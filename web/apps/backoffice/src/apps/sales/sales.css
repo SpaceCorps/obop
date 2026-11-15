@@ -1,70 +1,66 @@
 /* Sales: the invoice note on a confirmed order, and the printed quotation. */
+/* In the panel's gutter like the blocks around it (record.css: 1.25rem, 16 px on a phone). */
 .so-invoice {
-  margin-block-start: var(--space-3);
+  margin: 0.85rem 1.25rem 0;
 }
+@media (max-width: 40rem) {
+  .so-invoice {
+    margin-inline: var(--space-4);
+  }
+}
+/* The printed quotation lives in a PrintSheet (print.css): shown on paper only. */
 .so-print {
-  display: none;
+  padding: 12mm;
+  font-size: 11pt;
 }
-@media print {
-  body:has(.so-print) * {
-    visibility: hidden;
-  }
-  body:has(.so-print) .so-print,
-  body:has(.so-print) .so-print * {
-    visibility: visible;
-  }
-  body:has(.so-print) .so-print {
-    display: block;
-    position: absolute;
-    inset: 0 0 auto 0;
-    padding: 12mm;
-    font-size: 11pt;
-  }
-  .so-print header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-block-end: 8mm;
-  }
-  .so-print h1 {
-    font-size: 20pt;
-  }
-  .so-print-no {
-    font-size: 14pt;
-    font-weight: var(--weight-semibold);
-  }
-  .so-print-meta {
-    display: flex;
-    gap: 12mm;
-    margin: 0 0 8mm;
-  }
-  .so-print-meta dt {
-    font-size: 9pt;
-    color: var(--text-muted);
-  }
-  .so-print-meta dd {
-    margin: 0;
-    font-weight: var(--weight-semibold);
-  }
-  .so-print table {
-    inline-size: 100%;
-    border-collapse: collapse;
-  }
-  .so-print th,
-  .so-print td {
-    padding: 2mm 0;
-    border-block-end: 1px solid var(--border);
-    text-align: start;
-  }
-  .so-print .num {
-    text-align: end;
-    padding-inline-start: 4mm;
-    white-space: nowrap;
-  }
-  .so-print tfoot th,
-  .so-print tfoot td {
-    border-block-end: 0;
-    font-weight: var(--weight-bold);
-    font-size: 12pt;
-  }
+.so-print header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8mm;
+  margin-block-end: 8mm;
+}
+.so-print h1 {
+  margin: 0;
+  font-size: 20pt;
+}
+.so-print-no {
+  margin: 0;
+  font-size: 14pt;
+  font-weight: var(--weight-semibold);
+}
+.so-print-meta {
+  display: flex;
+  gap: 12mm;
+  margin: 0 0 8mm;
+}
+.so-print-meta dt {
+  font-size: 9pt;
+  color: var(--print-muted);
+}
+.so-print-meta dd {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+}
+.so-print table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+.so-print th,
+.so-print td {
+  padding: 2mm 0;
+  border-block-end: 1px solid var(--print-rule);
+  text-align: start;
+  vertical-align: top;
+}
+.so-print .num {
+  text-align: end;
+  padding-inline-start: 4mm;
+  white-space: nowrap;
+}
+.so-print tfoot th,
+.so-print tfoot td {
+  border-block-end: 0;
+  font-weight: var(--weight-bold);
+  font-size: 12pt;
 }

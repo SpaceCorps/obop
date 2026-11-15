@@ -7,6 +7,7 @@ import { call, type Row } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import { formatDate, isoDate, money, rowCurrency } from "../../format.ts";
 import type { RecordExtProps } from "../../extensions.ts";
+import { PrintSheet } from "./PrintSheet.tsx";
 import "./sales.css";
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -41,7 +42,7 @@ export function PrintQuote({ busy }: RecordExtProps) {
   );
 }
 
-/** The quotation as it prints: hidden on screen, the only thing on paper. */
+/** The quotation as it prints: hidden on screen, the only thing on paper (PrintSheet). */
 export function QuoteDocument({ row }: RecordExtProps) {
   const d = useData();
   const lines = useChildren("sale_order_line", "order_id", row.id) ?? [];
@@ -54,50 +55,52 @@ export function QuoteDocument({ row }: RecordExtProps) {
         : t("Quotation");
   const customer = str(row.party_id) ? d.refText("party", str(row.party_id)) : "";
   return (
-    <article className="so-print" aria-hidden="true">
-      <header>
-        <h1>{title}</h1>
-        <p className="so-print-no">{str(row.number)}</p>
-      </header>
-      <dl className="so-print-meta">
-        {customer && (
+    <PrintSheet>
+      <article className="so-print">
+        <header>
+          <h1>{title}</h1>
+          <p className="so-print-no">{str(row.number)}</p>
+        </header>
+        <dl className="so-print-meta">
+          {customer && (
+            <div>
+              <dt>{t("Customer")}</dt>
+              <dd>{customer}</dd>
+            </div>
+          )}
           <div>
-            <dt>{t("Customer")}</dt>
-            <dd>{customer}</dd>
+            <dt>{t("Date")}</dt>
+            <dd>{formatDate(isoDate(new Date()))}</dd>
           </div>
-        )}
-        <div>
-          <dt>{t("Date")}</dt>
-          <dd>{formatDate(isoDate(new Date()))}</dd>
-        </div>
-      </dl>
-      <table>
-        <thead>
-          <tr>
-            <th>{t("Description")}</th>
-            <th className="num">{t("Quantity")}</th>
-            <th className="num">{t("Unit price")}</th>
-            <th className="num">{t("Amount")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((l) => (
-            <tr key={l.id}>
-              <td>{str(l.description) || d.refText("product", str(l.product_id))}</td>
-              <td className="num">{num(l.quantity)}</td>
-              <td className="num">{money(num(l.unit_price_minor), cur)}</td>
-              <td className="num">{money(num(l.amount_minor), cur)}</td>
+        </dl>
+        <table>
+          <thead>
+            <tr>
+              <th>{t("Description")}</th>
+              <th className="num">{t("Quantity")}</th>
+              <th className="num">{t("Unit price")}</th>
+              <th className="num">{t("Amount")}</th>
             </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr>
-            <th colSpan={3}>{t("Total")}</th>
-            <td className="num">{money(num(row.total_minor), cur)}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </article>
+          </thead>
+          <tbody>
+            {lines.map((l) => (
+              <tr key={l.id}>
+                <td>{str(l.description) || d.refText("product", str(l.product_id))}</td>
+                <td className="num">{num(l.quantity)}</td>
+                <td className="num">{money(num(l.unit_price_minor), cur)}</td>
+                <td className="num">{money(num(l.amount_minor), cur)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colSpan={3}>{t("Total")}</th>
+              <td className="num">{money(num(row.total_minor), cur)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </article>
+    </PrintSheet>
   );
 }
 
