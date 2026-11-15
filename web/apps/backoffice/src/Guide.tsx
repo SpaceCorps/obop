@@ -196,7 +196,7 @@ export function Guide({ anchor, goAnchor, notify }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(anchor || TOC[0]?.id || "");
   // The contents sit beside the text on wide screens and fold away on phones.
-  const wide = () => matchMedia("(min-width: 57rem)").matches;
+  const wide = () => typeof matchMedia === "function" && matchMedia("(min-width: 57rem)").matches;
   const [tocOpen, setTocOpen] = useState(wide);
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
