@@ -1,10 +1,10 @@
 [labels.sv.module]
 name = "Fakturering"
-summary = "Kundfakturor med livscykeln utkast, bokförd och betald."
+summary = "Kundfakturor med livscykeln utkast, bokförd och annullerad."
 
 [labels.sv.model.invoice]
 name = "Faktura"
-description = "En kundfaktura; bokförda fakturor korrigeras endast genom kreditfakturor"
+description = "En kundfaktura; ingen åtgärd återför en bokförd faktura till utkast eller annullerar den"
 
 [labels.sv.model.invoice.field.sale_order_id]
 label = "Försäljningsorder"
@@ -25,11 +25,11 @@ description = "Fakturans totalbelopp i valutans minsta enhet, summan av raderna"
 
 [labels.sv.model.invoice.field.number]
 label = "Nummer"
-description = "Lagstadgat löpnummer utan luckor, som INV-2026-00042, tilldelas vid bokföring"
+description = "Nummer ur en årlig nummerserie utan luckor, som INV-2026-00042, tilldelas vid bokföring"
 
 [labels.sv.model.invoice.action.post]
 label = "Bokför"
-description = "Bokför en faktura i utkast och tilldela dess lagstadgade nummer"
+description = "Bokför en faktura i utkast och ge den nästa nummer i serien"
 
 [labels.sv.model.invoice.action.cancel]
 label = "Annullera"

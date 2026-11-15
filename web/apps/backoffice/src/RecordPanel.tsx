@@ -8,11 +8,20 @@ import { isMasked, isState, optionLabel, rowCurrency, shownLabel } from "./forma
 import { actionTitle, appTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
+import { SignByLinkNote, SignLinkAction, SignLinks } from "./SignLinks.tsx";
+import { REQUEST_MODEL } from "./signLinks.ts";
 import { encodeState } from "./query.ts";
 import { PHONE_QUERY, SHEET_QUERY, useMedia, useScrollLock } from "./media.ts";
 import { nav } from "./route.ts";
 import { Badge, Button, Icon, IconButton, Kbd, Menu, Tooltip } from "./ui.tsx";
-import { canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
+import {
+  canMove,
+  hiddenForRecord,
+  initialOption,
+  isGoverned,
+  moveRecord,
+  notForRecord,
+} from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -123,6 +132,15 @@ export function RecordPanel({
   useScrollLock(sheet);
   const statusField = fields.find(isState);
   const canEdit = creating ? model.can_create : model.can_update;
+  // An action that is not for this record at all has no button (a Document request is not marked
+  // signed by hand); `notForRecord` greys out the ones that are only wrong for now.
+  const shownActions = row
+    ? model.actions.filter((a) => !hiddenForRecord(model, a, row))
+    : model.actions;
+  // On a phone Delete sits at the end of the form instead, so it no longer holds the action row
+  // open, except on a request, where the row also carries the signing-link button.
+  const actionRow =
+    model.actions.length > 0 || (model.can_delete && (!phone || model.name === REQUEST_MODEL));
 
   // A governed field (D48) starts at its first option and then moves only through actions.
   const governed = (f: FieldMeta) => isGoverned(model, f);
@@ -321,9 +339,13 @@ export function RecordPanel({
       >
         <header>
           {phone && (
-            <Button size="sm" className="back" onClick={onClose}>
-              <Icon name="chevron-left" size={14} /> {t("Back to list")}
-            </Button>
+            <IconButton
+              icon="chevron-left"
+              label={t("Back to list")}
+              tooltip={false}
+              className="back"
+              onClick={onClose}
+            />
           )}
           <div>
             <h2>
@@ -370,7 +392,7 @@ export function RecordPanel({
                       state: optionLabel(initialOption(statusField), statusField),
                     }),
                   }
-                : canMove(model, statusField, row[statusField.name] as string, s, title);
+                : canMove(model, statusField, row[statusField.name] as string, s, title, row);
               const blocked = !mv.allowed;
               const text = `${optionLabel(s, statusField)}${mv.allowed && mv.needsApproval ? " *" : ""}`;
               const btn = (
@@ -416,9 +438,9 @@ export function RecordPanel({
             ))}
           </div>
         )}
-        {!creating && (model.actions.length > 0 || model.can_delete) && (
+        {!creating && actionRow && (
           <div className="actionrow">
-            {model.actions.map((a, ai) => {
+            {shownActions.map((a, ai) => {
               const f = a.field ? fields.find((x) => x.name === a.field) : undefined;
               const at = f ? String(row[f.name] ?? "") : "";
               const why =
@@ -429,7 +451,7 @@ export function RecordPanel({
                         field: fieldTitle(f),
                         state: optionLabel(a.from, f),
                       })
-                    : "";
+                    : notForRecord(model, a, row);
               const btn = (
                 <Button
                   key={a.id}
@@ -452,7 +474,7 @@ export function RecordPanel({
                   key={a.id}
                   label={why}
                   side="top"
-                  align={ai === 0 ? "start" : ai === model.actions.length - 1 ? "end" : "center"}
+                  align={ai === 0 ? "start" : ai === shownActions.length - 1 ? "end" : "center"}
                 >
                   {btn}
                 </Tooltip>
@@ -460,7 +482,10 @@ export function RecordPanel({
                 btn
               );
             })}
-            {model.can_delete && (
+            {model.name === REQUEST_MODEL && (
+              <SignLinkAction row={row} fields={fields} disabled={busy} />
+            )}
+            {model.can_delete && !phone && (
               <Button
                 variant="ghost"
                 className="danger-text"
@@ -473,6 +498,8 @@ export function RecordPanel({
             )}
           </div>
         )}
+        {!creating && model.name === REQUEST_MODEL && <SignByLinkNote row={row} />}
+        {!creating && model.name === REQUEST_MODEL && <SignLinks request={row} />}
         <form
           className="fields"
           noValidate
@@ -634,6 +661,18 @@ export function RecordPanel({
               {serverMessage(error.raw)}
             </p>
           )}
+          {/* On a phone Delete waits at the end of the form, away from the status pills. */}
+          {!creating && phone && model.can_delete && (
+            <Button
+              variant="ghost"
+              className="danger-text record-delete"
+              icon="trash"
+              disabled={busy}
+              onClick={() => setDeleting(true)}
+            >
+              {t("Delete")}
+            </Button>
+          )}
           <footer className="formbar">
             <Button
               type="submit"
@@ -699,7 +738,7 @@ function GovernedValue(p: {
           items={(f.options ?? [])
             .filter((o) => o !== current)
             .map((o) => {
-              const mv = canMove(model, f, current, o, p.title);
+              const mv = canMove(model, f, current, o, p.title, row ?? undefined);
               return {
                 label: `${optionLabel(o, f)}${mv.needsApproval ? " *" : ""}`,
                 disabled: p.busy || !mv.allowed,

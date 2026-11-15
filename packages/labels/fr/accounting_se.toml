@@ -1,0 +1,345 @@
+[labels.fr.module]
+name = "Comptabilité Suède"
+description = "Localisation suédoise de la comptabilité : données de l'entreprise, séries de pièces, codes et cases de TVA, et un rapport de TVA par période que le groupe accounting.approver approuve. NON VÉRIFIÉ : rien n'a été contrôlé auprès de Skatteverket (SKV 4700) ni de SIE. Aucun plan comptable BAS inclus ; l'utilisateur choisit les comptes. Montants en öre, taux en points de base."
+
+[labels.fr.model.accounting_se_company]
+name = "Entreprise"
+description = "L'entreprise suédoise à laquelle appartiennent les livres ; normalement un enregistrement"
+
+[labels.fr.model.accounting_se_company.field.name]
+label = "Nom"
+description = "Dénomination légale de l'entreprise"
+
+[labels.fr.model.accounting_se_company.field.org_number]
+label = "Numéro d'organisation"
+description = "Numéro d'organisation, dix chiffres comme 556000-0000 ; pour un entrepreneur individuel, c'est un numéro personnel et donc une donnée personnelle"
+
+[labels.fr.model.accounting_se_company.field.vat_number]
+label = "Numéro de TVA"
+description = "Numéro de TVA comme SE556000000001 ; vide si l'entreprise n'est pas immatriculée à la TVA"
+
+[labels.fr.model.accounting_se_company.field.f_skatt]
+label = "F-skatt"
+description = "Si l'entreprise est agréée pour le régime F-skatt (F-tax)"
+
+[labels.fr.model.accounting_se_company.field.fiscal_year_start_month]
+label = "Mois de début de l'exercice"
+description = "Mois où l'exercice commence, de 1 à 12 ; 1 signifie année civile"
+
+[labels.fr.model.accounting_se_company.field.vat_period]
+label = "Période de TVA"
+description = "Fréquence de la déclaration de TVA : monthly, quarterly, yearly"
+
+[labels.fr.model.accounting_se_company.field.vat_period.options]
+monthly = "Mensuelle"
+quarterly = "Trimestrielle"
+yearly = "Annuelle"
+
+[labels.fr.model.accounting_se_company.field.currency]
+label = "Devise"
+description = "Code de devise ISO 4217 des livres, normalement SEK"
+
+[labels.fr.model.accounting_se_company.field.address]
+label = "Adresse"
+description = "Adresse enregistrée"
+
+[labels.fr.model.accounting_se_company.field.contact_email]
+label = "E-mail de contact"
+description = "E-mail de contact pour la comptabilité"
+
+[labels.fr.model.accounting_se_voucher_series]
+name = "Série de pièces"
+description = "Une série de pièces, une lettre comme A qui regroupe les pièces d'un même type"
+
+[labels.fr.model.accounting_se_voucher_series.field.code]
+label = "Code"
+description = "Code de la série, une à trois lettres, par exemple A ; deux séries n'ont jamais le même code"
+
+[labels.fr.model.accounting_se_voucher_series.field.name]
+label = "Nom"
+description = "Ce que contient la série, par exemple Pièces manuelles"
+
+[labels.fr.model.accounting_se_voucher_series.field.journal_id]
+label = "Journal"
+description = "Le journal comptable dont les pièces appartiennent à la série"
+
+[labels.fr.model.accounting_se_voucher_series.field.is_default]
+label = "Par défaut"
+description = "Si la série est utilisée quand aucune n'est indiquée"
+
+[labels.fr.model.accounting_se_voucher_series.field.active]
+label = "Active"
+description = "Si la série peut encore être utilisée"
+
+[labels.fr.model.accounting_se_voucher_series.field.note]
+label = "Remarque"
+description = "Remarques sur l'utilisation de la série"
+
+[labels.fr.model.accounting_se_vat_box]
+name = "Case de TVA"
+description = "Une case de la déclaration de TVA suédoise. NON VÉRIFIÉE tant qu'elle n'a pas été contrôlée avec SKV 4700"
+
+[labels.fr.model.accounting_se_vat_box.field.box]
+label = "Case"
+description = "Numéro de case tel qu'il figure sur le formulaire, par exemple 05 ; deux cases n'ont jamais le même numéro"
+
+[labels.fr.model.accounting_se_vat_box.field.label]
+label = "Intitulé"
+description = "Intitulé de la case en suédois tel qu'il figure sur le formulaire"
+
+[labels.fr.model.accounting_se_vat_box.field.kind]
+label = "Type"
+description = "Ce que contient la case : base (base imposable), output (TVA collectée), input (TVA déductible), result (TVA à payer ou à récupérer)"
+
+[labels.fr.model.accounting_se_vat_box.field.kind.options]
+base = "Base imposable"
+output = "TVA collectée"
+input = "TVA déductible"
+result = "Résultat"
+
+[labels.fr.model.accounting_se_vat_box.field.not_used]
+label = "Inutilisée"
+description = "Si l'entreprise n'utilise pas la case ; un montant qui tombe dans une case inutilisée est une erreur"
+
+[labels.fr.model.accounting_se_vat_box.field.review]
+label = "Vérification"
+description = "État de vérification de la case : unverified, verified. Commence non vérifiée ; seul l'approbateur vérifie, après contrôle avec SKV 4700"
+
+[labels.fr.model.accounting_se_vat_box.field.review.options]
+unverified = "Non vérifiée"
+verified = "Vérifiée"
+
+[labels.fr.model.accounting_se_vat_box.field.verified]
+label = "Vérifiée"
+description = "Si la case a été vérifiée par le propriétaire ; faux jusque-là"
+
+[labels.fr.model.accounting_se_vat_box.field.verified_by]
+label = "Vérifiée par"
+description = "Identifiant de la personne qui a vérifié"
+
+[labels.fr.model.accounting_se_vat_box.field.verified_on]
+label = "Vérifiée le"
+description = "Date de la vérification (AAAA-MM-JJ)"
+
+[labels.fr.model.accounting_se_vat_box.field.source]
+label = "Source"
+description = "D'où vient la case et ce qui a été contrôlé, par exemple l'édition de SKV 4700 ; vide signifie qu'aucune source n'a été contrôlée"
+
+[labels.fr.model.accounting_se_vat_box.action.verify]
+label = "Vérifier"
+description = "Marquer la case comme contrôlée avec SKV 4700 (approbateur uniquement)"
+
+[labels.fr.model.accounting_se_vat_box.action.unverify]
+label = "Annuler la vérification"
+description = "Retirer la vérification de la case (approbateur uniquement)"
+
+[labels.fr.model.accounting_se_vat_code]
+name = "Code de TVA"
+description = "Un code de TVA qu'une ligne du grand livre peut porter, relié à une case de base, une case de TVA et des comptes. NON VÉRIFIÉ tant qu'il n'a pas été contrôlé avec SKV 4700"
+
+[labels.fr.model.accounting_se_vat_code.field.code]
+label = "Code"
+description = "Code court comme S25 (vente à 25 pour cent) ; deux codes n'ont jamais la même valeur"
+
+[labels.fr.model.accounting_se_vat_code.field.label]
+label = "Libellé"
+description = "Ce que le code signifie en mots"
+
+[labels.fr.model.accounting_se_vat_code.field.treatment]
+label = "Traitement"
+description = "Type d'opération : sale_domestic, purchase_domestic, reverse_charge_eu, reverse_charge_non_eu, sale_eu_goods, sale_eu_services, export, exempt, none"
+
+[labels.fr.model.accounting_se_vat_code.field.treatment.options]
+sale_domestic = "Vente en Suède"
+purchase_domestic = "Achat en Suède"
+reverse_charge_eu = "Autoliquidation, UE"
+reverse_charge_non_eu = "Autoliquidation, hors UE"
+sale_eu_goods = "Vente de biens vers l'UE"
+sale_eu_services = "Vente de services vers l'UE"
+export = "Vente à l'exportation"
+exempt = "Exonéré"
+none = "Sans TVA"
+
+[labels.fr.model.accounting_se_vat_code.field.rate_bp]
+label = "Taux de TVA (points de base)"
+description = "Taux de TVA en points de base : 2500 signifie 25,00 pour cent, 1200 12,00, 600 6,00, 0 aucun"
+
+[labels.fr.model.accounting_se_vat_code.field.base_box_id]
+label = "Case de base"
+description = "Case qui reçoit le montant net des lignes portant ce code ; vide si aucune"
+
+[labels.fr.model.accounting_se_vat_code.field.base_side]
+label = "Côté de la base"
+description = "Quel côté de la ligne compte comme base : credit ou debit"
+
+[labels.fr.model.accounting_se_vat_code.field.base_side.options]
+credit = "Crédit"
+debit = "Débit"
+
+[labels.fr.model.accounting_se_vat_code.field.vat_box_id]
+label = "Case de TVA"
+description = "Case qui reçoit le montant de TVA comptabilisé sur le compte de TVA ; vide si aucune"
+
+[labels.fr.model.accounting_se_vat_code.field.vat_account_id]
+label = "Compte de TVA"
+description = "Le compte sur lequel le montant de TVA est comptabilisé. Choisi par l'utilisateur dans son propre plan comptable ; le paquet n'en fournit aucun"
+
+[labels.fr.model.accounting_se_vat_code.field.vat_side]
+label = "Côté du compte de TVA"
+description = "Quel côté du compte de TVA compte comme TVA pour la case : credit ou debit"
+
+[labels.fr.model.accounting_se_vat_code.field.vat_side.options]
+credit = "Crédit"
+debit = "Débit"
+
+[labels.fr.model.accounting_se_vat_code.field.tax_id]
+label = "Taxe"
+description = "Le taux de taxe comptable auquel correspond le code, s'il en existe un"
+
+[labels.fr.model.accounting_se_vat_code.field.active]
+label = "Actif"
+description = "Si le code peut encore être mis sur de nouvelles lignes"
+
+[labels.fr.model.accounting_se_vat_code.field.review]
+label = "Vérification"
+description = "État de vérification du code : unverified, verified. Commence non vérifié ; seul l'approbateur vérifie, après contrôle avec SKV 4700"
+
+[labels.fr.model.accounting_se_vat_code.field.review.options]
+unverified = "Non vérifié"
+verified = "Vérifié"
+
+[labels.fr.model.accounting_se_vat_code.field.verified]
+label = "Vérifié"
+description = "Si le code a été vérifié par le propriétaire ; faux jusque-là"
+
+[labels.fr.model.accounting_se_vat_code.field.verified_by]
+label = "Vérifié par"
+description = "Identifiant de la personne qui a vérifié"
+
+[labels.fr.model.accounting_se_vat_code.field.verified_on]
+label = "Vérifié le"
+description = "Date de la vérification (AAAA-MM-JJ)"
+
+[labels.fr.model.accounting_se_vat_code.field.source]
+label = "Source"
+description = "D'où vient le code et ce qui a été contrôlé, par exemple l'édition de SKV 4700 ; vide signifie qu'aucune source n'a été contrôlée"
+
+[labels.fr.model.accounting_se_vat_code.action.verify]
+label = "Vérifier"
+description = "Marquer le code comme contrôlé avec SKV 4700 (approbateur uniquement)"
+
+[labels.fr.model.accounting_se_vat_code.action.unverify]
+label = "Annuler la vérification"
+description = "Retirer la vérification du code (approbateur uniquement)"
+
+[labels.fr.model.accounting_se_vat_report]
+name = "Rapport de TVA"
+description = "Un rapport de TVA pour une période, établi à partir du grand livre et approuvé par une personne avant usage. NON VÉRIFIÉ : non comparé à SKV 4700 par ce paquet"
+
+[labels.fr.model.accounting_se_vat_report.field.name]
+label = "Nom"
+description = "Nom de la période, par exemple 2026-Q3"
+
+[labels.fr.model.accounting_se_vat_report.field.period_kind]
+label = "Durée de la période"
+description = "Durée de la période : month, quarter, year"
+
+[labels.fr.model.accounting_se_vat_report.field.period_kind.options]
+month = "Mois"
+quarter = "Trimestre"
+year = "Année"
+
+[labels.fr.model.accounting_se_vat_report.field.start_on]
+label = "Premier jour"
+description = "Premier jour de la période (AAAA-MM-JJ)"
+
+[labels.fr.model.accounting_se_vat_report.field.end_on]
+label = "Dernier jour"
+description = "Dernier jour de la période (AAAA-MM-JJ)"
+
+[labels.fr.model.accounting_se_vat_report.field.due_on]
+label = "Date d'échéance"
+description = "Jour où la déclaration doit être reçue ; indiqué par le préparateur, le paquet ne le calcule pas"
+
+[labels.fr.model.accounting_se_vat_report.field.company_id]
+label = "Entreprise"
+description = "L'entreprise concernée par le rapport"
+
+[labels.fr.model.accounting_se_vat_report.field.output_vat]
+label = "TVA collectée"
+description = "TVA collectée de la période en öre, somme des lignes de TVA collectée"
+
+[labels.fr.model.accounting_se_vat_report.field.input_vat]
+label = "TVA déductible"
+description = "TVA déductible de la période en öre, somme des lignes de TVA déductible"
+
+[labels.fr.model.accounting_se_vat_report.field.vat_to_pay]
+label = "TVA à payer"
+description = "TVA collectée moins TVA déductible en öre ; négatif signifie remboursement (case 49)"
+
+[labels.fr.model.accounting_se_vat_report.field.boxes_confirmed]
+label = "Cases confirmées"
+description = "L'approbateur confirme que chaque case du rapport a été comparée au formulaire SKV 4700 et que les correspondances utilisées sont vérifiées"
+
+[labels.fr.model.accounting_se_vat_report.field.notes]
+label = "Remarques"
+description = "Remarques du préparateur ou de l'approbateur"
+
+[labels.fr.model.accounting_se_vat_report.field.state]
+label = "Statut"
+description = "Statut du rapport : draft, proposed, approved, filed"
+
+[labels.fr.model.accounting_se_vat_report.field.state.options]
+draft = "Brouillon"
+proposed = "Proposé"
+approved = "Approuvé"
+filed = "Déposé"
+
+[labels.fr.model.accounting_se_vat_report.action.propose]
+label = "Proposer"
+description = "Proposer le rapport à l'approbation ; les agents peuvent le faire"
+
+[labels.fr.model.accounting_se_vat_report.action.withdraw]
+label = "Retirer"
+description = "Renvoyer un rapport proposé à l'état de brouillon"
+
+[labels.fr.model.accounting_se_vat_report.action.approve]
+label = "Approuver"
+description = "Approuver le rapport (approbateur uniquement ; les cases doivent être confirmées comme contrôlées avec SKV 4700)"
+
+[labels.fr.model.accounting_se_vat_report.action.approve.assert.boxes_checked]
+message = "Les cases n'ont pas été confirmées comme contrôlées avec SKV 4700"
+
+[labels.fr.model.accounting_se_vat_report.action.record_filed]
+label = "Enregistrer le dépôt"
+description = "Enregistrer que la déclaration a été déposée auprès de Skatteverket en dehors de ce système (approbateur uniquement)"
+
+[labels.fr.model.accounting_se_vat_report_line]
+name = "Ligne de rapport de TVA"
+description = "Une case d'un rapport de TVA avec son montant"
+
+[labels.fr.model.accounting_se_vat_report_line.field.report_id]
+label = "Rapport"
+description = "Le rapport auquel appartient la ligne"
+
+[labels.fr.model.accounting_se_vat_report_line.field.box_id]
+label = "Case"
+description = "La case de TVA"
+
+[labels.fr.model.accounting_se_vat_report_line.field.kind]
+label = "Type"
+description = "Type de la case, copié par le préparateur : base, output, input, result"
+
+[labels.fr.model.accounting_se_vat_report_line.field.kind.options]
+base = "Base imposable"
+output = "TVA collectée"
+input = "TVA déductible"
+result = "Résultat"
+
+[labels.fr.model.accounting_se_vat_report_line.field.amount]
+label = "Montant"
+description = "Montant de la case en öre"
+
+[labels.fr.model.accounting_se_vat_report_line.field.vouchers]
+label = "Pièces"
+description = "Références aux pièces qui composent le montant, une par ligne, pour qu'un contrôleur puisse les suivre"

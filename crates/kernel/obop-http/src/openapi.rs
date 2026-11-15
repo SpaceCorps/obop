@@ -2,6 +2,7 @@
 //! (D31): a fixed one for the control plane, and one generated from the registry for each
 //! instance, listing exactly the commands the caller may use.
 
+use obop_brand::Brand;
 use obop_commands::ModuleInfo;
 use serde_json::{Value as J, json};
 
@@ -218,7 +219,15 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     );
     paths.insert(
         "/api/auth/agent-token".into(),
-        json!({"post": {"operationId": "issueAgentToken", "summary": "A signed-in human issues a scoped agent token", "security": sec.clone(), "requestBody": json_body(json!({"type": "object", "required": ["scopes"], "properties": {"scopes": {"type": "array", "items": {"type": "string"}, "description": "Permission groups, each one the issuer holds."}, "label": {"type": "string"}}})), "responses": {"200": ok(json!({"type": "object", "properties": {"token": {"type": "string"}}}), "The token, shown once."), "400": error_responses()["400"].clone()}}}),
+        json!({"post": {"operationId": "issueAgentToken", "summary": "A signed-in human issues a scoped agent token", "security": sec.clone(), "requestBody": json_body(json!({"type": "object", "required": ["scopes"], "properties": {"scopes": {"type": "array", "items": {"type": "string"}, "description": "Permission groups by name, each one the issuer holds; an administrator may name any registered group. Never `*`."}, "label": {"type": "string"}}})), "responses": {"200": ok(json!({"type": "object", "properties": {"token": {"type": "string"}}}), "The token, shown once."), "400": error_responses()["400"].clone()}}}),
+    );
+    paths.insert(
+        "/api/auth/agent-tokens".into(),
+        json!({"get": {"operationId": "listAgentTokens", "summary": "The agent tokens the signed-in human issued that still work, and the groups they may put on a new one", "security": sec.clone(), "responses": {"200": ok(json!({"type": "object", "properties": {"tokens": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "scopes": {"type": "array", "items": {"type": "string"}}, "created_at": {"type": "integer", "description": "Unix seconds."}}}}, "delegable": {"type": "array", "items": {"type": "string"}, "description": "Permission groups the caller may delegate: their own, and every registered group for an administrator."}}}), "The tokens (never a token itself) and the groups."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
+    );
+    paths.insert(
+        "/api/auth/agent-tokens/{id}/revoke".into(),
+        json!({"post": {"operationId": "revokeAgentToken", "summary": "End one agent token the signed-in human issued", "security": sec.clone(), "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": ok(json!({"type": "object", "properties": {"revoked": {"type": "boolean"}}}), "Revoked."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
     );
     paths.insert(
         "/api/meta".into(),
@@ -496,11 +505,25 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
 
 /// What an instance that runs the OAuth authorization server (D64) adds to the `x-mcp` block of its
 /// document. `GET /api/openapi.json` and `obop openapi` both go through here, so the exported
-/// document is the one a running instance serves.
+/// document is the one a running instance serves, for an instance with no brand: a brand changes
+/// the title of the running instance's document (`describe_brand`), and `obop openapi` has none.
 pub fn describe_oauth(doc: &mut J, base: &str) {
     doc["x-mcp"]["authorization"] = J::from("oauth2 or bearer");
     doc["x-mcp"]["authorizationServerMetadata"] =
         J::from(format!("{base}/.well-known/oauth-authorization-server"));
+}
+
+/// What a brand adds to the document of the instance (docs/spec/branding.md, section 6, OT-12): the
+/// title of the API is the instance's own, `{name} API`, in place of "obop instance API". The
+/// running instance calls it for every caller, anonymous or signed in, with the brand it read once
+/// for the request. The document of `obop openapi` (the committed `openapi.json`) is the instance
+/// of no brand and is never given one, so it stays the document of the software. With no brand set
+/// the document is left as it is, byte for byte. Only the title is touched, and the title only
+/// holds the name: nothing else of the record is published here.
+pub fn describe_brand(doc: &mut J, brand: &Brand) {
+    if brand.is_set() {
+        doc["info"]["title"] = J::from(format!("{} API", brand.name()));
+    }
 }
 
 /// Whether an agent's token is denied a field of this class outright, and not given a mask token

@@ -20,8 +20,7 @@ export const fi: Messages = {
     docsNav: "Dokumentaatio",
     breadcrumb: "Polku",
     home: "obop, etusivu",
-    signIn: "Kirjaudu sisään",
-    startFree: "Aloita ilmaiseksi",
+    startFree: "Aloita",
     search: "Haku",
     searchPlaceholder: "Hae sivustolta",
     searchEmpty: "Ei tuloksia. Kokeile vähemmän tai eri hakusanoja.",
@@ -43,7 +42,7 @@ export const fi: Messages = {
     langSuggest: "Tämä sivu on saatavilla myös englanniksi.",
     langSuggestGo: "Vaihda englantiin",
     dismiss: "Sulje",
-    betaNote: "Avoimen lähdekoodin yritysalusta. Beta-vaihe.",
+    betaNote: "Avoimen lähdekoodin yritysalusta. Ennen versiota 1.0.",
     allRightsNote: "Suunniteltuja hintoja ei veloiteta vielä.",
     sourceCode: "Lähdekoodi GitHubissa",
     docsHome: "Dokumentaatio",
@@ -101,11 +100,11 @@ export const fi: Messages = {
   },
   home: {
     eyebrow: "Avoimen lähdekoodin yritysalusta",
-    badge: "Beta",
+    badge: "Ennen 1.0",
     titleA: "Yksi yritys.",
     titleB: "Yksi alusta.",
     lead: "CRM, myynti, laskutus ja muuta yhdellä tietomallilla. Tehty ihmisille ja tekoälyagenteille, ja käyttöoikeudet ja tietosuoja on rakennettu niin, että molempiin voi luottaa.",
-    ctaPrimary: "Hanki oma instanssi",
+    ctaPrimary: "Aja se itse",
     ctaSecondary: "Katso sovellukset",
     heroPoints: [
       "Avoin lähdekoodi",
@@ -115,7 +114,7 @@ export const fi: Messages = {
     mockCaption: "Havainnekuva esimerkkitiedoilla",
     appsTitle: "Kaikki yrityksen sovellukset. Yksi tietokanta.",
     appsSub:
-      "Kaikki sovellukset käyttävät samoja yhteystietoja, tuotteita ja käyttöoikeuksia, joten mitään ei tarvitse liimata yhteen. Kuusi sovellusta on sisäänrakennettuja, ja muut 22 asennetaan markkinapaikalta.",
+      "Kaikki sovellukset jakavat yhden tietokannan ja samat käyttöoikeusryhmät, ja myynti, laskutus ja osto käyttävät samoja yhteystietoja ja tuotteita. Osa sovelluksista on sisäänrakennettuja, ja muut asennetaan markkinapaikalta.",
     seeAllApps: "Selaa kaikkia sovelluksia ja niiden tietomalleja",
     pillarsTitle: "Tehty nykyiseen tapaan tehdä työtä",
     pillarsSub:
@@ -136,8 +135,8 @@ export const fi: Messages = {
       {
         icon: "grid",
         title: "Yksi tietomalli",
-        body: "Sovellukset ovat moduuleja samassa rekisterissä, joten yhteystieto on sama yhteystieto CRM:ssä, myynnissä ja laskutuksessa. Käyttöoikeudet, auditointi ja rajapinta tulevat jokaisen lisäämäsi mallin mukana.",
-        tag: "PostgreSQL pohjalla",
+        body: "Sovellukset ovat moduuleja samassa rekisterissä, joten yhteystieto on sama yhteystieto myynnissä ja laskutuksessa. Käyttöoikeudet, tietoluokat ja rajapinta tulevat jokaisen lisäämäsi mallin mukana.",
+        tag: "PostgreSQL tai SQLite pohjalla",
       },
     ],
     flowLabel: "Näin agentti työskentelee kanssasi",
@@ -170,35 +169,32 @@ export const fi: Messages = {
     marketCta: "Tutustu markkinapaikkaan",
     stepsTitle: "Käyttöön kolmella askeleella",
     steps: [
-      { title: "Rekisteröidy", body: "Luo tili sähköpostiosoitteellasi." },
-      {
-        title: "Hanki instanssi",
-        body: "Oma tietokanta ja osoite valmiina muutamassa minuutissa.",
-      },
+      { title: "Käynnistä obop", body: "Aja obop Dockerilla tai käännä se lähdekoodista." },
+      { title: "Luo ylläpitäjä", body: "Yksi komento luo ensimmäisen tilin." },
       {
         title: "Lisää moduuleja",
-        body: "Kirjaudu sisään samoilla tunnuksilla ja asenna tarvitsemasi sovellukset.",
+        body: "Kirjaudu sisään ja asenna tarvitsemasi sovellukset Mukauta-sovelluksesta.",
       },
     ],
-    stepsCta: "Aloita ilmaiseksi",
+    stepsCta: "Aloita",
     openTitle: "Avoin lähdekoodi, ja voit ylläpitää sitä itse",
     openBody:
-      "obop on kirjoitettu Rustilla ja toimii kaikkialla, missä PostgreSQL toimii. Käytä isännöityä palvelua tai aja sama ohjelma itse Dockerilla. Kummassakin tapauksessa jokaisella yrityksellä on oma tietokanta, ja tiedot kuuluvat sinulle.",
+      "obopin palvelin on kirjoitettu Rustilla, ja se toimii SQLiten tai PostgreSQL:n kanssa. Aja se itse Dockerilla tai käännä se lähdekoodista. Jokaisella yrityksellä on oma tietokanta, ja tiedot kuuluvat sinulle.",
     openPoints: [
       {
-        title: "Meidän isännöimänä",
-        body: "Luomme sinulle instanssin, jolla on oma tietokanta. Kaikki on ilmaista beta-vaiheen ajan.",
+        title: "Palvelinhotellointi, suunnitteilla",
+        body: "SpaceCorps suunnittelee ilmaista hiekkalaatikkoa (sandbox), jossa on vain esimerkkidataa, sekä maksullista palvelinhotellointia dedikoiduilla palvelimilla. Kumpaakaan ei vielä tarjota.",
       },
       {
         title: "Omalla palvelimella",
-        body: "Yksi ajettava tiedosto tai yksi Docker-image: SQLite kokeiluun, PostgreSQL oikeaan käyttöön.",
+        body: "Käännä se lähdekoodista ja aja sitä suoraan tai Dockerilla. SQLite kokeiluun, PostgreSQL oikeaan käyttöön.",
       },
       {
         title: "Lähdekoodi GitHubissa",
         body: "Lue koodi, päätökset ja tiekartta. Apache-2.0, vapaasti käytettävissä ja itse isännöitävissä; katso tarkemmat tiedot repositoriosta.",
       },
     ],
-    pricingTitle: "Ilmainen käyttää. Palvelinhotellointi, jos haluat.",
+    pricingTitle: "Ilmainen käyttää. Palvelinhotellointi suunnitteilla.",
     pricingSub: `obop on ilmainen ja avointa lähdekoodia: aja sitä itse omalla palvelimellasi. Jos et halua, oma palvelin on suunnitteilla alkaen ${eur(HOSTING.servers[0].eur)} kuukaudessa. Tänään mitään ei laskuteta.`,
     pricingFine:
       "Suunnitellut hinnat palvelinta ja kuukautta kohti, ilman arvonlisäveroa. Palvelinhotellointia ei vielä tarjota eikä laskuteta.",
@@ -207,11 +203,11 @@ export const fi: Messages = {
     faq: [
       {
         q: "Mikä obop on?",
-        a: "obop on avoimen lähdekoodin yritysalusta. Se tarjoaa yritykselle CRM:n, myynnin, laskutuksen, yhteystiedot ja tuotteet yhdellä tietomallilla, ja lisää sovelluksia voi asentaa markkinapaikalta. Jokainen toiminto on käytettävissä ihmisille selaimessa ja tekoälyagenteille REST-rajapinnan, MCP:n ja komentorivin kautta.",
+        a: "obop on avoimen lähdekoodin yritysalusta. Se tarjoaa yritykselle CRM:n, myynnin, laskutuksen, yhteystiedot ja tuotteet yhdellä tietomallilla, ja lisää sovelluksia voi asentaa markkinapaikalta. Ihmiset työskentelevät selaimessa, ja tekoälyagentit käyttävät obopin komentoja REST-rajapinnan, MCP:n ja komentorivin kautta.",
       },
       {
         q: "Onko obop valmis tuotantokäyttöön?",
-        a: "Ei vielä. obop on beta-vaiheessa. Ydin toimii ja on testattu, mutta moduulien versioiden välille ei ole vielä tietomigraatioita, isännöityjen tietokantojen varmuuskopiointia ei ole, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
+        a: "Ei vielä. obop ei ole vielä saavuttanut versiota 1.0, joten uusi versio voi vielä muuttaa asioita. Ydin toimii ja on testattu, sisäänrakennettujen sovellusten tilaksi on merkitty Vakaa ja muiden sovellusten tilaksi Beta tai Kokeellinen, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
       },
       {
         q: "Paljonko se maksaa?",
@@ -219,7 +215,7 @@ export const fi: Messages = {
       },
       {
         q: "Missä tietoni sijaitsevat?",
-        a: "Jokaisella yrityksellä on oma tietokantansa, isännöidyssä ja tuotantokäytössä PostgreSQL-tietokanta. Jos ylläpidät alustaa itse, tiedot sijaitsevat siellä, missä ajat sitä. Tietueet tallennetaan JSON-dokumentteina, kunnes skeemanhallinta valmistuu.",
+        a: "Palvelimella, jolla ajat obopia: jokaisella yrityksellä on oma tietokantansa, SQLite kokeiluun ja PostgreSQL oikeaan käyttöön. SpaceCorps ei vielä tarjoa palvelinhotellointia. Tietueet tallennetaan JSON-dokumentteina, kunnes skeemanhallinta valmistuu.",
       },
       {
         q: "Miten tekoälyagentit toimivat obop-alustan kanssa?",
@@ -227,7 +223,7 @@ export const fi: Messages = {
       },
       {
         q: "Voiko agentti lukea asiakkaideni henkilötietoja?",
-        a: "Ei selkoisena. Henkilötiedot palautetaan pysyvinä paikkamerkkeinä, kuten EMAIL_1, ja talous-, henkilöstö- ja erityisryhmien tietokentät pidätetään kokonaan. Agentti voi välittää paikkamerkin takaisin viitatakseen arvoon näkemättä sitä koskaan.",
+        a: "Ei selkoisena, kun kenttä on merkitty henkilötiedoksi. Taloustietojen, henkilöstötietojen, erityisryhmien tietojen ja salaisuuksien kentät pidätetään kokonaan, ja muut henkilötiedoiksi merkityt kentät palautetaan pysyvinä paikkamerkkeinä, kuten EMAIL_1. Kenttään, jota ei ole merkitty henkilötiedoksi, esimerkiksi kuvaukseen, kirjoitettua tekstiä ei korvata. Agentti voi välittää paikkamerkin takaisin viitatakseen arvoon näkemättä sitä koskaan.",
       },
       {
         q: "Voinko rakentaa tai lisätä omia sovelluksia?",
@@ -239,8 +235,9 @@ export const fi: Messages = {
       },
     ],
     ctaTitle: "Yksi yritys, yksi alusta.",
-    ctaBody: "Avointa lähdekoodia, tehty Rustilla, toimii kaikkialla, missä PostgreSQL toimii.",
-    ctaButton: "Hanki oma instanssi",
+    ctaBody:
+      "Avointa lähdekoodia, palvelin tehty Rustilla, toimii SQLiten tai PostgreSQL:n kanssa.",
+    ctaButton: "Aloita",
   },
   pricing: {
     title: "Hinnoittelu",
@@ -254,7 +251,7 @@ export const fi: Messages = {
         name: "Itse ajettu",
         price: eur(0),
         period: "",
-        blurb: "Koko projekti omalla palvelimellasi. Apache-2.0, ilmainen ikuisesti.",
+        blurb: "Koko projekti omalla palvelimellasi. Apache-2.0, ilmainen käyttää.",
         features: [
           "Kaikki mukana tulevat sovellukset",
           "REST-rajapinta, MCP ja komentorivi",
@@ -276,7 +273,7 @@ export const fi: Messages = {
     selfHostTitle: "Ilmainen, ja ajat sitä itse",
     selfHostBody:
       "obopissa ei ole maksullista versiota eikä pantattuja ominaisuuksia: jokainen sovellus, REST-rajapinta, MCP ja komentorivi kuuluvat ilmaiseen Apache-2.0-julkaisuun. Ajat sitä itse SQLitellä tai PostgreSQL:llä.",
-    hostingTitle: "Palvelinhotellointi, jos haluat",
+    hostingTitle: "Palvelinhotellointi, suunnitteilla",
     hostingBody:
       "Suunniteltu palvelu: SpaceCorps ylläpitää yrityksellesi omaa palvelinta Sliplanen infrastruktuurissa, jolla ovat obop ja PostgreSQL. Hinta määräytyy palvelimen koon mukaan; käyttäjäkohtaisia maksuja ei ole.",
     faqTitle: "Hinnoittelun kysymyksiä",
@@ -287,20 +284,20 @@ export const fi: Messages = {
       },
       {
         q: "Miksi hinta määräytyy palvelimen eikä käyttäjien mukaan?",
-        a: "Jokainen isännöity yritys saa oman palvelimen, joten hinta seuraa palvelimen kokoa ja lisättyä tallennustilaa. Lisää ihmisiä ei maksa mitään.",
+        a: "Jokainen isännöity yritys saisi oman palvelimen, joten hinta seuraisi palvelimen kokoa ja lisättyä tallennustilaa. Lisää ihmisiä ei maksaisi mitään.",
       },
       {
         q: "Voinko lähteä ja ottaa tietoni mukaan?",
-        a: "Kyllä. obop on Apache-2.0-lisenssin alla ja sen tietokanta on tavallinen PostgreSQL, joten voit ajaa samaa ohjelmistoa itse; obop backup ja obop restore ovat mukana.",
+        a: "Kyllä. obop on Apache-2.0-lisenssin alla, joten voit ajaa samaa ohjelmistoa itse; obop backup ja obop restore ovat mukana.",
       },
     ],
-    cta: "Hanki oma instanssi",
+    cta: "Aja se itse",
   },
   apps: {
     title: "Sovellukset",
     description:
-      "Kaikki 28 obop-sovellusta: 6 sisäänrakennettua (CRM, Sales, Invoicing, Products, Contacts, Connectors) ja 22 markkinapaikalta asennettavaa. Jokaisella sivulla luetellaan mallit, kentät, tietoluokat, työnkulut ja se, mitä agentit voivat tehdä.",
-    lead: "Jokainen sovellus on moduuli samalla tietomallilla. Kuusi on sisäänrakennettuja, ja muut 22 asennetaan markkinapaikalta yhdellä napsautuksella. Avaa sovellus nähdäksesi sen mallit, kentät, työnkulut ja sen, mitä tekoälyagentti saa sillä tehdä.",
+      "Tässä 28 obopin sovellusta: 6 tulee obopin mukana ja 22 muuta, jotka voit ottaa käyttöön. Avaa sovellus nähdäksesi, mitä se tekee.",
+    lead: "Sovellukset pienyrityksen arkeen.",
     filterLabel: "Suodata sovelluksia",
     all: "Kaikki",
     available: "Saatavilla",
@@ -314,7 +311,6 @@ export const fi: Messages = {
       content: "Sisältö ja asiakirjat",
     },
     status: { available: "Saatavilla", marketplace: "Markkinapaikka" },
-    countLine: "{n} sovellusta",
     h: {
       purpose: "Mihin se on tarkoitettu",
       package: "Mitä paketti tekee ja mitä ei",
@@ -328,7 +324,7 @@ export const fi: Messages = {
       dependencies: "Riippuvuudet",
       install: "Asennus",
       guide: "Tee oma",
-      related: "Liittyvät sovellukset",
+      related: "Muut tämän luokan sovellukset",
     },
     th: {
       field: "Kenttä",
@@ -354,7 +350,7 @@ export const fi: Messages = {
     noWorkflow:
       "Tässä sovelluksessa ei ole työnkulun toimintoja; tietueet luodaan ja muokataan suoraan.",
     noApproval:
-      "Mikään tämän sovelluksen vaihe ei vaadi hyväksyntää tietueiden poistamista lukuun ottamatta.",
+      "Mikään tämän sovelluksen vaihe ei vaadi hyväksyntää, kun henkilö suorittaa sen. Tekoälyagentti voi vain ehdottaa tietueiden poistamista, ja henkilö hyväksyy sen.",
     noDependencies: "Ei ole.",
     depLead:
       "Jokainen riippuvuus kertoo hyväksymänsä versiot. Sisäänrakennetut sovellukset versioituvat ytimen mukana, joten niitä koskeva vaatimus tarkistetaan ytimen versiota vasten.",
@@ -390,20 +386,78 @@ export const fi: Messages = {
     guideLink: "Moduulioppaassa näytetään, miten tällaiset sovellukset kirjoitetaan",
     englishNote: "englanniksi",
     agentsCan:
-      "Agentti voi lukea, hakea, luoda ja päivittää tämän sovelluksen tietueita sekä suorittaa toiminnot, jotka eivät vaadi hyväksyntää, tunnisteensa käyttöoikeusryhmien rajoissa.",
+      "Agentti voi lukea ja hakea tämän sovelluksen tietueita, luoda ja päivittää niitä silloin, kun malli sen sallii, sekä suorittaa toiminnot, jotka eivät vaadi hyväksyntää, tunnisteensa käyttöoikeusryhmien rajoissa.",
     agentsPropose: "Se voi vain ehdottaa näitä vaiheita, ja ihmisen on hyväksyttävä ne: {list}.",
     agentsMasked: "Henkilötiedot maskataan paikkamerkeiksi: {list}.",
     agentsWithheld: "Nämä kentät pidätetään agenteilta kokonaan: {list}.",
     agentsNone: "ei yhtään",
     approvalsLead: "Vaiheet, joita agentti voi vain ehdottaa:",
     permissionsLead: "Tämän sovelluksen käyttämät ryhmät:",
-    versionLabel: "Versio",
+    store: {
+      ready: "Mukana obopissa",
+      more: "Lisää sovelluksia",
+      open: "Aloita",
+      get: "Lataa",
+      canDo: "Mitä voit tehdä",
+      keeps: "Mitä se tallentaa",
+      safe: "Tekoälyagentit ja tämä sovellus",
+      safeWhat:
+        "Tekoälyagentti on tekoälyohjelma, joka toimii obopissa ihmisen puolesta eikä voi tehdä enempää kuin tämä ihminen saa.",
+      worksWith: "Toimii yhdessä",
+      info: "Tiedot",
+      developers: "Kehittäjille",
+      category: "Luokka",
+      developer: "Kehittäjä",
+      compat: "Yhteensopivuus",
+      compatValue: "obop {version}",
+      manifest: "Pakettitiedosto",
+      source: "Lähdekoodi",
+      standalone: "Ei tarvitse muita sovelluksia",
+      worksCount: {
+        one: "{n} sovellus",
+        few: "{n} sovellusta",
+        many: "{n} sovellusta",
+        other: "{n} sovellusta",
+      },
+      sameAsObop: "{version}, sama kuin obop",
+      directEdit: "Tietueet luodaan ja muokataan suoraan.",
+      needsApproval: "Tekoäly tarvitsee ihmisen hyväksynnän",
+      showMoreActions: "Näytä {n} toimintoa lisää",
+      showMoreKeeps: "Näytä {n} tallennettavaa asiaa lisää",
+      getLead: "Asenna se Mukauta-sovelluksesta, kohdasta Moduulikauppa.",
+      commandLine: "Tai komentoriviltä",
+      openObop: "Aloita",
+      getNote: "Tarvitset ylläpitäjän tunnuksen.",
+      included: "Sisältyy jokaiseen obopiin.",
+      experimentalNote:
+        "Sen kehittäjät ovat merkinneet sen kokeelliseksi. Kokeile sitä ensin esimerkkitiedoilla.",
+      safeMasked:
+        "Tekoälyagentit näkevät henkilötiedoiksi merkityt kentät, kuten nimet ja sähköpostiosoitteet, vain paikkamerkkeinä. Kenttään, jota ei ole merkitty henkilötiedoksi, esimerkiksi kuvaukseen, kirjoitettua tekstiä ei korvata paikkamerkillä.",
+      safeWithheld:
+        "Tekoälyagentit eivät koskaan näe arkaluonteisiksi merkittyjä kenttiä. Tässä sovelluksessa: {list}.",
+      safeMoneyClear: "Hinta tai summa näytetään, ellei sen kenttä ole yksi näistä.",
+      safeKinds: {
+        financial: "arkaluonteiset taloustiedot",
+        confidential_hr: "luottamukselliset henkilöstötiedot",
+        special_category: "erityiset henkilötietoryhmät (esimerkiksi terveystiedot)",
+        secret: "salaisuudet (esimerkiksi kirjautumistiedot)",
+      },
+      safeApprove:
+        "Joitakin vaiheita tekoälyagentti voi vain ehdottaa, ja henkilö hyväksyy ne. Muut vaiheet se voi tehdä itse, oikeuksiensa rajoissa.",
+      safeApproveNone:
+        "Tekoälyagentti voi vain ehdottaa tietueiden poistamista, ja henkilö hyväksyy sen. Kaiken muun se voi tehdä itse, oikeuksiensa rajoissa.",
+      appMeta: "Sovellus obopille, avoimen lähdekoodin yritysalustalle.",
+      developersShow: "Näytä tekniset tiedot",
+      developersHide: "Piilota tekniset tiedot",
+      purposeEnglish: "Kuvaus on englanniksi.",
+      readMore: "Lue lisää",
+    },
     taglines: {
-      crm: "Liidit ja myyntiputki",
+      crm: "Seuraa myyntimahdollisuuksia",
       sales: "Tarjoukset ja tilaukset",
-      invoicing: "Luonnokset, kirjaus, numerointi",
-      connectors: "Yhdistä järjestelmiä GDPR-kontrollein",
-      product: "Hinnat, tuotekoodit, kustannus",
+      invoicing: "Laskuta asiakkaita",
+      connectors: "Yhdistä muut työkalut",
+      product: "Tuotteet ja hinnat",
       base: "Henkilöt ja yritykset",
       projects: "Projektit ja tehtävät",
       helpdesk: "Tukipyynnöt",
@@ -412,18 +466,18 @@ export const fi: Messages = {
       purchase: "Toimittajat ja ostotilaukset",
       manufacturing: "Tuoterakenteet",
       hr: "Työntekijät ja poissaolot",
-      timesheets: "Työaika ja laskutus",
+      timesheets: "Työaika ja hyväksyntä",
       planning: "Vuorot ja resurssit",
       field_service: "Kohdetyöt asiakkaan luona",
-      pos: "Kauppa ja ravintola",
+      pos: "Kauppakassat",
       ecommerce: "Verkkokauppa",
-      website: "Sivut ja lomakkeet",
+      website: "Sivut ja yhteyslomake",
       email_marketing: "Kampanjat",
       documents: "Tiedostot ja kansiot",
-      sign: "Sähköiset allekirjoitukset",
-      subscriptions: "Toistuva laskutus",
+      sign: "Yksinkertaiset sähköiset allekirjoitukset",
+      subscriptions: "Suunnitelmat ja tilaukset",
       dashboards: "Raportit ja kaaviot",
-      accounting: "Pääkirja ja raportit",
+      accounting: "Pääkirja ja päiväkirjat",
       knowledge: "Artikkelit ja oppaat",
       appointments: "Varattavat resurssit",
       expenses: "Kulukorvaukset ja hyväksynnät",

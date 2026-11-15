@@ -545,3 +545,319 @@ fn a_visitor_cannot_send_a_number_or_a_decimal_past_its_bound() {
     api.submit_batch("n2", vec![ok]).unwrap();
     assert_eq!(s.count("msg"), 1);
 }
+
+/// The instance brand reaches the public site through this door and no other (docs/spec/branding.md,
+/// section 4 and 5, row OT-04): `site_settings_read` (and `site_settings`, which answers its object
+/// alone) reads the reader of the dispatcher, fills the keys the stored object leaves unset, and
+/// hands the artwork over through one reserved key that it strips from the stored object first.
+mod brand_door {
+    use super::*;
+    use crate::brand::Reader;
+    use crate::brand::tests::{M_ARTWORK, Spy, put_row, put_settings};
+    use serde_json::json;
+    use std::time::Duration;
+
+    struct Rig {
+        api: PublicApi,
+        spy: Arc<Spy>,
+    }
+
+    /// A door over a store behind the counting double, with a reader of this bound on the
+    /// dispatcher (a zero bound makes every call a flight, so the reads count the calls).
+    fn rig(bound: Duration) -> Rig {
+        let spy = Spy::memory();
+        let store = Store::over(spy.clone());
+        let d = Arc::new(Dispatcher::new());
+        let reader = Arc::new(Reader::with_bound(spy.clone(), bound));
+        assert!(d.brand.set(reader).is_ok(), "the dispatcher had no reader");
+        Rig {
+            api: PublicApi::new(d, store),
+            spy,
+        }
+    }
+
+    /// The brand row: the name MOHV and the given other text fields.
+    fn put(spy: &Arc<Spy>, extra: &[(&str, &str)]) {
+        let mut pairs: Vec<(&str, J)> = vec![("name", J::String("MOHV".into()))];
+        pairs.extend(extra.iter().map(|(k, v)| (*k, J::String(v.to_string()))));
+        put_row(&**spy, &pairs);
+    }
+
+    #[test]
+    fn with_no_brand_the_door_answers_what_is_stored_and_nothing_else() {
+        let r = rig(Duration::ZERO);
+        assert!(r.api.site_settings().is_empty());
+        let site = json!({"title": "Café Nord", "accent": "red", "n": 3});
+        put_settings(
+            &*r.spy,
+            json!({"theme": {"accent": "#c2410c"}, "site": site}),
+        );
+        assert_eq!(
+            J::Object(r.api.site_settings()),
+            site,
+            "the theme is not the shop's, and nothing is filled"
+        );
+        // A dispatcher that never ran `register_admin` has an inert reader: the same answer.
+        let (api, s) = api();
+        assert!(api.site_settings().is_empty());
+        s.backend
+            .insert(
+                "obop_setting",
+                "instance",
+                &[(
+                    "value".to_string(),
+                    J::String(json!({ "site": site }).to_string()),
+                )]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap();
+        assert_eq!(J::Object(api.site_settings()), site);
+    }
+
+    #[test]
+    fn with_a_brand_the_door_fills_the_unset_keys_and_hands_over_the_artwork() {
+        let r = rig(Duration::ZERO);
+        put(&r.spy, &[("logo_svg", M_ARTWORK)]);
+        let site = r.api.site_settings();
+        let v = site[crate::SITE_FAVICON_KEY]["v"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(v.len(), 16);
+        assert_eq!(site["title"], "MOHV");
+        assert_eq!(site["logo_url"], format!("/api/brand/logo.svg?v={v}"));
+        assert_eq!(site["accent"], "#495670");
+        assert_eq!(site[crate::SITE_FAVICON_KEY]["svg"], M_ARTWORK);
+        // The theme's accent is the shop's accent; an explicit key wins over both.
+        put_settings(
+            &*r.spy,
+            json!({"theme": {"accent": "#c2410c"}, "site": {"title": "Café Nord"}}),
+        );
+        let site = r.api.site_settings();
+        assert_eq!(site["title"], "Café Nord");
+        assert_eq!(site["accent"], "#c2410c");
+        put_settings(&*r.spy, json!({"site": {"accent": "#e11d48"}}));
+        assert_eq!(r.api.site_settings()["accent"], "#e11d48");
+    }
+
+    #[test]
+    fn a_key_with_the_reserved_name_written_to_the_settings_reaches_nothing() {
+        let hostile = json!({"svg": "<svg onload=\"x\"></svg>", "v": "0123456789abcdef"});
+        let stored = json!({"site": {crate::SITE_FAVICON_KEY: hostile, "title": "Café Nord"}});
+        // No brand.
+        let r = rig(Duration::ZERO);
+        put_settings(&*r.spy, stored.clone());
+        let site = r.api.site_settings();
+        assert!(!site.contains_key(crate::SITE_FAVICON_KEY), "{site:?}");
+        assert_eq!(site["title"], "Café Nord");
+        // A brand with no artwork: the shop keeps its own tile, so there is no key at all.
+        put(&r.spy, &[]);
+        let site = r.api.site_settings();
+        assert!(!site.contains_key(crate::SITE_FAVICON_KEY), "{site:?}");
+        // A brand with an artwork: the key is the reader's, never the stored one.
+        put(&r.spy, &[("logo_svg", M_ARTWORK)]);
+        let site = r.api.site_settings();
+        assert_eq!(site[crate::SITE_FAVICON_KEY]["svg"], M_ARTWORK);
+        assert_ne!(site[crate::SITE_FAVICON_KEY]["v"], "0123456789abcdef");
+        assert!(!J::Object(site).to_string().contains("onload"));
+    }
+
+    #[test]
+    fn one_call_asks_the_reader_once() {
+        let r = rig(Duration::ZERO);
+        put(&r.spy, &[]);
+        for calls in 1..=3 {
+            r.api.site_settings();
+            // A reader of zero bound reads on every call, so its reads are its calls: the row once,
+            // and the theme setting once (the door's own read of the setting is one more).
+            assert_eq!(r.spy.gets("instance_brand"), calls, "{calls} calls");
+            assert_eq!(r.spy.gets("obop_setting"), 2 * calls, "{calls} calls");
+        }
+        // With the reader's bound the calls within it share one flight.
+        let r = rig(Duration::from_secs(3600));
+        put(&r.spy, &[]);
+        for _ in 0..5 {
+            r.api.site_settings();
+        }
+        assert_eq!(r.spy.gets("instance_brand"), 1);
+    }
+
+    /// D74 shape (section 4, "The display read and D74"): a reader that cannot read serves the last
+    /// good brand, and the default only in a process that never had a good read; a failed refill is
+    /// not kept; the door never fails, panics or blocks on it.
+    #[test]
+    fn a_failing_read_serves_the_last_good_brand_and_in_a_new_process_the_default() {
+        let r = rig(Duration::ZERO);
+        put(&r.spy, &[("logo_svg", M_ARTWORK)]);
+        let good = r.api.site_settings();
+        assert_eq!(good["title"], "MOHV");
+
+        r.spy.fail("instance_brand", "storage_busy");
+        for _ in 0..2 {
+            let during = r.api.site_settings();
+            assert_eq!(during, good, "the last good brand, of any age");
+        }
+        r.spy.heal();
+        put_row(&*r.spy, &[("name", J::String("Other".into()))]);
+        assert_eq!(
+            r.api.site_settings()["title"],
+            "Other",
+            "the next call reads again: the failure was not kept"
+        );
+
+        // The theme setting failing fails the refill as a whole, and is served the same way.
+        r.spy.fail("obop_setting", "storage_busy");
+        let during = r.api.site_settings();
+        assert_eq!(during["title"], "Other");
+        r.spy.heal();
+
+        // A process that never had a good read: the default, which is today's shop.
+        let fresh = rig(Duration::ZERO);
+        put_settings(&*fresh.spy, json!({"site": {"tagline": "Tea"}}));
+        put(&fresh.spy, &[]);
+        fresh.spy.fail("instance_brand", "storage_busy");
+        let during = fresh.api.site_settings();
+        assert_eq!(during.get("tagline"), Some(&json!("Tea")));
+        assert!(!during.contains_key("title"), "{during:?}");
+        assert!(!during.contains_key("logo_url") && !during.contains_key("accent"));
+        assert!(!during.contains_key(crate::SITE_FAVICON_KEY));
+        // Nothing was pinned at the door: when the store answers, the brand is there. What the site
+        // keeps of such an answer is another matter, `site_settings_read` and the site's cache (the
+        // next test, and `tests_brand` in `obop-site`).
+        fresh.spy.heal();
+        assert_eq!(fresh.api.site_settings()["title"], "MOHV");
+    }
+
+    #[test]
+    fn the_door_without_a_reader_never_asks_the_store_for_the_row() {
+        let spy = Spy::memory();
+        let api = PublicApi::new(Arc::new(Dispatcher::new()), Store::over(spy.clone()));
+        put(&spy, &[]);
+        assert!(api.site_settings().is_empty());
+        assert_eq!(spy.gets("instance_brand"), 0);
+    }
+
+    /// What a cache may keep (`site_settings_read`): the answer says when it is a stand-in. The
+    /// settings row that cannot be read is one (the owner's explicit keys are missing, so the brand's
+    /// values stand where they are); the default of a reader that never had a good read is the other.
+    /// The last good brand that a failing refill serves is a brand that was read, and an empty store
+    /// is the answer "no brand".
+    #[test]
+    fn the_read_says_when_it_is_a_stand_in_for_what_the_store_holds() {
+        let explicit = json!({"site": {"title": "Corner Shop", "accent": "#e11d48"}});
+
+        // Nothing wrong: no brand, a brand, an inert reader. Not degraded.
+        let nobody = rig(Duration::ZERO);
+        put_settings(&*nobody.spy, explicit.clone());
+        assert!(!nobody.api.site_settings_read().degraded);
+        let r = rig(Duration::from_secs(3600));
+        put_settings(&*r.spy, explicit.clone());
+        put(&r.spy, &[]);
+        let read = r.api.site_settings_read();
+        assert!(!read.degraded);
+        assert_eq!(read.site["title"], "Corner Shop", "an explicit key wins");
+        let (api, _) = api();
+        assert!(!api.site_settings_read().degraded);
+
+        // The settings row cannot be read (the reader's own cell is fresh and reads nothing): the
+        // object is the brand's values with no explicit key, and it says so.
+        r.spy.fail("obop_setting", "storage_busy");
+        let read = r.api.site_settings_read();
+        assert!(read.degraded);
+        assert_eq!(
+            read.site["title"], "MOHV",
+            "the stand-in, not the owner's key"
+        );
+        assert_eq!(read.site["accent"], "#495670");
+        assert_eq!(
+            r.api.site_settings(),
+            read.site,
+            "the plain door answers the same object"
+        );
+        r.spy.heal();
+        let read = r.api.site_settings_read();
+        assert!(!read.degraded);
+        assert_eq!(read.site["title"], "Corner Shop");
+        assert_eq!(read.site["accent"], "#e11d48");
+
+        // A process that never had a good read of the brand, the store failing: the default stands
+        // for a brand that may be set, and the object says so. The explicit keys are all there.
+        let fresh = rig(Duration::ZERO);
+        put_settings(&*fresh.spy, explicit.clone());
+        put(&fresh.spy, &[]);
+        fresh.spy.fail("instance_brand", "storage_busy");
+        let read = fresh.api.site_settings_read();
+        assert!(read.degraded);
+        assert_eq!(read.site["title"], "Corner Shop");
+        assert!(!read.site.contains_key("logo_url"));
+        fresh.spy.heal();
+        let read = fresh.api.site_settings_read();
+        assert!(!read.degraded);
+        assert!(read.site.contains_key("logo_url"), "the brand is back");
+
+        // A failing refill that has a last good brand to serve serves it: a brand that was read.
+        let last = rig(Duration::ZERO);
+        put_settings(&*last.spy, explicit);
+        put(&last.spy, &[("logo_svg", M_ARTWORK)]);
+        let good = last.api.site_settings_read();
+        assert!(!good.degraded);
+        last.spy.fail("instance_brand", "storage_busy");
+        let during = last.api.site_settings_read();
+        assert!(!during.degraded);
+        assert_eq!(during, good, "the last good brand, as before");
+
+        // No brand and a failing read of the row: the reader answers "no brand", not a stand-in; the
+        // settings row is what is wrong, and it is told whichever way the brand stands.
+        let none = rig(Duration::ZERO);
+        put_settings(&*none.spy, json!({"site": {"tagline": "Tea"}}));
+        let read = none.api.site_settings_read();
+        assert!(!read.degraded);
+        none.spy.fail("obop_setting", "storage_busy");
+        assert!(none.api.site_settings_read().degraded);
+    }
+
+    /// A read error that is none of the fault classes of D74 (`docs/DEPLOY.md`, "If the store cannot
+    /// be read"; a table that is missing, say, whose text has no code word) is a stand-in for the
+    /// store all the same: the answer says `degraded`, so the site keeps none of it, but it notes no
+    /// fault, so the layer above answers the request with the stand-in and not with a 503. The
+    /// text with a code word is the control: the same double notes a fault for it.
+    #[test]
+    fn a_read_error_that_is_not_a_d74_class_is_a_stand_in_and_notes_no_fault() {
+        use obop_storage::fault::{self, Fault};
+        let explicit = json!({"site": {"title": "Corner Shop"}});
+        for model in ["obop_setting", "instance_brand"] {
+            // The reader has never read: both models are asked by the one call.
+            let r = rig(Duration::ZERO);
+            r.spy.note_faults();
+            put_settings(&*r.spy, explicit.clone());
+            put(&r.spy, &[]);
+
+            r.spy.fail(model, "storage_busy: the pool is full");
+            fault::clear();
+            let read = r.api.site_settings_read();
+            assert!(read.degraded, "{model}: a fault");
+            assert_eq!(fault::take(), Some(Fault::Busy), "{model}: the control");
+
+            r.spy.fail(model, &format!("no such table: {model}"));
+            fault::clear();
+            let read = r.api.site_settings_read();
+            assert!(read.degraded, "{model}: another error is a stand-in too");
+            assert_eq!(fault::take(), None, "{model}: and no fault is noted");
+            // The settings row is the owner's explicit keys: unread, they are not in the object.
+            // The brand is not: the explicit keys are all there.
+            assert_eq!(
+                read.site.get("title") == Some(&json!("Corner Shop")),
+                model == "instance_brand",
+                "{model}: {:?}",
+                read.site
+            );
+
+            r.spy.heal();
+            let read = r.api.site_settings_read();
+            assert!(!read.degraded, "{model}: healed");
+            assert_eq!(read.site["title"], "Corner Shop", "{model}");
+            assert_eq!(fault::take(), None, "{model}");
+        }
+    }
+}

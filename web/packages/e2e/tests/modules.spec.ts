@@ -78,7 +78,7 @@ test.describe("Customize > Modules", () => {
     await page.getByRole("tab", { name: /^Marketplace/ }).click();
     const ts = card(page, "Timesheets");
     await expect(ts).toBeVisible();
-    await expect(ts).toContainText("0.3.0 · SpaceCorps");
+    await expect(ts).toContainText("0.3.1 · SpaceCorps");
     await expect(ts).toContainText("Beta");
     await expect(ts).toContainText("Works with core 0.2");
     await expect(ts).toContainText("Marketplace");
@@ -87,7 +87,7 @@ test.describe("Customize > Modules", () => {
     await expect(card(page, "Field Service")).toContainText(
       "Needs: Contacts, Human Resources, Products",
     );
-    await expect(page.getByRole("tab", { name: /^Marketplace/ })).toContainText("23");
+    await expect(page.getByRole("tab", { name: /^Marketplace/ })).toContainText("24");
   });
 
   test("search, category and sort narrow the list", async ({ page, signIn }) => {

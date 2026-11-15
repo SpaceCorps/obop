@@ -4,7 +4,9 @@ import type { Page } from "@playwright/test";
  * Layout problems on the current screen, found with element boxes: the page scrolls sideways, a
  * control sticks out of the viewport (unless it sits in a container that scrolls), or the text of a
  * button, tab, label or heading is cut off (its content is wider than its box and it clips). Text in
- * a `lang="en"` island (the guide, the brand book) is skipped.
+ * a `lang="en"` island (the guide, the brand book) is skipped, and so is anything visually hidden
+ * for screen readers (`.sr-only`, or the same 1 px clip written in a rule: a heading kept for
+ * `aria-labelledby` while a sheet's own title shows, the header row of a stacked table).
  */
 export async function layoutProblems(page: Page): Promise<string[]> {
   // A panel that is still sliding in widens the page for a moment.
@@ -18,6 +20,13 @@ export async function layoutProblems(page: Page): Promise<string[]> {
       out.push(`the page scrolls sideways: ${document.documentElement.scrollWidth} > ${vw}`);
     const sel =
       "button, [role=tab], [role=radio], a.btn, select, input:not([type=hidden]), label.check, .badge, .chip, h1, h2, h3, h4, th, .app-tile, .menu-item, .fp-item";
+    const readerOnly = (el: Element) => {
+      for (let e: Element | null = el; e; e = e.parentElement) {
+        if (e.classList.contains("sr-only")) return true;
+        if (getComputedStyle(e).clipPath === "inset(50%)") return true;
+      }
+      return false;
+    };
     const scrolls = (el: Element) => {
       for (let p = el.parentElement; p; p = p.parentElement) {
         const o = getComputedStyle(p).overflowX;
@@ -29,7 +38,7 @@ export async function layoutProblems(page: Page): Promise<string[]> {
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height || el.closest("[lang=en], [hidden], [aria-hidden=true]")) continue;
       const cs = getComputedStyle(el);
-      if (cs.visibility === "hidden" || cs.display === "none") continue;
+      if (cs.visibility === "hidden" || cs.display === "none" || readerOnly(el)) continue;
       const name = `${el.tagName.toLowerCase()} "${(el.textContent || el.getAttribute("aria-label") || "").trim().slice(0, 40)}"`;
       const cut =
         el.scrollWidth > el.clientWidth + 1 &&

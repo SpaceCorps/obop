@@ -123,6 +123,72 @@ pub fn otpauth_uri(issuer: &str, account: &str, secret_b32: &str) -> String {
     )
 }
 
+/// What a test needs to hold the URI of an enrolment to its format, whatever the issuer says.
+#[cfg(test)]
+pub(crate) mod uri_check {
+    /// The text a percent-encoded component stands for. Panics on anything but `%XX` escapes and
+    /// the unreserved characters, which is all that [`super::pct`] writes.
+    pub(crate) fn unpct(s: &str) -> String {
+        let bytes = s.as_bytes();
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'%' => {
+                    let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).expect("two hex digits");
+                    out.push(u8::from_str_radix(hex, 16).expect("two hex digits"));
+                    i += 3;
+                }
+                b @ (b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~') => {
+                    out.push(b);
+                    i += 1;
+                }
+                other => panic!(
+                    "{:?} is not written as it is in a component: {s}",
+                    other as char
+                ),
+            }
+        }
+        String::from_utf8(out).expect("UTF-8")
+    }
+
+    /// The URI is `otpauth://totp/<issuer>:<account>?secret=..&issuer=<issuer>&algorithm=SHA1&digits=6&period=30`
+    /// whatever the issuer and the account say: exactly one literal `:` in the label (the one
+    /// between its two parts, so that an app splitting the label at the first colon reads the
+    /// issuer back), exactly one `?`, no `#`, exactly the five keys `secret`, `issuer`,
+    /// `algorithm`, `digits` and `period` in the query, and percent-decoding the label prefix and
+    /// `issuer=` gives the issuer back, and the label suffix the account.
+    pub(crate) fn assert_sound(uri: &str, issuer: &str, account: &str) {
+        let rest = uri
+            .strip_prefix("otpauth://totp/")
+            .unwrap_or_else(|| panic!("scheme and type: {uri}"));
+        assert_eq!(rest.matches('?').count(), 1, "one `?`: {uri}");
+        assert!(!uri.contains('#'), "no fragment: {uri}");
+        let (label, query) = rest.split_once('?').unwrap();
+        assert_eq!(label.matches(':').count(), 1, "one `:` in the label: {uri}");
+        let (label_issuer, label_account) = label.split_once(':').unwrap();
+        assert_eq!(unpct(label_issuer), issuer, "the label's issuer: {uri}");
+        assert_eq!(unpct(label_account), account, "the label's account: {uri}");
+        let pairs: Vec<(&str, &str)> = query
+            .split('&')
+            .map(|kv| {
+                kv.split_once('=')
+                    .unwrap_or_else(|| panic!("{kv} in {uri}"))
+            })
+            .collect();
+        assert_eq!(
+            pairs.iter().map(|(k, _)| *k).collect::<Vec<_>>(),
+            ["secret", "issuer", "algorithm", "digits", "period"],
+            "exactly these keys, in this order: {uri}"
+        );
+        let value = |key: &str| pairs.iter().find(|(k, _)| *k == key).unwrap().1;
+        assert_eq!(unpct(value("issuer")), issuer, "issuer=: {uri}");
+        assert_eq!(value("algorithm"), "SHA1");
+        assert_eq!(value("digits"), "6");
+        assert_eq!(value("period"), "30");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,5 +287,77 @@ mod tests {
             u,
             "otpauth://totp/obop%20%28acme%29:ada%40example.test?secret=ABC&issuer=obop%20%28acme%29&algorithm=SHA1&digits=6&period=30"
         );
+    }
+
+    /// The names that matter most for a URI: the colon that separates the label's two parts, the
+    /// percent sign that starts an escape, the `?` that starts the query, the `#` that starts a
+    /// fragment, the `&` and `=` of the query, the slash and the backslash of a path, a double
+    /// quote, white space of every kind, and non-ASCII text (which is written as UTF-8 bytes). The
+    /// issuer is operator-controlled stored text since the brand record feeds it, so none of these
+    /// may change what the URI says: it stays one URI with one label and the five keys.
+    #[test]
+    fn a_hostile_issuer_cannot_change_the_shape_of_the_uri() {
+        let names = [
+            "a:b",
+            ":",
+            "::",
+            "a%41",
+            "100%",
+            "%",
+            "%3A",
+            "q?x=1",
+            "?",
+            "h#frag",
+            "#",
+            "a&b=c",
+            "a&secret=EVIL",
+            "&issuer=evil&",
+            "a/b",
+            "a\\b",
+            "say \"hi\"",
+            "it's",
+            "a b",
+            "tab\there",
+            "line\nbreak",
+            "a@b",
+            "a;b,c",
+            "a+b",
+            "[x]{y}|z^`",
+            "Exämple Söns",
+            "日本語",
+            "emoji \u{1F389}",
+            "obop:evil",
+            "javascript:alert(1)",
+            "http://evil.test/x?y#z",
+        ];
+        for issuer in names {
+            for account in ["ada", "ada@example.test", "a:b?c#d%e"] {
+                let uri = otpauth_uri(issuer, account, "ABC");
+                uri_check::assert_sound(&uri, issuer, account);
+            }
+        }
+    }
+
+    /// The same, for the characters one at a time: every ASCII character that is not unreserved is
+    /// written as `%XX` and nothing else, and the unreserved ones are written as they are.
+    #[test]
+    fn every_ascii_character_is_written_as_itself_or_as_one_escape() {
+        for b in 0u8..=127 {
+            let c = b as char;
+            let issuer = format!("x{c}y");
+            let uri = otpauth_uri(&issuer, "ada", "ABC");
+            uri_check::assert_sound(&uri, &issuer, "ada");
+            let label = uri
+                .strip_prefix("otpauth://totp/")
+                .and_then(|r| r.split_once(':'))
+                .unwrap()
+                .0;
+            let unreserved = c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '~');
+            if unreserved {
+                assert_eq!(label, issuer, "{b:#04x}");
+            } else {
+                assert_eq!(label, format!("x%{b:02X}y"), "{b:#04x}");
+            }
+        }
     }
 }

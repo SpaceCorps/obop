@@ -13,6 +13,7 @@ import {
   type Upload,
 } from "./blobs.ts";
 import { useData } from "./data.tsx";
+import { loadPreview, type Preview } from "./filePreview.ts";
 import { fieldTitle } from "./labels.ts";
 import { Icon } from "./ui.tsx";
 
@@ -109,6 +110,88 @@ export function FileChip({ id, field }: { id: string; field: FieldMeta }) {
     >
       <Icon name="download" size={14} /> {state === "failed" ? t("Try again") : t("Download")}
     </button>
+  );
+}
+
+type PreviewState =
+  | { s: "idle" | "loading" | "failed" | "none" }
+  | { s: "large"; size: number }
+  | { s: "ready"; preview: Preview };
+
+/**
+ * A look at a PDF or a PNG or JPEG picture that a record holds (filePreview.ts): shown in the page
+ * from a typed Blob of the bytes the download would give, opened full size in a new tab on a click,
+ * with the Download chip beside it unchanged. Other types show nothing here. A file over 8 MiB waits
+ * for a click, and the object URL is revoked when the person leaves the record.
+ */
+export function FilePreview({ id, title }: { id: string; title: string }) {
+  const d = useData();
+  const [ref, seen] = useVisible<HTMLDivElement>();
+  const [state, setState] = useState<PreviewState>({ s: "idle" });
+  const [force, setForce] = useState(false);
+  useEffect(() => {
+    if (!seen) return;
+    const ctl = new AbortController();
+    let url: string | null = null;
+    setState({ s: "loading" });
+    void loadPreview(d.token, id, { force, signal: ctl.signal }).then((r) => {
+      if ("ok" in r) {
+        if (ctl.signal.aborted) return URL.revokeObjectURL(r.ok.url);
+        url = r.ok.url;
+        setState({ s: "ready", preview: r.ok });
+      } else if (ctl.signal.aborted) {
+        // the person moved on
+      } else if ("large" in r) setState({ s: "large", size: r.large });
+      else setState({ s: "none" in r ? "none" : "failed" });
+    });
+    return () => {
+      ctl.abort();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [seen, d.token, id, force]);
+  return (
+    <div ref={ref} className="filepreview" data-state={state.s}>
+      {state.s === "loading" && <small className="hint">{t("Loading the preview…")}</small>}
+      {state.s === "failed" && <small className="hint">{t("Could not load the preview.")}</small>}
+      {state.s === "large" && (
+        <button type="button" className="btn small" onClick={() => setForce(true)}>
+          <Icon name="eye" size={14} />{" "}
+          {t("Show preview ({size})", { size: formatBytes(state.size) })}
+        </button>
+      )}
+      {state.s === "ready" && (
+        <>
+          {state.preview.kind === "pdf" ? (
+            <object
+              className="filepreview-pdf"
+              data={state.preview.url}
+              type="application/pdf"
+              aria-label={t("Preview of {field}", { field: title })}
+            >
+              <small className="hint">
+                {t("This browser cannot show the PDF here. Use Open full size or Download.")}
+              </small>
+            </object>
+          ) : (
+            <a href={state.preview.url} target="_blank" rel="noopener noreferrer" tabIndex={-1}>
+              <img
+                className="filepreview-img"
+                src={state.preview.url}
+                alt={t("Preview of {field}", { field: title })}
+              />
+            </a>
+          )}
+          <a
+            className="btn small filepreview-open"
+            href={state.preview.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Icon name="eye" size={14} /> {t("Open full size")}
+          </a>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -239,6 +322,7 @@ export function BlobInput(p: BlobInputProps) {
           </div>
         )}
       </div>
+      {!isImage && value && <FilePreview key={value} id={value} title={title} />}
       <input
         ref={input}
         type="file"

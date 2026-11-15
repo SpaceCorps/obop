@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useId, useState } from "react";
-import { Badge, Button, Input, Notice, Table, createTwoFactorApi, fmt, t } from "@obop/ui";
-import { Icon, Logo } from "./ui.tsx";
+import {
+  Badge,
+  Button,
+  InstanceLogo,
+  Input,
+  Notice,
+  Table,
+  createTwoFactorApi,
+  fmt,
+  t,
+} from "@obop/ui";
+import { Icon } from "./ui.tsx";
 import { passkeyMessage } from "./Passkeys.tsx";
 import { proveWithPasskey } from "./passkeys.ts";
 import { call, search, type Row } from "./api.ts";
@@ -239,7 +249,7 @@ export function SessionsSection({
         {t("Your sessions")}
       </h3>
       {rows !== null && (
-        <Table caption={t("Your sessions")} dense>
+        <Table caption={t("Your sessions")} dense stack>
           <thead>
             <tr>
               <th scope="col">{t("Signed in")}</th>
@@ -250,9 +260,15 @@ export function SessionsSection({
           <tbody>
             {rows.map((s) => (
               <tr key={s.id}>
-                <td>{s.created_at ? fmt.dateTime(s.created_at) : t("Earlier")}</td>
-                <td>{s.expires_at ? fmt.dateTime(s.expires_at) : ""}</td>
-                <td>{s.current ? <Badge tone="success">{t("This session")}</Badge> : null}</td>
+                <td data-label={t("Signed in")}>
+                  {s.created_at ? fmt.dateTime(s.created_at) : t("Earlier")}
+                </td>
+                <td data-label={t("Ends")}>{s.expires_at ? fmt.dateTime(s.expires_at) : ""}</td>
+                {/* Last and on a line of its own on a phone, so Signed in and Ends pair up in
+                    every row. */}
+                <td className="cell-actions">
+                  {s.current ? <Badge tone="success">{t("This session")}</Badge> : null}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -348,7 +364,7 @@ export function ConnectedAppsSection({ token, notify }: { token: string; notify:
         </p>
       )}
       {rows !== null && rows.length > 0 && (
-        <Table caption={t("Connected apps")} dense>
+        <Table caption={t("Connected apps")} dense stack>
           <thead>
             <tr>
               <th scope="col">{t("App")}</th>
@@ -364,15 +380,19 @@ export function ConnectedAppsSection({ token, notify }: { token: string; notify:
           <tbody>
             {rows.map((g) => (
               <tr key={g.id}>
-                <td>
+                <td className="cell-main">
                   <strong>{g.client_name}</strong>
                   <div className="hint">{g.redirect_host}</div>
                 </td>
-                <td>{g.scopes.join(", ")}</td>
-                <td>{g.created_at ? fmt.dateTime(g.created_at) : ""}</td>
-                <td>{g.last_used_at ? fmt.dateTime(g.last_used_at) : ""}</td>
-                <td>{g.expires_at ? fmt.dateTime(g.expires_at) : ""}</td>
-                <td>
+                <td data-label={t("Can act with")}>{g.scopes.join(", ")}</td>
+                <td data-label={t("Connected")}>
+                  {g.created_at ? fmt.dateTime(g.created_at) : ""}
+                </td>
+                <td data-label={t("Last active")}>
+                  {g.last_used_at ? fmt.dateTime(g.last_used_at) : ""}
+                </td>
+                <td data-label={t("Ends")}>{g.expires_at ? fmt.dateTime(g.expires_at) : ""}</td>
+                <td className="cell-actions">
                   <Button
                     variant="danger"
                     size="sm"
@@ -490,7 +510,7 @@ export function DevicesSection({
       {rows !== null && rows.length === 0 && problem === null ? (
         <p className="hint">{t("No device is signed in.")}</p>
       ) : rows === null ? null : (
-        <Table caption={t("Devices")} dense>
+        <Table caption={t("Devices")} dense stack>
           <thead>
             <tr>
               <th scope="col">{t("Device")}</th>
@@ -515,7 +535,7 @@ export function DevicesSection({
               const editing = renaming?.id === d.id ? renaming : null;
               return (
                 <tr key={d.id}>
-                  <td>
+                  <td className="cell-main">
                     {editing ? (
                       <form
                         className="actionrow"
@@ -564,11 +584,15 @@ export function DevicesSection({
                       </>
                     )}
                   </td>
-                  {showUser && <td>{text(d, "user")}</td>}
-                  <td>{text(d, "client_name")}</td>
-                  <td>{text(d, "registered_at") ? fmt.dateTime(text(d, "registered_at")) : ""}</td>
-                  <td>{text(d, "last_seen") ? fmt.dateTime(text(d, "last_seen")) : ""}</td>
-                  <td>
+                  {showUser && <td data-label={t("Person")}>{text(d, "user")}</td>}
+                  <td data-label={t("App")}>{text(d, "client_name")}</td>
+                  <td data-label={t("Signed in")}>
+                    {text(d, "registered_at") ? fmt.dateTime(text(d, "registered_at")) : ""}
+                  </td>
+                  <td data-label={t("Last active")}>
+                    {text(d, "last_seen") ? fmt.dateTime(text(d, "last_seen")) : ""}
+                  </td>
+                  <td data-label={t("Ends")}>
                     {active
                       ? text(d, "expires_at")
                         ? fmt.dateTime(text(d, "expires_at"))
@@ -577,12 +601,12 @@ export function DevicesSection({
                         ? fmt.dateTime(text(d, "revoked_at"))
                         : ""}
                   </td>
-                  <td>
+                  <td data-label={t("Status")}>
                     <Badge tone={active && !expired ? "success" : "neutral"}>
                       {!active ? t("Revoked") : expired ? t("Expired") : t("Signed in")}
                     </Badge>
                   </td>
-                  <td>
+                  <td className="cell-actions">
                     {active && !editing && (
                       <div className="actionrow">
                         {/* A name is the owner's: an administrator reads and ends every device and
@@ -676,7 +700,7 @@ export function PasswordGate({
     <main className="gate">
       <div className="gate-card panel">
         <header className="gate-head">
-          <Logo variant="full" size={26} title="obop" />
+          <InstanceLogo variant="full" size={26} />
           <span className="hint">{user}</span>
         </header>
         <Notice tone="warning" title={t("Choose a new password to continue")}>

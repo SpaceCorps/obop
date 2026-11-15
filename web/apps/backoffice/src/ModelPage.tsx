@@ -7,7 +7,7 @@ import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
 import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.ts";
 import { isState, visibleFields } from "./format.ts";
-import { DriveBrowser, useDriveStatus } from "./DriveBrowser.tsx";
+import { DriveBrowser, takePendingDriveDefaults, useDriveStatus } from "./DriveBrowser.tsx";
 import { ImportDialog } from "./ImportDialog.tsx";
 import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
@@ -72,7 +72,12 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   const [extraDialog, setExtraDialog] = useState<ReactNode>(null);
   const [importing, setImporting] = useState(false);
   const [drive, setDrive] = useState(false);
-  const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>({});
+  // A file imported on the Drive page opens the new record form with its values.
+  const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>(() => {
+    const v =
+      route.id === "new" && model.name === "documents_document" ? takePendingDriveDefaults() : null;
+    return v ? { ...v, kind: "contract", confidentiality: "internal" } : {};
+  });
   const [pageSize, setPageSizeState] = useState(() => {
     const n = readPref<number>("obop-pagesize", 100);
     return PAGE_SIZES.includes(n) ? n : 100;

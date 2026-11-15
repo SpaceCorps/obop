@@ -2373,6 +2373,23 @@ fn observers_hear_about_successful_commands_only_and_go_with_their_module() {
     assert_eq!(heard.lock().unwrap().len(), 1);
 }
 
+/// The ids of the modules that have a command registered, sorted: what the installer reserves so
+/// that no package takes the id of a module the program registered itself.
+#[test]
+fn the_dispatcher_lists_the_ids_of_its_modules_and_forgets_one_that_is_unregistered() {
+    let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
+    assert!(d.module_ids().is_empty());
+    d.register_crud(&module("zeta"), &store);
+    d.register_crud(&m, &store);
+    d.register_crud(&module("alpha"), &store);
+    // The same module registered again is listed once.
+    d.register_crud(&m, &store);
+    assert_eq!(d.module_ids(), ["alpha", "hooks_t", "zeta"]);
+    d.unregister_module("hooks_t");
+    assert_eq!(d.module_ids(), ["alpha", "zeta"]);
+    assert_eq!(d.model_owner("hooks_item"), None);
+}
+
 #[test]
 fn read_only_registration_exposes_get_list_and_search_and_ignores_actor_keys() {
     let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());

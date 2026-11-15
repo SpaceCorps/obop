@@ -17,15 +17,43 @@ const emailFor = (uid: (p: string) => string) => `${uid("owner").replace(/ /g, "
 const nameFor = (uid: (p: string) => string) => uid("Acme").replace(/ /g, "").slice(0, 24);
 
 test.describe("landing page", () => {
-  test("loads, shows the pitch and its call to action reaches the app", async ({ page }) => {
+  // SpaceCorps hosts no obop for other people today (OR-11; the owner confirmed in chat on 2026-11-11
+  // that the hosted beta is not live): the site's call to action leads to Getting started (run obop
+  // yourself), and the home page does not link to the sign-up app.
+  test("loads, shows the pitch and its call to action reaches Getting started", async ({
+    page,
+  }) => {
     await page.goto(`${platformUrl()}/`);
     await expect(page).toHaveTitle(/obop/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("One business.");
     await expect(page.getByRole("link", { name: "See the apps" })).toBeVisible();
+    await expect(page.locator('a[href*="/app/"], a[href$="/app"]')).toHaveCount(0);
 
-    await page.getByRole("link", { name: "Get your own instance" }).first().click();
-    await expect(page).toHaveURL(`${platformUrl()}/app/`);
+    await page.getByRole("link", { name: "Run it yourself" }).first().click();
+    await expect(page).toHaveURL(`${platformUrl()}/docs/getting-started/`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Getting started");
+  });
+});
+
+test.describe("sign-up app", () => {
+  // The app is the sign-up page of whichever control plane serves it, so it names no domain and
+  // offers no free beta; it still shows its Create account form.
+  test("names no domain, offers no free beta and shows the Create account form", async ({
+    page,
+  }) => {
+    await page.goto(`${platformUrl()}/app/`);
+    await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+    await expect(page.getByLabel("Email")).toBeVisible();
+    await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
+    const body = page.locator("body");
+    await expect(body).not.toContainText(/free while in beta/i);
+    await expect(body).not.toContainText("obop.dev");
+    // The other mode of the form says neither.
+    await page.getByRole("button", { name: "I already have an account" }).click();
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(body).not.toContainText(/free while in beta/i);
+    await expect(body).not.toContainText("obop.dev");
   });
 });
 

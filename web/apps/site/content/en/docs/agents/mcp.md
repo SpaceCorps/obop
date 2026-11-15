@@ -6,19 +6,19 @@ lead: "Every obop instance has an MCP server at /mcp. Point a client at the URL 
 
 ## Remote MCP: connect by URL
 
-An instance serves the [Model Context Protocol](https://modelcontextprotocol.io/) over **Streamable HTTP** at `https://YOUR-INSTANCE/mcp`. A hosted instance (for example on Sliplane) and a local `obop serve` both have it; there is nothing to switch on.
+An instance serves the [Model Context Protocol](https://modelcontextprotocol.io/) over **Streamable HTTP** at `https://YOUR-INSTANCE/mcp`. An instance on a server (for example on Sliplane) and a local `obop serve` both have it; there is nothing to switch on.
 
-- **Authentication:** a browser sign-in (OAuth, [below](#connect-with-a-browser-sign-in-oauth)) for Claude Desktop, claude.ai and Claude Code, or `Authorization: Bearer <token>` on every request with an agent token. Either way the token is checked as for REST. A missing or bad token gets `401` with `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, as the MCP authorization specification asks; that document names the authorization server of the instance (`/.well-known/oauth-authorization-server`). A token issued by the sign-in works on `/mcp` only, not on `/api`.
+- **Authentication:** a browser sign-in (OAuth, [below](#connect-with-a-browser-sign-in-oauth); not yet tried with the real Claude apps) for Claude Desktop, claude.ai and Claude Code, or `Authorization: Bearer <token>` on every request with an agent token. Either way the token is checked as for REST. A missing token gets `401` with `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, and a bad one the same header with `error="invalid_token"` and an `error_description` added, as the MCP authorization specification asks; that document names the authorization server of the instance (`/.well-known/oauth-authorization-server`). A token issued by the sign-in works on `/mcp` only, not on `/api`.
 - **Protocol revisions:** `2025-11-25`, `2025-06-18` and `2025-03-26`, negotiated in `initialize`. The newest revision, `2026-07-28`, is stateless and works differently; obop does not implement it yet. A client that speaks both falls back to `initialize` when it sees a plain `400`, which is what obop sends for an unsupported version header.
 - **Sessions:** `initialize` returns an `Mcp-Session-Id`; send it on every later request. The session keeps the masking vault, so a mask token such as `NAME_1` means the same thing in every call of the session and you can send it back. A different session starts a new vault. `DELETE /mcp` ends a session; an unknown or expired one answers `404`, and the client starts again with `initialize`. A session belongs to the token that opened it and expires after two hours without a request.
 - **Answers are plain JSON.** There is no server-to-client SSE stream (`GET /mcp` answers `405`), and JSON-RPC batches are accepted only on `2025-03-26`, the one revision that has them.
-- **Limits:** request bodies up to 1 MiB (`413`), 600 requests per minute per token (`429` with `Retry-After`, tunable with `OBOP_MCP_RATE_PER_MINUTE`), 25 open sessions per token.
+- **Limits:** request bodies up to 1 MiB (`413`), 600 requests per minute per token (`429` with `Retry-After`, tunable with `OBOP_MCP_RATE_PER_MINUTE`), 25 open sessions per token (opening a 26th ends the one used least recently, which then answers `404`).
 - **When the database is busy:** a `tools/call` that meets a refusal of the database is answered HTTP `503` with `Retry-After` and a JSON-RPC error `-32000` whose `data.applied` says what became of the call (`none`: nothing was changed, repeat it; `unknown`: after `storage_unavailable`, read before you repeat a write; `partial`: part of the call was applied and a step it needed was refused, do not repeat it blindly, read the records it touched). It is never an HTTP 200 tool error, so a client that retries only 503s retries the right things. The local stdio server (`obop mcp`) has no HTTP status: it answers the same refusal as a tool error whose structured content has `code` (`storage_busy`, `storage_unavailable` or `storage_timeout`), `applied` (`none`, `unknown` or `partial`, with the same meaning), `hint` and `retry_after` (seconds).
 - **Browsers:** a request with an `Origin` header is refused with `403` unless the origin is the instance's own public URL (`OBOP_PUBLIC_URL`), the same origin on a loopback host, or listed in `OBOP_ALLOWED_ORIGINS` (comma separated). This protects local instances against DNS rebinding. Clients that are not browsers send no `Origin`. Behind a proxy set `OBOP_PUBLIC_URL` (for example `https://acme.example.com`) so the discovery documents name the public address.
 
 ### Connect with a browser sign-in (OAuth)
 
-Claude Desktop, claude.ai and Claude Code can connect to an instance without a pasted token. In the app add a custom connector with the address `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, then `/mcp` and choose to authenticate). The app finds the sign-in by itself and opens a page of **your instance** in the browser. There you:
+Claude Desktop, claude.ai and Claude Code are meant to connect to an instance without a pasted token; we have not yet tried it with the real apps. In the app add a custom connector with the address `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, then `/mcp` and choose to authenticate). The app should find the sign-in by itself and open a page of **your instance** in the browser. There you:
 
 1. sign in with your obop account, and enter your two-factor code if the account has one (a passkey works too, as the second step, or on its own if you allowed that in Security);
 2. see which application asks and to which address the browser will return;
@@ -65,7 +65,7 @@ Copy the `mcp-session-id` header of the answer, then send `{"jsonrpc":"2.0","met
 
 ### Remote client configuration
 
-Replace `https://YOUR-INSTANCE/mcp` and keep the token in an environment variable or a secret store. The formats below were taken from each client's documentation on 2026-10-17. We ran obop only against the MCP Inspector command line client (`vp dlx @modelcontextprotocol/inspector --cli URL --transport http --header "Authorization: Bearer ..." --method tools/list`) and our own Playwright tests. We did not start the other clients, so each snippet is **documented, not tried**.
+Replace `https://YOUR-INSTANCE/mcp` and keep the token in an environment variable or a secret store. The formats below were taken from each client's documentation on 2026-10-17. The remote endpoint is covered by our own automated tests (Rust over HTTP and Playwright). We did not start these clients, so each snippet is **documented, not tried**.
 
 #### Claude Code
 
@@ -181,15 +181,15 @@ or `gemini mcp add --transport http --header "Authorization: Bearer $OBOP_TOKEN"
 
 ### Discovery
 
-An instance publishes these without a token:
+An instance publishes these without a token, except `/api/meta`:
 
-| URL                                       | What                                                                                                                                                                                |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/.well-known/oauth-protected-resource`   | OAuth protected resource metadata (RFC 9728) for `/mcp`, naming the authorization server. Also at `/.well-known/oauth-protected-resource/mcp`, which the `401` challenge points to. |
-| `/.well-known/oauth-authorization-server` | OAuth authorization server metadata (RFC 8414): the endpoints, PKCE `S256` only, public clients only.                                                                               |
-| `/.well-known/mcp/server-card.json`       | MCP server card: name, version, the `streamable-http` endpoint, protocol versions, the `Authorization` header. Also at `/mcp/server-card`.                                          |
-| `/.well-known/ai-catalog.json`            | A one-entry AI Catalog that points at the server card.                                                                                                                              |
-| `/api/openapi.json`, `/api/meta`          | The OpenAPI document has an `x-mcp` field with the endpoint, transport and protocol versions; `GET /api/meta` carries a `Link` header with `rel="mcp"`.                             |
+| URL                                       | What                                                                                                                                                                                                                                    |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/.well-known/oauth-protected-resource`   | OAuth protected resource metadata (RFC 9728) for `/mcp`, naming the authorization server. Also at `/.well-known/oauth-protected-resource/mcp`, which the `401` challenge points to.                                                     |
+| `/.well-known/oauth-authorization-server` | OAuth authorization server metadata (RFC 8414): the endpoints, PKCE `S256` only, public clients only.                                                                                                                                   |
+| `/.well-known/mcp/server-card.json`       | MCP server card: name, version, the `streamable-http` endpoint, protocol versions, the `Authorization` header. Also at `/mcp/server-card`.                                                                                              |
+| `/.well-known/ai-catalog.json`            | A one-entry AI Catalog that points at the server card.                                                                                                                                                                                  |
+| `/api/openapi.json`, `/api/meta`          | The OpenAPI document has an `x-mcp` field with the endpoint, transport and protocol versions (without a token it lists only sign-in and discovery). `GET /api/meta` needs a token; its answer carries a `Link` header with `rel="mcp"`. |
 
 The server card is an extension of the MCP specification that is still being developed (SEP-2127, kept in an incubation repository), so its shape may change; the file says so in its `$comment`. It also carries plain `serverInfo`, `transport`, `endpoint` and `capabilities` fields from an earlier draft, for scanners that look for them.
 
@@ -406,18 +406,18 @@ If the client shows no tools or an error, go to [Troubleshooting](/docs/agents/t
 
 Every model the agent may create also has a `<model>__bulk_create` tool: up to 1,000 rows in one call (`rows`, or `csv` text), all or nothing by default, `mode: "partial"` to keep the good rows and get the bad ones listed, `dry_run: true` to check first, and an `idempotency_key` to make a retry safe. It is subject to the same masking, scope and approval as `create`.
 
-An agent whose owner is an administrator also sees the `user_account` tools (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`). The ones that change an account always return `approval_required`: an administrator approves the plan, and it runs as that administrator's current account, so a plan outlives nothing. `__add` needs a password a person chose; the server never hands a generated one to an agent.
+An agent whose owner is an administrator also sees the `user_account` tools (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`, `__bind_sso`, `__unbind_sso`, `__set_sso_only`). The ones that change an account always return `approval_required`: an administrator approves the plan, and it runs as the agent's owner, whose administrator rights are checked again at that moment. `__add` needs a password a person chose; the server never hands a generated one to an agent.
 
 ## Verified and not verified
 
-| Item                                                                                         | Status                                                                                 |
-| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `obop mcp` handshake, `tools/list`, `tools/call`, approval result                            | Run against a real local instance.                                                     |
-| Remote `/mcp`: handshake, tools, masking, approval loop, sessions, 401, origin check, limits | Automated tests (Rust over HTTP, Playwright) against a real instance.                  |
-| Remote `/mcp` with a real MCP client                                                         | MCP Inspector command line client 2.11.0: `initialize` and `tools/list`, `tools/call`. |
-| Official MCP conformance suite                                                               | Not meaningful: it needs a server without authentication and its own fixture tools.    |
-| Remote configuration of Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI        | Taken from each client's documentation; the clients were not started.                  |
-| Stdio configuration formats                                                                  | Taken from each client's documentation. We did not start every client.                 |
-| Windsurf file location                                                                       | Unconfirmed, see above.                                                                |
-| Browser sign-in (OAuth): registration, PKCE, consent, tokens, refresh reuse, revocation      | Automated tests (Rust, and Playwright in a real browser) with our own client.          |
-| Claude Desktop and claude.ai connectors, Claude Code sign-in                                 | **Not tried** with the real apps; built from the specification.                        |
+| Item                                                                                         | Status                                                                              |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `obop mcp` handshake, `tools/list`, `tools/call`, approval result                            | Run against a real local instance.                                                  |
+| Remote `/mcp`: handshake, tools, masking, approval loop, sessions, 401, origin check, limits | Automated tests (Rust over HTTP, Playwright) against a real instance.               |
+| Remote `/mcp` with a real MCP client                                                         | Not recorded; covered by our own automated tests only.                              |
+| Official MCP conformance suite                                                               | Not meaningful: it needs a server without authentication and its own fixture tools. |
+| Remote configuration of Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI        | Taken from each client's documentation; the clients were not started.               |
+| Stdio configuration formats                                                                  | Taken from each client's documentation. We did not start every client.              |
+| Windsurf file location                                                                       | Unconfirmed, see above.                                                             |
+| Browser sign-in (OAuth): registration, PKCE, consent, tokens, refresh reuse, revocation      | Automated tests (Rust, and Playwright in a real browser) with our own client.       |
+| Claude Desktop and claude.ai connectors, Claude Code sign-in                                 | **Not tried** with the real apps; built from the specification.                     |

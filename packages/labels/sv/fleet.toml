@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Fordonsflotta"
-description = "Fordon, förare och servicehistorik för en mindre fordonsflotta. Håller reda på status och servicetillfällen; den beräknar inte driftskostnader eller bränsleförbrukning."
+description = "Fordon, förare och servicehistorik för en mindre fordonsflotta. Håller reda på status och servicetillfällen; den beräknar inte driftskostnader eller bränsleförbrukning. En förares status och körkortets giltighet registreras bara: inget kontrollerar dem, inte heller när en förare kopplas till ett fordon."
 summary = "Fordon, förare och servicehistorik för en mindre fordonsflotta."
 
 [labels.sv.model.fleet_vehicle]
@@ -70,7 +70,7 @@ description = "Ta bort ett tillgängligt fordon ur flottan för gott (kräver go
 
 [labels.sv.model.fleet_vehicle_driver]
 name = "Förare"
-description = "En person som får köra flottans fordon"
+description = "En registrerad förare med körkortsuppgifter och statusen aktiv eller avstängd"
 
 [labels.sv.model.fleet_vehicle_driver.field.name]
 label = "Namn"
@@ -98,11 +98,11 @@ suspended = "Avstängd"
 
 [labels.sv.model.fleet_vehicle_driver.action.suspend]
 label = "Stäng av"
-description = "Stäng av en förare, till exempel efter ett utgånget körkort"
+description = "Markera en förare som avstängd, till exempel efter ett utgånget körkort"
 
 [labels.sv.model.fleet_vehicle_driver.action.reactivate]
 label = "Återaktivera"
-description = "Låt en avstängd förare köra igen"
+description = "Sätt en avstängd förare till aktiv igen"
 
 [labels.sv.model.fleet_vehicle_service]
 name = "Fordonsservice"

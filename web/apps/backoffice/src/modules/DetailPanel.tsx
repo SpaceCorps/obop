@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Badge, Button, Chip, IconButton, Icon, Notice, Tabs, fmt, panelId, t } from "@obop/ui";
 import { AppIcon } from "../Chrome.tsx";
+import { useMedia, useScrollLock } from "../media.ts";
 import { appColor } from "../theme.ts";
 import { CoreBadge, LicenseBadge, MaturityBadge, SourceBadge } from "./badges.tsx";
 import { CoreRequirement, DependencyTree } from "./DependencyTree.tsx";
@@ -76,6 +77,9 @@ export function DetailPanel({
   actions: CardActions;
 }) {
   const ref = useRef<HTMLElement>(null);
+  // Up to 60rem the panel floats over the page (modules.css), so the page behind it holds still
+  // and keeps its place for when the panel closes.
+  useScrollLock(useMedia("(max-width: 60rem)"));
   // Focus the panel while it is open and give focus back to the card that opened it.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;

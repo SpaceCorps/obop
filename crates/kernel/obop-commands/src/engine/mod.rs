@@ -58,6 +58,16 @@ impl Engine {
         self.models.read().unwrap().get(name).map(|m| m.def.clone())
     }
 
+    /// Whether an action effect may write `name`: the generated `create` and `update` are bound
+    /// for it (see `ModelMeta::generated_writes`).
+    pub fn effects_may_write(&self, name: &str) -> bool {
+        self.models
+            .read()
+            .unwrap()
+            .get(name)
+            .is_some_and(|m| m.generated_writes)
+    }
+
     pub fn now(&self) -> i64 {
         (self.clock.read().unwrap())()
     }

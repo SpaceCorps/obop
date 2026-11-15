@@ -20,7 +20,7 @@ mod browse_tests;
 mod tests;
 
 pub use authorize::{AuthorizeOptions, authorize};
-pub use browse::{DriveBrowser, Entry, Fetched, Page};
+pub use browse::{Created, DriveBrowser, Entry, Fetched, Page, SharedDrive, Workspace};
 
 use obop_storage::Result;
 use obop_storage::blob::{BlobBytes, valid_key};

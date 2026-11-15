@@ -174,6 +174,18 @@ description = "Personen mit connectors.user dürfen ihre eigenen Konten verbinde
 label = "Zulässige Gruppe"
 description = "Berechtigungsgruppe, die ihn nutzen darf; leer heißt connectors.user"
 
+[labels.de.model.provider_policy.field.workspace_id]
+label = "Arbeitslaufwerk"
+description = "Google Drive: das Laufwerk, in dem die Instanz arbeitet (root ist Mein Laufwerk, leer heißt keines)"
+
+[labels.de.model.provider_policy.field.workspace_name]
+label = "Name des Arbeitslaufwerks"
+description = "Google Drive: der Name dieses Laufwerks zur Anzeige"
+
+[labels.de.model.provider_policy.field.write_group]
+label = "Schreibgruppe"
+description = "Google Drive: Berechtigungsgruppe, die dort Ordner, Docs und Uploads anlegen darf; leer heißt platform.admin"
+
 [labels.de.model.provider_policy.field.legal_basis]
 label = "Rechtsgrundlage"
 description = "Hinterlegte Rechtsgrundlage für Verbindungen dieses Anbieters"

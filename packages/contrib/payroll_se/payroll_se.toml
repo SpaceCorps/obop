@@ -1,0 +1,463 @@
+[module]
+id = "payroll_se"
+version = "0.1.0"
+name = "Payroll Sweden"
+description = "Swedish payroll scaffolding, ported from the domain model of open-accounting-sweden (payroll.rs): payroll data per employee (personnummer, tax table or percentage or adjustment decision as entered by the user), pay runs per period with gross, preliminary tax, employer contribution and net per line, a payroll rate table of employer contribution rates in basis points per age class with a review state, and an AGI submission record. A pay run is proposed by anyone with payroll.preparer (agents may propose) and approved or marked paid only by the stricter payroll.approver group with human approval. UNVERIFIED: nothing in this package has been checked against Skatteverket (the employer contribution rates, the age classes, the tax tables, the adjustment rules or the AGI specification). The package ships no rate, no age class rule and no tax table; every figure is typed in by the user, every rate row starts unverified, and a pay run cannot be approved until the approver confirms that the rates used were verified. No age class is derived from the personnummer, no tax is computed and no employer contribution is computed: the user enters them. The AGI XML file is NOT generated here (an X1 package cannot build or validate a file) and nothing is filed with Skatteverket. The personnummer and the pay amounts are personal data of sensitive classes: see docs/spec/payroll-se.md for retention and erasure. Money is in minor units (ore), rates in basis points, no floats."
+author = "SpaceCorps"
+summary = "Swedish payroll data, pay runs, contribution rate table and AGI record. All rates and rules UNVERIFIED; nothing seeded."
+license = "Apache-2.0"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["payroll", "sweden", "agi", "salary"]
+categories = ["finance", "people"]
+maturity = "experimental"
+requires_core = "^0.2.1"
+
+[module.dependencies]
+hr = "^0.3"
+
+[[model]]
+name = "payroll_se_employee"
+description = "Swedish payroll data of one employee of the hr module. Personal data of sensitive classes; see the retention note in docs/spec/payroll-se.md. Every tax figure is typed in by the user"
+read_group = "payroll.preparer"
+write_group = "payroll.preparer"
+
+  [[model.field]]
+  name = "employee_id"
+  description = "The employee in the hr module this payroll data belongs to; one record per employee"
+  class = "none"
+  kind = "ref"
+  to = "hr_employee"
+  required = true
+  unique = true
+
+  [[model.field]]
+  name = "personnummer"
+  description = "Personal identity number (personnummer), twelve digits such as 19900101-1234. Personal data of the class confidential_hr: masked for readers outside payroll.preparer and never shown to agents; the package does not check the check digit"
+  class = "confidential_hr"
+  personal_data = true
+  required = true
+  unique = true
+  max_length = 13
+  min_length = 12
+
+  [[model.field]]
+  name = "age_class"
+  description = "Age class used to pick the employer contribution rate: standard, senior, over_79, youth, other. Chosen by the user; the package derives nothing from the personnummer and the class names are UNVERIFIED labels, not Skatteverket terms"
+  class = "none"
+  kind = "select"
+  options = ["standard", "senior", "over_79", "youth", "other"]
+  required = true
+
+  [[model.field]]
+  name = "tax_basis"
+  description = "How preliminary tax is found: table (a tax table and column entered below), percent (a flat percentage entered below), adjustment (an adjustment decision, jamkning, entered below). The user decides; nothing is looked up"
+  class = "financial"
+  personal_data = true
+  kind = "select"
+  options = ["table", "percent", "adjustment"]
+  required = true
+
+  [[model.field]]
+  name = "tax_table"
+  description = "Tax table number as entered by the user from Skatteverket, for example 33. Not validated, no table is included"
+  class = "financial"
+  personal_data = true
+  max_length = 4
+
+  [[model.field]]
+  name = "tax_column"
+  description = "Tax table column as entered by the user. Not validated"
+  class = "financial"
+  personal_data = true
+  kind = "number"
+  min = 0
+  max = 99
+
+  [[model.field]]
+  name = "tax_percent_bp"
+  description = "Flat preliminary tax percentage in basis points when tax_basis is percent: 3000 means 30.00 percent. Entered by the user"
+  class = "financial"
+  personal_data = true
+  kind = "number"
+  min = 0
+  max = 10000
+
+  [[model.field]]
+  name = "adjustment_percent_bp"
+  description = "Tax percentage in basis points from an adjustment decision (jamkning) when tax_basis is adjustment. Entered by the user from the decision"
+  class = "financial"
+  personal_data = true
+  kind = "number"
+  min = 0
+  max = 10000
+
+  [[model.field]]
+  name = "adjustment_valid_from"
+  description = "First day the adjustment decision applies (YYYY-MM-DD)"
+  class = "financial"
+  personal_data = true
+  kind = "date"
+
+  [[model.field]]
+  name = "adjustment_valid_to"
+  description = "Last day the adjustment decision applies (YYYY-MM-DD)"
+  class = "financial"
+  personal_data = true
+  kind = "date"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the employee can be put on new pay runs"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "note"
+  description = "Remarks of the preparer. Do not put identity numbers or health data here"
+  class = "confidential_hr"
+  personal_data = true
+  kind = "longtext"
+
+[[model]]
+name = "payroll_se_rate"
+description = "An employer contribution rate for one age class and a validity period. UNVERIFIED until the approver checks it against Skatteverket"
+read_group = "payroll.preparer"
+write_group = "payroll.approver"
+
+  [[model.field]]
+  name = "name"
+  description = "Short name of the row, for example standard from 2026-01"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "age_class"
+  description = "Age class the rate is for: standard, senior, over_79, youth, other"
+  class = "none"
+  kind = "select"
+  options = ["standard", "senior", "over_79", "youth", "other"]
+  required = true
+
+  [[model.field]]
+  name = "rate_bp"
+  description = "Employer contribution rate in basis points: 3142 means 31.42 percent. Typed in by the user; the package ships no value"
+  class = "none"
+  kind = "number"
+  required = true
+  min = 0
+  max = 10000
+
+  [[model.field]]
+  name = "valid_from"
+  description = "First day the rate applies (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "valid_to"
+  description = "Last day the rate applies (YYYY-MM-DD); empty means open ended"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "review"
+  description = "Verification status of this rate: unverified, verified. Starts unverified; only the approver verifies it, after checking it against Skatteverket"
+  class = "none"
+  kind = "select"
+  options = ["unverified", "verified"]
+  required = true
+
+  [[model.field]]
+  name = "verified"
+  description = "Whether this rate has been verified by the owner; false until then"
+  class = "none"
+  kind = "bool"
+  computed = 'review == "verified"'
+
+  [[model.field]]
+  name = "verified_by"
+  description = "Login name of the person who verified it"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "verified_on"
+  description = "Date it was verified (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "source"
+  description = "Where the rate comes from and what was checked; empty means no source was checked"
+  class = "none"
+  kind = "longtext"
+
+  [[model.action]]
+  name = "verify"
+  description = "Mark the rate as checked against Skatteverket (approver only)"
+  field = "review"
+  from = "unverified"
+  to = "verified"
+  group = "payroll.approver"
+  approval = true
+
+  [[model.action]]
+  name = "unverify"
+  description = "Withdraw the verification of the rate (approver only)"
+  field = "review"
+  from = "verified"
+  to = "unverified"
+  group = "payroll.approver"
+  approval = true
+
+[[model]]
+name = "payroll_se_pay_run"
+description = "A pay run for one period: lines with gross, preliminary tax, employer contribution and net, proposed by a preparer and approved by a person. UNVERIFIED: no rate or rule is checked by this package"
+read_group = "payroll.preparer"
+write_group = "payroll.preparer"
+
+  [[model.field]]
+  name = "period"
+  description = "Pay period, for example 2026-10; one run per period"
+  class = "none"
+  required = true
+  unique = true
+  max_length = 7
+  min_length = 7
+
+  [[model.field]]
+  name = "pay_date"
+  description = "Date the salaries are paid (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "total_gross"
+  description = "Total gross pay of the run in ore"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  computed = 'sum(lines.gross)'
+
+  [[model.field]]
+  name = "total_tax"
+  description = "Total preliminary tax withheld in ore"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  computed = 'sum(lines.preliminary_tax)'
+
+  [[model.field]]
+  name = "total_contribution"
+  description = "Total employer contributions in ore, as entered on the lines"
+  class = "financial"
+  kind = "money"
+  computed = 'sum(lines.employer_contribution)'
+
+  [[model.field]]
+  name = "total_net"
+  description = "Total net pay in ore: gross minus preliminary tax"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  computed = 'total_gross - total_tax'
+
+  [[model.field]]
+  name = "rates_confirmed"
+  description = "The approver confirms that every rate and every tax figure used on the lines was compared with Skatteverket and that the rate rows used are verified"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "notes"
+  description = "Remarks of the preparer or the approver"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Run status: draft, proposed, approved, paid"
+  class = "none"
+  kind = "select"
+  options = ["draft", "proposed", "approved", "paid"]
+  required = true
+
+  [[model.action]]
+  name = "propose"
+  description = "Propose the run for approval; agents may do this"
+  field = "state"
+  from = "draft"
+  to = "proposed"
+
+  [[model.action]]
+  name = "withdraw"
+  description = "Send a proposed run back to draft"
+  field = "state"
+  from = "proposed"
+  to = "draft"
+
+  [[model.action]]
+  name = "approve"
+  description = "Approve the run (approver only; the rates must be confirmed as checked against Skatteverket)"
+  field = "state"
+  from = "proposed"
+  to = "approved"
+  group = "payroll.approver"
+  approval = true
+  assert = [{ expr = "rates_confirmed", message = "The rates were not confirmed as checked against Skatteverket", key = "rates_checked" }]
+
+  [[model.action]]
+  name = "record_paid"
+  description = "Record that the salaries were paid outside this system (approver only)"
+  field = "state"
+  from = "approved"
+  to = "paid"
+  group = "payroll.approver"
+  approval = true
+
+[[model]]
+name = "payroll_se_pay_run_line"
+description = "One employee on a pay run, with every amount typed in by the preparer"
+read_group = "payroll.preparer"
+write_group = "payroll.preparer"
+
+  [[model.field]]
+  name = "run_id"
+  description = "The pay run the line belongs to"
+  class = "none"
+  kind = "ref"
+  to = "payroll_se_pay_run"
+  required = true
+
+  [[model.field]]
+  name = "employee_id"
+  description = "The employee paid"
+  class = "none"
+  kind = "ref"
+  to = "payroll_se_employee"
+  required = true
+
+  [[model.field]]
+  name = "gross"
+  description = "Gross pay in ore"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "preliminary_tax"
+  description = "Preliminary tax withheld in ore, typed in by the user from the tax table or decision; not computed here"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "age_class"
+  description = "Age class the contribution rate was chosen for"
+  class = "none"
+  kind = "select"
+  options = ["standard", "senior", "over_79", "youth", "other"]
+  required = true
+
+  [[model.field]]
+  name = "rate_bp"
+  description = "Employer contribution rate in basis points that the preparer applied, copied from a rate row"
+  class = "none"
+  kind = "number"
+  min = 0
+  max = 10000
+
+  [[model.field]]
+  name = "rate_id"
+  description = "The rate row the percentage came from; the approver checks that it is verified"
+  class = "none"
+  kind = "ref"
+  to = "payroll_se_rate"
+
+  [[model.field]]
+  name = "employer_contribution"
+  description = "Employer contribution in ore, typed in by the user; not computed here"
+  class = "financial"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "net"
+  description = "Net pay in ore: gross minus preliminary tax"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  computed = 'gross - preliminary_tax'
+
+  [[model.field]]
+  name = "note"
+  description = "Why the amounts are what they are, for the approver"
+  class = "none"
+  kind = "longtext"
+
+[[model]]
+name = "payroll_se_agi_submission"
+description = "A record of one employer declaration at individual level (AGI) for a period. The XML file is not generated here and nothing is sent; this only records what was prepared and filed outside the system. UNVERIFIED"
+read_group = "payroll.preparer"
+write_group = "payroll.preparer"
+
+  [[model.field]]
+  name = "period"
+  description = "Declaration period, for example 2026-10"
+  class = "none"
+  required = true
+  max_length = 7
+  min_length = 7
+
+  [[model.field]]
+  name = "run_id"
+  description = "The pay run the declaration is based on"
+  class = "none"
+  kind = "ref"
+  to = "payroll_se_pay_run"
+
+  [[model.field]]
+  name = "file_reference"
+  description = "Name or hash of the AGI file that was made outside this system. The file itself is not stored here; it carries personnummer, so keep it as a restricted document"
+  class = "financial"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "submitted_on"
+  description = "Date it was submitted to Skatteverket outside this system (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "receipt_reference"
+  description = "Receipt or confirmation reference from Skatteverket, as typed by the user"
+  class = "none"
+
+  [[model.field]]
+  name = "state"
+  description = "Status: draft, prepared, recorded_submitted"
+  class = "none"
+  kind = "select"
+  options = ["draft", "prepared", "recorded_submitted"]
+  required = true
+
+  [[model.action]]
+  name = "mark_prepared"
+  description = "Record that a file was prepared outside this system"
+  field = "state"
+  from = "draft"
+  to = "prepared"
+
+  [[model.action]]
+  name = "record_submitted"
+  description = "Record that the declaration was submitted outside this system (approver only)"
+  field = "state"
+  from = "prepared"
+  to = "recorded_submitted"
+  group = "payroll.approver"
+  approval = true
