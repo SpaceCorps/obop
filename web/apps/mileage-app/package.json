@@ -8,14 +8,23 @@
   "scripts": {
     "start": "expo start --dev-client",
     "export:android": "expo export --platform android",
+    "export:ios": "expo export --platform ios",
     "check:sdk": "node scripts/check-sdk.mjs",
     "android:prebuild": "expo prebuild --platform android --no-install",
     "android:build": "node scripts/gradle.mjs assembleDebug",
     "android:build:release": "node scripts/gradle.mjs assembleRelease",
+    "ios:prebuild": "expo prebuild --platform ios --no-install",
+    "ios:pods": "node scripts/ios/xcode.mjs pods",
+    "ios:build:simulator": "node scripts/ios/xcode.mjs build-simulator",
+    "ios:gate": "node scripts/ios/gate.mjs",
+    "ios:run:device": "expo run:ios --device --configuration Release",
     "check:sdk:latest": "node scripts/check-sdk.mjs --latest",
     "emulator:route": "node scripts/emulator/route.mjs",
     "emulator:drive": "node scripts/emulator/drive.mjs",
-    "emulator:check": "node scripts/emulator/check-trip.mjs"
+    "emulator:check": "node scripts/emulator/check-trip.mjs",
+    "emulator:thinning": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/emulator/thinning-replay.mjs",
+    "simulator:route": "node scripts/simulator/route.mjs",
+    "simulator:drive": "node scripts/simulator/ui/drive.mjs"
   },
   "dependencies": {
     "@obop/client": "workspace:*",

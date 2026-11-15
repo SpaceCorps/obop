@@ -47,15 +47,39 @@ export function recordingHealth(input: {
 export type Readiness = "ready" | "no_permission" | "approximate" | "services_off";
 
 /**
- * Whether the phone can record a trip now. `accuracy` is what Android reports for the granted
- * permission (`fine` or `coarse`, the choice "Precise" or "Approximate" in the system dialog); it
- * is `undefined` where the platform has no such choice.
+ * The accuracy of a granted location permission as `fine` or `coarse`, whichever platform said it.
+ * Android reports `android.accuracy` as `fine`, `coarse` or `none` (the choice "Precise" or
+ * "Approximate" in the system dialog). iOS reports `ios.accuracy` as `full` or `reduced` (the
+ * switch "Precise Location" in the settings of the app); `full` is `fine` and anything else,
+ * `reduced` included, is `coarse`. `undefined` where the platform said nothing (iOS before 14, or
+ * a platform without the choice).
+ */
+export function reportedAccuracy(permission: {
+  android?: { accuracy?: string };
+  ios?: { accuracy?: string };
+}): string | undefined {
+  if (permission.android?.accuracy !== undefined) return permission.android.accuracy;
+  const ios = permission.ios?.accuracy;
+  if (ios === undefined) return undefined;
+  return ios === "full" ? "fine" : "coarse";
+}
+
+/**
+ * Whether the phone can record a trip now. `accuracy` is `fine` or `coarse` as `reportedAccuracy`
+ * gives it; it is `undefined` where the platform has no such choice.
+ *
+ * `servicesFirst` is iOS: with Location Services switched off the status of the app is "denied",
+ * the same as a refusal, so the switch has to be named before the permission or the driver is told
+ * that the app has no permission when the whole phone has none to give. On Android the status is
+ * "granted" with the switch off, and the permission is named first.
  */
 export function readiness(input: {
   granted: boolean;
   accuracy: string | undefined;
   servicesEnabled: boolean;
+  servicesFirst?: boolean;
 }): Readiness {
+  if (input.servicesFirst === true && !input.servicesEnabled) return "services_off";
   if (!input.granted) return "no_permission";
   if (input.accuracy !== undefined && input.accuracy !== "fine") return "approximate";
   return input.servicesEnabled ? "ready" : "services_off";

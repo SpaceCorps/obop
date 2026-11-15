@@ -54,14 +54,19 @@ export function toStored(seq: number, fix: NewFix): StoredPoint {
  */
 export const STALE_FIX_MS = 10_000;
 
-/** Whether a fix is a position the phone can trust to be on Earth. */
+/**
+ * Whether a fix is a position the phone can trust to be on Earth. A negative accuracy is how
+ * CoreLocation (iOS) says that the position is not valid, so such a fix is refused; a missing
+ * accuracy (`null`) is not a reason to refuse one.
+ */
 export function plausible(fix: NewFix): boolean {
   return (
     Number.isFinite(fix.t) &&
     Number.isFinite(fix.lat) &&
     Number.isFinite(fix.lon) &&
     Math.abs(fix.lat) <= 90 &&
-    Math.abs(fix.lon) <= 180
+    Math.abs(fix.lon) <= 180 &&
+    !(fix.accuracyM !== null && fix.accuracyM < 0)
   );
 }
 

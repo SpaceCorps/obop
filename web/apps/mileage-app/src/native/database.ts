@@ -1,24 +1,40 @@
 import * as Crypto from "expo-crypto";
-import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
-import { createSqlDb, type RawDb, type SqlDb, type SqlValue } from "../core/sql.ts";
-import { migrate } from "../core/sql-store.ts";
-import { DATABASE_KEY_NAME, DATABASE_NAME } from "./config.ts";
+import { Platform } from "react-native";
+import { openOutbox, policyFor, type FileHandle, type OpenPorts } from "../core/open-outbox.ts";
+import type { SqlDb, SqlValue } from "../core/sql.ts";
+import type { StartupConfig } from "../core/startup-config.ts";
+import { hostConfig } from "./host.ts";
+import { keychain } from "./keychain.ts";
 
 const hex = (bytes: Uint8Array): string =>
   Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
 /**
- * The key of the database: 32 random bytes made on the first start and kept in the Android
- * Keystore (expo-secure-store encrypts the value with a Keystore key that never leaves the
- * hardware-backed store). The key is never logged.
+ * The parts of the phone that `openOutbox` (`core/open-outbox.ts`, where the procedure and its
+ * tests are) needs. The key of the database is 32 random bytes made on the first start and kept in
+ * the Android Keystore or the iOS Keychain (after first unlock, this device only: `keychain.ts`).
+ * The key is never logged. The name of the file is the app's (`identity.storage.databaseFile`).
  */
-async function databaseKey(): Promise<string> {
-  const known = await SecureStore.getItemAsync(DATABASE_KEY_NAME);
-  if (known && /^[0-9a-f]{64}$/.test(known)) return known;
-  const key = hex(await Crypto.getRandomBytesAsync(32));
-  await SecureStore.setItemAsync(DATABASE_KEY_NAME, key);
-  return key;
+function portsFor(databaseFile: string): OpenPorts {
+  return {
+    secrets: keychain,
+    randomKey: async () => hex(await Crypto.getRandomBytesAsync(32)),
+    openFile: async (): Promise<FileHandle> => {
+      const sqlite = await SQLite.openDatabaseAsync(databaseFile);
+      return {
+        exec: (sql) => sqlite.execAsync(sql),
+        run: async (sql, params) => {
+          await sqlite.runAsync(sql, params as SqlValue[]);
+        },
+        all: (sql, params) =>
+          sqlite.getAllAsync<Record<string, SqlValue>>(sql, params as SqlValue[]),
+        close: () => sqlite.closeAsync(),
+      };
+    },
+    deleteFile: () => SQLite.deleteDatabaseAsync(databaseFile),
+    now: Date.now,
+  };
 }
 
 /** What the encrypted database says about itself (shown in Account). */
@@ -27,40 +43,41 @@ export interface DatabaseInfo {
   cipherVersion: string;
 }
 
-let opened: Promise<{ db: SqlDb; info: DatabaseInfo }> | null = null;
+type Opened = { db: SqlDb; info: DatabaseInfo };
 
-async function open(): Promise<{ db: SqlDb; info: DatabaseInfo }> {
-  const key = await databaseKey();
-  const sqlite = await SQLite.openDatabaseAsync(DATABASE_NAME);
-  // The key goes first; nothing else may read the file before it.
-  await sqlite.execAsync(`PRAGMA key = "x'${key}'"`);
-  const version = await sqlite.getAllAsync<{ cipher_version: string }>("PRAGMA cipher_version");
-  const cipherVersion = version[0]?.cipher_version;
-  if (!cipherVersion) {
-    // Plain SQLite would store the route in the clear. Fail closed.
-    await sqlite.closeAsync();
-    throw new Error("The database is not encrypted: this build has no SQLCipher");
-  }
-  await sqlite.execAsync("PRAGMA busy_timeout = 5000");
-  await sqlite.execAsync("PRAGMA journal_mode = WAL");
-  const raw: RawDb = {
-    exec: (sql) => sqlite.execAsync(sql),
-    run: async (sql, params) => {
-      await sqlite.runAsync(sql, params as SqlValue[]);
-    },
-    all: (sql, params) => sqlite.getAllAsync<Record<string, SqlValue>>(sql, params as SqlValue[]),
+/**
+ * The opener of the database of an app: the one connection of a process, opened on first use, and
+ * opened again after a failed attempt. The names come from the configuration it is given.
+ */
+export function createDatabaseOpener(config: StartupConfig): () => Promise<Opened> {
+  const { storage } = config.identity;
+  let opened: Promise<Opened> | null = null;
+  const open = async (): Promise<Opened> => {
+    const result = await openOutbox(
+      portsFor(storage.databaseFile),
+      { databaseKey: storage.databaseKey, session: [storage.server, storage.tokens] },
+      policyFor(Platform.OS),
+      config.modules,
+    );
+    return { db: result.db, info: { cipherVersion: result.cipherVersion } };
   };
-  const db = createSqlDb(raw);
-  // A wrong key shows here as "file is not a database": the file is left as it is.
-  await migrate(db);
-  return { db, info: { cipherVersion } };
+  return () => {
+    opened ??= open().catch((error: unknown) => {
+      opened = null;
+      throw error;
+    });
+    return opened;
+  };
 }
 
-/** The one connection of this process, opened on first use. The location task and the screens share it. */
-export function openDatabase(): Promise<{ db: SqlDb; info: DatabaseInfo }> {
-  opened ??= open().catch((error: unknown) => {
-    opened = null;
-    throw error;
-  });
-  return opened;
+let opener: (() => Promise<Opened>) | null = null;
+
+/**
+ * The one connection of this process, opened on first use, with the configuration the app started
+ * the host with. The location task and the screens share it. The configuration is read when this
+ * is called and not when the file is imported: the task imports this file before anything else.
+ */
+export async function openDatabase(): Promise<Opened> {
+  opener ??= createDatabaseOpener(hostConfig());
+  return opener();
 }

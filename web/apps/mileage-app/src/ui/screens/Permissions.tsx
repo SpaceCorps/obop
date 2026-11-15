@@ -1,5 +1,6 @@
 import { Banner, Button, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
+import { DISCLOSURE_META } from "../../core/host-state.ts";
 import type { Purpose } from "../../core/types.ts";
 import { t } from "../../i18n/index.ts";
 import { CannotRecord, startTrip } from "../../native/actions.ts";
@@ -11,16 +12,14 @@ import {
   type LocationAccess,
 } from "../../native/permissions.ts";
 import type { Runtime } from "../../native/runtime.ts";
+import { tOs } from "../os-text.ts";
+import { firstStep, stepAfterAccess, type Step } from "../permission-step.ts";
 import type { Nav } from "../router.ts";
-
-/** The key under which the outbox remembers that the driver has read the disclosure. */
-export const DISCLOSURE_META = "location_disclosure_accepted";
-
-type Step = "check" | "disclosure" | "denied" | "blocked" | "approximate" | "services" | "guide";
 
 /**
  * Before the first Start: the disclosure in the app, in plain words, before the system dialog
- * (Google Play asks for it when location is collected in the background); then the permission
+ * (Google Play asks for it when location is collected in the background; it is shown on iOS too, with its own wording
+ * where the Android one names a notification); then the permission
  * (precise, not approximate); then the note about keeping the app running. A driver who has done
  * all of it goes straight to the trip. Whatever stops a Start is shown here with a way on: the
  * location switch of the phone, an approximate-only permission, a refused permission, a failure.
@@ -31,11 +30,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
   const [starting, setStarting] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const afterAccess = (access: LocationAccess) => {
-    if (access === "granted") setStep("guide");
-    else if (access === "approximate") setStep("approximate");
-    else setStep(access === "ask" ? "denied" : "blocked");
-  };
+  const afterAccess = (access: LocationAccess) => setStep(stepAfterAccess(access));
 
   const begin = async () => {
     setStarting(true);
@@ -60,14 +55,12 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
   useEffect(() => {
     let alive = true;
     (async () => {
-      const accepted = (await rt.store.getMeta(DISCLOSURE_META)) !== null;
+      const accepted = (await rt.hostState.getMeta(DISCLOSURE_META)) !== null;
       const access = await locationAccess();
       if (!alive) return;
-      if (!accepted) setStep("disclosure");
-      else if (access === "granted") void begin();
-      else if (access === "approximate") setStep("approximate");
-      else if (access === "blocked") setStep("blocked");
-      else setStep("disclosure");
+      const first = firstStep(accepted, access);
+      if (first === "begin") void begin();
+      else setStep(first);
     })().catch(() => alive && setStep("disclosure"));
     return () => {
       alive = false;
@@ -77,7 +70,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
   }, [rt]);
 
   const accept = async () => {
-    await rt.store.setMeta(DISCLOSURE_META, new Date().toISOString());
+    await rt.hostState.setMeta(DISCLOSURE_META, new Date().toISOString());
     afterAccess(await requestLocation());
     setNotificationsOff(!(await requestNotifications()));
   };
@@ -106,7 +99,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
           </>
         }
       >
-        <Text>{t("disclosure.body")}</Text>
+        <Text>{tOs("disclosure.body")}</Text>
       </Screen>
     );
   }
@@ -128,7 +121,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
         <Banner
           tone="warning"
           title={t("permission.services.title")}
-          message={t("permission.services.message")}
+          message={tOs("permission.services.message")}
         />
       </Screen>
     );
@@ -199,7 +192,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
         />
       }
     >
-      <Text>{t("guide.body")}</Text>
+      <Text>{tOs("guide.body")}</Text>
       {notificationsOff ? (
         <Banner
           tone="warning"
