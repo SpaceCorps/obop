@@ -458,7 +458,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Manufacturing",
     tagline: "Bills of materials",
     purpose:
-      "Define what a product is made of and plan manufacturing orders from draft to done. An order goes through draft, confirmed, in progress and done. The stock of the components is not used up automatically.",
+      "Define what a product is made of and plan manufacturing orders from draft to done. An order goes through draft, confirmed, in progress and done. When it is finished at a production location, its components leave stock there and the product arrives, for the warehouse to confirm.",
     // active is a D95 ref_filter on manufacturing_order.bom_id (active = true): an inactive bill of
     // materials cannot be chosen for a new order.
     fieldText: {
@@ -468,6 +468,12 @@ export const APP_COPY: AppCopy[] = [
     modelNames: {
       manufacturing_bom: "Bill of materials",
       manufacturing_bom_line: "Component",
+      manufacturing_order_line: "Order component",
+    },
+    cards: {
+      "manufacturing_order.finish": {
+        text: "Mark production as finished. If the order has a production location, a draft stock move takes each component out of stock there and one puts the finished product there, for the warehouse to confirm. You need permission to use Inventory.",
+      },
     },
   },
   {
