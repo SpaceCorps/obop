@@ -534,7 +534,7 @@ write_group = "accounting.user"
   [model.ui]
   title = "{account_id} · {label} | {account_id}"
   subtitle = "{move_id}"
-  list = ["move_id", "account_id", "partner_id", "label", "debit", "credit", "tax_id", "due_on", "reconciled"]
+  list = ["move_id", "account_id", "partner_id", "label", "debit", "credit", "due_on", "tax_id", "reconciled"]
   quick_create = ["account_id", "label", "debit", "credit"]
   default_view = "list"
   menu = "reporting"

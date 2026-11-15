@@ -13,7 +13,7 @@ categories = ["productivity"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "knowledge_article"
-changelog = "Clearer screens: the app opens on Articles in their tree, with the body shown as formatted text, saved filters and safer action buttons. A new article is for the workspace and names the person who writes it unless they say otherwise. Publishing now stamps the day it was first published; that date is set by the server only."
+changelog = "Clearer screens: an article opens with its title, parent and body first and the body shown as formatted text until you edit it, with the details folded below, saved filters and safer action buttons. A new article is for the workspace and names the person who writes it unless they say otherwise. Publishing now stamps the day it was first published; that date is set by the server only."
 
 [[model]]
 name = "knowledge_article"
@@ -31,6 +31,14 @@ write_group = "knowledge.user"
   default_view = "tree"
   menu = "main"
   menu_order = 1
+
+  [[model.ui.section]]
+  label = "Article"
+  fields = ["title", "parent_id", "body"]
+
+  [[model.ui.section]]
+  label = "Details"
+  fields = ["visibility", "tags", "author_name", "published_on"]
 
   [[model.ui.filter]]
   label = "Published"
@@ -94,6 +102,7 @@ write_group = "knowledge.user"
 
     [model.field.ui]
     aggregate = "none"
+    hidden = true
 
   [[model.field]]
   name = "published_on"

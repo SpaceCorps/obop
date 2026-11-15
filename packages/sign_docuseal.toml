@@ -14,7 +14,7 @@ maturity = "experimental"
 requires_core = "^0.2.2"
 home = "sign_docuseal_event"
 launcher = false
-changelog = "The DocuSeal events live under the Sign app instead of a launcher tile of their own, with business names, list columns and the document address as a link."
+changelog = "The DocuSeal events no longer have a launcher tile of their own; open them from the command palette (Ctrl+K). They have business names, list columns and the document address as a link."
 
 [module.dependencies]
 sign = "^0.2"

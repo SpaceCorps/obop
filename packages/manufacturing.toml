@@ -119,8 +119,8 @@ read_group = "manufacturing.user"
 write_group = "manufacturing.user"
 
   [model.ui]
-  title = "{reference}"
-  subtitle = "{bom_id} × {quantity}"
+  title = "{reference} · {bom_id} × {quantity} | {reference}"
+  subtitle = "{planned_on}"
   list = ["reference", "bom_id", "quantity", "planned_on", "deadline", "responsible", "state"]
   card = ["reference", "bom_id", "quantity", "deadline"]
   quick_create = ["reference", "bom_id", "quantity"]
@@ -165,6 +165,9 @@ write_group = "manufacturing.user"
   kind = "number"
   required = true
   fill_from = "bom_id.quantity"
+
+    [model.field.ui]
+    aggregate = "none"
 
   [[model.field]]
   name = "planned_on"

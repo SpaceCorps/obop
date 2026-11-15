@@ -12,7 +12,7 @@ keywords = ["planning", "shifts", "rota"]
 categories = ["people"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "The app opens on Shifts, shown on a timeline by employee; roles and templates sit under Configuration. Start and end read as times of day and are never added up, and a time outside 00:00 to 23:59 is refused. A shift can be given only to an employee who has not left. The first state reads Not published."
+changelog = "The app opens on Shifts, shown on the calendar and coloured by employee; roles and templates sit under Configuration. Start and end read as times of day and are never added up, and a time outside 00:00 to 23:59 is refused. A shift can be given only to an employee who has not left. The first state reads Not published."
 home = "planning_shift"
 
 [module.dependencies]
@@ -107,7 +107,7 @@ write_group = "planning.manager"
   card = ["name", "employee_id", "role_id", "work_date", "start_minute", "end_minute"]
   quick_create = ["name", "work_date", "employee_id"]
   order = "work_date asc, start_minute asc"
-  default_view = "timeline"
+  default_view = "calendar"
   menu = "main"
   menu_order = 1
   calendar = { start = "work_date", color = "employee_id" }

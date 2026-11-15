@@ -18,3 +18,6 @@ label = "Document hash (SHA-256)"
 [labels.en.model.sign_link]
 name = "Signing link"
 plural = "Signing links"
+
+[labels.en.model.sign_request.action.sign]
+label = "Mark signed"
