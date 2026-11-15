@@ -331,6 +331,8 @@ export function RefPicker(p: RefPickerProps) {
       e.stopPropagation();
       choose(items[active]);
     } else if (e.key === "Escape" && open) {
+      // The list closes; the record panel around it stays open.
+      e.preventDefault();
       e.stopPropagation();
       close();
     } else if (e.key === "Tab") close();
@@ -393,6 +395,11 @@ export function RefPicker(p: RefPickerProps) {
       {open && (
         <div ref={pop} className="rp-pop" popover="manual" data-side="bottom">
           <ul id={listId} role="listbox" aria-label={t("{field} options", { field: fieldName })}>
+            {options.length === 0 && (
+              <li className="rp-empty" role="presentation">
+                {!loaded || (serverMode && q && remote?.q !== q) ? t("Searching…") : t("No match")}
+              </li>
+            )}
             {items.map((it, i) => {
               const props = {
                 id: optionId(i),
@@ -439,11 +446,6 @@ export function RefPicker(p: RefPickerProps) {
                 </li>
               );
             })}
-            {options.length === 0 && (
-              <li className="rp-empty" role="presentation">
-                {!loaded || (serverMode && q && remote?.q !== q) ? t("Searching…") : t("No match")}
-              </li>
-            )}
           </ul>
           {scoped.scope.length > 0 && (
             <div className="rp-foot">

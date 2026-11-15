@@ -26,16 +26,7 @@ import { displayOf, titleFieldsOf, titleOf } from "./presentation.ts";
 import { Badge, Icon } from "./ui.tsx";
 import type { CommonAttrs } from "./inputs/common.ts";
 import { DateInput, DatetimeInput } from "./inputs/DateInput.tsx";
-import {
-  basisPointsText,
-  clockText,
-  durationText,
-  kmText,
-  linkOf,
-  percentShare,
-  titleFromFileName,
-  urlSlug,
-} from "./inputs/display.ts";
+import { linkOf, percentShare, shownNumber, titleFromFileName, urlSlug } from "./inputs/display.ts";
 import { useFieldForm } from "./inputs/form.ts";
 import { MarkdownField, MarkdownView } from "./inputs/MarkdownField.tsx";
 import { CurrencySelect, MoneyInput } from "./inputs/MoneyInput.tsx";
@@ -52,6 +43,7 @@ import {
 import "./inputs/inputs.css";
 
 export { RefPicker } from "./inputs/RefPicker.tsx";
+export { shownNumber } from "./inputs/display.ts";
 export { FieldFormProvider, useFieldForm, type FieldFormApi } from "./inputs/form.ts";
 
 /** A value as it reads in a list, card or calendar chip. Principal-masked tokens keep their look. */
@@ -79,13 +71,10 @@ export function Cell({
   if (field.kind === "number" || field.kind === "decimal") {
     switch (display) {
       case "time_of_day":
-        return <span className="amount">{clockText(value)}</span>;
       case "duration_minutes":
-        return <span className="amount">{durationText(value)}</span>;
       case "percent_bp":
-        return <span className="amount">{basisPointsText(value)}</span>;
       case "km_from_m":
-        return <span className="amount">{kmText(value)}</span>;
+        return <span className="amount">{shownNumber(display, value)}</span>;
       case "percent": {
         const share = percentShare(value);
         return (

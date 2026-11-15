@@ -112,11 +112,11 @@ export function kmText(metres: unknown): string {
   return `${fmt.number(n / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
 }
 
-/** Kilometres for an input box: up to three decimals, no grouping, the locale's decimal mark. */
-export function kmInput(metres: unknown): string {
+/** Kilometres for an input box: up to `digits` decimals, no grouping, the locale's decimal mark. */
+export function kmInput(metres: unknown, digits = 3): string {
   const n = Number(metres);
   if (metres === null || metres === undefined || metres === "" || !Number.isFinite(n)) return "";
-  return fmt.number(n / 1000, { maximumFractionDigits: 3, useGrouping: false });
+  return fmt.number(n / 1000, { maximumFractionDigits: digits, useGrouping: false });
 }
 
 /**
@@ -265,6 +265,32 @@ export function linkOf(display: string | undefined, value: unknown): string | nu
       return /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(v) ? `https://${v}` : null;
     case "address":
       return `https://www.openstreetmap.org/search?query=${encodeURIComponent(v.replace(/\s*\n\s*/g, ", "))}`;
+    default:
+      return null;
+  }
+}
+
+// ---- one value as text ------------------------------------------------------------------------
+
+/**
+ * A number with a display format as text ("1 h 30", "14:30", "19%", "200.2 km", "40%"), or null
+ * when the format is not one of these: for totals, footers and anything that is not a Cell.
+ */
+export function shownNumber(display: string | undefined, value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  switch (display) {
+    case "time_of_day":
+      return clockText(value);
+    case "duration_minutes":
+      return durationText(value);
+    case "percent_bp":
+      return basisPointsText(value);
+    case "km_from_m":
+      return kmText(value);
+    case "percent": {
+      const share = percentShare(value);
+      return share === null ? null : fmt.percent(share, 0);
+    }
     default:
       return null;
   }

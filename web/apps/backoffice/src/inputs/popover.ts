@@ -52,9 +52,10 @@ export function useAnchored(
       el.style.maxBlockSize = `${Math.min(maxHeight, room)}px`;
       const width = Math.min(Math.max(r.width, minWidth), vw - 16);
       if (matchWidth) el.style.inlineSize = `${width}px`;
-      else el.style.minInlineSize = `${Math.min(Math.max(r.width, minWidth), vw - 16)}px`;
+      else el.style.maxInlineSize = `${vw - 16}px`;
       const w = matchWidth ? width : el.offsetWidth || width;
-      const left = Math.max(8, Math.min(r.left, vw - w - 8));
+      // A list starts under the start of the input; a calendar ends under its button.
+      const left = Math.max(8, Math.min(matchWidth ? r.left : r.right - w, vw - w - 8));
       el.style.left = `${left}px`;
       el.style.right = "auto";
       if (flip) {

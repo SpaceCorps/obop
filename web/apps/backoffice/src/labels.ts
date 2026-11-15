@@ -99,6 +99,29 @@ const shownInKm = (f: { name: string; kind?: string; ui?: FieldMeta["ui"] }) =>
   (f.kind === "number" || f.kind === "decimal") &&
   (f.ui?.display === "km_from_m" || (!f.ui?.display && /(distance|length)_m$/.test(f.name)));
 
+/** How a number field is read, by its hint or by the name rules of presentation.ts `displayOf`. */
+function numberDisplay(f: { name: string; kind?: string; ui?: FieldMeta["ui"] }): string {
+  if (f.kind !== "number" && f.kind !== "decimal") return "";
+  if (f.ui?.display) return f.ui.display;
+  if (/(^|_)(start|end|from|to)_minute$|_minute_of_day$|^minute_of_day$/.test(f.name))
+    return "time_of_day";
+  if (/(^|_)(duration|minutes)$|_minutes$/.test(f.name)) return "duration_minutes";
+  return "";
+}
+
+/**
+ * The English name of a number that is shown in another unit drops the stored unit: "Distance"
+ * (shown in km), "Start time" (a time of day), "Resolution time" (a duration), "Duration".
+ */
+function withoutUnit(text: string, f: { name: string; kind?: string; ui?: FieldMeta["ui"] }) {
+  const display = numberDisplay(f);
+  if (shownInKm(f)) return text.replace(/ m$/, "");
+  if (display === "time_of_day") return text.replace(/ minute( of day)?$/i, " time");
+  if (display === "duration_minutes")
+    return /^minutes$/i.test(text) ? "Duration" : text.replace(/ minutes$/i, " time");
+  return text;
+}
+
 /** A field's label for column headers, forms, filters and group-by. */
 export function fieldTitle(
   f: Pick<FieldMeta, "name" | "labels"> & { kind?: string; ui?: FieldMeta["ui"] },
@@ -109,8 +132,7 @@ export function fieldTitle(
   let fallback =
     f.kind && f.kind !== "ref" && f.name.endsWith("_id") && own === en ? `${en} ID` : own;
   if (fallback === en || fallback === `${en} ID`) {
-    fallback = keepAcronyms(fallback);
-    if (shownInKm(f)) fallback = fallback.replace(/ m$/, "");
+    fallback = withoutUnit(keepAcronyms(fallback), f);
   }
   return labelFor(f, getLang(), fallback);
 }

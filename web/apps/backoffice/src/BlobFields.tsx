@@ -315,7 +315,7 @@ export function BlobInput(p: BlobInputProps) {
     const thumb = value ? (
       <BlobThumb id={value} alt={title} size={size} className="preview" />
     ) : (
-      <span className="blobthumb preview empty" style={{ inlineSize: size, blockSize: size }}>
+      <span className="blobthumb preview vacant" style={{ inlineSize: size, blockSize: size }}>
         <span className="blobthumb-ph">
           <Icon name="upload" size={p.compact ? 14 : 18} />
         </span>

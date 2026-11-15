@@ -167,14 +167,19 @@ export function KmInput({ field, value, onChange, readOnly, common }: BaseInputP
   const mark = fmt.separators().decimal;
   // The form holds a decimal with the locale's mark ("200,15"); a number as digits.
   const metres = (v: string) => (decimal ? v.replace(mark, ".") : v);
+  // One decimal to read (as in a list), up to metres while typing.
   const show = (v: string) => {
+    const m = metres(v);
+    return splitDecimal(m) ? kmInput(m, 1) : v;
+  };
+  const edit = (v: string) => {
     const m = metres(v);
     return splitDecimal(m) ? kmInput(m) : v;
   };
   const box = useTypedText(
     value,
     show,
-    show,
+    edit,
     (typed) => {
       const m = parseKm(typed, decimal ? (field.scale ?? 0) : null);
       if (m === null) return typed;

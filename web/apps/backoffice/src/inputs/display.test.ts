@@ -129,6 +129,9 @@ describe("names", () => {
     expect(fieldTitle(field("national_id"))).toBe("National ID");
     expect(fieldTitle(field("distance_m", { kind: "decimal" }))).toBe("Distance");
     expect(modelTitle({ name: "helpdesk_sla" }, "helpdesk")).toBe("SLA");
+    expect(fieldTitle(field("start_minute", { kind: "number" }))).toBe("Start time");
+    expect(fieldTitle(field("resolution_minutes", { kind: "number" }))).toBe("Resolution time");
+    expect(fieldTitle(field("minutes", { kind: "number" }))).toBe("Duration");
   });
   it("prefer the server's own label, English included", () => {
     expect(fieldTitle(field("seo_title", { labels: { en: "Search title" } }))).toBe("Search title");

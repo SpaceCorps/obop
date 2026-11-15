@@ -123,6 +123,18 @@ li[data-current] .rp-title {
   animation: none;
 }
 
+/* On a phone the new record takes the whole screen, as every record does there. */
+@media (max-width: 40rem) {
+  .rp-stack.dialog,
+  .rp-stack .dialog-body,
+  .rp-stack .record {
+    inline-size: 100vw;
+    max-block-size: 100dvh;
+    block-size: 100dvh;
+    border-radius: 0;
+  }
+}
+
 /* ---------- Units: a sign after the number ---------- */
 .unitin {
   position: relative;
@@ -402,8 +414,8 @@ li[data-current] .rp-title {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  font-family: var(--font-mono);
   font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
 }
 .mdpanes textarea:focus {
   box-shadow: none;
@@ -418,12 +430,16 @@ li[data-current] .rp-title {
 .mdfield[data-tab="preview"] .mdpanes textarea {
   display: none;
 }
+.mdfield.wide .mdpanes textarea,
+.mdfield.wide .mdpreview {
+  display: block;
+}
 @container (min-width: 40rem) {
   .mdpanes {
     grid-template-columns: 1fr 1fr;
   }
-  .mdfield .mdpanes textarea,
-  .mdfield .mdpreview {
+  .mdfield[data-tab] .mdpanes textarea,
+  .mdfield[data-tab] .mdpreview {
     display: block;
   }
   .mdpreview {
@@ -575,4 +591,13 @@ li[data-current] .rp-title {
   .avatarfield {
     transition: none;
   }
+}
+.blobthumb.preview.vacant {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+.avatarbtn:hover .blobthumb.vacant {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
 }
