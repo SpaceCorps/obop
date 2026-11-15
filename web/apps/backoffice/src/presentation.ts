@@ -54,6 +54,7 @@ import {
   optionLabel,
   shownLabel,
 } from "./format.ts";
+import { shownNumber } from "./inputs/display.ts";
 import { fieldTitle, modelTitle } from "./labels.ts";
 import type { Cond } from "./query.ts";
 import { governedNames, hiddenForRecord, notForRecord } from "./workflow.ts";
@@ -185,6 +186,14 @@ function valueText(model: ModelMeta, row: Row, name: string, ctx: PresentCtx): s
       return fmt.money(v, currencyOf(row, model, ctx, f));
     case "bool":
       return v === true ? fieldTitle(f) : "";
+    case "number":
+    case "decimal": {
+      // Minutes read as "2 h 30", metres as km, a time of day as "09:00" (D95 `ui.display`).
+      const shown = shownNumber(displayOf(f), v);
+      if (shown) return shown;
+      const n = Number(v);
+      return Number.isFinite(n) && f.kind === "number" ? fmt.number(n) : String(v);
+    }
     case "image":
     case "file":
       return "";
@@ -341,8 +350,17 @@ export function subtitleOf(model: ModelMeta, row: Row, ctx: PresentCtx = {}): st
 
 const SECOND_LINE = ["sku", "code", "number", "reference", "vendor_reference", "email"];
 
-/** The grey second line of a picker option: a code, else an amount, else a date, else a ref. */
+/**
+ * The grey second line of a picker option: `ui.subtitle`, else a code, else an amount (never a
+ * financial or personal one), else a date, else a ref.
+ */
 export function pickerSecondLine(model: ModelMeta, row: Row, ctx: PresentCtx = {}): string {
+  // The package's own line under the title first ("Workshop lead · Service").
+  const hint = model.ui?.subtitle;
+  if (hint) {
+    const text = fillTemplate(model, row, hint, ctx);
+    if (text) return text;
+  }
   const used = new Set(titleParts(model, row, ctx).used);
   for (const name of SECOND_LINE) {
     const f = fieldOf(model, name);
@@ -351,7 +369,15 @@ export function pickerSecondLine(model: ModelMeta, row: Row, ctx: PresentCtx = {
       if (v) return v;
     }
   }
-  const money = model.fields.find((f) => f.kind === "money" && !isPrivate(f) && !used.has(f.name));
+  // Never a person's own money (a salary: financial and personal data) or a financial secret.
+  const money = model.fields.find(
+    (f) =>
+      f.kind === "money" &&
+      !isPrivate(f) &&
+      f.class !== "financial" &&
+      !f.personal_data &&
+      !used.has(f.name),
+  );
   const date = mainDate(model, used);
   const ref = mainRef(model, used);
   for (const f of [money, date, ref]) {
@@ -583,7 +609,13 @@ export function toneClassOf(
 ): string {
   const tone = toneOf(field, value, model);
   if (tone) return `t-${tone}`;
-  const i = field?.options?.indexOf(value) ?? 0;
+  // A ref or a text (an employee, a resource) has no options: each value gets its own tint.
+  if (!field?.options?.length) {
+    let h = 0;
+    for (const c of value) h = (h * 31 + c.codePointAt(0)!) >>> 0;
+    return `t-${(h % 6) + 1}`;
+  }
+  const i = field.options.indexOf(value);
   return `t-${(Math.max(i, 0) % 6) + 1}`;
 }
 
@@ -717,7 +749,25 @@ export type CardLayout = {
   avatar?: string;
   /** A percentage drawn as a progress bar. */
   progress?: string;
+  /**
+   * The other fields `ui.card` lists that no slot above takes (text, numbers, yes/no, more refs
+   * and selects), in hint order, drawn as one small muted line ("nina.petersen · 2 h 30").
+   */
+  facts: string[];
 };
+
+/** Kinds a card draws as a fact: everything that reads as a short text. */
+const FACT_KINDS = new Set([
+  "text",
+  "number",
+  "decimal",
+  "bool",
+  "ref",
+  "select",
+  "money",
+  "date",
+  "datetime",
+]);
 
 /**
  * The card of a record on a board, a gallery or a phone list. `ui.card` lists the fields (any
@@ -743,7 +793,9 @@ export function cardLayout(model: ModelMeta): CardLayout {
   const subtitle = [pick((f) => f.kind === "ref" && f.required), pick((f) => f.kind === "ref")]
     .filter((n): n is string => !!n)
     .slice(0, 2);
-  const money = pick((f) => f.kind === "money" && summable(f, model));
+  // A hinted amount is the card's amount even when it is not summed (a price, a rate): summable
+  // governs column sums, not what a card shows.
+  const money = pick((f) => f.kind === "money" && (!!hint?.length || summable(f, model)));
   const date =
     pick((f) => (f.kind === "date" || f.kind === "datetime") && DUE.test(f.name)) ??
     pick((f) => f.kind === "date" || f.kind === "datetime");
@@ -756,8 +808,15 @@ export function cardLayout(model: ModelMeta): CardLayout {
     pick((f) => f.kind === "select" && f !== state),
     pick((f) => f.kind === "select" && f !== state),
   ].filter((n): n is string => !!n);
+  // Only what the package names: without a hint the card stays as the heuristic chose it.
+  const facts = hint?.length
+    ? pool
+        .filter((f) => !used.has(f.name) && f !== state && FACT_KINDS.has(f.kind))
+        .map((f) => f.name)
+    : [];
   return {
     title,
+    facts,
     ...(overline ? { overline } : {}),
     subtitle,
     ...(money ? { money } : {}),

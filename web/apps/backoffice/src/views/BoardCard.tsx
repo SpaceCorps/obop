@@ -14,7 +14,9 @@ import {
   type PresentCtx,
 } from "../presentation.ts";
 import { Icon } from "../ui.tsx";
-import { dueTone, type BoardLayout } from "./board.ts";
+import { shownNumber } from "../inputs/display.ts";
+import { displayOf } from "../presentation.ts";
+import { dueTone, rangeEndOf, type BoardLayout } from "./board.ts";
 import { CardMenu, type CardMenuHandle } from "./CardMenu.tsx";
 
 /** What the presentation functions may ask the data layer: labels and cached rows of other models. */
@@ -136,6 +138,52 @@ function hash(s: string): number {
   return h;
 }
 
+/** A number as a card's figure: "2 h 30", "18.5 km", else "40 Quantity". */
+function figureText(f: FieldMeta, v: unknown): string {
+  const shown = shownNumber(displayOf(f), v);
+  if (shown) return shown;
+  const n = Number(v);
+  const value = Number.isFinite(n) ? fmt.number(n) : String(v);
+  return `${value} ${fieldTitle(f).toLowerCase()}`;
+}
+
+/**
+ * The facts of a card as short texts in hint order: text as it is, a number with its unit or its
+ * field's name ("Quantity 3"), a yes as the field's name, a time of day with the end of its range
+ * ("09:00–17:00"). Empty and masked values are left out.
+ */
+function factsOf(
+  names: readonly string[],
+  byName: (n: string | undefined) => FieldMeta | undefined,
+  row: Row,
+  text: (n: string) => string,
+): string[] {
+  const fields = names.map(byName).filter((f): f is FieldMeta => !!f);
+  const out: string[] = [];
+  const skip = new Set<string>();
+  for (const f of fields) {
+    if (skip.has(f.name)) continue;
+    const v = row[f.name];
+    if (isEmpty(v) || isMasked(v) || v === false) continue;
+    const display = displayOf(f);
+    if (display === "time_of_day") {
+      const end = rangeEndOf(fields, f);
+      if (end && !isEmpty(row[end.name])) {
+        skip.add(end.name);
+        out.push(`${text(f.name)}–${text(end.name)}`);
+        continue;
+      }
+    }
+    if ((f.kind === "number" || f.kind === "decimal") && !display) {
+      out.push(`${fieldTitle(f)} ${text(f.name)}`);
+      continue;
+    }
+    const s = text(f.name);
+    if (s) out.push(s);
+  }
+  return out;
+}
+
 export type NextStep = {
   label: string;
   run: () => void;
@@ -202,6 +250,12 @@ export function BoardCard(p: BoardCardProps) {
         ? String(row[moneyF.name])
         : fmt.money(row[moneyF.name], currencyOf(row, model, ctx, moneyF))
       : "";
+  const figureF = byName(layout.figure);
+  const figure =
+    !money && figureF && !isEmpty(row[figureF.name]) && !isMasked(row[figureF.name])
+      ? figureText(figureF, row[figureF.name])
+      : "";
+  const facts = factsOf(layout.facts, byName, row, text);
   const dateF = byName(layout.date);
   const date =
     dateF && !isEmpty(row[dateF.name]) && !isMasked(row[dateF.name])
@@ -322,6 +376,7 @@ export function BoardCard(p: BoardCardProps) {
           {overline && <span className="kover">{overline}</span>}
           <strong className="ktitle">{p.title}</strong>
           {subtitle.length > 0 && <span className="ksub">{subtitle.join(" · ")}</span>}
+          {facts.length > 0 && <span className="kfacts">{facts.join(" · ")}</span>}
         </div>
         {p.menu.length > 0 && <CardMenu label={p.menuLabel} items={p.menu} handle={menu} />}
       </div>
@@ -335,18 +390,21 @@ export function BoardCard(p: BoardCardProps) {
         </div>
       )}
       {progress !== null && (
-        <div
-          className="kprogress"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(progress)}
-          aria-label={progressF ? fieldTitle(progressF) : undefined}
-        >
-          <span style={{ inlineSize: `${progress}%` }} />
+        <div className="kprogress-row">
+          <div
+            className="kprogress"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress)}
+            aria-label={progressF ? fieldTitle(progressF) : undefined}
+          >
+            <span style={{ inlineSize: `${progress}%` }} />
+          </div>
+          <span className="kprogress-value">{fmt.percent(progress / 100, 0)}</span>
         </div>
       )}
-      {(date || money || p.next) && (
+      {(date || money || figure || p.next) && (
         <div className="kfoot">
           {date && (
             <span className={`kdate${late ? ` ${late}` : ""}`}>
@@ -355,11 +413,16 @@ export function BoardCard(p: BoardCardProps) {
             </span>
           )}
           {/* The next step shares the line with the date or the amount; with both it gets its own. */}
-          {nextButton && !(date && money) && nextButton}
+          {nextButton && !(date && (money || figure)) && nextButton}
           {money && <span className="kmoney amount">{money}</span>}
+          {figure && (
+            <span className="kmoney amount kfigure" title={fieldTitle(figureF!)}>
+              {figure}
+            </span>
+          )}
         </div>
       )}
-      {nextButton && date && money && nextButton}
+      {nextButton && date && (money || figure) && nextButton}
     </article>
   );
 }

@@ -7,26 +7,16 @@ import {
   type KeyboardEvent,
   type TouchEvent,
 } from "react";
-import {
-  fmt as fmtLocale,
-  getCurrency,
-  inSentence,
-  panelId,
-  t,
-  tabId,
-  Tabs,
-  useI18n,
-  type MenuItem,
-} from "@obop/ui";
+import { getCurrency, inSentence, panelId, t, tabId, Tabs, useI18n, type MenuItem } from "@obop/ui";
 import { search, type FieldMeta, type Row, type ServerFilter } from "../api.ts";
 import { Cell, FieldInput } from "../fields.tsx";
 import { useData } from "../data.tsx";
 import { fromEdit, toEdit, type Edit } from "../edit.ts";
 import { readPref, writePref } from "../favorites.ts";
-import { isEmpty, isState, money as fmtMoney } from "../format.ts";
+import { isEmpty, isState } from "../format.ts";
 import { actionTitle, fieldTitle } from "../labels.ts";
 import { PHONE_QUERY, useMedia } from "../media.ts";
-import { newDefaults, nextActions } from "../presentation.ts";
+import { currencyOf, newDefaults, nextActions } from "../presentation.ts";
 import { domainOf, groupDomain, groupKey, groupLabel, groupable } from "../query.ts";
 import { serverMessage } from "../serverMessage.ts";
 import { Icon } from "../ui.tsx";
@@ -54,6 +44,8 @@ import {
   readFold,
   rowSums,
   showsSum,
+  sumText,
+  currencyGroupOf,
   toggleFold,
   type FoldPrefs,
 } from "./board.ts";
@@ -213,13 +205,6 @@ type Quick = {
  */
 type Fresh = { key: string; row: Row; mutation: number };
 
-/** The sentence of a column's sums ("€12,400.00 and SEK 3,000.00"); negative sums show too. */
-const sumSentence = (sums: Map<string, number>) =>
-  fmtLocale.list(
-    [...sums].filter(([, n]) => n !== 0).map(([c, n]) => fmtMoney(n, c || undefined)),
-    "conjunction",
-  );
-
 const SWIPE_PX = 56;
 
 /**
@@ -280,9 +265,13 @@ export function KanbanView(p: ViewProps) {
   }, [fresh]);
 
   // Server mode (D4): counts and sums per column from one aggregate, cards one page per column.
-  const hasCurrency = model.fields.some(
-    (f) => f.name === "currency" && (f.kind === "text" || f.kind === "select"),
-  );
+  // Money is summed per currency: the record's own, or the one its journal or company is in.
+  const split = useMemo(() => currencyGroupOf(model, money1), [model, money1]);
+  if (split?.to) d.store.peek(split.to);
+  const currencyOfKey = (value: unknown): string | undefined =>
+    split?.field === "currency"
+      ? (value as string | undefined)
+      : currencyOf({ id: "", [split?.field ?? ""]: value } as Row, model, ctx, money1);
   const agg = useAggregate({
     enabled: !!server && !!gf,
     model: model.name,
@@ -290,14 +279,21 @@ export function KanbanView(p: ViewProps) {
     groupBy: gf
       ? [
           gf.kind === "date" ? { field: gf.name, bucket: "month" } : { field: gf.name },
-          ...(hasCurrency && money1 ? [{ field: "currency" }] : []),
+          ...(split ? [{ field: split.field }] : []),
         ]
       : [],
     measures: money1 ? [{ op: "count" }, { op: "sum", field: money1.name }] : [{ op: "count" }],
   });
   const totals = useMemo(
-    () => (gf && server ? columnTotals(agg.groups, gf, money1, getCurrency()) : null),
-    [gf, server, agg.groups, money1],
+    () =>
+      gf && server
+        ? columnTotals(agg.groups, gf, money1, getCurrency(), (k) =>
+            currencyOfKey(split ? k[split.field] : undefined),
+          )
+        : null,
+    // `version` brings the rows a `currency_from` path reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gf, server, agg.groups, money1, split, d.version],
   );
 
   const clientRows = p.rows;
@@ -509,7 +505,8 @@ export function KanbanView(p: ViewProps) {
       // The form stays for the next card, emptied but for what the column fills in.
       const values: Record<string, Edit> = {};
       for (const f of plan.fields)
-        values[f.name] = f === title ? "" : (quick.values[f.name] ?? toEdit(f, preset[f.name]));
+        // Every field starts again from its default; only the column's own value stays (preset).
+        values[f.name] = f === title ? "" : toEdit(f, preset[f.name]);
       setQuick({ key: quick.key, values, errors: {} });
       return;
     }
@@ -567,7 +564,9 @@ export function KanbanView(p: ViewProps) {
     const cards =
       isFresh && fresh ? [fresh.row, ...loaded.filter((r) => r.id !== fresh.row.id)] : loaded;
     const count = server ? (totals?.get(key)?.count ?? 0) : loaded.length;
-    const sums = server ? totals?.get(key)?.sums : rowSums(loaded, money1);
+    const sums = server
+      ? totals?.get(key)?.sums
+      : rowSums(loaded, money1, getCurrency(), (r) => currencyOf(r, model, ctx, money1));
     const more = server ? count - loaded.length : 0;
     const isFolded = !solo && foldedKeys.includes(key);
     const name = groupLabel(gf, key, d.lookup);
@@ -657,7 +656,7 @@ export function KanbanView(p: ViewProps) {
             )}
             {solo && !isFolded && money1 && showsSum(sums) && (
               <span className="sum" title={t("Total {field}", { field: fieldTitle(money1) })}>
-                {sumSentence(sums!)}
+                {sumText(sums!, money1)}
               </span>
             )}
             <span className="grow" />
@@ -683,7 +682,7 @@ export function KanbanView(p: ViewProps) {
           </div>
           {!solo && !isFolded && money1 && showsSum(sums) && (
             <span className="sum" title={t("Total {field}", { field: fieldTitle(money1) })}>
-              {sumSentence(sums!)}
+              {sumText(sums!, money1)}
             </span>
           )}
         </header>

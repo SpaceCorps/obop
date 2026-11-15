@@ -10,7 +10,7 @@ import { ActionDialog } from "./ActionDialog.tsx";
 import { useData } from "./data.tsx";
 import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
 import { recordExtensionOf } from "./extensions.ts";
-import { FormBody } from "./FormBody.tsx";
+import { FormBody, flushLines, linesDirty, newLinesRegistry } from "./FormBody.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
 import { actionTitle, fieldTitle } from "./labels.ts";
 import { extendTrail, trailStore } from "./lastRecord.ts";
@@ -19,6 +19,7 @@ import { DeleteDialog } from "./DeleteDialog.tsx";
 import { PHONE_QUERY, SHEET_QUERY, useMedia, useScrollLock } from "./media.ts";
 import {
   indexModels,
+  currencyOf,
   newDefaults,
   nextActions,
   subtitleOf,
@@ -68,6 +69,15 @@ const without = <V,>(m: Record<string, V>, name: string): Record<string, V> =>
   Object.fromEntries(Object.entries(m).filter(([k]) => k !== name));
 
 const NO_ACTIONS: NextActions = { secondary: [], danger: [] };
+
+/**
+ * The open panels, the last opened last: a record created from a picker ("Create and edit…")
+ * opens a second panel over the first, and only the top one answers a key pressed outside both.
+ */
+const openPanels: object[] = [];
+
+/** A control that owns the arrow keys (a select opens on Alt+Down, a text moves its caret). */
+const OWNS_KEYS = "input, select, textarea, [contenteditable], [role=combobox], [role=listbox]";
 
 /**
  * A record link whose record is gone or hidden from the person says so and drops the id, instead
@@ -153,7 +163,13 @@ export function RecordPanel({
 
   // A governed field (D48) starts at its first option and then moves only through actions.
   const governed = (f: FieldMeta) => isGoverned(model, f);
-  const currency = rowCurrency(row ?? defaults);
+  // The record's own currency, else the one its journal or company is in (`ui.currency_from`).
+  const currency =
+    rowCurrency(row ?? defaults) ??
+    currencyOf({ id: row?.id ?? "", ...(row ?? defaults) } as Row, model, {
+      ...ctx,
+      rowOf: (m, id) => d.store.peek(m)?.find((r) => r.id === id),
+    });
   const baseline = (f: FieldMeta): Edit =>
     creating && governed(f)
       ? initialOption(f)
@@ -162,8 +178,11 @@ export function RecordPanel({
   const masked = (f: FieldMeta) => !!row && isMasked(row[f.name]) && !(f.name in draft);
   const changed = (f: FieldMeta) => f.name in draft && draft[f.name] !== baseline(f);
   const dirty = fields.some(changed);
+  // Unsaved line edits count as unsaved changes: leaving asks first, and Save saves them too.
+  const lines = useRef(newLinesRegistry()).current;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  const unsaved = () => dirtyRef.current || linesDirty(lines);
 
   // A frozen record (meta `guard`) keeps only its mutable fields; the server says the same.
   const lock = lockOf(model, row);
@@ -223,14 +242,17 @@ export function RecordPanel({
   pagerRef.current = pager;
 
   // Leaving with unsaved edits asks first (hash navigation, tab close).
+  // A panel opened over another one keeps the one below it guarded too, and gives its guard back.
   useEffect(() => {
-    nav.dirty = () => dirtyRef.current;
+    const below = nav.dirty;
+    const mine = () => unsaved() || !!below?.();
+    nav.dirty = mine;
     const before = (e: BeforeUnloadEvent) => {
-      if (dirtyRef.current) e.preventDefault();
+      if (unsaved()) e.preventDefault();
     };
     addEventListener("beforeunload", before);
     return () => {
-      if (nav.dirty) nav.dirty = null;
+      if (nav.dirty === mine) nav.dirty = below ?? null;
       removeEventListener("beforeunload", before);
     };
   }, []);
@@ -247,22 +269,36 @@ export function RecordPanel({
   const saveRef = useRef<() => void>(() => {});
   saveRef.current = () => void save();
   useEffect(() => {
+    const me = {};
+    openPanels.push(me);
     const on = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      // A key pressed in this panel is this panel's; one pressed elsewhere only the top panel's.
+      const target = e.target instanceof Node ? e.target : null;
+      const inside = !!target && !!panel.current?.contains(target);
+      if (!inside && openPanels.at(-1) !== me) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
+        if (linesDirty(lines)) void flushLines(lines);
         if (dirtyRef.current || creating) saveRef.current();
       } else if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        // A select, a text or a picker keeps its own arrow keys (images reorder with them too).
+        if (target instanceof Element && target.closest(OWNS_KEYS)) return;
         const go = e.key === "ArrowUp" ? pagerRef.current?.prev : pagerRef.current?.next;
         if (go) {
           e.preventDefault();
           go();
         }
-      } else if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".overlay")) {
+      } else if (e.key === "Escape" && !document.querySelector(".overlay")) {
         onClose();
       }
     };
     addEventListener("keydown", on);
-    return () => removeEventListener("keydown", on);
+    return () => {
+      removeEventListener("keydown", on);
+      const i = openPanels.indexOf(me);
+      if (i >= 0) openPanels.splice(i, 1);
+    };
   }, [onClose, creating]);
 
   function failure(message: string) {
@@ -503,6 +539,7 @@ export function RecordPanel({
             <Panel key={i} model={model} fields={fields} row={row} busy={busy} />
           ))}
         <FormBody
+          lines={lines}
           model={model}
           fields={fields}
           row={row}

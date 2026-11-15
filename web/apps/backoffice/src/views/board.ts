@@ -5,10 +5,18 @@
  * and when a date reads as overdue. Every function reads the D95 hint first, when the server sends
  * one, and falls back to the heuristics of presentation.ts.
  */
-import { getCurrency } from "@obop/ui";
+import { fmt, getCurrency } from "@obop/ui";
 import type { FieldMeta, ModelMeta, Row } from "../api.ts";
-import { isEmpty } from "../format.ts";
-import { cardLayout, summable, titleFieldsOf, type CardLayout } from "../presentation.ts";
+import { isEmpty, money } from "../format.ts";
+import { shownNumber } from "../inputs/display.ts";
+import { fieldTitle } from "../labels.ts";
+import {
+  cardLayout,
+  displayOf,
+  summable,
+  titleFieldsOf,
+  type CardLayout,
+} from "../presentation.ts";
 import { keyOf } from "../useAggregate.ts";
 import { actionsOn, governedNames, initialOption, isGoverned } from "../workflow.ts";
 
@@ -139,18 +147,41 @@ export function mainMoneyOf(model: ModelMeta, fields: readonly FieldMeta[]): Fie
 const ISO = /^[A-Z]{3}$/;
 
 /**
- * Per column: its record count and its sums by currency. A group without a currency of its own is
- * added to the instance's currency (`fallback`), so "€7,428.00 and €1,345.00" cannot happen (B7).
+ * The field a sum is also grouped by to tell its currency: `currency`, or the first step of the
+ * money field's `ui.currency_from` (`journal_id` of `journal_id.currency`), with the model that
+ * step points at. Null for a sum that is not money, or money always in the instance's currency.
+ */
+export function currencyGroupOf(
+  model: ModelMeta,
+  sumField: FieldMeta | undefined,
+): { field: string; to?: string } | null {
+  if (sumField?.kind !== "money") return null;
+  if (model.fields.some((f) => f.name === "currency" && (f.kind === "text" || f.kind === "select")))
+    return { field: "currency" };
+  const path =
+    sumField.ui?.currency_from ??
+    model.fields.find((f) => f.kind === "money" && f.ui?.currency_from)?.ui?.currency_from;
+  const hop = path?.split(".")[0];
+  const ref = hop ? model.fields.find((f) => f.name === hop && f.kind === "ref") : undefined;
+  return ref ? { field: ref.name, ...(ref.to ? { to: ref.to } : {}) } : null;
+}
+
+/**
+ * Per column: its record count and its sums, by currency for money (`currencyOfGroup` reads a
+ * group's key, the `currency` key by default). A group without a currency is added to the
+ * instance's currency (`fallback`), so "€7,428.00 and €1,345.00" cannot happen (B7). A sum that is
+ * not money (hours, days, a quantity) has one sum under the key "".
  */
 export function columnTotals(
   groups: {
     key: Record<string, unknown>;
     count: number;
-    measures: Record<string, number | null>;
+    measures: Record<string, number | string | null>;
   }[],
   field: FieldMeta,
   sumField: FieldMeta | undefined,
   fallback: string = getCurrency(),
+  currencyOfGroup: (key: Record<string, unknown>) => unknown = (k) => k.currency,
 ) {
   const out = new Map<string, { count: number; sums: Map<string, number> }>();
   for (const g of groups) {
@@ -158,8 +189,9 @@ export function columnTotals(
     const e = out.get(k) ?? { count: 0, sums: new Map<string, number>() };
     e.count += g.count;
     if (sumField) {
-      const raw = g.key.currency;
-      const c = typeof raw === "string" && ISO.test(raw) ? raw : fallback;
+      const raw = sumField.kind === "money" ? currencyOfGroup(g.key) : "";
+      const c =
+        sumField.kind !== "money" ? "" : typeof raw === "string" && ISO.test(raw) ? raw : fallback;
       e.sums.set(c, (e.sums.get(c) ?? 0) + (Number(g.measures[`sum:${sumField.name}`]) || 0));
     }
     out.set(k, e);
@@ -167,21 +199,44 @@ export function columnTotals(
   return out;
 }
 
-/** The same sums from records in the browser, by each record's currency (else `fallback`). */
+/**
+ * The same sums from records in the browser, by each record's currency (`currencyFor`, else its
+ * own `currency`, else `fallback`); a sum that is not money under the key "".
+ */
 export function rowSums(
   rows: readonly Row[],
   sumField: FieldMeta | undefined,
   fallback: string = getCurrency(),
+  currencyFor?: (row: Row) => string | undefined,
 ): Map<string, number> {
   const sums = new Map<string, number>();
   if (!sumField) return sums;
   for (const r of rows) {
     const v = Number(r[sumField.name]);
     if (!Number.isFinite(v) || isEmpty(r[sumField.name])) continue;
-    const c = typeof r.currency === "string" && ISO.test(r.currency) ? r.currency : fallback;
+    const own = currencyFor?.(r) ?? r.currency;
+    const c =
+      sumField.kind !== "money" ? "" : typeof own === "string" && ISO.test(own) ? own : fallback;
     sums.set(c, (sums.get(c) ?? 0) + v);
   }
   return sums;
+}
+
+/**
+ * The sentence of a sum: money per currency ("€12,400.00 and SEK 3,000.00"), a duration as hours,
+ * metres as km, else the number and the field's name ("11 working days", "40 quantity").
+ */
+export function sumText(sums: Map<string, number>, f: FieldMeta): string {
+  if (f.kind === "money")
+    return fmt.list(
+      [...sums].filter(([, n]) => n !== 0).map(([c, n]) => money(n, c || undefined)),
+      "conjunction",
+    );
+  const n = [...sums.values()].reduce((a, b) => a + b, 0);
+  const shown = shownNumber(displayOf(f), n);
+  if (shown) return shown;
+  const digits = f.kind === "decimal" ? (f.scale ?? 2) : 0;
+  return `${fmt.number(n, { maximumFractionDigits: digits })} ${fieldTitle(f).toLowerCase()}`;
 }
 
 /** Whether a column's sums are worth a line: any of them is not zero (negative ones too, B8). */
@@ -192,6 +247,8 @@ export const showsSum = (sums: Map<string, number> | undefined): boolean =>
 
 /** What a card of the board or the gallery shows: the card layout, fitted to the board. */
 export type BoardLayout = CardLayout & {
+  /** A number shown large where an amount would be (`ui.card_sum` on hours, km or days). */
+  figure?: string;
   /** The end of a date range whose start is `date` ("14 – 18 Dec"). */
   dateEnd?: string;
   /**
@@ -243,14 +300,23 @@ export function boardLayout(
   const base = cardLayout(model);
   const ok = (n: string | undefined) =>
     !!n && n !== group?.name && fields.some((f) => f.name === n);
-  const money = model.ui?.card?.length ? base.money : mainMoneyOf(model, fields)?.name;
+  const sum = mainMoneyOf(model, fields);
+  // The large figure: an amount, or a number the package sums on the card (hours, km, days).
+  const figure = sum && sum.kind !== "money" ? sum.name : undefined;
+  const money = model.ui?.card?.length
+    ? (base.money ?? (sum?.kind === "money" ? sum.name : undefined))
+    : sum?.kind === "money"
+      ? sum.name
+      : undefined;
   const out: BoardLayout = {
     title: base.title.filter((n) => fields.some((f) => f.name === n)),
     subtitle: base.subtitle.filter(ok),
     badges: base.badges.filter(ok),
+    facts: base.facts.filter((n) => ok(n) && n !== figure && n !== money),
   };
   if (ok(base.overline)) out.overline = base.overline;
   if (ok(money)) out.money = money;
+  else if (ok(figure)) out.figure = figure;
   if (ok(base.state)) out.state = base.state;
   if (ok(base.date)) {
     out.date = base.date;

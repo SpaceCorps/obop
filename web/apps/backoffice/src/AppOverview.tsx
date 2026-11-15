@@ -3,7 +3,7 @@
 // the same access rules; each card opens the list that shows exactly the records it counts.
 import { useEffect, useMemo, useState } from "react";
 import { Button, Icon, fmt, getCurrency, t, tx, useI18n } from "@obop/ui";
-import { aggregate, type ModelMeta, type ServerFilter } from "./api.ts";
+import { aggregate, list, type ModelMeta, type ServerFilter } from "./api.ts";
 import { KpiStrip, KpiTile } from "./charts/KpiTile.tsx";
 import { AppIcon, appBlurb, type App } from "./Chrome.tsx";
 import { useData } from "./data.tsx";
@@ -21,6 +21,7 @@ import {
   type QuickFilter,
 } from "./quickFilters.ts";
 import { encodeState, type Cond } from "./query.ts";
+import { currencyGroupOf } from "./views/board.ts";
 import { recentRecords } from "./recent.ts";
 import { href, type Go, type Route } from "./route.ts";
 
@@ -75,8 +76,31 @@ function primaryModel(main: readonly ModelMeta[]): ModelMeta | undefined {
   );
 }
 
-const hasCurrency = (m: ModelMeta) =>
-  m.fields.some((f) => f.name === "currency" && f.kind === "text");
+/**
+ * How a group's key tells its currency: the record's own `currency`, or, for money whose currency
+ * comes from a ref (`ui.currency_from` = "journal_id.currency"), the ref's id looked up in the
+ * target's records. Bank lines of a SEK journal are then never added to euros.
+ */
+async function currencyResolver(
+  token: string,
+  model: ModelMeta,
+  money: ModelMeta["fields"][number] | undefined,
+): Promise<{ field?: string; of: (key: Record<string, unknown>) => unknown }> {
+  const split = currencyGroupOf(model, money);
+  if (!split) return { of: () => undefined };
+  if (split.field === "currency") return { field: "currency", of: (k) => k.currency };
+  const path =
+    money?.ui?.currency_from ??
+    model.fields.find((f) => f.kind === "money" && f.ui?.currency_from)?.ui?.currency_from ??
+    "";
+  const step = path.split(".")[1];
+  const byId = new Map<string, unknown>();
+  if (split.to && step) {
+    const r = await list(token, split.to);
+    if (!("error" in r)) for (const row of r.rows) byId.set(row.id, row[step]);
+  }
+  return { field: split.field, of: (k) => byId.get(String(k[split.field] ?? "")) };
+}
 
 /** Money per currency as one line: "€1,200.00 and SEK 4,000.00". */
 function moneyLine(by: Map<string, number>): string | undefined {
@@ -112,9 +136,10 @@ async function tilesOf(
   const status = statusOf(model);
   const money = mainMoneyOf(model);
   const tiles: Tile[] = [];
+  const cur = await currencyResolver(token, model, money);
   const grouped = await aggregate(token, model.name, {
     group_by: status
-      ? [{ field: status.name }, ...(money && hasCurrency(model) ? [{ field: "currency" }] : [])]
+      ? [{ field: status.name }, ...(money && cur.field ? [{ field: cur.field }] : [])]
       : [],
     measures: money ? [{ op: "count" }, { op: "sum", field: money.name }] : [{ op: "count" }],
   });
@@ -128,10 +153,8 @@ async function tilesOf(
       const by = new Map<string, number>();
       if (money)
         for (const g of groups) {
-          const c =
-            typeof g.key.currency === "string" && /^[A-Z]{3}$/.test(g.key.currency)
-              ? g.key.currency
-              : instance;
+          const raw = cur.of(g.key);
+          const c = typeof raw === "string" && /^[A-Z]{3}$/.test(raw) ? raw : instance;
           by.set(c, (by.get(c) ?? 0) + (g.measures[`sum:${money.name}`] ?? 0));
         }
       tiles.push({
