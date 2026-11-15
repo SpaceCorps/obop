@@ -27,6 +27,14 @@ description = "Suma faktury w jednostkach podrzędnych waluty, czyli suma pozycj
 label = "Numer"
 description = "Numer z ciągłej serii rocznej, np. INV-2026-00042, nadawany przy księgowaniu"
 
+[labels.pl.model.invoice.field.issue_date]
+label = "Data wystawienia"
+description = "Data wystawienia faktury (YYYY-MM-DD)"
+
+[labels.pl.model.invoice.field.due_date]
+label = "Termin płatności"
+description = "Data, do której należy zapłacić (YYYY-MM-DD); nie wcześniej niż data wystawienia"
+
 [labels.pl.model.invoice.action.post]
 label = "Zaksięguj"
 description = "Księguje fakturę roboczą i nadaje jej kolejny numer z serii"
