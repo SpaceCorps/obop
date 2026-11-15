@@ -363,7 +363,9 @@
   border-color: var(--border);
   text-align: start;
 }
+/* display: the Customize .card rule below would otherwise make the tile a grid. */
 .app-tile.card {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 0.85rem;
@@ -1208,12 +1210,14 @@ button.ov-more:hover {
   }
   /* The home is an icon grid on a phone, four apps a row as on the launcher and the phone's own
      home screen; the one-line summaries are for wider screens. */
-  .home .app-grid {
+  .home .app-grid,
+  .home .app-grid.small {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--space-3) var(--space-1);
   }
   .home .app-tile.card {
     flex-direction: column;
+    align-items: center;
     gap: 0.4rem;
     padding: var(--space-2) 0;
     border: 0;

@@ -909,7 +909,12 @@ export function Tooltip({
       // stayed over the menu the tap had opened (B16).
       onPointerEnter={(e) => e.pointerType === "mouse" && on()}
       onPointerLeave={(e) => e.pointerType === "mouse" && off()}
-      onPointerDown={(e) => e.pointerType === "mouse" && off()}
+      // A press closes the tip, except on a control that is greyed out: there it says why.
+      onPointerDown={(e) => {
+        if (e.pointerType !== "mouse") return;
+        if ((e.target as Element).closest('[aria-disabled="true"]')) on(0);
+        else off();
+      }}
       // On a touch screen a tap shows the tip only on a control that is greyed out, where it says
       // why (a status step that cannot be chosen); it goes again after a moment.
       onPointerUp={(e) => {

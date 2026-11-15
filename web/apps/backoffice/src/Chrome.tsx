@@ -13,9 +13,12 @@ import {
   Menu,
   Spinner,
   compareText,
+  getLang,
   inSentence,
+  isPseudo,
   labelFor,
   pageBrand,
+  pseudo,
   t,
   tx,
   useI18n,
@@ -31,7 +34,7 @@ import { appHomeOf } from "./extensions.ts";
 import "./registrations.ts";
 import { productDocsVisible } from "./productDocs.ts";
 import { actionTitle, appTitle, modelTitle } from "./labels.ts";
-import { appMenu, homeHref, onLauncher, pluralTitle } from "./nav.ts";
+import { appMenu, groupApps, homeHref, onLauncher, pluralTitle } from "./nav.ts";
 import { nextActions, searchFieldsOf, titleOf } from "./presentation.ts";
 import { recentRecords } from "./recent.ts";
 import { serverMessage } from "./serverMessage.ts";
@@ -112,8 +115,10 @@ export function AppIcon({
 export function appBlurb(app: App): string {
   if (app.id === "customize") return t("Theme, apps and modules");
   const m = app.module;
-  const summary = labelFor({ labels: m.summaries }, undefined, m.summary ?? "");
-  if (summary) return summary;
+  const own = labelFor({ labels: m.summaries }, undefined, "");
+  if (own) return own;
+  // The English summary, accented in the translators' pseudo-locale like every untranslated text.
+  if (m.summary) return isPseudo(getLang()) ? pseudo(m.summary) : m.summary;
   const main = appMenu(m).main;
   const labels = (main.length ? main : m.models).slice(0, 3).map((x) => pluralTitle(x, m.id));
   return labels.join(", ");
@@ -228,7 +233,8 @@ export function Launcher({
   // was opened to tap; with a mouse and keyboard the search takes the first key at once.
   const [touch] = useState(() => matchesNow("(pointer: coarse)"));
   const [cancel] = useState(() => matchesNow(NO_ESCAPE_QUERY));
-  const listed = apps.filter(onLauncher);
+  // In the order of the home screen: by what the apps are for, then the instance's own order.
+  const listed = groupApps(apps.filter(onLauncher)).flatMap((g) => g.apps);
   const shown = listed.filter((a) => a.name.toLowerCase().includes(q.toLowerCase()));
   const recents = recent
     .map((id) => listed.find((a) => a.id === id))

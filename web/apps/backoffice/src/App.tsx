@@ -753,7 +753,7 @@ function Home({
         {!q && recent.length > 0 && (
           <section aria-label={t("Recently opened")}>
             <h2 className="overline">{t("Recently opened")}</h2>
-            <div className="app-grid">{recent.map(tile)}</div>
+            <div className="app-grid small">{recent.map(tile)}</div>
           </section>
         )}
         {q ? (
