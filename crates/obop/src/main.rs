@@ -3725,6 +3725,20 @@ mod bundled_packages {
                 let line = line.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
                 self.app.store.insert("accounting_move_line", line).unwrap();
             }
+            // A manufacturing order is confirmed only with a component (manufacturing 0.3.0).
+            if model == "manufacturing_order" {
+                let component = self.record("product", &mut Vec::new());
+                let line = [
+                    ("order_id", Value::text(&id)),
+                    ("component_id", Value::text(&component)),
+                    ("quantity", Value::Int(1)),
+                ];
+                let line = line.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+                self.app
+                    .store
+                    .insert("manufacturing_order_line", line)
+                    .unwrap();
+            }
             id
         }
     }
