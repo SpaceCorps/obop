@@ -4,6 +4,7 @@ import {
   deviceStateText,
   formatDistance,
   integrityLines,
+  signalBannerProps,
   statusText,
   unsentSentence,
 } from "../core/present.ts";
@@ -153,6 +154,65 @@ describe("Swedish sentences with a count", () => {
       "3 punkter uteslöts på grund av låg noggrannhet",
       "future_flag:2",
     ]);
+  });
+
+  test("the note about a distance of 0 m: Swedish words that stay fixed, the counts in the line under it", () => {
+    setLanguage("sv");
+    const weakWords = {
+      tone: "warning",
+      title: "Platssignalen är för svag för att mäta en sträcka",
+      message:
+        "Positioner med för låg noggrannhet räknas inte med i sträckan. Om du är inomhus, gå till ett fönster eller gå ut.",
+      testID: "weak-signal",
+    };
+    const jumpyWords = {
+      tone: "warning",
+      title: "Positionerna stämmer inte överens",
+      message:
+        "Positioner som inte stämmer överens med den första medräknade positionen räknas inte med i sträckan. Om sträckan står kvar på 0 m, stoppa den här resan, kassera den och starta en ny.",
+      testID: "jumpy-signal",
+    };
+    // The verb is the same for one and for several; the numbers and the unit are written as Swedish
+    // writes them (a no-break space between thousands and before the unit).
+    const cases = [
+      [
+        { kind: "weak", dropped: 7, stored: 7, accuracyM: 150 },
+        weakWords,
+        "7 av 7 positioner räknades inte med (den senaste kunde bara bestämmas på 150 m när)",
+      ],
+      [
+        { kind: "weak", dropped: 1, stored: 4, accuracyM: 1235 },
+        weakWords,
+        "1 av 4 positioner räknades inte med (den senaste kunde bara bestämmas på 1 235 m när)",
+      ],
+      [
+        { kind: "weak", dropped: 12345, stored: 20000, accuracyM: null },
+        weakWords,
+        "12 345 av 20 000 positioner räknades inte med",
+      ],
+      [{ kind: "jumpy", dropped: 1, stored: 3 }, jumpyWords, "1 av 3 positioner räknades inte med"],
+      [{ kind: "jumpy", dropped: 8, stored: 9 }, jumpyWords, "8 av 9 positioner räknades inte med"],
+    ] as const;
+    for (const [signal, words, detail] of cases) {
+      const props = signalBannerProps({ signal })!;
+      expect(props).toEqual({ ...words, detail });
+      // As in English: no number in the banner but the "0 m" of the advice, no placeholder left,
+      // no satellite system and no product named, and nothing about a cause.
+      expect(props.title).not.toMatch(/\d/);
+      expect(props.message.replace("0 m", "")).not.toMatch(/\d/);
+      for (const text of [props.title, props.message, props.detail]) {
+        expect(text).not.toMatch(/\{\w+\}/);
+        expect(text).not.toMatch(/GPS|GNSS|satellit|obop/i);
+      }
+      expect(`${props.title} ${props.message}`).not.toMatch(
+        /hopp|fel|orsak|eftersom|därför|på grund av/i,
+      );
+    }
+    // Back in English the same note is the English one.
+    setLanguage("en");
+    expect(signalBannerProps({ signal: { kind: "jumpy", dropped: 1, stored: 3 } })!.detail).toBe(
+      "1 of 3 positions was left out",
+    );
   });
 
   test("the state of the phone on the instance is a word, an unknown state is shown as it is", () => {
