@@ -431,3 +431,139 @@ Not stale by this direction, and so not in the table: `docs/spec/mobile.md:439` 
 - `web/packages/ui-native` (theme tokens) was not re-read. Each route under `/api/auth/*` was not re-read; the refusal rests on the doc comment at `obop-http/src/lib.rs:193-196` and on `main:docs/DEPLOY.md:366`.
 - The Xcode 27.2 report: the line number 200 and the version numbers 58.0.23, 58.0.29 and 58.0.22, the local patch, and the build and gate result on the iPhone. Only the upstream issue and PR were checked, and the lockfile line that locks 58.0.23. The direction of section 0 was not recorded on main when this document was written.
 - Doc line numbers are for main at fe1b93a (section 10 says main 9ba3afed where it gives lines of that commit) and will move when PR 27, 34 and 45 merge. The merge of PR 51 (09861505) has moved some of them already.
+
+## 12. What was built: the host shell, first slice (2026-11-15)
+
+Status: PROPOSED, like the rest of this document; nothing here is a ruling. This section is the only part of the document that describes code. The code is on the branch `feat/host-app`; no pull request is open. The section was appended and edits no line of sections 0 to 11; where they say that nothing was built or run (the note at the top, section 0, section 11), that is still true of everything they describe.
+
+Marks in this section: "run" means it was started on 2026-11-15 and the result was seen; "not run" means it was not. Everything on a device was run on one Android emulator (the image `obophost36`, Android 16, x86_64) against a throwaway instance on the same PC with a new database and a new account, reached through `adb reverse`. No real phone, no iPhone and no iOS Simulator was used, and no build met an instance with real data. Paths in this section are on `feat/host-app`.
+
+### 12.1 What the shell is, and how it differs from sections 1 to 4
+
+`web/apps/host-app` is a React Native app (Expo SDK 58, `expo` 58.0.16, React Native 0.88.0, `react-native-webview` 14.0.1; every package pinned exactly) that asks for the address of one obop instance and then shows the back office of that instance in a WebView. It is a shell: it holds no module, and the Mileage app is not inside it.
+
+- Section 1 (the split): nothing was split. No file of the Mileage app was moved or lifted into a package. The shell shares `@obop/ui-native` (components and tokens) with it and nothing else.
+- Section 2 (the module descriptor): not built. There is no descriptor, no registry of modules and no module-qualified route.
+- Section 3 (configuration and identity): the shell stores one value, the address of the server, as one item in `expo-secure-store` (`src/native/storage.ts`, `src/core/server-record.ts`), and reads three build variables (`app.config.ts`): `OBOP_ALLOW_CLEARTEXT`, `OBOP_WEBVIEW_DEBUG` and `OBOP_DEFAULT_SERVER`. Every build of the slice has the application id `org.obop.app.test` and is signed with the template's debug key. It registers no OAuth client and declares no groups.
+- Section 4 (sign-in and the device flow): not used. The shell opens no system browser for a sign-in, creates no `device` record and holds no token. The person signs in on the back office's own sign-in page inside the WebView (12.2).
+
+The screens. All are native except the page itself.
+
+- The address screen: one field and Connect. An address is stored only after `GET <origin>/api/openapi.json` answered as an obop server within 8 seconds (`src/core/probe.ts`). Only `https` is accepted, except in a build made with `OBOP_ALLOW_CLEARTEXT=1`, which also accepts `http` to this device or the local network; the rule runs again on the stored address at every start (`src/core/address.ts`, `src/core/local-host.ts`). One path segment is allowed, for an instance whose back office is under `/admin/`.
+- The page, in a WebView. A document of another origin is not loaded in it; it opens in the system browser (`src/core/nav-policy.ts`).
+- The host bar, drawn by the app over the top edge of the page: the host and port, "not encrypted" for plain http, "test build", and "new since {date}" for seven days after the address was stored. It is shown at every start and at every return to the foreground, for at least two seconds and until the person touches the page; a tap on it opens "This app". No message and no navigation of a page hides it (`src/core/shell.ts`, `src/ui/HostBar.tsx`).
+- "This app": the address, whether the connection is encrypted, the server's version, the date the address was stored, the app's version and build, Open in browser, and Change server with one confirmation and no authentication.
+- The error screen, when the server does not answer: what the phone reported, Try again, Change server.
+
+### 12.2 Sign-in: the browser's session inside an app
+
+The sign-in is the page's own. The bearer token stays where the back office keeps it in any browser, in the page's `sessionStorage` (`web/apps/backoffice/src/App.tsx`, the key `obop-token`): a full person session of 12 hours that nothing extends. The app has no code that reads it, and no server code was changed.
+
+In the terms of D64 this is the phone browser's session inside an app, and it is outside the phone class. It carries every group the person holds, the groups of `never_for_mobile` and `NEVER_FOR_MOBILE` included (`crates/kernel/obop-commands/src/devices.rs`): those whose holders approve, post, pay, erase, export, publish, see special data or run standing outbound work, which `docs/CONVENTIONS.md` section 4 keeps off a mobile app because "a phone is lost" and neither the approval gates nor the masking hold such a token. It can do what `docs/spec/mobile.md` 8.5 decision 4 gives as the reason a phone token is never a person: issue an agent token, change a password, enrol a second factor, approve a proposal. It has no `device` record and cannot be ended under Devices. The slice has no control for any of this, because it changes no server code; the same account can do the same today in the phone's browser. Whether that is acceptable in an app is the owner's question, and it is the first item of 12.6. (The four citations of this paragraph were opened on `feat/host-app` on 2026-11-15.)
+
+Passkeys (D65) and Microsoft (D91) are not offered in the app. The host says so in its answer to `host.info` (`signIn: { passkeys: false, microsoft: false }`), and the page then draws neither button; where the instance has the Microsoft sign-in on, the page shows one sentence instead: "Sign-in with Microsoft is not available in this app yet. To sign in that way, use your browser." (`web/apps/backoffice/src/host/SignInNotes.tsx`). A person whose only second factor is a passkey, or whose account is Microsoft-only, cannot use the app yet. Nothing changes for a browser.
+
+### 12.3 The bridge
+
+The contract between the app and the page is the package `web/packages/host-bridge` (`@obop/host-bridge`): `src/protocol.ts` has the types, the constants and the validators both sides use, `src/host.ts` the host's side, `src/page.ts` the page's side, and `src/origin.ts` the one function both use to work out an origin. The app and the back office both import it, and so does the stand-in host of the end-to-end tests, so the three cannot drift.
+
+Version 1 has three commands. Each is a request of the page with one answer of the host; the host never calls the page.
+
+| Command | What it does |
+| --- | --- |
+| `host.info` | The first call of a page: the bridge version, the platform, the app's id and version, whether the build may speak plain http (`cleartext`) and whether the WebView is open to DevTools (`inspectable`), the list of commands this host answers, and what the sign-in page may offer |
+| `host.theme` | The page tells the host its ground colour (`#rrggbb`) and whether it is a dark one; the app paints the band behind the status bar and the system bars with it |
+| `host.settings` | Opens the native "This app" screen |
+
+- How a page knows that it is inside the host: the user agent ends in `ObopHost/1 (android; 0.1.0)` and the WebView's `postMessage` transport exists. Both are needed. A browser that has only one of them is a browser.
+- Whom the host answers: only a message that the WebView reports as sent by the document of the instance's origin, and only while that document is the one on top. A command that is not on the host's list cannot reach native code. A message longer than 65,536 characters is dropped by either side. The page waits five seconds for an answer and then treats the call as failed.
+- The page's side in the back office is `web/apps/backoffice/src/host/` (the state, the embed code, the theme reporter, the download catcher, the menu entry, the sign-in notes). Inside the host the page marks `<html data-host="1" data-host-info="ok">` (or `failed`), adds "This app" to the account menu directly above Sign out, and draws no passkey and no Microsoft button.
+- Files. Uploads work through the system's file chooser. Downloads do not exist in version 1: there is no command that saves a file. Where the page would save one (Export on a list, the recovery codes, a connector's CSV file), it saves nothing and says "Downloads are not available in the app yet."; it does not also say that it exported something (`hostSavesFiles` in `web/apps/backoffice/src/host/state.ts`).
+
+### 12.4 What stays on the phone or travels
+
+None of this is removed in the slice.
+
+1. The page's `localStorage` for an origin stays after Change server: the theme, the language, favourites, recent apps and the titles of the last records opened.
+2. The session lives on the server to the end of its 12 hours whatever the page or the app does. Sign out in the page and Change server in the app remove the token from the page only.
+3. The token at rest (run, on the emulator with `adb root`). After a sign-in and `am force-stop`, the text of the token was in one file of the app's private data directory, `app_webview/Default/Session Storage/000003.log`, as UTF-16LE text, and in none of the other 81 files. Ten seconds after the next start it was in no file, and the page showed the sign-in page. So "the session ends when the app is closed" is true of what the page sees; on the disk the token stays from the moment the app is stopped until its next start, for as long as the server still accepts it. Only an uncompressed copy of the text would have been found by this search.
+4. Android: a photo or video taken through a file field stays in the app's external files directory (read in the library's source for the design; not run).
+5. Android: a file the WebView treats as a download from an http or https address is saved by the library to the public Downloads folder. The page starts none itself (not run).
+6. Backups: Android's cloud backup is off for the app (`allowBackup` false), but a phone-to-phone transfer and an iOS device backup are not stopped by that (general knowledge; not run).
+
+### 12.5 What was run, and what passed
+
+The joined tree is `feat/host-app` with `feat/host-app-web` and `origin/main` (c6846b24) merged into it. The test APK was built from it at 78c70ab9 with the three build variables set (`vp run android:prebuild`, `vp run android:build:release`); after that commit nothing in the app's folder changed except the script of the emulator check. The server was the binary of this tree (no Rust file differs from the commit it was built from).
+
+On the PC, at 13d02eb9 (run, all passed):
+
+- `vp check` and `vp test` in `web/packages/host-bridge` (193 tests), in `web/apps/host-app` (196 tests) and in `web/apps/backoffice` (937 tests); `vp run check:sdk` in the app; `vp build` in the back office; `vp check` and `vp run typecheck` in `web/packages/e2e`.
+- `tests/host.spec.ts` in `web/packages/e2e` (7 tests): the back office in Chrome with a stand-in host (`support/host.ts`) that answers through the host's side of `@obop/host-bridge`. It covers the page's side: `host.info` asked once, no passkey button although that browser knows passkeys, the ground colour reported and reported again for Dark, "This app" in the menu, no file saved for Export and for the recovery codes, a browser without the host's token left as it was, and a host that reports another sender getting no answer.
+
+On the emulator, the scripted check (`vp run emulator:check`, 7 checks; run, all passed):
+
+- The address screen refuses an address that answers but is not an obop server, and accepts the instance.
+- After a start the host bar shows the host and "test build".
+- The page's user agent holds `ObopHost/1`, and the page is a secure context.
+- A sign-in through the page's form ends with the top bar and a token in the page.
+- Android Back walks the page's history back and then leaves the app.
+- An address of another origin, assigned by a script and opened by a link in a new window, leaves the WebView where it was and opens outside the app.
+- With the server unreachable at start the error screen is shown, and Try again shows the sign-in page once the server answers.
+
+On the emulator by hand, driven over adb and the WebView's DevTools socket, once with the system in light and once in dark, with a screenshot of every screen looked at (run, all passed):
+
+- The page is marked `data-host="1"` and `data-host-info="ok"`. The sign-in page has two buttons, "Forgot your password?" and "Sign in". (`window.PublicKeyCredential` is undefined in this WebView, so the passkey button would not be drawn there in any case; that the host's answer takes it away is shown by the test in Chrome.)
+- The band behind the status bar has the page's ground colour: `#f1f2f6` in light, `#0a0c11` in dark, and the dark one with white icons when the page's theme is set to dark under a light system.
+- The host bar goes after a touch on the page and is back after Home and a return. A tap on it opens "This app"; Back closes it; the person is still signed in.
+- The launcher, the Contacts gallery and list, and the form of a record open and can be read. Account, "This app" opens the native screen.
+- After a rotation the page is in landscape and the person is still signed in, and again back in portrait.
+- Export on a list shows the downloads notice and no success message; the app stays on top.
+- The CSV field of the Import dialog opens the system's file chooser, and Back returns. Once, a file was chosen there: the page read it and two rows were imported.
+- When the system switches between light and dark, the page and the status bar follow, and the person stays signed in.
+- Cancel in the Change server confirmation leaves the app on the server and signed in.
+- Typed once on the on-screen keyboard into the form of a new contact in portrait: the last field and the Create and Discard buttons stayed above the keyboard, and the contact was created. The measured comparison of the keyboard's frame with the field was not run.
+- Started from the icon of the home screen, Back at the first page sends the app to the background, and the session is still there on return.
+
+The plain APK (built at e7f6e22b without the three variables; the app's source is the same) installed over the test one (run, passed): at start the stored `http` address is refused on the address screen with "This app connects over https only. An address that starts with http:// is not encrypted.", the screen has no test-build warning, and the process has no DevTools socket. No WebView was mounted in that build, because it loads no local instance; a mounted WebView of a plain build was not seen. Before the join, `vp run android:gate` passed on the plain APK and the manifests of the two APKs differed in one line, `usesCleartextTraffic`; neither was repeated at the joined tree.
+
+Not run: anything on a real phone; anything for iOS (the iOS code is type-checked only, and no `ios/` project was generated); the debug APK and the development client; the rule that a foreign document on top gets the WebView mounted again, on a device (unit tests of `src/core/shell.ts` only); passkeys and Microsoft in any WebView; a server other than a local throwaway one; the whole end-to-end suite locally (CI runs it).
+
+### 12.6 Before any build of the host meets real data
+
+None of this is in the slice.
+
+1. The owner's answers: whether an account that holds a never-for-mobile group may sign in in the app at all (12.2), and which instance a real phone is tried against. Until then every build meets throwaway instances only: a test build puts the password and the token on the network in clear, is open to DevTools and is signed with a public key.
+2. An app lock, a device prompt before Change server, and the page hidden in the app switcher. Today whoever holds the unlocked phone has the open back office until the session's fixed end.
+3. Photos and videos taken for an upload are deleted, and the lowest Android version is raised (on Android 7 to 10 another app with the storage permission can read them).
+4. The page's `localStorage` is cleared on Change server; a data-extraction rule keeps the app's data out of an Android phone-to-phone transfer; a decision about iOS backups.
+5. A release key, and the gate on every build meant for release.
+6. A decision about the token at rest (12.4 item 3): it is in the WebView's files while the app is stopped.
+7. Sign out and Change server end the session on the server. Today Sign out calls no server route, in every browser. The server can end all sessions of a person (`POST /api/auth/sessions/revoke-all`) and not one, and a session has no device, so a person cannot pick the phone's session out.
+8. The foreign-document rule run on a device.
+
+### 12.7 Seen and not fixed
+
+On the screen:
+
+- The host bar covers the page's own top bar, and the first heading under it, after every start and every return until the first touch. With its three chips in a test build it is about a tenth of the screen's height.
+- "This app": the Back link is drawn in the middle of the top edge, not at its start. In landscape the header and the two buttons leave only a narrow window for the rows between them, and the footer begins after the left inset, so a strip of the ground colour shows at the left edge (the same strip is on the error screen). Both come from `@obop/ui-native`.
+- The keyboard's Go key does not connect on the address screen: `Field` of `@obop/ui-native` has no `returnKeyType` and no `onSubmitEditing`. In landscape Android shows its full-screen text editor for that field.
+- The first paint after a cold start is slow on the emulator (software graphics): the host bar stands over a bare ground for some seconds. Not measured on a phone.
+- In the form of a record the band behind the status bar keeps the page's ground colour while the form's own header is a sheet of another colour.
+- Three things are the page's own and the same in a phone's browser: on a short list the round New button stands over the pager's arrows; Back after Create returns to an empty New form; and after one Back, a change of view that the page makes with no touch is skipped by the next Back, which then leaves the app (Chromium's rule for history entries made without a gesture).
+- Started through adb and not from the home screen, Back at the first page ends the activity, and the session is gone with it.
+
+In the page inside the host:
+
+- A link that opens a `blob:` address for a preview gets the downloads sentence too. Customize, Security says "This browser cannot use passkeys" there. A `host.settings` call that fails says nothing to the person.
+- The new texts in German, French, Polish, Finnish, Swedish and Spanish are machine-drafted; no native speaker read them.
+- `crypto.randomUUID` does not exist on a plain-http LAN address, in any browser: the filter panel and the Import dialog use it (read for the design; not run, the emulator's `localhost` is a secure context).
+
+In the build and the tests:
+
+- The APKs hold the x86_64 libraries only and are signed with the debug key: they are for the emulator.
+- The manifest carries entries the app does not use, all from libraries: the dev-client scheme, a file provider and payment queries of `react-native-webview`, a file provider and two queries of `expo-file-system`.
+- `screenAvoidsKeyboard` of `@obop/ui-native` assumes that Android resizes the window for the keyboard; under Android 16 edge to edge it does not. The shell makes the room itself at its root; the Mileage app's screens were not looked at.
+- `gradle.mjs`, `check-sdk.mjs` and the gate exist twice, in this app and in the Mileage app.
+- `tests/host.spec.ts` borrows a user of `tests/mfa.spec.ts` for the recovery-codes test and turns two-factor off again afterwards.
+- The emulator restarted its Android once during the run by itself; the cause was not found, and the checks were run again after it.
