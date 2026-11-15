@@ -1,11 +1,12 @@
 // "Stock by location" on a product, when Inventory is installed: where its units are, summed on
 // the server over the product's stock items (`inventory_item.search` with `aggregate`), with a
-// link to its stock list. The total is the "On hand" chip above it (RelatedChips).
+// link to its stock list. Units at a scrap location are not stock: they are left out of the places
+// and shown apart as scrapped.
 import { useEffect, useState } from "react";
 import { fmt, t } from "@obop/ui";
 import { aggregate } from "../../api.ts";
 import type { RecordExtProps } from "../../extensions.ts";
-import { useData } from "../../data.tsx";
+import { useData, useRows } from "../../data.tsx";
 import { encodeState } from "../../query.ts";
 import { Icon } from "../../ui.tsx";
 import "../supply.css";
@@ -15,6 +16,7 @@ const ITEM = "inventory_item";
 export function OnHand({ row }: RecordExtProps) {
   const d = useData();
   const has = d.models.has(ITEM);
+  const { rows: locations } = useRows("inventory_location", has);
   const [stock, setStock] = useState<{ places: [string, number][] } | null>(null);
   useEffect(() => {
     if (!has) return;
@@ -36,14 +38,23 @@ export function OnHand({ row }: RecordExtProps) {
     };
   }, [d.token, row.id, has, d.mutations]);
   if (!has || !stock) return null;
+  const scrapAt = new Set(locations.filter((l) => l.kind === "scrap").map((l) => l.id));
+  const places = stock.places.filter(([loc]) => !scrapAt.has(loc));
+  const scrapped = stock.places.filter(([loc]) => scrapAt.has(loc)).reduce((n, [, q]) => n + q, 0);
+  const total = places.reduce((n, [, q]) => n + q, 0);
   const st = encodeState({ facets: [{ op: "is", f: "product_id", v: [row.id] }], group: [] });
   const href = d.linkTo(ITEM, { st });
-  const shown = stock.places.slice(0, 5);
+  const shown = places.slice(0, 5);
   return (
     <section className="sup-onhand" aria-label={t("Stock by location")}>
       <div className="sup-onhand-head">
         <Icon name="inventory" size={18} />
         <span className="sup-onhand-label">{t("Stock by location")}</span>
+        {places.length > 0 && (
+          <span className="sup-onhand-total num">
+            {t("{count} on hand", { count: fmt.integer(total) })}
+          </span>
+        )}
         {href && (
           <a href={href} className="sup-onhand-link">
             {t("All stock")}
@@ -59,16 +70,21 @@ export function OnHand({ row }: RecordExtProps) {
               <span className="num">{fmt.integer(n)}</span>
             </li>
           ))}
-          {stock.places.length > shown.length && (
+          {places.length > shown.length && (
             <li className="hint">
               {t("and {count} more locations", {
-                count: String(stock.places.length - shown.length),
+                count: String(places.length - shown.length),
               })}
             </li>
           )}
         </ul>
       ) : (
         <p className="hint">{t("Not in stock anywhere.")}</p>
+      )}
+      {scrapped !== 0 && (
+        <p className="hint sup-onhand-scrap">
+          {t("{count} scrapped, not counted as stock", { count: fmt.integer(scrapped) })}
+        </p>
       )}
     </section>
   );

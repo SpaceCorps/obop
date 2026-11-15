@@ -23,6 +23,46 @@ type Need = { component: string; needed: number; onHand: number | null };
 export const scaled = (uses: number, qty: number, perRun: number): number =>
   Math.ceil((uses * qty) / Math.max(1, perRun));
 
+/**
+ * The components of order `row` summed per product, against the units on hand at its production
+ * location (`onHand` is null without a location); null when the lines cannot be read.
+ */
+async function needsOf(token: string, withStock: boolean, row: Row): Promise<Need[] | null> {
+  const location = String(row.location_id ?? "");
+  const lines = await search(token, LINE, {
+    filter: [{ field: "order_id", op: "eq", value: row.id }],
+    limit: 500,
+  });
+  if ("error" in lines) return null;
+  const by = new Map<string, number>();
+  for (const l of lines.rows)
+    by.set(String(l.component_id), (by.get(String(l.component_id)) ?? 0) + Number(l.quantity ?? 0));
+  let stock = new Map<string, number>();
+  if (location && by.size && withStock) {
+    const a = await aggregate(token, "inventory_item", {
+      filter: [
+        { field: "location_id", op: "eq", value: location },
+        { field: "product_id", op: "in", value: [...by.keys()] },
+      ],
+      group_by: [{ field: "product_id" }],
+      measures: [{ op: "sum", field: "quantity" }],
+    });
+    if (!("error" in a))
+      stock = new Map(
+        a.groups.map((g) => [String(g.key.product_id), Number(g.measures["sum:quantity"] ?? 0)]),
+      );
+  }
+  return [...by].map(([component, needed]) => ({
+    component,
+    needed,
+    onHand: location ? (stock.get(component) ?? 0) : null,
+  }));
+}
+
+/** The components there are fewer of at the production location than the order uses. */
+const shortOf = (needs: readonly Need[]) =>
+  needs.filter((n) => n.onHand !== null && n.onHand < n.needed);
+
 export function Components({ row }: RecordExtProps) {
   const d = useData();
   const [needs, setNeeds] = useState<Need[] | null>(null);
@@ -32,52 +72,17 @@ export function Components({ row }: RecordExtProps) {
   const open = row.state !== "done" && row.state !== "cancelled";
   const lineMeta = d.models.get(LINE)?.model;
   const canFill = open && !!lineMeta?.can_create && !!row.bom_id;
+  const withStock = d.models.has("inventory_item");
 
   useEffect(() => {
     let live = true;
-    void (async () => {
-      const lines = await search(d.token, LINE, {
-        filter: [{ field: "order_id", op: "eq", value: row.id }],
-        limit: 500,
-      });
-      if (!live || "error" in lines) return;
-      const by = new Map<string, number>();
-      for (const l of lines.rows)
-        by.set(
-          String(l.component_id),
-          (by.get(String(l.component_id)) ?? 0) + Number(l.quantity ?? 0),
-        );
-      let stock = new Map<string, number>();
-      if (location && by.size && d.models.has("inventory_item")) {
-        const a = await aggregate(d.token, "inventory_item", {
-          filter: [
-            { field: "location_id", op: "eq", value: location },
-            { field: "product_id", op: "in", value: [...by.keys()] },
-          ],
-          group_by: [{ field: "product_id" }],
-          measures: [{ op: "sum", field: "quantity" }],
-        });
-        if (!("error" in a))
-          stock = new Map(
-            a.groups.map((g) => [
-              String(g.key.product_id),
-              Number(g.measures["sum:quantity"] ?? 0),
-            ]),
-          );
-      }
-      if (!live) return;
-      setNeeds(
-        [...by].map(([component, needed]) => ({
-          component,
-          needed,
-          onHand: location ? (stock.get(component) ?? 0) : null,
-        })),
-      );
-    })();
+    void needsOf(d.token, withStock, row).then((n) => {
+      if (live && n) setNeeds(n);
+    });
     return () => {
       live = false;
     };
-  }, [d.token, row.id, location, d.mutations]);
+  }, [d.token, row.id, location, d.mutations, withStock]);
 
   async function fill() {
     setBusy(true);
@@ -117,7 +122,7 @@ export function Components({ row }: RecordExtProps) {
   }
 
   if (needs === null) return null;
-  const short = needs.filter((n) => n.onHand !== null && n.onHand < n.needed);
+  const short = shortOf(needs);
   return (
     <section className="sup-avail" aria-label={t("Components")}>
       {needs.length === 0 ? (
@@ -195,9 +200,24 @@ export function FinishAction({ model, row, busy }: RecordExtProps) {
   const finish = model.actions.find((a) => a.id === `${MO}.finish`);
   if (!finish || row.state !== "in_progress") return null;
   async function run() {
+    // Short components make the stock at the production location go below zero: say which.
+    setRunning(true);
+    const short = shortOf((await needsOf(d.token, d.models.has("inventory_item"), row)) ?? []);
+    setRunning(false);
+    const at = d.refText("inventory_location", String(row.location_id ?? ""));
     const ok = await d.confirm(
-      finish!.ui?.confirm ?? t("Mark production as finished?"),
-      t("Finish"),
+      short.length === 1
+        ? t(
+            "{name} is short at {location}. Finishing leaves the stock there below zero. Finish anyway?",
+            { name: d.refText("product", short[0]!.component), location: at },
+          )
+        : short.length
+          ? t(
+              "{count} components are short at {location}. Finishing leaves the stock there below zero. Finish anyway?",
+              { count: String(short.length), location: at },
+            )
+          : (finish!.ui?.confirm ?? t("Mark production as finished?")),
+      short.length ? t("Finish anyway") : t("Finish"),
       t("Cancel"),
     );
     if (!ok) return;

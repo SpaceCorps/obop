@@ -42,7 +42,7 @@ export function SourceMoves(p: {
     };
   }, [d.token, p.origin, d.mutations, move]);
   if (!counts || counts.done + counts.draft === 0) return null;
-  const st = encodeState({ facets: [{ op: "contains", f: "origin", v: p.origin }], group: [] });
+  const st = encodeState({ facets: [{ op: "is", f: "origin", v: [p.origin] }], group: [] });
   const href = d.linkTo(MOVE, { st });
   async function validate() {
     setBusy(true);

@@ -18,6 +18,9 @@ async function withManufacturing(api: Api, run: () => Promise<void>) {
   }
 }
 
+// Two packages are installed and removed around the test, which takes longer than most.
+test.setTimeout(90_000);
+
 test("a manufacturing order uses its components and makes its product", async ({
   page,
   signIn,
@@ -79,7 +82,11 @@ test("a manufacturing order uses its components and makes its product", async ({
     await panel.getByRole("button", { name: "Confirm", exact: true }).click();
     await panel.getByRole("button", { name: "Start", exact: true }).click();
     await panel.getByRole("button", { name: "Finish", exact: true }).click();
-    await page.getByRole("alertdialog").getByRole("button", { name: "Finish" }).click();
+    // The bits are short: the confirm names them and says the stock goes below zero.
+    const confirm = page.getByRole("alertdialog");
+    await expect(confirm).toContainText(`${bits.name} is short at ${floor.name}`);
+    await expect(confirm).toContainText("below zero");
+    await confirm.getByRole("button", { name: "Finish anyway" }).click();
     await expect(
       page.locator(".toast").filter({ hasText: "Production finished; stock updated" }),
     ).toBeVisible();
@@ -94,6 +101,8 @@ test("a manufacturing order uses its components and makes its product", async ({
     expect(at(kit.id)).toBe(4);
     expect(at(box.id)).toBe(6);
     expect(at(bits.id)).toBe(-2);
+    // A negative stock item needs attention: it counts as low stock.
+    expect(items.find((r) => r.product_id === bits.id)?.below_reorder).toBe(true);
     const moves = (await api.list("root", "inventory_move")).filter((x) => x.origin === mo.number);
     expect(moves.every((x) => x.kind === "production" && x.state === "done")).toBe(true);
     expect(moves).toHaveLength(3);
