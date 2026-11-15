@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { provideCatalogue, setInstanceDefaults, setLanguage } from "@obop/ui";
 import type { AggGroup, FieldMeta, ModelMeta } from "./api.ts";
 import { foldOther, niceTicks, OTHER_KEY } from "./charts/Chart.tsx";
+import { kpiValues } from "./charts/KpiTile.tsx";
 import { indexModels } from "./presentation.ts";
 import type { Lookup } from "./query.ts";
 import {
@@ -326,6 +327,24 @@ describe("reports and currencies", () => {
     ]);
     const avg = reportFromRows(recs, [dim], { field: amount, op: "avg" }, { currencyOf: cur });
     expect(avg[0]).toMatchObject({ count: 1, value: 100 });
+  });
+});
+
+describe("key figures", () => {
+  const amount = f("total_minor", "money");
+  it("show the instance's currency first and the others beside it", () => {
+    const rows = [
+      { keys: [], currency: "SEK", count: 1, value: 70000 },
+      { keys: [], currency: "EUR", count: 3, value: 12550 },
+    ];
+    const k = kpiValues(rows, { field: amount, op: "sum" });
+    expect(k.value).toBe("€125.50");
+    expect(k.more).toHaveLength(1);
+    expect(k.more[0]).toMatch(/^SEK\s700\.00$/);
+  });
+  it("count records, and say zero when there are none", () => {
+    expect(kpiValues([{ keys: [], count: 7, value: 7 }], null)).toEqual({ value: "7", more: [] });
+    expect(kpiValues([], { field: amount, op: "sum" })).toEqual({ value: "€0.00", more: [] });
   });
 });
 

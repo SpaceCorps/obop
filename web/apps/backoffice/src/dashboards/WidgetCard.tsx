@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fmt, inSentence, t } from "@obop/ui";
 import type { ModelMeta, Row } from "../api.ts";
 import { Chart, OTHER_KEY } from "../charts/Chart.tsx";
-import { KpiTile } from "../charts/KpiTile.tsx";
+import { KpiTile, kpiValues } from "../charts/KpiTile.tsx";
 import { useData } from "../data.tsx";
 import { integer } from "../format.ts";
 import { fieldTitle, modelTitle } from "../labels.ts";
@@ -281,16 +281,7 @@ function Kpi({
 }) {
   const d = useData();
   const rows = useReportOf(data, r.model);
-  const curs = currenciesOf(rows);
-  const text = (cur: string | undefined) => {
-    const mine = rows.filter((x) => x.currency === cur);
-    const n = data.measure
-      ? mine.reduce((s, x) => s + x.value, 0)
-      : mine.reduce((s, x) => s + x.count, 0);
-    return formatMeasure(data.measure, n, cur);
-  };
-  const value = rows.length ? text(curs[0]) : formatMeasure(data.measure, 0);
-  const more = rows.length ? curs.slice(1).map(text) : [];
+  const { value, more } = kpiValues(rows, data.measure);
   const moduleId = d.models.get(r.model.name)?.module.id ?? "";
   return (
     <KpiTile

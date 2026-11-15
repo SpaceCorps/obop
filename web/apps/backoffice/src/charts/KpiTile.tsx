@@ -6,7 +6,13 @@
 import type { ReactNode } from "react";
 import { t } from "@obop/ui";
 import type { ModelMeta, ServerFilter, ValueTone } from "../api.ts";
-import { currenciesOf, formatMeasure, type MeasureSel } from "../reports.ts";
+import {
+  cellValue,
+  currenciesOf,
+  formatMeasure,
+  type MeasureSel,
+  type ReportRow,
+} from "../reports.ts";
 import { useReportRows } from "../useAggregate.ts";
 
 export type KpiTileProps = {
@@ -85,6 +91,27 @@ export function KpiStrip({ children, label }: { children: ReactNode; label?: str
   );
 }
 
+/**
+ * The figure of a report without dimensions, formatted: in the first currency (the instance's when
+ * it has records) and in each other currency. A count or a non-money sum has one value.
+ */
+export function kpiValues(
+  rows: readonly ReportRow[],
+  measure: MeasureSel,
+): { value: string; more: string[] } {
+  if (rows.length === 0) return { value: formatMeasure(measure, 0), more: [] };
+  const text = (cur: string | undefined) => {
+    const mine = rows.filter((x) => x.currency === cur);
+    const cell = {
+      count: mine.reduce((n, x) => n + x.count, 0),
+      value: mine.reduce((n, x) => n + x.value, 0),
+    };
+    return formatMeasure(measure, cellValue(measure, cell), cur);
+  };
+  const [first, ...rest] = currenciesOf(rows);
+  return { value: text(first), more: rest.map(text) };
+}
+
 /** A key figure from the server: the count or the sum of a measure over the matching records. */
 export function useKpi(q: {
   model: ModelMeta;
@@ -110,17 +137,8 @@ export function useKpi(q: {
     dims: [],
     measure: q.measure,
   });
-  const curs = currenciesOf(r.rows);
-  const text = (cur: string | undefined) => {
-    const rows = r.rows.filter((x) => x.currency === cur);
-    const count = rows.reduce((n, x) => n + x.count, 0);
-    const value = rows.reduce((n, x) => n + x.value, 0);
-    const shown = !q.measure ? count : q.measure.op === "avg" ? (count ? value / count : 0) : value;
-    return formatMeasure(q.measure, shown, cur);
-  };
   return {
-    value: r.rows.length ? text(curs[0]) : formatMeasure(q.measure, 0),
-    more: curs.slice(1).map(text),
+    ...kpiValues(r.rows, q.measure),
     count: r.total,
     loaded: r.loaded,
     error: r.error,
