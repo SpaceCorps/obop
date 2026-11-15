@@ -46,6 +46,8 @@ mod drive_tests;
 #[cfg(test)]
 mod error_seam_tests;
 #[cfg(test)]
+mod finance_supply_tests;
+#[cfg(test)]
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
@@ -3566,8 +3568,8 @@ mod bundled_packages {
             let fields: Vec<FieldInfo> = self.meta[model].fields.clone();
             let mut m = BTreeMap::new();
             for f in fields {
-                // Computed values and numbers are the system's to give.
-                if f.computed || f.sequence {
+                // Computed values, numbers and read-only fields (D95) are the system's to give.
+                if f.computed || f.sequence || f.hints.as_ref().is_some_and(|h| h.readonly) {
                     continue;
                 }
                 let v = match f.kind {
@@ -3592,6 +3594,9 @@ mod bundled_packages {
                     "longtext" => Value::text("a longer sample text"),
                     "number" => Value::Int(1),
                     "money" => Value::Int(12_345),
+                    // The sample periods (2026-01-31) are closed by the walk below, and an entry
+                    // dated in a closed period is frozen by its lock date (D77).
+                    "date" if model == "accounting_move" => Value::text("2026-02-15"),
                     "date" => Value::text("2026-01-31"),
                     "datetime" => Value::text("2026-01-31T09:30:00Z"),
                     "decimal" => Value::Text(match f.scale.unwrap_or(0) {
@@ -3696,7 +3701,20 @@ mod bundled_packages {
                 fields.remove("document_id");
                 fields.remove("document_file");
             }
-            self.app.store.insert(model, fields).unwrap()
+            let id = self.app.store.insert(model, fields).unwrap();
+            // An entry is posted only with an amount (accounting 0.3.1): one balanced line.
+            if model == "accounting_move" {
+                let account = self.record("accounting_account", &mut Vec::new());
+                let line = [
+                    ("move_id", Value::text(&id)),
+                    ("account_id", Value::text(&account)),
+                    ("debit", Value::Int(100)),
+                    ("credit", Value::Int(100)),
+                ];
+                let line = line.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+                self.app.store.insert("accounting_move_line", line).unwrap();
+            }
+            id
         }
     }
 
