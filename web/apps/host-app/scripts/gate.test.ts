@@ -68,6 +68,7 @@ describe("reading the manifest", () => {
       versionName: "0.1.0",
       versionCode: "1",
       usesCleartextTraffic: "true",
+      networkSecurityConfig: undefined,
       debuggable: undefined,
       allowBackup: "false",
       hasApplication: true,
@@ -131,6 +132,26 @@ describe("a build meant for release", () => {
     expect(failures(result)).toEqual([expect.stringContaining("usesCleartextTraffic=true")]);
     // The two halves of the build disagree: that is said too.
     expect(warnings(result)).toEqual([expect.stringContaining("disagree")]);
+  });
+
+  test("a network security config fails, whatever usesCleartextTraffic says", () => {
+    const result = release({
+      manifest: manifest(
+        '        android:allowBackup="false"\n        android:usesCleartextTraffic="false"\n        android:networkSecurityConfig="@ref/0x7f150001"',
+      ),
+    });
+    expect(result.ok).toBe(false);
+    expect(failures(result)).toEqual([expect.stringContaining("networkSecurityConfig")]);
+    // A test build reports it and passes.
+    const test = checkBuild(
+      {
+        manifest: manifest('        android:networkSecurityConfig="@xml/network_security_config"'),
+        permissions: PERMISSIONS,
+        config: config(TEST_EXTRA),
+      },
+      { mode: "test" },
+    );
+    expect(failures(test)).toEqual([]);
   });
 
   test("debuggable in the manifest fails", () => {

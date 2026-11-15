@@ -196,6 +196,9 @@ function Shell() {
     // If the phone cannot remove the item, the old address is back at the next start; the app
     // still asks for a new one now.
     await serverStore.clear().catch(() => undefined);
+    // The WebView's HTTP cache holds answers of the old server that were fetched with the token
+    // (records, files); it is emptied, the disk part too, before the WebView goes.
+    webRef.current?.clearCache?.(true);
     dispatch({ type: "change_server" });
   };
 

@@ -48,6 +48,7 @@ export function manifestFacts(xml) {
     versionName: attribute(manifest, "android:versionName") ?? "",
     versionCode: attribute(manifest, "android:versionCode") ?? "",
     usesCleartextTraffic: of("android:usesCleartextTraffic"),
+    networkSecurityConfig: of("android:networkSecurityConfig"),
     debuggable: of("android:debuggable"),
     allowBackup: of("android:allowBackup"),
     hasApplication: application !== undefined,
@@ -110,6 +111,14 @@ export function checkBuild(built, { mode }) {
     } else {
       ok(
         `the manifest has usesCleartextTraffic=${manifest.usesCleartextTraffic ?? "unset (false from Android 9)"}`,
+      );
+    }
+    // From Android 7 a network security config wins over usesCleartextTraffic, and it can allow
+    // plain http for every host or for some. This app declares none; a library that adds one
+    // keeps the build from being a release until its file has been read.
+    if (manifest.networkSecurityConfig !== undefined) {
+      notARelease(
+        `the manifest has networkSecurityConfig=${manifest.networkSecurityConfig}: it overrides usesCleartextTraffic and may allow plain http`,
       );
     }
     if (manifest.debuggable === "true") {

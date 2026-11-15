@@ -512,11 +512,19 @@ async function e6() {
     ),
   );
   if (!home) throw new Error("could not ask Android for its home screen");
+  // A crash on this Back also leaves the launcher on top, so the crash log is read as well.
+  adb(["logcat", "-b", "crash", "-c"], { mayFail: true });
   shell("input keyevent 4");
   await untilResumed(
     (name) => name === home,
     "the third Back did not leave the app for the launcher",
   );
+  await sleep(1_000);
+  const crashes = adb(["logcat", "-b", "crash", "-d"], { mayFail: true });
+  if (/FATAL EXCEPTION/.test(crashes) && crashes.includes(PACKAGE)) {
+    throw new Error(`the app crashed on the third Back:
+${crashes.slice(0, 2_000)}`);
+  }
   return `opened ${app}, then ${shorten(list)}; Back twice walked location.hash back; the third Back left the app (on top: ${home})`;
 }
 

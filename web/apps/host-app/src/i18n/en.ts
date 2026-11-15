@@ -82,7 +82,7 @@ export const en = {
   "settings.connection": "Connection",
   "settings.connection.https": "Encrypted (https)",
   "settings.connection.http": "Not encrypted (http)",
-  "settings.serverVersion": "Server version",
+  "settings.serverVersion": "Server version when added",
   "settings.added": "Connected since",
   "settings.app": "App",
   "settings.appVersion": "Version",

@@ -8,6 +8,7 @@ export interface ManifestFacts {
   versionName: string;
   versionCode: string;
   usesCleartextTraffic: string | undefined;
+  networkSecurityConfig: string | undefined;
   debuggable: string | undefined;
   allowBackup: string | undefined;
   hasApplication: boolean;
