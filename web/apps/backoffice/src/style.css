@@ -710,6 +710,30 @@ button.ov-more::before {
 button.ov-more:hover {
   background: var(--surface-2);
 }
+/* An overview's key figure (charts/KpiTile.tsx) with the colour of its state as a band. */
+:where(.ov-kpi) {
+  --tone: var(--accent-fill);
+}
+.kpi.ov-kpi {
+  position: relative;
+  overflow: hidden;
+  padding-inline-start: calc(var(--space-4) + 3px);
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+.kpi.ov-kpi::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  background: var(--tone);
+}
+a.kpi.ov-kpi:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
+}
 .ov-card-wait {
   min-block-size: 6.5rem;
   background: var(--surface-2);

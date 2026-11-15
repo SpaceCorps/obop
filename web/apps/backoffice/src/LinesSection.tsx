@@ -29,7 +29,7 @@ import type { ChildMeta, FieldMeta, ModelMeta, Row, ServerOrder } from "./api.ts
 import { BlobThumb } from "./BlobFields.tsx";
 import { useData } from "./data.tsx";
 import { fromEdit, toEdit, type Edit } from "./edit.ts";
-import { Cell, FieldInput } from "./fields.tsx";
+import { Cell, FieldFormProvider, FieldInput, type FieldFormApi } from "./fields.tsx";
 import type { LinesSlotProps } from "./FormBody.tsx";
 import { isEmpty, optionLabel } from "./format.ts";
 import { fieldTitle, modelTitle } from "./labels.ts";
@@ -236,6 +236,16 @@ function ChildSection(props: SectionProps) {
     return r ? toEdit(f, r[f.name], currency) : f.kind === "bool" ? false : "";
   };
   const val = (key: string, f: FieldMeta): Edit => s.drafts.get(key)?.[f.name] ?? base(key, f);
+  // The row as the record its cell inputs belong to: a picker scopes itself by the line's other
+  // refs (ref_filter, the same-parent rule). The fills of a pick are the section's own (setValue).
+  const rowForm = (key: string): FieldFormApi => ({
+    model,
+    peek: (name) => {
+      const g = fieldOf(name);
+      return g ? val(key, g) : undefined;
+    },
+    fill: () => {},
+  });
   const changedFields = (key: string) => {
     const dr = s.drafts.get(key);
     return dr ? edits.filter((f) => f.name in dr && dr[f.name] !== base(key, f)) : [];
@@ -790,15 +800,17 @@ function ChildSection(props: SectionProps) {
                                 <label className="sr-only" htmlFor={id}>
                                   {t("{field}, line {n}", { field: fieldTitle(f), n: no })}
                                 </label>
-                                <FieldInput
-                                  field={f}
-                                  id={id}
-                                  value={val(key, f)}
-                                  compact
-                                  currency={currency}
-                                  invalid={bad?.has(f.name)}
-                                  onChange={(v) => setValue(key, f, v)}
-                                />
+                                <FieldFormProvider value={rowForm(key)}>
+                                  <FieldInput
+                                    field={f}
+                                    id={id}
+                                    value={val(key, f)}
+                                    compact
+                                    currency={currency}
+                                    invalid={bad?.has(f.name)}
+                                    onChange={(v) => setValue(key, f, v)}
+                                  />
+                                </FieldFormProvider>
                               </>
                             ) : (
                               <Cell
@@ -1248,6 +1260,15 @@ function LineSheet(p: {
   const base = useId();
   const { model, via } = p;
   const form = useRef<HTMLFormElement>(null);
+  // The line as the record its inputs belong to (pickers scope by it); the section fills on a pick.
+  const sheetForm: FieldFormApi = {
+    model,
+    peek: (name) => {
+      const g = model.fields.find((x) => x.name === name);
+      return g ? p.value(g) : undefined;
+    },
+    fill: () => {},
+  };
   // A new line starts in its first field (the product), after the dialog placed its focus.
   const fresh = p.row === null;
   useEffect(() => {
@@ -1307,14 +1328,16 @@ function LineSheet(p: {
                 )}
               </label>
               {canType ? (
-                <FieldInput
-                  field={f}
-                  id={id}
-                  value={p.value(f)}
-                  currency={p.currency}
-                  invalid={p.invalid?.has(f.name)}
-                  onChange={(v) => p.onChange(f, v)}
-                />
+                <FieldFormProvider value={sheetForm}>
+                  <FieldInput
+                    field={f}
+                    id={id}
+                    value={p.value(f)}
+                    currency={p.currency}
+                    invalid={p.invalid?.has(f.name)}
+                    onChange={(v) => p.onChange(f, v)}
+                  />
+                </FieldFormProvider>
               ) : (
                 <span className="lines-sheet-value" id={id}>
                   <Cell

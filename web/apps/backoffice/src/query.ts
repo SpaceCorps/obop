@@ -2,6 +2,7 @@ import { compareText, fmt, getCurrency, t } from "@obop/ui";
 import { getTime, type FieldMeta, type Kind, type Row, type ServerOrder } from "./api.ts";
 import { compareDecimals, isDecimalText, sumDecimals } from "./decimals.ts";
 import { dayInZone } from "./instants.ts";
+import { shownNumber } from "./inputs/display.ts";
 import {
   decimalText,
   decimalToMinor,
@@ -209,7 +210,14 @@ export function formatSumRows(
 ): string {
   if (!f) return "";
   if (f.kind === "decimal") return decimalText(sumDecimalRows(rows, f.name), f);
-  if (f.kind !== "money") return integer(sumOf(rows, f.name));
+  if (f.kind !== "money") {
+    const n = sumOf(rows, f.name);
+    // A total of minutes reads as hours, of metres as km (D95 `ui.display`).
+    const shown = f.ui?.display;
+    if (shown === "duration_minutes" || shown === "km_from_m")
+      return shownNumber(shown, n) ?? integer(n);
+    return integer(n);
+  }
   return fmt.list(
     sumByCurrency(rows, f.name, currencyFor).map(([c, n]) => money(n, c)),
     "conjunction",

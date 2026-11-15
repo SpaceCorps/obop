@@ -57,6 +57,7 @@ import {
   toggleFold,
   type FoldPrefs,
 } from "./board.ts";
+import { lockOf } from "../recordLayout.ts";
 import type { ViewProps } from "./types.ts";
 
 export { columnTotals } from "./board.ts";
@@ -350,12 +351,21 @@ export function KanbanView(p: ViewProps) {
   const canDrag =
     draggableBy(gf) && (governed ? actionsOn(model, gf.name).length > 0 : p.canUpdate);
   const noun = p.title;
+  /** Why a card's ungoverned column field is fixed: its record is frozen (D77 guard), or "". */
+  const frozenFor = (r: Row): string => {
+    const lock = lockOf(model, r);
+    return lock && !lock.mutable.has(gf.name) ? lock.message : "";
+  };
   const titleOfRow = (r: Row) => cardTitle(model, r, layout, ctx);
   /** Whether the card being dragged (or the given one) may go to column `key`. */
   const may = (id: string | null, key: string) => {
-    if (!governed || !id) return { ok: true, reason: "" };
+    if (!id) return { ok: true, reason: "" };
     const row = rows.find((r) => r.id === id);
     if (!row) return { ok: true, reason: "" };
+    // A frozen record (D77 guard) keeps an ungoverned column field; the server refuses the update.
+    const frozen = !governed && frozenFor(row);
+    if (frozen) return { ok: false, reason: frozen };
+    if (!governed) return { ok: true, reason: "" };
     // The card itself decides between two actions that lead the same way, or refuses one (D92).
     const m = canMove(model, gf, row[gf.name] as string, key, noun, row);
     return { ok: m.allowed || m.current, reason: m.reason };
@@ -437,14 +447,15 @@ export function KanbanView(p: ViewProps) {
     if (!canDrag) return [];
     const targets = keys.filter((k) => k !== key && (k !== "" || !gf.required));
     if (!targets.length) return [];
+    const frozen = governed ? "" : frozenFor(r);
     return [
       { heading: t("Move to…") },
       ...targets.map((k): MenuItem => {
         const m = governed ? canMove(model, gf, key, k, noun, r) : null;
         return {
           label: `${groupLabel(gf, k, d.lookup)}${m?.allowed && m.needsApproval ? " *" : ""}`,
-          disabled: m ? !m.allowed : false,
-          description: m && !m.allowed ? m.reason : undefined,
+          disabled: frozen ? true : m ? !m.allowed : false,
+          description: frozen || (m && !m.allowed ? m.reason : undefined),
           onSelect: () => void move(r.id, k),
         };
       }),

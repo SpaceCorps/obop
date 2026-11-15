@@ -843,7 +843,8 @@ export function ListView(p: ViewProps) {
             {selecting ? t("Done") : t("Select")}
           </button>
         )}
-        {!hasSelection && exportButton}
+        {/* On a phone the page's ⋯ menu exports (ControlPanel onExport). */}
+        {!hasSelection && !phone && exportButton}
         {!phone && columnsMenu}
       </div>
       <div className="tablewrap" ref={root}>

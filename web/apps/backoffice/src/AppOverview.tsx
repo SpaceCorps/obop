@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Icon, fmt, getCurrency, t, tx, useI18n } from "@obop/ui";
 import { aggregate, type ModelMeta, type ServerFilter } from "./api.ts";
+import { KpiStrip, KpiTile } from "./charts/KpiTile.tsx";
 import { AppIcon, appBlurb, type App } from "./Chrome.tsx";
 import { useData } from "./data.tsx";
 import { optionLabel } from "./format.ts";
@@ -287,28 +288,24 @@ export function AppOverview({ app }: AppOverviewProps) {
             {t("Needs attention")}
           </h2>
           {!state.loaded ? (
-            <div className="ov-grid" aria-busy="true" aria-label={t("Loading")}>
+            <div className="kpistrip" aria-busy="true" aria-label={t("Loading")}>
               {[0, 1, 2].map((i) => (
-                <div key={i} className="ov-card ov-card-wait" />
+                <KpiTile key={i} label="" loading className="ov-kpi" />
               ))}
             </div>
           ) : state.tiles.length ? (
-            <div className="ov-grid">
+            // The key figures of the charts lane (charts/KpiTile.tsx), with the state's colour as a band.
+            <KpiStrip>
               {tiles.map((x) => (
-                <a key={x.key} className={`ov-card ${x.tone}`} href={x.to}>
-                  <span className="ov-card-top">
-                    <span className="ov-overline">{x.overline}</span>
-                    {x.icon && <Icon name={x.icon} size={16} />}
-                  </span>
-                  <span className="ov-label">
-                    <span className="badge-dot" aria-hidden="true" />
-                    {x.label}
-                  </span>
-                  <span className="ov-figure">
-                    <strong>{fmt.integer(x.count)}</strong>
-                    {x.money && <span className="ov-money">{x.money}</span>}
-                  </span>
-                </a>
+                <KpiTile
+                  key={x.key}
+                  className={`ov-kpi ${x.tone}`}
+                  label={x.label}
+                  value={fmt.integer(x.count)}
+                  more={x.money ? [x.money] : undefined}
+                  caption={x.overline}
+                  href={x.to}
+                />
               ))}
               {state.tiles.length > SHOWN && (
                 <button type="button" className="ov-card ov-more" onClick={() => setAll(!all)}>
@@ -317,7 +314,7 @@ export function AppOverview({ app }: AppOverviewProps) {
                     : t("Show all ({count})", { count: String(state.tiles.length) })}
                 </button>
               )}
-            </div>
+            </KpiStrip>
           ) : (
             <p className="ov-calm">
               <Icon name="check-circle" size={18} />

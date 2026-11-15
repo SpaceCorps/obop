@@ -33,11 +33,13 @@ export type KpiTileProps = {
   tone?: ValueTone;
   /** No border or padding of its own, for a tile drawn inside another card. */
   plain?: boolean;
+  /** More classes, for example the coloured band of an app overview's card (`ov-kpi t-warn`). */
+  className?: string;
 };
 
 /** One key figure. Put several in a `KpiStrip`. */
 export function KpiTile(p: KpiTileProps) {
-  const cls = `kpi${p.plain ? " plain" : ""}${p.tone ? ` tone-${p.tone}` : ""}${p.href ? " kpi-link" : ""}`;
+  const cls = `kpi${p.plain ? " plain" : ""}${p.tone ? ` tone-${p.tone}` : ""}${p.href ? " kpi-link" : ""}${p.className ? ` ${p.className}` : ""}`;
   const body = (
     <>
       <span className="kpi-label">{p.label}</span>

@@ -56,7 +56,7 @@ import {
 } from "./format.ts";
 import { fieldTitle, modelTitle } from "./labels.ts";
 import type { Cond } from "./query.ts";
-import { governedNames, hiddenForRecord } from "./workflow.ts";
+import { governedNames, hiddenForRecord, notForRecord } from "./workflow.ts";
 
 // ---- shared context ----------------------------------------------------------------------------
 
@@ -935,6 +935,12 @@ const shortName = (a: Command) => a.id.slice(a.id.indexOf(".") + 1);
 export function nextActions(model: ModelMeta, row: Row): NextActions {
   const valid: Command[] = [];
   const groups = new Set<string>();
+  const fits = (a: Command) => {
+    if (hiddenForRecord(model, a, row) || notForRecord(model, a, row)) return false;
+    const f = a.field ? fieldOf(model, a.field) : undefined;
+    const at = f ? String(row[f.name] ?? "") : "";
+    return !(f && a.from && a.from !== at) && !(f && a.to && a.to === at);
+  };
   for (const a of model.actions) {
     if (hiddenForRecord(model, a, row)) continue;
     const f = a.field ? fieldOf(model, a.field) : undefined;
@@ -944,6 +950,12 @@ export function nextActions(model: ModelMeta, row: Row): NextActions {
     const g = a.ui?.group;
     if (g) {
       if (groups.has(g)) continue;
+      // A variant the server refuses for this record (`notForRecord`) gives way to a later one.
+      if (
+        notForRecord(model, a, row) &&
+        model.actions.some((b) => b !== a && b.ui?.group === g && fits(b))
+      )
+        continue;
       groups.add(g);
     }
     valid.push(a);
@@ -964,7 +976,9 @@ export function nextActions(model: ModelMeta, row: Row): NextActions {
     const tone = toTone(a);
     return opts.indexOf(a.to) > from && tone !== "bad" && tone !== "neutral";
   };
-  const primary = rest.find((a) => a.ui?.primary) ?? rest.find(forward);
+  // Never a step the server refuses for this record (it stays, greyed out with why).
+  const runnable = rest.filter((a) => !notForRecord(model, a, row));
+  const primary = runnable.find((a) => a.ui?.primary) ?? runnable.find(forward);
   return { ...(primary ? { primary } : {}), secondary: rest.filter((a) => a !== primary), danger };
 }
 
