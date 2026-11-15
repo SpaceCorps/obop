@@ -377,14 +377,15 @@ describe("which cards a section shows and which it folds", () => {
     ]);
     expect(at("hr", "actions")).toEqual([5, 0]);
     // Fleet: Retire and Suspend are marked (the approval mark, and "By itself, this does not stop the
-    // driver being assigned a vehicle"), and the first three others are open beside them.
-    expect(at("fleet", "actions")).toEqual([5, 2]);
+    // driver being assigned a vehicle"), and the first three others are open beside them (fleet 0.3.2
+    // adds Send to workshop and Back in service after Retire).
+    expect(at("fleet", "actions")).toEqual([5, 4]);
     expect(titles(splitCards(view("fleet").actions).shown)).toEqual([
       "Dispatch",
       "Return to pool",
       "Retire",
+      "Send to workshop",
       "Suspend",
-      "Reactivate",
     ]);
     // Email Marketing: three marked cards (Schedule, Send, Send now) would show one other, but a fold
     // of one card is not made, so all five are open, as they were with two marked.

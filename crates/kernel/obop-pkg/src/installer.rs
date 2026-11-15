@@ -3319,7 +3319,12 @@ mod tests {
                 .iter()
                 .map(|a| a.id.as_str())
                 .collect::<Vec<_>>(),
-            ["fleet_vehicle.dispatch", "fleet_vehicle.return_to_pool"]
+            [
+                "fleet_vehicle.dispatch",
+                "fleet_vehicle.return_to_pool",
+                "fleet_vehicle.send_to_workshop",
+                "fleet_vehicle.back_in_service"
+            ]
         );
         let driver = model.fields.iter().find(|f| f.name == "driver").unwrap();
         assert_eq!((driver.class, driver.personal_data), ("internal", true));
@@ -3489,7 +3494,7 @@ mod tests {
                 .unwrap_err()
                 .contains("already installed")
         );
-        let newer = fleet.replace("version = \"0.3.1\"", "version = \"0.4.0\"");
+        let newer = fleet.replace("version = \"0.3.2\"", "version = \"0.4.0\"");
         assert_eq!(
             inst.install(&newer, "upload", "r").unwrap().version,
             "0.4.0"
@@ -4299,7 +4304,7 @@ label = "Ota käyttöön"
 
     fn fleet_with_labels(version: &str, labels: &str) -> String {
         Manifest::combine(
-            &include_str!("../../../../packages/fleet.toml").replace("0.3.1", version),
+            &include_str!("../../../../packages/fleet.toml").replace("0.3.2", version),
             labels,
         )
     }

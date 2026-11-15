@@ -1,2 +1,16 @@
 # English names and plurals of documents (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.documents_folder]
+name = "Folder"
+plural = "Folders"
+
+[labels.en.model.documents_folder.field.parent_id]
+label = "Parent folder"
+
+[labels.en.model.documents_document]
+name = "Document"
+plural = "Documents"
+
+[labels.en.model.documents_document.field.attachment]
+label = "File"

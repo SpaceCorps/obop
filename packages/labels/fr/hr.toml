@@ -5,6 +5,7 @@ summary = "Employés, départements et demandes de congé, avec paie et données
 
 [labels.fr.model.hr_department]
 name = "Département"
+plural = "Départements"
 description = "Une équipe ou un département de l’entreprise"
 
 [labels.fr.model.hr_department.field.name]
@@ -21,6 +22,7 @@ description = "Code du centre de coûts utilisé par la finance"
 
 [labels.fr.model.hr_employee]
 name = "Employé"
+plural = "Employés"
 description = "Une personne employée par l’entreprise"
 
 [labels.fr.model.hr_employee.field.name]
@@ -124,6 +126,7 @@ description = "Met fin au dossier d’emploi ; ne l’annulez que sur décision
 
 [labels.fr.model.hr_leave_request]
 name = "Demande de congé"
+plural = "Congés"
 description = "Une demande d’absence"
 
 [labels.fr.model.hr_leave_request.field.employee_id]
@@ -194,3 +197,15 @@ description = "Photo de la personne (PNG, JPEG, WebP ou GIF ; les métadonnées 
 [labels.fr.model.hr_leave_request.field.requested_by]
 label = "Demandé par"
 description = "Nom d’utilisateur de la personne qui demande le congé ; par défaut la personne qui dépose la demande. Seuls elle et hr.manager voient la demande"
+
+[labels.fr.model.hr_leave_request.action.request.assert.dates_in_order]
+message = "Le dernier jour du congé est avant son premier jour"
+
+[labels.fr.model.hr_leave_request.action.request.assert.days_given]
+message = "Indiquez le nombre de jours ouvrés du congé"
+
+[labels.fr.model.hr_leave_request.action.approve.assert.dates_in_order]
+message = "Le dernier jour du congé est avant son premier jour"
+
+[labels.fr.model.hr_leave_request.action.approve.assert.days_given]
+message = "Indiquez le nombre de jours ouvrés du congé"

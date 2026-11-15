@@ -5,6 +5,7 @@ summary = "Plantillas de documentos y solicitudes de firma; un PDF de Documentos
 
 [labels.es.model.sign_template]
 name = "Plantilla"
+plural = "Plantillas"
 description = "Un documento que se puede enviar a firmar"
 
 [labels.es.model.sign_template.field.name]
@@ -29,6 +30,7 @@ description = "Indica si las solicitudes nuevas pueden usar la plantilla"
 
 [labels.es.model.sign_request]
 name = "Solicitud"
+plural = "Solicitudes de firma"
 description = "Una solicitud para que una persona firme un documento"
 
 [labels.es.model.sign_request.field.template_id]
@@ -139,6 +141,7 @@ description = "Enviar una solicitud sobre un documento de Documentos: toma el SH
 
 [labels.es.model.sign_link]
 name = "Enlace de firma"
+plural = "Enlaces de firma"
 description = "Un enlace de un solo uso que permite a una persona firmar una solicitud; solo se guarda un hash del secreto, así que el enlace se muestra una vez al crearlo"
 
 [labels.es.model.sign_link.field.request_id]

@@ -5,6 +5,7 @@ summary = "Ein Verzeichnis von Geschäftsdokumenten mit Eigentümer, Ablauf und 
 
 [labels.de.model.documents_folder]
 name = "Ordner"
+plural = "Ordner"
 description = "Ein Ordner, der Dokumente zusammenfasst"
 
 [labels.de.model.documents_folder.field.name]
@@ -21,6 +22,7 @@ description = "Was in den Ordner gehört"
 
 [labels.de.model.documents_document]
 name = "Dokument"
+plural = "Dokumente"
 description = "Ein Vertrag, eine Richtlinie, ein Zertifikat oder ein anderes erfasstes Dokument"
 
 [labels.de.model.documents_document.field.title]

@@ -1201,18 +1201,18 @@ test.describe("website without JavaScript", () => {
     });
     expect(edge.cards).toBe(2);
     expect(edge.gap).toBeLessThan(2);
-    // CRM has four actions: all shown, no fold for a single card. Fleet has seven: five are shown
+    // CRM has four actions: all shown, no fold for a single card. Fleet has nine: five are shown
     // (its two marked cards, Retire and Suspend, and the first three others: a store page shows a few
-    // cards, not the manual) and the other two are in a fold that counts them.
+    // cards, not the manual) and the other four are in a fold that counts them.
     await page.goto(`${base()}/apps/crm/`);
     await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(4);
     await expect(page.locator("#can-do ~ .app-more")).toHaveCount(0);
     await page.goto(`${base()}/apps/fleet/`);
     await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(5);
     await expect(page.locator("#can-do ~ .app-more > summary")).toHaveText(
-      messages.en.apps.store.showMoreActions.replace("{n}", "2"),
+      messages.en.apps.store.showMoreActions.replace("{n}", "4"),
     );
-    await expect(page.locator("#can-do ~ .app-more .app-card")).toHaveCount(2);
+    await expect(page.locator("#can-do ~ .app-more .app-card")).toHaveCount(4);
   });
 
   test("a card that needs a person's approval is never behind a tap, on any app page", async ({

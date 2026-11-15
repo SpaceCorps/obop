@@ -5,6 +5,7 @@ summary = "Fordon, förare och servicehistorik för en mindre fordonsflotta."
 
 [labels.sv.model.fleet_vehicle]
 name = "Fordon"
+plural = "Fordon"
 description = "Ett fordon som företaget använder"
 
 [labels.sv.model.fleet_vehicle.field.plate]
@@ -70,6 +71,7 @@ description = "Ta bort ett tillgängligt fordon ur flottan för gott (kräver go
 
 [labels.sv.model.fleet_vehicle_driver]
 name = "Förare"
+plural = "Förare"
 description = "En registrerad förare med körkortsuppgifter och statusen aktiv eller avstängd"
 
 [labels.sv.model.fleet_vehicle_driver.field.name]
@@ -106,6 +108,7 @@ description = "Sätt en avstängd förare till aktiv igen"
 
 [labels.sv.model.fleet_vehicle_service]
 name = "Fordonsservice"
+plural = "Fordonsservice"
 description = "Ett underhålls-, reparations- eller besiktningsuppdrag för ett fordon"
 
 [labels.sv.model.fleet_vehicle_service.field.vehicle_id]
@@ -159,3 +162,11 @@ description = "Markera ett planerat uppdrag som klart"
 [labels.sv.model.fleet_vehicle_service.action.cancel]
 label = "Annullera"
 description = "Annullera ett planerat uppdrag"
+
+[labels.sv.model.fleet_vehicle.action.send_to_workshop]
+label = "Till verkstaden"
+description = "Skicka ett tillgängligt fordon till verkstaden för underhåll eller reparation"
+
+[labels.sv.model.fleet_vehicle.action.back_in_service]
+label = "Tillbaka från verkstaden"
+description = "Återföra ett fordon från verkstaden till de tillgängliga fordonen"

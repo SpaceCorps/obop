@@ -5,6 +5,7 @@ summary = "Ein Wiki: Artikel in einem Baum mit dem Ablauf Entwurf, veröffentlic
 
 [labels.de.model.knowledge_article]
 name = "Artikel"
+plural = "Artikel"
 description = "Ein Artikel der Wissensdatenbank"
 
 [labels.de.model.knowledge_article.field.title]

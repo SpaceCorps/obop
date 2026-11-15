@@ -5,6 +5,7 @@ summary = "En wiki: artiklar i ett träd med flödet utkast, publicerad, arkiver
 
 [labels.sv.model.knowledge_article]
 name = "Artikel"
+plural = "Artiklar"
 description = "En artikel i kunskapsbasen"
 
 [labels.sv.model.knowledge_article.field.title]

@@ -1,6 +1,6 @@
 [module]
 id = "knowledge"
-version = "0.2.0"
+version = "0.2.1"
 name = "Knowledge"
 description = "A wiki: articles arranged in a tree through a parent article, with a draft, published, archived flow, a visibility setting and tags. Visibility is a label for the UI and for people to respect; the platform has no row-level permissions yet, so everyone with the Knowledge groups can read every article."
 author = "SpaceCorps"
@@ -11,13 +11,34 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["wiki", "knowledge-base", "articles"]
 categories = ["productivity"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+home = "knowledge_article"
+changelog = "Clearer screens: the app opens on Articles in their tree, with the body shown as formatted text, saved filters and safer action buttons. A new article is for the workspace and names the person who writes it unless they say otherwise. Publishing now stamps the day it was first published; that date is set by the server only."
 
 [[model]]
 name = "knowledge_article"
 description = "An article of the knowledge base"
 read_group = "knowledge.user"
 write_group = "knowledge.user"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{author_name} · {published_on} | {author_name}"
+  list = ["title", "parent_id", "visibility", "author_name", "published_on", "state"]
+  card = ["title", "author_name", "tags", "published_on"]
+  quick_create = ["title", "parent_id"]
+  order = "sequence asc, title asc"
+  default_view = "tree"
+  menu = "main"
+  menu_order = 1
+
+  [[model.ui.filter]]
+  label = "Published"
+  where = "state = published"
+
+  [[model.ui.filter]]
+  label = "Drafts"
+  where = "state = draft"
 
   [[model.field]]
   name = "title"
@@ -38,6 +59,9 @@ write_group = "knowledge.user"
   class = "none"
   kind = "longtext"
 
+    [model.field.ui]
+    display = "markdown"
+
   [[model.field]]
   name = "visibility"
   description = "Who the article is meant for: private, workspace, public"
@@ -45,6 +69,10 @@ write_group = "knowledge.user"
   kind = "select"
   options = ["private", "workspace", "public"]
   required = true
+  default = "workspace"
+
+    [model.field.ui]
+    tones = { private = "warn", workspace = "neutral", public = "info" }
 
   [[model.field]]
   name = "tags"
@@ -56,6 +84,7 @@ write_group = "knowledge.user"
   description = "Name of the author"
   class = "public_directory"
   personal_data = true
+  default = "$user"
 
   [[model.field]]
   name = "sequence"
@@ -63,11 +92,15 @@ write_group = "knowledge.user"
   class = "none"
   kind = "number"
 
+    [model.field.ui]
+    aggregate = "none"
+
   [[model.field]]
   name = "published_on"
   description = "Day the article was published (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  readonly = true
 
   [[model.field]]
   name = "state"
@@ -77,6 +110,9 @@ write_group = "knowledge.user"
   options = ["draft", "published", "archived"]
   required = true
 
+    [model.field.ui]
+    tones = { draft = "neutral", published = "ok", archived = "neutral" }
+
   [[model.action]]
   name = "publish"
   description = "Publish the article (manager only)"
@@ -84,6 +120,15 @@ write_group = "knowledge.user"
   from = "draft"
   to = "published"
   group = "knowledge.manager"
+
+    [model.action.ui]
+    primary = true
+    done = "The article is published"
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { published_on = "$today" }
+    when = "!is_set(published_on)"
 
   [[model.action]]
   name = "unpublish"
@@ -93,6 +138,9 @@ write_group = "knowledge.user"
   to = "draft"
   group = "knowledge.manager"
 
+    [model.action.ui]
+    done = "The article is back in draft"
+
   [[model.action]]
   name = "archive"
   description = "Archive an article that is out of date"
@@ -100,3 +148,8 @@ write_group = "knowledge.user"
   from = "published"
   to = "archived"
   group = "knowledge.manager"
+
+    [model.action.ui]
+    danger = true
+    confirm = "Archive this article? No step brings it back."
+    done = "The article is archived"

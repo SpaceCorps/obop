@@ -338,9 +338,10 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
     let dir = std::env::temp_dir().join(format!("obop-catalog-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let text = std::fs::read_to_string(pk.join("fleet.toml")).unwrap();
-    let bare = text
-        .replace("license = \"Apache-2.0\"\n", "")
-        .replace("requires_core = \"^0.2\"\n", "requires_core = \">=0.2\"\n");
+    let bare = text.replace("license = \"Apache-2.0\"\n", "").replace(
+        "requires_core = \"^0.2.2\"\n",
+        "requires_core = \">=0.2\"\n",
+    );
     let f = dir.join("fleet.toml");
     std::fs::write(&f, bare).unwrap();
     let fs = f.to_string_lossy().to_string();
@@ -358,7 +359,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
         r.errors.iter().any(|e| e.contains("has no upper bound")),
         "{r:?}"
     );
-    let no_range = text.replace("requires_core = \"^0.2\"\n", "");
+    let no_range = text.replace("requires_core = \"^0.2.2\"\n", "");
     for catalog in [false, true] {
         let r = obop_pkg::check_package(&no_range, &builtin, catalog);
         assert!(
@@ -457,7 +458,7 @@ fn the_tree_list_and_plan_commands_run() {
     let t = app.installer.tree(Some("field_service")).unwrap();
     assert!(t.contains("base ^0.2  [built in, core 0.2.2]"), "{t}");
     assert!(
-        t.contains("hr >=0.2, <1  [not installed, marketplace offers 0.3.0]"),
+        t.contains("hr >=0.2, <1  [not installed, marketplace offers 0.3.1]"),
         "{t}"
     );
 }

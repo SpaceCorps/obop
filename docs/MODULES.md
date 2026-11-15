@@ -1079,7 +1079,7 @@ Declarative X1 deliberately cannot do the following. Plan around them or wait fo
 
 ## 12. The bundled workflows
 
-What the bundled modules do with sections 3.8 and 3.9 (each is exercised by a test in `crates/obop/src/model_tests.rs`):
+What the bundled modules do with sections 3.8 to 3.10 (each is exercised by a test in `crates/obop/src/model_tests.rs`, or for the D95 rules of hr, fleet, documents, knowledge, sign and dashboards in `crates/obop/src/people_collab_hints_tests.rs`):
 
 | Module | Does |
 |---|---|
@@ -1091,9 +1091,12 @@ What the bundled modules do with sections 3.8 and 3.9 (each is exercised by a te
 | `purchase` | Orders are numbered `PO-00042`; the total is the sum of the line amounts; `receive` creates a draft stock move per line to the receiving location (the caller needs `inventory.user`). |
 | `pos` | Subtotals and the order total are computed; `pay` is refused until the payments cover the total and creates draft stock moves from the order's stock location; receipts are numbered gapless per year. |
 | `expenses` | Claims are numbered `EXP-2026-0042`; an employee sees only their own, managers and finance see all. |
-| `hr` | Leave requests: employees see their own (`requested_by`), `hr.manager` sees all. |
+| `hr` | Leave requests: employees see their own (`requested_by`), `hr.manager` sees all. `request` and `approve` are refused when the last day is before the first or no working days are given (keys `dates_in_order`, `days_given`); a new request is paid leave unless it says otherwise. |
 | `documents` | Confidential and restricted documents are visible to their owner and `documents.manager`; the rest to every reader (`open_to_all` is computed from `confidentiality`). |
+| `knowledge` | `publish` stamps `published_on` with the day, once (a `set` effect, 3.10); the field is `readonly`. A new article is for the workspace and names its writer in `author_name`. |
+| `fleet` | `send_to_workshop` and `back_in_service` move a vehicle to and from `maintenance`; a new service is dated today and takes the vehicle's `odometer_km` (`fill_from`) when none is given. |
+| `sign` | `send` (from a template) stamps `sent_on` and the hand-marked `sign` stamps `signed_on`, each only when empty; a new template is `active`. |
 | `timesheets` | Entries are private to their worker; `timesheets.manager` sees all. |
 | `projects` | `progress` (percent of non-cancelled tasks that are done) and `estimate_minutes` are computed. |
 | `helpdesk` | Tickets are numbered `TCK-00042`. |
-| `dashboards` | A dashboard is visible to its owner, to `dashboards.manager` and, when `shared`, to every reader; its tiles follow it. |
+| `dashboards` | A dashboard is visible to its owner, to `dashboards.manager` and, when `shared`, to every reader; its tiles follow it. A new tile counts records unless it says `sum`. |

@@ -5,6 +5,7 @@ summary = "Työntekijät, osastot ja poissaolopyynnöt; palkka- ja terveystiedot
 
 [labels.fi.model.hr_department]
 name = "Osasto"
+plural = "Osastot"
 description = "Yrityksen tiimi tai osasto"
 
 [labels.fi.model.hr_department.field.name]
@@ -21,6 +22,7 @@ description = "Talouden käyttämä kustannuspaikan koodi"
 
 [labels.fi.model.hr_employee]
 name = "Työntekijä"
+plural = "Työntekijät"
 description = "Yrityksen palveluksessa oleva henkilö"
 
 [labels.fi.model.hr_employee.field.name]
@@ -124,6 +126,7 @@ description = "Päätä työsuhdetietue; peruttavissa vain henkilöstöhallinnon
 
 [labels.fi.model.hr_leave_request]
 name = "Poissaolopyyntö"
+plural = "Poissaolot"
 description = "Pyyntö saada vapaata"
 
 [labels.fi.model.hr_leave_request.field.employee_id]
@@ -194,3 +197,15 @@ description = "Henkilön valokuva (PNG, JPEG, WebP tai GIF; metatiedot, kuten si
 [labels.fi.model.hr_leave_request.field.requested_by]
 label = "Pyytäjä"
 description = "Poissaoloa pyytävän henkilön käyttäjänimi; pyynnön jättävä henkilö, ellei toisin määritetä. Vain hän ja hr.manager näkevät pyynnön"
+
+[labels.fi.model.hr_leave_request.action.request.assert.dates_in_order]
+message = "Poissaolon viimeinen päivä on ennen sen ensimmäistä päivää"
+
+[labels.fi.model.hr_leave_request.action.request.assert.days_given]
+message = "Anna poissaolon työpäivien määrä"
+
+[labels.fi.model.hr_leave_request.action.approve.assert.dates_in_order]
+message = "Poissaolon viimeinen päivä on ennen sen ensimmäistä päivää"
+
+[labels.fi.model.hr_leave_request.action.approve.assert.days_given]
+message = "Anna poissaolon työpäivien määrä"
