@@ -145,14 +145,15 @@ test.describe("governed fields in the UI", () => {
     await expect(card("Done")).toHaveCount(0);
     expect(await stateOf(api, model, rec.id)).toBe("new");
 
-    // The Move to select lists every other state, with the unreachable ones disabled and explained.
-    const moveTo = card("New").getByLabel(/^Move .* to$/);
-    await expect(moveTo.locator("option", { hasText: "Done" })).toBeDisabled();
-    await expect(moveTo.locator("option", { hasText: "Done" })).toHaveAttribute(
-      "title",
-      `No action moves a ${model} from New to Done`,
-    );
-    await expect(moveTo.locator("option", { hasText: "Doing" })).toBeEnabled();
+    // The card's Move to menu lists every other state, the unreachable ones disabled and explained.
+    await card("New")
+      .getByRole("button", { name: /^Move .* to$/ })
+      .click();
+    const done = page.getByRole("menuitem", { name: /^Done/ });
+    await expect(done).toBeDisabled();
+    await expect(done).toHaveAttribute("title", `No action moves a ${model} from New to Done`);
+    await expect(page.getByRole("menuitem", { name: /^Doing/ })).toBeEnabled();
+    await page.keyboard.press("Escape");
     // The keyboard twin (Shift+Arrow) follows the same rules: one step right is allowed, the next is not.
     await card("New").focus();
     await page.keyboard.press("Shift+ArrowRight");
