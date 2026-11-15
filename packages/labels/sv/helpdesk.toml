@@ -5,6 +5,7 @@ summary = "Supportärenden med prioritet, allvarlighetsgrad, servicenivåmål oc
 
 [labels.sv.model.helpdesk_sla]
 name = "SLA"
+plural = "SLA:er"
 description = "En servicenivåpolicy: hur snabbt ärenden med en viss prioritet ska besvaras och lösas"
 
 [labels.sv.model.helpdesk_sla.field.name]
@@ -35,6 +36,7 @@ description = "Om policyn kan kopplas till nya ärenden"
 
 [labels.sv.model.helpdesk_ticket]
 name = "Ärende"
+plural = "Ärenden"
 description = "En supportförfrågan från en kund"
 
 [labels.sv.model.helpdesk_ticket.field.subject]

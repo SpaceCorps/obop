@@ -1,6 +1,6 @@
 [module]
 id = "pos"
-version = "0.3.1"
+version = "0.4.0"
 name = "Point of Sale"
 description = "Shop tills: a point-of-sale configuration, sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change and cash differences are still entered, and the cash control and refund settings of a point of sale are only recorded: nothing checks them. Paying also creates a draft stock move per line from the order's stock location, for the warehouse to validate. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
 author = "SpaceCorps"
@@ -11,7 +11,9 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["pos", "retail", "till"]
 categories = ["sales"]
 maturity = "experimental"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+changelog = "The app opens on Sessions; a till is called a till and sits under Configuration. A new session starts today, for you, with the till's opening cash; a new sale goes to the one open session, dated today; a line takes the product's name and price. Closing a session stamps the closing day. A paid, refunded or cancelled sale, its lines and its payments can no longer be changed, and neither can a closed session except its note."
+home = "pos_session"
 
 [module.dependencies]
 base = "^0.2"
@@ -24,6 +26,13 @@ description = "A point of sale (a till or a shop) and its settings"
 read_group = "pos.user"
 write_group = "pos.manager"
 
+  [model.ui]
+  title = "{name}"
+  list = ["name", "currency", "default_opening_cash", "cash_control", "allow_refunds", "active"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
+
   [[model.field]]
   name = "name"
   description = "Name of the till or shop, for example Main street shop"
@@ -32,8 +41,9 @@ write_group = "pos.manager"
 
   [[model.field]]
   name = "currency"
-  description = "ISO 4217 currency code, for example EUR"
+  description = "ISO 4217 currency code, for example EUR; the instance currency unless given"
   class = "none"
+  default = "$instance.currency"
 
   [[model.field]]
   name = "receipt_header"
@@ -52,6 +62,8 @@ write_group = "pos.manager"
   description = "Cash normally left in the drawer overnight (minor currency units)"
   class = "none"
   kind = "money"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "allow_refunds"
@@ -64,12 +76,42 @@ write_group = "pos.manager"
   description = "Whether the point of sale is in use"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "pos_session"
 description = "One shift of selling at a point of sale, from opening to closing the cash drawer"
 read_group = "pos.user"
 write_group = "pos.user"
+
+  [model.ui]
+  title = "{config_id} · {opened_on}"
+  subtitle = "{cashier}"
+  list = ["config_id", "cashier", "opened_on", "closed_on", "opening_cash", "closing_cash", "cash_difference", "state"]
+  card = ["config_id", "cashier", "opened_on", "opening_cash"]
+  quick_create = ["config_id"]
+  order = "opened_on desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 1
+
+  [[model.ui.section]]
+  label = "Cash count"
+  fields = ["opening_cash", "expected_cash", "closing_cash", "cash_difference", "note"]
+
+  [[model.ui.filter]]
+  label = "Open"
+  where = "state = open"
+
+  [[model.child]]
+  model = "pos_order"
+  via = "session_id"
+  shape = "list"
+
+  [model.guard]
+  immutable_when = ["closed"]
+  mutable_fields = ["note"]
+  message = "A closed session cannot be changed; only its note can still explain a cash difference."
 
   [[model.field]]
   name = "config_id"
@@ -81,10 +123,11 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "cashier"
-  description = "Name of the cashier who opened the session"
+  description = "Name of the cashier who opened the session; the person who opens it unless given"
   class = "internal"
   personal_data = true
   required = true
+  default = "$user"
 
   [[model.field]]
   name = "opened_on"
@@ -92,31 +135,40 @@ write_group = "pos.user"
   class = "none"
   kind = "date"
   required = true
+  default = "today"
 
   [[model.field]]
   name = "closed_on"
   description = "Day the session was closed (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  readonly = true
 
   [[model.field]]
   name = "opening_cash"
-  description = "Cash counted in the drawer at opening (minor currency units)"
+  description = "Cash counted in the drawer at opening (minor currency units); the till's usual opening cash unless given"
   class = "financial"
   kind = "money"
   required = true
+  fill_from = "config_id.default_opening_cash"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "expected_cash"
   description = "Cash the drawer should hold at closing: opening cash plus cash payments (entered, not computed)"
   class = "financial"
   kind = "money"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "closing_cash"
   description = "Cash actually counted in the drawer at closing"
   class = "financial"
   kind = "money"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "cash_difference"
@@ -137,6 +189,8 @@ write_group = "pos.user"
   kind = "select"
   options = ["open", "closed"]
   required = true
+  [model.field.ui]
+  tones = { open = "ok", closed = "neutral" }
 
   [[model.action]]
   name = "close"
@@ -146,6 +200,15 @@ write_group = "pos.user"
   to = "closed"
   group = "pos.manager"
   approval = true
+  [model.action.ui]
+  primary = true
+  confirm = "Close this session? Count the cash in the drawer first; a closed session cannot be changed."
+  done = "Session closed"
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { closed_on = "$today" }
+    when = "!is_set(closed_on)"
 
 [[model]]
 name = "pos_order"
@@ -153,13 +216,38 @@ description = "A sale rung up at a point of sale"
 read_group = "pos.user"
 write_group = "pos.user"
 
+  [model.ui]
+  title = "{receipt_number}"
+  subtitle = "{customer_id}"
+  list = ["receipt_number", "ordered_on", "session_id", "customer_id", "total", "state"]
+  card = ["receipt_number", "customer_id", "ordered_on", "total"]
+  card_sum = "total"
+  order = "ordered_on desc, receipt_number desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 2
+  report = { rows = "session_id", cols = "state", measure = "total" }
+
+  [[model.child]]
+  model = "pos_payment"
+  via = "order_id"
+  shape = "lines"
+
+  [model.guard]
+  immutable_when = ["paid", "refunded", "cancelled"]
+  mutable_fields = ["note"]
+  exit_to = ["refunded"]
+  message = "A paid, refunded or cancelled sale cannot be changed. Refund it to reverse it."
+
   [[model.field]]
   name = "session_id"
-  description = "The session the sale was made in"
+  description = "The session the sale was made in; the one open session unless given"
   class = "none"
   kind = "ref"
   to = "pos_session"
   required = true
+  default = "$open:pos_session"
+  ref_filter = "state = open"
 
   [[model.field]]
   name = "receipt_number"
@@ -182,6 +270,7 @@ write_group = "pos.user"
   description = "Day of the sale (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  default = "today"
 
   [[model.field]]
   name = "customer_id"
@@ -216,6 +305,8 @@ write_group = "pos.user"
   kind = "select"
   options = ["draft", "paid", "refunded", "cancelled"]
   required = true
+  [model.field.ui]
+  tones = { draft = "info", paid = "ok", refunded = "warn", cancelled = "neutral" }
 
   [[model.action]]
   name = "pay"
@@ -223,7 +314,10 @@ write_group = "pos.user"
   field = "state"
   from = "draft"
   to = "paid"
-  assert = [{ expr = "sum(pos_payment.amount) >= total", message = "The payments do not cover the total of the sale" }]
+  assert = [{ expr = "sum(pos_payment.amount) >= total", message = "The payments do not cover the total of the sale: add a payment for the rest", key = "covered" }]
+  [model.action.ui]
+  primary = true
+  done = "Sale paid"
 
     [[model.action.effect]]
     kind = "create"
@@ -238,6 +332,9 @@ write_group = "pos.user"
   field = "state"
   from = "draft"
   to = "cancelled"
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this sale? It keeps its receipt number and cannot be changed afterwards."
 
   [[model.action]]
   name = "refund"
@@ -247,12 +344,26 @@ write_group = "pos.user"
   to = "refunded"
   group = "pos.manager"
   approval = true
+  [model.action.ui]
+  danger = true
+  confirm = "Refund this sale to the customer?"
+  done = "Sale refunded"
 
 [[model]]
 name = "pos_order_line"
 description = "One product line of a sale"
 read_group = "pos.user"
 write_group = "pos.user"
+
+  [model.ui]
+  title = "{product_id} × {quantity}"
+  list = ["product_id", "description", "quantity", "unit_price", "discount_bp", "subtotal"]
+  quick_create = ["product_id", "quantity"]
+  menu = "hidden"
+
+  [model.guard]
+  children_of = "order_id"
+  message = "The lines of a paid, refunded or cancelled sale cannot be changed."
 
   [[model.field]]
   name = "order_id"
@@ -272,8 +383,9 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "description"
-  description = "Text shown on the receipt"
+  description = "Text shown on the receipt; the product's name unless given"
   class = "none"
+  fill_from = "product_id.name"
 
   [[model.field]]
   name = "quantity"
@@ -284,16 +396,22 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "unit_price"
-  description = "Price per unit including tax (minor currency units)"
+  description = "Price per unit including tax (minor currency units); the product's list price unless given"
   class = "none"
   kind = "money"
   required = true
+  fill_from = "product_id.list_price_minor"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "discount_bp"
   description = "Discount in basis points: 1000 means 10.00 percent"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  display = "percent_bp"
+  aggregate = "none"
 
   [[model.field]]
   name = "subtotal"
@@ -307,6 +425,16 @@ name = "pos_payment"
 description = "A payment received against a sale; a sale may be paid with several methods"
 read_group = "pos.user"
 write_group = "pos.user"
+
+  [model.ui]
+  title = "{method} · {amount}"
+  list = ["method", "amount", "paid_on", "provider_reference"]
+  quick_create = ["method", "amount"]
+  menu = "hidden"
+
+  [model.guard]
+  children_of = "order_id"
+  message = "The payments of a paid, refunded or cancelled sale cannot be changed."
 
   [[model.field]]
   name = "order_id"
@@ -336,6 +464,7 @@ write_group = "pos.user"
   description = "Day of the payment (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  default = "today"
 
   [[model.field]]
   name = "provider_reference"

@@ -5,6 +5,7 @@ summary = "Tid som lagts på projektuppgifter, i minuter, med en markering för 
 
 [labels.sv.model.timesheets_entry]
 name = "Tidsregistrering"
+plural = "Tidsregistreringar"
 description = "Tid som en person lagt på en uppgift en dag"
 
 [labels.sv.model.timesheets_entry.field.task_id]

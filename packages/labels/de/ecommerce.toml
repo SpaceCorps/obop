@@ -6,6 +6,7 @@ summary = "Ein Onlineshop: Einträge, Versand, Rabattcodes und Webbestellungen, 
 
 [labels.de.model.ecommerce_category]
 name = "Kategorie"
+plural = "Kategorien"
 description = "Eine Gruppe von Einträgen, die im Shop zusammen angezeigt werden"
 
 [labels.de.model.ecommerce_category.field.name]
@@ -30,6 +31,7 @@ description = "Ob die Kategorie für Kunden sichtbar ist"
 
 [labels.de.model.ecommerce_listing]
 name = "Shop-Eintrag"
+plural = "Shop-Einträge"
 description = "Ein Produkt, wie es im Onlineshop erscheint"
 
 [labels.de.model.ecommerce_listing.field.product_id]
@@ -91,6 +93,7 @@ description = "Ob der Eintrag für Kunden sichtbar ist"
 
 [labels.de.model.ecommerce_listing_translation]
 name = "Übersetzung des Shop-Eintrags"
+plural = "Übersetzungen der Shop-Einträge"
 description = "Ein in eine andere Sprache übersetzter Shop-Eintrag"
 
 [labels.de.model.ecommerce_listing_translation.field.listing_id]
@@ -128,6 +131,7 @@ description = "Ob die Übersetzung angezeigt wird; sie ist nur erreichbar, solan
 
 [labels.de.model.ecommerce_shipping_method]
 name = "Versandart"
+plural = "Versandarten"
 description = "Eine Art, Bestellungen zuzustellen, mit ihrem Preis"
 
 [labels.de.model.ecommerce_shipping_method.field.name]
@@ -156,6 +160,7 @@ description = "Ob Kunden sie wählen können"
 
 [labels.de.model.ecommerce_discount_code]
 name = "Rabattcode"
+plural = "Rabattcodes"
 description = "Ein Code, den Kunden an der Kasse für eine Ermäßigung eingeben"
 
 [labels.de.model.ecommerce_discount_code.field.code]
@@ -199,7 +204,8 @@ label = "Aktiv"
 description = "Ob der Code verwendet werden kann"
 
 [labels.de.model.ecommerce_order]
-name = "Auftrag"
+name = "Web-Bestellung"
+plural = "Web-Bestellungen"
 description = "Eine online aufgegebene Bestellung"
 
 [labels.de.model.ecommerce_order.field.number]
@@ -312,6 +318,7 @@ description = "Das Geld für eine gelieferte Bestellung zurückzahlen, zum Beisp
 
 [labels.de.model.ecommerce_order_line]
 name = "Auftragsposition"
+plural = "Auftragspositionen"
 description = "Eine Produktposition einer Webbestellung"
 
 [labels.de.model.ecommerce_order_line.field.order_id]
@@ -352,6 +359,7 @@ description = "Text, der das Hauptbild für Menschen beschreibt, die es nicht se
 
 [labels.de.model.ecommerce_listing_image]
 name = "Produktbild"
+plural = "Produktbilder"
 description = "Ein zusätzliches Bild eines Angebots für die Galerie"
 
 [labels.de.model.ecommerce_listing_image.field.listing_id]
@@ -384,6 +392,7 @@ description = "Nur Einträge dieser Kategorie erhalten die Ermäßigung; leer be
 
 [labels.de.model.ecommerce_discount_use]
 name = "Code-Nutzung"
+plural = "Code-Nutzungen"
 description = "Wie oft ein Kunde einen Rabattcode genutzt hat (der Kunde wird als Hash gespeichert, nie als E-Mail-Adresse)"
 
 [labels.de.model.ecommerce_discount_use.field.code_id]
@@ -400,6 +409,7 @@ description = "Bisherige Nutzungen"
 
 [labels.de.model.ecommerce_tax_rate]
 name = "Steuersatz"
+plural = "Steuersätze"
 description = "Ein Steuersatz, den der Shop auf Einträge anwendet, auf dem Server berechnet"
 
 [labels.de.model.ecommerce_tax_rate.field.name]
@@ -477,6 +487,7 @@ description = "Steuer auf dieser Position, in den Preisen enthalten oder aufgesc
 
 [labels.de.model.ecommerce_payment]
 name = "Zahlung"
+plural = "Zahlungen"
 description = "Eine Zahlung für eine Webbestellung: welcher Anbieter, seine Referenz, der Betrag und was daraus wurde. Der Shop sieht nie Kartendaten"
 
 [labels.de.model.ecommerce_payment.field.order_id]

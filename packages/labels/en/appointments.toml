@@ -1,2 +1,29 @@
 # English names and plurals of appointments (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.appointments_resource]
+name = "Resource"
+plural = "Resources"
+
+[labels.en.model.appointments_appointment]
+name = "Appointment"
+plural = "Appointments"
+
+[labels.en.model.appointments_appointment.field.start_minute]
+label = "Start"
+
+[labels.en.model.appointments_appointment.field.end_minute]
+label = "End"
+
+[labels.en.model.appointments_appointment.field.attendee_name]
+label = "Attendee"
+
+[labels.en.model.appointments_appointment.field.state.options]
+done = "Held"
+no_show = "No-show"
+
+[labels.en.model.appointments_appointment.action.complete]
+label = "Mark as held"
+
+[labels.en.model.appointments_appointment.action.mark_no_show]
+label = "No-show"

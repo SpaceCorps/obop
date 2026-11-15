@@ -1,2 +1,74 @@
 # English names and plurals of website (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.website_page]
+name = "Page"
+plural = "Pages"
+
+[labels.en.model.website_page.field.seo_title]
+label = "SEO title"
+
+[labels.en.model.website_page.field.seo_description]
+label = "SEO description"
+
+[labels.en.model.website_page.field.cover_alt]
+label = "Cover picture description"
+
+[labels.en.model.website_menu_item]
+name = "Menu item"
+plural = "Menu"
+
+[labels.en.model.website_menu_item.field.url]
+label = "Link"
+
+[labels.en.model.website_menu_item.field.parent_id]
+label = "Under"
+
+[labels.en.model.website_blog_post]
+name = "Blog post"
+plural = "Blog posts"
+
+[labels.en.model.website_blog_post.field.author_name]
+label = "Author (internal, not shown)"
+
+[labels.en.model.website_blog_post.field.byline]
+label = "Shown as author"
+
+[labels.en.model.website_blog_post.field.cover_alt]
+label = "Cover picture description"
+
+[labels.en.model.website_form_submission]
+name = "Form submission"
+plural = "Form submissions"
+
+[labels.en.model.website_form_submission.field.form_name]
+label = "Form"
+
+[labels.en.model.website_form_submission.field.sender_email]
+label = "Email"
+
+[labels.en.model.website_form_submission.field.sender_phone]
+label = "Phone"
+
+[labels.en.model.website_form_submission.field.source_page]
+label = "Sent from page"
+
+[labels.en.model.website_page_translation]
+name = "Page translation"
+plural = "Page translations"
+
+[labels.en.model.website_page_translation.field.lang]
+label = "Language"
+
+[labels.en.model.website_page_translation.field.seo_title]
+label = "SEO title"
+
+[labels.en.model.website_page_translation.field.seo_description]
+label = "SEO description"
+
+[labels.en.model.website_blog_post_translation]
+name = "Post translation"
+plural = "Post translations"
+
+[labels.en.model.website_blog_post_translation.field.lang]
+label = "Language"

@@ -3373,7 +3373,10 @@ mod tests {
             [
                 "projects_task.begin",
                 "projects_task.complete",
-                "projects_task.cancel"
+                "projects_task.cancel",
+                "projects_task.complete_now",
+                "projects_task.reopen",
+                "projects_task.reopen_cancelled"
             ]
         );
         // The catalogue data of D55 that the interface shows.
@@ -4075,6 +4078,19 @@ write_group = "gadget.manager"
         let e = handler_error(set(&agent, "closed"));
         assert!(e.contains("it can only go to: in_progress"), "{e}");
         set(&agent, "in_progress").unwrap();
+        // Resolving needs the resolution (D95 `needs`): without it the move is refused.
+        let e = handler_error(set(&agent, "resolved"));
+        assert!(e.contains("needs resolution"), "{e}");
+        call(
+            &d,
+            &agent,
+            "helpdesk_ticket.update",
+            Value::map([
+                ("id", Value::text(&id)),
+                ("resolution", Value::text("new toner")),
+            ]),
+        )
+        .unwrap();
         set(&agent, "resolved").unwrap();
         // Closing needs helpdesk.manager and, for an agent, an approval.
         let e = handler_error(set(&agent, "closed"));

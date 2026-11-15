@@ -5,6 +5,7 @@ summary = "Postituslistat, yhteystiedot suostumuksineen ja kampanjat. Sähköpos
 
 [labels.fi.model.email_marketing_list]
 name = "Postituslista"
+plural = "Postituslistat"
 description = "Postituslista, johon yhteystiedot voivat kuulua"
 
 [labels.fi.model.email_marketing_list.field.name]
@@ -21,6 +22,7 @@ description = "Voivatko kävijät liittyä listalle itse"
 
 [labels.fi.model.email_marketing_contact]
 name = "Postituslistan yhteystieto"
+plural = "Postituslistan yhteystiedot"
 description = "Postituslistalla oleva henkilö"
 
 [labels.fi.model.email_marketing_contact.field.list_id]
@@ -55,6 +57,7 @@ description = "Mistä suostumus kerättiin, esimerkiksi verkkosivuston tilauslom
 
 [labels.fi.model.email_marketing_campaign]
 name = "Kampanja"
+plural = "Kampanjat"
 description = "Yksi postitus listalle"
 
 [labels.fi.model.email_marketing_campaign.field.name]
@@ -132,11 +135,11 @@ label = "Ajoita"
 description = "Merkitse kampanja ajoitetuksi sen päivälle"
 
 [labels.fi.model.email_marketing_campaign.action.send]
-label = "Lähetä"
+label = "Merkitse lähetetyksi"
 description = "Merkitse ajoitettu kampanja lähetetyksi; sähköpostia ei lähetetä (vain esihenkilö)"
 
 [labels.fi.model.email_marketing_campaign.action.send_now]
-label = "Lähetä nyt"
+label = "Merkitse lähetetyksi"
 description = "Merkitse luonnoskampanja lähetetyksi; sähköpostia ei lähetetä (vain esihenkilö)"
 
 [labels.fi.model.email_marketing_campaign.action.unschedule]

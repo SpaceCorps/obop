@@ -1,2 +1,115 @@
 # English names and plurals of ecommerce (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.ecommerce_category]
+name = "Category"
+plural = "Categories"
+
+[labels.en.model.ecommerce_category.field.published]
+label = "Show in shop"
+
+[labels.en.model.ecommerce_listing]
+name = "Listing"
+plural = "Listings"
+
+[labels.en.model.ecommerce_listing.field.compare_at_price]
+label = "Compare-at price"
+
+[labels.en.model.ecommerce_listing.field.image_alt]
+label = "Picture description"
+
+[labels.en.model.ecommerce_listing.field.sku]
+label = "SKU"
+
+[labels.en.model.ecommerce_listing.field.published]
+label = "Show in shop"
+
+[labels.en.model.ecommerce_listing_image]
+name = "Listing picture"
+plural = "Listing pictures"
+
+[labels.en.model.ecommerce_listing_image.field.alt]
+label = "Picture description"
+
+[labels.en.model.ecommerce_listing_translation]
+name = "Listing translation"
+plural = "Listing translations"
+
+[labels.en.model.ecommerce_listing_translation.field.lang]
+label = "Language"
+
+[labels.en.model.ecommerce_shipping_method]
+name = "Shipping method"
+plural = "Shipping methods"
+
+[labels.en.model.ecommerce_discount_code]
+name = "Discount code"
+plural = "Discount codes"
+
+[labels.en.model.ecommerce_discount_code.field.used_count]
+label = "Times used"
+
+[labels.en.model.ecommerce_discount_use]
+name = "Discount use"
+plural = "Discount uses"
+
+[labels.en.model.ecommerce_discount_use.field.code_id]
+label = "Discount code"
+
+[labels.en.model.ecommerce_tax_rate]
+name = "Tax rate"
+plural = "Tax rates"
+
+[labels.en.model.ecommerce_tax_rate.field.rate_bp]
+label = "Rate"
+
+[labels.en.model.ecommerce_tax_rate.field.included]
+label = "Included in prices"
+
+[labels.en.model.ecommerce_order]
+name = "Web order"
+plural = "Web orders"
+
+[labels.en.model.ecommerce_order.field.customer_id]
+label = "Contact"
+
+[labels.en.model.ecommerce_order.field.reserved_until]
+label = "Stock held until"
+
+[labels.en.model.ecommerce_order.field.stock_returned]
+label = "Stock put back"
+
+[labels.en.model.ecommerce_order.field.tracking_reference]
+label = "Tracking number"
+
+[labels.en.model.ecommerce_order.field.discount_use_id]
+label = "Discount use"
+
+[labels.en.model.ecommerce_order.action.mark_paid]
+label = "Mark as paid"
+
+[labels.en.model.ecommerce_order.action.cancel]
+label = "Cancel order"
+
+[labels.en.model.ecommerce_order.action.refund_delivered]
+label = "Refund"
+
+[labels.en.model.ecommerce_order_line]
+name = "Order line"
+plural = "Order lines"
+
+[labels.en.model.ecommerce_order_line.field.tax_rate_bp]
+label = "Tax rate"
+
+[labels.en.model.ecommerce_payment]
+name = "Payment"
+plural = "Payments"
+
+[labels.en.model.ecommerce_payment.field.external_id]
+label = "Provider reference"
+
+[labels.en.model.ecommerce_payment.field.checkout_url]
+label = "Payment page"
+
+[labels.en.model.ecommerce_payment.field.refund_id]
+label = "Refund reference"

@@ -3834,8 +3834,14 @@ mod bundled_packages {
                     matches!(list.value, Value::List(l) if !l.is_empty()),
                     "{name}"
                 );
-                // A required field cannot be left out.
-                if let Some(req) = model.field.iter().find(|f| f.required) {
+                // A required field cannot be left out (one the server does not fill in itself:
+                // no D95 `default` or `fill_from`, and not a state that starts at its first option).
+                if let Some(req) = model.field.iter().find(|f| {
+                    f.required
+                        && f.default.is_none()
+                        && f.fill_from.is_none()
+                        && !model.action.iter().any(|a| a.field == f.name)
+                }) {
                     let Value::Map(mut input) = mk.input(name, None, &mut vec![name.to_string()])
                     else {
                         unreachable!()
@@ -4175,7 +4181,10 @@ mod bundled_packages {
                 from,
                 "{cmd} refused, state unchanged"
             );
-            let allowed = Principal::user("a", &[group]);
+            // The holder of the group also holds the app's user group, as a manager does: an
+            // action that stamps its own record (a D95 `set` effect) writes it under the model's
+            // write group.
+            let allowed = Principal::user("a", &[user_group.as_str(), group]);
             call(&app, &allowed, &cmd, by_id(&rec)).unwrap_or_else(|e| panic!("{cmd}: {e:?}"));
         }
     }

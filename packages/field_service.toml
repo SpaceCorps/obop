@@ -1,6 +1,6 @@
 [module]
 id = "field_service"
-version = "0.2.0"
+version = "0.3.0"
 name = "Field Service"
 description = "On-site jobs for customers, done by a technician: scheduled, en route, in progress, done or cancelled. A job records the customer, the site, the technician, the planned day and start (minutes since midnight), the parts used and whether the customer must sign off. Site address and contact details are personal data. Needs the Human Resources and Products packages."
 author = "SpaceCorps"
@@ -11,7 +11,9 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["field-service", "jobs", "technicians"]
 categories = ["services"]
 maturity = "experimental"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+changelog = "The app opens on Jobs, grouped into job, site, schedule, sign-off and report, with the parts used inside the job. The start reads as a time of day and the planned time as a duration; a part takes the product's price. A job that needs the customer to sign off can only be completed once the signer and the day are filled in, and a done or cancelled job and its parts can no longer be changed."
+home = "field_service_job"
 
 [module.dependencies]
 base = "^0.2"
@@ -23,6 +25,56 @@ name = "field_service_job"
 description = "An on-site job for a customer"
 read_group = "field_service.user"
 write_group = "field_service.user"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{customer_id}"
+  list = ["name", "customer_id", "technician_id", "scheduled_on", "scheduled_start_minute", "priority", "state"]
+  card = ["name", "customer_id", "technician_id", "scheduled_on", "scheduled_start_minute", "priority"]
+  quick_create = ["name", "customer_id", "technician_id", "scheduled_on"]
+  order = "scheduled_on asc, scheduled_start_minute asc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "scheduled_on", color = "technician_id" }
+  report = { rows = "technician_id", cols = "state" }
+
+  [[model.ui.section]]
+  label = "Job"
+  fields = ["name", "customer_id", "technician_id", "priority", "description"]
+
+  [[model.ui.section]]
+  label = "Customer and site"
+  fields = ["site_name", "site_address", "site_postcode", "site_city", "site_country", "site_contact_name", "site_contact_phone"]
+
+  [[model.ui.section]]
+  label = "Schedule"
+  fields = ["scheduled_on", "scheduled_start_minute", "planned_minutes"]
+
+  [[model.ui.section]]
+  label = "Sign-off"
+  fields = ["signature_required", "signed_by", "signed_on"]
+
+  [[model.ui.section]]
+  label = "Report"
+  fields = ["work_report"]
+
+  [[model.ui.filter]]
+  label = "Today"
+  where = "scheduled_on = today"
+
+  [[model.ui.filter]]
+  label = "Not done"
+  where = "state != done && state != cancelled"
+
+  [[model.child]]
+  model = "field_service_part"
+  via = "job_id"
+  shape = "lines"
+
+  [model.guard]
+  immutable_when = ["done", "cancelled"]
+  message = "A done or cancelled job cannot be changed. Schedule a follow-up job instead."
 
   [[model.field]]
   name = "name"
@@ -49,6 +101,8 @@ write_group = "field_service.user"
   class = "internal"
   personal_data = true
   kind = "longtext"
+  [model.field.ui]
+  display = "address"
 
   [[model.field]]
   name = "site_city"
@@ -78,6 +132,8 @@ write_group = "field_service.user"
   description = "Phone number of the person to meet on site"
   class = "internal"
   personal_data = true
+  [model.field.ui]
+  display = "tel"
 
   [[model.field]]
   name = "technician_id"
@@ -86,6 +142,7 @@ write_group = "field_service.user"
   personal_data = true
   kind = "ref"
   to = "hr_employee"
+  ref_filter = "state != offboarded"
 
   [[model.field]]
   name = "priority"
@@ -93,6 +150,9 @@ write_group = "field_service.user"
   class = "none"
   kind = "select"
   options = ["low", "normal", "high", "urgent"]
+  default = "normal"
+  [model.field.ui]
+  tones = { low = "neutral", normal = "neutral", high = "warn", urgent = "bad" }
 
   [[model.field]]
   name = "description"
@@ -105,18 +165,27 @@ write_group = "field_service.user"
   description = "Planned day of the visit (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  default = "today"
 
   [[model.field]]
   name = "scheduled_start_minute"
   description = "Planned start in minutes since midnight (540 is 09:00)"
   class = "none"
   kind = "number"
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
   [[model.field]]
   name = "planned_minutes"
   description = "Planned duration in minutes"
   class = "none"
   kind = "number"
+  min = 0
+  [model.field.ui]
+  display = "duration_minutes"
 
   [[model.field]]
   name = "signature_required"
@@ -149,6 +218,8 @@ write_group = "field_service.user"
   kind = "select"
   options = ["scheduled", "en_route", "in_progress", "done", "cancelled"]
   required = true
+  [model.field.ui]
+  tones = { scheduled = "info", en_route = "warn", in_progress = "warn", done = "ok", cancelled = "neutral" }
 
   [[model.action]]
   name = "depart"
@@ -156,6 +227,9 @@ write_group = "field_service.user"
   field = "state"
   from = "scheduled"
   to = "en_route"
+  [model.action.ui]
+  primary = true
+  done = "On the way"
 
   [[model.action]]
   name = "start"
@@ -163,6 +237,9 @@ write_group = "field_service.user"
   field = "state"
   from = "en_route"
   to = "in_progress"
+  [model.action.ui]
+  primary = true
+  done = "Work started"
 
   [[model.action]]
   name = "complete"
@@ -170,6 +247,11 @@ write_group = "field_service.user"
   field = "state"
   from = "in_progress"
   to = "done"
+  assert = [{ expr = "!signature_required || (is_set(signed_by) && is_set(signed_on))", message = "The customer has to sign off this job first: fill in who signed and on which day", key = "signed" }]
+  [model.action.ui]
+  primary = true
+  confirm = "Complete this job? A done job can no longer be changed."
+  done = "Job done"
 
   [[model.action]]
   name = "cancel"
@@ -178,12 +260,25 @@ write_group = "field_service.user"
   from = "scheduled"
   to = "cancelled"
   group = "field_service.manager"
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this job? It can no longer be changed afterwards."
 
 [[model]]
 name = "field_service_part"
 description = "A part or product used on a job"
 read_group = "field_service.user"
 write_group = "field_service.user"
+
+  [model.ui]
+  title = "{product_id} × {quantity}"
+  list = ["product_id", "quantity", "unit_price", "note"]
+  quick_create = ["product_id", "quantity"]
+  menu = "hidden"
+
+  [model.guard]
+  children_of = "job_id"
+  message = "The parts of a done or cancelled job cannot be changed."
 
   [[model.field]]
   name = "job_id"
@@ -210,9 +305,12 @@ write_group = "field_service.user"
 
   [[model.field]]
   name = "unit_price"
-  description = "Price per unit charged to the customer (minor currency units, e.g. cents)"
+  description = "Price per unit charged to the customer (minor currency units, e.g. cents); the product's list price unless given"
   class = "none"
   kind = "money"
+  fill_from = "product_id.list_price_minor"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "note"
