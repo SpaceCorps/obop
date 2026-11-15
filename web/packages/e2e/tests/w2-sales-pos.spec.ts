@@ -84,7 +84,7 @@ test.describe("point of sale register", () => {
       await expect(page.locator(".print-sheet .pos-receipt-paper")).toContainText(
         "2 × " + product.name,
       );
-      await page.emulateMedia({ media: "screen" });
+      await page.emulateMedia({ media: null });
 
       const orders = (await api.list("root", "pos_order")).filter(
         (o) => o.state === "paid" && o.total === 49800,

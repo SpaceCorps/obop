@@ -33,7 +33,7 @@ async function onPaper(page: Page) {
       brightness: ((red ?? 0) + (green ?? 0) + (blue ?? 0)) / 3,
     };
   });
-  await page.emulateMedia({ media: "screen" });
+  await page.emulateMedia({ media: null });
   return out;
 }
 
