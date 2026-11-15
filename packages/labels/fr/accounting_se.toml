@@ -4,6 +4,7 @@ description = "Localisation suédoise de la comptabilité : données de l'entrep
 
 [labels.fr.model.accounting_se_company]
 name = "Entreprise"
+plural = "Entreprise"
 description = "L'entreprise suédoise à laquelle appartiennent les livres ; normalement un enregistrement"
 
 [labels.fr.model.accounting_se_company.field.name]
@@ -49,6 +50,7 @@ description = "E-mail de contact pour la comptabilité"
 
 [labels.fr.model.accounting_se_voucher_series]
 name = "Série de pièces"
+plural = "Séries de pièces"
 description = "Une série de pièces, une lettre comme A qui regroupe les pièces d'un même type"
 
 [labels.fr.model.accounting_se_voucher_series.field.code]
@@ -77,6 +79,7 @@ description = "Remarques sur l'utilisation de la série"
 
 [labels.fr.model.accounting_se_vat_box]
 name = "Case de TVA"
+plural = "Cases de TVA"
 description = "Une case de la déclaration de TVA suédoise. NON VÉRIFIÉE tant qu'elle n'a pas été contrôlée avec SKV 4700"
 
 [labels.fr.model.accounting_se_vat_box.field.box]
@@ -115,11 +118,11 @@ description = "Si la case a été vérifiée par le propriétaire ; faux jusque-
 
 [labels.fr.model.accounting_se_vat_box.field.verified_by]
 label = "Vérifiée par"
-description = "Identifiant de la personne qui a vérifié"
+description = "Identifiant de la personne qui a vérifié ; enregistré par l’action Vérifier"
 
 [labels.fr.model.accounting_se_vat_box.field.verified_on]
 label = "Vérifiée le"
-description = "Date de la vérification (AAAA-MM-JJ)"
+description = "Date de la vérification (AAAA-MM-JJ) ; enregistrée par l’action Vérifier"
 
 [labels.fr.model.accounting_se_vat_box.field.source]
 label = "Source"
@@ -127,7 +130,7 @@ description = "D'où vient la case et ce qui a été contrôlé, par exemple l'�
 
 [labels.fr.model.accounting_se_vat_box.action.verify]
 label = "Vérifier"
-description = "Marquer la case comme contrôlée avec SKV 4700 (approbateur uniquement)"
+description = "Marquer la case comme contrôlée avec SKV 4700 (approbateur uniquement) ; enregistre qui a vérifié et quand"
 
 [labels.fr.model.accounting_se_vat_box.action.unverify]
 label = "Annuler la vérification"
@@ -135,6 +138,7 @@ description = "Retirer la vérification de la case (approbateur uniquement)"
 
 [labels.fr.model.accounting_se_vat_code]
 name = "Code de TVA"
+plural = "Codes de TVA"
 description = "Un code de TVA qu'une ligne du grand livre peut porter, relié à une case de base, une case de TVA et des comptes. NON VÉRIFIÉ tant qu'il n'a pas été contrôlé avec SKV 4700"
 
 [labels.fr.model.accounting_se_vat_code.field.code]
@@ -214,11 +218,11 @@ description = "Si le code a été vérifié par le propriétaire ; faux jusque-l
 
 [labels.fr.model.accounting_se_vat_code.field.verified_by]
 label = "Vérifié par"
-description = "Identifiant de la personne qui a vérifié"
+description = "Identifiant de la personne qui a vérifié ; enregistré par l’action Vérifier"
 
 [labels.fr.model.accounting_se_vat_code.field.verified_on]
 label = "Vérifié le"
-description = "Date de la vérification (AAAA-MM-JJ)"
+description = "Date de la vérification (AAAA-MM-JJ) ; enregistrée par l’action Vérifier"
 
 [labels.fr.model.accounting_se_vat_code.field.source]
 label = "Source"
@@ -226,7 +230,7 @@ description = "D'où vient le code et ce qui a été contrôlé, par exemple l'�
 
 [labels.fr.model.accounting_se_vat_code.action.verify]
 label = "Vérifier"
-description = "Marquer le code comme contrôlé avec SKV 4700 (approbateur uniquement)"
+description = "Marquer le code comme contrôlé avec SKV 4700 (approbateur uniquement) ; enregistre qui a vérifié et quand"
 
 [labels.fr.model.accounting_se_vat_code.action.unverify]
 label = "Annuler la vérification"
@@ -234,6 +238,7 @@ description = "Retirer la vérification du code (approbateur uniquement)"
 
 [labels.fr.model.accounting_se_vat_report]
 name = "Rapport de TVA"
+plural = "Rapports de TVA"
 description = "Un rapport de TVA pour une période, établi à partir du grand livre et approuvé par une personne avant usage. NON VÉRIFIÉ : non comparé à SKV 4700 par ce paquet"
 
 [labels.fr.model.accounting_se_vat_report.field.name]
@@ -316,6 +321,7 @@ description = "Enregistrer que la déclaration a été déposée auprès de Skat
 
 [labels.fr.model.accounting_se_vat_report_line]
 name = "Ligne de rapport de TVA"
+plural = "Lignes de rapport de TVA"
 description = "Une case d'un rapport de TVA avec son montant"
 
 [labels.fr.model.accounting_se_vat_report_line.field.report_id]

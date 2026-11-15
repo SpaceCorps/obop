@@ -1,10 +1,11 @@
 [labels.fr.module]
 name = "Fabrication"
-description = "Nomenclatures et ordres de fabrication avec un flux brouillon, confirmé, en cours et terminé. Le stock des composants n’est pas consommé automatiquement."
+description = "Nomenclatures et ordres de fabrication avec un flux brouillon, confirmé, en cours et terminé. Le stock des composants n’est pas consommé automatiquement. Un ordre terminé ou annulé est figé."
 summary = "Nomenclatures et ordres de fabrication avec un flux brouillon, confirmé, en cours et terminé."
 
 [labels.fr.model.manufacturing_bom]
 name = "Nomenclature"
+plural = "Nomenclatures"
 description = "Une recette : les composants nécessaires pour fabriquer un produit"
 
 [labels.fr.model.manufacturing_bom.field.product_id]
@@ -29,6 +30,7 @@ description = "Indique si la recette peut servir pour de nouveaux ordres"
 
 [labels.fr.model.manufacturing_bom_line]
 name = "Ligne de nomenclature"
+plural = "Composants"
 description = "Un composant d’une nomenclature"
 
 [labels.fr.model.manufacturing_bom_line.field.bom_id]
@@ -45,6 +47,7 @@ description = "Unités du composant utilisées par cycle"
 
 [labels.fr.model.manufacturing_order]
 name = "Ordre de fabrication"
+plural = "Ordres de fabrication"
 description = "Une instruction de produire une quantité d’un produit"
 
 [labels.fr.model.manufacturing_order.field.reference]

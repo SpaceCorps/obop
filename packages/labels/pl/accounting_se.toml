@@ -4,6 +4,7 @@ description = "Szwedzka lokalizacja księgowości: dane firmy, serie dowodów, k
 
 [labels.pl.model.accounting_se_company]
 name = "Firma"
+plural = "Firma"
 description = "Szwedzka firma, do której należą księgi; zwykle jeden rekord"
 
 [labels.pl.model.accounting_se_company.field.name]
@@ -49,6 +50,7 @@ description = "E-mail kontaktowy w sprawach księgowości"
 
 [labels.pl.model.accounting_se_voucher_series]
 name = "Seria dowodów"
+plural = "Serie dowodów"
 description = "Seria dowodów, litera jak A, która grupuje dowody jednego rodzaju"
 
 [labels.pl.model.accounting_se_voucher_series.field.code]
@@ -77,6 +79,7 @@ description = "Uwagi o tym, jak używana jest seria"
 
 [labels.pl.model.accounting_se_vat_box]
 name = "Pole VAT"
+plural = "Pola VAT"
 description = "Pole szwedzkiej deklaracji VAT. NIEZWERYFIKOWANE, dopóki nie sprawdzono go z SKV 4700"
 
 [labels.pl.model.accounting_se_vat_box.field.box]
@@ -115,11 +118,11 @@ description = "Czy pole zweryfikował właściciel; do tego czasu fałsz"
 
 [labels.pl.model.accounting_se_vat_box.field.verified_by]
 label = "Zweryfikował"
-description = "Nazwa logowania osoby, która zweryfikowała"
+description = "Nazwa logowania osoby, która zweryfikowała; zapisywana przy weryfikacji"
 
 [labels.pl.model.accounting_se_vat_box.field.verified_on]
 label = "Zweryfikowano dnia"
-description = "Data weryfikacji (RRRR-MM-DD)"
+description = "Data weryfikacji (RRRR-MM-DD); zapisywana przy weryfikacji"
 
 [labels.pl.model.accounting_se_vat_box.field.source]
 label = "Źródło"
@@ -127,7 +130,7 @@ description = "Skąd pochodzi pole i co sprawdzono, na przykład wydanie SKV 470
 
 [labels.pl.model.accounting_se_vat_box.action.verify]
 label = "Zweryfikuj"
-description = "Oznacz pole jako sprawdzone z SKV 4700 (tylko zatwierdzający)"
+description = "Oznacz pole jako sprawdzone z SKV 4700 (tylko zatwierdzający); zapisuje, kto i kiedy zweryfikował"
 
 [labels.pl.model.accounting_se_vat_box.action.unverify]
 label = "Cofnij weryfikację"
@@ -135,6 +138,7 @@ description = "Wycofaj weryfikację pola (tylko zatwierdzający)"
 
 [labels.pl.model.accounting_se_vat_code]
 name = "Kod VAT"
+plural = "Kody VAT"
 description = "Kod VAT, który może nosić wiersz księgi głównej, powiązany z polem podstawy, polem VAT i kontami. NIEZWERYFIKOWANY, dopóki nie sprawdzono go z SKV 4700"
 
 [labels.pl.model.accounting_se_vat_code.field.code]
@@ -214,11 +218,11 @@ description = "Czy kod zweryfikował właściciel; do tego czasu fałsz"
 
 [labels.pl.model.accounting_se_vat_code.field.verified_by]
 label = "Zweryfikował"
-description = "Nazwa logowania osoby, która zweryfikowała"
+description = "Nazwa logowania osoby, która zweryfikowała; zapisywana przy weryfikacji"
 
 [labels.pl.model.accounting_se_vat_code.field.verified_on]
 label = "Zweryfikowano dnia"
-description = "Data weryfikacji (RRRR-MM-DD)"
+description = "Data weryfikacji (RRRR-MM-DD); zapisywana przy weryfikacji"
 
 [labels.pl.model.accounting_se_vat_code.field.source]
 label = "Źródło"
@@ -226,7 +230,7 @@ description = "Skąd pochodzi kod i co sprawdzono, na przykład wydanie SKV 4700
 
 [labels.pl.model.accounting_se_vat_code.action.verify]
 label = "Zweryfikuj"
-description = "Oznacz kod jako sprawdzony z SKV 4700 (tylko zatwierdzający)"
+description = "Oznacz kod jako sprawdzony z SKV 4700 (tylko zatwierdzający); zapisuje, kto i kiedy zweryfikował"
 
 [labels.pl.model.accounting_se_vat_code.action.unverify]
 label = "Cofnij weryfikację"
@@ -234,6 +238,7 @@ description = "Wycofaj weryfikację kodu (tylko zatwierdzający)"
 
 [labels.pl.model.accounting_se_vat_report]
 name = "Raport VAT"
+plural = "Raporty VAT"
 description = "Raport VAT za okres, przygotowany z księgi głównej i zatwierdzony przez osobę przed użyciem. NIEZWERYFIKOWANY: ten pakiet nie porównał go z SKV 4700"
 
 [labels.pl.model.accounting_se_vat_report.field.name]
@@ -316,6 +321,7 @@ description = "Zapisz, że deklarację złożono w Skatteverket poza tym systeme
 
 [labels.pl.model.accounting_se_vat_report_line]
 name = "Wiersz raportu VAT"
+plural = "Wiersze raportu VAT"
 description = "Pole raportu VAT z jego kwotą"
 
 [labels.pl.model.accounting_se_vat_report_line.field.report_id]

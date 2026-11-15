@@ -1,10 +1,11 @@
 [labels.fi.module]
 name = "Varastonhallinta"
-description = "Varastot, varastopaikat, varastosaldot ja varastosiirrot. Siirron vahvistaminen vähentää määrän lähtöpaikan saldosta ja lisää sen kohdepaikan saldoon yhdellä kertaa; puuttuva saldorivi luodaan. Yksi rivi per tuote, paikka ja erä; negatiiviset määrät sallitaan."
+description = "Varastot, varastopaikat, varastosaldot ja varastosiirrot. Siirron vahvistaminen vähentää määrän lähtöpaikan saldosta ja lisää sen kohdepaikan saldoon yhdellä kertaa; puuttuva saldorivi luodaan. Yksi rivi per tuote, paikka ja erä; negatiiviset määrät sallitaan. Määrä muuttuu vain siirroilla; valmiit ja perutut siirrot lukitaan."
 summary = "Varastot, varastopaikat, varastosaldot ja varastosiirrot."
 
 [labels.fi.model.inventory_warehouse]
 name = "Varasto"
+plural = "Varastot"
 description = "Rakennus tai toimipaikka, jossa tavaraa säilytetään"
 
 [labels.fi.model.inventory_warehouse.field.name]
@@ -25,6 +26,7 @@ description = "Onko varasto käytössä"
 
 [labels.fi.model.inventory_location]
 name = "Sijainti"
+plural = "Sijainnit"
 description = "Varaston sisäinen paikka, jossa tavaraa voi olla"
 
 [labels.fi.model.inventory_location.field.name]
@@ -52,6 +54,7 @@ description = "Onko varastopaikka käytössä"
 
 [labels.fi.model.inventory_item]
 name = "Varastosaldo"
+plural = "Varastosaldot"
 description = "Yhden tuotteen määrä yhdessä varastopaikassa"
 
 [labels.fi.model.inventory_item.field.product_id]
@@ -64,7 +67,7 @@ description = "Missä tuotetta säilytetään"
 
 [labels.fi.model.inventory_item.field.quantity]
 label = "Määrä"
-description = "Käsillä olevat yksiköt"
+description = "Käsillä olevat yksiköt; muuttuu vain vahvistetuilla varastosiirroilla"
 
 [labels.fi.model.inventory_item.field.reorder_level]
 label = "Tilauspiste"
@@ -76,6 +79,7 @@ description = "Erän tai eränumero, jos sitä seurataan"
 
 [labels.fi.model.inventory_move]
 name = "Varastosiirto"
+plural = "Varastosiirrot"
 description = "Tuotteen siirto varastopaikkojen välillä tai yritykseen tai sieltä pois"
 
 [labels.fi.model.inventory_move.field.reference]
@@ -118,3 +122,7 @@ description = "Vahvista, että tavara todella siirtyi: määrä poistuu lähtör
 [labels.fi.model.inventory_move.action.cancel]
 label = "Peruuta"
 description = "Peruuta luonnossiirto"
+
+[labels.fi.model.inventory_item.field.below_reorder]
+description = "Onko määrä tilauspisteessä tai sen alla (ei, jos tilauspistettä ei ole asetettu)"
+label = "Vähissä"

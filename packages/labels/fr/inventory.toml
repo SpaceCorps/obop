@@ -1,10 +1,11 @@
 [labels.fr.module]
 name = "Inventaire"
-description = "Entrepôts, emplacements, niveaux de stock et mouvements de stock. Valider un mouvement retire la quantité de l’article source et l’ajoute à l’article de destination en une étape ; un article manquant est créé. Un article par produit, emplacement et lot. Les quantités négatives sont admises, par exemple pour les fournisseurs."
+description = "Entrepôts, emplacements, niveaux et mouvements de stock. Valider un mouvement retire la quantité de l’article source et l’ajoute à la destination en une étape ; un article manquant est créé. Un article par produit, emplacement et lot ; les quantités négatives sont admises. La quantité ne change que par des mouvements ; un mouvement fait ou annulé est figé."
 summary = "Entrepôts, emplacements de stock, niveaux de stock et mouvements de stock."
 
 [labels.fr.model.inventory_warehouse]
 name = "Entrepôt"
+plural = "Entrepôts"
 description = "Un bâtiment ou un site où le stock est conservé"
 
 [labels.fr.model.inventory_warehouse.field.name]
@@ -25,6 +26,7 @@ description = "Indique si l’entrepôt est utilisé"
 
 [labels.fr.model.inventory_location]
 name = "Emplacement"
+plural = "Emplacements"
 description = "Un endroit d’un entrepôt où du stock peut être placé"
 
 [labels.fr.model.inventory_location.field.name]
@@ -52,6 +54,7 @@ description = "Indique si l’emplacement est utilisé"
 
 [labels.fr.model.inventory_item]
 name = "Stock"
+plural = "Stock"
 description = "La quantité d’un produit conservée à un emplacement"
 
 [labels.fr.model.inventory_item.field.product_id]
@@ -64,7 +67,7 @@ description = "Où il est conservé"
 
 [labels.fr.model.inventory_item.field.quantity]
 label = "Quantité"
-description = "Unités en stock"
+description = "Unités en stock ; modifiées uniquement par des mouvements validés"
 
 [labels.fr.model.inventory_item.field.reorder_level]
 label = "Seuil de réapprovisionnement"
@@ -76,6 +79,7 @@ description = "Numéro de lot, s’il est suivi"
 
 [labels.fr.model.inventory_move]
 name = "Mouvement"
+plural = "Mouvements de stock"
 description = "Un déplacement de produit entre emplacements, ou vers l’entreprise ou hors de celle-ci"
 
 [labels.fr.model.inventory_move.field.reference]
@@ -118,3 +122,7 @@ description = "Confirme que les marchandises ont réellement bougé : la quantit
 [labels.fr.model.inventory_move.action.cancel]
 label = "Annuler"
 description = "Annule un mouvement en brouillon"
+
+[labels.fr.model.inventory_item.field.below_reorder]
+description = "Indique si la quantité est au niveau de réapprovisionnement ou en dessous (non si aucun niveau n’est défini)"
+label = "Stock bas"

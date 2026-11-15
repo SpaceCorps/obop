@@ -5,6 +5,7 @@ summary = "Plan kont, dzienniki, podatki, okresy obrotowe i operacje księgowe. 
 
 [labels.pl.model.accounting_account]
 name = "Konto"
+plural = "Plan kont"
 description = "Konto planu kont"
 
 [labels.pl.model.accounting_account.field.code]
@@ -47,6 +48,7 @@ description = "Wewnętrzne uwagi o sposobie używania konta"
 
 [labels.pl.model.accounting_journal]
 name = "Dziennik"
+plural = "Dzienniki"
 description = "Dziennik grupujący operacje jednego rodzaju (sprzedaż, zakupy, bank, kasa, różne)"
 
 [labels.pl.model.accounting_journal.field.name]
@@ -82,6 +84,7 @@ description = "Czy dziennik może jeszcze przyjmować operacje"
 
 [labels.pl.model.accounting_tax]
 name = "Podatek"
+plural = "Podatki"
 description = "Stawka podatku, do której mogą odwoływać się pozycje operacji"
 
 [labels.pl.model.accounting_tax.field.name]
@@ -115,6 +118,7 @@ description = "Czy podatek można jeszcze wybierać w nowych pozycjach"
 
 [labels.pl.model.accounting_fiscal_year]
 name = "Rok obrotowy"
+plural = "Lata obrotowe"
 description = "Rok obrotowy, otwierany i zamykany w całości"
 
 [labels.pl.model.accounting_fiscal_year.field.name]
@@ -147,6 +151,7 @@ description = "Otwiera ponownie zamknięty rok obrotowy w celu korekty (tylko os
 
 [labels.pl.model.accounting_period]
 name = "Okres"
+plural = "Okresy"
 description = "Okres księgowy (zwykle miesiąc) w ramach roku obrotowego"
 
 [labels.pl.model.accounting_period.field.fiscal_year_id]
@@ -183,6 +188,7 @@ description = "Otwiera ponownie zamknięty okres (tylko osoba zatwierdzająca)"
 
 [labels.pl.model.accounting_move]
 name = "Operacja"
+plural = "Operacje"
 description = "Operacja księgowa: datowany zestaw pozycji winien i ma w jednym dzienniku"
 
 [labels.pl.model.accounting_move.field.journal_id]
@@ -221,7 +227,7 @@ reversed = "Wystornowane"
 
 [labels.pl.model.accounting_move.action.post]
 label = "Zaksięguj"
-description = "Księguje roboczą operację w księdze i nadaje jej numer (tylko osoba zatwierdzająca; odrzucane, gdy winien nie równa się ma)"
+description = "Księguje roboczą operację w księdze i nadaje jej numer (tylko osoba zatwierdzająca; odrzucane bez kwoty lub gdy winien nie równa się ma)"
 
 [labels.pl.model.accounting_move.action.cancel]
 label = "Anuluj"
@@ -233,6 +239,7 @@ description = "Oznacza zaksięgowaną operację jako wystornowaną; operacja prz
 
 [labels.pl.model.accounting_move_line]
 name = "Pozycja operacji"
+plural = "Pozycje operacji"
 description = "Jedna pozycja winien lub ma operacji księgowej"
 
 [labels.pl.model.accounting_move_line.field.move_id]
@@ -273,6 +280,7 @@ description = "Czy pozycję dopasowano do płatności"
 
 [labels.pl.model.accounting_bank_statement_line]
 name = "Pozycja wyciągu bankowego"
+plural = "Pozycje wyciągu bankowego"
 description = "Pozycja wyciągu bankowego oczekująca na dopasowanie do operacji"
 
 [labels.pl.model.accounting_bank_statement_line.field.journal_id]
@@ -314,7 +322,7 @@ reconciled = "Uzgodnione"
 
 [labels.pl.model.accounting_bank_statement_line.action.match]
 label = "Dopasuj"
-description = "Rejestruje, że pozycja odpowiada pozycji operacji"
+description = "Rejestruje, że pozycja odpowiada pozycji operacji wskazanej w move_line_id"
 
 [labels.pl.model.accounting_bank_statement_line.action.reconcile]
 label = "Uzgodnij"
@@ -331,3 +339,12 @@ description = "Suma kwot po stronie winien pozycji operacji (w jednostkach podrz
 [labels.pl.model.accounting_move.field.total_credit]
 label = "Suma ma"
 description = "Suma kwot po stronie ma pozycji operacji (w jednostkach podrzędnych waluty)"
+
+[labels.pl.model.accounting_move.action.post.assert.has_amount]
+message = "Operacja nie ma kwoty: przed zaksięgowaniem dodaj pozycje winien i ma"
+
+[labels.pl.model.accounting_move.action.post.assert.balanced]
+message = "Operacja się nie bilansuje: suma winien i suma ma muszą być równe"
+
+[labels.pl.model.accounting_bank_statement_line.action.match.assert.has_line]
+message = "Wybierz pozycję operacji, do której należy ta transakcja bankowa"

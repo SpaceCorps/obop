@@ -1,2 +1,29 @@
 # English names and plurals of manufacturing (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.manufacturing_bom]
+name = "Bill of materials"
+plural = "Bills of materials"
+
+[labels.en.model.manufacturing_bom.field.quantity]
+label = "Quantity per run"
+
+[labels.en.model.manufacturing_bom_line]
+name = "Component"
+plural = "Components"
+
+[labels.en.model.manufacturing_bom_line.field.bom_id]
+label = "Bill of materials"
+
+[labels.en.model.manufacturing_bom_line.field.component_id]
+label = "Component"
+
+[labels.en.model.manufacturing_order]
+name = "Manufacturing order"
+plural = "Manufacturing orders"
+
+[labels.en.model.manufacturing_order.field.bom_id]
+label = "Bill of materials"
+
+[labels.en.model.manufacturing_order.field.planned_on]
+label = "Planned start"

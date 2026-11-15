@@ -1,6 +1,6 @@
 [module]
 id = "accounting"
-version = "0.3.0"
+version = "0.3.1"
 name = "Accounting"
 description = "Chart of accounts, journals, tax rates, journal entries with debit and credit lines, fiscal years and periods, and bank statement lines. Amounts are money fields in minor currency units and tax rates are numbers in basis points (2000 means 20.00 percent). An entry shows its total debit and total credit, and posting is refused unless they are equal; a posted entry gets the next number of a gapless yearly series. Tax amounts are still entered by whoever books the entry. Account and journal codes are unique. Posting an entry and closing a period or fiscal year need a human approval and the stricter accounting.approver group; agents may only propose them."
 author = "SpaceCorps"
@@ -11,7 +11,9 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["accounting", "ledger", "journal", "tax"]
 categories = ["finance"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+home = "overview"
+changelog = "Journal entries are frozen once posted, cancelled or reversed, and so are their lines and every entry dated in a closed period; closed periods and fiscal years are frozen until they are reopened. An entry with no amount is no longer posted, and a bank transaction is matched only to a journal item that is named. English business names, list, card and form hints, and defaults (today, debit and credit 0, active). Inactive journals and taxes are no longer offered for new entries; journals and taxes whose active flag was never set become active."
 
 [module.dependencies]
 base = "^0.2"
@@ -21,6 +23,23 @@ name = "accounting_account"
 description = "An account of the chart of accounts"
 read_group = "accounting.user"
 write_group = "accounting.manager"
+
+  [model.ui]
+  title = "{code} {name}"
+  list = ["code", "name", "account_type", "reconcile", "deprecated"]
+  quick_create = ["code", "name", "account_type"]
+  order = "code asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 1
+
+  [[model.ui.filter]]
+  label = "Reconcilable"
+  where = "reconcile = true"
+
+  [[model.ui.filter]]
+  label = "In use"
+  where = "deprecated = false"
 
   [[model.field]]
   name = "code"
@@ -67,6 +86,16 @@ description = "A journal that groups entries of one kind (sales, purchases, bank
 read_group = "accounting.user"
 write_group = "accounting.manager"
 
+  [model.ui]
+  title = "{name}"
+  subtitle = "{code} · {kind}"
+  list = ["code", "name", "kind", "default_account_id", "currency", "active"]
+  quick_create = ["name", "code", "kind"]
+  order = "code asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 2
+
   [[model.field]]
   name = "name"
   description = "Journal name, for example Customer invoices"
@@ -105,12 +134,22 @@ write_group = "accounting.manager"
   description = "Whether the journal can still receive entries"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "accounting_tax"
 description = "A tax rate that entry lines can refer to"
 read_group = "accounting.user"
 write_group = "accounting.manager"
+
+  [model.ui]
+  title = "{name}"
+  list = ["name", "rate_bp", "scope", "price_included", "tax_account_id", "active"]
+  quick_create = ["name", "rate_bp", "scope"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 3
 
   [[model.field]]
   name = "name"
@@ -124,6 +163,10 @@ write_group = "accounting.manager"
   class = "none"
   kind = "number"
   required = true
+
+    [model.field.ui]
+    display = "percent_bp"
+    aggregate = "none"
 
   [[model.field]]
   name = "scope"
@@ -151,12 +194,26 @@ write_group = "accounting.manager"
   description = "Whether the tax can still be chosen on new lines"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "accounting_fiscal_year"
 description = "A fiscal year, opened and closed as a whole"
 read_group = "accounting.user"
 write_group = "accounting.manager"
+
+  [model.ui]
+  title = "{name}"
+  list = ["name", "start_on", "end_on", "state"]
+  order = "start_on desc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 4
+
+  [model.guard]
+  immutable_when = ["closed"]
+  exit_to = ["open"]
+  message = "A closed fiscal year cannot be changed. Reopen it to correct it."
 
   [[model.field]]
   name = "name"
@@ -186,6 +243,9 @@ write_group = "accounting.manager"
   options = ["open", "closed"]
   required = true
 
+    [model.field.ui]
+    tones = { open = "ok", closed = "neutral" }
+
   [[model.action]]
   name = "close"
   description = "Close the fiscal year so nothing more is posted in it (approver only)"
@@ -194,6 +254,11 @@ write_group = "accounting.manager"
   to = "closed"
   group = "accounting.approver"
   approval = true
+
+    [model.action.ui]
+    primary = true
+    confirm = "Close this fiscal year? It can no longer be changed until it is reopened."
+    done = "Fiscal year closed"
 
   [[model.action]]
   name = "reopen"
@@ -204,11 +269,34 @@ write_group = "accounting.manager"
   group = "accounting.approver"
   approval = true
 
+    [model.action.ui]
+    danger = true
+    confirm = "Reopen this closed fiscal year?"
+    done = "Fiscal year reopened"
+
 [[model]]
 name = "accounting_period"
 description = "An accounting period (normally a month) inside a fiscal year"
 read_group = "accounting.user"
 write_group = "accounting.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{fiscal_year_id}"
+  list = ["name", "fiscal_year_id", "start_on", "end_on", "state"]
+  order = "start_on desc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 5
+
+  [[model.ui.filter]]
+  label = "Open"
+  where = "state = open"
+
+  [model.guard]
+  immutable_when = ["closed"]
+  exit_to = ["open"]
+  message = "A closed period cannot be changed. Reopen it to correct it."
 
   [[model.field]]
   name = "fiscal_year_id"
@@ -246,6 +334,9 @@ write_group = "accounting.manager"
   options = ["open", "closed"]
   required = true
 
+    [model.field.ui]
+    tones = { open = "ok", closed = "neutral" }
+
   [[model.action]]
   name = "close"
   description = "Close the period against further posting (approver only)"
@@ -254,6 +345,11 @@ write_group = "accounting.manager"
   to = "closed"
   group = "accounting.approver"
   approval = true
+
+    [model.action.ui]
+    primary = true
+    confirm = "Close this period? Entries dated in it can no longer be posted or changed."
+    done = "Period closed"
 
   [[model.action]]
   name = "reopen"
@@ -264,11 +360,50 @@ write_group = "accounting.manager"
   group = "accounting.approver"
   approval = true
 
+    [model.action.ui]
+    danger = true
+    confirm = "Reopen this period? Draft entries dated in it can be changed and posted again."
+    done = "Period reopened"
+
 [[model]]
 name = "accounting_move"
 description = "A journal entry: a dated set of debit and credit lines in one journal"
 read_group = "accounting.user"
 write_group = "accounting.user"
+
+  [model.ui]
+  title = "{number}"
+  subtitle = "{journal_id} · {date}"
+  list = ["number", "date", "journal_id", "partner_id", "reference", "total_debit", "state"]
+  card = ["number", "date", "journal_id", "partner_id", "total_debit"]
+  card_sum = "total_debit"
+  quick_create = ["journal_id", "date", "reference"]
+  order = "date desc, number desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "date", color = "journal_id" }
+  report = { rows = "journal_id", cols = "state", measure = "total_debit" }
+
+  [[model.child]]
+  model = "accounting_move_line"
+  via = "move_id"
+  shape = "lines"
+
+  [[model.ui.filter]]
+  label = "Drafts"
+  where = "state = draft"
+
+  [[model.ui.filter]]
+  label = "Posted"
+  where = "state = posted"
+
+  [model.guard]
+  immutable_when = ["posted", "cancelled", "reversed"]
+  mutable_fields = ["narration"]
+  exit_to = ["reversed"]
+  lock_date = { field = "date", closed_by = "accounting_period" }
+  message = "Posted, cancelled and reversed entries, and entries dated in a closed period, cannot be changed. Reverse a posted entry to correct it."
 
   [[model.field]]
   name = "journal_id"
@@ -277,6 +412,7 @@ write_group = "accounting.user"
   kind = "ref"
   to = "accounting_journal"
   required = true
+  ref_filter = "active = true"
 
   [[model.field]]
   name = "date"
@@ -284,6 +420,7 @@ write_group = "accounting.user"
   class = "none"
   kind = "date"
   required = true
+  default = "today"
 
   [[model.field]]
   name = "number"
@@ -320,12 +457,18 @@ write_group = "accounting.user"
   kind = "money"
   computed = "sum(lines.debit)"
 
+    [model.field.ui]
+    currency_from = "journal_id.currency"
+
   [[model.field]]
   name = "total_credit"
   description = "Sum of the credit amounts of the entry's lines (minor currency units)"
   class = "financial"
   kind = "money"
   computed = "sum(lines.credit)"
+
+    [model.field.ui]
+    currency_from = "journal_id.currency"
 
   [[model.field]]
   name = "state"
@@ -335,15 +478,26 @@ write_group = "accounting.user"
   options = ["draft", "posted", "cancelled", "reversed"]
   required = true
 
+    [model.field.ui]
+    tones = { posted = "ok", cancelled = "neutral", reversed = "neutral" }
+
   [[model.action]]
   name = "post"
-  description = "Post a draft entry to the ledger and number it (approver only; refused unless debits equal credits)"
+  description = "Post a draft entry to the ledger and number it (approver only; refused unless it has an amount and debits equal credits)"
   field = "state"
   from = "draft"
   to = "posted"
   group = "accounting.approver"
   approval = true
-  assert = [{ expr = "total_debit == total_credit", message = "The entry does not balance: total debit and total credit must be equal" }]
+  assert = [
+    { expr = "total_debit > 0", message = "The entry has no amount: add debit and credit lines before posting it", key = "has_amount" },
+    { expr = "total_debit == total_credit", message = "The entry does not balance: total debit and total credit must be equal", key = "balanced" },
+  ]
+
+    [model.action.ui]
+    primary = true
+    confirm = "Post this entry? It gets its number and can no longer be changed."
+    done = "Entry posted"
 
   [[model.action]]
   name = "cancel"
@@ -351,6 +505,11 @@ write_group = "accounting.user"
   field = "state"
   from = "draft"
   to = "cancelled"
+
+    [model.action.ui]
+    danger = true
+    confirm = "Cancel this draft entry?"
+    done = "Entry cancelled"
 
   [[model.action]]
   name = "reverse"
@@ -361,11 +520,42 @@ write_group = "accounting.user"
   group = "accounting.approver"
   approval = true
 
+    [model.action.ui]
+    danger = true
+    confirm = "Mark this entry as reversed? Book the opposite entry separately."
+    done = "Entry marked as reversed"
+
 [[model]]
 name = "accounting_move_line"
 description = "One debit or credit line of a journal entry"
 read_group = "accounting.user"
 write_group = "accounting.user"
+
+  [model.ui]
+  title = "{account_id} · {label} | {account_id}"
+  subtitle = "{move_id}"
+  list = ["move_id", "account_id", "partner_id", "label", "debit", "credit", "tax_id", "due_on", "reconciled"]
+  quick_create = ["account_id", "label", "debit", "credit"]
+  default_view = "list"
+  menu = "reporting"
+  menu_order = 1
+  report = { rows = "account_id", measure = "debit" }
+
+  [[model.ui.filter]]
+  label = "Open items"
+  where = "reconciled = false"
+
+  [[model.ui.filter]]
+  label = "Overdue"
+  where = "due_on < today && reconciled = false"
+
+  [[model.ui.filter]]
+  label = "Due in 30 days"
+  where = "due_on <= today+30 && reconciled = false"
+
+  [model.guard]
+  children_of = "move_id"
+  message = "The lines of a posted, cancelled or reversed entry, or of an entry dated in a closed period, cannot be changed."
 
   [[model.field]]
   name = "move_id"
@@ -389,6 +579,7 @@ write_group = "accounting.user"
   class = "none"
   kind = "ref"
   to = "party"
+  fill_from = "move_id.partner_id"
 
   [[model.field]]
   name = "label"
@@ -401,6 +592,7 @@ write_group = "accounting.user"
   class = "financial"
   kind = "money"
   required = true
+  default = 0
 
   [[model.field]]
   name = "credit"
@@ -408,6 +600,7 @@ write_group = "accounting.user"
   class = "financial"
   kind = "money"
   required = true
+  default = 0
 
   [[model.field]]
   name = "tax_id"
@@ -415,12 +608,16 @@ write_group = "accounting.user"
   class = "none"
   kind = "ref"
   to = "accounting_tax"
+  ref_filter = "active = true"
 
   [[model.field]]
   name = "due_on"
   description = "Due date for receivable and payable lines (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+
+    [model.field.ui]
+    warn_before_days = 7
 
   [[model.field]]
   name = "reconciled"
@@ -434,6 +631,26 @@ description = "A line of a bank statement waiting to be matched to entries"
 read_group = "accounting.user"
 write_group = "accounting.user"
 
+  [model.ui]
+  title = "{label}"
+  subtitle = "{date} · {journal_id}"
+  list = ["date", "journal_id", "label", "counterparty_name", "amount", "move_line_id", "state"]
+  card = ["label", "date", "counterparty_name", "amount"]
+  card_sum = "amount"
+  order = "date desc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 2
+  report = { rows = "journal_id", cols = "state", measure = "amount" }
+
+  [[model.ui.filter]]
+  label = "To match"
+  where = "state = unmatched"
+
+  [model.guard]
+  immutable_when = ["reconciled"]
+  message = "A reconciled bank transaction cannot be changed."
+
   [[model.field]]
   name = "journal_id"
   description = "The bank journal the statement belongs to"
@@ -441,6 +658,7 @@ write_group = "accounting.user"
   kind = "ref"
   to = "accounting_journal"
   required = true
+  ref_filter = "active = true"
 
   [[model.field]]
   name = "date"
@@ -448,6 +666,7 @@ write_group = "accounting.user"
   class = "none"
   kind = "date"
   required = true
+  default = "today"
 
   [[model.field]]
   name = "label"
@@ -461,6 +680,9 @@ write_group = "accounting.user"
   class = "financial"
   kind = "money"
   required = true
+
+    [model.field.ui]
+    currency_from = "journal_id.currency"
 
   [[model.field]]
   name = "counterparty_name"
@@ -489,12 +711,21 @@ write_group = "accounting.user"
   options = ["unmatched", "matched", "reconciled"]
   required = true
 
+    [model.field.ui]
+    tones = { unmatched = "warn", matched = "info", reconciled = "ok" }
+
   [[model.action]]
   name = "match"
-  description = "Record that the line corresponds to an entry line"
+  description = "Record that the line corresponds to an entry line, the one named in move_line_id"
   field = "state"
   from = "unmatched"
   to = "matched"
+  assert = [{ expr = "is_set(move_line_id)", message = "Choose the journal item this bank transaction belongs to", key = "has_line" }]
+
+    [model.action.ui]
+    primary = true
+    needs = ["move_line_id"]
+    done = "Matched"
 
   [[model.action]]
   name = "reconcile"
@@ -504,9 +735,35 @@ write_group = "accounting.user"
   to = "reconciled"
   group = "accounting.manager"
 
+    [model.action.ui]
+    primary = true
+    confirm = "Reconcile this bank transaction? It can no longer be changed."
+    done = "Reconciled"
+
   [[model.action]]
   name = "unmatch"
   description = "Undo a match that was wrong"
   field = "state"
   from = "matched"
   to = "unmatched"
+
+    [model.action.ui]
+    danger = true
+    confirm = "Undo this match?"
+    done = "Match undone"
+
+[[migration]]
+from = "<0.3.1"
+op = "set_default"
+model = "accounting_journal"
+field = "active"
+value = true
+description = "Journals whose active flag was never set become active, so they are still offered for new entries"
+
+[[migration]]
+from = "<0.3.1"
+op = "set_default"
+model = "accounting_tax"
+field = "active"
+value = true
+description = "Taxes whose active flag was never set become active, so they are still offered for new lines"
