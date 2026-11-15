@@ -36,7 +36,7 @@ function useChildren(model: string, field: string, id: string, enabled = true): 
 
 export function PrintQuote({ busy }: RecordExtProps) {
   return (
-    <Button icon="download" disabled={busy} onClick={() => window.print()}>
+    <Button icon="printer" disabled={busy} onClick={() => window.print()}>
       {t("Print")}
     </Button>
   );

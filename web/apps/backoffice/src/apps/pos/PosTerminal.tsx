@@ -887,7 +887,7 @@ function Receipt(p: {
       className="pos-receipt-dialog"
       footer={
         <>
-          <Button icon="download" onClick={() => window.print()}>
+          <Button icon="printer" onClick={() => window.print()}>
             {t("Print receipt")}
           </Button>
           <Button variant="primary" size="lg" autoFocus onClick={p.onNext}>

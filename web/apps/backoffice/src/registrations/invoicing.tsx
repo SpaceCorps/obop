@@ -15,7 +15,7 @@ const InvoicePrint = lazy(() =>
 function PrintButton({ row, busy }: RecordExtProps) {
   return (
     <Button
-      icon="download"
+      icon="printer"
       disabled={busy}
       onClick={() => (location.hash = href({ app: "invoicing", model: PRINT, id: row.id }))}
     >

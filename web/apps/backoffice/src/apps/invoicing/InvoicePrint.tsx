@@ -72,7 +72,7 @@ export function InvoicePrint({ app, id, go }: { app: string; id: string; go: Go 
           </Button>
           <Button
             variant="primary"
-            icon="download"
+            icon="printer"
             disabled={data.state !== "ok"}
             onClick={() => window.print()}
           >
