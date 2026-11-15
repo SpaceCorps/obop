@@ -267,7 +267,9 @@ test.describe("views over many records do not load the table", () => {
     const sent = searches(page, model);
     await signIn("root", `/${model}/${model}?view=pivot`);
 
-    // Pivot: 75 records and EUR 75.00 per stage, 300 in all.
+    // Pivot: 75 records and EUR 75.00 per stage, 300 in all. (It opens on the date by month and
+    // the money measure; the rows are switched to the stage.)
+    await page.locator(".pivot").getByLabel("Rows").selectOption("state");
     const pivot = page.locator("table.pivot-table");
     await expect(pivot.getByRole("row", { name: /^New/ })).toContainText("75");
     await expect(pivot.locator("tfoot")).toContainText("300");
@@ -275,6 +277,7 @@ test.describe("views over many records do not load the table", () => {
 
     // Graph as a table of data.
     await page.goto(`/#/${model}/${model}?view=graph`);
+    await page.locator(".graph").getByLabel("Dimension").selectOption("state");
     await page.getByRole("button", { name: "Show data table" }).click();
     await expect(
       page.locator("table.pivot-table").getByRole("row", { name: /^Won/ }),
