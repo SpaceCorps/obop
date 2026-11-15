@@ -448,10 +448,13 @@ export function compactMeasure(m: MeasureSel, n: number, currency?: string): str
 
 // ---- defaults ----------------------------------------------------------------------------------
 
-/** The ref through which a model is the line of another (`move_id` of a journal item). */
+/**
+ * The ref through which a model is the line of another (`move_id` of a journal item). A child with
+ * a date of its own (a vehicle's service on a day) is an event, and its parent is a fine group.
+ */
 function parentLinks(model: ModelMeta, index?: MetaIndex): Set<string> {
   const out = new Set<string>();
-  if (!index) return out;
+  if (!index || model.fields.some(isDated)) return out;
   for (const f of model.fields) {
     if (f.kind !== "ref" || !f.to) continue;
     const parent = index.get(f.to);

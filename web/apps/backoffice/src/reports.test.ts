@@ -244,6 +244,9 @@ describe("defaults", () => {
   it("rows: the hint, the main ref but not the parent of a line, a date by month, the status", () => {
     expect(defaultRows(order, dimensionsOf(order.fields))?.field.name).toBe("customer_id");
     expect(defaultRows(line, dimensionsOf(line.fields), index)?.field.name).toBe("account_id");
+    // A child with its own date is an event: its parent is the group (services by vehicle).
+    const event = { ...line, fields: [...line.fields, f("booked_on", "date")] };
+    expect(defaultRows(event, dimensionsOf(event.fields), index)?.field.name).toBe("move_id");
     const dated = model("x", [f("on", "date"), state]);
     expect(defaultRows(dated, dimensionsOf(dated.fields))).toMatchObject({ bucket: "month" });
     const onlyState = model("y", [state]);
