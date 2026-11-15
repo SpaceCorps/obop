@@ -139,6 +139,22 @@
 .list td.refcol {
   max-inline-size: 14rem;
 }
+/* Fixed layout: every column has its width (colgroup, from ListView), the room left over is shared
+   in proportion, and a value longer than its column ends in an ellipsis. */
+.list.fitted {
+  table-layout: fixed;
+}
+.list.fitted td {
+  max-inline-size: none;
+}
+.list.fitted th {
+  overflow: hidden;
+}
+.thlabel {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .list .selcol {
   inline-size: 3.25rem;
   max-inline-size: none;
@@ -279,8 +295,14 @@ tr:hover .refgo,
   white-space: nowrap;
 }
 .list tfoot td.agg {
-  max-inline-size: none;
-  overflow: visible;
+  vertical-align: top;
+}
+/* Totals in several currencies: one line each. */
+.sums {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
 }
 .inline-edit {
   display: flex;
@@ -343,6 +365,14 @@ tr:hover .refgo,
   gap: var(--space-2);
   min-block-size: 3rem;
   padding: var(--space-2) var(--space-4);
+}
+.phone-all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--control-h-sm);
+  padding-inline: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
 }
 .listview.phone .list,
 .listview.phone .list > tbody,

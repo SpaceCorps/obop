@@ -176,6 +176,72 @@ export function trimColumns(cols: readonly FieldMeta[], n: number, state?: strin
 export const droppable = (cols: readonly FieldMeta[], state?: string) =>
   cols.length - trimColumns(cols, cols.length, state).length;
 
+/** The base width of a column by kind, in pixels: wide enough for its usual values. */
+const KIND_WIDTH: Partial<Record<FieldMeta["kind"], number>> = {
+  ref: 180,
+  date: 124,
+  datetime: 168,
+  money: 136,
+  decimal: 128,
+  number: 104,
+  bool: 88,
+  select: 140,
+  text: 176,
+  longtext: 220,
+  image: 72,
+  file: 168,
+};
+/** The first column's base width for a name; it also takes the larger share of what is left. */
+export const TITLE_WIDTH = 280;
+/** Room the selection column takes (list.css .list .selcol). */
+const SELECT_WIDTH = 52;
+
+/**
+ * A column's width in pixels: its kind's, widened for a long head (about 7.2 px a character plus
+ * the padding and the sort mark), at most 260. The table is laid out fixed with these widths, and
+ * the browser shares any room left over among the columns in proportion.
+ */
+export function columnWidth(f: FieldMeta, head: string, first = false): number {
+  // A number or a code is short ("SO-00027"); a name or a description is long.
+  const short = f.sequence || f.name === "code";
+  if (first) return short ? 160 : f.kind === "ref" ? 200 : TITLE_WIDTH;
+  const base = short ? 150 : (KIND_WIDTH[f.kind] ?? 160);
+  return Math.round(Math.min(260, Math.max(base, head.length * 7.2 + 44)));
+}
+
+/**
+ * The columns that fit `width` pixels and their widths: the lowest-ranked go first (trimColumns),
+ * until the rest fit or only the title, the first amount and the status are left. What is left
+ * over is shared out, so the widths fill `width` exactly (an infinite width shares nothing).
+ */
+export function fitColumns(
+  ranked: readonly FieldMeta[],
+  width: number,
+  head: (f: FieldMeta) => string,
+  state?: string,
+): { cols: FieldMeta[]; widths: number[] } {
+  const widthsOf = (cs: readonly FieldMeta[]) => cs.map((f, i) => columnWidth(f, head(f), i === 0));
+  let cols = [...ranked];
+  let widths = widthsOf(cols);
+  const total = () => widths.reduce((a, b) => a + b, SELECT_WIDTH);
+  while (total() > width && droppable(cols, state) > 0) {
+    cols = trimColumns(cols, 1, state);
+    widths = widthsOf(cols);
+  }
+  // Room left over: half goes to the title (at most 400 px more), the rest to every column in
+  // proportion, so a short list of columns spreads out evenly instead of leaving a gap.
+  const extra = Number.isFinite(width) ? Math.floor(width - total()) : 0;
+  if (extra > 0 && widths.length) {
+    const toTitle = widths.length === 1 ? extra : Math.min(Math.floor(extra / 2), 400);
+    const rest = extra - toTitle;
+    const others = widths.slice(1).reduce((a, b) => a + b, 0);
+    widths = widths.map((w, i) =>
+      i === 0 ? w + toTitle : w + (others ? Math.floor((rest * w) / others) : 0),
+    );
+  }
+  return { cols, widths };
+}
+
 /** Whether a cell may turn into an input: not a number the server gives, a computed or read-only field. */
 export function editableField(f: FieldMeta): boolean {
   if (f.computed || f.sequence || f.readonly) return false;

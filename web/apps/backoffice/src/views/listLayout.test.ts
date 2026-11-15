@@ -10,8 +10,10 @@ import {
   chooseColumns,
   droppable,
   dueLevel,
+  columnWidth,
   editableField,
   effectiveOrder,
+  fitColumns,
   firstColumnMode,
   isDueLike,
   isMasterData,
@@ -202,6 +204,32 @@ describe("the totals and the fit of the columns", () => {
     const one = trimColumns(cols, 1, "state");
     expect(one).toHaveLength(cols.length - 1);
     expect(names(one).at(-1)).toBe("state");
+  });
+});
+
+describe("the widths of the columns", () => {
+  const head = (x: FieldMeta) => x.name;
+  it("follow the kind and a long head; a number or a code is a short title", () => {
+    expect(columnWidth(f("spent_on", "date"), "Spent on")).toBe(124);
+    expect(columnWidth(f("x", "number"), "Payment terms in days")).toBeGreaterThan(104);
+    expect(columnWidth(f("x", "text"), "A".repeat(80))).toBe(260);
+    expect(columnWidth(f("number", "text", { sequence: true }), "Number", true)).toBe(160);
+    expect(columnWidth(f("description", "text"), "Description", true)).toBe(280);
+  });
+
+  it("fill the width exactly, the title taking the larger share, and drop what does not fit", () => {
+    const ranked = chooseColumns(expense, expense.fields, 100_000, [], null);
+    const wide = fitColumns(ranked, 2000, head, "state");
+    expect(wide.cols).toHaveLength(ranked.length);
+    // 52 px of selection column plus the columns make the whole width (give or take the rounding).
+    const sum = wide.widths.reduce((a, b) => a + b, 52);
+    expect(sum).toBeLessThanOrEqual(2000);
+    expect(sum).toBeGreaterThan(2000 - wide.widths.length);
+    const narrow = fitColumns(ranked, 700, head, "state");
+    expect(names(narrow.cols)).toEqual(["description", "amount_minor", "state"]);
+    expect(narrow.widths[0]).toBeGreaterThan(narrow.widths[1]!);
+    // The person's own columns are never dropped (the table scrolls instead).
+    expect(fitColumns(ranked, Infinity, head, "state").cols).toHaveLength(ranked.length);
   });
 });
 

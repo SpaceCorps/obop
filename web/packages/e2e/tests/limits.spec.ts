@@ -258,7 +258,8 @@ test.describe("field limits", () => {
     // The same in a cell of the list.
     await page.goto(`/#/${id}/${model}?view=list`);
     const row = page.locator("tr").filter({ hasText: headline });
-    await row.locator("td", { hasText: "abcdefgh" }).click();
+    // A double-click edits a cell in place (a click opens the record).
+    await row.locator("td", { hasText: "abcdefgh" }).dblclick();
     const input = page.locator("td.editing input");
     await expect(input).toHaveValue("abcdefgh");
     await expect(input).not.toHaveAttribute("aria-invalid", /.*/);

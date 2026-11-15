@@ -36,7 +36,7 @@ import {
   toneClassOf,
   type PresentCtx,
 } from "../presentation.ts";
-import { buildGroups, formatSumRows, type Group, type Sort } from "../query.ts";
+import { buildGroups, formatSumRows, sumByCurrency, type Group, type Sort } from "../query.ts";
 import { DeleteDialog } from "../DeleteDialog.tsx";
 import { nounFor } from "../remove.ts";
 import { serverMessage } from "../serverMessage.ts";
@@ -47,7 +47,6 @@ import {
   cardMeta,
   cardRoles,
   chooseColumns,
-  droppable,
   dueLevel,
   editableField,
   firstColumnMode,
@@ -55,7 +54,7 @@ import {
   listOrder,
   listSummable,
   nextSort,
-  trimColumns,
+  fitColumns,
   type CardRoles,
 } from "./listLayout.ts";
 import type { ViewProps } from "./types.ts";
@@ -72,6 +71,9 @@ function flatten(groups: Group[], collapsed: Set<string>, out: Item[], counter: 
 }
 
 const isNum = (f: FieldMeta) => f.kind === "number" || f.kind === "money" || f.kind === "decimal";
+
+/** The selection column, in pixels (list.css .list .selcol). */
+const SELECT_COL_PX = 52;
 
 /** How long a click on an editable cell waits for a second click, which edits it in place. */
 const DOUBLE_MS = 250;
@@ -101,8 +103,9 @@ export function ListView(p: ViewProps) {
     const el = root.current;
     if (!el) return;
     const measure = () => {
-      // jsdom measures nothing; 16 px steps keep a resize from redrawing the table at every pixel.
-      const w = Math.round(el.clientWidth / 16) * 16;
+      // The box of the table without its scroll bar. jsdom measures nothing; 16 px steps (down, so
+      // the columns never overflow) keep a resize from redrawing the table at every pixel.
+      const w = Math.floor(el.clientWidth / 16) * 16;
       if (w > 0) setWidth((old) => (old === w ? old : w));
     };
     measure();
@@ -117,25 +120,16 @@ export function ListView(p: ViewProps) {
   const [custom, setCustom] = useState<string[] | null>(() =>
     readPref<string[] | null>(prefKey, null),
   );
-  const ranked = useMemo(
-    () => chooseColumns(model, fields, width, rows, custom),
-    [model, fields, width, rows, custom],
-  );
-  // The widths listColumns estimates cannot know the words in the cells: while the table is wider
-  // than its box, one more low-ranked column goes (never the title, the first amount or the status).
-  // The count belongs to one width and one page of rows; a new one starts again from none.
+  // Every column has a width by its kind and head (listLayout.ts columnWidth) and the table is laid
+  // out fixed, so the columns that fit are known before anything is drawn: low-ranked ones go
+  // until the rest fit, never the title, the first amount or the status. Columns the person picked
+  // all stay; the table then scrolls sideways inside its box.
   const stateName = stateFieldOf(model)?.name;
-  const fitKey = `${width}|${rows.length}|${rows[0]?.id ?? ""}|${rows.at(-1)?.id ?? ""}|${fields.length}`;
-  const [fit, setFit] = useState({ key: "", drop: 0 });
-  const drop = !custom && !phone && fit.key === fitKey ? fit.drop : 0;
-  const cols = useMemo(() => trimColumns(ranked, drop, stateName), [ranked, drop, stateName]);
-  const wrap = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = wrap.current;
-    if (!el || custom || phone || el.clientWidth === 0) return;
-    if (el.scrollWidth > el.clientWidth + 1 && drop < droppable(ranked, stateName))
-      setFit({ key: fitKey, drop: drop + 1 });
-  }, [custom, phone, drop, ranked, stateName, fitKey]);
+  const { cols, widths } = useMemo(() => {
+    const ranked = chooseColumns(model, fields, 100_000, rows, custom);
+    return fitColumns(ranked, custom ? Infinity : width, fieldTitle, stateName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, fields, width, rows, custom, stateName, d.lang]);
   const mode = firstColumnMode(model, cols);
   const roles = useMemo(() => cardRoles(model, fields, rows), [model, fields, rows]);
   const order = useMemo(() => listOrder(model, fields), [model, fields]);
@@ -384,10 +378,14 @@ export function ListView(p: ViewProps) {
     const href = recordHref(row);
     if (href) window.open(href, "_blank", "noopener");
   };
-  // The person is selecting text in the row: the mouse-up is not a click on the record.
-  const selectingText = (el: HTMLElement) => {
+  // Where the mouse went down: a click that ends elsewhere with text selected was a drag to
+  // select that text (to copy it), not a click on the record.
+  const down = useRef<{ x: number; y: number } | null>(null);
+  const draggedToSelect = (e: MouseEvent) => {
+    const d0 = down.current;
+    if (!d0 || Math.hypot(e.clientX - d0.x, e.clientY - d0.y) < 5) return false;
     const s = window.getSelection();
-    return !!s && !s.isCollapsed && !!s.anchorNode && el.closest("tr")!.contains(s.anchorNode);
+    return !!s && !s.isCollapsed;
   };
   const open: Open = (row) => (phone && selecting ? toggle(row.id) : p.onOpen(row.id));
 
@@ -397,14 +395,22 @@ export function ListView(p: ViewProps) {
    * for the second one. The first column always opens the record, at once.
    */
   function clickCell(e: MouseEvent<HTMLElement>, row: Row, f: FieldMeta, ci: number) {
-    if (selectingText(e.currentTarget)) return;
-    if (e.ctrlKey || e.metaKey || e.shiftKey) return openInTab(row);
     window.clearTimeout(pending.current);
+    // The cell, not the words in it, holds the focus: the arrow keys go on from there, and closing
+    // the record comes back to it.
+    e.currentTarget.focus({ preventScroll: true });
     const editable = ci > 0 && canEditCell(row, f);
-    if (editable && editMode) return setEditing({ id: row.id, field: f.name });
+    const edit = () => {
+      // A double-click also selected the word under the mouse; the input takes over from it.
+      window.getSelection()?.removeAllRanges();
+      setEditing({ id: row.id, field: f.name });
+    };
+    if (editable && e.detail >= 2 && !editMode) return edit();
+    if (draggedToSelect(e)) return;
+    if (e.ctrlKey || e.metaKey || e.shiftKey) return openInTab(row);
+    if (editable && editMode) return edit();
     const tap = (e.nativeEvent as PointerEvent).pointerType === "touch" || touch;
     if (!editable || tap) return open(row);
-    if (e.detail >= 2) return setEditing({ id: row.id, field: f.name });
     pending.current = window.setTimeout(() => open(row), DOUBLE_MS);
   }
   const auxCell = (e: MouseEvent, row: Row) => {
@@ -617,20 +623,33 @@ export function ListView(p: ViewProps) {
           )}
         </Popover>
       )}
-      <button className="btn small" disabled={!!exporting} onClick={() => void exportCsv()}>
-        <Icon name="download" size={13} /> {t("Export selected")}
+      {/* A phone has room for icons only; "Done" there ends the selection. */}
+      <button
+        className={`btn small${phone ? " icon-only" : ""}`}
+        disabled={!!exporting}
+        onClick={() => void exportCsv()}
+        aria-label={phone ? t("Export selected") : undefined}
+        title={phone ? t("Export selected") : undefined}
+      >
+        <Icon name="download" size={13} />
+        {!phone && <> {t("Export selected")}</>}
       </button>
       {p.canDelete && (
         <button
-          className="btn small danger-text"
+          className={`btn small danger-text${phone ? " icon-only" : ""}`}
           onClick={() => (allMatching ? setBulk({ kind: "delete" }) : setDeleting(true))}
+          aria-label={phone ? t("Delete") : undefined}
+          title={phone ? t("Delete") : undefined}
         >
-          <Icon name="trash" size={13} /> {t("Delete")}
+          <Icon name="trash" size={13} />
+          {!phone && <> {t("Delete")}</>}
         </button>
       )}
-      <button className="linkbtn" onClick={clearSelection}>
-        {t("Clear")}
-      </button>
+      {!phone && (
+        <button className="linkbtn" onClick={clearSelection}>
+          {t("Clear")}
+        </button>
+      )}
     </div>
   );
 
@@ -652,7 +671,6 @@ export function ListView(p: ViewProps) {
       onClick={() => void exportCsv()}
       aria-label={t("Export all as CSV")}
       title={phone ? t("Export all as CSV") : undefined}
-      hidden={hasSelection}
       disabled={!!exporting}
     >
       <Icon name="download" size={13} />
@@ -789,8 +807,14 @@ export function ListView(p: ViewProps) {
   );
 
   return (
-    <div className={`listview${phone ? " phone" : ""}`} ref={root}>
+    <div className={`listview${phone ? " phone" : ""}`}>
       <div className="listbar">
+        {phone && selecting && (
+          <label className="phone-all">
+            {selectAll}
+            <span>{t("All")}</span>
+          </label>
+        )}
         {hasSelection
           ? bulkbar
           : phone
@@ -819,21 +843,35 @@ export function ListView(p: ViewProps) {
             {selecting ? t("Done") : t("Select")}
           </button>
         )}
-        {exportButton}
+        {!hasSelection && exportButton}
         {!phone && columnsMenu}
       </div>
-      <div className="tablewrap" ref={wrap}>
+      <div className="tablewrap" ref={root}>
         <table
-          className={`table list${editMode && !phone ? " editmode" : ""}`}
+          className={`table list${editMode && !phone ? " editmode" : ""}${phone ? "" : " fitted"}`}
           role="grid"
           aria-label={t("{model} list", { model: p.title })}
           aria-rowcount={p.total + 1}
+          style={
+            phone
+              ? undefined
+              : { minInlineSize: `${widths.reduce((a, b) => a + b, SELECT_COL_PX)}px` }
+          }
         >
+          {!phone && (
+            <colgroup>
+              {showSelect && <col style={{ inlineSize: `${SELECT_COL_PX}px` }} />}
+              {cols.map((f, i) => (
+                <col key={f.name} style={{ inlineSize: `${widths[i]}px` }} />
+              ))}
+            </colgroup>
+          )}
           <thead className={phone ? "sr-only" : undefined}>
             <tr role="row">
               {showSelect && (
                 <th className="selcol" role="columnheader" scope="col">
-                  {selectAll}
+                  {/* A phone has its own "All" above the cards. */}
+                  {!phone && selectAll}
                 </th>
               )}
               {phone ? (
@@ -855,7 +893,7 @@ export function ListView(p: ViewProps) {
                       title={describeFor(f)}
                     >
                       <button className="thbtn" onClick={() => sortBy(f)}>
-                        {fieldTitle(f)}
+                        <span className="thlabel">{fieldTitle(f)}</span>
                         <span
                           className={`sortmark${s ? (s.chosen ? " on" : " dflt") : ""}`}
                           aria-hidden="true"
@@ -869,7 +907,11 @@ export function ListView(p: ViewProps) {
               )}
             </tr>
           </thead>
-          <tbody ref={grid} onKeyDown={onGridKey}>
+          <tbody
+            ref={grid}
+            onKeyDown={onGridKey}
+            onMouseDown={(e) => (down.current = { x: e.clientX, y: e.clientY })}
+          >
             {items.map((it) =>
               it.t === "group" ? (
                 <GroupRow
@@ -882,7 +924,7 @@ export function ListView(p: ViewProps) {
                   firstSum={firstSum}
                   phoneSum={phoneSum}
                   collapsed={collapsed.has(it.g.path)}
-                  sumOf={(f, rs) => formatSumRows(f, rs, currencyFor)}
+                  sumOf={(f, rs) => <Sum field={f} rows={rs} currencyFor={currencyFor} />}
                   onToggle={() =>
                     setCollapsed((c) => {
                       const n = new Set(c);
@@ -1021,7 +1063,7 @@ export function ListView(p: ViewProps) {
                   <span className="hint">({fmt.integer(rows.length)})</span>
                   {phone && phoneSum && (
                     <span className="foot-sum amount">
-                      {formatSumRows(phoneSum, rows, currencyFor)}
+                      <Sum field={phoneSum} rows={rows} currencyFor={currencyFor} />
                     </span>
                   )}
                 </td>
@@ -1029,8 +1071,13 @@ export function ListView(p: ViewProps) {
                   cols.slice(Math.max(1, firstSum)).map((f, i) => {
                     const on = sums[i + Math.max(1, firstSum)];
                     return (
-                      <td key={f.name} role="gridcell" className={`${isNum(f) ? "num" : ""} agg`}>
-                        {on ? formatSumRows(f, rows, currencyFor) : ""}
+                      <td
+                        key={f.name}
+                        role="gridcell"
+                        className={`${isNum(f) ? "num" : ""} agg`}
+                        data-f={f.name}
+                      >
+                        {on ? <Sum field={f} rows={rows} currencyFor={currencyFor} /> : ""}
                       </td>
                     );
                   })}
@@ -1072,7 +1119,7 @@ function GroupRow(p: {
   firstSum: number;
   phoneSum?: FieldMeta;
   collapsed: boolean;
-  sumOf: (f: FieldMeta, rows: Row[]) => string;
+  sumOf: (f: FieldMeta, rows: Row[]) => ReactNode;
   onToggle: () => void;
 }) {
   const { g } = p;
@@ -1105,6 +1152,23 @@ function GroupRow(p: {
           </td>
         ))}
     </tr>
+  );
+}
+
+/**
+ * The total of a column. Amounts in several currencies are never added together: each currency
+ * is a line of its own, largest group first, so a narrow column still shows every one.
+ */
+function Sum(p: { field: FieldMeta; rows: Row[]; currencyFor: (row: Row) => string | undefined }) {
+  if (p.field.kind !== "money") return <>{formatSumRows(p.field, p.rows)}</>;
+  const parts = sumByCurrency(p.rows, p.field.name, p.currencyFor);
+  if (parts.length === 1) return <>{fmt.money(parts[0]![1], parts[0]![0])}</>;
+  return (
+    <span className="sums">
+      {parts.map(([c, n]) => (
+        <span key={c}>{fmt.money(n, c)}</span>
+      ))}
+    </span>
   );
 }
 
