@@ -2075,7 +2075,7 @@ test.describe("crawlers and agents", () => {
     expect(urls).toHaveLength(28);
     // The list is pinned, and every row can fail: it catches the sentence it was written for and
     // leaves alone the true sentences that stand where it was (claims.ts).
-    expect(CLAIMS).toHaveLength(60);
+    expect(CLAIMS).toHaveLength(57);
     for (const { re, example, fine, why } of CLAIMS) {
       expect(example, `${re}: ${why}`).toMatch(re);
       for (const ok of fine ?? []) expect(ok, `${re} must leave this alone`).not.toMatch(re);

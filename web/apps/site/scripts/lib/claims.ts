@@ -48,25 +48,9 @@ export const CLAIMS: readonly Claim[] = [
     example: "Close the fiscal year so nothing more is posted in it (only people who may approve).",
   },
   {
-    re: /against further posting/i,
-    why: "closing a period stops no posting (packages/accounting.toml:251)",
-    example: "Close the period against further posting (only people who may approve).",
-  },
-  {
     re: /close each month and year/i,
     why: "closing stops no posting (packages/accounting.toml)",
     example: "post each entry to the ledger, and close each month and year.",
-  },
-  {
-    // The claim, not one wording of it: "closing ... stops / blocks / locks ... posting / entries".
-    // A verb in the third person, so "it does not stop new entries" is left alone.
-    re: /\bclos(?:e|es|ing|ed)\b[^.;]*?(?<!\b(?:not|never) )\b(?:stops|blocks|prevents|locks|freezes|seals)\b[^.]*\b(?:post\w*|entr\w+)/i,
-    why: "closing stops no posting (packages/accounting.toml: the only assert is line 346)",
-    example: "Closing a month stops posting.",
-    fine: [
-      "Closing a month or year is only a label; it does not stop new entries.",
-      "Mark the period as closed. This is a label only: entries can still be posted into it.",
-    ],
   },
   {
     re: /send a draft order to the vendor/i,
@@ -154,7 +138,7 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     re: /\bfinali[sz]\w*/i,
-    why: "the product's word is post, and nothing locks a posted record: invoicing has no lock (crates/modules/invoicing/src/lib.rs:72-85) and accounting has one assert, the balance (packages/accounting.toml:346)",
+    why: "the product's word is post (crates/modules/invoicing/src/lib.rs, packages/accounting.toml)",
     example: "then finalise each one to give it its own number",
     fine: ["Post a draft invoice and give it its next number in the yearly series."],
   },
@@ -418,12 +402,10 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     re: /a done move cannot be undone/i,
-    why: "no action reverses a done move, but its record is written by inventory.user and can be edited or deleted (packages/inventory.toml:126-129, :181-189)",
+    why: "no action reverses a done move: a done move is frozen (D77 guard), and the stock is corrected with a new move (packages/inventory.toml)",
     example:
       "the quantity leaves the source item and arrives at the destination item (stock managers only); a done move cannot be undone",
-    fine: [
-      "No action reverses a done move, but its record can still be edited or deleted, and the stock does not follow.",
-    ],
+    fine: ["A done move can no longer be changed or deleted; correct the stock with a new move."],
   },
   {
     re: /card numbers must never be stored/i,
@@ -439,12 +421,6 @@ export const CLAIMS: readonly Claim[] = [
     fine: [
       "Confidentiality limits who can see a document: confidential and restricted documents are visible only to their owner, to documents.manager and to the instance administrator",
     ],
-  },
-  {
-    re: /\bposted only when the totals match\b/i,
-    why: "the totals are checked once, when post runs; the lines of a posted entry stay editable and an entry with no lines posts (packages/accounting.toml:346, :368)",
-    example: "An entry is a set of debit and credit lines, posted only when the totals match.",
-    fine: ["An entry is a set of debit and credit lines; its totals are checked only at posting."],
   },
 ];
 

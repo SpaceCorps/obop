@@ -997,8 +997,13 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
     expect(text("subscriptions", "subscriptions_subscription.activate")).toContain(
       "By itself, this does not start any billing",
     );
-    expect(text("accounting", "accounting_period.close")).toContain("label only");
-    expect(text("accounting", "accounting_fiscal_year.close")).toContain("label only");
+    // Closing freezes (the D77 guards of accounting 0.3.1): a closed period takes no entries dated in it.
+    expect(text("accounting", "accounting_period.close")).toContain(
+      "Entries dated in a closed period can no longer be created or changed",
+    );
+    expect(text("accounting", "accounting_fiscal_year.close")).toContain(
+      "can no longer be changed until it is reopened",
+    );
     for (const key of ["ecommerce_order.refund", "ecommerce_order.refund_delivered"])
       expect(text("ecommerce", key), key).toContain("you pay it back yourself");
     expect(text("pos", "pos_order.refund")).toContain("By itself, this does not pay money back");
@@ -1049,24 +1054,23 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
   // that it catches its own correction fails here). The count is pinned, so a row is not dropped
   // unnoticed.
   test("each row of the ratchet catches its own sentence and leaves the corrections alone", () => {
-    expect(CLAIMS).toHaveLength(60);
+    expect(CLAIMS).toHaveLength(57);
     for (const { re, example, fine, why } of CLAIMS) {
       expect(example, `${re}: ${why}`).toMatch(re);
       for (const ok of fine ?? []) expect(ok, `${re} must leave this alone`).not.toMatch(re);
     }
     // The wider rows catch other wordings of the same claim.
     const claim = (text: string) => CLAIMS.filter((c) => c.re.test(text)).length;
+    // Closing a period does stop entries dated in it now (accounting 0.3.1, D77 lock_date), so the
+    // rows about closing are gone; the year's "nothing more is posted" stays.
     for (const text of [
-      "Closing a period locks it against new entries.",
-      "Closing the year blocks further posting.",
-      "Closing a month stops posting.",
+      "Close the fiscal year so nothing more is posted in it.",
       "Publishing needs approval.",
       "No step in this app needs an approval, apart from deleting records.",
     ])
       expect(claim(text), text).toBeGreaterThan(0);
     for (const text of [
-      "Closing a month or year is only a label; it does not stop new entries.",
-      "Closing a period never blocks entries.",
+      "Entries dated in a closed period can no longer be created or changed until it is reopened.",
       "No step in this app needs approval when a person runs it.",
     ])
       expect(claim(text), text).toBe(0);
@@ -1498,7 +1502,6 @@ describe("a caveat that only a developer needs sits under 'For developers', move
   test("these are the caveats that moved; a new one is a change of this list", () => {
     expect(moved.map((x) => `${x.app.id} ${x.key}`).sort()).toEqual(
       [
-        "accounting accounting_move.post",
         "base party.erase",
         "ecommerce ecommerce_order.refund",
         "ecommerce ecommerce_order.refund_delivered",
@@ -1561,7 +1564,7 @@ describe("a caveat that only a developer needs sits under 'For developers', move
     }
     expect(eco.limit).toContain("stand-in");
     expect(card("pos", "pos_order.pay").text).toContain(
-      "a paid sale can still be edited afterwards",
+      "a paid sale and its lines can no longer be changed, only refunded",
     );
     expect(card("pos", "pos_order.pay").text).not.toContain("press pay");
     expect(card("pos", "pos_order.pay").limit).toBe(
@@ -1612,15 +1615,12 @@ describe("a caveat that only a developer needs sits under 'For developers', move
       "A driver's status and licence expiry are not checked when a vehicle is assigned.",
     );
     expect(card("fleet", "fleet_vehicle_driver.reactivate").text).not.toMatch(/allow|drive again/i);
+    // A posted entry is frozen (D77 guard), and an entry needs an amount to be posted (has_amount), so
+    // the old caveat about an entry with no lines is gone.
     expect(card("accounting", "accounting_move.post").text).toContain(
-      "A posted entry can still be edited afterwards.",
+      "A posted entry and its lines can no longer be changed; reverse it to correct it.",
     );
-    expect(card("accounting", "accounting_move.post").text).not.toContain("no lines");
-    // Said once, in the fold: the sum of no lines is zero on both sides, so the check "debits equal
-    // credits" is met (packages/accounting.toml:321, :346; computed.rs, the empty child set sums to 0).
-    expect(card("accounting", "accounting_move.post").limit).toBe(
-      "An entry with no lines has debits and credits of zero, which are equal, so it can be posted.",
-    );
+    expect(card("accounting", "accounting_move.post").limit).toBeUndefined();
     // The sign-off reminder is said once, by the field text in the part for developers, so the card has no limit.
     const complete = card("field_service", "field_service_job.complete");
     expect(complete.text).not.toContain("Nothing checks");
