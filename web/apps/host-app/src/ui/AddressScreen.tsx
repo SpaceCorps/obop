@@ -32,9 +32,14 @@ export function AddressScreen({
   onUseForwarded,
 }: AddressScreenProps) {
   const sentence = addressSentence(note, build);
+  // The keyboard's Go key is Connect, with the same conditions as the button.
+  const submit = () => {
+    if (!busy && value.trim() !== "") onConnect();
+  };
   return (
     <Screen
       title={t("address.title")}
+      footerToEdges
       footer={
         <Button
           label={busy ? t("address.connecting") : t("address.connect")}
@@ -58,6 +63,8 @@ export function AddressScreen({
         autoCapitalize="none"
         autoCorrect={false}
         maxLength={300}
+        returnKeyType="go"
+        onSubmitEditing={submit}
         testID="address-field"
       />
       {note?.kind === "forwarded" ? (

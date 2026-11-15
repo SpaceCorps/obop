@@ -57,6 +57,9 @@ export function SettingsSheet({
       <Screen
         title={t("settings.title")}
         onBack={onClose}
+        backAtStart
+        compactInLandscape
+        footerToEdges
         footer={
           <ButtonRow>
             <Button

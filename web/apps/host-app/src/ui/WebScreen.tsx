@@ -152,8 +152,10 @@ export type WebScreenProps = {
 
 /**
  * The back office, full screen. The native side pads the four safe areas and paints the ground
- * behind them; the page keeps its own safe-area insets at 0. Over the top edge of the page lies
- * the host bar, and while a document of the instance is not on top, a cover.
+ * behind them; the page keeps its own safe-area insets at 0. While the host bar is shown it stands
+ * above the page and the WebView begins under it, so it covers nothing of the page; when it goes,
+ * the page takes the full height. While a document of the instance is not on top, a cover lies
+ * over the page.
  */
 export function WebScreen({ state, store, ground, covered, webRef }: WebScreenProps) {
   const theme = useTheme();
@@ -180,6 +182,17 @@ export function WebScreen({ state, store, ground, covered, webRef }: WebScreenPr
       accessibilityElementsHidden={covered}
       testID="web-screen"
     >
+      {state.bar.shown ? (
+        <View style={styles.bar} testID="host-bar-frame">
+          <HostBar
+            host={host}
+            notEncrypted={isCleartext(server.origin)}
+            testBuild={isTestBuild(build)}
+            newSince={newSince(server, Date.now())}
+            onPress={() => store.dispatch({ type: "open_settings" })}
+          />
+        </View>
+      ) : null}
       {/* The wrapper sees a touch that lands on the page; that is what lets the host bar go. */}
       <View style={styles.fill} onTouchStart={() => store.dispatch({ type: "page_touched" })}>
         {webViewMounted(state) ? (
@@ -208,20 +221,6 @@ export function WebScreen({ state, store, ground, covered, webRef }: WebScreenPr
           </View>
         ) : null}
       </View>
-      {state.bar.shown ? (
-        <View
-          style={[styles.bar, { top: insets.top, left: insets.left, right: insets.right }]}
-          testID="host-bar-frame"
-        >
-          <HostBar
-            host={host}
-            notEncrypted={isCleartext(server.origin)}
-            testBuild={isTestBuild(build)}
-            newSince={newSince(server, Date.now())}
-            onPress={() => store.dispatch({ type: "open_settings" })}
-          />
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -229,5 +228,5 @@ export function WebScreen({ state, store, ground, covered, webRef }: WebScreenPr
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   cover: { alignItems: "center", justifyContent: "center" },
-  bar: { position: "absolute", elevation: 4 },
+  bar: { elevation: 4, zIndex: 1 },
 });

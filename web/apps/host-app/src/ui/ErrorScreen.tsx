@@ -34,6 +34,8 @@ export function ErrorScreen({
     <View style={StyleSheet.absoluteFill} testID="error-screen">
       <Screen
         title={t("error.title")}
+        compactInLandscape
+        footerToEdges
         footer={
           <ButtonRow>
             <Button

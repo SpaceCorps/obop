@@ -37,7 +37,7 @@ function Chip({ label, tone }: { label: string; tone: "danger" | "warning" | "in
 }
 
 /**
- * The strip that names the server. The app draws it over the top edge of the page at every start
+ * The strip that names the server. The app draws it above the page at every start
  * and every return, and the page cannot remove it: nothing the page sends hides it, and a tap on
  * it is the way to "This app" that needs no page. What it cannot do is tell a look-alike name
  * from the right one; that stays with the person.
