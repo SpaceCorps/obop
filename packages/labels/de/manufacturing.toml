@@ -89,6 +89,12 @@ cancelled = "Storniert"
 label = "Bestätigen"
 description = "Einen Auftragsentwurf bestätigen, damit die Produktion geplant werden kann"
 
+[labels.de.model.manufacturing_order.action.confirm.assert.has_location]
+message = "Wählen Sie zuerst den Produktionsort: Beim Abschluss des Auftrags werden dort die Komponenten entnommen und das Produkt eingelagert"
+
+[labels.de.model.manufacturing_order.action.confirm.assert.has_components]
+message = "Fügen Sie zuerst die Komponenten hinzu: Ein Auftrag ohne Komponenten bewegt beim Abschluss keinen Bestand"
+
 [labels.de.model.manufacturing_order.action.start]
 label = "Starten"
 description = "Die Produktion eines bestätigten Auftrags starten"

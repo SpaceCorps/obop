@@ -89,6 +89,12 @@ cancelled = "Annulé"
 label = "Confirmer"
 description = "Confirme un ordre en brouillon pour que la production puisse être planifiée"
 
+[labels.fr.model.manufacturing_order.action.confirm.assert.has_location]
+message = "Choisissez d’abord le lieu de production : à la fin de l’ordre, les composants en sortent et le produit y entre"
+
+[labels.fr.model.manufacturing_order.action.confirm.assert.has_components]
+message = "Ajoutez d’abord les composants : un ordre sans composants ne déplace aucun stock à sa fin"
+
 [labels.fr.model.manufacturing_order.action.start]
 label = "Démarrer"
 description = "Démarre la production d’un ordre confirmé"

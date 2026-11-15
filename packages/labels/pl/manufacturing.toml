@@ -89,6 +89,12 @@ cancelled = "Anulowane"
 label = "Potwierdź"
 description = "Potwierdza zlecenie robocze, aby można było zaplanować produkcję"
 
+[labels.pl.model.manufacturing_order.action.confirm.assert.has_location]
+message = "Najpierw wybierz miejsce produkcji: po zakończeniu zlecenia komponenty są tam pobierane, a produkt przyjmowany"
+
+[labels.pl.model.manufacturing_order.action.confirm.assert.has_components]
+message = "Najpierw dodaj komponenty: zlecenie bez komponentów po zakończeniu nie przesuwa żadnego zapasu"
+
 [labels.pl.model.manufacturing_order.action.start]
 label = "Rozpocznij"
 description = "Rozpoczyna produkcję dla potwierdzonego zlecenia"

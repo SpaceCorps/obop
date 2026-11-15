@@ -559,6 +559,47 @@ fn a_manufacturing_order_makes_one_run_and_a_done_order_is_frozen() {
     assert_eq!(mo["quantity"], 4);
     assert_eq!(mo["planned_on"], TODAY);
     let mo = id(&mo);
+    // An order without a production location or components would finish without moving any
+    // stock, so it is not confirmed.
+    let e = refused(
+        &app,
+        &lead,
+        "manufacturing_order.confirm",
+        json!({ "id": mo }),
+        "Choose the production location first",
+    );
+    assert!(e.contains("is_set(location_id)"), "{e}");
+    let wh = id(&ok(
+        &app,
+        &root,
+        "inventory_warehouse.create",
+        json!({"name": "Plant", "code": "PL1"}),
+    ));
+    let floor = id(&ok(
+        &app,
+        &root,
+        "inventory_location.create",
+        json!({"name": "Floor", "warehouse_id": wh, "kind": "internal"}),
+    ));
+    ok(
+        &app,
+        &lead,
+        "manufacturing_order.update",
+        json!({"id": mo, "location_id": floor}),
+    );
+    refused(
+        &app,
+        &lead,
+        "manufacturing_order.confirm",
+        json!({ "id": mo }),
+        "Add the components first",
+    );
+    ok(
+        &app,
+        &lead,
+        "manufacturing_order_line.create",
+        json!({"order_id": mo, "component_id": product, "quantity": 1}),
+    );
     for action in ["confirm", "start", "finish"] {
         ok(
             &app,

@@ -233,7 +233,7 @@ export function FinishAction({ model, row, busy }: RecordExtProps) {
       );
       return;
     }
-    const { waiting } = await settleMoves(
+    const { done, waiting } = await settleMoves(
       d.run,
       d.token,
       d.models.get(MOVE)?.model,
@@ -241,13 +241,16 @@ export function FinishAction({ model, row, busy }: RecordExtProps) {
     );
     await d.changed(MOVE);
     setRunning(false);
+    // An order from before 0.3.0 may have no location or components: then nothing moved.
     d.notify(
-      waiting === 0
-        ? t("Production finished; stock updated")
-        : t("Production finished; {count} stock moves wait for a stock manager", {
-            count: String(waiting),
-          }),
-      waiting === 0 ? "ok" : "info",
+      done + waiting === 0
+        ? t("Production finished; no stock moved (the order has no location or components)")
+        : waiting === 0
+          ? t("Production finished; stock updated")
+          : t("Production finished; {count} stock moves wait for a stock manager", {
+              count: String(waiting),
+            }),
+      waiting === 0 && done > 0 ? "ok" : "info",
     );
   }
   return (
