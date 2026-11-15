@@ -347,7 +347,11 @@ export function CalendarView(p: ViewProps) {
               setMoved((m) => ({ ...m, [e.row.id]: patch }));
               void p.update(e.row.id, patch).then((err) => {
                 if (!err) return;
-                setMoved(({ [e.row.id]: _, ...rest }) => rest);
+                setMoved((m) => {
+                  const rest = { ...m };
+                  delete rest[e.row.id];
+                  return rest;
+                });
                 d.notify(err, "error");
               });
             }
