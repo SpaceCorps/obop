@@ -420,4 +420,9 @@
   .acc-overview .content {
     padding: var(--space-4);
   }
+  /* The screen's own "Back to the list" and "All transactions" lead back: the title stands alone. */
+  .acc-rec-head .crumbs > a,
+  .acc-rec-head .crumbs > .ico {
+    display: none;
+  }
 }
