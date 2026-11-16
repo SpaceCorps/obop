@@ -79,7 +79,10 @@ test.describe("employees", () => {
       // One login belongs to one employee (a run before this one may have linked "eve").
       for (const was of (await api.list("root", "hr_employee")).filter((r) => r.user === "eve"))
         await api.post("/api/hr_employee/update", { id: was.id, user: null }, root);
-      const eve = await api.create("root", "hr_employee", { name: uid("Eve Example"), user: "eve" });
+      const eve = await api.create("root", "hr_employee", {
+        name: uid("Eve Example"),
+        user: "eve",
+      });
       const twice = await api.post(
         "/api/hr_employee/create",
         { name: uid("Eve Copy"), user: "eve" },
