@@ -55,9 +55,9 @@ test("a week of time is typed into the grid and submitted for approval", async (
 
     // Submit week: the draft is submitted and its cell is no longer typed over.
     await page.getByRole("button", { name: /^Submit week \(\d+\)$/ }).click();
-    await expect.poll(async () => (await mine(api, task.id)).map((r) => r.state)).toEqual([
-      "submitted",
-    ]);
+    await expect
+      .poll(async () => (await mine(api, task.id)).map((r) => r.state))
+      .toEqual(["submitted"]);
     await expect(
       page.getByRole("button", { name: new RegExp(`^${task.title} on .*: 2 h 30$`) }),
     ).toBeVisible();
