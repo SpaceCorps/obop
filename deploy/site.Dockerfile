@@ -10,6 +10,8 @@ FROM node:24-slim AS web
 RUN corepack enable
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# pnpm-workspace.yaml names patch files (patchedDependencies); pnpm reads them on every install.
+COPY patches ./patches
 COPY web ./web
 # The website is generated from these: bundled packages, the module guide, the ASCII hero. There
 # is no .git here, so its changelog comes from data/changelog.snapshot.json.
