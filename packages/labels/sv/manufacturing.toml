@@ -90,7 +90,7 @@ cancelled = "Annullerad"
 
 [labels.sv.model.manufacturing_order.action.confirm]
 label = "Bekräfta"
-description = "Bekräfta en order i utkast så att tillverkningen kan planeras"
+description = "Bekräfta en order i utkast så att tillverkningen kan planeras; den behöver den färdiga produkten, en produktionsplats och minst en komponentrad"
 
 [labels.sv.model.manufacturing_order.action.confirm.assert.has_product]
 message = "Välj den färdiga produkten först: när ordern slutförs läggs den i lager på produktionsplatsen"
