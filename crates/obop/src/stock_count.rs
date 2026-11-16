@@ -20,6 +20,8 @@ use std::sync::{Arc, Weak};
 const MODEL: &str = "stock_count";
 /// The group of `inventory_move.validate`.
 const GROUP: &str = "inventory.manager";
+const DRY_RUN_WORDS: &str =
+    "dry_run must be true or false (also yes, no, 1 or 0); nothing was counted";
 
 pub fn module() -> Module {
     let f = |name, description| FieldDef::new(name, description, DataClass::None, false, GROUP);
@@ -191,11 +193,19 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 _ => return Err("counted is required: the units counted, a whole number".into()),
             };
             // `obop call ... dry_run=true` sends text (docs/ISSUES.md Q9): a dry run must never
-            // write, so the text counts too.
+            // write, so the text counts too, in any case; a word that is neither yes nor no is
+            // refused rather than read as a real count.
             let dry = match map.get("dry_run") {
+                None | Some(Value::Null) => false,
                 Some(Value::Bool(b)) => *b,
-                Some(Value::Text(t)) => matches!(t.trim(), "true" | "1" | "yes"),
-                _ => false,
+                Some(Value::Int(0)) => false,
+                Some(Value::Int(1)) => true,
+                Some(Value::Text(t)) => match t.trim().to_ascii_lowercase().as_str() {
+                    "true" | "1" | "yes" => true,
+                    "false" | "0" | "no" => false,
+                    _ => return Err(DRY_RUN_WORDS.into()),
+                },
+                _ => return Err(DRY_RUN_WORDS.into()),
             };
             let a = Actor::from_input(input);
             if a.agent && !dry {

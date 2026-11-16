@@ -207,3 +207,39 @@ fn a_count_leaves_no_draft_difference_and_a_dry_run_writes_nothing() {
     .unwrap_err();
     assert!(e.contains("0 or more"), "{e}");
 }
+
+#[test]
+fn dry_run_text_is_read_without_regard_to_case_and_unknown_text_is_refused() {
+    let s = shelf();
+    let n = s.moves().len();
+    for dry in ["TRUE", "True", " yes ", "Yes", "1"] {
+        let out = ok(
+            &s.app,
+            &s.keeper,
+            "stock_count.apply",
+            json!({"item": s.item, "counted": 40, "dry_run": dry}),
+        );
+        assert_eq!(out["written"], false, "dry_run={dry:?}");
+        assert_eq!((s.on_hand(), s.moves().len()), (36, n), "dry_run={dry:?}");
+    }
+    // A word that is neither yes nor no is refused, never read as "count for real".
+    for dry in ["maybe", "ture", "2"] {
+        let e = run(
+            &s.app,
+            &s.keeper,
+            "stock_count.apply",
+            json!({"item": s.item, "counted": 40, "dry_run": dry}),
+        )
+        .unwrap_err();
+        assert!(e.contains("dry_run"), "{dry:?}: {e}");
+        assert_eq!((s.on_hand(), s.moves().len()), (36, n), "dry_run={dry:?}");
+    }
+    // A no word is a real count.
+    let out = ok(
+        &s.app,
+        &s.keeper,
+        "stock_count.apply",
+        json!({"item": s.item, "counted": 40, "dry_run": "FALSE"}),
+    );
+    assert_eq!((out["written"].as_bool(), s.on_hand()), (Some(true), 40));
+}
