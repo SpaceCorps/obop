@@ -8,6 +8,8 @@
 //! - `fill_from` copies a value only when the caller could read it in clear: the field's group,
 //!   the record's visibility and the masking of its data class (D40). Otherwise the field stays
 //!   empty, exactly as if the source were empty, so the answer is no oracle for what it holds.
+//! - A `fill_from` into the model's `access.own` field is applied again by an update that moves
+//!   the record to another source and leaves the owner out (`refill_owner`): the record follows.
 //! - `readonly` refuses a value on create and a changed value on update (code `readonly_field`);
 //!   the record sent back as it is passes. Defaults, `fill_from` and effects still write it.
 
@@ -104,6 +106,44 @@ pub(crate) fn fill_in(cx: &FillCtx<'_>, def: &ModelDef, f: &mut Fields) -> R<()>
         }
     }
     Ok(())
+}
+
+/// The owner (the model's `access.own` field) that its `fill_from` gives again when an update
+/// moves the record to another source (the `via` ref changes) and does not name the owner itself:
+/// leave moved to another employee becomes that employee's. When nothing can be copied the
+/// caller owns it, as on create (`own_default`).
+pub(crate) fn refill_owner(
+    cx: &FillCtx<'_>,
+    def: &ModelDef,
+    patch: &Fields,
+    changed: &Fields,
+    after: &Fields,
+) -> R<Option<(String, J)>> {
+    let Some(own) = def.access.as_ref().and_then(|a| a.own) else {
+        return Ok(None);
+    };
+    let Some(p) = def
+        .fields
+        .iter()
+        .find(|x| x.name == own)
+        .and_then(|x| x.hints.as_ref())
+        .and_then(|h| h.fill_from.as_ref())
+    else {
+        return Ok(None);
+    };
+    let Some(via) = &p.via else {
+        return Ok(None);
+    };
+    if patch.contains_key(own) || !changed.contains_key(via.as_str()) {
+        return Ok(None);
+    }
+    let copied = if is_unset(after.get(via.as_str())) {
+        None
+    } else {
+        copied(cx, def, via, &p.field, after)?
+    };
+    let v = copied.or_else(|| (!cx.actor.id.is_empty()).then(|| J::from(cx.actor.id.clone())));
+    Ok(v.map(|v| (own.to_string(), v)))
 }
 
 fn default_value(cx: &FillCtx<'_>, fd: &FieldDef, d: &DefaultSpec) -> R<Option<J>> {

@@ -472,7 +472,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     kinds::canonicalise(def, &mut patch, Path::Write)?;
     hints::refuse_readonly(def, &patch, Some(&cur))?;
     check_fields_against(&unit, &look, &actor, def, &patch, false, Some(&cur))?;
-    let changed: Fields = patch
+    let mut changed: Fields = patch
         .iter()
         .filter(|(k, v)| cur.get(*k) != Some(*v))
         .map(|(k, v)| (k.clone(), v.clone()))
@@ -501,6 +501,12 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
             actor: &actor,
             today: &today,
         };
+        if let Some((k, v)) = hints::refill_owner(&cx, def, &patch, &changed, &after)?
+            && cur.get(&k) != Some(&v)
+        {
+            after.insert(k.clone(), v.clone());
+            changed.insert(k, v);
+        }
         hints::check_ref_filters(&cx, def, &after, Some(&changed))?;
         // The caller may not move a record out of their own sight.
         if let Some(why) = creator_blocked(&Gate::new(&unit, &look, &actor), def, &after) {
