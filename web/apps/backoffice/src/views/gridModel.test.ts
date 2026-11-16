@@ -4,6 +4,7 @@ import {
   buildGrid,
   cellEditable,
   daySumText,
+  seesOthers,
   cellPlan,
   parseCellHours,
   gridSpecOf,
@@ -160,5 +161,20 @@ describe("daySumText", () => {
     expect(daySumText(480)).toBe("8:00");
     expect(daySumText(5)).toBe("0:05");
     expect(daySumText(0)).toBe("");
+  });
+});
+
+describe("seesOthers", () => {
+  const m = (access?: ModelMeta["access"]) => ({ access }) as unknown as ModelMeta;
+  it("offers Everyone only to a person who can see more than their own", () => {
+    expect(seesOthers(m({ own: "worker", see_all_group: ["t.manager"], sees_all: false }))).toBe(
+      false,
+    );
+    expect(seesOthers(m({ own: "worker", see_all_group: ["t.manager"], sees_all: true }))).toBe(
+      true,
+    );
+    expect(seesOthers(m({ own: "worker", via: "task_id", sees_all: false }))).toBe(true);
+    expect(seesOthers(m(undefined))).toBe(true);
+    expect(seesOthers(m({ own: "worker" }))).toBe(true);
   });
 });

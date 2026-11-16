@@ -514,6 +514,7 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                         o["access"] = json!({
                             "own": a.own, "via": a.via, "public_field": a.public_field,
                             "shared_with": a.shared_with, "see_all_group": a.see_all,
+                            "sees_all": a.sees_all,
                         });
                     }
                     ui::model_hints(&mut o, x);

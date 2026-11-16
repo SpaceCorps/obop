@@ -55,6 +55,17 @@ export function gridSpecOf(model: ModelMeta, fields: readonly FieldMeta[]): Grid
   };
 }
 
+/**
+ * Whether "Everyone" can show this person more than their own records: the model has no row
+ * rule, the server says they see every record (`sees_all`; an older server leaves it out), or
+ * the rule also lets other records through (`via`, `shared_with`, `public_field`).
+ */
+export function seesOthers(model: ModelMeta): boolean {
+  const a = model.access;
+  if (!a || a.sees_all !== false) return true;
+  return !!(a.via || a.shared_with || a.public_field);
+}
+
 /** The Monday of the week `day` (YYYY-MM-DD) falls in. */
 export function weekStart(day: string): string {
   const d = new Date(`${day}T00:00:00Z`);

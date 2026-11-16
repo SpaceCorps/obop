@@ -31,6 +31,7 @@ import {
   gridSpecOf,
   minutesOf,
   parseCellHours,
+  seesOthers,
   submittable,
   weekDays,
   weekStart,
@@ -230,17 +231,19 @@ export function GridView(p: ViewProps) {
     );
   };
 
-  const scopeSwitch = spec.owner ? (
-    <Segmented
-      label={t("Whose time")}
-      value={scope}
-      onChange={setScope}
-      options={[
-        { value: "mine", label: t("Mine"), icon: "user" },
-        { value: "all", label: t("Everyone"), icon: "users" },
-      ]}
-    />
-  ) : null;
+  // Only for a person who can see others' entries (a manager); for the rest Everyone is Mine.
+  const scopeSwitch =
+    spec.owner && seesOthers(p.model) ? (
+      <Segmented
+        label={t("Whose time")}
+        value={scope}
+        onChange={setScope}
+        options={[
+          { value: "mine", label: t("Mine"), icon: "user" },
+          { value: "all", label: t("Everyone"), icon: "users" },
+        ]}
+      />
+    ) : null;
 
   const submitButton =
     submit && p.canUpdate ? (
