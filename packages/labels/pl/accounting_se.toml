@@ -241,6 +241,9 @@ name = "Raport VAT"
 plural = "Raporty VAT"
 description = "Raport VAT za okres, przygotowany z księgi głównej i zatwierdzony przez osobę przed użyciem. NIEZWERYFIKOWANY: ten pakiet nie porównał go z SKV 4700"
 
+[labels.pl.model.accounting_se_vat_report.guard]
+message = "Zatwierdzonej lub złożonej deklaracji VAT nie można zmienić, z wyjątkiem jej notatek."
+
 [labels.pl.model.accounting_se_vat_report.field.name]
 label = "Nazwa"
 description = "Nazwa okresu, na przykład 2026-Q3"
@@ -279,7 +282,7 @@ label = "VAT naliczony"
 description = "Podlegający odliczeniu VAT naliczony za okres w öre, suma wierszy VAT naliczonego"
 
 [labels.pl.model.accounting_se_vat_report.field.vat_to_pay]
-label = "VAT do zapłaty"
+label = "VAT do zapłaty lub zwrotu"
 description = "VAT należny minus VAT naliczony w öre; ujemny oznacza zwrot (pole 49)"
 
 [labels.pl.model.accounting_se_vat_report.field.boxes_confirmed]
@@ -323,6 +326,9 @@ description = "Zapisz, że deklarację złożono w Skatteverket poza tym systeme
 name = "Wiersz raportu VAT"
 plural = "Wiersze raportu VAT"
 description = "Pole raportu VAT z jego kwotą"
+
+[labels.pl.model.accounting_se_vat_report_line.guard]
+message = "Pozycji zatwierdzonej lub złożonej deklaracji VAT nie można zmienić."
 
 [labels.pl.model.accounting_se_vat_report_line.field.report_id]
 label = "Raport"

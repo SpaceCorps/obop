@@ -8,6 +8,9 @@ name = "Page"
 plural = "Pages"
 description = "Une page du site web"
 
+[labels.fr.model.website_page.guard]
+message = "Une page archivée est retirée pour de bon. Créez une nouvelle page pour la remplacer."
+
 [labels.fr.model.website_page.field.title]
 label = "Titre"
 description = "Titre de la page"
@@ -86,6 +89,9 @@ description = "Indique si le lien s’ouvre dans une nouvelle fenêtre"
 name = "Article de blog"
 plural = "Articles de blog"
 description = "Un article de blog"
+
+[labels.fr.model.website_blog_post.guard]
+message = "Un article archivé est retiré pour de bon. Écrivez un nouvel article pour le remplacer."
 
 [labels.fr.model.website_blog_post.field.title]
 label = "Titre"

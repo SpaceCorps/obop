@@ -34,6 +34,9 @@ name = "Cita"
 plural = "Citas"
 description = "Una reserva de un recurso en un momento dado"
 
+[labels.es.model.appointments_appointment.guard]
+message = "Una cita realizada, cancelada o perdida no se puede modificar. Reserve una nueva en su lugar."
+
 [labels.es.model.appointments_appointment.field.resource_id]
 label = "Recurso"
 description = "El recurso reservado"

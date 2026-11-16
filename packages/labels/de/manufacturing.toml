@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Fertigung"
-description = "Stücklisten und Fertigungsaufträge mit dem Ablauf Entwurf, bestätigt, in Bearbeitung und erledigt. Der Bestand der Komponenten wird nicht automatisch verbraucht. Erledigte und stornierte Aufträge sind gesperrt."
+description = "Stücklisten und Fertigungsaufträge mit dem Ablauf Entwurf, bestätigt, in Bearbeitung und erledigt. Ein Auftrag listet die Komponenten, die er verbraucht; beim Fertigstellen entstehen die Lagerbewegungen, die diese Komponenten am Produktionsort entnehmen und das Fertigprodukt dort einbuchen. Erledigte und stornierte Aufträge sind gesperrt."
 summary = "Stücklisten und Fertigungsaufträge mit dem Ablauf Entwurf, bestätigt, in Bearbeitung und erledigt."
 
 [labels.de.model.manufacturing_bom]
@@ -50,9 +50,12 @@ name = "Fertigungsauftrag"
 plural = "Fertigungsaufträge"
 description = "Eine Anweisung, eine Menge eines Produkts herzustellen"
 
-[labels.de.model.manufacturing_order.field.reference]
-label = "Referenz"
-description = "Auftragsnummer, zum Beispiel MO-0042"
+[labels.de.model.manufacturing_order.guard]
+message = "Ein erledigter oder stornierter Fertigungsauftrag kann nicht geändert werden."
+
+[labels.de.model.manufacturing_order.field.number]
+label = "Nummer"
+description = "Auftragsnummer wie MO-00042, wird beim Anlegen des Auftrags vergeben"
 
 [labels.de.model.manufacturing_order.field.bom_id]
 label = "Stückliste"
@@ -87,7 +90,16 @@ cancelled = "Storniert"
 
 [labels.de.model.manufacturing_order.action.confirm]
 label = "Bestätigen"
-description = "Einen Auftragsentwurf bestätigen, damit die Produktion geplant werden kann"
+description = "Einen Auftragsentwurf bestätigen, damit die Produktion geplant werden kann; dafür braucht er das Fertigprodukt, einen Produktionsort und mindestens eine Komponentenzeile"
+
+[labels.de.model.manufacturing_order.action.confirm.assert.has_product]
+message = "Wählen Sie zuerst das Fertigprodukt: Beim Abschluss des Auftrags wird es am Produktionsort eingelagert"
+
+[labels.de.model.manufacturing_order.action.confirm.assert.has_location]
+message = "Wählen Sie zuerst den Produktionsort: Beim Abschluss des Auftrags werden dort die Komponenten entnommen und das Produkt eingelagert"
+
+[labels.de.model.manufacturing_order.action.confirm.assert.has_components]
+message = "Fügen Sie zuerst die Komponenten hinzu: Ein Auftrag ohne Komponenten bewegt beim Abschluss keinen Bestand"
 
 [labels.de.model.manufacturing_order.action.start]
 label = "Starten"
@@ -95,8 +107,36 @@ description = "Die Produktion eines bestätigten Auftrags starten"
 
 [labels.de.model.manufacturing_order.action.finish]
 label = "Fertigstellen"
-description = "Die Produktion als abgeschlossen markieren"
+description = "Die Produktion als abgeschlossen markieren: mit einem Produktionsort entsteht je Komponente eine Lagerbewegung im Entwurf, die sie dort entnimmt, und eine, die das Fertigprodukt dort einbucht, mit der Auftragsnummer als Herkunftsbeleg, zur Validierung durch das Lager (erfordert die Gruppe inventory.user)"
 
 [labels.de.model.manufacturing_order.action.cancel]
 label = "Stornieren"
 description = "Einen Auftrag stornieren, der noch nicht bestätigt wurde"
+
+[labels.de.model.manufacturing_order.field.product_id]
+label = "Produkt"
+description = "Das hergestellte Fertigprodukt; wird aus der Stückliste übernommen, wenn es fehlt"
+
+[labels.de.model.manufacturing_order.field.location_id]
+label = "Produktionsort"
+description = "Der Produktionsort: beim Fertigstellen entstehen die Lagerbewegungen, die die Komponenten hier entnehmen und das Fertigprodukt hier einbuchen; leer erzeugt keine Bewegungen"
+
+[labels.de.model.manufacturing_order_line]
+name = "Auftragskomponente"
+plural = "Auftragskomponenten"
+description = "Eine Komponente, die ein Fertigungsauftrag verbraucht, mit der Stückzahl für den ganzen Auftrag"
+
+[labels.de.model.manufacturing_order_line.guard]
+message = "Die Komponenten eines erledigten oder stornierten Fertigungsauftrags können nicht geändert werden."
+
+[labels.de.model.manufacturing_order_line.field.order_id]
+label = "Fertigungsauftrag"
+description = "Der Fertigungsauftrag, der die Komponente verbraucht"
+
+[labels.de.model.manufacturing_order_line.field.component_id]
+label = "Komponente"
+description = "Das verbrauchte Produkt"
+
+[labels.de.model.manufacturing_order_line.field.quantity]
+label = "Menge"
+description = "Stückzahl der Komponente, die der ganze Auftrag verbraucht"

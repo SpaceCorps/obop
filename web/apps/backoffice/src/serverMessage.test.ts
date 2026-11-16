@@ -383,3 +383,25 @@ describe("server messages without engine text", () => {
     ).toBe("Customer is required");
   });
 });
+
+describe("paying an invoice that is not in the ledger", () => {
+  const raw =
+    "the invoice is not in the ledger yet (it has no move), so no receivable was booked for it and 1400 cannot be credited with its payment; book the invoice first (invoice_posting.create_move) and match its receivable item, or book the payment to a revenue account (nothing was written)";
+
+  it("tells a person to choose another account, without the command name", async () => {
+    await setLanguage("en", false);
+    const out = serverMessage(raw);
+    expect(out).toContain("1400 is a receivable");
+    expect(out).not.toContain("invoice_posting");
+  });
+
+  for (const lang of LANGS)
+    it(`${lang}: is translated`, async () => {
+      provideCatalogue(lang, read(lang));
+      await setLanguage(lang, false);
+      const out = serverMessage(raw);
+      expect(out).toContain("1400");
+      expect(out).not.toContain("invoice_posting");
+      expect(out).not.toMatch(/[{}]/);
+    });
+});

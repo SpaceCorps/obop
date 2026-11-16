@@ -41,6 +41,9 @@ name = "Sitzung"
 plural = "Sitzungen"
 description = "Eine Verkaufsschicht an einer Verkaufsstelle, vom Öffnen bis zum Schließen der Kassenschublade"
 
+[labels.de.model.pos_session.guard]
+message = "Eine geschlossene Sitzung kann nicht geändert werden; nur ihre Notiz kann noch eine Kassendifferenz erklären."
+
 [labels.de.model.pos_session.field.config_id]
 label = "Kasse"
 description = "Die Verkaufsstelle, zu der die Sitzung gehört"
@@ -89,10 +92,16 @@ closed = "Abgeschlossen"
 label = "Abschließen"
 description = "Die Sitzung abschließen, sobald die Schublade gezählt ist (nur Führungskräfte)"
 
+[labels.de.model.pos_session.action.close.assert.difference_explained]
+message = "Die Kassendifferenz ist nicht erklärt: vor dem Abschließen im Notizfeld begründen"
+
 [labels.de.model.pos_order]
 name = "Verkauf"
 plural = "Verkäufe"
 description = "Ein an einer Verkaufsstelle erfasster Verkauf"
+
+[labels.de.model.pos_order.guard]
+message = "Ein bezahlter, erstatteter oder stornierter Verkauf kann nicht geändert werden. Erstatten Sie ihn, um ihn rückgängig zu machen."
 
 [labels.de.model.pos_order.field.session_id]
 label = "Sitzung"
@@ -149,6 +158,9 @@ name = "Verkaufsposition"
 plural = "Verkaufspositionen"
 description = "Eine Produktposition eines Verkaufs"
 
+[labels.de.model.pos_order_line.guard]
+message = "Die Zeilen eines bezahlten, erstatteten oder stornierten Verkaufs können nicht geändert werden."
+
 [labels.de.model.pos_order_line.field.order_id]
 label = "Auftrag"
 description = "Der Verkauf, zu dem die Position gehört"
@@ -181,6 +193,9 @@ description = "Positionssumme nach Rabatt: Menge mal Stückpreis abzüglich Raba
 name = "Zahlung"
 plural = "Zahlungen"
 description = "Eine zu einem Verkauf erhaltene Zahlung; ein Verkauf kann mit mehreren Zahlungsarten bezahlt werden"
+
+[labels.de.model.pos_payment.guard]
+message = "Die Zahlungen eines bezahlten, erstatteten oder stornierten Verkaufs können nicht geändert werden."
 
 [labels.de.model.pos_payment.field.order_id]
 label = "Auftrag"

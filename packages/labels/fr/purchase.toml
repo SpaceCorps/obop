@@ -37,6 +37,9 @@ name = "Commande"
 plural = "Commandes d’achat"
 description = "Une demande faite à un fournisseur de livrer des biens ou des services"
 
+[labels.fr.model.purchase_order.guard]
+message = "Une commande reçue ou annulée ne peut pas être modifiée, sauf ses notes."
+
 [labels.fr.model.purchase_order.field.reference]
 label = "Référence fournisseur"
 description = "Numéro de devis ou de référence du fournisseur pour cette commande, le cas échéant"
@@ -97,6 +100,9 @@ name = "Ligne de commande"
 plural = "Lignes de commande"
 description = "Un produit ou un service d’une commande d’achat"
 
+[labels.fr.model.purchase_order_line.guard]
+message = "Les lignes d’une commande reçue ou annulée ne peuvent pas être modifiées."
+
 [labels.fr.model.purchase_order_line.field.order_id]
 label = "Commande"
 description = "La commande à laquelle appartient la ligne"
@@ -119,7 +125,7 @@ description = "Prix convenu par unité (plus petite unité monétaire, par exemp
 
 [labels.fr.model.purchase_order_line.field.received_quantity]
 label = "Quantité reçue"
-description = "Unités reçues jusqu’à présent"
+description = "Unités réellement arrivées, si elles diffèrent de la commande ; vide signifie que la quantité commandée est arrivée. À renseigner avant la réception de la commande"
 
 [labels.fr.model.purchase_order.field.number]
 label = "Numéro"
@@ -132,3 +138,7 @@ description = "Où les marchandises doivent être reçues ; la réception de la 
 [labels.fr.model.purchase_order_line.field.amount]
 label = "Montant"
 description = "Montant de la ligne : quantité multipliée par le prix unitaire (plus petite unité monétaire)"
+
+[labels.fr.model.purchase_order_line.field.receipt_quantity]
+label = "Quantité à réceptionner"
+description = "Unités que la réception met en stock : la quantité reçue si elle est indiquée, sinon la quantité commandée"

@@ -121,6 +121,9 @@ name = "Exercice fiscal"
 plural = "Exercices fiscaux"
 description = "Un exercice fiscal, ouvert et clôturé dans son ensemble"
 
+[labels.fr.model.accounting_fiscal_year.guard]
+message = "Un exercice clôturé ne peut pas être modifié. Rouvrez-le pour le corriger."
+
 [labels.fr.model.accounting_fiscal_year.field.name]
 label = "Nom"
 description = "Nom de l’exercice fiscal, par exemple EF2026"
@@ -153,6 +156,9 @@ description = "Rouvre un exercice fiscal clôturé pour le corriger (approbateur
 name = "Période"
 plural = "Périodes"
 description = "Une période comptable (en général un mois) à l’intérieur d’un exercice fiscal"
+
+[labels.fr.model.accounting_period.guard]
+message = "Une période clôturée ne peut pas être modifiée. Rouvrez-la pour la corriger."
 
 [labels.fr.model.accounting_period.field.fiscal_year_id]
 label = "Exercice fiscal"
@@ -190,6 +196,9 @@ description = "Rouvre une période clôturée (approbateur uniquement)"
 name = "Écriture"
 plural = "Écritures"
 description = "Une écriture comptable : un ensemble daté de lignes de débit et de crédit dans un journal"
+
+[labels.fr.model.accounting_move.guard]
+message = "Les écritures comptabilisées, annulées ou extournées, et celles datées dans une période clôturée, ne peuvent pas être modifiées. Extournez une écriture comptabilisée pour la corriger."
 
 [labels.fr.model.accounting_move.field.journal_id]
 label = "Journal"
@@ -242,6 +251,9 @@ name = "Ligne d’écriture"
 plural = "Lignes d’écriture"
 description = "Une ligne de débit ou de crédit d’une écriture comptable"
 
+[labels.fr.model.accounting_move_line.guard]
+message = "Les lignes d’une écriture comptabilisée, annulée ou extournée, ou datée dans une période clôturée, ne peuvent pas être modifiées."
+
 [labels.fr.model.accounting_move_line.field.move_id]
 label = "Écriture"
 description = "L’écriture comptable à laquelle appartient la ligne"
@@ -283,6 +295,9 @@ name = "Ligne de relevé bancaire"
 plural = "Lignes de relevé bancaire"
 description = "Une ligne de relevé bancaire en attente d’association à des écritures"
 
+[labels.fr.model.accounting_bank_statement_line.guard]
+message = "Une transaction bancaire rapprochée ne peut pas être modifiée."
+
 [labels.fr.model.accounting_bank_statement_line.field.journal_id]
 label = "Journal"
 description = "Le journal de banque auquel appartient le relevé"
@@ -310,6 +325,10 @@ description = "Compte bancaire du payeur ou du bénéficiaire"
 [labels.fr.model.accounting_bank_statement_line.field.move_line_id]
 label = "Ligne d’écriture"
 description = "La ligne d’écriture à laquelle cette ligne de relevé a été associée"
+
+[labels.fr.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Poste ouvert réglé"
+description = "Le poste ouvert client ou fournisseur que ce paiement règle ; deux transactions bancaires ne peuvent pas régler le même poste"
 
 [labels.fr.model.accounting_bank_statement_line.field.state]
 label = "Statut"

@@ -1037,3 +1037,42 @@ fn prereleases_wildcards_and_empty_ranges_in_dependencies() {
     assert!(m(">=2, <1").unwrap_err().contains("matches no version"));
     assert!(m("^0.2").is_ok());
 }
+
+/// A catalog whose listing fails, as the bundled one does when a package's labels fail the gate.
+struct Unreadable;
+
+impl Marketplace for Unreadable {
+    fn list(&self) -> Result<Vec<Listing>, String> {
+        Err("bundled package aa: labels.de: description is longer than 400 characters".into())
+    }
+    fn fetch(&self, id: &str) -> Result<String, String> {
+        Err(format!("no package {id}"))
+    }
+}
+
+#[test]
+fn upgrade_all_names_the_package_when_the_catalog_cannot_be_read() {
+    let store = Store::new();
+    let d = Arc::new(Dispatcher::new());
+    let inst = Installer::new(
+        store.clone(),
+        &d,
+        vec![admin_module()],
+        Arc::new(Unreadable),
+    );
+    register_admin(&d, &inst);
+    inst.install(&pkg("aa", "0.1.0", "", "", "", ""), "upload", "root")
+        .unwrap();
+    let r = call(
+        &d,
+        &admin(),
+        "module.upgrade_all",
+        Value::Map(Default::default()),
+    );
+    let Err(CallError::Handler(m)) = r else {
+        panic!("expected a refusal in words, got {r:?}");
+    };
+    assert!(m.contains("nothing was updated"), "{m}");
+    assert!(m.contains("bundled package aa"), "{m}");
+    assert!(m.contains("400 characters"), "{m}");
+}

@@ -4,7 +4,11 @@ summary = "Faktury klientów z cyklem życia wersja robocza, zaksięgowana, anul
 
 [labels.pl.model.invoice]
 name = "Faktura"
+plural = "Faktury sprzedaży"
 description = "Faktura sprzedaży dla klienta; żadna akcja nie przywraca zaksięgowanej faktury do wersji roboczej ani jej nie anuluje"
+
+[labels.pl.model.invoice.guard]
+message = "Zaksięgowanej faktury nie można zmienić."
 
 [labels.pl.model.invoice.field.sale_order_id]
 label = "Zamówienie sprzedaży"
@@ -53,6 +57,7 @@ description = "Kod waluty ISO 4217"
 
 [labels.pl.model.invoice_line]
 name = "Pozycja faktury"
+plural = "Pozycje faktury"
 description = "Jeden produkt lub jedna usługa na fakturze"
 
 [labels.pl.model.invoice_line.field.invoice_id]

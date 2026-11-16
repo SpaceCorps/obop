@@ -1,8 +1,8 @@
 [module]
 id = "inventory"
-version = "0.4.0"
+version = "0.5.0"
 name = "Inventory"
-description = "Warehouses, stock locations, stock levels and stock moves. Validating a move takes the quantity out of the stock item at the source location and adds it to the item at the destination, in one step; an item that does not exist yet is created. There is one item per product, location and lot, and its quantity changes only through moves: a receipt is a move with no source, a delivery or write-off a move with no destination. Negative quantities are allowed, as for virtual locations such as suppliers. A done or cancelled move can no longer be changed."
+description = "Warehouses, stock locations, stock levels and stock moves. Validating a move takes the quantity out of the stock item at the source location and adds it to the item at the destination, in one step; an item that does not exist yet is created. There is one item per product, location and lot, and its quantity changes only through moves: a receipt is a move with no source, a delivery or scrap a move with no destination. Once an item exists, its product, location and lot are fixed: stock changes place through moves, never by editing an item. Negative quantities are allowed, as for virtual locations such as suppliers; a negative item counts as low stock. A done or cancelled move can no longer be changed."
 author = "SpaceCorps"
 summary = "Warehouses, stock locations, stock levels and stock moves."
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ categories = ["supply-chain"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "overview"
-changelog = "The quantity of a stock item changes only through stock moves: it is no longer typed in or imported (start stock with a move that has no source location). Done and cancelled moves are frozen. A stock item says whether it is at or below its reorder level (Low stock). A new move is planned for today, new warehouses and locations start active, and inactive ones are no longer offered for moves; warehouses and locations whose active flag was never set become active. English names: Stock, Stock moves, Warehouses, Locations."
+changelog = "0.5.0: a stock item keeps its product, location and lot once it exists (only its reorder level can be edited; its quantity moves through stock moves), so stock is never relabelled without a move, and a negative stock item counts as low stock. A new stock move says what kind of move it is (receipt, delivery, internal, scrap, a stock count adjustment or production) and which document it came from (origin, for example PO-00042), so receipts of a purchase order and stock counts can be found; moves made before 0.5.0 keep no type. 0.4.0: the quantity of a stock item changes only through stock moves: it is no longer typed in or imported (start stock with a move that has no source location). Done and cancelled moves are frozen. A stock item says whether it is at or below its reorder level (Low stock). A new move is planned for today, new warehouses and locations start active, and inactive ones are no longer offered for moves; warehouses and locations whose active flag was never set become active. English names: Stock, Stock moves, Warehouses, Locations."
 
 [module.dependencies]
 product = "^0.2"
@@ -134,6 +134,10 @@ write_group = "inventory.manager"
   label = "In stock"
   where = "quantity > 0"
 
+  [model.guard]
+  mutable_fields = ["quantity", "reorder_level"]
+  message = "A stock item keeps its product, location and lot. Move the stock to change where it is."
+
   [[model.field]]
   name = "product_id"
   description = "The product held; there is one item per product, location and lot"
@@ -177,10 +181,10 @@ write_group = "inventory.manager"
 
   [[model.field]]
   name = "below_reorder"
-  description = "Whether the quantity is at or below the reorder level (false when no reorder level is set)"
+  description = "Whether the item needs attention: the quantity is below zero, or at or below the reorder level"
   class = "none"
   kind = "bool"
-  computed = "is_set(reorder_level) && quantity <= reorder_level"
+  computed = "quantity < 0 || (is_set(reorder_level) && quantity <= reorder_level)"
 
 [[model]]
 name = "inventory_move"
@@ -191,8 +195,8 @@ write_group = "inventory.user"
   [model.ui]
   title = "{product_id} × {quantity}"
   subtitle = "{from_location_id} → {to_location_id} | → {to_location_id} | {from_location_id} →"
-  list = ["reference", "scheduled_on", "product_id", "from_location_id", "to_location_id", "quantity", "state"]
-  card = ["reference", "product_id", "quantity", "scheduled_on"]
+  list = ["reference", "product_id", "from_location_id", "to_location_id", "quantity", "scheduled_on", "state"]
+  card = ["reference", "product_id", "quantity", "kind", "scheduled_on"]
   quick_create = ["product_id", "quantity", "from_location_id", "to_location_id"]
   order = "scheduled_on desc, reference desc"
   default_view = "list"
@@ -211,7 +215,15 @@ write_group = "inventory.user"
 
   [[model.ui.filter]]
   label = "Deliveries"
-  where = "to_location_id = null"
+  where = "to_location_id = null && kind != scrap"
+
+  [[model.ui.filter]]
+  label = "Stock counts"
+  where = "kind = adjustment"
+
+  [[model.ui.filter]]
+  label = "Scrap"
+  where = "kind = scrap"
 
   [[model.ui.filter]]
   label = "Late"
@@ -246,7 +258,7 @@ write_group = "inventory.user"
 
   [[model.field]]
   name = "to_location_id"
-  description = "Where it arrives; empty for a delivery to a customer"
+  description = "Where it arrives; empty for a delivery to a customer or for scrap"
   class = "none"
   kind = "ref"
   to = "inventory_location"
@@ -258,6 +270,21 @@ write_group = "inventory.user"
   class = "none"
   kind = "number"
   required = true
+
+  [[model.field]]
+  name = "kind"
+  description = "What the move is: a receipt from a supplier, a delivery to a customer, an internal transfer, scrap, an adjustment after a stock count, or production (components used and products made)"
+  class = "none"
+  kind = "select"
+  options = ["receipt", "delivery", "internal", "scrap", "adjustment", "production"]
+
+    [model.field.ui]
+    tones = { receipt = "info", delivery = "info", scrap = "warn", adjustment = "neutral" }
+
+  [[model.field]]
+  name = "origin"
+  description = "The document the move came from, for example a purchase order number such as PO-00042 or a manufacturing order"
+  class = "none"
 
   [[model.field]]
   name = "scheduled_on"

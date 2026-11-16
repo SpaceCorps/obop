@@ -3,8 +3,17 @@
 // with, what picking a product fills in, when the lines are frozen and the sums of the footer. Pure
 // functions over `/api/meta` and rows, no React. Each reads the D95 hint first (`children`,
 // `ui.list`, `fill_from`, `guard`) and falls back to a heuristic the tests pin.
-import type { ChildMeta, FieldMeta, ModelGuard, ModelMeta, Row, ServerOrder } from "./api.ts";
+import {
+  fixedOnceCreated,
+  type ChildMeta,
+  type FieldMeta,
+  type ModelGuard,
+  type ModelMeta,
+  type Row,
+  type ServerOrder,
+} from "./api.ts";
 import { isEmpty } from "./format.ts";
+import { guardMessage } from "./labels.ts";
 import { isIdLike, stateFieldOf, summable } from "./presentation.ts";
 import { initialOption, isGoverned } from "./workflow.ts";
 
@@ -305,7 +314,7 @@ export function fillsFor(opts: {
 /** Whether a guard freezes a record: its `immutable_when`, or `append_only`. */
 function guardFreezes(g: ModelGuard | undefined, row: Row | null): boolean {
   if (!g || !row) return false;
-  if (g.append_only) return true;
+  if (g.append_only || fixedOnceCreated(g)) return true;
   const w = g.immutable_when;
   return !!w && w.values.includes(String(row[w.field] ?? ""));
 }
@@ -337,7 +346,7 @@ export function linesFrozen(
   if (!parentRow) return { frozen: false };
   if (parent.guard || child.guard) {
     const frozen = child.guard?.children_of === via && guardFreezes(parent.guard, parentRow);
-    return { frozen, message: frozen ? parent.guard?.message : undefined };
+    return { frozen, message: frozen ? guardMessage(parent.guard) : undefined };
   }
   const st = stateFieldOf(parent);
   if (!st || !isGoverned(parent, st)) return { frozen: false };

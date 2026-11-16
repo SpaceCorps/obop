@@ -41,6 +41,9 @@ name = "Sesja"
 plural = "Sesje"
 description = "Jedna zmiana sprzedaży w punkcie sprzedaży, od otwarcia do zamknięcia szuflady kasowej"
 
+[labels.pl.model.pos_session.guard]
+message = "Zamkniętej sesji nie można zmienić; tylko jej notatka może jeszcze wyjaśnić różnicę w kasie."
+
 [labels.pl.model.pos_session.field.config_id]
 label = "Kasa"
 description = "Punkt sprzedaży, do którego należy sesja"
@@ -89,10 +92,16 @@ closed = "Zamknięte"
 label = "Zamknij"
 description = "Zamyka sesję po przeliczeniu szuflady (tylko kierownik)"
 
+[labels.pl.model.pos_session.action.close.assert.difference_explained]
+message = "Różnica w kasie nie jest wyjaśniona: przed zamknięciem podaj przyczynę w notatce"
+
 [labels.pl.model.pos_order]
 name = "Sprzedaż"
 plural = "Sprzedaże"
 description = "Sprzedaż zarejestrowana w punkcie sprzedaży"
+
+[labels.pl.model.pos_order.guard]
+message = "Opłaconej, zwróconej lub anulowanej sprzedaży nie można zmienić. Zwróć ją, aby ją cofnąć."
 
 [labels.pl.model.pos_order.field.session_id]
 label = "Sesja"
@@ -149,6 +158,9 @@ name = "Pozycja sprzedaży"
 plural = "Pozycje sprzedaży"
 description = "Jedna pozycja produktowa sprzedaży"
 
+[labels.pl.model.pos_order_line.guard]
+message = "Pozycji opłaconej, zwróconej lub anulowanej sprzedaży nie można zmienić."
+
 [labels.pl.model.pos_order_line.field.order_id]
 label = "Zamówienie"
 description = "Sprzedaż, do której należy pozycja"
@@ -181,6 +193,9 @@ description = "Wartość pozycji po rabacie: ilość razy cena jednostkowa, pomn
 name = "Płatność"
 plural = "Płatności"
 description = "Płatność przyjęta za sprzedaż; sprzedaż może być opłacona kilkoma metodami"
+
+[labels.pl.model.pos_payment.guard]
+message = "Płatności opłaconej, zwróconej lub anulowanej sprzedaży nie można zmienić."
 
 [labels.pl.model.pos_payment.field.order_id]
 label = "Zamówienie"

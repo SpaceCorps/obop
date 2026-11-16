@@ -60,6 +60,9 @@ name = "Kampanj"
 plural = "Kampanjer"
 description = "Ett utskick till en lista"
 
+[labels.sv.model.email_marketing_campaign.guard]
+message = "En skickad eller avbruten kampanj kan inte ändras; bara dess statistik kan fortfarande föras in."
+
 [labels.sv.model.email_marketing_campaign.field.name]
 label = "Namn"
 description = "Kampanjens interna namn"

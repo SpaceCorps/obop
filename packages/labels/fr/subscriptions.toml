@@ -42,6 +42,9 @@ name = "Abonnement"
 plural = "Abonnements"
 description = "L’abonnement récurrent d’un client à une formule"
 
+[labels.fr.model.subscriptions_subscription.guard]
+message = "Un abonnement résilié ne peut pas être modifié. Souscrivez plutôt un nouvel abonnement."
+
 [labels.fr.model.subscriptions_subscription.field.customer_id]
 label = "Client"
 description = "Le client qui s’est abonné"
@@ -60,7 +63,7 @@ description = "Date de fin de l’essai gratuit (YYYY-MM-DD)"
 
 [labels.fr.model.subscriptions_subscription.field.next_invoice_on]
 label = "Prochaine facture le"
-description = "Date d’échéance de la prochaine facture (YYYY-MM-DD)"
+description = "Date d’échéance de la prochaine facture (YYYY-MM-DD), saisie à la main : aucune facture n’est encore créée depuis un abonnement, créez-la dans Facturation"
 
 [labels.fr.model.subscriptions_subscription.field.recurring_amount]
 label = "Montant récurrent"

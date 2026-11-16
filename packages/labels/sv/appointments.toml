@@ -34,6 +34,9 @@ name = "Bokning"
 plural = "Bokningar"
 description = "En bokning av en resurs vid en viss tid"
 
+[labels.sv.model.appointments_appointment.guard]
+message = "Ett genomfört, avbokat eller missat besök kan inte ändras. Boka ett nytt i stället."
+
 [labels.sv.model.appointments_appointment.field.resource_id]
 label = "Resurs"
 description = "Den bokade resursen"

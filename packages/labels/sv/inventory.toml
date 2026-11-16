@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Lager"
-description = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser. När en rörelse valideras tas antalet från källplatsen och läggs till på målplatsen i ett steg; en post som saknas skapas. En post per produkt, plats och parti; negativa antal är tillåtna. Antalet ändras bara genom rörelser; klara och avbrutna rörelser är låsta."
+description = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser. När en rörelse valideras tas antalet från källplatsen och läggs till på målplatsen i ett steg; en post som saknas skapas. En post per produkt, plats och parti; negativa antal är tillåtna. Antalet ändras bara genom rörelser; klara och avbrutna rörelser är låsta. En posts produkt och plats ligger fast."
 summary = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser."
 
 [labels.sv.model.inventory_warehouse]
@@ -57,6 +57,9 @@ name = "Lagerartikel"
 plural = "Lagersaldo"
 description = "Antalet av en produkt på en lagerplats"
 
+[labels.sv.model.inventory_item.guard]
+message = "En lagerpost behåller sin produkt, sin plats och sitt parti. Flytta lagret för att ändra var det finns."
+
 [labels.sv.model.inventory_item.field.product_id]
 label = "Produkt"
 description = "Produkten som lagras; det finns en post per produkt, plats och parti"
@@ -82,6 +85,9 @@ name = "Lagerrörelse"
 plural = "Lagerrörelser"
 description = "En förflyttning av en produkt mellan lagerplatser, eller in i eller ut ur verksamheten"
 
+[labels.sv.model.inventory_move.guard]
+message = "En klar eller avbruten flytt kan inte ändras. Gör en ny flytt för att rätta lagret."
+
 [labels.sv.model.inventory_move.field.reference]
 label = "Referens"
 description = "Rörelsens nummer, som MV-00042, tilldelas när rörelsen skapas"
@@ -96,7 +102,7 @@ description = "Varifrån den lämnar; tomt för inleverans från en leverantör"
 
 [labels.sv.model.inventory_move.field.to_location_id]
 label = "Till plats"
-description = "Vart den kommer; tomt för leverans till en kund"
+description = "Vart den kommer; tomt för leverans till en kund eller för kassation"
 
 [labels.sv.model.inventory_move.field.quantity]
 label = "Antal"
@@ -124,5 +130,21 @@ label = "Annullera"
 description = "Annullera en rörelse i utkast"
 
 [labels.sv.model.inventory_item.field.below_reorder]
-description = "Om antalet är på eller under beställningspunkten (nej när ingen beställningspunkt är satt)"
+description = "Om posten behöver uppmärksamhet: antalet är under noll, eller på eller under beställningspunkten"
 label = "Lågt lager"
+
+[labels.sv.model.inventory_move.field.kind]
+label = "Typ"
+description = "Vad rörelsen är: en inleverans från en leverantör, en leverans till en kund, en intern flytt, kassation, en justering efter en inventering eller tillverkning (förbrukade komponenter och tillverkade produkter)"
+
+[labels.sv.model.inventory_move.field.kind.options]
+receipt = "Inleverans"
+delivery = "Leverans"
+internal = "Intern"
+scrap = "Kassation"
+adjustment = "Inventeringsjustering"
+production = "Tillverkning"
+
+[labels.sv.model.inventory_move.field.origin]
+label = "Ursprung"
+description = "Dokumentet som rörelsen kommer från, till exempel ett inköpsordernummer som PO-00042 eller en tillverkningsorder"

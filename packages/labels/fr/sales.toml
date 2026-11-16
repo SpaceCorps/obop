@@ -6,9 +6,16 @@ summary = "Devis et commandes client pour vos clients."
 name = "Commande client"
 description = "Un devis ou une commande confirmée pour un client"
 
+[labels.fr.model.sale_order.guard]
+message = "Une commande confirmée ne peut pas être modifiée. Annulez-la pour la corriger."
+
 [labels.fr.model.sale_order.field.party_id]
-label = "Tiers"
-description = "Identifiant du tiers client"
+label = "Client"
+description = "Le client du devis ou de la commande"
+
+[labels.fr.model.sale_order.field.lead_id]
+label = "Piste"
+description = "La piste CRM pour laquelle le devis a été créé ; son client si aucun n’est indiqué"
 
 [labels.fr.model.sale_order.field.state]
 label = "Statut"

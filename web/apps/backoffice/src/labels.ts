@@ -5,7 +5,7 @@
 // name, which keeps acronyms in capitals ("SEO title", "VAT", "IBAN"). See
 // docs/brand/LOCALIZATION.md.
 import { getLang, labelFor, tx } from "@obop/ui";
-import type { Command, FieldMeta, ModelMeta, ModuleMeta } from "./api.ts";
+import type { Command, FieldMeta, ModelGuard, ModelMeta, ModuleMeta } from "./api.ts";
 import { label, modelLabel } from "./format.ts";
 
 /** Words that are written in capitals, whatever the technical name says. */
@@ -49,6 +49,12 @@ const humanised = (own: string, en: string) => (own === en ? keepAcronyms(en) : 
 
 /** Whether the active language is English (where the humanised names are the words shown). */
 const english = () => /^en\b/i.test(getLang());
+
+/** What the lock banner of a guard says in the active language; English when untranslated. */
+export function guardMessage(g: ModelGuard | undefined): string | undefined {
+  if (!g?.message) return undefined;
+  return labelFor({ labels: g.message_labels ?? {} }, getLang(), g.message);
+}
 
 /** The name of an app (module) as shown in the launcher, sidebar and palette. */
 export function appTitle(m: Pick<ModuleMeta, "name" | "labels">): string {

@@ -22,6 +22,18 @@ description = "Adresse e-mail de la personne à contacter"
 label = "Revenu attendu"
 description = "Revenu attendu en plus petite unité monétaire"
 
+[labels.fr.model.lead.field.party_id]
+label = "Client"
+description = "Le client : le contact pour lequel un devis est créé à partir de la piste"
+
+[labels.fr.model.lead.field.expected_close]
+label = "Clôture prévue"
+description = "Jour où l’affaire devrait être conclue (AAAA-MM-JJ)"
+
+[labels.fr.model.lead.field.lost_reason]
+label = "Motif de perte"
+description = "Pourquoi l’opportunité a été perdue"
+
 [labels.fr.model.lead.field.stage]
 label = "Étape"
 description = "Étape du pipeline : nouveau, qualifié, gagné ou perdu"

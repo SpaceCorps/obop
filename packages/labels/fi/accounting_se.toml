@@ -241,6 +241,9 @@ name = "Alv-raportti"
 plural = "Alv-raportit"
 description = "Jakson alv-raportti, laadittu pääkirjasta ja henkilön hyväksymä ennen käyttöä. TARKISTAMATON: tämä paketti ei ole verrannut sitä SKV 4700:aan"
 
+[labels.fi.model.accounting_se_vat_report.guard]
+message = "Hyväksyttyä tai jätettyä arvonlisäveroilmoitusta ei voi muuttaa, vain sen muistiinpanoja."
+
 [labels.fi.model.accounting_se_vat_report.field.name]
 label = "Nimi"
 description = "Jakson nimi, esimerkiksi 2026-Q3"
@@ -279,7 +282,7 @@ label = "Ostojen vero"
 description = "Jakson vähennyskelpoinen ostojen vero örinä, ostorivien summa"
 
 [labels.fi.model.accounting_se_vat_report.field.vat_to_pay]
-label = "Maksettava alv"
+label = "Maksettava tai palautettava alv"
 description = "Myynnin vero miinus ostojen vero örinä; negatiivinen tarkoittaa palautusta (ruutu 49)"
 
 [labels.fi.model.accounting_se_vat_report.field.boxes_confirmed]
@@ -323,6 +326,9 @@ description = "Kirjaa, että ilmoitus on toimitettu Skatteverketille tämän jä
 name = "Alv-raportin rivi"
 plural = "Alv-raportin rivit"
 description = "Alv-raportin ruutu summineen"
+
+[labels.fi.model.accounting_se_vat_report_line.guard]
+message = "Hyväksytyn tai jätetyn arvonlisäveroilmoituksen rivejä ei voi muuttaa."
 
 [labels.fi.model.accounting_se_vat_report_line.field.report_id]
 label = "Raportti"

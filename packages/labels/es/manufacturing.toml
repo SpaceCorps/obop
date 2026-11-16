@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Fabricación"
-description = "Listas de materiales y órdenes de fabricación con un flujo de borrador, confirmada, en curso y hecha. El stock de componentes no se consume automáticamente. Las órdenes hechas o canceladas quedan bloqueadas."
+description = "Listas de materiales y órdenes de fabricación con un flujo borrador, confirmada, en curso y terminada. Una orden lista los componentes que usa; al terminarla se crean los movimientos de stock que sacan esos componentes en su ubicación de producción y dejan allí el producto terminado. Una orden terminada o cancelada ya no se puede cambiar."
 summary = "Listas de materiales y órdenes de fabricación con un flujo de borrador, confirmada, en curso y hecha."
 
 [labels.es.model.manufacturing_bom]
@@ -50,9 +50,12 @@ name = "Orden de fabricación"
 plural = "Órdenes de fabricación"
 description = "Una instrucción para producir una cantidad de un producto"
 
-[labels.es.model.manufacturing_order.field.reference]
-label = "Referencia"
-description = "Número de orden, por ejemplo OF-0042"
+[labels.es.model.manufacturing_order.guard]
+message = "Una orden de fabricación terminada o cancelada no se puede modificar."
+
+[labels.es.model.manufacturing_order.field.number]
+label = "Número"
+description = "Número de orden como MO-00042, asignado al crear la orden"
 
 [labels.es.model.manufacturing_order.field.bom_id]
 label = "Lista de materiales"
@@ -87,7 +90,16 @@ cancelled = "Cancelado"
 
 [labels.es.model.manufacturing_order.action.confirm]
 label = "Confirmar"
-description = "Confirmar una orden en borrador para poder planificar la producción"
+description = "Confirmar una orden en borrador para poder planificar la producción; necesita el producto terminado, un lugar de producción y al menos una línea de componente"
+
+[labels.es.model.manufacturing_order.action.confirm.assert.has_product]
+message = "Elija primero el producto terminado: al terminar la orden, entra en el stock del lugar de producción"
+
+[labels.es.model.manufacturing_order.action.confirm.assert.has_location]
+message = "Elija primero el lugar de producción: al terminar la orden, los componentes salen de allí y el producto entra"
+
+[labels.es.model.manufacturing_order.action.confirm.assert.has_components]
+message = "Añada primero los componentes: una orden sin componentes no mueve stock al terminarse"
 
 [labels.es.model.manufacturing_order.action.start]
 label = "Iniciar"
@@ -95,8 +107,36 @@ description = "Iniciar la producción de una orden confirmada"
 
 [labels.es.model.manufacturing_order.action.finish]
 label = "Terminar"
-description = "Marcar la producción como terminada"
+description = "Marcar la producción como terminada: con una ubicación de producción se crea un movimiento de stock en borrador que saca cada componente de allí y otro que deja allí el producto terminado, con el número de la orden como origen, para que el almacén los valide (requiere el grupo inventory.user)"
 
 [labels.es.model.manufacturing_order.action.cancel]
 label = "Cancelar"
 description = "Cancelar una orden que no se ha confirmado"
+
+[labels.es.model.manufacturing_order.field.product_id]
+label = "Producto"
+description = "El producto terminado que se fabrica; se toma de la lista de materiales si no se indica"
+
+[labels.es.model.manufacturing_order.field.location_id]
+label = "Ubicación de producción"
+description = "La ubicación de producción: al terminar la orden se crean los movimientos de stock que toman de aquí los componentes y dejan aquí el producto terminado; vacía no crea movimientos"
+
+[labels.es.model.manufacturing_order_line]
+name = "Componente de la orden"
+plural = "Componentes de la orden"
+description = "Un componente que usa una orden de fabricación, con las unidades para toda la orden"
+
+[labels.es.model.manufacturing_order_line.guard]
+message = "Los componentes de una orden de fabricación terminada o cancelada no se pueden modificar."
+
+[labels.es.model.manufacturing_order_line.field.order_id]
+label = "Orden de fabricación"
+description = "La orden de fabricación que usa el componente"
+
+[labels.es.model.manufacturing_order_line.field.component_id]
+label = "Componente"
+description = "El producto consumido"
+
+[labels.es.model.manufacturing_order_line.field.quantity]
+label = "Cantidad"
+description = "Unidades del componente que usa toda la orden"

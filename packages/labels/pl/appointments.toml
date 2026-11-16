@@ -34,6 +34,9 @@ name = "Spotkanie"
 plural = "Spotkania"
 description = "Rezerwacja zasobu na określony czas"
 
+[labels.pl.model.appointments_appointment.guard]
+message = "Odbytej, odwołanej lub nieodbytej wizyty nie można zmienić. Zarezerwuj zamiast tego nową."
+
 [labels.pl.model.appointments_appointment.field.resource_id]
 label = "Zasób"
 description = "Zarezerwowany zasób"

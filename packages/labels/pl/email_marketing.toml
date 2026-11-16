@@ -60,6 +60,9 @@ name = "Kampania"
 plural = "Kampanie"
 description = "Jedna wysyłka mailingowa do listy"
 
+[labels.pl.model.email_marketing_campaign.guard]
+message = "Wysłanej lub anulowanej kampanii nie można zmienić; można jeszcze wpisać tylko jej statystyki."
+
 [labels.pl.model.email_marketing_campaign.field.name]
 label = "Nazwa"
 description = "Wewnętrzna nazwa kampanii"

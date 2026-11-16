@@ -37,6 +37,9 @@ name = "Pedido"
 plural = "Pedidos de compra"
 description = "Una solicitud a un proveedor para que suministre bienes o servicios"
 
+[labels.es.model.purchase_order.guard]
+message = "Un pedido recibido o cancelado no se puede modificar, salvo sus notas."
+
 [labels.es.model.purchase_order.field.reference]
 label = "Referencia del proveedor"
 description = "Número de presupuesto o referencia del proveedor para este pedido, si lo hay"
@@ -97,6 +100,9 @@ name = "Línea de pedido"
 plural = "Líneas de pedido"
 description = "Un producto o servicio de un pedido de compra"
 
+[labels.es.model.purchase_order_line.guard]
+message = "Las líneas de un pedido recibido o cancelado no se pueden modificar."
+
 [labels.es.model.purchase_order_line.field.order_id]
 label = "Pedido"
 description = "El pedido al que pertenece la línea"
@@ -119,7 +125,7 @@ description = "Precio acordado por unidad (unidad menor de la moneda, por ejempl
 
 [labels.es.model.purchase_order_line.field.received_quantity]
 label = "Cantidad recibida"
-description = "Unidades recibidas hasta ahora"
+description = "Unidades que llegaron realmente, si difieren de lo pedido; vacío significa que llegó la cantidad pedida. Indíquelo antes de recibir el pedido"
 
 [labels.es.model.purchase_order.field.number]
 label = "Número"
@@ -132,3 +138,7 @@ description = "Dónde se van a recibir las mercancías; al recibir el pedido se 
 [labels.es.model.purchase_order_line.field.amount]
 label = "Importe"
 description = "Importe de la línea: cantidad por precio unitario (unidad menor de la moneda)"
+
+[labels.es.model.purchase_order_line.field.receipt_quantity]
+label = "Cantidad a recibir"
+description = "Unidades que la recepción pone en stock: la cantidad recibida si se indica, si no la cantidad pedida"

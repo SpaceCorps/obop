@@ -39,6 +39,9 @@ name = "Ärende"
 plural = "Ärenden"
 description = "En supportförfrågan från en kund"
 
+[labels.sv.model.helpdesk_ticket.guard]
+message = "Ett stängt ärende kan inte ändras. Öppna ett nytt ärende om problemet kommer tillbaka."
+
 [labels.sv.model.helpdesk_ticket.field.subject]
 label = "Ämne"
 description = "Sammanfattning av problemet på en rad"

@@ -37,6 +37,9 @@ name = "Ostotilaus"
 plural = "Ostotilaukset"
 description = "Pyyntö toimittajalle toimittaa tavaroita tai palveluja"
 
+[labels.fi.model.purchase_order.guard]
+message = "Vastaanotettua tai peruttua tilausta ei voi muuttaa, vain sen muistiinpanoja."
+
 [labels.fi.model.purchase_order.field.reference]
 label = "Toimittajan viite"
 description = "Toimittajan tarjous- tai viitenumero tälle tilaukselle, jos sellainen on"
@@ -97,6 +100,9 @@ name = "Ostotilauksen rivi"
 plural = "Ostotilauksen rivit"
 description = "Ostotilauksen yksi tuote tai palvelu"
 
+[labels.fi.model.purchase_order_line.guard]
+message = "Vastaanotetun tai perutun tilauksen rivejä ei voi muuttaa."
+
 [labels.fi.model.purchase_order_line.field.order_id]
 label = "Ostotilaus"
 description = "Tilaus, johon rivi kuuluu"
@@ -119,7 +125,7 @@ description = "Sovittu yksikköhinta (valuutan pienin yksikkö, esimerkiksi sent
 
 [labels.fi.model.purchase_order_line.field.received_quantity]
 label = "Vastaanotettu määrä"
-description = "Tähän mennessä vastaanotetut yksiköt"
+description = "Todellisuudessa saapuneet yksiköt, jos määrä poikkeaa tilatusta; tyhjä tarkoittaa, että tilattu määrä saapui. Aseta ennen tilauksen vastaanottoa"
 
 [labels.fi.model.purchase_order.field.number]
 label = "Numero"
@@ -132,3 +138,7 @@ description = "Mihin tavarat vastaanotetaan; tilauksen vastaanotto luo varastosi
 [labels.fi.model.purchase_order_line.field.amount]
 label = "Summa"
 description = "Rivin summa: määrä kertaa yksikköhinta (valuutan pienin yksikkö)"
+
+[labels.fi.model.purchase_order_line.field.receipt_quantity]
+label = "Vastaanotettava määrä"
+description = "Yksiköt, jotka vastaanotto vie varastoon: vastaanotettu määrä, jos se on annettu, muuten tilattu määrä"

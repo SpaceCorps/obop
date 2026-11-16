@@ -208,6 +208,9 @@ name = "Zamówienie online"
 plural = "Zamówienia online"
 description = "Zamówienie złożone online"
 
+[labels.pl.model.ecommerce_order.guard]
+message = "Dostarczonego, anulowanego lub zwróconego zamówienia nie można zmienić, z wyjątkiem kontaktu i numeru przesyłki."
+
 [labels.pl.model.ecommerce_order.field.number]
 label = "Numer"
 description = "Numer zamówienia widoczny dla kupującego. Dowolny tekst: pakiety nie generują numeracji; publiczny proces zamówienia tworzy numer losowy"
@@ -320,6 +323,9 @@ description = "Zwraca pieniądze za dostarczone zamówienie, na przykład po zwr
 name = "Pozycja zamówienia"
 plural = "Pozycje zamówienia"
 description = "Jedna pozycja produktowa zamówienia internetowego"
+
+[labels.pl.model.ecommerce_order_line.guard]
+message = "Pozycji dostarczonego, anulowanego lub zwróconego zamówienia nie można zmienić."
 
 [labels.pl.model.ecommerce_order_line.field.order_id]
 label = "Zamówienie"

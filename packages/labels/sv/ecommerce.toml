@@ -208,6 +208,9 @@ name = "Webborder"
 plural = "Webborder"
 description = "En order som lagts online"
 
+[labels.sv.model.ecommerce_order.guard]
+message = "En levererad, avbruten eller återbetald order kan inte ändras, bara dess kontakt och spårningsnummer."
+
 [labels.sv.model.ecommerce_order.field.number]
 label = "Nummer"
 description = "Ordernummer som visas för kunden. Fritext: paket kan inte generera nummerserier; den publika kassan skapar ett slumpmässigt nummer"
@@ -320,6 +323,9 @@ description = "Betala tillbaka en levererad order, till exempel efter en retur (
 name = "Orderrad"
 plural = "Orderrader"
 description = "En produktrad i en webborder"
+
+[labels.sv.model.ecommerce_order_line.guard]
+message = "Raderna i en levererad, avbruten eller återbetald order kan inte ändras."
 
 [labels.sv.model.ecommerce_order_line.field.order_id]
 label = "Order"

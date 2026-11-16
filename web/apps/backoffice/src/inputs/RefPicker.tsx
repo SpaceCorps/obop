@@ -41,6 +41,7 @@ import { serverMessage } from "../serverMessage.ts";
 import { Icon } from "../ui.tsx";
 import { fillsFor, fillValues, meets, refConditions, useFieldForm, type RefCond } from "./form.ts";
 import { useAnchored } from "./popover.ts";
+import { byName, existing, searchWord } from "./refFind.ts";
 
 const RecordPanel = lazy(() =>
   import("../RecordPanel.tsx").then((m) => ({ default: m.RecordPanel })),
@@ -117,6 +118,13 @@ function archivedMatches(
       r.active === false &&
       words.every((w) => haystack(target, r, titleOf(target, r, ctx), "").includes(w)),
   ).length;
+}
+
+/** The text field that names a record of `model` (its title), if one does. */
+function textTitleOf(model: ModelMeta): string | undefined {
+  return titleFieldsOf(model)
+    .map((n) => model.fields.find((f) => f.name === n))
+    .find((f) => f?.kind === "text" && !f.computed && !f.sequence)?.name;
 }
 
 export function RefPicker(p: RefPickerProps) {
@@ -238,11 +246,25 @@ export function RefPicker(p: RefPickerProps) {
     [hasActive, target, serverMode, rows, q, ctx, d.lang],
   );
 
+  const titleFields = target
+    ? titleFieldsOf(target).map((n) => target.fields.find((f) => f.name === n))
+    : [];
+  // A record named by one ref and nothing else (a vendor is its contact): the typed name is the
+  // name of that record, made or found first, never another text field of this one ("Our customer
+  // number"). A title of several parts (a stock item is a product at a location) makes nothing.
+  const viaRef = (() => {
+    const f = titleFields[0];
+    if (!target || titleFields.length !== 1 || f?.kind !== "ref" || !f.to) return undefined;
+    const other = d.models.get(f.to)?.model;
+    const name = other ? textTitleOf(other) : undefined;
+    return other?.can_create && name ? { field: f.name, to: f.to, name } : undefined;
+  })();
+  // A boolean for the list below: the object above is new on every render, and a list that
+  // changes on every render would reset the highlighted option (Enter would pick nothing).
+  const makesRef = !!viaRef;
   const labelName = target
-    ? (titleFieldsOf(target)
-        .map((n) => target.fields.find((f) => f.name === n))
-        .find((f) => f?.kind === "text" && !f.computed && !f.sequence)?.name ??
-      labelField(target)?.name)
+    ? (titleFields.find((f) => f?.kind === "text" && !f.computed && !f.sequence)?.name ??
+      (titleFields[0]?.kind === "ref" ? undefined : labelField(target)?.name))
     : undefined;
   const canCreate = !!target?.can_create && !ACTION_ONLY_MODELS.has(to) && !readOnly;
   const exact = options.some((o) => fold(o.title) === fold(q));
@@ -250,10 +272,10 @@ export function RefPicker(p: RefPickerProps) {
     const list: Item[] = [];
     if (!field.required && !q) list.push({ kind: "none" });
     for (const o of options) list.push({ kind: "rec", ...o });
-    if (canCreate && q && labelName && !exact) list.push({ kind: "create", text: q });
+    if (canCreate && q && (labelName || makesRef) && !exact) list.push({ kind: "create", text: q });
     if (canCreate) list.push({ kind: "edit", text: q });
     return list;
-  }, [options, q, canCreate, labelName, exact, field.required]);
+  }, [options, q, canCreate, labelName, makesRef, exact, field.required]);
 
   // One highlighted option: the current value when it is listed, else the first record.
   useEffect(() => {
@@ -324,14 +346,103 @@ export function RefPicker(p: RefPickerProps) {
     return out;
   }
 
+  /**
+   * The record a ref-named model points at: the one of that name (case and repeated spaces do not
+   * count), else a new one. Null when a person must choose: several records have that name, or
+   * the search failed; the full form then opens.
+   */
+  async function refFor(
+    text: string,
+  ): Promise<{ id: string; found: boolean; name: string } | null> {
+    if (!viaRef) return null;
+    const asked = 50;
+    const found = await search(d.token, viaRef.to, {
+      filter: [{ field: viaRef.name, op: "contains", value: searchWord(text) }],
+      limit: asked,
+    });
+    if ("error" in found) return null;
+    const hit = byName(found.rows, viaRef.name, text, found.rows.length < asked);
+    if (hit.kind === "one") {
+      const row = found.rows.find((r) => r.id === hit.id);
+      return { id: hit.id, found: true, name: String(row?.[viaRef.name] ?? text) };
+    }
+    if (hit.kind === "several") {
+      d.notify(t("Several records are named “{name}”. Choose one in the form.", { name: text }));
+      return null;
+    }
+    const made = await d.run(`${viaRef.to}.create`, { [viaRef.name]: text });
+    if (made.kind === "ok") {
+      const id = String((made.value as Row).id ?? "");
+      return id ? { id, found: false, name: text } : null;
+    }
+    if (made.kind === "error") d.notify(serverMessage(made.message), "error");
+    return null;
+  }
+
+  /**
+   * A record of this model that already stands for the found one (the vendor of a contact): an
+   * active one is picked, an archived one is restored when the person agrees. True when it was
+   * dealt with and nothing is to be made.
+   */
+  async function reuseFor(refId: string, text: string): Promise<boolean> {
+    if (!viaRef) return false;
+    const there = await search(d.token, to, {
+      filter: [{ field: viaRef.field, op: "eq", value: refId }],
+      limit: 5,
+    });
+    if ("error" in there) return false;
+    const old = existing(there.rows);
+    if (old.kind === "none") return false;
+    if (old.kind === "active") {
+      pick(old.id);
+      return true;
+    }
+    const restore = await d.confirm(
+      t("“{name}” is an archived {model}. Restore it instead of making a second one?", {
+        name: text,
+        model: inSentence(targetTitle),
+      }),
+      t("Restore"),
+      t("Cancel"),
+    );
+    if (!restore) {
+      close();
+      return true;
+    }
+    const r = await d.run(`${to}.update`, { id: old.id, active: true });
+    if (r.kind === "ok") {
+      d.notify(t("{model} “{name}” restored", { model: targetTitle, name: text }));
+      pick(old.id);
+    } else if (r.kind === "error") d.notify(serverMessage(r.message), "error");
+    else close();
+    return true;
+  }
+
   async function quickCreate(text: string) {
-    if (!labelName || making) return;
+    if ((!labelName && !viaRef) || making) return;
     setMaking(true);
-    const r = await d.run(`${to}.create`, startValues(text));
+    const start = startValues(text);
+    let name = text;
+    if (viaRef) {
+      const ref = await refFor(text);
+      if (!ref) {
+        setMaking(false);
+        openStacked(text);
+        return;
+      }
+      // The record is named after what was found ("Baumann Bau GmbH", not "baumann  bau gmbh").
+      name = ref.name;
+      if (ref.found && (await reuseFor(ref.id, name))) {
+        setMaking(false);
+        return;
+      }
+      start[viaRef.field] = ref.id;
+    }
+    const r = await d.run(`${to}.create`, start);
     setMaking(false);
     if (r.kind === "ok") {
       const id = String((r.value as Row).id ?? "");
-      d.notify(t("{model} “{name}” created", { model: targetTitle, name: text }));
+      d.notify(t("{model} “{name}” created", { model: targetTitle, name }));
       if (id) pick(id);
     } else if (r.kind === "approval") {
       d.notify(
@@ -342,7 +453,8 @@ export function RefPicker(p: RefPickerProps) {
     } else {
       // Something else is required: the full form takes it from here.
       d.notify(serverMessage(r.message), "error");
-      openStacked(text);
+      setStacked(start);
+      setOpen(false);
     }
   }
 

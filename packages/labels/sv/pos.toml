@@ -41,6 +41,9 @@ name = "Kassapass"
 plural = "Kassapass"
 description = "Ett säljpass vid en kassa, från öppning till stängning av kassalådan"
 
+[labels.sv.model.pos_session.guard]
+message = "Ett stängt pass kan inte ändras; bara dess anteckning kan fortfarande förklara en kassadifferens."
+
 [labels.sv.model.pos_session.field.config_id]
 label = "Kassa"
 description = "Kassan som kassapasset tillhör"
@@ -89,10 +92,16 @@ closed = "Stängt"
 label = "Stäng"
 description = "Stäng kassapasset när kassalådan har räknats (endast chef)"
 
+[labels.sv.model.pos_session.action.close.assert.difference_explained]
+message = "Kassadifferensen är inte förklarad: ange orsaken i anteckningen innan du stänger"
+
 [labels.sv.model.pos_order]
 name = "Försäljning"
 plural = "Försäljningar"
 description = "En försäljning som slagits in i en kassa"
+
+[labels.sv.model.pos_order.guard]
+message = "En betald, återbetald eller avbruten försäljning kan inte ändras. Återbetala den för att häva den."
 
 [labels.sv.model.pos_order.field.session_id]
 label = "Kassapass"
@@ -149,6 +158,9 @@ name = "Försäljningsrad"
 plural = "Försäljningsrader"
 description = "En produktrad i en försäljning"
 
+[labels.sv.model.pos_order_line.guard]
+message = "Raderna i en betald, återbetald eller avbruten försäljning kan inte ändras."
+
 [labels.sv.model.pos_order_line.field.order_id]
 label = "Order"
 description = "Försäljningen som raden tillhör"
@@ -181,6 +193,9 @@ description = "Radsumma efter rabatt: antal gånger styckpris minus rabatten (va
 name = "Betalning"
 plural = "Betalningar"
 description = "En betalning mottagen för en försäljning; en försäljning kan betalas med flera betalsätt"
+
+[labels.sv.model.pos_payment.guard]
+message = "Betalningarna i en betald, återbetald eller avbruten försäljning kan inte ändras."
 
 [labels.sv.model.pos_payment.field.order_id]
 label = "Order"

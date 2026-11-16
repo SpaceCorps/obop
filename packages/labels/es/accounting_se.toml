@@ -241,6 +241,9 @@ name = "Informe de IVA"
 plural = "Informes de IVA"
 description = "Un informe de IVA de un periodo, preparado a partir del libro mayor y aprobado por una persona antes de usarse. SIN VERIFICAR: este paquete no lo ha comparado con SKV 4700"
 
+[labels.es.model.accounting_se_vat_report.guard]
+message = "Una declaración de IVA aprobada o presentada no se puede modificar, salvo sus notas."
+
 [labels.es.model.accounting_se_vat_report.field.name]
 label = "Nombre"
 description = "Nombre del periodo, por ejemplo 2026-Q3"
@@ -279,7 +282,7 @@ label = "IVA soportado"
 description = "IVA soportado deducible del periodo en öre, suma de las líneas soportadas"
 
 [labels.es.model.accounting_se_vat_report.field.vat_to_pay]
-label = "IVA a pagar"
+label = "IVA a pagar o a devolver"
 description = "IVA repercutido menos IVA soportado en öre; negativo significa devolución (casilla 49)"
 
 [labels.es.model.accounting_se_vat_report.field.boxes_confirmed]
@@ -323,6 +326,9 @@ description = "Registrar que la declaración se presentó a Skatteverket fuera d
 name = "Línea de informe de IVA"
 plural = "Líneas de informe de IVA"
 description = "Una casilla de un informe de IVA con su importe"
+
+[labels.es.model.accounting_se_vat_report_line.guard]
+message = "Las líneas de una declaración de IVA aprobada o presentada no se pueden modificar."
 
 [labels.es.model.accounting_se_vat_report_line.field.report_id]
 label = "Informe"

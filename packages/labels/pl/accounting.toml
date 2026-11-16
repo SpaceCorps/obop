@@ -121,6 +121,9 @@ name = "Rok obrotowy"
 plural = "Lata obrotowe"
 description = "Rok obrotowy, otwierany i zamykany w całości"
 
+[labels.pl.model.accounting_fiscal_year.guard]
+message = "Zamkniętego roku obrotowego nie można zmienić. Otwórz go ponownie, aby go poprawić."
+
 [labels.pl.model.accounting_fiscal_year.field.name]
 label = "Nazwa"
 description = "Nazwa roku obrotowego, na przykład RO2026"
@@ -153,6 +156,9 @@ description = "Otwiera ponownie zamknięty rok obrotowy w celu korekty (tylko os
 name = "Okres"
 plural = "Okresy"
 description = "Okres księgowy (zwykle miesiąc) w ramach roku obrotowego"
+
+[labels.pl.model.accounting_period.guard]
+message = "Zamkniętego okresu nie można zmienić. Otwórz go ponownie, aby go poprawić."
 
 [labels.pl.model.accounting_period.field.fiscal_year_id]
 label = "Rok obrotowy"
@@ -190,6 +196,9 @@ description = "Otwiera ponownie zamknięty okres (tylko osoba zatwierdzająca)"
 name = "Operacja"
 plural = "Operacje"
 description = "Operacja księgowa: datowany zestaw pozycji winien i ma w jednym dzienniku"
+
+[labels.pl.model.accounting_move.guard]
+message = "Zaksięgowanych, anulowanych i stornowanych zapisów ani zapisów z zamkniętego okresu nie można zmienić. Wystornuj zaksięgowany zapis, aby go poprawić."
 
 [labels.pl.model.accounting_move.field.journal_id]
 label = "Dziennik"
@@ -242,6 +251,9 @@ name = "Pozycja operacji"
 plural = "Pozycje operacji"
 description = "Jedna pozycja winien lub ma operacji księgowej"
 
+[labels.pl.model.accounting_move_line.guard]
+message = "Pozycji zaksięgowanego, anulowanego lub stornowanego zapisu ani zapisu z zamkniętego okresu nie można zmienić."
+
 [labels.pl.model.accounting_move_line.field.move_id]
 label = "Operacja"
 description = "Operacja księgowa, do której należy pozycja"
@@ -283,6 +295,9 @@ name = "Pozycja wyciągu bankowego"
 plural = "Pozycje wyciągu bankowego"
 description = "Pozycja wyciągu bankowego oczekująca na dopasowanie do operacji"
 
+[labels.pl.model.accounting_bank_statement_line.guard]
+message = "Uzgodnionej transakcji bankowej nie można zmienić."
+
 [labels.pl.model.accounting_bank_statement_line.field.journal_id]
 label = "Dziennik"
 description = "Dziennik bankowy, do którego należy wyciąg"
@@ -310,6 +325,10 @@ description = "Rachunek bankowy płatnika lub odbiorcy"
 [labels.pl.model.accounting_bank_statement_line.field.move_line_id]
 label = "Pozycja operacji"
 description = "Pozycja operacji, do której dopasowano tę pozycję wyciągu"
+
+[labels.pl.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Rozliczona pozycja otwarta"
+description = "Otwarta pozycja należności lub zobowiązania, którą rozlicza ta płatność; dwie transakcje bankowe nie mogą rozliczyć tej samej pozycji"
 
 [labels.pl.model.accounting_bank_statement_line.field.state]
 label = "Status"

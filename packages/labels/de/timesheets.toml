@@ -8,6 +8,9 @@ name = "Zeiteintrag"
 plural = "Zeiteinträge"
 description = "Zeit, die eine Person an einem Tag für eine Aufgabe aufgewendet hat"
 
+[labels.de.model.timesheets_entry.guard]
+message = "Ein genehmigter Zeiteintrag kann nicht geändert werden. Bitten Sie eine Führungskraft, einen Korrektureintrag zu erfassen."
+
 [labels.de.model.timesheets_entry.field.task_id]
 label = "Aufgabe"
 description = "Die bearbeitete Aufgabe"

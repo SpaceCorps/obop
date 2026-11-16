@@ -241,6 +241,9 @@ name = "Rapport de TVA"
 plural = "Rapports de TVA"
 description = "Un rapport de TVA pour une période, établi à partir du grand livre et approuvé par une personne avant usage. NON VÉRIFIÉ : non comparé à SKV 4700 par ce paquet"
 
+[labels.fr.model.accounting_se_vat_report.guard]
+message = "Une déclaration de TVA approuvée ou déposée ne peut pas être modifiée, sauf ses notes."
+
 [labels.fr.model.accounting_se_vat_report.field.name]
 label = "Nom"
 description = "Nom de la période, par exemple 2026-Q3"
@@ -279,7 +282,7 @@ label = "TVA déductible"
 description = "TVA déductible de la période en öre, somme des lignes de TVA déductible"
 
 [labels.fr.model.accounting_se_vat_report.field.vat_to_pay]
-label = "TVA à payer"
+label = "TVA à payer ou à récupérer"
 description = "TVA collectée moins TVA déductible en öre ; négatif signifie remboursement (case 49)"
 
 [labels.fr.model.accounting_se_vat_report.field.boxes_confirmed]
@@ -323,6 +326,9 @@ description = "Enregistrer que la déclaration a été déposée auprès de Skat
 name = "Ligne de rapport de TVA"
 plural = "Lignes de rapport de TVA"
 description = "Une case d'un rapport de TVA avec son montant"
+
+[labels.fr.model.accounting_se_vat_report_line.guard]
+message = "Les lignes d’une déclaration de TVA approuvée ou déposée ne peuvent pas être modifiées."
 
 [labels.fr.model.accounting_se_vat_report_line.field.report_id]
 label = "Rapport"

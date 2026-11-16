@@ -487,6 +487,8 @@ pub struct ModelInfo {
     /// The immutability guard (D77), so an interface can show which records are locked; `None`
     /// when the model declares none.
     pub guard: Option<obop_registry::Guard>,
+    /// The message of the guard per language (D52), empty when untranslated.
+    pub guard_messages: Texts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -671,6 +673,7 @@ impl Dispatcher {
                     },
                     plurals: mtr.map(|t| t.plurals.clone()).unwrap_or_default(),
                     guard: m.def.ext.guard.clone(),
+                    guard_messages: mtr.map(|t| t.guard.clone()).unwrap_or_default(),
                     name: name.clone(),
                     description: m.description,
                     labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
@@ -1597,8 +1600,11 @@ impl Dispatcher {
                         // definition for it is what a field of that name left behind in records
                         // written before the model dropped it (`connection.created_at`): it is
                         // withheld too, but nobody was denied it, so it is not reported as denied.
+                        // An empty value is what a `rename_field` or `drop_field` step leaves under
+                        // the old name (`manufacturing_order.reference`): nothing is withheld, so
+                        // it is not reported as denied either.
                         if k != "id" {
-                            if !obop_registry::is_system_name(&k) {
+                            if !obop_registry::is_system_name(&k) && !matches!(v, Value::Null) {
                                 denied.push(format!("{model}.{k}"));
                             }
                             continue;

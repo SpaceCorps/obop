@@ -8,6 +8,9 @@ name = "Uppdrag"
 plural = "Uppdrag"
 description = "Ett uppdrag hos en kund"
 
+[labels.sv.model.field_service_job.guard]
+message = "Ett klart eller avbrutet uppdrag kan inte ändras. Planera ett uppföljande uppdrag i stället."
+
 [labels.sv.model.field_service_job.field.name]
 label = "Namn"
 description = "Uppdragets korta titel, till exempel Byte av pannpump"
@@ -121,6 +124,9 @@ description = "Annullera ett uppdrag som inte har påbörjats"
 name = "Reservdel"
 plural = "Reservdelar"
 description = "En reservdel eller produkt som använts i ett uppdrag"
+
+[labels.sv.model.field_service_part.guard]
+message = "Delarna i ett klart eller avbrutet uppdrag kan inte ändras."
 
 [labels.sv.model.field_service_part.field.job_id]
 label = "Uppdrag"

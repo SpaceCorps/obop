@@ -224,6 +224,21 @@ li[data-current] .rp-title {
   inline-size: var(--control-h-sm);
   block-size: var(--control-h-sm);
 }
+/* On a phone or a touch screen the calendar button takes the full height of the field to tap, and
+   every option of a picker is 44 px high. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .rp-pop li {
+    min-block-size: 2.75rem;
+  }
+  .datefield input {
+    padding-inline-end: 2.9rem;
+  }
+  .datefield .calbtn {
+    inset-inline-end: 0;
+    inline-size: var(--control-h);
+    block-size: var(--control-h);
+  }
+}
 .cal-pop {
   padding: 0.75rem;
 }

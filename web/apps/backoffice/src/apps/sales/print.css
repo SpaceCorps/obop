@@ -1,0 +1,28 @@
+/* A print sheet (PrintSheet.tsx): hidden on screen; on paper the only thing, once, dark on white.
+   The theme's tokens follow the screen (near-white text in dark mode), so the sheet uses the
+   system colours of a light scheme instead and derives its quiet tones from the text colour. */
+.print-sheet {
+  display: none;
+}
+@media print {
+  html:has(body > .print-sheet),
+  body:has(> .print-sheet) {
+    color-scheme: light;
+    background: Canvas;
+    color: CanvasText;
+    block-size: auto;
+    min-block-size: 0;
+    overflow: visible;
+  }
+  body:has(> .print-sheet) > :not(.print-sheet) {
+    display: none !important;
+  }
+  body > .print-sheet {
+    display: block;
+    color-scheme: light;
+    background: Canvas;
+    color: CanvasText;
+    --print-muted: color-mix(in srgb, CanvasText 62%, Canvas);
+    --print-rule: color-mix(in srgb, CanvasText 22%, Canvas);
+  }
+}

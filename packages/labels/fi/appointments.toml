@@ -34,6 +34,9 @@ name = "Ajanvaraus"
 plural = "Ajanvaraukset"
 description = "Resurssin varaus tiettyyn aikaan"
 
+[labels.fi.model.appointments_appointment.guard]
+message = "Pidettyä, peruttua tai väliin jäänyttä tapaamista ei voi muuttaa. Varaa sen sijaan uusi."
+
 [labels.fi.model.appointments_appointment.field.resource_id]
 label = "Resurssi"
 description = "Varattu resurssi"

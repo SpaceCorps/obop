@@ -209,7 +209,7 @@ const wordy = (f: FieldMeta) =>
 /** The base width of a column by kind, in pixels: wide enough for its usual values. */
 const KIND_WIDTH: Partial<Record<FieldMeta["kind"], number>> = {
   ref: 180,
-  date: 124,
+  date: 136,
   datetime: 196,
   money: 136,
   decimal: 128,

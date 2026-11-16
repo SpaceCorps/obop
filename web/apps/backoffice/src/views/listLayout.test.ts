@@ -211,7 +211,7 @@ describe("the totals and the fit of the columns", () => {
 describe("the widths of the columns", () => {
   const head = (x: FieldMeta) => x.name;
   it("follow the kind and a long head; a number or a code is a short title", () => {
-    expect(columnWidth(f("spent_on", "date"), "Spent on")).toBe(124);
+    expect(columnWidth(f("spent_on", "date"), "Spent on")).toBe(136);
     expect(columnWidth(f("x", "number"), "Payment terms in days")).toBeGreaterThan(104);
     expect(columnWidth(f("x", "text"), "A".repeat(80))).toBe(260);
     expect(columnWidth(f("number", "text", { sequence: true }), "Number", true)).toBe(160);

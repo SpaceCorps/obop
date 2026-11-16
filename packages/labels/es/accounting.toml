@@ -121,6 +121,9 @@ name = "Ejercicio fiscal"
 plural = "Ejercicios fiscales"
 description = "Un ejercicio fiscal, que se abre y se cierra como un todo"
 
+[labels.es.model.accounting_fiscal_year.guard]
+message = "Un ejercicio cerrado no se puede modificar. Vuelva a abrirlo para corregirlo."
+
 [labels.es.model.accounting_fiscal_year.field.name]
 label = "Nombre"
 description = "Nombre del ejercicio fiscal, por ejemplo EF2026"
@@ -153,6 +156,9 @@ description = "Reabrir un ejercicio fiscal cerrado para corregirlo (solo aprobad
 name = "Periodo"
 plural = "Periodos"
 description = "Un periodo contable (normalmente un mes) dentro de un ejercicio fiscal"
+
+[labels.es.model.accounting_period.guard]
+message = "Un periodo cerrado no se puede modificar. Vuelva a abrirlo para corregirlo."
 
 [labels.es.model.accounting_period.field.fiscal_year_id]
 label = "Ejercicio fiscal"
@@ -190,6 +196,9 @@ description = "Reabrir un periodo cerrado (solo aprobadores)"
 name = "Movimiento"
 plural = "Movimientos"
 description = "Un asiento contable: un conjunto fechado de líneas de debe y haber en un diario"
+
+[labels.es.model.accounting_move.guard]
+message = "Los asientos contabilizados, cancelados o revertidos, y los fechados en un periodo cerrado, no se pueden modificar. Revierta un asiento contabilizado para corregirlo."
 
 [labels.es.model.accounting_move.field.journal_id]
 label = "Diario"
@@ -242,6 +251,9 @@ name = "Línea de movimiento"
 plural = "Líneas de movimiento"
 description = "Una línea de debe o de haber de un asiento contable"
 
+[labels.es.model.accounting_move_line.guard]
+message = "Las líneas de un asiento contabilizado, cancelado o revertido, o fechado en un periodo cerrado, no se pueden modificar."
+
 [labels.es.model.accounting_move_line.field.move_id]
 label = "Movimiento"
 description = "El asiento al que pertenece la línea"
@@ -283,6 +295,9 @@ name = "Línea de extracto bancario"
 plural = "Líneas de extracto bancario"
 description = "Una línea de extracto bancario pendiente de cruzar con asientos"
 
+[labels.es.model.accounting_bank_statement_line.guard]
+message = "Una transacción bancaria conciliada no se puede modificar."
+
 [labels.es.model.accounting_bank_statement_line.field.journal_id]
 label = "Diario"
 description = "El diario de banco al que pertenece el extracto"
@@ -310,6 +325,10 @@ description = "Cuenta bancaria del ordenante o del beneficiario"
 [labels.es.model.accounting_bank_statement_line.field.move_line_id]
 label = "Línea de movimiento"
 description = "La línea de asiento con la que se cruzó esta línea de extracto"
+
+[labels.es.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Partida abierta liquidada"
+description = "La partida abierta de cliente o proveedor que liquida este pago; dos transacciones bancarias no pueden liquidar la misma partida"
 
 [labels.es.model.accounting_bank_statement_line.field.state]
 label = "Estado"

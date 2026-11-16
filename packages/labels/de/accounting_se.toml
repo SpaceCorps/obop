@@ -241,6 +241,9 @@ name = "Umsatzsteuerbericht"
 plural = "Umsatzsteuerberichte"
 description = "Ein Umsatzsteuerbericht für eine Periode, aus dem Hauptbuch erstellt und vor der Verwendung von einer Person freigegeben. UNGEPRÜFT: von diesem Paket nicht mit SKV 4700 verglichen"
 
+[labels.de.model.accounting_se_vat_report.guard]
+message = "Ein genehmigter oder eingereichter Umsatzsteuerbericht kann nicht geändert werden, nur seine Notizen."
+
 [labels.de.model.accounting_se_vat_report.field.name]
 label = "Name"
 description = "Name der Periode, zum Beispiel 2026-Q3"
@@ -279,7 +282,7 @@ label = "Vorsteuer"
 description = "Abziehbare Vorsteuer der Periode in Öre, Summe der Eingangszeilen"
 
 [labels.de.model.accounting_se_vat_report.field.vat_to_pay]
-label = "Zu zahlende Umsatzsteuer"
+label = "Zu zahlende oder zu erstattende Umsatzsteuer"
 description = "Ausgangsumsatzsteuer minus Vorsteuer in Öre; negativ bedeutet Erstattung (Feld 49)"
 
 [labels.de.model.accounting_se_vat_report.field.boxes_confirmed]
@@ -323,6 +326,9 @@ description = "Erfassen, dass die Erklärung außerhalb dieses Systems bei Skatt
 name = "Umsatzsteuerberichtszeile"
 plural = "Umsatzsteuerberichtszeilen"
 description = "Ein Feld eines Umsatzsteuerberichts mit seinem Betrag"
+
+[labels.de.model.accounting_se_vat_report_line.guard]
+message = "Die Zeilen eines genehmigten oder eingereichten Umsatzsteuerberichts können nicht geändert werden."
 
 [labels.de.model.accounting_se_vat_report_line.field.report_id]
 label = "Bericht"

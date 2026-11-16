@@ -208,6 +208,9 @@ name = "Verkkotilaus"
 plural = "Verkkotilaukset"
 description = "Verkossa tehty tilaus"
 
+[labels.fi.model.ecommerce_order.guard]
+message = "Toimitettua, peruttua tai hyvitettyä tilausta ei voi muuttaa, vain sen yhteystietoja ja seurantanumeroa."
+
 [labels.fi.model.ecommerce_order.field.number]
 label = "Numero"
 description = "Ostajalle näytettävä tilausnumero. Vapaa teksti: paketit eivät voi luoda numerosarjoja, ja julkinen kassa arpoo satunnaisen numeron"
@@ -320,6 +323,9 @@ description = "Palauta toimitetun tilauksen rahat, esimerkiksi palautuksen jälk
 name = "Tilausrivi"
 plural = "Tilausrivit"
 description = "Verkkotilauksen yksi tuoterivi"
+
+[labels.fi.model.ecommerce_order_line.guard]
+message = "Toimitetun, perutun tai hyvitetyn tilauksen rivejä ei voi muuttaa."
 
 [labels.fi.model.ecommerce_order_line.field.order_id]
 label = "Tilaus"

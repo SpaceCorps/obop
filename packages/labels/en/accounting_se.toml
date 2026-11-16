@@ -96,7 +96,7 @@ label = "Output VAT"
 label = "Input VAT"
 
 [labels.en.model.accounting_se_vat_report.field.vat_to_pay]
-label = "VAT to pay"
+label = "VAT to pay or get back"
 
 [labels.en.model.accounting_se_vat_report.field.boxes_confirmed]
 label = "Boxes checked against SKV 4700"

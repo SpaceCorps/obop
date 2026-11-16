@@ -4,9 +4,9 @@
 // hint first (`ui.section`, `guard`, `children`, `readonly`, action `ui`) and falls back to a
 // heuristic, because no server sends the hints yet.
 import { t } from "@obop/ui";
-import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
+import { fixedOnceCreated, type Command, type FieldMeta, type ModelMeta, type Row } from "./api.ts";
 import { isEmpty, optionLabel } from "./format.ts";
-import { actionTitle } from "./labels.ts";
+import { actionTitle, guardMessage } from "./labels.ts";
 import { childrenOf, titleFieldsOf, toneOf, type MetaIndex } from "./presentation.ts";
 
 /** A group of fields on the form. */
@@ -248,14 +248,16 @@ export function lockOf(model: ModelMeta, row: Row | null): Lock | null {
   const w = g.immutable_when;
   const field = w ? model.fields.find((f) => f.name === w.field) : undefined;
   const hit = w && w.values.includes(String(row[w.field] ?? ""));
-  if (!hit && !g.append_only) return null;
+  if (!hit && !g.append_only && !fixedOnceCreated(g)) return null;
   const message =
-    g.message ??
+    guardMessage(g) ??
     (hit && w
       ? t("This record is {state} and can no longer be changed.", {
           state: optionLabel(String(row[w.field] ?? ""), field),
         })
-      : t("Records of this kind are kept as written and can no longer be changed."));
+      : fixedOnceCreated(g)
+        ? t("Once saved, only some fields of this record can change.")
+        : t("Records of this kind are kept as written and can no longer be changed."));
   return { message, mutable: new Set(g.mutable_fields ?? []) };
 }
 

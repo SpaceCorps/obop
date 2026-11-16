@@ -39,6 +39,9 @@ name = "Zgłoszenie"
 plural = "Zgłoszenia"
 description = "Zgłoszenie klienta do pomocy technicznej"
 
+[labels.pl.model.helpdesk_ticket.guard]
+message = "Zamkniętego zgłoszenia nie można zmienić. Otwórz nowe zgłoszenie, jeśli problem powróci."
+
 [labels.pl.model.helpdesk_ticket.field.subject]
 label = "Temat"
 description = "Jednowierszowe podsumowanie problemu"

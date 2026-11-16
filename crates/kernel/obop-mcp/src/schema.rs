@@ -561,6 +561,7 @@ mod tests {
             children: Vec::new(),
             plurals: Default::default(),
             guard: None,
+            guard_messages: Default::default(),
         }
     }
 

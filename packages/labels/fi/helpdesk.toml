@@ -39,6 +39,9 @@ name = "Tiketti"
 plural = "Tiketit"
 description = "Asiakastukipyyntö"
 
+[labels.fi.model.helpdesk_ticket.guard]
+message = "Suljettua tikettiä ei voi muuttaa. Avaa uusi tiketti, jos ongelma palaa."
+
 [labels.fi.model.helpdesk_ticket.field.subject]
 label = "Aihe"
 description = "Yhden rivin yhteenveto ongelmasta"

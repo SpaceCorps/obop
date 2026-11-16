@@ -161,6 +161,9 @@ pub fn model_hints(o: &mut J, x: &ModelInfo) {
     }
     if let Some(g) = &x.guard {
         o["guard"] = guard(g);
+        if !x.guard_messages.is_empty() {
+            o["guard"]["message_labels"] = json!(x.guard_messages);
+        }
     }
 }
 

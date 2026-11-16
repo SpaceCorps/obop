@@ -237,7 +237,12 @@ describe("the view of an app, in every language", () => {
     const byId = (id: string) => apps.find((a) => a.id === id)!;
     const titles = (id: string) => appView(byId(id), m, apps, "en").models.map((c) => c.title);
     expect(titles("base")).toEqual(["Contact"]);
-    expect(titles("manufacturing")).toEqual(["Bill of materials", "Component", "Order"]);
+    expect(titles("manufacturing")).toEqual([
+      "Bill of materials",
+      "Component",
+      "Order",
+      "Order component",
+    ]);
     expect(titles("accounting")).toContain("Journal entry");
     expect(titles("inventory")).toContain("Stock move");
   });

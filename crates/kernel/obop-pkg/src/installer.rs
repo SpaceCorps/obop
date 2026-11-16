@@ -918,6 +918,13 @@ impl Installer {
     /// stays where it is and is reported with the reason; the others still update.
     pub fn update_all(&self, by: &str) -> Result<UpdateAll, String> {
         let _x = self.exclusive()?;
+        // A catalog that cannot be read offers nothing; say why instead of answering that nothing
+        // was updated (a bundled package whose manifest or labels fail the gate names itself).
+        if let Err(e) = self.market.list() {
+            return Err(format!(
+                "the catalog cannot be read, so nothing was updated: {e}"
+            ));
+        }
         let mut applied: Vec<(PackageInfo, StepAction)> = Vec::new();
         let mut skipped: BTreeMap<String, String> = BTreeMap::new();
         for _round in 0..=self.installed_manifests().len() {

@@ -119,6 +119,9 @@ mod vat_tests;
 mod src_scan;
 #[cfg(test)]
 mod sso_tests;
+mod stock_count;
+#[cfg(test)]
+mod stock_count_tests;
 mod storage_cli;
 mod update_cmd;
 #[cfg(test)]
@@ -3613,6 +3616,9 @@ mod bundled_packages {
                         Some(s) if f.name == state_field(model) => Value::text(s),
                         _ => Value::text(f.options[0]),
                     },
+                    // An optional unique reference (a bank line's settled item) stays empty: the
+                    // shared sample record of its target could be named only once.
+                    "ref" if f.unique && !f.required => continue,
                     "ref" => {
                         let to = f.to.expect("ref has a target");
                         if open.iter().any(|o| o == to) {
@@ -3718,6 +3724,20 @@ mod bundled_packages {
                 ];
                 let line = line.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
                 self.app.store.insert("accounting_move_line", line).unwrap();
+            }
+            // A manufacturing order is confirmed only with a component (manufacturing 0.3.0).
+            if model == "manufacturing_order" {
+                let component = self.record("product", &mut Vec::new());
+                let line = [
+                    ("order_id", Value::text(&id)),
+                    ("component_id", Value::text(&component)),
+                    ("quantity", Value::Int(1)),
+                ];
+                let line = line.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+                self.app
+                    .store
+                    .insert("manufacturing_order_line", line)
+                    .unwrap();
             }
             id
         }

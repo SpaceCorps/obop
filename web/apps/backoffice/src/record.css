@@ -205,6 +205,17 @@ a.smartbtn:hover {
   block-size: 1.75rem;
   transform: translateY(-50%);
 }
+/* On a phone or a touch screen the clear button takes the full height of the field to tap. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .refpicker input {
+    padding-inline-end: 2.9rem;
+  }
+  .refpicker .clear {
+    inset-inline-end: 0;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+}
 .rp-list {
   position: absolute;
   inset-inline: 0;

@@ -213,7 +213,8 @@ impl Marketplace for Bundled {
         BUNDLED
             .iter()
             .map(|b| {
-                let m = Manifest::parse(&combined(b))?;
+                let m = Manifest::parse(&combined(b))
+                    .map_err(|e| format!("bundled package {}: {e}", b.0))?;
                 let problems = m.catalog_problems();
                 if !problems.is_empty() {
                     return Err(format!("bundled package {}: {}", b.0, problems.join("; ")));

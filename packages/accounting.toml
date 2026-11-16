@@ -1,6 +1,6 @@
 [module]
 id = "accounting"
-version = "0.3.1"
+version = "0.4.0"
 name = "Accounting"
 description = "Chart of accounts, journals, tax rates, journal entries with debit and credit lines, fiscal years and periods, and bank statement lines. Amounts are money fields in minor currency units and tax rates are numbers in basis points (2000 means 20.00 percent). An entry shows its total debit and total credit, and posting is refused unless they are equal; a posted entry gets the next number of a gapless yearly series. Tax amounts are still entered by whoever books the entry. Account and journal codes are unique. Posting an entry and closing a period or fiscal year need a human approval and the stricter accounting.approver group; agents may only propose them."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["finance"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "overview"
-changelog = "Journal entries are frozen once posted, cancelled or reversed, and so are their lines and every entry dated in a closed period; closed periods and fiscal years are frozen until they are reopened. An entry with no amount is no longer posted, and a bank transaction is matched only to a journal item that is named. English business names, list, card and form hints, and defaults (today, debit and credit 0, active). Inactive journals and taxes are no longer offered for new entries; journals and taxes whose active flag was never set become active."
+changelog = "A bank transaction that pays an open invoice or bill item records that item (settles_line_id), and no two transactions may settle the same item, so a paid item is not offered or booked twice; paying an invoice through its proposal records its receivable item too, and undoing a match empties it again. Journal entries are frozen once posted, cancelled or reversed, and so are their lines and every entry dated in a closed period; closed periods and fiscal years are frozen until they are reopened. An entry with no amount is no longer posted, and a bank transaction is matched only to a journal item that is named. English business names, list, card and form hints, and defaults (today, debit and credit 0, active). Inactive journals and taxes are no longer offered for new entries; journals and taxes whose active flag was never set become active."
 
 [module.dependencies]
 base = "^0.2"
@@ -704,6 +704,14 @@ write_group = "accounting.user"
   to = "accounting_move_line"
 
   [[model.field]]
+  name = "settles_line_id"
+  description = "The open receivable or payable item this payment settles; no two bank transactions may settle the same item"
+  class = "none"
+  kind = "ref"
+  to = "accounting_move_line"
+  unique = true
+
+  [[model.field]]
   name = "state"
   description = "Matching status: unmatched, matched, reconciled"
   class = "none"
@@ -742,7 +750,7 @@ write_group = "accounting.user"
 
   [[model.action]]
   name = "unmatch"
-  description = "Undo a match that was wrong"
+  description = "Undo a match that was wrong; the item the transaction settled is open again"
   field = "state"
   from = "matched"
   to = "unmatched"
@@ -751,6 +759,11 @@ write_group = "accounting.user"
     danger = true
     confirm = "Undo this match?"
     done = "Match undone"
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { settles_line_id = "$null" }
+    when = "is_set(settles_line_id)"
 
 [[migration]]
 from = "<0.3.1"

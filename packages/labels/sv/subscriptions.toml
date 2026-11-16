@@ -42,6 +42,9 @@ name = "Abonnemang"
 plural = "Abonnemang"
 description = "En kunds återkommande abonnemang på en plan"
 
+[labels.sv.model.subscriptions_subscription.guard]
+message = "Ett avslutat abonnemang kan inte ändras. Starta ett nytt abonnemang i stället."
+
 [labels.sv.model.subscriptions_subscription.field.customer_id]
 label = "Kund"
 description = "Kunden som tecknade abonnemanget"
@@ -60,7 +63,7 @@ description = "Datum då den kostnadsfria provperioden slutar (ÅÅÅÅ-MM-DD)"
 
 [labels.sv.model.subscriptions_subscription.field.next_invoice_on]
 label = "Nästa fakturadatum"
-description = "Datum då nästa faktura ska skickas (ÅÅÅÅ-MM-DD)"
+description = "Datum då nästa faktura ska skickas (ÅÅÅÅ-MM-DD), anges för hand: ingen faktura skapas ännu från ett abonnemang, så skapa den i Fakturering"
 
 [labels.sv.model.subscriptions_subscription.field.recurring_amount]
 label = "Återkommande belopp"

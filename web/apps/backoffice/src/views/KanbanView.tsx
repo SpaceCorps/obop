@@ -8,7 +8,8 @@ import {
   type TouchEvent,
 } from "react";
 import { getCurrency, inSentence, panelId, t, tabId, Tabs, useI18n, type MenuItem } from "@obop/ui";
-import { search, type FieldMeta, type Row, type ServerFilter } from "../api.ts";
+import { search, type Command, type FieldMeta, type Row, type ServerFilter } from "../api.ts";
+import { ActionDialog } from "../ActionDialog.tsx";
 import { Cell, FieldInput } from "../fields.tsx";
 import { useData } from "../data.tsx";
 import { fromEdit, toEdit, type Edit } from "../edit.ts";
@@ -232,6 +233,8 @@ export function KanbanView(p: ViewProps) {
   const [quick, setQuick] = useState<Quick | null>(null);
   const [fresh, setFresh] = useState<Fresh | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // A card dropped on a column whose action asks for input first (`ui.needs`, a lost reason).
+  const [asking, setAsking] = useState<{ row: Row; action: Command } | null>(null);
   const [stage, setStage] = useState<string | null>(null);
   const board = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<{ id: string; col: number } | null>(null);
@@ -382,6 +385,9 @@ export function KanbanView(p: ViewProps) {
     if (governed) {
       const m = may(id, key);
       if (!m.ok) return d.notify(m.reason, "error");
+      // An action that needs input the card does not have asks for it, as its button does (D95).
+      const step = canMove(model, gf, row[gf.name] as string, key, noun, row).action;
+      if (step?.ui?.needs?.some((n) => isEmpty(row[n]))) return setAsking({ row, action: step });
       const out = await moveRecord(d.run, model, gf, row, key, noun);
       if (out.kind === "approval") d.notify(out.message, "info");
       else if (out.kind === "error") d.notify(out.message, "error");
@@ -878,9 +884,46 @@ export function KanbanView(p: ViewProps) {
       </div>
     );
 
+  /** The action of a card dropped where it asks for input, run with what was typed. */
+  async function runAsked(values: Record<string, unknown>) {
+    if (!asking) return;
+    const { row, action } = asking;
+    setAsking(null);
+    const name = actionTitle(action);
+    setBusyId(row.id);
+    const reply = await d.run(action.id, { id: row.id, ...values });
+    setBusyId(null);
+    if (reply.kind === "ok") d.notify(action.ui?.done ?? t("{name} done", { name }));
+    else if (reply.kind === "approval")
+      d.notify(
+        t(
+          "Approval needed: “{name}” was proposed (plan {plan}). Nothing changes until a human approves it.",
+          { name, plan: reply.planId.slice(0, 8) },
+        ),
+        "info",
+      );
+    else d.notify(serverMessage(reply.message), "error");
+  }
+
   return (
-    <div className="kanban" ref={board} role="group" aria-label={label}>
-      {keys.map((key, col) => column(key, col, false))}
-    </div>
+    <>
+      <div className="kanban" ref={board} role="group" aria-label={label}>
+        {keys.map((key, col) => column(key, col, false))}
+      </div>
+      {asking && (
+        <ActionDialog
+          action={asking.action}
+          label={actionTitle(asking.action)}
+          needs={(asking.action.ui?.needs ?? [])
+            .map((n) => model.fields.find((f) => f.name === n))
+            .filter((f): f is FieldMeta => !!f)}
+          question={asking.action.ui?.confirm}
+          danger={!!asking.action.ui?.danger}
+          currency={currencyOf(asking.row, model, ctx)}
+          onCancel={() => setAsking(null)}
+          onConfirm={(values) => void runAsked(values)}
+        />
+      )}
+    </>
   );
 }

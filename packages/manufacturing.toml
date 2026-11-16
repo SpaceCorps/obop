@@ -1,8 +1,8 @@
 [module]
 id = "manufacturing"
-version = "0.2.1"
+version = "0.3.0"
 name = "Manufacturing"
-description = "Bills of materials and manufacturing orders with a draft, confirmed, in progress and done flow. Component stock is not consumed automatically. A done or cancelled order can no longer be changed."
+description = "Bills of materials and manufacturing orders with a draft, confirmed, in progress and done flow. An order lists the components it uses; finishing it makes the stock moves that take those components out at its production location and put the finished product there. A done or cancelled order can no longer be changed."
 author = "SpaceCorps"
 summary = "Bills of materials and manufacturing orders with a draft, confirmed, in progress and done flow."
 license = "Apache-2.0"
@@ -13,10 +13,11 @@ categories = ["supply-chain"]
 maturity = "experimental"
 requires_core = "^0.2.2"
 home = "manufacturing_order"
-changelog = "Done and cancelled manufacturing orders are frozen. A new order starts today and makes one run of its bill of materials unless a quantity is given; inactive bills of materials are no longer offered for new orders, new ones start active, and those whose active flag was never set become active. The app opens on the manufacturing orders, and components are edited inside their bill of materials. English names, list, card, calendar and form hints."
+changelog = "0.3.0: an order is numbered in the series MO-00001, going on after the highest number typed by hand in the old reference (MO-0018 makes the next order MO-00019), names the product it makes (taken from the bill of materials) and a production location, and lists its components. Finishing the order makes the stock moves that take the components out at that location and put the finished product there, with the order number as their source document, for the warehouse to validate (finishing needs the inventory.user group); an order is confirmed only with the finished product, a production location and at least one component. The person in charge stays a name typed in. 0.2.1: done and cancelled manufacturing orders are frozen. A new order starts today and makes one run of its bill of materials unless a quantity is given; inactive bills of materials are no longer offered for new orders, new ones start active, and those whose active flag was never set become active. The app opens on the manufacturing orders, and components are edited inside their bill of materials. English names, list, card, calendar and form hints."
 
 [module.dependencies]
 product = "^0.2"
+inventory = ">=0.5, <1"
 
 [[model]]
 name = "manufacturing_bom"
@@ -119,17 +120,17 @@ read_group = "manufacturing.user"
 write_group = "manufacturing.user"
 
   [model.ui]
-  title = "{reference} · {bom_id} × {quantity} | {reference}"
-  subtitle = "{planned_on}"
-  list = ["reference", "bom_id", "quantity", "planned_on", "deadline", "responsible", "state"]
-  card = ["reference", "bom_id", "quantity", "deadline"]
-  quick_create = ["reference", "bom_id", "quantity"]
-  order = "planned_on desc, reference desc"
+  title = "{number}"
+  subtitle = "{product_id} × {quantity} | {bom_id} × {quantity}"
+  list = ["number", "bom_id", "quantity", "location_id", "planned_on", "deadline", "state"]
+  card = ["number", "product_id", "quantity", "deadline"]
+  quick_create = ["bom_id", "quantity", "location_id"]
+  order = "planned_on desc, number desc"
   default_view = "list"
   menu = "main"
   menu_order = 1
   calendar = { start = "planned_on", end = "deadline", color = "state" }
-  report = { rows = "bom_id", cols = "state", measure = "quantity" }
+  report = { rows = "product_id", cols = "state", measure = "quantity" }
 
   [[model.ui.filter]]
   label = "In progress"
@@ -139,15 +140,21 @@ write_group = "manufacturing.user"
   label = "Late"
   where = "deadline < today && state != done && state != cancelled"
 
+  [[model.child]]
+  model = "manufacturing_order_line"
+  via = "order_id"
+  shape = "lines"
+
   [model.guard]
   immutable_when = ["done", "cancelled"]
   message = "A done or cancelled manufacturing order cannot be changed."
 
   [[model.field]]
-  name = "reference"
-  description = "Order number, for example MO-0042"
+  name = "number"
+  description = "Order number such as MO-00042, assigned when the order is created"
   class = "none"
-  required = true
+  kind = "sequence"
+  format = "MO-{seq:05}"
 
   [[model.field]]
   name = "bom_id"
@@ -156,6 +163,22 @@ write_group = "manufacturing.user"
   kind = "ref"
   to = "manufacturing_bom"
   required = true
+  ref_filter = "active = true"
+
+  [[model.field]]
+  name = "product_id"
+  description = "The finished product made; taken from the bill of materials when left out"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  fill_from = "bom_id.product_id"
+
+  [[model.field]]
+  name = "location_id"
+  description = "The production location: finishing the order makes the stock moves that take the components from here and put the finished product here; empty makes no moves"
+  class = "none"
+  kind = "ref"
+  to = "inventory_location"
   ref_filter = "active = true"
 
   [[model.field]]
@@ -204,11 +227,16 @@ write_group = "manufacturing.user"
 
   [[model.action]]
   name = "confirm"
-  description = "Confirm a draft order so production can be planned"
+  description = "Confirm a draft order so production can be planned; it needs the finished product, a production location and at least one component line"
   field = "state"
   from = "draft"
   to = "confirmed"
   group = "manufacturing.manager"
+  assert = [
+    { expr = "is_set(product_id)", message = "Choose the finished product first: finishing the order puts it into stock at the production location", key = "has_product" },
+    { expr = "is_set(location_id)", message = "Choose the production location first: finishing the order moves the components out and the product in there", key = "has_location" },
+    { expr = "count(lines) > 0", message = "Add the components first: an order without components moves no stock when it is finished", key = "has_components" },
+  ]
 
     [model.action.ui]
     primary = true
@@ -227,15 +255,28 @@ write_group = "manufacturing.user"
 
   [[model.action]]
   name = "finish"
-  description = "Mark production as finished"
+  description = "Mark production as finished: with a production location, a draft stock move takes each component out of stock there and one puts the finished product there, with the order number as their source document, for the warehouse to validate (needs the inventory.user group)"
   field = "state"
   from = "in_progress"
   to = "done"
 
     [model.action.ui]
     primary = true
-    confirm = "Mark production as finished? A done order can no longer be changed."
+    confirm = "Mark production as finished? Stock moves take the components out and put the finished product in at the production location. A done order can no longer be changed."
     done = "Production finished"
+
+    [[model.action.effect]]
+    kind = "create"
+    model = "inventory_move"
+    for_each = "lines"
+    when = "is_set(location_id)"
+    map = { product_id = "$line.component_id", from_location_id = "$self.location_id", quantity = "$line.quantity", scheduled_on = "$today", kind = "production", origin = "$self.number" }
+
+    [[model.action.effect]]
+    kind = "create"
+    model = "inventory_move"
+    when = "is_set(location_id) && is_set(product_id)"
+    map = { product_id = "$self.product_id", to_location_id = "$self.location_id", quantity = "$self.quantity", scheduled_on = "$today", kind = "production", origin = "$self.number" }
 
   [[model.action]]
   name = "cancel"
@@ -249,6 +290,49 @@ write_group = "manufacturing.user"
     confirm = "Cancel this order?"
     done = "Order cancelled"
 
+[[model]]
+name = "manufacturing_order_line"
+description = "One component a manufacturing order uses, with the units it takes for the whole order"
+read_group = "manufacturing.user"
+write_group = "manufacturing.user"
+
+  [model.ui]
+  title = "{component_id} × {quantity}"
+  subtitle = "{order_id}"
+  list = ["component_id", "quantity"]
+  quick_create = ["component_id", "quantity"]
+  default_view = "list"
+  menu = "hidden"
+
+  [model.guard]
+  children_of = "order_id"
+  message = "The components of a done or cancelled manufacturing order cannot be changed."
+
+  [[model.field]]
+  name = "order_id"
+  description = "The manufacturing order that uses the component"
+  class = "none"
+  kind = "ref"
+  to = "manufacturing_order"
+  required = true
+
+  [[model.field]]
+  name = "component_id"
+  description = "The product consumed"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "quantity"
+  description = "Units of the component the whole order uses"
+  class = "none"
+  kind = "number"
+  required = true
+  default = 1
+  min = 0
+
 [[migration]]
 from = "<0.2.1"
 op = "set_default"
@@ -256,3 +340,11 @@ model = "manufacturing_bom"
 field = "active"
 value = true
 description = "Bills of materials whose active flag was never set become active, so they are still offered for new orders"
+
+[[migration]]
+from = "<0.3.0"
+op = "rename_field"
+model = "manufacturing_order"
+field = "reference"
+to = "number"
+description = "The order numbers typed by hand become the numbers of the orders; new orders are numbered after the highest of them that is written as MO- and digits"

@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Inventaire"
-description = "Entrepôts, emplacements, niveaux et mouvements de stock. Valider un mouvement retire la quantité de l’article source et l’ajoute à la destination en une étape ; un article manquant est créé. Un article par produit, emplacement et lot ; les quantités négatives sont admises. La quantité ne change que par des mouvements ; un mouvement fait ou annulé est figé."
+description = "Entrepôts, emplacements, niveaux et mouvements de stock. Valider un mouvement retire la quantité de l’article source et l’ajoute à la destination en une étape ; un article manquant est créé. Un article par produit, emplacement et lot ; les quantités négatives sont admises. La quantité ne change que par des mouvements ; un mouvement fait ou annulé est figé. Produit et emplacement restent fixes."
 summary = "Entrepôts, emplacements de stock, niveaux de stock et mouvements de stock."
 
 [labels.fr.model.inventory_warehouse]
@@ -57,6 +57,9 @@ name = "Stock"
 plural = "Stock"
 description = "La quantité d’un produit conservée à un emplacement"
 
+[labels.fr.model.inventory_item.guard]
+message = "Un article de stock garde son produit, son emplacement et son lot. Déplacez le stock pour changer son emplacement."
+
 [labels.fr.model.inventory_item.field.product_id]
 label = "Produit"
 description = "Le produit détenu ; il y a un article par produit, emplacement et lot"
@@ -82,6 +85,9 @@ name = "Mouvement"
 plural = "Mouvements de stock"
 description = "Un déplacement de produit entre emplacements, ou vers l’entreprise ou hors de celle-ci"
 
+[labels.fr.model.inventory_move.guard]
+message = "Un mouvement effectué ou annulé ne peut pas être modifié. Créez un nouveau mouvement pour corriger le stock."
+
 [labels.fr.model.inventory_move.field.reference]
 label = "Référence"
 description = "Numéro du mouvement tel que MV-00042, attribué à la création du mouvement"
@@ -96,7 +102,7 @@ description = "D’où il part ; vide pour une réception d’un fournisseur"
 
 [labels.fr.model.inventory_move.field.to_location_id]
 label = "Emplacement de destination"
-description = "Où il arrive ; vide pour une livraison à un client"
+description = "Où il arrive ; vide pour une livraison à un client ou une mise au rebut"
 
 [labels.fr.model.inventory_move.field.quantity]
 label = "Quantité"
@@ -124,5 +130,21 @@ label = "Annuler"
 description = "Annule un mouvement en brouillon"
 
 [labels.fr.model.inventory_item.field.below_reorder]
-description = "Indique si la quantité est au niveau de réapprovisionnement ou en dessous (non si aucun niveau n’est défini)"
+description = "Indique si l’article demande attention : la quantité est négative, ou au niveau de réapprovisionnement ou en dessous"
 label = "Stock bas"
+
+[labels.fr.model.inventory_move.field.kind]
+label = "Type"
+description = "Nature du mouvement : réception d’un fournisseur, livraison à un client, transfert interne, rebut, ajustement après un inventaire ou production (composants consommés et produits fabriqués)"
+
+[labels.fr.model.inventory_move.field.kind.options]
+receipt = "Réception"
+delivery = "Livraison"
+internal = "Interne"
+scrap = "Rebut"
+adjustment = "Ajustement d’inventaire"
+production = "Fabrication"
+
+[labels.fr.model.inventory_move.field.origin]
+label = "Origine"
+description = "Le document d’origine du mouvement, par exemple un numéro de commande fournisseur comme PO-00042 ou un ordre de fabrication"

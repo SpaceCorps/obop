@@ -33,6 +33,7 @@ import { Cell, FieldFormProvider, FieldInput, type FieldFormApi } from "./fields
 import type { LinesSlotProps } from "./FormBody.tsx";
 import { isEmpty, optionLabel } from "./format.ts";
 import { fieldTitle, modelTitle } from "./labels.ts";
+import { linesHeading } from "./plural.ts";
 import {
   ACTIONS_WIDTH,
   POSITION,
@@ -581,9 +582,7 @@ function ChildSection(props: SectionProps) {
       ? t("Images")
       : shape === "translations"
         ? t("Translations")
-        : /_lines?$/.test(model.name)
-          ? t("Lines")
-          : modelTitle(model, moduleId);
+        : linesHeading(model, modelTitle(model, moduleId));
   const rows = live();
   const diff = differenceOf(model, rows);
   const count = Math.max(0, srv.total + s.created.length - s.deleted.size);

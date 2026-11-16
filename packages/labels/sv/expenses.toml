@@ -8,6 +8,9 @@ name = "Utlägg"
 plural = "Utlägg"
 description = "Ett belopp som en anställd lagt ut för företaget och vill få ersatt"
 
+[labels.sv.model.expenses_expense.guard]
+message = "Ett godkänt, utbetalt eller avslaget utlägg kan inte ändras, utom dess kvitto och betalningsuppgifterna."
+
 [labels.sv.model.expenses_expense.field.description]
 label = "Beskrivning"
 description = "Vad pengarna användes till"

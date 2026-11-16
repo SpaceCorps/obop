@@ -8,6 +8,9 @@ name = "Wpis"
 plural = "Wpisy"
 description = "Czas, który jedna osoba poświęciła na jedno zadanie w jednym dniu"
 
+[labels.pl.model.timesheets_entry.guard]
+message = "Zatwierdzonego wpisu czasu nie można zmienić. Poproś kierownika o wpisanie korekty."
+
 [labels.pl.model.timesheets_entry.field.task_id]
 label = "Zadanie"
 description = "Zadanie, nad którym pracowano"

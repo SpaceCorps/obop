@@ -16,7 +16,8 @@
  * CLI, REST and MCP can do the same.
  */
 import type { ComponentType, ReactNode } from "react";
-import type { FieldMeta, ModelMeta, Row } from "./api.ts";
+import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
+import type { NextActions } from "./presentation.ts";
 import type { App } from "./Chrome.tsx";
 import type { Go, Route } from "./route.ts";
 
@@ -53,6 +54,11 @@ export type RecordExtension = {
   panels?: ComponentType<RecordExtProps>[];
   /** Sections inside the form, after the fields (rendered by FormBody's `<SectionSlot>`). */
   sections?: ComponentType<RecordSectionProps>[];
+  /**
+   * Actions of the model (`purchase_order.receive`) whose generic button is not drawn, because one
+   * of `actions` runs the same command with a screen of its own (a receipt with the quantities).
+   */
+  overrides?: string[];
 };
 
 export const recordExtensions: Record<string, RecordExtension> = {};
@@ -64,15 +70,28 @@ export function registerRecordExtension(model: string, ext: RecordExtension): vo
     actions: [...(had.actions ?? []), ...(ext.actions ?? [])],
     panels: [...(had.panels ?? []), ...(ext.panels ?? [])],
     sections: [...(had.sections ?? []), ...(ext.sections ?? [])],
+    overrides: [...(had.overrides ?? []), ...(ext.overrides ?? [])],
   };
 }
 
-const NONE: Required<RecordExtension> = { actions: [], panels: [], sections: [] };
+const NONE: Required<RecordExtension> = { actions: [], panels: [], sections: [], overrides: [] };
 
 /** What `model` adds to its record panel; empty lists when nothing is registered. */
 export function recordExtensionOf(model: string): Required<RecordExtension> {
   const e = recordExtensions[model];
   return e ? ({ ...NONE, ...e } as Required<RecordExtension>) : NONE;
+}
+
+/** The next actions without those an extension draws itself (`overrides`). */
+export function withoutOverridden(a: NextActions, overrides: readonly string[]): NextActions {
+  if (!overrides.length) return a;
+  const keep = (c: Command) => !overrides.includes(c.id);
+  const primary = a.primary && keep(a.primary) ? a.primary : undefined;
+  return {
+    ...(primary ? { primary } : {}),
+    secondary: a.secondary.filter(keep),
+    danger: a.danger.filter(keep),
+  };
 }
 
 // ---- model pages -------------------------------------------------------------------------------
@@ -132,6 +151,11 @@ export type AppPagesResult = {
    * generic page. While it is set no model link is marked current.
    */
   page?: ReactNode | null;
+  /**
+   * The page drawn is the app's own overview, so the sidebar marks its Overview entry current as
+   * it does on the generic overview. Absent: an app page marks no entry.
+   */
+  overview?: boolean;
 };
 
 export type AppPages = {

@@ -17,6 +17,8 @@ pub enum SlotKind {
     ActionDescription,
     /// The message of an assertion with a key (`assert.<key>` under the action).
     AssertMessage,
+    /// The message of the model's guard (D77): the lock banner (`guard` under the model).
+    GuardMessage,
 }
 
 /// One thing a translator fills in, with its English source text.
@@ -70,6 +72,9 @@ pub fn slots(module: &Module) -> Vec<Slot> {
             .unwrap_or(m.name);
         push(SlotKind::ModelName, m.name, "", "", &humanise(own));
         push(SlotKind::ModelDescription, m.name, "", "", m.description);
+        if let Some(message) = m.ext.guard.as_ref().and_then(|g| g.message) {
+            push(SlotKind::GuardMessage, m.name, "", "", message);
+        }
         for f in &m.fields {
             push(SlotKind::FieldLabel, m.name, f.name, "", &humanise(f.name));
             push(
@@ -133,12 +138,16 @@ impl Slot {
             SlotKind::AssertMessage => {
                 return t.assertion_message(&self.model, &self.item, &self.option, lang);
             }
+            SlotKind::GuardMessage => return t.guard_message(&self.model, lang),
         }
         .map(String::as_str)
     }
 
     /// A human path for messages: `fleet_vehicle.fuel.option.petrol`.
     pub fn path(&self) -> String {
+        if self.kind == SlotKind::GuardMessage {
+            return format!("{}.guard.message", self.model);
+        }
         if self.kind == SlotKind::AssertMessage {
             return format!(
                 "{}.{}.assert.{}.message",
@@ -155,7 +164,7 @@ impl Slot {
             SlotKind::OptionLabel => "option",
             SlotKind::ActionLabel => "label",
             SlotKind::ActionDescription => "description",
-            SlotKind::AssertMessage => "message",
+            SlotKind::AssertMessage | SlotKind::GuardMessage => "message",
         };
         let mut parts: Vec<&str> = [&self.model, &self.item, &self.option]
             .into_iter()
@@ -237,6 +246,7 @@ pub fn template(module: &Module, lang: &str) -> String {
                 format!("labels.{lang}.model.{model}.action.{item}"),
                 "description",
             ),
+            SlotKind::GuardMessage => (format!("labels.{lang}.model.{model}.guard"), "message"),
             SlotKind::AssertMessage => (
                 format!(
                     "labels.{lang}.model.{model}.action.{item}.assert.{}",

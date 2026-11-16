@@ -34,6 +34,9 @@ name = "Termin"
 plural = "Termine"
 description = "Eine Buchung einer Ressource zu einer bestimmten Zeit"
 
+[labels.de.model.appointments_appointment.guard]
+message = "Ein stattgefundener, abgesagter oder versäumter Termin kann nicht geändert werden. Buchen Sie stattdessen einen neuen."
+
 [labels.de.model.appointments_appointment.field.resource_id]
 label = "Ressource"
 description = "Die gebuchte Ressource"

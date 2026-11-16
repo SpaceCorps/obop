@@ -4,7 +4,11 @@ summary = "Asiakaslaskut luonnos-, kirjattu- ja peruutettu-elinkaarella."
 
 [labels.fi.model.invoice]
 name = "Lasku"
+plural = "Myyntilaskut"
 description = "Asiakaslasku; mikään toiminto ei palauta kirjattua laskua luonnokseksi eikä peruuta sitä"
+
+[labels.fi.model.invoice.guard]
+message = "Kirjattua laskua ei voi muuttaa."
 
 [labels.fi.model.invoice.field.sale_order_id]
 label = "Myyntitilaus"
@@ -53,6 +57,7 @@ description = "ISO 4217 -valuuttakoodi"
 
 [labels.fi.model.invoice_line]
 name = "Laskurivi"
+plural = "Laskurivit"
 description = "Yksi tuote tai palvelu laskulla"
 
 [labels.fi.model.invoice_line.field.invoice_id]

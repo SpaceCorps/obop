@@ -577,10 +577,10 @@
 @media (hover: none) {
   .kmore-btn {
     opacity: 1;
-    inline-size: 2.25rem;
-    block-size: 2.25rem;
-    margin-block: -0.45rem;
-    margin-inline-end: -0.55rem;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    margin-block: -0.7rem;
+    margin-inline-end: -0.8rem;
   }
 }
 /* Touch targets the control height tokens do not reach. */

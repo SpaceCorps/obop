@@ -1,4 +1,4 @@
-import { getLang } from "@obop/ui";
+import { getLang, t } from "@obop/ui";
 import type { ModelMeta } from "./api.ts";
 
 // The plural name of a model, for page headings, empty states and menus ("Sale orders").
@@ -27,4 +27,17 @@ export function pluralTitle(model: ModelMeta, title: string): string {
   if (own) return own;
   if (lang !== "en") return title;
   return model.plural ?? englishPlural(title);
+}
+
+/**
+ * The heading of a lines table inside a record: the child model's plural where its package
+ * declares one for the active language ("Components", "Order lines"); else "Lines" for a model
+ * named `*_line(s)`; else the model's name.
+ */
+export function linesHeading(model: ModelMeta, title: string): string {
+  const lang = getLang();
+  const own = model.plural_labels?.[lang] ?? model.plural_labels?.[lang.split("-")[0]!];
+  if (own?.trim()) return own;
+  if (/^en\b/i.test(lang) && model.plural?.trim()) return model.plural;
+  return /_lines?$/.test(model.name) ? t("Lines") : title;
 }

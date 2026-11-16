@@ -60,6 +60,9 @@ name = "Kampanja"
 plural = "Kampanjat"
 description = "Yksi postitus listalle"
 
+[labels.fi.model.email_marketing_campaign.guard]
+message = "Lähetettyä tai peruttua kampanjaa ei voi muuttaa; vain sen tilastot voi vielä kirjata."
+
 [labels.fi.model.email_marketing_campaign.field.name]
 label = "Nimi"
 description = "Kampanjan sisäinen nimi"

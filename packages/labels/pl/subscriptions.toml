@@ -42,6 +42,9 @@ name = "Subskrypcja"
 plural = "Subskrypcje"
 description = "Cykliczna subskrypcja planu przez klienta"
 
+[labels.pl.model.subscriptions_subscription.guard]
+message = "Anulowanej subskrypcji nie można zmienić. Rozpocznij zamiast tego nową subskrypcję."
+
 [labels.pl.model.subscriptions_subscription.field.customer_id]
 label = "Klient"
 description = "Klient, który zawarł subskrypcję"
@@ -60,7 +63,7 @@ description = "Data zakończenia bezpłatnego okresu próbnego (YYYY-MM-DD)"
 
 [labels.pl.model.subscriptions_subscription.field.next_invoice_on]
 label = "Data następnej faktury"
-description = "Data wystawienia następnej faktury (YYYY-MM-DD)"
+description = "Data wystawienia następnej faktury (YYYY-MM-DD), wpisywana ręcznie: z subskrypcji nie powstaje jeszcze żadna faktura, utwórz ją w Fakturowaniu"
 
 [labels.pl.model.subscriptions_subscription.field.recurring_amount]
 label = "Kwota cykliczna"
