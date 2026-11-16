@@ -240,6 +240,16 @@ const GUARD_RULES: Rule[] = [
         field: fieldName(m[1]!, m[2]!),
       }),
   ],
+  // Paying an invoice that is not in the ledger (bank_matching.book): the server names a command a
+  // person cannot run from a screen; the person needs to choose another account.
+  [
+    /^the invoice is not in the ledger yet \(it has no move\), so no receivable was booked for it and (\S+) cannot be credited with its payment;/,
+    (m) =>
+      t(
+        "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.",
+        { account: m[1]! },
+      ),
+  ],
 ];
 
 const RULES: Rule[] = [

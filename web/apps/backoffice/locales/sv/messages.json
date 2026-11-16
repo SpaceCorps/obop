@@ -2,6 +2,7 @@
   " Show records.": " Visa poster.",
   "(needs a human's approval when an agent runs it)": "(kräver godkännande av en människa när en agent kör den)",
   "(opens in a new tab)": "(öppnas i en ny flik)",
+  "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.": "{account} är ett kundfordringskonto, och den här fakturan finns inte i huvudboken än, så kontot kan inte ta emot betalningen. Välj ett annat konto, till exempel ett intäktskonto. Inget bokfördes.",
   "{action} “{name}”?": "{action}: ”{name}”?",
   "{action} {noun}": "{action}: {noun}",
   "{amount} is missing from the drawer.": "Det saknas {amount} i kassalådan.",

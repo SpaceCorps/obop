@@ -20,6 +20,7 @@ import { formatDate } from "../../format.ts";
 import { useMedia } from "../../media.ts";
 import { href } from "../../route.ts";
 import { serverMessage } from "../../serverMessage.ts";
+import { bookAccounts } from "./book.ts";
 import { BANK_LINE, RECONCILE } from "./links.ts";
 import "./accounting.css";
 
@@ -475,6 +476,8 @@ function LineDetail(p: {
       else p.onBook(String(x.item.account_id), "", x.item.id);
     } else if (!x.inLedger) {
       setForInvoice({ id: x.invoiceId, number: x.number });
+      // A receivable is not offered for this payment (see bookAccounts); drop one chosen before.
+      if (accountById.get(account)?.account_type === "asset_receivable") setAccount("");
       document.getElementById(`acc-book-${line.id}`)?.focus();
     } else if (receivable) p.onBook(receivable.id, x.invoiceId);
   };
@@ -619,13 +622,11 @@ function LineDetail(p: {
             required
           >
             <option value="">{t("Choose an account")}</option>
-            {p.accounts
-              .filter((a) => a.id !== p.journal?.default_account_id)
-              .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {accountName(a.id)}
-                </option>
-              ))}
+            {bookAccounts(p.accounts, p.journal?.default_account_id, !!forInvoice).map((a) => (
+              <option key={a.id} value={a.id}>
+                {accountName(a.id)}
+              </option>
+            ))}
           </Select>
           <Button type="submit" disabled={!account || p.busy}>
             {t("Book and match")}
