@@ -1,6 +1,6 @@
 // reminders.ts: how close a licence expiry or a planned service is.
 import { describe, expect, it } from "vite-plus/test";
-import { addDays, daysUntil, urgencyOf } from "./reminders.ts";
+import { addDays, daysUntil, licenceQuery, urgencyOf } from "./reminders.ts";
 
 describe("fleet reminders", () => {
   it("counts whole days across a month end", () => {
@@ -14,5 +14,13 @@ describe("fleet reminders", () => {
     expect(urgencyOf("2026-11-16", "2026-11-16", 30)).toBe("today");
     expect(urgencyOf("2026-12-16", "2026-11-16", 30)).toBe("soon");
     expect(urgencyOf("2026-12-17", "2026-11-16", 30)).toBe("later");
+  });
+
+  it("asks for licences only when the reader sees licence dates", () => {
+    const field = (name: string) => ({ name }) as never;
+    expect(licenceQuery({ fields: [field("name"), field("state")] }, "2026-11-16")).toBeNull();
+    expect(licenceQuery(undefined, "2026-11-16")).toBeNull();
+    const q = licenceQuery({ fields: [field("licence_expiry")] }, "2026-11-16")!;
+    expect(q.filter[1]).toEqual({ field: "licence_expiry", op: "lte", value: "2026-12-16" });
   });
 });

@@ -14,7 +14,14 @@ import { appMenu, pluralTitle } from "../../nav.ts";
 import { encodeState, type Cond } from "../../query.ts";
 import { today as todayOf } from "../../quickFilters.ts";
 import { href } from "../../route.ts";
-import { LICENCE_WARN_DAYS, addDays, daysUntil, urgencyOf, type Urgency } from "./reminders.ts";
+import {
+  LICENCE_WARN_DAYS,
+  addDays,
+  daysUntil,
+  licenceQuery,
+  urgencyOf,
+  type Urgency,
+} from "./reminders.ts";
 import "./fleet.css";
 
 const VEHICLE = "fleet_vehicle";
@@ -46,17 +53,14 @@ export function FleetHome({ app }: { app: App }) {
 
   useEffect(() => {
     let live = true;
+    const licenceAsk = licenceQuery(
+      app.module.models.find((m) => m.name === DRIVER),
+      day,
+    );
     void (async () => {
       const [states, licences, planned, spent] = await Promise.all([
         aggregate(d.token, VEHICLE, { group_by: [{ field: "state" }] }),
-        search(d.token, DRIVER, {
-          filter: [
-            { field: "state", op: "eq", value: "active" },
-            { field: "licence_expiry", op: "lte", value: addDays(day, LICENCE_WARN_DAYS) },
-          ],
-          order: [{ field: "licence_expiry", dir: "asc" }],
-          limit: 50,
-        }),
+        licenceAsk ? search(d.token, DRIVER, licenceAsk) : { error: "", status: 403 },
         search(d.token, SERVICE, {
           filter: [{ field: "state", op: "eq", value: "planned" }],
           order: [{ field: "service_on", dir: "asc" }],
@@ -84,7 +88,7 @@ export function FleetHome({ app }: { app: App }) {
     return () => {
       live = false;
     };
-  }, [d.token, d.mutations, day]);
+  }, [d.token, d.mutations, day, app.module]);
 
   const menu = useMemo(() => appMenu(app.module), [app.module]);
   const listOf = (name: string, facets: Cond[], view = "") =>
