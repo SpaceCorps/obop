@@ -90,7 +90,12 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 21] = [
+const ALLOWED: [(&str, &str, Limit); 22] = [
+    (
+        "kernel/obop-auth/src/setup.rs",
+        "the first-administrator set-up page (D96) writes the name of the instance with `brand::apply`, as the actor `setup`, before the account, and checks it first with a dry run (`Action`, `Failure`, `Refused`); it acts on the row as `obop admin brand configure` does",
+        Limit::Any,
+    ),
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -843,6 +848,10 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
         (
             "kernel/obop-auth/src/mfa.rs",
             "fn f(b: &dyn Backend) { let _ = obop_commands::brand::strict(b); }",
+        ),
+        (
+            "kernel/obop-auth/src/setup.rs",
+            "fn f(b: &dyn Backend) { let _ = obop_commands::brand::apply(b, None, \"setup\", &a, true); }",
         ),
         (
             "kernel/obop-http/src/mfa.rs",

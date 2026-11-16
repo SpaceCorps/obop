@@ -30,6 +30,7 @@ pub mod ops;
 pub(crate) mod passkeys;
 pub mod payments;
 pub mod public;
+mod setup;
 pub(crate) mod shared;
 pub mod shell;
 mod sign;
@@ -325,6 +326,12 @@ pub(crate) fn api_routes(state: Arc<HttpState>, not_found: brand::NotFound) -> R
         .route("/metrics", get(ops::metrics))
         .route("/api/auth/login", post(login))
         .route("/api/auth/sso", get(sso::status))
+        .route(
+            "/api/auth/setup",
+            get(setup::status)
+                .post(setup::complete)
+                .layer(axum::extract::DefaultBodyLimit::max(setup::MAX_BODY)),
+        )
         .route("/api/auth/oidc/start", get(sso::start))
         .route("/api/auth/oidc/callback", get(sso::callback))
         .route(
