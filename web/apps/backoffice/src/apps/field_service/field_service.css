@@ -100,7 +100,6 @@
 }
 .fs-job-line {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   margin: 0;
@@ -109,6 +108,13 @@
 .fs-job-line > svg {
   flex: none;
   color: var(--text-subtle);
+}
+.fs-job-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+  min-inline-size: 0;
 }
 .fs-job-tel {
   font-variant-numeric: tabular-nums;
@@ -140,7 +146,7 @@
   .fs-job-actions .btn:first-child {
     flex: 1 1 auto;
   }
-  .fs-job-line a {
+  .fs-job-text a {
     min-block-size: 44px;
     display: inline-flex;
     align-items: center;

@@ -182,24 +182,28 @@ export function MyDay({ app }: { app: App }) {
                     {address && (
                       <p className="fs-job-line">
                         <Icon name="home" size={15} />
-                        {map ? (
-                          <a href={map} target="_blank" rel="noreferrer noopener">
-                            {address}
-                          </a>
-                        ) : (
-                          address
-                        )}
+                        <span className="fs-job-text">
+                          {map ? (
+                            <a href={map} target="_blank" rel="noreferrer noopener">
+                              {address}
+                            </a>
+                          ) : (
+                            address
+                          )}
+                        </span>
                       </p>
                     )}
                     {(phone || str(job.site_contact_name)) && (
                       <p className="fs-job-line">
                         <Icon name="user" size={15} />
-                        {str(job.site_contact_name)}
-                        {tel && (
-                          <a href={tel} className="fs-job-tel">
-                            {phone}
-                          </a>
-                        )}
+                        <span className="fs-job-text">
+                          {str(job.site_contact_name)}
+                          {tel && (
+                            <a href={tel} className="fs-job-tel">
+                              {phone}
+                            </a>
+                          )}
+                        </span>
                       </p>
                     )}
                     {!mine && !!job.technician_id && (

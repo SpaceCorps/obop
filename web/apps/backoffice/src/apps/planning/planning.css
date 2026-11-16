@@ -84,7 +84,7 @@
   font-variant-numeric: tabular-nums;
 }
 .pl-grid .pl-who {
-  inline-size: 11rem;
+  inline-size: 10rem;
   border-inline-start: 0;
   padding: var(--space-3);
   font-weight: var(--weight-medium);
@@ -144,6 +144,7 @@
   background: var(--success-soft);
 }
 .pl-shift-time {
+  white-space: nowrap;
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
 }
@@ -154,6 +155,9 @@
   white-space: nowrap;
 }
 .pl-shift-state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
