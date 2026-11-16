@@ -105,15 +105,15 @@ done = "Hecho"
 cancelled = "Cancelado"
 
 [labels.es.model.field_service_job.action.depart]
-label = "Ponerse en camino"
+label = "Voy de camino"
 description = "El técnico está de camino"
 
 [labels.es.model.field_service_job.action.start]
-label = "Iniciar"
+label = "Empezar el trabajo"
 description = "El técnico ha llegado y ha empezado el trabajo"
 
 [labels.es.model.field_service_job.action.complete]
-label = "Completar"
+label = "Completar el trabajo"
 description = "Terminar el trabajo; si se requiere firma, registra antes quién firmó y cuándo"
 
 [labels.es.model.field_service_job.action.cancel]
