@@ -2791,5 +2791,6 @@
   "Work started": "machine-drafted",
   "Your user is not linked to an employee, so this shows every job of today. An HR manager links it on the employee record.": "machine-drafted",
   "Earlier times today have passed.": "machine-drafted",
-  "Passed": "machine-drafted"
+  "Passed": "machine-drafted",
+  "{resource} on {day}: no free time left today": "machine-drafted"
 }

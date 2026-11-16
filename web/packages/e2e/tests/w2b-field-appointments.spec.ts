@@ -91,6 +91,12 @@ test.describe("Appointments: book a free slot", () => {
       await expect(slots.getByRole("button", { name: "10:30 AM" })).toHaveClass(/is-past/);
       await expect(slots.getByRole("button", { name: "11:00 AM" })).toBeEnabled();
       await expect(page.getByText("Earlier times today have passed.")).toBeVisible();
+      // Late in the evening nothing is left today, and the line says so rather than "fully booked".
+      await page.clock.setFixedTime(new Date(`${day}T23:00:00Z`));
+      await page.getByRole("textbox", { name: "Start", exact: true }).fill("09:00");
+      await expect(page.getByText(/no free time left today/)).toBeVisible();
+      await page.clock.setFixedTime(new Date(`${day}T10:40:00Z`));
+      await page.getByRole("textbox", { name: "Start", exact: true }).fill("08:00");
       await page.getByRole("textbox", { name: "Start", exact: true }).fill("09:00");
 
       // A free slot fills Start and End and the clash is gone.
@@ -111,6 +117,9 @@ test.describe("Appointments: book a free slot", () => {
           return r.rows.map((x: any) => [x.start_minute, x.end_minute, x.resource_id]);
         })
         .toEqual([[660, 720, room.id]]);
+      // The form reads the day's bookings again after the save; let that finish before the
+      // package is uninstalled, or the late search is answered 404.
+      await page.waitForLoadState("networkidle");
     });
   });
 });

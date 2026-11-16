@@ -2791,5 +2791,6 @@
   "Work started": "Työ aloitettu",
   "Your user is not linked to an employee, so this shows every job of today. An HR manager links it on the employee record.": "Käyttäjääsi ei ole liitetty työntekijään, joten tässä näkyvät kaikki tämän päivän työt. HR-päällikkö liittää sen työntekijän tietueessa.",
   "Earlier times today have passed.": "Tämän päivän aiemmat ajat ovat menneet.",
-  "Passed": "Mennyt"
+  "Passed": "Mennyt",
+  "{resource} on {day}: no free time left today": "{resource} {day}: tänään ei ole enää vapaita aikoja"
 }

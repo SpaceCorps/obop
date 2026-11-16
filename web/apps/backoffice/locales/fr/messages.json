@@ -2791,5 +2791,6 @@
   "Work started": "Travail commencé",
   "Your user is not linked to an employee, so this shows every job of today. An HR manager links it on the employee record.": "Votre utilisateur n'est lié à aucun employé, cette page affiche donc toutes les interventions du jour. Un responsable RH le lie sur la fiche de l'employé.",
   "Earlier times today have passed.": "Les horaires plus tôt aujourd'hui sont passés.",
-  "Passed": "Passé"
+  "Passed": "Passé",
+  "{resource} on {day}: no free time left today": "{resource} le {day} : plus de créneau libre aujourd'hui"
 }

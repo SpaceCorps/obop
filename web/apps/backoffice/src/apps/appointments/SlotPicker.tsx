@@ -104,14 +104,19 @@ export function SlotPicker(p: RecordSectionProps) {
           <p className="hint ap-slots-sub">
             {taken === null
               ? t("Loading")
-              : t(
-                  "{resource} on {day}: {count, plural, =0 {fully booked} one {# free slot} other {# free slots}}",
-                  {
+              : !slots.some((s) => s.free) && slots.some((s) => s.kind === "past")
+                ? t("{resource} on {day}: no free time left today", {
                     resource: d.refText("appointments_resource", resource),
                     day: formatDate(day),
-                    count: slots.filter((s) => s.free).length,
-                  },
-                )}
+                  })
+                : t(
+                    "{resource} on {day}: {count, plural, =0 {fully booked} one {# free slot} other {# free slots}}",
+                    {
+                      resource: d.refText("appointments_resource", resource),
+                      day: formatDate(day),
+                      count: slots.filter((s) => s.free).length,
+                    },
+                  )}
           </p>
           {taken !== null && (
             <div className="ap-slot-grid" role="group" aria-label={t("Free times")}>
