@@ -534,8 +534,11 @@ function Cell(p: {
       onFocus={(e) => {
         setText(shown);
         setFocused(true);
+        // Swap "1 h 30" for "1:30" and select it now, not after the next render: a render that
+        // changes the value drops the selection, and what is typed next would be appended.
         const box = e.currentTarget;
-        requestAnimationFrame(() => box.select());
+        box.value = shown;
+        box.select();
       }}
       onBlur={() => {
         setFocused(false);
