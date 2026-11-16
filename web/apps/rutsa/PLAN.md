@@ -57,7 +57,7 @@ except those that start with `config/` or `scripts/`.
       the `vp run` scripts `start`, `check:sdk`, `android:prebuild`, `android:build`,
       `android:build:release` (an APK that runs without Metro), `ios:prebuild`, `ios:pods`,
       `ios:build:simulator`, `ios:run:device`. The iOS release gate waits for stage 4
-- [ ] A4 `ci: check and test apps/rutsa`: both loops of `.github/workflows/ci.yml`
+- [x] A4 `ci: check and test apps/rutsa`: both loops of `.github/workflows/ci.yml`
 
 Checkpoint: `vp check` and `vp test` pass.
 
