@@ -112,7 +112,8 @@ test.describe("on a phone", () => {
       await box.fill("45m");
       await box.press("Enter");
       await expect.poll(async () => (await mine(api, task.id)).map((r) => r.minutes)).toEqual([45]);
-      await expect(days.nth(1)).toContainText("45 min");
+      // The day tab writes its total as a clock, short enough for a 320 px phone.
+      await expect(days.nth(1)).toContainText("0:45");
       // The Mine / Everyone switch is a tap target too.
       await expect(page.locator(".tsgrid .switcher button")).toHaveCount(2);
       for (const b of await page.locator(".tsgrid .switcher button").all())

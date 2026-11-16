@@ -36,12 +36,15 @@ test.describe("Appointments: book a free slot", () => {
         name: uid("Meeting room Elbe"),
         kind: "room",
       });
-      // The form starts on today; book 10:00 to 11:00 of today already.
-      await signIn("root", "/appointments/appointments_appointment?id=new");
+      // The form starts on today (UTC, the zone of the test server and browser); the browser's
+      // clock stands at 07:00 of today so that every slot of the day is still ahead. Book 10:00
+      // to 11:00 of today already.
       const now = new Date();
-      const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+      const day = [now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate()]
         .map((n) => String(n).padStart(2, "0"))
         .join("-");
+      await page.clock.setFixedTime(new Date(`${day}T07:00:00Z`));
+      await signIn("root", "/appointments/appointments_appointment?id=new");
       await api.create("root", "appointments_appointment", {
         title: uid("Supplier visit"),
         resource_id: room.id,
@@ -79,6 +82,16 @@ test.describe("Appointments: book a free slot", () => {
       await expect(slots.getByRole("button", { name: "09:30 AM" })).toHaveClass(/is-short/);
       await expect(slots.getByRole("button", { name: "10:00 AM" })).toHaveClass(/is-booked/);
       await expect(page.getByText(/Dashed: free, but too short for 60 minutes/)).toBeVisible();
+
+      // Later in the day the slots that have begun are past: not offered, and said so.
+      await page.clock.setFixedTime(new Date(`${day}T10:40:00Z`));
+      await page.getByRole("textbox", { name: "Start", exact: true }).fill("08:00");
+      await expect(slots.getByRole("button", { name: "08:00 AM" })).toHaveClass(/is-past/);
+      await expect(slots.getByRole("button", { name: "08:00 AM" })).toBeDisabled();
+      await expect(slots.getByRole("button", { name: "10:30 AM" })).toHaveClass(/is-past/);
+      await expect(slots.getByRole("button", { name: "11:00 AM" })).toBeEnabled();
+      await expect(page.getByText("Earlier times today have passed.")).toBeVisible();
+      await page.getByRole("textbox", { name: "Start", exact: true }).fill("09:00");
 
       // A free slot fills Start and End and the clash is gone.
       await slots.getByRole("button", { name: "11:00 AM" }).click();
