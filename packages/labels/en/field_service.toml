@@ -29,3 +29,12 @@ en_route = "On the way"
 [labels.en.model.field_service_part]
 name = "Part"
 plural = "Parts"
+
+[labels.en.model.field_service_job.action.depart]
+label = "On my way"
+
+[labels.en.model.field_service_job.action.start]
+label = "Start work"
+
+[labels.en.model.field_service_job.action.complete]
+label = "Complete job"

@@ -6,7 +6,7 @@ import { t } from "@obop/ui";
 import { registerAppPages, registerRecordExtension } from "../extensions.ts";
 import { href } from "../route.ts";
 import { setSignedInUser } from "../apps/hr/LeavePage.tsx";
-import { JobReport, PrintJob, SignOff } from "../apps/field_service/JobExtras.tsx";
+import { CompleteJob, JobReport, PrintJob, SignOff } from "../apps/field_service/JobExtras.tsx";
 import { JOB, MY_DAY } from "../apps/field_service/job.ts";
 
 const MyDay = lazy(() =>
@@ -41,4 +41,9 @@ registerAppPages("field_service", {
     hasJobs(app.module.models) && narrow() ? href({ app: app.id, model: MY_DAY }) : undefined,
 });
 
-registerRecordExtension(JOB, { actions: [SignOff, PrintJob], panels: [JobReport] });
+// Complete is drawn by CompleteJob, so that it is not offered next to "Customer signs".
+registerRecordExtension(JOB, {
+  actions: [SignOff, CompleteJob, PrintJob],
+  panels: [JobReport],
+  overrides: [`${JOB}.complete`],
+});

@@ -1,6 +1,6 @@
 [module]
 id = "field_service"
-version = "0.3.0"
+version = "0.3.1"
 name = "Field Service"
 description = "On-site jobs for customers, done by a technician: scheduled, en route, in progress, done or cancelled. A job records the customer, the site, the technician, the planned day and start (minutes since midnight), the parts used and whether the customer must sign off. Site address and contact details are personal data. Needs the Human Resources and Products packages."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["field-service", "jobs", "technicians"]
 categories = ["services"]
 maturity = "experimental"
 requires_core = "^0.2.2"
-changelog = "The app opens on Jobs, grouped into job, site, schedule, sign-off and report, with the parts used inside the job. The start reads as a time of day and the planned time as a duration; a part takes the product's price. A job that needs the customer to sign off can only be completed once the signer and the day are filled in, and a done or cancelled job and its parts can no longer be changed."
+changelog = "The job actions are named as a technician says them, On my way, Start work and Complete job, the same on the job, the board and My day."
 home = "field_service_job"
 
 [module.dependencies]

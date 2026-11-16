@@ -10,6 +10,7 @@ import { search, type Row } from "../../api.ts";
 import type { App } from "../../Chrome.tsx";
 import { useData } from "../../data.tsx";
 import { formatDate, isoDate, optionLabel } from "../../format.ts";
+import { actionTitle } from "../../labels.ts";
 import { clockText, linkOf, shownNumber } from "../../inputs/display.ts";
 import { serverMessage } from "../../serverMessage.ts";
 import { myEmployee } from "../hr/LeavePage.tsx";
@@ -66,7 +67,12 @@ export function MyDay({ app }: { app: App }) {
   }, [d.token, today, me, mine, d.mutations]);
 
   const stateField = model?.fields.find((f) => f.name === "state");
+  // The same name and the same question as the action has on the job and the board.
+  const command = (action: string) => model?.actions.find((c) => c.id === `${JOB}.${action}`);
   const run = async (job: Row, action: string, done: string) => {
+    const cmd = command(action);
+    if (cmd?.ui?.confirm && !(await d.confirm(cmd.ui.confirm, actionTitle(cmd), t("Cancel"))))
+      return;
     setWorking(job.id);
     try {
       const r = await d.run(`${JOB}.${action}`, { id: job.id });
@@ -220,7 +226,7 @@ export function MyDay({ app }: { app: App }) {
                           disabled={!!working}
                           onClick={() => void run(job, step.action, step.done)}
                         >
-                          {step.label}
+                          {command(step.action) ? actionTitle(command(step.action)!) : step.label}
                         </Button>
                       )}
                       {blocked && (

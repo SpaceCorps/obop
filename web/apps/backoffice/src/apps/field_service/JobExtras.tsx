@@ -12,6 +12,7 @@ import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
 import { formatDate, isoDate, money, optionLabel } from "../../format.ts";
 import { clockText, shownNumber } from "../../inputs/display.ts";
+import { actionTitle } from "../../labels.ts";
 import { serverMessage } from "../../serverMessage.ts";
 import { PrintSheet } from "../sales/PrintSheet.tsx";
 import { JOB, PART, needsSignature, siteText } from "./job.ts";
@@ -111,6 +112,43 @@ export function SignOff({ row, busy }: RecordExtProps) {
         </Dialog>
       )}
     </>
+  );
+}
+
+/**
+ * Complete, drawn here instead of the generic button (`overrides` in the registration): while the
+ * customer still has to sign, "Customer signs" is the one primary action and Complete is not
+ * offered; once signed (or when no sign-off is needed) it runs `field_service_job.complete` with
+ * the action's own name and question. The server keeps the rule (the `signed` assertion).
+ */
+export function CompleteJob({ model, row, busy }: RecordExtProps) {
+  const d = useData();
+  const [working, setWorking] = useState(false);
+  const cmd = model.actions.find((c) => c.id === `${JOB}.complete`);
+  if (!cmd || row.state !== "in_progress" || needsSignature(row)) return null;
+  const label = actionTitle(cmd);
+  const complete = async () => {
+    if (cmd.ui?.confirm && !(await d.confirm(cmd.ui.confirm, label, t("Cancel")))) return;
+    setWorking(true);
+    try {
+      const r = await d.run(cmd.id, { id: row.id });
+      if (r.kind === "ok") d.notify(cmd.ui?.done || t("Job done"), "ok");
+      else if (r.kind === "approval") d.notify(t("Sent for approval"), "info");
+      else d.notify(serverMessage(r.message), "error");
+    } finally {
+      setWorking(false);
+    }
+  };
+  return (
+    <Button
+      icon="check"
+      variant="primary"
+      loading={working}
+      disabled={busy || working}
+      onClick={() => void complete()}
+    >
+      {label}
+    </Button>
   );
 }
 

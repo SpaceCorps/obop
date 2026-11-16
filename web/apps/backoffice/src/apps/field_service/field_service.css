@@ -85,6 +85,10 @@
   line-height: var(--leading-snug);
   overflow-wrap: anywhere;
   margin-inline-end: var(--space-1);
+  /* A touch target of 44 px, with the text centred in it. */
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
 }
 .fs-job-title:hover {
   text-decoration: underline;

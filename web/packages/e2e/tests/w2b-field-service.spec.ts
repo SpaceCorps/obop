@@ -99,13 +99,21 @@ test.describe("Field Service: a technician's day on a phone", () => {
 
         // The customer signs on the job.
         await card.getByRole("button", { name: "Get signature" }).click();
-        await page.getByRole("button", { name: "Customer signs" }).click();
+        // While the sign-off is missing, "Customer signs" is the one primary action of the job:
+        // Complete is not offered beside it.
+        const signs = page.getByRole("button", { name: "Customer signs" });
+        await expect(signs).toBeVisible();
+        const record = page.getByRole("dialog", { name: "Job record" });
+        await expect(record.getByRole("button", { name: /^Complete/ })).toHaveCount(0);
+        await signs.click();
         const dialog = page.getByRole("dialog", { name: "Sign off the work" });
         const signer = dialog.getByRole("textbox", { name: "Name of the person signing" });
         await expect(signer).toHaveValue("Jens Moeller");
         await dialog.getByRole("button", { name: "Sign" }).click();
         await expect(dialog).toBeHidden();
         await expect(page.getByRole("button", { name: "Customer signs" })).toHaveCount(0);
+        // Signed: Complete job comes back on the job, under the same name as on My day.
+        await expect(record.getByRole("button", { name: "Complete job" })).toBeVisible();
 
         // The printed report carries the sign-off.
         await expect(page.locator(".print-sheet .fs-print")).toContainText(
@@ -116,6 +124,8 @@ test.describe("Field Service: a technician's day on a phone", () => {
         await signIn("root", "/field_service/my-day");
         const again = page.locator(".fs-job", { hasText: name });
         await again.getByRole("button", { name: "Complete job" }).click();
+        // The same question as on the job page.
+        await page.getByRole("alertdialog").getByRole("button", { name: "Complete job" }).click();
         await expect(again).toContainText("Done");
         const done = await api.run("root", "field_service_job.get", { id: job.id });
         expect(done.state).toBe("done");
