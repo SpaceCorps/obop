@@ -65,6 +65,22 @@ struct Server {
 
 impl Drop for Server {
     fn drop(&mut self) {
+        // When a test fails, the servers are dropped while it unwinds. Say what became of each
+        // process and what it wrote: otherwise a dead or stuck server shows up only as
+        // "connection refused" in a request, and the log file is deleted below.
+        if std::thread::panicking() {
+            let state = match self.child.try_wait() {
+                Ok(Some(status)) => format!("had exited with {status}"),
+                Ok(None) => "was still running".to_string(),
+                Err(e) => format!("could not be asked: {e}"),
+            };
+            eprintln!(
+                "the server on port {} (pid {}) {state}; it wrote:\n{}",
+                self.port,
+                self.child.id(),
+                std::fs::read_to_string(&self.log).unwrap_or_default()
+            );
+        }
         let _ = self.child.kill();
         let _ = self.child.wait();
         let _ = std::fs::remove_file(&self.log);
@@ -186,7 +202,8 @@ fn http(
     extra: &[(&str, &str)],
     body: Option<&J>,
 ) -> Reply {
-    let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    let mut s = TcpStream::connect(("127.0.0.1", port))
+        .unwrap_or_else(|e| panic!("connect to 127.0.0.1:{port} for {method} {path}: {e}"));
     s.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
     let payload = body.map(J::to_string).unwrap_or_default();
     let mut req = format!(
