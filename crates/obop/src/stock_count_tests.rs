@@ -285,3 +285,18 @@ fn a_count_where_the_product_is_kept_in_lots_is_refused_before_any_move_is_made(
     // No cancelled move is left behind.
     assert_eq!((s.on_hand(), s.moves().len()), (36, n));
 }
+
+#[test]
+fn a_manager_without_the_inventory_user_group_is_told_which_group_is_missing() {
+    let s = shelf();
+    let boss = Principal::user("bo", &["inventory.manager"]);
+    let e = run(
+        &s.app,
+        &boss,
+        "stock_count.apply",
+        json!({"item": s.item, "counted": 40}),
+    )
+    .unwrap_err();
+    assert!(e.contains("inventory.user"), "{e}");
+    assert!(!e.contains("import"), "{e}");
+}

@@ -10,8 +10,8 @@
 //! approval). The call reads the item again afterwards and says when the stock is not the counted
 //! figure (a move validated by someone else between the two steps).
 
-use crate::sie::{Env, call};
-use obop_commands::{Actor, Dispatcher, Principal, Store, Value};
+use crate::sie::Env;
+use obop_commands::{Actor, CallError, Dispatcher, Principal, Store, Surface, Value, Vault};
 use obop_registry::{CommandDef, FieldDef, FieldKind, ModelDef, Module};
 use obop_types::DataClass;
 use serde_json::{Value as J, json};
@@ -87,6 +87,28 @@ pub struct Counted {
     pub quantity: i64,
     pub move_id: Option<String>,
     pub notes: Vec<String>,
+}
+
+/// One command as the caller, the refusals in words. Like `sie::call`, with this command's text
+/// for a missing group.
+fn call(env: Env<'_>, p: &Principal, cmd: &str, input: J) -> Result<J, String> {
+    match env.d.call(
+        Surface::Cli,
+        p,
+        &mut Vault::new(),
+        cmd,
+        &Value::from_json(&input),
+    ) {
+        Err(CallError::Forbidden(_)) => Err(format!(
+            "{cmd}: you may not do that; a stock count reads the stock item and books a stock move as you, so it needs the inventory.user group as well as {GROUP}"
+        )),
+        Err(CallError::Handler(m)) => Err(format!("{cmd}: {m}")),
+        Err(CallError::ApprovalRequired { plan_id }) => Err(format!(
+            "{cmd} needs a person's approval (plan {plan_id}); run it as a signed-in person, not an agent"
+        )),
+        Err(e) => Err(format!("{cmd}: {e:?}")),
+        Ok(r) => Ok(r.value.to_json()),
+    }
 }
 
 fn int(v: &J) -> i64 {
