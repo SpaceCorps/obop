@@ -322,7 +322,8 @@ export function ListView(p: ViewProps) {
     const out = phone ? listColumns(model, 100_000, { fields }) : cols;
     const head = out.map((f) => csvCell(fieldTitle(f))).join(",");
     const body = pick.map((r) => out.map((f) => csvCell(cellText(f, r))).join(","));
-    download(`${model.name}.csv`, [head, ...body].join("\r\n") + "\r\n");
+    // Inside the phone host app no file was saved, and the app's notice has said so.
+    if (!download(`${model.name}.csv`, [head, ...body].join("\r\n") + "\r\n")) return;
     d.notify(
       t("{count, plural, one {Exported # record} other {Exported # records}}", {
         count: pick.length,

@@ -19,6 +19,10 @@ export type FieldProps = {
   autoCapitalize?: TextInputProps["autoCapitalize"];
   autoCorrect?: boolean;
   maxLength?: number;
+  /** The label of the keyboard's action key ("go", "next", "done"); the system's default when left out. */
+  returnKeyType?: TextInputProps["returnKeyType"];
+  /** The keyboard's action key was pressed. */
+  onSubmitEditing?: () => void;
   testID?: string;
 };
 
@@ -36,6 +40,8 @@ export function Field({
   autoCapitalize,
   autoCorrect,
   maxLength,
+  returnKeyType,
+  onSubmitEditing,
   testID,
 }: FieldProps) {
   const t = useTheme();
@@ -60,6 +66,8 @@ export function Field({
         autoCapitalize={autoCapitalize}
         autoCorrect={autoCorrect}
         maxLength={maxLength}
+        returnKeyType={returnKeyType}
+        {...(onSubmitEditing === undefined ? {} : { onSubmitEditing: () => onSubmitEditing() })}
         allowFontScaling
         maxFontSizeMultiplier={2}
         onFocus={() => setFocused(true)}

@@ -21,6 +21,8 @@ import {
   takeSsoReturn,
   type SsoErrorWord,
 } from "./api.ts";
+import { SignInNotes } from "./host/SignInNotes.tsx";
+import { useHost } from "./host/useHost.ts";
 import { passkeyMessage } from "./Passkeys.tsx";
 import { passkeysSupported, signInWithPasskey } from "./passkeys.ts";
 import { storageFaultMessage } from "./serverMessage.ts";
@@ -71,6 +73,7 @@ export function SignIn({
   // begin a second sign-in.
   const [leaving, setLeaving] = useState(false);
   const i18n = useI18n();
+  const host = useHost();
   // The brand of the instance, from the page (docs/spec/branding.md): with one, the logo and the
   // name stand in the aside instead of the product's own copy, and its message sits under the hint.
   const brand = pageBrand();
@@ -290,7 +293,7 @@ export function SignIn({
               {t("Sign in with a passkey")}
             </Button>
           )}
-          {microsoft && (
+          {microsoft && host.allows("microsoft") && (
             <>
               <Button
                 icon="shield-check"
@@ -309,6 +312,7 @@ export function SignIn({
               </span>
             </>
           )}
+          <SignInNotes microsoft={microsoft} />
           <LanguageSelect value={i18n.lang} onChange={(l) => void i18n.setLanguage(l)} />
         </form>
       )}

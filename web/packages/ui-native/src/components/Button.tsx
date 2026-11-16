@@ -20,6 +20,11 @@ export type ButtonProps = {
    * says "selected" or "not selected", and a check mark in the label shows it without colour.
    */
   selected?: boolean;
+  /**
+   * The button is as wide as its label and stands at the start of its row, instead of as wide as
+   * the row (the default). `size="big"` is centred either way.
+   */
+  fit?: boolean;
   testID?: string;
 };
 
@@ -32,6 +37,7 @@ export function Button({
   busy = false,
   hint,
   selected,
+  fit = false,
   testID,
 }: ButtonProps) {
   const t = useTheme();
@@ -77,7 +83,7 @@ export function Button({
         paddingVertical: t.space[2],
         alignItems: "center",
         justifyContent: "center",
-        alignSelf: big ? "center" : "stretch",
+        alignSelf: big ? "center" : fit ? "flex-start" : "stretch",
         backgroundColor: fill,
         borderWidth: variant === "secondary" ? 1 : 0,
         borderColor: t.c.borderControl,

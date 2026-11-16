@@ -1,5 +1,6 @@
 import { t } from "@obop/ui";
 import type { FieldMeta, ModelMeta, Row } from "../api.ts";
+import { hostSavesFiles } from "../host/state.ts";
 
 /** The catalogue entry a `connector_provider` row describes. */
 export type Provider = Row & {
@@ -236,8 +237,11 @@ export function adequacyLabel(a: Provider["eu_adequate"]): string {
       : t("Verify with the provider");
 }
 
-/** Save a text as a file the person chooses where to keep. */
-export function downloadText(filename: string, text: string, mime = "text/csv") {
+/**
+ * Save a text as a file the person chooses where to keep. The answer is `false` inside the phone
+ * host app, which saves no file yet and stops the click with a notice (`host/downloads.ts`).
+ */
+export function downloadText(filename: string, text: string, mime = "text/csv"): boolean {
   const url = URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` }));
   const a = document.createElement("a");
   a.href = url;
@@ -246,6 +250,7 @@ export function downloadText(filename: string, text: string, mime = "text/csv") 
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return hostSavesFiles();
 }
 
 /** A random signing secret in the Standard Webhooks form (`whsec_` and base64). */
