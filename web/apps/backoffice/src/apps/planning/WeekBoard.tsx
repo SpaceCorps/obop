@@ -325,10 +325,14 @@ export function WeekBoard(p: ModelPageProps) {
                               <button
                                 type="button"
                                 className="pl-add"
-                                aria-label={t("Add a shift for {name} on {day}", {
-                                  name,
-                                  day: formatDate(day),
-                                })}
+                                aria-label={
+                                  id
+                                    ? t("Add a shift for {name} on {day}", {
+                                        name,
+                                        day: formatDate(day),
+                                      })
+                                    : t("Add a shift on {day}", { day: formatDate(day) })
+                                }
                                 onClick={() => newShift(id, day)}
                               >
                                 +
