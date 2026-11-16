@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
-import { IOS_USAGE_TEXTS, iosBundleId, withoutDevClientEntries } from "./ios.ts";
+import {
+  IOS_USAGE_TEXTS,
+  iosBundleId,
+  withTransportSecurity,
+  withoutDevClientEntries,
+} from "./ios.ts";
 
 describe("the bundle id of the iOS build", () => {
   test("is the application id unless the build names another", () => {
@@ -87,5 +92,37 @@ describe("the texts iOS shows when it asks", () => {
       expect(text, key).toMatch(/\.$/);
       expect(text.length, key).toBeGreaterThan(40);
     }
+  });
+});
+
+describe("App Transport Security", () => {
+  const template = {
+    CFBundleName: "obop",
+    NSAppTransportSecurity: {
+      NSAllowsArbitraryLoads: false,
+      NSAllowsLocalNetworking: true,
+      NSExceptionDomains: { "example.com": { NSExceptionAllowsInsecureHTTPLoads: true } },
+    },
+  };
+
+  test("a plain build has no exception at all, not even the template's local networking", () => {
+    const plist = withTransportSecurity(template, false);
+    expect(plist.NSAppTransportSecurity).toEqual({ NSAllowsArbitraryLoads: false });
+    expect(plist.CFBundleName).toBe("obop");
+    // The input is not changed.
+    expect(template.NSAppTransportSecurity.NSAllowsLocalNetworking).toBe(true);
+  });
+
+  test("a test build keeps local networking and nothing more", () => {
+    expect(withTransportSecurity(template, true).NSAppTransportSecurity).toEqual({
+      NSAllowsArbitraryLoads: false,
+      NSAllowsLocalNetworking: true,
+    });
+  });
+
+  test("a plist without the entry gets one", () => {
+    expect(withTransportSecurity({}, false)).toEqual({
+      NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
+    });
   });
 });

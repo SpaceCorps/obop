@@ -76,3 +76,20 @@ export const IOS_USAGE_TEXTS = Object.freeze({
   NSPhotoLibraryAddUsageDescription:
     "obop saves a picture to your photos when you choose to save it.",
 });
+
+/**
+ * App Transport Security of a build, set whole (the template's own entry is replaced). The Expo
+ * template puts `NSAllowsLocalNetworking` into every build, which lets plain http reach this device
+ * and the local network. A build that may not speak plain http gets no exception at all, so iOS
+ * itself refuses an `http` load of the app and of its WebView, behind the address rule of the app;
+ * a test build (`OBOP_ALLOW_CLEARTEXT=1`) or the development build (`OBOP_DEV_CLIENT=1`, whose
+ * Metro is on this Mac) keeps that one key and nothing more. `NSAllowsArbitraryLoads`,
+ * `NSAllowsArbitraryLoadsInWebContent` and exception domains are never set.
+ */
+export function withTransportSecurity<T extends object>(plist: T, localNetworking: boolean): T {
+  const result = { ...plist } as Record<string, unknown>;
+  result.NSAppTransportSecurity = localNetworking
+    ? { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true }
+    : { NSAllowsArbitraryLoads: false };
+  return result as T;
+}

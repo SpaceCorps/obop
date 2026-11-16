@@ -1,7 +1,12 @@
 import type { ExpoConfig } from "expo/config";
 import { withAndroidManifest, withInfoPlist, type ConfigPlugin } from "expo/config-plugins";
 import { identity } from "./config/identity.ts";
-import { IOS_USAGE_TEXTS, iosBundleId, withoutDevClientEntries } from "./config/ios.ts";
+import {
+  IOS_USAGE_TEXTS,
+  iosBundleId,
+  withTransportSecurity,
+  withoutDevClientEntries,
+} from "./config/ios.ts";
 
 // PLACEHOLDER: "org.obop.app.test" is a stand-in application id and bundle id for every build of
 // this slice. It is not registered anywhere and no store account, signing key or publication
@@ -21,11 +26,9 @@ const IOS_BUNDLE_ID = iosBundleId(process.env.OBOP_IOS_BUNDLE_ID, APPLICATION_ID
 //   OBOP_ALLOW_CLEARTEXT=1   the build may speak plain http, and only to this device or the local
 //                            network (the address rule of the app is the second check). Without it
 //                            a build connects over https only: on Android the manifest says so
-//                            (`usesCleartextTraffic`), on both systems the address rule does. iOS
-//                            has no per-build switch: the Expo template puts
-//                            NSAllowsArbitraryLoads=false and NSAllowsLocalNetworking=true into
-//                            every build and the app adds no exception, so there the address rule
-//                            is the only guard.
+//                            (`usesCleartextTraffic`), on iOS App Transport Security does (the
+//                            template's NSAllowsLocalNetworking stays in a test build only, see
+//                            `withTransportSecurity`), and on both systems the address rule does.
 //   OBOP_WEBVIEW_DEBUG=1     the WebView is open to DevTools. A variable of its own: "speaks plain
 //                            http" and "open to DevTools" are separate facts.
 //   OBOP_DEFAULT_SERVER      the address the address field starts with.
@@ -55,6 +58,7 @@ const withCleartext: ConfigPlugin = (config) =>
 const withIosPlistCleanup: ConfigPlugin = (config) =>
   withInfoPlist(config, (c) => {
     if (!DEV_CLIENT) c.modResults = withoutDevClientEntries(c.modResults);
+    c.modResults = withTransportSecurity(c.modResults, CLEARTEXT || DEV_CLIENT);
     return c;
   });
 
@@ -100,8 +104,8 @@ const config: ExpoConfig = {
   },
   ios: {
     bundleIdentifier: IOS_BUNDLE_ID,
-    // No ATS exception and no Bonjour keys: the app does no discovery (the ones of the development
-    // client are removed, see DEV_CLIENT).
+    // No Bonjour keys: the app does no discovery (the ones of the development client are removed,
+    // see DEV_CLIENT). App Transport Security is set by `withIosPlistCleanup`.
     infoPlist: { ...IOS_USAGE_TEXTS },
   },
   extra: {
