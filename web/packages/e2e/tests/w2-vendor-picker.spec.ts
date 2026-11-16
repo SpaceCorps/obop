@@ -47,6 +47,10 @@ test("a vendor typed in another case or spacing is made for the contact that exi
     await picker.fill(typed);
     await page.getByRole("option", { name: `Create “${typed}”` }).click();
     await expect(picker).toHaveValue(name);
+    // The toast names the vendor as it is called, not as it was typed.
+    await expect(
+      page.locator(".toast").getByText(`Vendor “${name}” created`, { exact: true }),
+    ).toBeVisible();
     // No second contact: the vendor is the one contact of that name.
     const all = await api.run("root", "party.search", {
       filter: [{ field: "name", op: "contains", value: name.split(" ").at(-1) }],

@@ -351,7 +351,9 @@ export function RefPicker(p: RefPickerProps) {
    * count), else a new one. Null when a person must choose: several records have that name, or
    * the search failed; the full form then opens.
    */
-  async function refFor(text: string): Promise<{ id: string; found: boolean } | null> {
+  async function refFor(
+    text: string,
+  ): Promise<{ id: string; found: boolean; name: string } | null> {
     if (!viaRef) return null;
     const asked = 50;
     const found = await search(d.token, viaRef.to, {
@@ -360,7 +362,10 @@ export function RefPicker(p: RefPickerProps) {
     });
     if ("error" in found) return null;
     const hit = byName(found.rows, viaRef.name, text, found.rows.length < asked);
-    if (hit.kind === "one") return { id: hit.id, found: true };
+    if (hit.kind === "one") {
+      const row = found.rows.find((r) => r.id === hit.id);
+      return { id: hit.id, found: true, name: String(row?.[viaRef.name] ?? text) };
+    }
     if (hit.kind === "several") {
       d.notify(t("Several records are named “{name}”. Choose one in the form.", { name: text }));
       return null;
@@ -368,7 +373,7 @@ export function RefPicker(p: RefPickerProps) {
     const made = await d.run(`${viaRef.to}.create`, { [viaRef.name]: text });
     if (made.kind === "ok") {
       const id = String((made.value as Row).id ?? "");
-      return id ? { id, found: false } : null;
+      return id ? { id, found: false, name: text } : null;
     }
     if (made.kind === "error") d.notify(serverMessage(made.message), "error");
     return null;
@@ -398,6 +403,7 @@ export function RefPicker(p: RefPickerProps) {
         model: inSentence(targetTitle),
       }),
       t("Restore"),
+      t("Cancel"),
     );
     if (!restore) {
       close();
@@ -416,6 +422,7 @@ export function RefPicker(p: RefPickerProps) {
     if ((!labelName && !viaRef) || making) return;
     setMaking(true);
     const start = startValues(text);
+    let name = text;
     if (viaRef) {
       const ref = await refFor(text);
       if (!ref) {
@@ -423,7 +430,9 @@ export function RefPicker(p: RefPickerProps) {
         openStacked(text);
         return;
       }
-      if (ref.found && (await reuseFor(ref.id, text))) {
+      // The record is named after what was found ("Baumann Bau GmbH", not "baumann  bau gmbh").
+      name = ref.name;
+      if (ref.found && (await reuseFor(ref.id, name))) {
         setMaking(false);
         return;
       }
@@ -433,7 +442,7 @@ export function RefPicker(p: RefPickerProps) {
     setMaking(false);
     if (r.kind === "ok") {
       const id = String((r.value as Row).id ?? "");
-      d.notify(t("{model} “{name}” created", { model: targetTitle, name: text }));
+      d.notify(t("{model} “{name}” created", { model: targetTitle, name }));
       if (id) pick(id);
     } else if (r.kind === "approval") {
       d.notify(
