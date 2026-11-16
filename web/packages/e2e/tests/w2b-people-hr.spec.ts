@@ -67,6 +67,49 @@ test.describe("employees", () => {
     }
   });
 
+  test("a deep reporting line keeps its names readable at 320 px", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const root = await api.token("root");
+    await api.post("/api/marketplace_listing/install", { id: "hr" }, root);
+    try {
+      // Ten levels, one under the other.
+      let above: string | undefined;
+      let deepest = "";
+      for (let level = 0; level < 10; level++) {
+        const e = await api.create("root", "hr_employee", {
+          name: uid(`Deep ${level}`),
+          ...(above ? { reports_to_id: above } : {}),
+        });
+        above = e.id;
+        deepest = e.name as string;
+      }
+      await page.setViewportSize({ width: 320, height: 720 });
+      await signIn("root", "/hr/org_chart");
+      await page.getByRole("searchbox", { name: "Find a person or a job" }).fill(deepest);
+      const tree = page.getByRole("tree", { name: "Org chart" });
+      const hit = tree.getByRole("link", { name: new RegExp(deepest) });
+      await expect(hit).toBeVisible();
+      const node = page.locator(".org-node.hit").first();
+      const width = (await node.boundingBox())!.width;
+      expect(width).toBeGreaterThanOrEqual(170);
+      // The whole name shows: not cut by an ellipsis.
+      const cut = await node
+        .locator(".org-name")
+        .evaluate((el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight + 1);
+      expect(cut).toBe(false);
+      const sideways = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(sideways).toBe(0);
+    } finally {
+      await api.post("/api/module/uninstall", { id: "hr" }, root);
+    }
+  });
+
   test("an employee asks for time off on a phone, starting on her own record", async ({
     page,
     signIn,

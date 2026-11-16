@@ -206,9 +206,28 @@
   .org-toggle > .ico:first-child {
     display: none;
   }
+  /* From the fourth level down the step is a hair, so the tenth level keeps most of its width. */
+  .org-group .org-group .org-group .org-group {
+    margin-inline-start: 0;
+    padding-inline-start: var(--space-1);
+  }
+  .org-group .org-group .org-group .org-group > li::before {
+    inset-inline-start: calc(-1 * var(--space-1) - 2px);
+    inline-size: var(--space-1);
+  }
   .org-person {
     gap: var(--space-2);
     padding-inline: var(--space-1);
+    block-size: auto;
+    min-block-size: 3.75rem;
+  }
+  /* A long name wraps (up to three lines) instead of ending in an ellipsis. */
+  .org-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
   .org-meta {
     display: -webkit-box;
