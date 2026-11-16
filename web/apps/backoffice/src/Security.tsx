@@ -24,6 +24,7 @@ import {
   SessionsSection,
 } from "./SecurityAccount.tsx";
 import { PeopleSection } from "./People.tsx";
+import { MicrosoftSignInSection } from "./SsoAdmin.tsx";
 import { EVENT_KINDS } from "./securityEvents.ts";
 
 type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
@@ -53,6 +54,8 @@ export function SecurityTab({
   const api = useMemo(() => createTwoFactorApi("/api/auth", token), [token]);
   const [policy, setPolicy] = useState<TwoFactorStatus | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Bumped when Microsoft sign-in changes, so that People shows or hides its column.
+  const [ssoKey, setSsoKey] = useState(0);
   useEffect(() => {
     let live = true;
     void api.status().then((r) => live && r.ok && setPolicy(r.value));
@@ -85,7 +88,13 @@ export function SecurityTab({
       <DevicesSection token={token} notify={notify} isAdmin={isAdmin} me={me} />
       {isAdmin && (
         <>
-          <PeopleSection token={token} notify={notify} />
+          <PeopleSection token={token} notify={notify} refreshKey={ssoKey} />
+          <MicrosoftSignInSection
+            token={token}
+            notify={notify}
+            refreshKey={ssoKey}
+            onChanged={() => setSsoKey((k) => k + 1)}
+          />
           <PolicySection
             token={token}
             settings={settings}

@@ -232,6 +232,35 @@
   color: var(--danger-ink, var(--text));
 }
 
+/* Sign in with Microsoft (SsoAdmin.tsx, PeopleSso.tsx): the summary of what is set up, and the
+   badges of a person's binding. */
+.sso-summary {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+.sso-summary > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+.sso-summary dt {
+  min-width: 11rem;
+  color: var(--text-muted);
+}
+.sso-summary dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sso-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.sso-bound {
+  overflow-wrap: anywhere;
+}
 @media (max-width: 40rem) {
   /* One 16 px gutter on a phone, for every tab of Customize. */
   .customize .content.pad {

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Input, Notice, Table, t } from "@obop/ui";
 import { MIN_PASSWORD, account, reason, type Failure, type Notify } from "./SecurityAccount.tsx";
+import { MicrosoftDialog } from "./PeopleSso.tsx";
+import { readSso, type SsoState } from "./SsoAdmin.tsx";
 
 /* D69: the people of the instance, for administrators: create a person, choose their permission
    groups, disable, enable, reset a password, and offboard (disable and end every session, agent
@@ -17,6 +19,10 @@ type Person = {
   mfa_enabled: boolean;
   must_change_password: boolean;
   sessions: number;
+  /** Signs in with Microsoft only (D91). */
+  sso_only?: boolean;
+  /** The object id at Microsoft the account is bound to; absent when it is not bound. */
+  sso_oid?: string | null;
 };
 
 /** The groups an account can be given, sorted with the administrator group first. */
@@ -271,8 +277,19 @@ function GroupsDialog({
 }
 
 /** Administrators: the people of the instance. */
-export function PeopleSection({ token, notify }: { token: string; notify: Notify }) {
+export function PeopleSection({
+  token,
+  notify,
+  refreshKey = 0,
+}: {
+  token: string;
+  notify: Notify;
+  /** Changes when Microsoft sign-in was set up, changed or removed: the column follows. */
+  refreshKey?: number;
+}) {
   const id = useId();
+  const [sso, setSso] = useState<SsoState>({ kind: "loading" });
+  const [microsoft, setMicrosoft] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[] | null>(null);
   const [resetting, setResetting] = useState<string | null>(null);
   const [temp, setTemp] = useState("");
@@ -288,6 +305,9 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
     setPeople(r.ok ? r.value.users : []);
   }, [token]);
   useEffect(() => void load(), [load]);
+  useEffect(() => {
+    void readSso(token).then(setSso);
+  }, [token, refreshKey]);
   const failed = (r: Failure) =>
     reason(r) || (r.status === 400 ? r.message : "") || t("Could not save");
   async function toggle(p: Person) {
@@ -334,6 +354,11 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
       void load();
     } else setOffError(failed(r));
   }
+  // An instance that does not use Microsoft sees no change: the column and the button need a
+  // provider or at least one binding.
+  const microsoftShown =
+    sso.kind === "set" || (people ?? []).some((p) => p.sso_oid || p.sso_only === true);
+  const shownPerson = people?.find((p) => p.name === microsoft) ?? null;
   return (
     <section className="stack" aria-labelledby={`${id}-h`}>
       <div className="people-head">
@@ -354,6 +379,7 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
               <th scope="col">{t("Two-factor")}</th>
               <th scope="col">{t("Sessions")}</th>
               <th scope="col">{t("Status")}</th>
+              {microsoftShown && <th scope="col">{t("Microsoft")}</th>}
               <th scope="col">
                 <span className="sr-only">{t("Actions")}</span>
               </th>
@@ -385,11 +411,28 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
                     <Badge tone="success">{t("Active")}</Badge>
                   )}
                 </td>
+                {microsoftShown && (
+                  <td data-label={t("Microsoft")}>
+                    {p.sso_oid || p.sso_only ? (
+                      <span className="sso-badges">
+                        {p.sso_oid && <Badge tone="info">{t("Bound")}</Badge>}
+                        {p.sso_only && <Badge tone="accent">{t("Microsoft only")}</Badge>}
+                      </span>
+                    ) : (
+                      <span className="hint">{t("Not bound")}</span>
+                    )}
+                  </td>
+                )}
                 <td className="cell-actions">
                   <div className="actionrow">
                     <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
                       {t("Groups")}
                     </Button>
+                    {microsoftShown && (
+                      <Button size="sm" variant="ghost" onClick={() => setMicrosoft(p.name)}>
+                        {t("Microsoft")}
+                      </Button>
+                    )}
                     <Button size="sm" disabled={busy} onClick={() => void toggle(p)}>
                       {p.disabled ? t("Enable") : t("Disable")}
                     </Button>
@@ -507,6 +550,16 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
             notify(t("Groups of {user} saved.", { user: editing.name }));
             void load();
           }}
+        />
+      )}
+      {shownPerson && (
+        <MicrosoftDialog
+          token={token}
+          person={shownPerson}
+          sso={sso}
+          notify={notify}
+          onClose={() => setMicrosoft(null)}
+          onDone={() => void load()}
         />
       )}
       {offboarding && (
