@@ -51,9 +51,12 @@
   inline-size: 100%;
   block-size: auto;
   aspect-ratio: 640 / 300;
+  /* A short drive must not push the facts and the check below Confirm (the drawing keeps its shape). */
+  max-block-size: 17.5rem;
 }
 .trip-map-wait {
   aspect-ratio: 640 / 300;
+  max-block-size: 17.5rem;
   background: var(--surface-3);
 }
 .trip-map-none {
@@ -126,7 +129,7 @@
 
 .trip-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.5rem), 1fr));
   gap: var(--space-3) var(--space-4);
   margin: 0;
 }

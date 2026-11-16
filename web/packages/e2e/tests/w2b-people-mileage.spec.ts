@@ -83,9 +83,9 @@ test("a reviewer reads a trip's route and check, and rejects it with a reason", 
   await expect(review).toContainText("1 min");
   await expect(review).toContainText("The track is clean: all 10 points were used");
 
-  // Reject asks for the reason and sends it with the action.
-  await record.getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: /^Reject/ }).click();
+  // Confirm and Reject stand side by side; Reject asks for the reason and sends it with the action.
+  await expect(record.getByRole("button", { name: /^Confirm/ })).toBeVisible();
+  await record.getByRole("button", { name: /^Reject/ }).click();
   const ask = page.getByRole("dialog").filter({ hasText: /reason/i });
   await ask.getByRole("textbox").first().fill("The trip was private");
   await ask.getByRole("button", { name: /^Reject/ }).click();
