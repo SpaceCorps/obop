@@ -8,6 +8,8 @@
 //! - `fill_from` copies a value only when the caller could read it in clear: the field's group,
 //!   the record's visibility and the masking of its data class (D40). Otherwise the field stays
 //!   empty, exactly as if the source were empty, so the answer is no oracle for what it holds.
+//!   Into the model's `access.own` field the masking is not asked (the stored owner is masked
+//!   in the answer the same way), so a record an agent files is the linked person's.
 //! - A `fill_from` into the model's `access.own` field is applied again by an update that moves
 //!   the record to another source and leaves the owner out (`refill_owner`): the record follows.
 //! - `readonly` refuses a value on create and a changed value on update (code `readonly_field`);
@@ -101,7 +103,8 @@ pub(crate) fn fill_in(cx: &FillCtx<'_>, def: &ModelDef, f: &mut Fields) -> R<()>
         if f.contains_key(fd.name) || is_unset(f.get(via.as_str())) {
             continue;
         }
-        if let Some(v) = copied(cx, def, via, &p.field, f)? {
+        let owner = def.access.as_ref().and_then(|a| a.own) == Some(fd.name);
+        if let Some(v) = copied(cx, def, via, &p.field, f, owner)? {
             f.insert(fd.name.to_string(), v);
         }
     }
@@ -140,7 +143,7 @@ pub(crate) fn refill_owner(
     let copied = if is_unset(after.get(via.as_str())) {
         None
     } else {
-        copied(cx, def, via, &p.field, after)?
+        copied(cx, def, via, &p.field, after, true)?
     };
     let v = copied.or_else(|| (!cx.actor.id.is_empty()).then(|| J::from(cx.actor.id.clone())));
     Ok(v.map(|v| (own.to_string(), v)))
@@ -182,7 +185,17 @@ fn default_value(cx: &FillCtx<'_>, fd: &FieldDef, d: &DefaultSpec) -> R<Option<J
 }
 
 /// The value of `field` of the record `via` points at, when the caller may read it in clear.
-fn copied(cx: &FillCtx<'_>, def: &ModelDef, via: &str, field: &str, f: &Fields) -> R<Option<J>> {
+/// Into the model's owner field (`owner`) the masking of the source is not asked: the value is
+/// stored, never shown to the caller (the owner field is masked the same way in the answer), so
+/// leave an agent files for a linked employee is the employee's, as when a person files it.
+fn copied(
+    cx: &FillCtx<'_>,
+    def: &ModelDef,
+    via: &str,
+    field: &str,
+    f: &Fields,
+    owner: bool,
+) -> R<Option<J>> {
     let Some(to) = def
         .fields
         .iter()
@@ -197,7 +210,12 @@ fn copied(cx: &FillCtx<'_>, def: &ModelDef, via: &str, field: &str, f: &Fields) 
     let Some(src) = target.fields.iter().find(|x| x.name == field) else {
         return Ok(None);
     };
-    if !cx.actor.holds(target.read_group) || !reads_clear(cx.actor, src) {
+    let clear = if owner {
+        cx.actor.holds(src.permission_group)
+    } else {
+        reads_clear(cx.actor, src)
+    };
+    if !cx.actor.holds(target.read_group) || !clear {
         return Ok(None);
     }
     let Some(J::String(id)) = f.get(via) else {

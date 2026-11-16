@@ -264,6 +264,38 @@ fn leave_follows_the_employee_when_hr_moves_it_to_another_one() {
 }
 
 #[test]
+fn leave_an_agent_files_for_a_linked_employee_is_the_employees() {
+    let app = app();
+    let hanna = Principal::user("hanna", &["hr.user", "hr.manager"]);
+    let agent = Principal::agent(
+        "hanna",
+        &["hr.user", "hr.manager"],
+        &["hr.user", "hr.manager"],
+    );
+    let ju = id(&ok(
+        &app,
+        &hanna,
+        "hr_employee.create",
+        json!({"name": "Julia Brandt", "user": "julia"}),
+    ));
+    let leave = ok(
+        &app,
+        &agent,
+        "hr_leave_request.create",
+        json!({"employee_id": ju, "start_on": "2026-10-05", "end_on": "2026-10-06", "days": 2}),
+    );
+    // The agent reads the login masked; what is stored is the employee's.
+    assert_ne!(leave["requested_by"], "julia");
+    let stored = ok(
+        &app,
+        &hanna,
+        "hr_leave_request.get",
+        json!({"id": id(&leave)}),
+    );
+    assert_eq!(stored["requested_by"], "julia");
+}
+
+#[test]
 fn a_vehicle_goes_to_the_workshop_and_a_service_starts_from_its_odometer() {
     let app = app();
     let m = Principal::user("m", &["fleet.user", "fleet.manager"]);
