@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { provideCatalogue, setLanguage } from "@obop/ui";
 import { PeopleSection } from "./People.tsx";
 import type { Notify } from "./SecurityAccount.tsx";
-import { MicrosoftSignInSection } from "./SsoAdmin.tsx";
+import { MicrosoftSignInSection, redirectAddress } from "./SsoAdmin.tsx";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,6 +50,13 @@ let server: {
   users: User[];
   /** A sentence makes the command of that name answer 400 with it. */
   refuse: Record<string, string>;
+  /** A status makes `sso_provider.list` answer with that error. */
+  listStatus: number;
+  /** A status makes the people list (`/api/auth/users`) answer with that error. */
+  usersStatus: number;
+  /** While it is set, the commands named in `gated` wait for it before they answer. */
+  gate: Promise<void> | null;
+  gated: string[];
 };
 
 const person = (name: string, extra: Partial<User> = {}): User => ({
@@ -89,12 +96,18 @@ function fakeServer() {
       const method = init?.method ?? "GET";
       const body = init?.body ? (JSON.parse(String(init.body)) as Call["body"]) : undefined;
       calls.push({ method, path: path!, body });
-      if (path === "/api/auth/users") return json({ users: server.users });
+      if (path === "/api/auth/users")
+        return server.usersStatus
+          ? json({ error: "the list is not available" }, server.usersStatus)
+          : json({ users: server.users });
       if (path === "/api/auth/groups") return json({ groups: ["base.user"] });
       const command = /^\/api\/(sso_provider|user_account)\/(\w+)$/.exec(path!);
       if (!command) return json({}, 404);
       const name = `${command[1]}.${command[2]}`;
+      if (server.gate && server.gated.includes(name)) await server.gate;
       if (server.refuse[name]) return json({ error: server.refuse[name] }, 400);
+      if (name === "sso_provider.list" && server.listStatus)
+        return json({ error: "the provider list is not available" }, server.listStatus);
       if (name === "sso_provider.list")
         return json({ value: server.provider ? [server.provider] : [] });
       if (name === "sso_provider.configure") {
@@ -144,6 +157,13 @@ const click = async (el: Element | null | undefined) => {
   });
   await settle();
 };
+/** A person's click: the keyboard focus is on the button first, as the browser puts it. */
+const press = async (el: Element | null | undefined) => {
+  expect(el, "the element to press").toBeTruthy();
+  (el as HTMLElement).focus();
+  await click(el);
+};
+const alertDialog = () => document.body.querySelector<HTMLElement>('[role="alertdialog"]');
 const type = (input: HTMLInputElement | null | undefined, value: string) => {
   expect(input, "the field to fill").toBeTruthy();
   return act(async () => {
@@ -160,20 +180,28 @@ const field = (label: string) => {
 };
 const sent = (path: string) => calls.filter((c) => c.path === path);
 
-async function mountSection(refreshKey = 0) {
+async function mountSection(refreshKey = 0, onChanged?: () => void) {
   await act(async () => {
     root.render(
-      <MicrosoftSignInSection token="session-token" notify={notify} refreshKey={refreshKey} />,
+      <MicrosoftSignInSection
+        token="session-token"
+        notify={notify}
+        refreshKey={refreshKey}
+        onChanged={onChanged}
+      />,
     );
   });
   await settle();
 }
-async function mountPeople() {
+async function mountPeople(me?: string) {
   await act(async () => {
-    root.render(<PeopleSection token="session-token" notify={notify} />);
+    root.render(<PeopleSection token="session-token" notify={notify} me={me} />);
   });
   await settle();
 }
+/** The "Microsoft" button of one person's row (its name carries the person). */
+const microsoftButton = (name: string) =>
+  button(`Microsoft sign-in for ${name}`, container.querySelector(`tr[data-person="${name}"]`)!);
 
 beforeEach(async () => {
   provideCatalogue("en", {});
@@ -182,7 +210,15 @@ beforeEach(async () => {
   sessionStorage.clear();
   notify = vi.fn<Notify>();
   calls = [];
-  server = { provider: null, users: [person("ada"), person("bea")], refuse: {} };
+  server = {
+    provider: null,
+    users: [person("ada"), person("bea")],
+    refuse: {},
+    listStatus: 0,
+    usersStatus: 0,
+    gate: null,
+    gated: [],
+  };
   fakeServer();
   container = document.createElement("div");
   document.body.append(container);
@@ -218,7 +254,7 @@ describe("the section Sign in with Microsoft", () => {
     expect(text()).toContain(APP);
     expect(text()).toContain("Stored");
     expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(true);
-    expect(button("Change", container)).toBeTruthy();
+    expect(button("Change settings", container)).toBeTruthy();
     expect(button("Remove", container)).toBeTruthy();
     expect(text()).toContain(
       "Administrators who can still sign in with a password and a second step: root1, root2.",
@@ -256,7 +292,10 @@ describe("the section Sign in with Microsoft", () => {
     expect(field("Redirect address")!.readOnly).toBe(true);
     const secret = field("Client secret")!;
     expect(secret.type).toBe("password");
-    expect(secret.autocomplete).toBe("off");
+    // "off" is ignored by browsers; a password manager must not fill the person's own password here.
+    expect(secret.autocomplete).toBe("new-password");
+    expect(secret.hasAttribute("data-1p-ignore")).toBe(true);
+    expect(secret.getAttribute("data-lpignore")).toBe("true");
 
     await type(field("Tenant ID"), "common");
     await type(field("Application (client) ID"), "not-a-guid");
@@ -285,7 +324,7 @@ describe("the section Sign in with Microsoft", () => {
   it("change: configure is sent without client_secret when the field is left empty", async () => {
     server.provider = stored();
     await mountSection();
-    await click(button("Change", container));
+    await click(button("Change settings", container));
     expect(field("Tenant ID")!.value).toBe(TENANT);
     expect(field("Client secret")!.value).toBe("");
     expect(dialog()?.textContent).toContain("Leave empty to keep the stored secret.");
@@ -302,7 +341,7 @@ describe("the section Sign in with Microsoft", () => {
     server.refuse["sso_provider.configure"] =
       "1 account(s) are bound to another tenant: unbind them before this tenant is set";
     await mountSection();
-    await click(button("Change", container));
+    await click(button("Change settings", container));
     await type(field("Tenant ID"), OTHER_TENANT);
     await click(button("Save", dialog()!));
     expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(
@@ -337,7 +376,9 @@ describe("People: Microsoft", () => {
     await mountPeople();
     expect(text()).toContain("ada");
     expect(text()).not.toContain("Microsoft");
+    expect(container.querySelector('td[data-label="Microsoft"]')).toBeNull();
     expect(button("Microsoft", container)).toBeUndefined();
+    expect(button("Microsoft sign-in for ada", container)).toBeUndefined();
   });
 
   it("shows the column once a provider is set up, and the badges of a binding", async () => {
@@ -367,8 +408,7 @@ describe("People: Microsoft", () => {
   it("not bound: Bind asks for a GUID, refuses anything else before a request, then binds", async () => {
     server.provider = stored();
     await mountPeople();
-    const row = container.querySelector('tr[data-person="ada"]')!;
-    await click(button("Microsoft", row));
+    await click(microsoftButton("ada"));
     expect(dialog()?.textContent).toContain("Microsoft sign-in for ada");
     expect(dialog()?.textContent).toContain(
       "The person's Object ID in the Microsoft Entra admin centre (Users, the person, Object ID). A GUID, not an e-mail address.",
@@ -392,7 +432,7 @@ describe("People: Microsoft", () => {
   it("no provider and not bound: it says to set up first and offers nothing else", async () => {
     server.users = [person("ada"), person("bea", { sso_oid: OID })];
     await mountPeople();
-    await click(button("Microsoft", container.querySelector('tr[data-person="ada"]')!));
+    await click(microsoftButton("ada"));
     expect(dialog()?.textContent).toContain("Set up Microsoft sign-in first.");
     expect(field("Object ID")).toBeNull();
     expect(button("Bind", dialog()!)).toBeUndefined();
@@ -402,7 +442,7 @@ describe("People: Microsoft", () => {
     server.provider = stored();
     server.refuse["user_account.bind_sso"] = "that object id is bound to another account already";
     await mountPeople();
-    await click(button("Microsoft", container.querySelector('tr[data-person="ada"]')!));
+    await click(microsoftButton("ada"));
     await type(field("Object ID"), OID);
     await click(button("Bind", dialog()!));
     expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(
@@ -417,18 +457,22 @@ describe("People: Microsoft", () => {
     server.refuse["user_account.set_sso_only"] =
       "ada has never signed in with Microsoft on this binding: ask them to sign in once with the button first, so that a wrong object id shows now and not as a lockout";
     await mountPeople();
-    await click(button("Microsoft", container.querySelector('tr[data-person="ada"]')!));
+    await click(microsoftButton("ada"));
     expect(dialog()?.textContent).toContain(`Bound to ${OID}`);
     expect(dialog()?.textContent).toContain(
       "The account then refuses its password and its passkeys.",
     );
     await click(field("Microsoft only"));
+    await click(button("Make Microsoft only", alertDialog()!));
     expect(sent("/api/user_account/set_sso_only")[0]!.body).toEqual({ id: "ada", sso_only: true });
+    // The refusal stands by the checkbox, and the question is gone.
+    expect(alertDialog()).toBeNull();
     expect(dialog()!.querySelector('[role="alert"]')?.textContent).toMatch(/never signed in/);
     expect(field("Microsoft only")!.checked).toBe(false);
 
     delete server.refuse["user_account.set_sso_only"];
     await click(field("Microsoft only"));
+    await click(button("Make Microsoft only", alertDialog()!));
     expect(notify).toHaveBeenCalledWith("ada now signs in with Microsoft only.");
     expect(
       container.querySelector('tr[data-person="ada"] td[data-label="Microsoft"]')?.textContent,
@@ -439,19 +483,554 @@ describe("People: Microsoft", () => {
     server.provider = stored();
     server.users = [person("ada", { sso_oid: OID, sso_only: true })];
     await mountPeople();
-    await click(button("Microsoft", container.querySelector('tr[data-person="ada"]')!));
+    await click(microsoftButton("ada"));
     expect(button("Remove binding", dialog()!)!.disabled).toBe(true);
     expect(dialog()?.textContent).toContain("Turn off Microsoft only before removing the binding.");
     await click(field("Microsoft only"));
     expect(sent("/api/user_account/set_sso_only")[0]!.body).toEqual({ id: "ada", sso_only: false });
+    // Turning it off needs no question, and the toast says the password must be changed.
+    expect(notify).toHaveBeenCalledWith(
+      "ada can use the password again and must choose a new one at the next sign-in.",
+    );
 
-    await click(button("Microsoft", container.querySelector('tr[data-person="ada"]')!));
+    await click(microsoftButton("ada"));
     expect(button("Remove binding", dialog()!)!.disabled).toBe(false);
     await click(button("Remove binding", dialog()!));
+    await click(button("Remove binding", alertDialog()!));
     expect(sent("/api/user_account/unbind_sso")[0]!.body).toEqual({ id: "ada" });
     expect(notify).toHaveBeenCalledWith("The Microsoft binding of ada was removed.");
     expect(
       container.querySelector('tr[data-person="ada"] td[data-label="Microsoft"]')?.textContent,
     ).toBe("Not bound");
+  });
+});
+
+/** A promise that the test settles by hand: the server answers when `open()` is called. */
+function gate() {
+  let open!: () => void;
+  const promise = new Promise<void>((done) => (open = done));
+  return { promise, open };
+}
+const escape = () =>
+  act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+const clickOutside = () =>
+  act(async () => {
+    document.body
+      .querySelector(".overlay")!
+      .dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  });
+const submit = (form: HTMLFormElement) =>
+  act(async () => {
+    form.requestSubmit();
+  });
+const describedBy = (input: HTMLElement) =>
+  (input.getAttribute("aria-describedby") ?? "")
+    .split(" ")
+    .map((id) => document.getElementById(id)?.textContent ?? "")
+    .join(" | ");
+
+describe("the section: what cannot be loaded, copy, refusals", () => {
+  it("a failed list says so with Try again; a server without the model shows nothing at all", async () => {
+    server.listStatus = 500;
+    await mountSection();
+    expect(text()).toContain("Microsoft sign-in could not be loaded. Try again.");
+    // No badge, no set-up button: the state is not known.
+    expect(container.querySelector('[role="switch"]')).toBeNull();
+    expect(button("Set up Microsoft sign-in", container)).toBeUndefined();
+    server.listStatus = 0;
+    await click(button("Try again", container));
+    expect(text()).toContain("Not set up");
+    expect(text()).not.toContain("could not be loaded");
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    server.listStatus = 404;
+    await mountSection();
+    expect(container.textContent).toBe("");
+  });
+
+  it("Copy: the status line is in the page before the copy, is filled by it and is cleared again", async () => {
+    await mountSection();
+    await click(button("Set up Microsoft sign-in"));
+    const status = dialog()!.querySelector('[role="status"]')!;
+    expect(status).toBeTruthy();
+    expect(status.textContent).toBe("");
+    const write = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { clipboard: { writeText: write } });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const copy = button("Copy redirect address", dialog()!)!;
+      expect(copy.textContent).toBe("Copy");
+      await act(async () => {
+        copy.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(write).toHaveBeenCalledWith(`${location.origin}/api/auth/oidc/callback`);
+      // The same element that was there before is the one that now has the words.
+      expect(dialog()!.querySelector('[role="status"]')).toBe(status);
+      expect(status.textContent).toBe("Copied");
+      await act(async () => void vi.advanceTimersByTime(4100));
+      expect(status.textContent).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Copy that the browser refuses says so in words", async () => {
+    await mountSection();
+    await click(button("Set up Microsoft sign-in"));
+    // jsdom has no clipboard and no execCommand: the copy fails.
+    await click(button("Copy redirect address", dialog()!));
+    expect(dialog()!.querySelector('[role="status"]')?.textContent).toBe(
+      "Could not copy. Select the address and copy it.",
+    );
+  });
+
+  it("the redirect address is the one of the page, whichever address that is, and the hint says what to do when it is wrong", async () => {
+    expect(redirectAddress("https://office.example.test:8443")).toBe(
+      "https://office.example.test:8443/api/auth/oidc/callback",
+    );
+    expect(redirectAddress("http://127.0.0.1:8377")).toBe(
+      "http://127.0.0.1:8377/api/auth/oidc/callback",
+    );
+    await mountSection();
+    await click(button("Set up Microsoft sign-in"));
+    expect(describedBy(field("Redirect address")!)).toContain(
+      "If sign-in later fails with a redirect address mismatch, ask whoever runs the server to set its public address.",
+    );
+  });
+
+  it("a refusal of the switch is an error notification, and the switch stays as the server has it", async () => {
+    server.provider = stored();
+    server.refuse["sso_provider.configure"] = "the tenant is not allowed";
+    await mountSection();
+    await click(container.querySelector('[role="switch"]'));
+    // The question comes only when someone signs in with Microsoft only; nobody does here.
+    expect(notify).toHaveBeenCalledWith("the tenant is not allowed", "error");
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(true);
+  });
+
+  it("a refusal of Remove stays in the question, which stays open, and nothing is announced as done", async () => {
+    server.provider = stored();
+    server.refuse["sso_provider.clear"] = "accounts are still bound to this tenant";
+    await mountSection();
+    await click(button("Remove", container));
+    await click(button("Remove", alertDialog()!));
+    expect(alertDialog()).toBeTruthy();
+    expect(alertDialog()!.querySelector('[role="alert"]')?.textContent).toBe(
+      "accounts are still bound to this tenant",
+    );
+    expect(notify).not.toHaveBeenCalled();
+    expect(text()).toContain("Stored");
+  });
+
+  it("Cancel sends nothing, in the form and in the question", async () => {
+    server.provider = stored();
+    await mountSection();
+    await click(button("Change settings", container));
+    await type(field("Tenant ID"), OTHER_TENANT);
+    await click(button("Cancel", dialog()!));
+    await click(button("Remove", container));
+    await click(button("Cancel", alertDialog()!));
+    expect(calls.filter((c) => c.method === "POST" && c.path !== "/api/sso_provider/list")).toEqual(
+      [],
+    );
+    expect(notify).not.toHaveBeenCalled();
+    expect(text()).toContain(TENANT);
+  });
+
+  it("every change tells the page around it, so that People follows", async () => {
+    const changed = vi.fn();
+    await mountSection(0, changed);
+    await click(button("Set up Microsoft sign-in"));
+    await type(field("Tenant ID"), TENANT);
+    await type(field("Application (client) ID"), APP);
+    await type(field("Client secret"), SECRET);
+    await click(button("Save", dialog()!));
+    expect(changed).toHaveBeenCalledTimes(1);
+    await click(container.querySelector('[role="switch"]'));
+    expect(changed).toHaveBeenCalledTimes(2);
+    await click(button("Remove", container));
+    await click(button("Remove", alertDialog()!));
+    expect(changed).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("the section: Microsoft only people, and the switch", () => {
+  const only = (name: string, n: number) =>
+    person(name, { sso_oid: `0b0b0b0b-0001-4000-8000-00000000000${n}`, sso_only: true });
+
+  it("says how many people sign in with Microsoft only, and puts it into the Remove question", async () => {
+    server.provider = stored();
+    server.users = [only("ada", 1), only("bea", 2), person("cy")];
+    await mountSection();
+    expect(text()).toContain("2 people sign in with Microsoft only.");
+    await click(button("Remove", container));
+    expect(alertDialog()!.textContent).toContain("2 people sign in with Microsoft only.");
+  });
+
+  it("says nothing of it when nobody does", async () => {
+    server.provider = stored();
+    await mountSection();
+    expect(text()).not.toContain("sign in with Microsoft only.");
+    await click(button("Remove", container));
+    expect(alertDialog()!.textContent).not.toContain("sign in with Microsoft only.");
+  });
+
+  it("turning the switch off asks first when someone is Microsoft only, and sends nothing until yes", async () => {
+    server.provider = stored();
+    server.users = [only("ada", 1), person("bea")];
+    await mountSection();
+    await click(container.querySelector('[role="switch"]'));
+    expect(alertDialog()!.textContent).toContain("Turn off Microsoft sign-in?");
+    expect(alertDialog()!.textContent).toContain("1 person signs in with Microsoft only.");
+    expect(alertDialog()!.textContent).toContain(
+      "They cannot sign in while it is off, and their password is refused.",
+    );
+    expect(sent("/api/sso_provider/configure")).toHaveLength(0);
+    expect(container.querySelector<HTMLInputElement>('[role="switch"]')!.checked).toBe(true);
+
+    await click(button("Cancel", alertDialog()!));
+    expect(sent("/api/sso_provider/configure")).toHaveLength(0);
+    expect(alertDialog()).toBeNull();
+
+    await click(container.querySelector('[role="switch"]'));
+    await click(button("Turn off", alertDialog()!));
+    expect(sent("/api/sso_provider/configure")[0]!.body).toEqual({
+      tenant: TENANT,
+      client_id: APP,
+      enabled: false,
+    });
+    expect(alertDialog()).toBeNull();
+    expect(notify).toHaveBeenCalledWith("Microsoft sign-in is off.");
+  });
+
+  it("asks also when the list of people cannot be read, with the cautious sentence", async () => {
+    server.provider = stored();
+    server.usersStatus = 500;
+    await mountSection();
+    await click(container.querySelector('[role="switch"]'));
+    expect(alertDialog()!.textContent).toContain(
+      "People who sign in with Microsoft only cannot sign in while it is off.",
+    );
+    expect(sent("/api/sso_provider/configure")).toHaveLength(0);
+  });
+
+  it("turning it on needs no question", async () => {
+    server.provider = stored({ enabled: false });
+    server.users = [only("ada", 1)];
+    await mountSection();
+    await click(container.querySelector('[role="switch"]'));
+    expect(alertDialog()).toBeNull();
+    expect(sent("/api/sso_provider/configure")[0]!.body).toMatchObject({ enabled: true });
+  });
+
+  it("the change form warns that a wrong value stops every sign-in; the first set-up does not", async () => {
+    server.provider = stored();
+    await mountSection();
+    await click(button("Change settings", container));
+    expect(dialog()!.textContent).toContain(
+      "A wrong tenant, application ID or secret stops every Microsoft sign-in",
+    );
+    await click(button("Cancel", dialog()!));
+    server.provider = null;
+    await mountSection(1);
+    await click(button("Set up Microsoft sign-in"));
+    expect(dialog()!.textContent).not.toContain("A wrong tenant");
+  });
+});
+
+describe("the form: keyboard, announcements, close while busy", () => {
+  const fill = async () => {
+    await type(field("Tenant ID"), TENANT);
+    await type(field("Application (client) ID"), APP);
+    await type(field("Client secret"), SECRET);
+  };
+
+  it("a refused Save puts the keyboard on the first wrong field, and the error is tied to it", async () => {
+    await mountSection();
+    await press(button("Set up Microsoft sign-in"));
+    await type(field("Application (client) ID"), "nope");
+    await click(button("Save", dialog()!));
+    const tenant = field("Tenant ID")!;
+    expect(document.activeElement).toBe(tenant);
+    expect(tenant.getAttribute("aria-invalid")).toBe("true");
+    expect(describedBy(tenant)).toContain("The tenant ID is a GUID.");
+    expect(describedBy(field("Application (client) ID")!)).toContain(
+      "The application ID is a GUID.",
+    );
+    expect(describedBy(field("Client secret")!)).toContain("Enter the client secret.");
+    // Once the first is right, the next refused Save goes to the next one.
+    await type(tenant, TENANT);
+    await click(button("Save", dialog()!));
+    expect(document.activeElement).toBe(field("Application (client) ID"));
+    expect(sent("/api/sso_provider/configure")).toHaveLength(0);
+  });
+
+  it("a field is judged when it is left, not only at Save; an empty one is not nagged", async () => {
+    await mountSection();
+    await click(button("Set up Microsoft sign-in"));
+    const tenant = field("Tenant ID")!;
+    await act(async () => tenant.focus());
+    await act(async () => tenant.blur());
+    expect(dialog()!.textContent).not.toContain("The tenant ID is a GUID.");
+    await type(tenant, "common");
+    await act(async () => tenant.focus());
+    await act(async () => tenant.blur());
+    expect(dialog()!.textContent).toContain("The tenant ID is a GUID.");
+    expect(tenant.getAttribute("aria-invalid")).toBe("true");
+    // The first Save of the others has not been asked for yet.
+    expect(dialog()!.textContent).not.toContain("Enter the client secret.");
+  });
+
+  it("Enter in a field saves once, and a second Enter while the request is out sends nothing more", async () => {
+    const hold = gate();
+    server.gate = hold.promise;
+    server.gated = ["sso_provider.configure"];
+    await mountSection();
+    await click(button("Set up Microsoft sign-in"));
+    await fill();
+    const form = dialog()!.querySelector("form")!;
+    await submit(form);
+    await submit(form);
+    await submit(form);
+    expect(sent("/api/sso_provider/configure")).toHaveLength(1);
+    await act(async () => hold.open());
+    await settle();
+    expect(sent("/api/sso_provider/configure")).toHaveLength(1);
+    expect(dialog()).toBeNull();
+  });
+
+  it("nothing closes the form while its request is out; the refusal then reaches the person", async () => {
+    server.provider = stored();
+    const hold = gate();
+    server.gate = hold.promise;
+    server.gated = ["sso_provider.configure"];
+    server.refuse["sso_provider.configure"] = "this tenant is not allowed";
+    await mountSection();
+    await click(button("Change settings", container));
+    await type(field("Tenant ID"), OTHER_TENANT);
+    await click(button("Save", dialog()!));
+    await escape();
+    await clickOutside();
+    expect(dialog()).toBeTruthy();
+    expect(button("Cancel", dialog()!)!.disabled).toBe(true);
+    await act(async () => hold.open());
+    await settle();
+    expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(
+      "this tenant is not allowed",
+    );
+    // Now it closes.
+    await escape();
+    expect(dialog()).toBeNull();
+  });
+
+  it("the keyboard goes back to the button that opened the form, and after a first set-up and a Remove to the heading", async () => {
+    await mountSection();
+    const setUp = button("Set up Microsoft sign-in", container)!;
+    await press(setUp);
+    await click(button("Cancel", dialog()!));
+    expect(document.activeElement).toBe(setUp);
+
+    await press(setUp);
+    await fill();
+    await click(button("Save", dialog()!));
+    // The button that opened the form is gone: the heading has the keyboard, not the page.
+    const heading = container.querySelector("h3")!;
+    expect(heading.textContent).toBe("Sign in with Microsoft");
+    expect(document.activeElement).toBe(heading);
+
+    const change = button("Change settings", container)!;
+    await press(change);
+    await click(button("Cancel", dialog()!));
+    expect(document.activeElement).toBe(change);
+
+    const remove = button("Remove", container)!;
+    await press(remove);
+    await click(button("Cancel", alertDialog()!));
+    expect(document.activeElement).toBe(remove);
+
+    await press(remove);
+    await click(button("Remove", alertDialog()!));
+    expect(text()).toContain("Not set up");
+    expect(document.activeElement).toBe(container.querySelector("h3"));
+  });
+});
+
+describe("People: Microsoft, the questions and the rules", () => {
+  const bound = (extra: Partial<User> = {}) => person("ada", { sso_oid: OID, ...extra });
+
+  it("each row's button is named for its person", async () => {
+    server.provider = stored();
+    await mountPeople();
+    expect(microsoftButton("ada")).toBeTruthy();
+    expect(microsoftButton("bea")).toBeTruthy();
+    expect(microsoftButton("ada")!.textContent).toBe("Microsoft");
+    expect(microsoftButton("ada")).not.toBe(microsoftButton("bea"));
+  });
+
+  it("Microsoft only asks first, says what it ends, and sends nothing before yes", async () => {
+    server.provider = stored();
+    server.users = [bound(), person("bea")];
+    await mountPeople("root1");
+    await click(microsoftButton("ada"));
+    await click(field("Microsoft only"));
+    const ask = alertDialog()!;
+    expect(ask.textContent).toContain("Make ada sign in with Microsoft only?");
+    expect(ask.textContent).toContain(
+      "The password and passkeys of ada are refused from now on. Their sessions and phone sign-ins end.",
+    );
+    expect(ask.textContent).not.toContain("your own account");
+    expect(sent("/api/user_account/set_sso_only")).toHaveLength(0);
+    expect(field("Microsoft only")!.checked).toBe(false);
+    await click(button("Cancel", ask));
+    expect(sent("/api/user_account/set_sso_only")).toHaveLength(0);
+    expect(alertDialog()).toBeNull();
+    expect(dialog()).toBeTruthy();
+
+    await click(field("Microsoft only"));
+    await click(button("Make Microsoft only", alertDialog()!));
+    expect(sent("/api/user_account/set_sso_only")[0]!.body).toEqual({ id: "ada", sso_only: true });
+  });
+
+  it("on the signed-in administrator's own account the question says they are signed out", async () => {
+    server.provider = stored();
+    server.users = [bound()];
+    await mountPeople("Ada");
+    await click(microsoftButton("ada"));
+    await click(field("Microsoft only"));
+    expect(alertDialog()!.textContent).toContain(
+      "This is your own account: you are signed out at once.",
+    );
+  });
+
+  it("with the provider off Microsoft only cannot be turned on, and says what to do; turning it off stays possible", async () => {
+    server.provider = stored({ enabled: false });
+    server.users = [bound()];
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    expect(field("Microsoft only")!.disabled).toBe(true);
+    expect(dialog()!.textContent).toContain(
+      "Turn Microsoft sign-in on first (Customize, Security).",
+    );
+    await click(button("Close", dialog()!));
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    server.users = [bound({ sso_only: true })];
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    expect(field("Microsoft only")!.disabled).toBe(false);
+    expect(dialog()!.textContent).not.toContain("Turn Microsoft sign-in on first");
+  });
+
+  it("with no provider at all, a bound person's checkbox is off limits too", async () => {
+    server.users = [bound()];
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    expect(field("Microsoft only")!.disabled).toBe(true);
+    expect(dialog()!.textContent).toContain(
+      "Turn Microsoft sign-in on first (Customize, Security).",
+    );
+  });
+
+  it("Remove binding asks first and says what it ends; Cancel sends nothing", async () => {
+    server.provider = stored();
+    server.users = [bound()];
+    await mountPeople("root1");
+    await click(microsoftButton("ada"));
+    await click(button("Remove binding", dialog()!));
+    const ask = alertDialog()!;
+    expect(ask.textContent).toContain("Remove the Microsoft binding of ada?");
+    expect(ask.textContent).toContain(
+      "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid. Their password still works.",
+    );
+    expect(sent("/api/user_account/unbind_sso")).toHaveLength(0);
+    await click(button("Cancel", ask));
+    expect(sent("/api/user_account/unbind_sso")).toHaveLength(0);
+    expect(dialog()).toBeTruthy();
+  });
+
+  it("a refusal of Remove binding is shown inside its question, which stays open", async () => {
+    server.provider = stored();
+    server.users = [bound()];
+    server.refuse["user_account.unbind_sso"] =
+      "ada signs in with Microsoft only: turn that off first";
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    await click(button("Remove binding", dialog()!));
+    await click(button("Remove binding", alertDialog()!));
+    expect(alertDialog()!.querySelector('[role="alert"]')?.textContent).toBe(
+      "ada signs in with Microsoft only: turn that off first",
+    );
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("the keyboard goes back to the row's button after Cancel and Close", async () => {
+    server.provider = stored();
+    server.users = [bound(), person("bea")];
+    await mountPeople();
+    const ada = microsoftButton("ada")!;
+    await press(ada);
+    await click(button("Close", dialog()!));
+    expect(document.activeElement).toBe(ada);
+    const bea = microsoftButton("bea")!;
+    await press(bea);
+    await click(button("Cancel", dialog()!));
+    expect(document.activeElement).toBe(bea);
+  });
+
+  it("while the provider is still loading the dialog says so; when it cannot be loaded it says that", async () => {
+    server.users = [person("ada"), person("bea", { sso_oid: OID })];
+    const hold = gate();
+    server.gate = hold.promise;
+    server.gated = ["sso_provider.list"];
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    expect(dialog()!.textContent).toContain("Loading…");
+    expect(field("Object ID")).toBeNull();
+    server.listStatus = 500;
+    await act(async () => hold.open());
+    await settle();
+    expect(dialog()!.textContent).toContain("Microsoft sign-in could not be loaded. Try again.");
+    expect(field("Object ID")).toBeNull();
+  });
+
+  it("nothing closes the Bind dialog while its request is out, and a double Enter binds once", async () => {
+    server.provider = stored();
+    const hold = gate();
+    server.gate = hold.promise;
+    server.gated = ["user_account.bind_sso"];
+    server.refuse["user_account.bind_sso"] = "that object id is bound to another account already";
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    await type(field("Object ID"), OID);
+    const form = dialog()!.querySelector("form")!;
+    await submit(form);
+    await submit(form);
+    await escape();
+    await clickOutside();
+    expect(dialog()).toBeTruthy();
+    expect(sent("/api/user_account/bind_sso")).toHaveLength(1);
+    await act(async () => hold.open());
+    await settle();
+    expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(
+      "that object id is bound to another account already",
+    );
+  });
+
+  it("a wrong object id puts the keyboard on the field and ties the error to it", async () => {
+    server.provider = stored();
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    await type(field("Object ID"), "ada@example.test");
+    await click(button("Bind", dialog()!));
+    const oid = field("Object ID")!;
+    expect(document.activeElement).toBe(oid);
+    expect(oid.getAttribute("aria-invalid")).toBe("true");
+    expect(describedBy(oid)).toContain("The object ID is a GUID, not an e-mail address.");
   });
 });

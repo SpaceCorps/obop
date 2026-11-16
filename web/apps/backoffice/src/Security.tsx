@@ -88,7 +88,7 @@ export function SecurityTab({
       <DevicesSection token={token} notify={notify} isAdmin={isAdmin} me={me} />
       {isAdmin && (
         <>
-          <PeopleSection token={token} notify={notify} refreshKey={ssoKey} />
+          <PeopleSection token={token} notify={notify} refreshKey={ssoKey} me={me} />
           <MicrosoftSignInSection
             token={token}
             notify={notify}

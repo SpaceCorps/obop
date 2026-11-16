@@ -281,9 +281,12 @@ export function PeopleSection({
   token,
   notify,
   refreshKey = 0,
+  me,
 }: {
   token: string;
   notify: Notify;
+  /** Who is signed in: a change of their own Microsoft sign-in says so. */
+  me?: string;
   /** Changes when Microsoft sign-in was set up, changed or removed: the column follows. */
   refreshKey?: number;
 }) {
@@ -429,7 +432,12 @@ export function PeopleSection({
                       {t("Groups")}
                     </Button>
                     {microsoftShown && (
-                      <Button size="sm" variant="ghost" onClick={() => setMicrosoft(p.name)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={t("Microsoft sign-in for {user}", { user: p.name })}
+                        onClick={() => setMicrosoft(p.name)}
+                      >
                         {t("Microsoft")}
                       </Button>
                     )}
@@ -557,6 +565,7 @@ export function PeopleSection({
           token={token}
           person={shownPerson}
           sso={sso}
+          me={me}
           notify={notify}
           onClose={() => setMicrosoft(null)}
           onDone={() => void load()}

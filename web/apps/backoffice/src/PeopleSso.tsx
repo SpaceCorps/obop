@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Button, Checkbox, Dialog, Input, t } from "@obop/ui";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
+import { Button, Checkbox, ConfirmDialog, Dialog, Input, t } from "@obop/ui";
 import { call } from "./api.ts";
 import type { Notify } from "./SecurityAccount.tsx";
 import { isGuid, type SsoState } from "./SsoAdmin.tsx";
@@ -21,6 +21,7 @@ export function MicrosoftDialog({
   token,
   person,
   sso,
+  me,
   notify,
   onClose,
   onDone,
@@ -28,6 +29,8 @@ export function MicrosoftDialog({
   token: string;
   person: PersonSso;
   sso: SsoState;
+  /** The name of the signed-in administrator: a change of their own account says so. */
+  me?: string;
   notify: Notify;
   onClose: () => void;
   /** After a change: People reloads. */
@@ -35,13 +38,30 @@ export function MicrosoftDialog({
 }) {
   const [oid, setOid] = useState("");
   const [asked, setAsked] = useState(false);
+  const [left, setLeft] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The question before a change that ends the person's sessions.
+  const [confirm, setConfirm] = useState<"only" | "unbind" | null>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const inflight = useRef(false);
+  const own = !!me && me.trim().toLowerCase() === person.name.trim().toLowerCase();
   const bound = typeof person.sso_oid === "string" && person.sso_oid !== "";
   const only = person.sso_only === true;
   const set = sso.kind === "set";
   const oidError =
-    asked && !isGuid(oid) ? t("The object ID is a GUID, not an e-mail address.") : undefined;
+    (asked || left) && !isGuid(oid)
+      ? t("The object ID is a GUID, not an e-mail address.")
+      : undefined;
+  // Turning Microsoft only on needs a provider that is on; the server refuses it otherwise.
+  const providerOff = sso.kind === "none" || (sso.kind === "set" && !sso.provider.enabled);
+  useEffect(() => {
+    if (attempt > 0) form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [attempt]);
+  const leave = (e: FocusEvent<HTMLInputElement>) => {
+    if (oid.trim() !== "" && !(e.relatedTarget instanceof HTMLButtonElement)) setLeft(true);
+  };
 
   /** One command, then the toast and the reload; the server's sentence stays in the dialog. */
   async function run(
@@ -50,9 +70,13 @@ export function MicrosoftDialog({
     done: string,
     failed: string,
   ): Promise<boolean> {
+    // A second Enter in the same moment must not send a second request.
+    if (inflight.current) return false;
+    inflight.current = true;
     setBusy(true);
     setError(null);
     const r = await call(token, `user_account.${command}`, { id: person.name, ...body });
+    inflight.current = false;
     setBusy(false);
     if (r.kind === "ok") {
       notify(done);
@@ -65,7 +89,10 @@ export function MicrosoftDialog({
 
   async function bind() {
     setAsked(true);
-    if (!isGuid(oid)) return;
+    if (!isGuid(oid)) {
+      setAttempt((a) => a + 1);
+      return;
+    }
     const ok = await run(
       "bind_sso",
       { oid: oid.trim() },
@@ -91,9 +118,12 @@ export function MicrosoftDialog({
       { sso_only: on },
       on
         ? t("{user} now signs in with Microsoft only.", { user: person.name })
-        : t("{user} can use the password again.", { user: person.name }),
+        : t("{user} can use the password again and must choose a new one at the next sign-in.", {
+            user: person.name,
+          }),
       t("Could not save."),
     );
+    setConfirm(null);
     if (ok) onClose();
   }
 
@@ -105,13 +135,15 @@ export function MicrosoftDialog({
       <Dialog
         title={title}
         size="md"
-        onClose={onClose}
+        onClose={busy ? () => {} : onClose}
         footer={<Button onClick={onClose}>{t("Close")}</Button>}
       >
         <p>
           {sso.kind === "none"
             ? t("Set up Microsoft sign-in first.")
-            : t("Microsoft sign-in could not be loaded. Try again.")}
+            : sso.kind === "loading"
+              ? t("Loading…")
+              : t("Microsoft sign-in could not be loaded. Try again.")}
         </p>
       </Dialog>
     );
@@ -121,7 +153,7 @@ export function MicrosoftDialog({
       <Dialog
         title={title}
         size="md"
-        onClose={onClose}
+        onClose={busy ? () => {} : onClose}
         footer={
           <>
             <Button onClick={onClose} disabled={busy}>
@@ -134,6 +166,7 @@ export function MicrosoftDialog({
         }
       >
         <form
+          ref={form}
           className="stack"
           noValidate
           onSubmit={(e) => {
@@ -148,6 +181,7 @@ export function MicrosoftDialog({
             )}
             value={oid}
             onChange={(e) => setOid(e.target.value)}
+            onBlur={leave}
             error={oidError}
             autoComplete="off"
             spellCheck={false}
@@ -163,39 +197,89 @@ export function MicrosoftDialog({
     );
 
   return (
-    <Dialog
-      title={title}
-      size="md"
-      onClose={onClose}
-      footer={<Button onClick={onClose}>{t("Close")}</Button>}
-    >
-      <div className="stack">
-        <p className="sso-bound">{t("Bound to {oid}", { oid: person.sso_oid ?? "" })}</p>
-        <Checkbox
-          label={t("Microsoft only")}
-          hint={t(
-            "The account then refuses its password and its passkeys. The person must have signed in with the Microsoft button once, and two other administrators must keep a password and a second step. Ends the person's sessions.",
-          )}
-          checked={only}
-          disabled={busy}
-          onChange={(e) => void setOnly(e.target.checked)}
-        />
+    <>
+      <Dialog
+        title={title}
+        size="md"
+        onClose={busy ? () => {} : onClose}
+        footer={
+          <Button onClick={onClose} disabled={busy}>
+            {t("Close")}
+          </Button>
+        }
+      >
         <div className="stack">
-          <div className="actionrow">
-            <Button disabled={busy || only} onClick={() => void unbind()}>
-              {t("Remove binding")}
-            </Button>
-          </div>
-          {only && (
-            <p className="hint">{t("Turn off Microsoft only before removing the binding.")}</p>
+          <p className="sso-bound">{t("Bound to {oid}", { oid: person.sso_oid ?? "" })}</p>
+          <Checkbox
+            label={t("Microsoft only")}
+            hint={`${t(
+              "The account then refuses its password and its passkeys. The person must have signed in with the Microsoft button once, and two other administrators must keep a password and a second step. Ends the person's sessions.",
+            )}${providerOff && !only ? ` ${t("Turn Microsoft sign-in on first (Customize, Security).")}` : ""}`}
+            checked={only}
+            disabled={busy || (providerOff && !only)}
+            onChange={(e) => (e.target.checked ? setConfirm("only") : void setOnly(false))}
+          />
+          {error && confirm !== "unbind" && (
+            <div className="confirm-error" role="alert">
+              {error}
+            </div>
           )}
-        </div>
-        {error && (
-          <div className="confirm-error" role="alert">
-            {error}
+          <div className="stack">
+            <div className="actionrow">
+              <Button
+                disabled={busy || only}
+                onClick={() => {
+                  setError(null);
+                  setConfirm("unbind");
+                }}
+              >
+                {t("Remove binding")}
+              </Button>
+            </div>
+            {only && (
+              <p className="hint">{t("Turn off Microsoft only before removing the binding.")}</p>
+            )}
           </div>
-        )}
-      </div>
-    </Dialog>
+        </div>
+      </Dialog>
+      {confirm === "only" && (
+        <ConfirmDialog
+          title={t("Make {user} sign in with Microsoft only?", { user: person.name })}
+          confirmLabel={t("Make Microsoft only")}
+          busy={busy}
+          onConfirm={() => void setOnly(true)}
+          onClose={() => setConfirm(null)}
+        >
+          <div className="stack">
+            <p>
+              {t(
+                "The password and passkeys of {user} are refused from now on. Their sessions and phone sign-ins end.",
+                { user: person.name },
+              )}
+            </p>
+            {own && <p>{t("This is your own account: you are signed out at once.")}</p>}
+          </div>
+        </ConfirmDialog>
+      )}
+      {confirm === "unbind" && (
+        <ConfirmDialog
+          title={t("Remove the Microsoft binding of {user}?", { user: person.name })}
+          confirmLabel={t("Remove binding")}
+          busy={busy}
+          error={error}
+          onConfirm={() => void unbind()}
+          onClose={() => setConfirm(null)}
+        >
+          <div className="stack">
+            <p>
+              {t(
+                "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid. Their password still works.",
+              )}
+            </p>
+            {own && <p>{t("This is your own account: you are signed out at once.")}</p>}
+          </div>
+        </ConfirmDialog>
+      )}
+    </>
   );
 }

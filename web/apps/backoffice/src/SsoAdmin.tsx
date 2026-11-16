@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FocusEvent } from "react";
 import { Badge, Button, ConfirmDialog, Dialog, Input, Notice, Switch, t } from "@obop/ui";
 import { call } from "./api.ts";
-import type { Notify } from "./SecurityAccount.tsx";
+import { account, type Notify } from "./SecurityAccount.tsx";
 import { copyText } from "./signLinks.ts";
 
 /* Customize > Security: "Sign in with Microsoft" for administrators (D91). One Microsoft Entra
@@ -36,7 +36,8 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isGuid = (s: string) => GUID.test(s.trim());
 
 /** The address that Microsoft sends the person back to; it is registered in the app registration. */
-export const redirectAddress = () => `${location.origin}/api/auth/oidc/callback`;
+export const redirectAddress = (origin: string = location.origin) =>
+  `${origin}/api/auth/oidc/callback`;
 
 /** The provider of this instance, or what stops us from knowing it. */
 export async function readSso(token: string): Promise<SsoState> {
@@ -60,6 +61,19 @@ export async function readSso(token: string): Promise<SsoState> {
   };
 }
 
+/** How many accounts sign in with Microsoft only, or null when the list could not be read. */
+export async function countSsoOnly(token: string): Promise<number | null> {
+  const r = await account<{ users: { sso_only?: boolean }[] }>(token, "GET", "/users");
+  return r.ok ? r.value.users.filter((u) => u.sso_only === true).length : null;
+}
+
+/** "3 people sign in with Microsoft only." */
+export const onlyPeople = (count: number) =>
+  t(
+    "{count, plural, one {# person signs in with Microsoft only.} other {# people sign in with Microsoft only.}}",
+    { count },
+  );
+
 /** The server's refusal as it words it, or a plain sentence when it said nothing. */
 function refusal(r: { kind: string; message?: string }, fallback: string): string {
   return (r.kind === "error" && r.message) || fallback;
@@ -81,20 +95,48 @@ function SsoFormDialog({
   const [clientId, setClientId] = useState(provider?.client_id ?? "");
   const [secret, setSecret] = useState("");
   const [asked, setAsked] = useState(false);
+  // A field the person has left with something typed in it is judged at once, not only at Save.
+  const [left, setLeft] = useState({ tenant: false, client: false });
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const address = useRef<HTMLInputElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  // A second Enter in the same moment must not send a second request.
+  const inflight = useRef(false);
   const [copied, setCopied] = useState<"ok" | "failed" | null>(null);
   const stored = provider?.secret_set === true;
 
-  const tenantError = asked && !isGuid(tenant) ? t("The tenant ID is a GUID.") : undefined;
-  const clientError = asked && !isGuid(clientId) ? t("The application ID is a GUID.") : undefined;
+  const tenantError =
+    (asked || left.tenant) && !isGuid(tenant) ? t("The tenant ID is a GUID.") : undefined;
+  const clientError =
+    (asked || left.client) && !isGuid(clientId) ? t("The application ID is a GUID.") : undefined;
   const secretError =
     asked && !stored && secret.trim() === "" ? t("Enter the client secret.") : undefined;
+  // After a refused Save the keyboard goes to the first field that is wrong, and the reader hears it.
+  useEffect(() => {
+    if (attempt > 0) form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [attempt]);
+  // The "Copied" line is cleared after a few seconds, so the next copy is announced again.
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(null), 4000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  /** Judge a field when the person leaves it, unless they go to a button (Save, Cancel). */
+  const leave = (key: "tenant" | "client", value: string) => (e: FocusEvent<HTMLInputElement>) => {
+    if (value.trim() !== "" && !(e.relatedTarget instanceof HTMLButtonElement))
+      setLeft((l) => ({ ...l, [key]: true }));
+  };
 
   async function save() {
+    if (inflight.current) return;
     setAsked(true);
-    if (!isGuid(tenant) || !isGuid(clientId) || (!stored && secret.trim() === "")) return;
+    if (!isGuid(tenant) || !isGuid(clientId) || (!stored && secret.trim() === "")) {
+      setAttempt((a) => a + 1);
+      return;
+    }
+    inflight.current = true;
     setBusy(true);
     setError(null);
     const r = await call(token, "sso_provider.configure", {
@@ -103,6 +145,7 @@ function SsoFormDialog({
       // Left empty on a change: the server keeps the sealed secret it has.
       ...(secret.trim() === "" ? {} : { client_secret: secret.trim() }),
     });
+    inflight.current = false;
     setBusy(false);
     if (r.kind === "ok") {
       setSecret("");
@@ -119,7 +162,8 @@ function SsoFormDialog({
     <Dialog
       title={provider ? t("Change Microsoft sign-in") : t("Set up Microsoft sign-in")}
       size="md"
-      onClose={onClose}
+      // While the request is in flight nothing closes it, or a refusal would be lost.
+      onClose={busy ? () => {} : onClose}
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>
@@ -132,6 +176,7 @@ function SsoFormDialog({
       }
     >
       <form
+        ref={form}
         className="stack"
         noValidate
         onSubmit={(e) => {
@@ -142,27 +187,35 @@ function SsoFormDialog({
         <Input
           ref={address}
           label={t("Redirect address")}
-          hint={t(
+          hint={`${t(
             "Register this as a Web redirect address in the app registration at Microsoft. It must be the address people type to reach this instance.",
-          )}
+          )} ${t(
+            "This is the address of the page you are on. If sign-in later fails with a redirect address mismatch, ask whoever runs the server to set its public address.",
+          )}`}
           value={redirectAddress()}
           readOnly
           spellCheck={false}
           className="sso-address"
         />
         <div className="actionrow">
-          <Button onClick={() => void copy()}>{t("Copy")}</Button>
-          {copied && (
-            <span className="hint" role="status">
-              {copied === "ok" ? t("Copied") : t("Could not copy. Select the address and copy it.")}
-            </span>
-          )}
+          <Button aria-label={t("Copy redirect address")} onClick={() => void copy()}>
+            {t("Copy")}
+          </Button>
+          {/* Always in the page and filled afterwards, so that a reader announces the change. */}
+          <span className="hint" role="status">
+            {copied === "ok"
+              ? t("Copied")
+              : copied === "failed"
+                ? t("Could not copy. Select the address and copy it.")
+                : ""}
+          </span>
         </div>
         <Input
           label={t("Tenant ID")}
           hint={t("The directory (tenant) ID of your organisation at Microsoft, a GUID.")}
           value={tenant}
           onChange={(e) => setTenant(e.target.value)}
+          onBlur={leave("tenant", tenant)}
           error={tenantError}
           autoComplete="off"
           spellCheck={false}
@@ -173,6 +226,7 @@ function SsoFormDialog({
           hint={t("The ID of the app registration, a GUID.")}
           value={clientId}
           onChange={(e) => setClientId(e.target.value)}
+          onBlur={leave("client", clientId)}
           error={clientError}
           autoComplete="off"
           spellCheck={false}
@@ -191,10 +245,21 @@ function SsoFormDialog({
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
           error={secretError}
-          autoComplete="off"
+          // "off" is ignored by browsers: a password manager would fill the person's own login
+          // password here, and on a change that would replace the stored secret.
+          autoComplete="new-password"
+          data-1p-ignore
+          data-lpignore="true"
           spellCheck={false}
           required={!stored}
         />
+        {provider && (
+          <p className="hint">
+            {t(
+              "A wrong tenant, application ID or secret stops every Microsoft sign-in, also for people who sign in with Microsoft only.",
+            )}
+          </p>
+        )}
         {error && (
           <div className="confirm-error" role="alert">
             {error}
@@ -224,14 +289,40 @@ export function MicrosoftSignInSection({
   const [removing, setRemoving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  // How many accounts sign in with Microsoft only (null: not known).
+  const [onlyCount, setOnlyCount] = useState<number | null>(null);
+  // The question before the switch is turned off; `people` is null when that could not be read.
+  const [turningOff, setTurningOff] = useState<{ people: number | null } | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [focusHeading, setFocusHeading] = useState(0);
 
-  const load = useCallback(async () => setState(await readSso(token)), [token]);
+  const load = useCallback(async () => {
+    const [next, only] = await Promise.all([readSso(token), countSsoOnly(token)]);
+    setState(next);
+    setOnlyCount(only);
+  }, [token]);
   useEffect(() => void load(), [load, refreshKey]);
+  // The button that opened a dialog is gone after Set up and Remove: the keyboard goes to the heading.
+  useEffect(() => {
+    if (focusHeading > 0) heading.current?.focus();
+  }, [focusHeading]);
 
   if (state.kind === "loading" || (state.kind === "unknown" && state.absent)) return null;
   const provider = state.kind === "set" ? state.provider : null;
 
   async function show(on: boolean) {
+    if (!provider) return;
+    if (!on) {
+      // Turning the button off strands everyone who signs in with Microsoft only: ask first.
+      setBusy(true);
+      const people = await countSsoOnly(token);
+      setBusy(false);
+      if (people !== 0) return setTurningOff({ people });
+    }
+    await apply(on);
+  }
+
+  async function apply(on: boolean) {
     if (!provider) return;
     setBusy(true);
     const r = await call(token, "sso_provider.configure", {
@@ -256,6 +347,7 @@ export function MicrosoftSignInSection({
       setRemoving(false);
       notify(t("Microsoft sign-in removed."));
       await load();
+      setFocusHeading((k) => k + 1);
       onChanged?.();
     } else setRemoveError(refusal(r, t("Could not remove the Microsoft sign-in.")));
   }
@@ -263,7 +355,7 @@ export function MicrosoftSignInSection({
   return (
     <section className="stack" aria-labelledby={`${id}-h`}>
       <div className="people-head">
-        <h3 id={`${id}-h`} className="overline">
+        <h3 id={`${id}-h`} ref={heading} tabIndex={-1} className="overline">
           {t("Sign in with Microsoft")}
         </h3>
         {state.kind !== "unknown" && (
@@ -318,9 +410,10 @@ export function MicrosoftSignInSection({
             disabled={busy}
             onChange={(e) => void show(e.target.checked)}
           />
+          {onlyCount !== null && onlyCount > 0 && <p className="hint">{onlyPeople(onlyCount)}</p>}
           <div className="actionrow">
             <Button variant="ghost" onClick={() => setEditing(true)}>
-              {t("Change")}
+              {t("Change settings")}
             </Button>
             <Button
               variant="ghost"
@@ -356,7 +449,8 @@ export function MicrosoftSignInSection({
           onClose={() => setEditing(false)}
           onSaved={() => {
             notify(t("Microsoft sign-in saved."));
-            void load();
+            // After a first set-up the button that opened the form is replaced: the heading takes the focus.
+            void load().then(() => provider === null && setFocusHeading((k) => k + 1));
             onChanged?.();
           }}
         />
@@ -370,11 +464,32 @@ export function MicrosoftSignInSection({
           onConfirm={() => void remove()}
           onClose={() => setRemoving(false)}
         >
-          <p>
-            {t(
-              "The button leaves the sign-in page. Bindings stay. People who sign in with Microsoft only cannot sign in until it is set up again.",
-            )}
-          </p>
+          <div className="stack">
+            <p>
+              {t(
+                "The button leaves the sign-in page. Bindings stay. People who sign in with Microsoft only cannot sign in until it is set up again.",
+              )}
+            </p>
+            {onlyCount !== null && onlyCount > 0 && <p>{onlyPeople(onlyCount)}</p>}
+          </div>
+        </ConfirmDialog>
+      )}
+      {turningOff && (
+        <ConfirmDialog
+          title={t("Turn off Microsoft sign-in?")}
+          confirmLabel={t("Turn off")}
+          busy={busy}
+          onConfirm={() => void apply(false).then(() => setTurningOff(null))}
+          onClose={() => setTurningOff(null)}
+        >
+          <div className="stack">
+            <p>{t("The button leaves the sign-in page.")}</p>
+            <p>
+              {turningOff.people === null
+                ? t("People who sign in with Microsoft only cannot sign in while it is off.")
+                : `${onlyPeople(turningOff.people)} ${t("They cannot sign in while it is off, and their password is refused.")}`}
+            </p>
+          </div>
         </ConfirmDialog>
       )}
     </section>
