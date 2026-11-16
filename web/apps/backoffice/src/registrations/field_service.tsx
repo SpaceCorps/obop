@@ -22,7 +22,8 @@ registerAppPages("field_service", {
   use: (ctx) => {
     if (!ctx || !hasJobs(ctx.app.module.models)) return {};
     setSignedInUser(ctx.email);
-    const here = ctx.route.model === MY_DAY;
+    // On a phone the app itself opens on the day (the launcher and `#/field_service` alike).
+    const here = ctx.route.model === MY_DAY || (!ctx.route.model && narrow());
     return {
       navBefore: [
         {
