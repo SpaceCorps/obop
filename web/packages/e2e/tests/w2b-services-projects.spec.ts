@@ -57,3 +57,37 @@ test("a project shows its progress, ticks a task done and adds one", async ({
     await api.post("/api/module/uninstall", { id: "projects" }, root);
   }
 });
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("a task is ticked through a 44 px target, and one task reads in the singular", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const root = await api.token("root");
+    await api.post("/api/marketplace_listing/install", { id: "projects" }, root);
+    try {
+      const project = await api.create("root", "projects_project", { name: uid("Small job") });
+      const todo = await api.create("root", "projects_task", {
+        title: uid("Only task"),
+        project_id: project.id,
+      });
+      await signIn("root", `/projects/projects_project?id=${project.id}`);
+      const panel = page.getByRole("region", { name: "Project progress" });
+      await expect(panel).toContainText("0 of 1 task done");
+      const tick = panel.locator(".prj-tick").first();
+      const box = await tick.boundingBox();
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+      // A tap near the corner of the target, outside the box itself, still ticks the task.
+      await tick.tap({ position: { x: 4, y: 4 } });
+      await expect(panel).toContainText("1 of 1 task done");
+      expect((await api.run("root", "projects_task.get", { id: todo.id })).state).toBe("done");
+    } finally {
+      await api.post("/api/module/uninstall", { id: "projects" }, root);
+    }
+  });
+});

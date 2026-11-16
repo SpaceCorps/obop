@@ -113,7 +113,10 @@ export function ProjectPanel({ row, busy }: RecordExtProps) {
           <span className="prj-pct num">{fmt.percent(progress / 100, 0)}</span>
           <span className="prj-progress-text">
             {all.length
-              ? t("{done} of {count} tasks done", { done: String(done), count: String(all.length) })
+              ? t("{done} of {count, plural, one {# task} other {# tasks}} done", {
+                  done: String(done),
+                  count: all.length,
+                })
               : t("No tasks yet")}
           </span>
         </div>
@@ -192,14 +195,17 @@ export function ProjectPanel({ row, busy }: RecordExtProps) {
                 const due = typeof r.due_on === "string" ? r.due_on : "";
                 return (
                   <li key={r.id} className="prj-task">
-                    <input
-                      type="checkbox"
-                      className="prj-check"
-                      aria-label={t("Mark {task} as done", { task: name })}
-                      checked={false}
-                      disabled={!a || busy || working === r.id}
-                      onChange={() => void tick(r)}
-                    />
+                    {/* The label is the tap target (44 px on touch), not the small box alone. */}
+                    <label className="prj-tick">
+                      <input
+                        type="checkbox"
+                        className="prj-check"
+                        aria-label={t("Mark {task} as done", { task: name })}
+                        checked={false}
+                        disabled={!a || busy || working === r.id}
+                        onChange={() => void tick(r)}
+                      />
+                    </label>
                     <a className="prj-task-name" href={d.linkTo(TASK, { id: r.id }) ?? undefined}>
                       {name}
                     </a>

@@ -166,12 +166,24 @@
   padding: var(--space-1) 0;
   border-block-end: 1px solid var(--border);
 }
-.prj-check {
+/* The tick: a square of 44 px around the box, so a near miss ticks instead of opening the task. */
+.prj-tick {
+  display: inline-flex;
   flex: none;
-  inline-size: 1.15rem;
-  block-size: 1.15rem;
-  accent-color: var(--accent);
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  margin-inline: -0.75rem calc(-1 * var(--space-2));
+  border-radius: var(--radius-md);
   cursor: pointer;
+}
+.prj-tick:has(.prj-check:disabled) {
+  cursor: default;
+}
+.prj-task .prj-check[type="checkbox"]:not([role="switch"]) {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
 }
 .prj-task-name {
   flex: 1 1 12rem;
@@ -218,8 +230,8 @@
     margin-inline: var(--space-4);
     padding: var(--space-4);
   }
-  /* On a phone the box is big enough to tap. */
-  .prj-check {
+  /* On a phone the box itself is larger too. */
+  .prj-task .prj-check[type="checkbox"]:not([role="switch"]) {
     inline-size: 1.5rem;
     block-size: 1.5rem;
   }
@@ -228,6 +240,6 @@
   }
   .prj-task-meta {
     flex-basis: 100%;
-    padding-inline-start: calc(1.5rem + var(--space-3));
+    padding-inline-start: calc(2.75rem - 0.75rem - var(--space-2) + var(--space-3));
   }
 }
