@@ -38,7 +38,9 @@ test.describe("employees", () => {
       await signIn("root", "/hr/org_chart");
       // The chart comes after the overview and the lists of the app, not above them.
       const side = page.getByRole("navigation", { name: /menu$/ });
+      await expect(side.getByRole("link", { name: "Org chart" })).toBeVisible();
       const entries = await side.getByRole("link").allTextContents();
+      expect(entries.indexOf("Overview")).toBeGreaterThanOrEqual(0);
       expect(entries.indexOf("Org chart")).toBeGreaterThan(entries.indexOf("Overview"));
       await expect(page.getByRole("heading", { name: "Org chart" })).toBeVisible();
       const tree = page.getByRole("tree", { name: "Org chart" });
