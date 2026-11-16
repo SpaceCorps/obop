@@ -27,6 +27,7 @@ import {
   buildGrid,
   cellEditable,
   cellPlan,
+  daySumText,
   gridSpecOf,
   minutesOf,
   parseCellHours,
@@ -338,7 +339,7 @@ export function GridView(p: ViewProps) {
             >
               <span className="tsgrid-dname">{weekdayShort(day)}</span>
               <span className="tsgrid-dnum">{dayNumber(day)}</span>
-              <span className="tsgrid-dsum num">{hours(grid.dayTotals[day] ?? 0) || "·"}</span>
+              <span className="tsgrid-dsum num">{daySumText(grid.dayTotals[day] ?? 0) || "·"}</span>
             </button>
           ))}
         </div>

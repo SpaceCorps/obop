@@ -9,7 +9,7 @@
 import type { FieldMeta, ModelMeta, Row } from "../api.ts";
 import { displayOf, stateFieldOf } from "../presentation.ts";
 import { addDays } from "../filters.ts";
-import { parseDuration } from "../inputs/display.ts";
+import { durationClock, parseDuration } from "../inputs/display.ts";
 
 export type GridSpec = {
   /** The ref each line stands for (`task_id`). */
@@ -132,6 +132,12 @@ export function parseCellHours(text: string): number | null {
   if (/^\d+(?:\.\d+)?$/.test(s) || /^\.\d+$/.test(s)) return Math.round(Number(s) * 60);
   return parseDuration(s);
 }
+
+/**
+ * A day total for the day tabs of the phone, as a clock ("7:30"; empty for none): the same in
+ * every language and short enough for a tab of a 320 px phone, where "7 Std. 30 Min." is cut.
+ */
+export const daySumText = (minutes: number): string => (minutes ? durationClock(minutes) : "");
 
 /** Whether an entry may still be typed over: no status, or the first one (draft). */
 export function isOpen(r: Row, spec: GridSpec): boolean {

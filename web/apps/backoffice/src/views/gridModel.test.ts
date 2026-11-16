@@ -3,6 +3,7 @@ import type { FieldMeta, ModelMeta, Row } from "../api.ts";
 import {
   buildGrid,
   cellEditable,
+  daySumText,
   cellPlan,
   parseCellHours,
   gridSpecOf,
@@ -150,5 +151,14 @@ describe("reading what is typed into a cell", () => {
     expect(parseCellHours("90m")).toBe(90);
     expect(parseCellHours("90 min")).toBe(90);
     expect(parseCellHours("eight")).toBeNull();
+  });
+});
+
+describe("daySumText", () => {
+  it("writes a day total as hours and minutes on a clock", () => {
+    expect(daySumText(450)).toBe("7:30");
+    expect(daySumText(480)).toBe("8:00");
+    expect(daySumText(5)).toBe("0:05");
+    expect(daySumText(0)).toBe("");
   });
 });
