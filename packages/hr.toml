@@ -1,6 +1,6 @@
 [module]
 id = "hr"
-version = "0.3.1"
+version = "0.4.0"
 name = "Human Resources"
 description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group. An employee sees and files only their own leave requests; hr.manager sees all of them."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["people"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "hr_employee"
-changelog = "Clearer screens: the app opens on Employees, with business names, list and card columns, form sections for private, pay and sensitive data, saved filters, a leave calendar and safer action buttons. A leave request now needs its last day on or after its first day and a number of working days before it is requested or approved."
+changelog = "An employee can be linked to their obop user name, so leave that HR files for them is theirs (they see it: Requested by is filled in from the employee). A department head can be an employee. The back office gains an org chart, and a new leave request starts on the person's own employee record."
 
 [[model]]
 name = "hr_department"
@@ -23,9 +23,9 @@ write_group = "hr.manager"
 
   [model.ui]
   title = "{name}"
-  subtitle = "{head}"
-  list = ["name", "head", "cost_centre"]
-  quick_create = ["name", "head"]
+  subtitle = "{head_id} | {head}"
+  list = ["name", "head_id", "cost_centre"]
+  quick_create = ["name", "head_id"]
   order = "name asc"
   default_view = "list"
   menu = "configuration"
@@ -43,8 +43,15 @@ write_group = "hr.manager"
   required = true
 
   [[model.field]]
+  name = "head_id"
+  description = "The employee who heads the department"
+  class = "none"
+  kind = "ref"
+  to = "hr_employee"
+
+  [[model.field]]
   name = "head"
-  description = "Name of the department head"
+  description = "Name of the department head as free text, from before the head could be an employee; leave it empty when Head is set"
   class = "public_directory"
   personal_data = true
 
@@ -77,7 +84,7 @@ write_group = "hr.manager"
 
   [[model.ui.section]]
   label = "Employment"
-  fields = ["hired_on", "contract_type"]
+  fields = ["hired_on", "contract_type", "user"]
 
   [[model.ui.section]]
   label = "Private"
@@ -159,6 +166,12 @@ write_group = "hr.manager"
   class = "none"
   kind = "ref"
   to = "hr_employee"
+
+  [[model.field]]
+  name = "user"
+  description = "The person's obop user name (login), when they have one: leave filed for this employee belongs to that user, and a new leave request of that user starts on this employee"
+  class = "internal"
+  personal_data = true
 
   [[model.field]]
   name = "hired_on"
@@ -356,9 +369,10 @@ write_group = "hr.user"
 
   [[model.field]]
   name = "requested_by"
-  description = "User name of the person who asked for the leave; the person who files the request unless set otherwise. Only they and hr.manager see the request"
+  description = "User name the request belongs to, set by the server when left out: the employee's obop user when the employee has one, else the person who files the request. Only they and hr.manager see the request"
   class = "internal"
   personal_data = true
+  fill_from = "employee_id.user"
 
     [model.field.ui]
     hidden = true

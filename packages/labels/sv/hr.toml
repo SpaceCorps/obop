@@ -13,8 +13,8 @@ label = "Namn"
 description = "Avdelningens namn"
 
 [labels.sv.model.hr_department.field.head]
-label = "Avdelningschef"
-description = "Namn på avdelningschefen"
+label = "Avdelningschef (namn som text)"
+description = "Avdelningschefens namn som fritext, från tiden innan chefen kunde vara en anställd; lämna tomt när Avdelningschef är vald"
 
 [labels.sv.model.hr_department.field.cost_centre]
 label = "Kostnadsställe"
@@ -196,7 +196,7 @@ description = "Foto av personen (PNG, JPEG, WebP eller GIF; metadata som plats t
 
 [labels.sv.model.hr_leave_request.field.requested_by]
 label = "Begärd av"
-description = "Användarnamn för personen som bad om ledigheten; den som lämnar in ansökan om inget annat anges. Bara den personen och hr.manager ser ansökan"
+description = "Användarnamnet som ansökan tillhör, satt av servern: den anställdas obop-användare om hen har en, annars personen som lämnar in ansökan. Bara den personen och hr.manager ser ansökan"
 
 [labels.sv.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Ledighetens sista dag ligger före dess första dag"
@@ -209,3 +209,11 @@ message = "Ledighetens sista dag ligger före dess första dag"
 
 [labels.sv.model.hr_leave_request.action.approve.assert.days_given]
 message = "Ange hur många arbetsdagar ledigheten omfattar"
+
+[labels.sv.model.hr_department.field.head_id]
+label = "Avdelningschef"
+description = "Den anställda som leder avdelningen"
+
+[labels.sv.model.hr_employee.field.user]
+label = "obop-användare"
+description = "Personens användarnamn (inloggning) i obop, om hen har ett: ledighet som lämnas in för den anställda tillhör den användaren, och en ny ledighetsansökan från den användaren börjar på den anställda"

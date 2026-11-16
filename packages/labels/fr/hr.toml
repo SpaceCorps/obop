@@ -13,8 +13,8 @@ label = "Nom"
 description = "Nom du département"
 
 [labels.fr.model.hr_department.field.head]
-label = "Responsable"
-description = "Nom du responsable du département"
+label = "Responsable (nom en texte)"
+description = "Nom du responsable du département en texte libre, d’avant que le responsable puisse être un employé ; laissez vide lorsque Responsable est renseigné"
 
 [labels.fr.model.hr_department.field.cost_centre]
 label = "Centre de coûts"
@@ -196,7 +196,7 @@ description = "Photo de la personne (PNG, JPEG, WebP ou GIF ; les métadonnées 
 
 [labels.fr.model.hr_leave_request.field.requested_by]
 label = "Demandé par"
-description = "Nom d’utilisateur de la personne qui demande le congé ; par défaut la personne qui dépose la demande. Seuls elle et hr.manager voient la demande"
+description = "Nom d’utilisateur auquel appartient la demande, fixé par le serveur : l’utilisateur obop de l’employé s’il en a un, sinon la personne qui dépose la demande. Seuls elle et hr.manager voient la demande"
 
 [labels.fr.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Le dernier jour du congé est avant son premier jour"
@@ -209,3 +209,11 @@ message = "Le dernier jour du congé est avant son premier jour"
 
 [labels.fr.model.hr_leave_request.action.approve.assert.days_given]
 message = "Indiquez le nombre de jours ouvrés du congé"
+
+[labels.fr.model.hr_department.field.head_id]
+label = "Responsable"
+description = "L’employé qui dirige le département"
+
+[labels.fr.model.hr_employee.field.user]
+label = "Utilisateur obop"
+description = "Le nom d’utilisateur obop (identifiant) de la personne, s’il existe : les congés déposés pour cet employé appartiennent à cet utilisateur, et une nouvelle demande de congé de cet utilisateur commence sur cet employé"
