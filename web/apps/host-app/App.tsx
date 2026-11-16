@@ -197,7 +197,10 @@ function Shell() {
     // still asks for a new one now.
     await serverStore.clear().catch(() => undefined);
     // The WebView's HTTP cache holds answers of the old server that were fetched with the token
-    // (records, files); it is emptied, the disk part too, before the WebView goes.
+    // (records, files); it is emptied, the disk part too, before the WebView goes. On iOS the same
+    // call also removes the page's local and session storage of every origin (WKWebsiteDataStore;
+    // it needs the patch of react-native-webview in pnpm-workspace.yaml, without which it does
+    // nothing there).
     webRef.current?.clearCache?.(true);
     dispatch({ type: "change_server" });
   };
