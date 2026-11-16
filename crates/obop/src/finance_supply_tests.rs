@@ -600,6 +600,26 @@ fn a_manufacturing_order_makes_one_run_and_a_done_order_is_frozen() {
         "manufacturing_order_line.create",
         json!({"order_id": mo, "component_id": product, "quantity": 1}),
     );
+    // Without a finished product, finishing would take the components out and put nothing in.
+    ok(
+        &app,
+        &lead,
+        "manufacturing_order.update",
+        json!({"id": mo, "product_id": null}),
+    );
+    refused(
+        &app,
+        &lead,
+        "manufacturing_order.confirm",
+        json!({ "id": mo }),
+        "Choose the finished product first",
+    );
+    ok(
+        &app,
+        &lead,
+        "manufacturing_order.update",
+        json!({"id": mo, "product_id": product}),
+    );
     for action in ["confirm", "start", "finish"] {
         ok(
             &app,

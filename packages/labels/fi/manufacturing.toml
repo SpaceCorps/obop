@@ -92,6 +92,9 @@ cancelled = "Peruutettu"
 label = "Vahvista"
 description = "Vahvista luonnostilaus, jotta tuotanto voidaan suunnitella"
 
+[labels.fi.model.manufacturing_order.action.confirm.assert.has_product]
+message = "Valitse ensin valmis tuote: kun tilaus valmistuu, se viedään varastoon tuotantopaikalla"
+
 [labels.fi.model.manufacturing_order.action.confirm.assert.has_location]
 message = "Valitse ensin tuotantopaikka: kun tilaus valmistuu, komponentit otetaan sieltä ja tuote viedään sinne"
 

@@ -92,6 +92,9 @@ cancelled = "Cancelado"
 label = "Confirmar"
 description = "Confirmar una orden en borrador para poder planificar la producción"
 
+[labels.es.model.manufacturing_order.action.confirm.assert.has_product]
+message = "Elija primero el producto terminado: al terminar la orden, entra en el stock del lugar de producción"
+
 [labels.es.model.manufacturing_order.action.confirm.assert.has_location]
 message = "Elija primero el lugar de producción: al terminar la orden, los componentes salen de allí y el producto entra"
 

@@ -13,7 +13,7 @@ categories = ["supply-chain"]
 maturity = "experimental"
 requires_core = "^0.2.2"
 home = "manufacturing_order"
-changelog = "0.3.0: an order is numbered in the series MO-00001, going on after the highest number typed by hand in the old reference (MO-0018 makes the next order MO-00019), names the product it makes (taken from the bill of materials) and a production location, and lists its components. Finishing the order makes the stock moves that take the components out at that location and put the finished product there, with the order number as their source document, for the warehouse to validate (finishing needs the inventory.user group); an order is confirmed only with a production location and at least one component. The person in charge stays a name typed in. 0.2.1: done and cancelled manufacturing orders are frozen. A new order starts today and makes one run of its bill of materials unless a quantity is given; inactive bills of materials are no longer offered for new orders, new ones start active, and those whose active flag was never set become active. The app opens on the manufacturing orders, and components are edited inside their bill of materials. English names, list, card, calendar and form hints."
+changelog = "0.3.0: an order is numbered in the series MO-00001, going on after the highest number typed by hand in the old reference (MO-0018 makes the next order MO-00019), names the product it makes (taken from the bill of materials) and a production location, and lists its components. Finishing the order makes the stock moves that take the components out at that location and put the finished product there, with the order number as their source document, for the warehouse to validate (finishing needs the inventory.user group); an order is confirmed only with the finished product, a production location and at least one component. The person in charge stays a name typed in. 0.2.1: done and cancelled manufacturing orders are frozen. A new order starts today and makes one run of its bill of materials unless a quantity is given; inactive bills of materials are no longer offered for new orders, new ones start active, and those whose active flag was never set become active. The app opens on the manufacturing orders, and components are edited inside their bill of materials. English names, list, card, calendar and form hints."
 
 [module.dependencies]
 product = "^0.2"
@@ -227,12 +227,13 @@ write_group = "manufacturing.user"
 
   [[model.action]]
   name = "confirm"
-  description = "Confirm a draft order so production can be planned; it needs a production location and at least one component line"
+  description = "Confirm a draft order so production can be planned; it needs the finished product, a production location and at least one component line"
   field = "state"
   from = "draft"
   to = "confirmed"
   group = "manufacturing.manager"
   assert = [
+    { expr = "is_set(product_id)", message = "Choose the finished product first: finishing the order puts it into stock at the production location", key = "has_product" },
     { expr = "is_set(location_id)", message = "Choose the production location first: finishing the order moves the components out and the product in there", key = "has_location" },
     { expr = "count(lines) > 0", message = "Add the components first: an order without components moves no stock when it is finished", key = "has_components" },
   ]

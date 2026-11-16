@@ -92,6 +92,9 @@ cancelled = "Storniert"
 label = "Bestätigen"
 description = "Einen Auftragsentwurf bestätigen, damit die Produktion geplant werden kann"
 
+[labels.de.model.manufacturing_order.action.confirm.assert.has_product]
+message = "Wählen Sie zuerst das Fertigprodukt: Beim Abschluss des Auftrags wird es am Produktionsort eingelagert"
+
 [labels.de.model.manufacturing_order.action.confirm.assert.has_location]
 message = "Wählen Sie zuerst den Produktionsort: Beim Abschluss des Auftrags werden dort die Komponenten entnommen und das Produkt eingelagert"
 

@@ -92,6 +92,9 @@ cancelled = "Anulowane"
 label = "Potwierdź"
 description = "Potwierdza zlecenie robocze, aby można było zaplanować produkcję"
 
+[labels.pl.model.manufacturing_order.action.confirm.assert.has_product]
+message = "Najpierw wybierz wyrób gotowy: po zakończeniu zlecenia jest on przyjmowany na stan w miejscu produkcji"
+
 [labels.pl.model.manufacturing_order.action.confirm.assert.has_location]
 message = "Najpierw wybierz miejsce produkcji: po zakończeniu zlecenia komponenty są tam pobierane, a produkt przyjmowany"
 
