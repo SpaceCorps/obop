@@ -2,7 +2,7 @@
 //! actions of 5.2, and the row rules of 5.7.
 
 use crate::policy::{ADMIN, DRIVER, POINT, REVIEWER, TRIP};
-use obop_registry::ui::UiFilter;
+use obop_registry::ui::{UiFilter, UiSection};
 use obop_registry::{
     Access, CommandDef, FieldDef as F, FieldKind, Filter, ModelDef, ModelUi, Module, ModuleMeta,
 };
@@ -320,7 +320,9 @@ fn trip() -> ModelDef {
         ext: Default::default(),
     }
     .with_ui(ModelUi {
-        title: Some("{driver} · {vehicle} | {driver}".into()),
+        // "frank.lehmann · 3 Nov 2026, 14:00 · 7.0 km": who, when and how far, the three things a
+        // reviewer looks for; a trip without a distance yet (still recording) drops the last part.
+        title: Some("{driver} · {started_at} · {distance_m} | {driver} · {started_at} | {driver}".into()),
         subtitle: Some("{vehicle}".into()),
         list: vec![
             "driver".into(),
@@ -337,12 +339,60 @@ fn trip() -> ModelDef {
         ],
         order: Some("started_at desc".into()),
         default_view: Some("list".into()),
+        // The reviewer's form: the trip first, then the review; what the app recorded about the
+        // device (identifiers, counters, coordinates) is folded away.
+        sections: vec![
+            section(
+                "Trip",
+                &["driver", "vehicle", "purpose", "started_at", "ended_at", "distance_m"],
+                false,
+                &[],
+            ),
+            section(
+                "Review",
+                &["reject_reason", "reviewed_by", "confirmed_at"],
+                false,
+                &["in_review", "confirmed", "rejected"],
+            ),
+            section(
+                "Discard",
+                &["discard_reason"],
+                false,
+                &["ended", "rejected", "discarded"],
+            ),
+            section(
+                "Recorded by the app",
+                &[
+                    "integrity",
+                    "point_count",
+                    "expected_points",
+                    "last_seq",
+                    "max_seq",
+                    "start_lat",
+                    "start_lon",
+                    "end_lat",
+                    "end_lon",
+                    "client_trip_id",
+                ],
+                true,
+                &[],
+            ),
+        ],
         filters: vec![UiFilter {
             label: "To review".into(),
             filter: Filter::parse("state = in_review").expect("a valid filter"),
         }],
         ..Default::default()
     })
+}
+
+fn section(label: &str, fields: &[&str], collapsed: bool, show_in: &[&str]) -> UiSection {
+    UiSection {
+        label: label.into(),
+        fields: fields.iter().map(|f| (*f).into()).collect(),
+        collapsed,
+        show_in: show_in.iter().map(|f| (*f).into()).collect(),
+    }
 }
 
 fn point() -> ModelDef {

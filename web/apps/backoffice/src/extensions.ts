@@ -144,6 +144,8 @@ export type AppPagesResult = {
   navBefore?: NavLink[];
   /** Sidebar entries after the list of models. */
   navAfter?: NavLink[];
+  /** Sidebar entries right after the main models (before Reporting and Configuration). */
+  navMain?: NavLink[];
   /** Replaces the whole sidebar body (the head with the app's icon and name stays). */
   nav?: ReactNode;
   /**

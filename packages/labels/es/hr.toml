@@ -13,8 +13,8 @@ label = "Nombre"
 description = "Nombre del departamento"
 
 [labels.es.model.hr_department.field.head]
-label = "Responsable del departamento"
-description = "Nombre del responsable del departamento"
+label = "Responsable (nombre como texto)"
+description = "Nombre del responsable del departamento como texto libre, de antes de que el responsable pudiera ser un empleado; déjelo vacío cuando Responsable esté indicado"
 
 [labels.es.model.hr_department.field.cost_centre]
 label = "Centro de coste"
@@ -196,7 +196,7 @@ description = "Foto de la persona (PNG, JPEG, WebP o GIF; los metadatos como la 
 
 [labels.es.model.hr_leave_request.field.requested_by]
 label = "Solicitada por"
-description = "Nombre de usuario de la persona que pidió la ausencia; quien presenta la solicitud, salvo que se indique otra. Solo esa persona y hr.manager ven la solicitud"
+description = "Nombre de usuario al que pertenece la solicitud, fijado por el servidor: el usuario de obop del empleado si tiene uno; si no, quien presenta la solicitud. Solo esa persona y hr.manager ven la solicitud"
 
 [labels.es.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "El último día de la ausencia es anterior a su primer día"
@@ -209,3 +209,11 @@ message = "El último día de la ausencia es anterior a su primer día"
 
 [labels.es.model.hr_leave_request.action.approve.assert.days_given]
 message = "Indique el número de días laborables de la ausencia"
+
+[labels.es.model.hr_department.field.head_id]
+label = "Responsable del departamento"
+description = "El empleado que dirige el departamento"
+
+[labels.es.model.hr_employee.field.user]
+label = "Usuario de obop"
+description = "El nombre de usuario de obop (inicio de sesión) de la persona, si tiene uno: las ausencias presentadas para este empleado pertenecen a ese usuario, y una nueva solicitud de ausencia de ese usuario empieza en este empleado"

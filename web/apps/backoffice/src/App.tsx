@@ -449,6 +449,7 @@ export function App() {
                     current={!extPage && !isOverview(route) && !atHome ? model?.name : undefined}
                     overview={(!extPage || !!ext.overview) && (isOverview(route) || atHome)}
                     user={email}
+                    extra={ext.navMain}
                   />
                   {ext.navAfter?.map((l) => (
                     <NavEntry key={l.key} link={l} />
@@ -583,6 +584,7 @@ function AppNav({
   current,
   overview,
   user,
+  extra,
 }: {
   app: AppT;
   route: Route;
@@ -591,6 +593,8 @@ function AppNav({
   /** The overview page is shown. */
   overview: boolean;
   user: string;
+  /** An app's own entries after its main models (extensions.ts `navMain`). */
+  extra?: NavLink[];
 }) {
   const menu = appMenu(app.module);
   const withOverview = hasOverview(app.module);
@@ -624,6 +628,9 @@ function AppNav({
         </a>
       )}
       {menu.main.map(link)}
+      {extra?.map((l) => (
+        <NavEntry key={l.key} link={l} />
+      ))}
       {hiddenOpen && link(hiddenOpen)}
       {quick.length > 0 && single && (
         <>
