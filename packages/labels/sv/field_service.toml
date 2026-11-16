@@ -105,7 +105,7 @@ done = "Klar"
 cancelled = "Annullerad"
 
 [labels.sv.model.field_service_job.action.depart]
-label = "På väg"
+label = "Jag åker nu"
 description = "Teknikern är på väg"
 
 [labels.sv.model.field_service_job.action.start]

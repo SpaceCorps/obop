@@ -178,6 +178,36 @@ fn every_bundled_package_declares_its_metadata() {
     assert_eq!(ts.requires_core, "^0.2.2");
 }
 
+/// A button says what it does, not where it leads: in every language, an action's label differs
+/// from the label of the state it moves to, or the button reads the same as the badge beside it.
+#[test]
+fn no_action_is_labelled_like_the_state_it_moves_to() {
+    let mut same = Vec::new();
+    for m in bundled() {
+        for (lang, l) in &m.labels {
+            for model in &m.model {
+                let Some(ml) = l.model.get(&model.name) else {
+                    continue;
+                };
+                for a in &model.action {
+                    let action = ml.action.get(&a.name).and_then(|x| x.label.as_deref());
+                    let state = ml
+                        .field
+                        .get(&a.field)
+                        .and_then(|f| f.options.get(&a.to))
+                        .map(String::as_str);
+                    if let (Some(x), Some(y)) = (action, state)
+                        && x.trim().to_lowercase() == y.trim().to_lowercase()
+                    {
+                        same.push(format!("{lang} {}.{}: {x:?}", model.name, a.name));
+                    }
+                }
+            }
+        }
+    }
+    assert!(same.is_empty(), "{same:#?}");
+}
+
 #[test]
 fn installing_timesheets_alone_pulls_projects_and_a_dependency_on_base_is_the_core() {
     let app = App::new();
