@@ -89,7 +89,7 @@ async function fill(page: Page, code: string, repeat = PASSWORD) {
   await page.getByLabel("Name of this instance (optional)").fill(NAME);
   await page.getByLabel("Set-up code").fill(code);
   await page.getByLabel("Username").fill("root");
-  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.locator(`input[name="password"]`).fill(PASSWORD);
   await page.getByLabel("Repeat the password").fill(repeat);
 }
 
@@ -159,7 +159,10 @@ test("what the form can tell by itself never reaches the server, and a wrong cod
 
 test("the right code creates the administrator, who must set up two-factor and then reaches the launcher", async ({
   page,
+  allowHttpErrors,
 }) => {
+  // A session limited to enrolment is refused everything else (403) until two-factor is on.
+  allowHttpErrors(403);
   await page.goto(`${instance.origin}/`);
   await fill(page, setupCode(instance));
   await page.getByRole("button", { name: "Create the administrator" }).click();

@@ -134,6 +134,11 @@ const ALLOWED: Allowed[] = [
   },
   {
     file: "*",
+    text: "This instance has no server secret yet, so two-factor sign-in cannot be set up. Set OBOP_SECRET_KEY in the environment of this service, restart it, and come back to this page.",
+    why: "The set-up page of an instance with no account (D96), which only the person who runs the server can use: it names the setting of the server they must set, and no brand exists yet.",
+  },
+  {
+    file: "*",
     text: "OBOP_BACKUP_DIR is not set, so a backup cannot be taken here. You can still update if you have your own backup (obop backup, or pg_dump).",
     why: ADMIN,
   },
