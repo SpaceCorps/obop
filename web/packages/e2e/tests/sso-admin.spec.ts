@@ -31,8 +31,7 @@ async function adminPage(page: Page, request: import("@playwright/test").APIRequ
   await expect(page.getByRole("heading", { name: "Sign in with Microsoft" })).toBeVisible();
 }
 
-const section = (page: Page) =>
-  page.locator("section").filter({ has: page.getByRole("heading", { name: "Sign in with Microsoft" }) });
+const section = (page: Page) => page.getByRole("region", { name: "Sign in with Microsoft" });
 const row = (page: Page, name: string) =>
   page
     .getByRole("table", { name: "People" })
@@ -182,7 +181,7 @@ test.describe("administering Sign in with Microsoft", () => {
     const dialog = page.getByRole("dialog", { name: "Microsoft sign-in for bea" });
     await expect(dialog.getByText(`Bound to ${BEA}`)).toBeVisible();
     // Nobody here keeps a password and a second step, so the server refuses, and says why.
-    await dialog.getByRole("checkbox", { name: /Microsoft only/ }).check({ force: true });
+    await dialog.getByRole("checkbox", { name: /Microsoft only/ }).click({ force: true });
     await expect(dialog.getByRole("alert")).toContainText("other enabled administrators");
     await expect(dialog.getByRole("checkbox", { name: /Microsoft only/ })).not.toBeChecked();
   });
@@ -194,10 +193,14 @@ test.describe("administering Sign in with Microsoft", () => {
   }) => {
     await adminPage(page, request);
     const s = section(page);
-    await s.getByRole("switch", { name: "Show the button on the sign-in page" }).uncheck();
+    const toggle = s.getByRole("switch", { name: "Show the button on the sign-in page" });
+    // The switch follows the server's answer, so it is clicked and then read, not "unchecked".
+    await toggle.click();
+    await expect(toggle).not.toBeChecked();
     await expect(s.getByText("Off", { exact: true })).toBeVisible();
     expect(await offersButton(browser)).toBe(false);
-    await s.getByRole("switch", { name: "Show the button on the sign-in page" }).check();
+    await toggle.click();
+    await expect(toggle).toBeChecked();
     await expect(s.getByText("On", { exact: true })).toBeVisible();
     expect(await offersButton(browser)).toBe(true);
 
