@@ -1,7 +1,7 @@
 import type { ExpoConfig } from "expo/config";
-import { withAppBuildGradle, type ConfigPlugin } from "expo/config-plugins";
+import { withAppBuildGradle, withInfoPlist, type ConfigPlugin } from "expo/config-plugins";
 import { identity } from "./config/identity.ts";
-import { iosBundleId } from "./config/ios.ts";
+import { iosBundleId, withoutDevClientEntries } from "./config/ios.ts";
 import { NATIVE_TEXTS } from "./config/native-texts.ts";
 
 // The id is a placeholder until the owner rules (config/identity.ts). A test build for iOS signed
@@ -19,6 +19,18 @@ const withMinSdk: ConfigPlugin = (config) =>
       /minSdkVersion\s+rootProject\.ext\.minSdkVersion/,
       `minSdkVersion Math.max(rootProject.ext.minSdkVersion, ${MIN_SDK})`,
     );
+    return c;
+  });
+
+// `expo-dev-client` is in the plugins for the development build (`vp run start`). Its iOS entries in
+// Info.plist (the Bonjour service `_expo._tcp` and the URL scheme `exp+rutsa`) belong to that build
+// only and are removed from every other one; OBOP_DEV_CLIENT=1 at `expo prebuild` keeps them for an
+// iOS development build. Mods run in the reverse order of their definition and the plugins of the
+// `plugins` list are applied after this wrapper, so this one runs after them (as in the Mileage app).
+const DEV_CLIENT = process.env.OBOP_DEV_CLIENT === "1";
+const withIosPlistCleanup: ConfigPlugin = (config) =>
+  withInfoPlist(config, (c) => {
+    if (!DEV_CLIENT) c.modResults = withoutDevClientEntries(c.modResults);
     return c;
   });
 
@@ -52,6 +64,7 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: IOS_BUNDLE_ID,
   },
+  plugins: ["expo-dev-client"],
 };
 
-export default withMinSdk(config);
+export default withIosPlistCleanup(withMinSdk(config));

@@ -5,9 +5,21 @@
   "description": "Rutsa: a mileage log that runs on the phone alone (React Native, Expo SDK 58). docs/spec/rutsa.md",
   "license": "Apache-2.0",
   "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "check:sdk": "node scripts/check-sdk.mjs",
+    "android:prebuild": "expo prebuild --platform android --no-install",
+    "android:build": "node scripts/gradle.mjs assembleDebug",
+    "android:build:release": "node scripts/gradle.mjs assembleRelease",
+    "ios:prebuild": "expo prebuild --platform ios --no-install",
+    "ios:pods": "node scripts/ios/xcode.mjs pods",
+    "ios:build:simulator": "node scripts/ios/xcode.mjs build-simulator",
+    "ios:run:device": "expo run:ios --device --configuration Release"
+  },
   "dependencies": {
     "@obop/ui-native": "workspace:*",
     "expo": "58.0.16",
+    "expo-dev-client": "58.0.14",
     "expo-status-bar": "58.0.3",
     "expo-system-ui": "58.0.6",
     "react": "19.3.0",

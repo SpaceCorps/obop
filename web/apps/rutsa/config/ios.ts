@@ -20,3 +20,36 @@ export function iosBundleId(env: string | undefined, fallback: string): string {
   }
   return env;
 }
+
+/**
+ * Takes out of Info.plist the entries that `expo-dev-client` adds for a development build: the
+ * Bonjour service `_expo._tcp` (finding a dev server on the network) and the URL scheme `exp+<slug>`
+ * (opening a project from the launcher). Any other build has no use for them. The dev launcher's
+ * own build phase removes only the Bonjour service, and in an incremental Xcode build it can run
+ * too early (docs/spec/mobile.md 8.8, item 6), so they are taken out of the generated project.
+ */
+export function withoutDevClientEntries<T extends object>(plist: T): T {
+  const result = { ...plist } as Record<string, unknown>;
+  if (Array.isArray(result.NSBonjourServices)) {
+    const left = result.NSBonjourServices.filter((name) => name !== "_expo._tcp");
+    if (left.length > 0) result.NSBonjourServices = left;
+    else delete result.NSBonjourServices;
+  }
+  if (Array.isArray(result.CFBundleURLTypes)) {
+    const isDevClientScheme = (type: unknown): boolean => {
+      const schemes =
+        typeof type === "object" && type !== null
+          ? (type as { CFBundleURLSchemes?: unknown }).CFBundleURLSchemes
+          : undefined;
+      return (
+        Array.isArray(schemes) &&
+        schemes.length > 0 &&
+        schemes.every((s) => typeof s === "string" && s.startsWith("exp+"))
+      );
+    };
+    const left = result.CFBundleURLTypes.filter((type) => !isDevClientScheme(type));
+    if (left.length > 0) result.CFBundleURLTypes = left;
+    else delete result.CFBundleURLTypes;
+  }
+  return result as T;
+}

@@ -50,9 +50,10 @@ except those that start with `config/` or `scripts/`.
       free Apple ID), their tests, `app.config.ts` (name, portrait, light and dark, Android
       package, minSdk 26, no cloud backup, the Android permissions that libraries add and the app
       never uses blocked as in `mileage-app`, iOS bundle id)
-- [ ] A3 `feat(rutsa): build scripts`: `expo-dev-client` with the removal of its iOS entries from
+- [x] A3 `feat(rutsa): build scripts`: `expo-dev-client` with the removal of its iOS entries from
       builds that are not development builds (`config/ios.ts`); `scripts/check-sdk.mjs`,
-      `scripts/gradle.mjs`, `scripts/ios/xcode.mjs`, `xcode-lib.mjs`, `env.sh` after `mileage-app`;
+      `scripts/gradle.mjs`, `scripts/ios/xcode.mjs`, `xcode-lib.mjs` and its test after
+      `mileage-app`;
       the `vp run` scripts `start`, `check:sdk`, `android:prebuild`, `android:build`,
       `android:build:release` (an APK that runs without Metro), `ios:prebuild`, `ios:pods`,
       `ios:build:simulator`, `ios:run:device`. The iOS release gate waits for stage 4
@@ -188,3 +189,5 @@ D23).
 - 2026-11-16: checked against the code of `mileage-app` line by line: the blocked permissions in
   the app config (A2), C5 without a screen (its note is in D4), typed date and time (D7), the
   emulator route fed by `drive.mjs` (E1), Start and Stop pressed in the app (E2).
+- 2026-11-16: A3 without `scripts/ios/env.sh` (the tool paths of the owner's Mac and the Mileage
+  UI test folder) and with the test of `xcode-lib.mjs`.
