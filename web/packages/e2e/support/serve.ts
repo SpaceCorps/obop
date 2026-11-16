@@ -183,8 +183,11 @@ if (kind === "app" || kind === "passkeys" || kind === "language" || kind === "br
   // nobody bound: the spec does all of that through the page.
   const db = `sqlite://${join(dir, "ssoadmin.sqlite")}`;
   for (const u of Object.values(sso.users))
-    run(["admin", "create", u.name, "--groups", u.groups, "--db", db], `${u.password}
-`);
+    run(
+      ["admin", "create", u.name, "--groups", u.groups, "--db", db],
+      `${u.password}
+`,
+    );
   args = [
     "serve",
     "--addr",
@@ -284,7 +287,10 @@ if (kind === "app" || kind === "passkeys" || kind === "language" || kind === "br
     "--static",
     siteDir,
   ];
-} else throw new Error("usage: serve.ts app|passkeys|language|brand|sso|ssoadmin|idp|shop|platform|market");
+} else
+  throw new Error(
+    "usage: serve.ts app|passkeys|language|brand|sso|ssoadmin|idp|shop|platform|market",
+  );
 
 // Connectors: the specs run a receiver on loopback, which is refused unless the operator allows it.
 // The secret key is a 32-byte key in the form two-factor authentication and connectors both accept.

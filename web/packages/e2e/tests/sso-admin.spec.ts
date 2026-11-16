@@ -5,7 +5,8 @@
 // the same accounts, nothing set up), so it does not touch the one that spec shares.
 import type { Page } from "@playwright/test";
 import { idpUrl, sso, ssoAdminUrl } from "../support/env.ts";
-import { expect, test } from "../support/fixtures.ts";
+import { tr } from "../support/catalogue.ts";
+import { expect, test, unnamedControls } from "../support/fixtures.ts";
 import { layoutProblems } from "../support/layout.ts";
 
 const PLACE = "/customize/security?tab=security";
@@ -31,7 +32,10 @@ async function adminPage(page: Page, request: import("@playwright/test").APIRequ
   await expect(page.getByRole("heading", { name: "Sign in with Microsoft" })).toBeVisible();
 }
 
-const section = (page: Page) => page.getByRole("region", { name: "Sign in with Microsoft" });
+const section = (page: Page, name = "Sign in with Microsoft") => page.getByRole("region", { name });
+/** The "Microsoft" button of one person's row; its name carries the person. */
+const microsoft = (page: Page, person: string) =>
+  row(page, person).getByRole("button", { name: `Microsoft sign-in for ${person}`, exact: true });
 const row = (page: Page, name: string) =>
   page
     .getByRole("table", { name: "People" })
@@ -61,7 +65,7 @@ test.describe("administering Sign in with Microsoft", () => {
     await expect(s.getByRole("button")).toHaveCount(1);
     await expect(s.getByRole("button", { name: "Set up Microsoft sign-in" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Microsoft" })).toHaveCount(0);
-    await expect(row(page, "bea").getByRole("button", { name: "Microsoft" })).toHaveCount(0);
+    await expect(row(page, "bea").getByRole("button", { name: /^Microsoft/ })).toHaveCount(0);
     expect(await offersButton(browser)).toBe(false);
   });
 
@@ -71,12 +75,21 @@ test.describe("administering Sign in with Microsoft", () => {
     browser,
   }) => {
     await adminPage(page, request);
-    await section(page).getByRole("button", { name: "Set up Microsoft sign-in" }).click();
+    const setUp = section(page).getByRole("button", { name: "Set up Microsoft sign-in" });
+    await setUp.click();
     const form = page.getByRole("dialog", { name: "Set up Microsoft sign-in" });
+    // Escape closes the form, and the keyboard is back on the button that opened it.
+    await page.keyboard.press("Escape");
+    await expect(form).toHaveCount(0);
+    await expect(setUp).toBeFocused();
+    await setUp.click();
     await expect(form.getByLabel("Redirect address")).toHaveValue(
       `${ssoAdminUrl()}/api/auth/oidc/callback`,
     );
     await expect(form.getByLabel("Client secret")).toHaveAttribute("type", "password");
+    // A password manager must not take the field for a login: "off" is ignored, "new-password" is not.
+    await expect(form.getByLabel("Client secret")).toHaveAttribute("autocomplete", "new-password");
+    expect(await unnamedControls(page), "set-up form").toEqual([]);
 
     await form.getByLabel("Tenant ID").fill("common");
     await form.getByLabel("Application (client) ID").fill("nope");
@@ -84,6 +97,11 @@ test.describe("administering Sign in with Microsoft", () => {
     await expect(form.getByText("The tenant ID is a GUID.")).toBeVisible();
     await expect(form.getByText("The application ID is a GUID.")).toBeVisible();
     await expect(form.getByText("Enter the client secret.")).toBeVisible();
+    // The keyboard goes to the first wrong field, which names its error.
+    await expect(form.getByLabel("Tenant ID")).toBeFocused();
+    await expect(form.getByLabel("Tenant ID")).toHaveAccessibleDescription(
+      /The tenant ID is a GUID\./,
+    );
 
     await form.getByLabel("Tenant ID").fill(sso.tenant);
     await form.getByLabel("Application (client) ID").fill(sso.clientId);
@@ -96,14 +114,41 @@ test.describe("administering Sign in with Microsoft", () => {
     await expect(s.getByText(sso.tenant)).toBeVisible();
     await expect(s.getByText(sso.clientId)).toBeVisible();
     await expect(s.getByText("Stored")).toBeVisible();
+    // The button that opened the form is gone: the heading has the keyboard.
+    await expect(s.getByRole("heading", { name: "Sign in with Microsoft" })).toBeFocused();
+    // The column and the button of People are there at once, with no reload.
+    await expect(page.getByRole("columnheader", { name: "Microsoft" })).toBeVisible();
+    await expect(row(page, "bea").getByText("Not bound")).toBeVisible();
     // The secret is nowhere on the page, also not after a reload.
     await page.reload();
     await expect(s.getByText(sso.tenant)).toBeVisible();
     expect(await page.content()).not.toContain(sso.clientSecret);
-    // The column and the button of People are there now, and the sign-in page offers the button.
-    await expect(page.getByRole("columnheader", { name: "Microsoft" })).toBeVisible();
-    await expect(row(page, "bea").getByText("Not bound")).toBeVisible();
     expect(await offersButton(browser)).toBe(true);
+
+    // The same screen in German reads from the German catalogue, the section and People's button.
+    await page.goto(`${ssoAdminUrl()}/?lang=de#${PLACE}`);
+    const de = section(page, tr("de", "Sign in with Microsoft"));
+    await expect(de).toBeVisible();
+    await expect(
+      de.getByRole("button", { name: tr("de", "Change settings"), exact: true }),
+    ).toBeVisible();
+    await expect(de.getByText(tr("de", "Stored"))).toBeVisible();
+    await expect(
+      de.getByRole("switch", { name: tr("de", "Show the button on the sign-in page") }),
+    ).toBeVisible();
+    await expect(
+      row(page, "bea").getByRole("button", {
+        name: tr("de", "Microsoft sign-in for {user}").replace("{user}", "bea"),
+        exact: true,
+      }),
+    ).toBeVisible();
+    await de.getByRole("button", { name: tr("de", "Change settings"), exact: true }).click();
+    const deForm = page.getByRole("dialog", { name: tr("de", "Change Microsoft sign-in") });
+    await expect(deForm.getByLabel(tr("de", "Client secret"))).toBeVisible();
+    await expect(
+      deForm.getByRole("button", { name: tr("de", "Copy redirect address") }),
+    ).toBeVisible();
+    await deForm.getByRole("button", { name: tr("de", "Cancel") }).click();
   });
 
   test("on a phone: the section, the People row and the dialog fit the screen", async ({
@@ -113,13 +158,14 @@ test.describe("administering Sign in with Microsoft", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await adminPage(page, request);
     expect(await layoutProblems(page)).toEqual([]);
-    await section(page).getByRole("button", { name: "Change" }).click();
+    const change = section(page).getByRole("button", { name: "Change settings", exact: true });
+    await change.click();
     const form = page.getByRole("dialog", { name: "Change Microsoft sign-in" });
     await expect(form.getByText("Leave empty to keep the stored secret.")).toBeVisible();
     expect(await layoutProblems(page)).toEqual([]);
     await form.getByRole("button", { name: "Cancel" }).click();
-    const bea = row(page, "bea");
-    const button = bea.getByRole("button", { name: "Microsoft", exact: true });
+    await expect(change).toBeFocused();
+    const button = microsoft(page, "bea");
     await button.scrollIntoViewIfNeeded();
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await button.click();
@@ -139,7 +185,7 @@ test.describe("administering Sign in with Microsoft", () => {
   }) => {
     allowHttpErrors(400);
     await adminPage(page, request);
-    await row(page, "bea").getByRole("button", { name: "Microsoft", exact: true }).click();
+    await microsoft(page, "bea").click();
     const dialog = page.getByRole("dialog", { name: "Microsoft sign-in for bea" });
     // An e-mail address is refused before anything is sent.
     await dialog.getByLabel("Object ID").fill("bea@example.test");
@@ -151,7 +197,7 @@ test.describe("administering Sign in with Microsoft", () => {
     await expect(row(page, "bea").getByText("Bound", { exact: true })).toBeVisible();
 
     // The same object id for a second person is refused with the server's own sentence.
-    await row(page, "ada").getByRole("button", { name: "Microsoft", exact: true }).click();
+    await microsoft(page, "ada").click();
     const again = page.getByRole("dialog", { name: "Microsoft sign-in for ada" });
     await again.getByLabel("Object ID").fill(BEA);
     await again.getByRole("button", { name: "Bind" }).click();
@@ -177,13 +223,26 @@ test.describe("administering Sign in with Microsoft", () => {
   }) => {
     allowHttpErrors(400);
     await adminPage(page, request);
-    await row(page, "bea").getByRole("button", { name: "Microsoft", exact: true }).click();
+    await microsoft(page, "bea").click();
     const dialog = page.getByRole("dialog", { name: "Microsoft sign-in for bea" });
     await expect(dialog.getByText(`Bound to ${BEA}`)).toBeVisible();
+    expect(await unnamedControls(page), "People Microsoft dialog").toEqual([]);
+    // The question comes first, and Cancel sends nothing.
+    await dialog.getByRole("checkbox", { name: /Microsoft only/ }).click({ force: true });
+    const ask = page.getByRole("alertdialog", { name: "Make bea sign in with Microsoft only?" });
+    await expect(ask).toContainText("Their sessions and phone sign-ins end.");
+    expect(await unnamedControls(page), "Microsoft only question").toEqual([]);
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(ask).toHaveCount(0);
+    await expect(dialog.getByRole("alert")).toHaveCount(0);
     // Nobody here keeps a password and a second step, so the server refuses, and says why.
     await dialog.getByRole("checkbox", { name: /Microsoft only/ }).click({ force: true });
+    await ask.getByRole("button", { name: "Make Microsoft only" }).click();
     await expect(dialog.getByRole("alert")).toContainText("other enabled administrators");
     await expect(dialog.getByRole("checkbox", { name: /Microsoft only/ })).not.toBeChecked();
+    // The keyboard goes back to the row's button when the dialog is closed.
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await expect(microsoft(page, "bea")).toBeFocused();
   });
 
   test("the switch hides and shows the button, and the binding is removed through the page", async ({
@@ -204,9 +263,16 @@ test.describe("administering Sign in with Microsoft", () => {
     await expect(s.getByText("On", { exact: true })).toBeVisible();
     expect(await offersButton(browser)).toBe(true);
 
-    await row(page, "bea").getByRole("button", { name: "Microsoft", exact: true }).click();
+    await microsoft(page, "bea").click();
     const dialog = page.getByRole("dialog", { name: "Microsoft sign-in for bea" });
     await dialog.getByRole("button", { name: "Remove binding" }).click();
+    const ask = page.getByRole("alertdialog", { name: "Remove the Microsoft binding of bea?" });
+    await expect(ask).toContainText("Their sessions and phone sign-ins end.");
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(ask).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Remove binding" }).click();
+    await ask.getByRole("button", { name: "Remove binding" }).click();
     await expect(dialog).toHaveCount(0);
     await expect(row(page, "bea").getByText("Not bound")).toBeVisible();
   });
@@ -217,10 +283,13 @@ test.describe("administering Sign in with Microsoft", () => {
     browser,
   }) => {
     await adminPage(page, request);
-    await section(page).getByRole("button", { name: "Remove", exact: true }).click();
+    const remove = section(page).getByRole("button", { name: "Remove", exact: true });
+    await remove.click();
     const ask = page.getByRole("alertdialog", { name: "Remove Microsoft sign-in?" });
+    expect(await unnamedControls(page), "Remove question").toEqual([]);
     await ask.getByRole("button", { name: "Cancel" }).click();
     await expect(section(page).getByText("On", { exact: true })).toBeVisible();
+    await expect(remove).toBeFocused();
 
     await section(page).getByRole("button", { name: "Remove", exact: true }).click();
     await page
@@ -228,6 +297,10 @@ test.describe("administering Sign in with Microsoft", () => {
       .getByRole("button", { name: "Remove", exact: true })
       .click();
     await expect(section(page).getByText("Not set up")).toBeVisible();
+    // The Remove button is gone with the configuration: the heading has the keyboard.
+    await expect(
+      section(page).getByRole("heading", { name: "Sign in with Microsoft" }),
+    ).toBeFocused();
     await expect(page.getByRole("columnheader", { name: "Microsoft" })).toHaveCount(0);
     expect(await offersButton(browser)).toBe(false);
   });
