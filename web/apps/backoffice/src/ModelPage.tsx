@@ -154,6 +154,8 @@ export function ModelPage({
     if (hasGallery(fields) || model.ui?.default_view === "gallery") ids.push("gallery");
     if (dateFields(fields).length) ids.push("calendar");
     if (canGroup) ids.push("pivot", "graph");
+    // The week grid of a ref, a day and minutes (views/GridView.tsx), where the package asks for it.
+    if (model.ui?.default_view === "grid") ids.push("grid");
     return ids;
   }, [fields, model]);
   const preferred = route.view || storedView(model.name);
@@ -669,7 +671,10 @@ export function ModelPage({
             <EmptyState title={t("Could not load records")} hint={serverMessage(error)} />
           ) : !loaded ? (
             <Skeleton rows={8} cols={Math.min(fields.length, 5)} />
-          ) : total === 0 && (view !== "calendar" || query.facets.length === 0) ? (
+          ) : total === 0 &&
+            // The week grid is where the first entry is typed: it is drawn empty.
+            view !== "grid" &&
+            (view !== "calendar" || query.facets.length === 0) ? (
             empty()
           ) : (
             <View {...vp} />

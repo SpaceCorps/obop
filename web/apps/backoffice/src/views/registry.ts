@@ -8,12 +8,13 @@ import { msg, type IconName } from "@obop/ui";
 import { CalendarView } from "./CalendarView.tsx";
 import { GalleryView } from "./GalleryView.tsx";
 import { GraphView } from "./GraphView.tsx";
+import { GridView } from "./GridView.tsx";
 import { KanbanView } from "./KanbanView.tsx";
 import { ListView } from "./ListView.tsx";
 import { PivotView } from "./PivotView.tsx";
 import type { ViewProps } from "./types.ts";
 
-export type ViewKind = "list" | "kanban" | "calendar" | "pivot" | "graph" | "gallery";
+export type ViewKind = "list" | "kanban" | "calendar" | "pivot" | "graph" | "gallery" | "grid";
 
 export type ViewEntry = {
   id: ViewKind;
@@ -30,6 +31,8 @@ export const VIEW_REGISTRY: Record<ViewKind, ViewEntry> = {
   pivot: { id: "pivot", label: msg("Pivot"), icon: "pivot", component: PivotView },
   graph: { id: "graph", label: msg("Graph"), icon: "graph", component: GraphView },
   gallery: { id: "gallery", label: msg("Gallery"), icon: "grid", component: GalleryView },
+  // The week grid (Timesheets): offered only where a package asks for it (`default_view = "grid"`).
+  grid: { id: "grid", label: msg("Week"), icon: "clock", component: GridView },
 };
 
 export const isViewKind = (v: string): v is ViewKind => Object.hasOwn(VIEW_REGISTRY, v);
