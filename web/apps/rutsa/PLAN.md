@@ -36,9 +36,9 @@ Status: `[ ]` to do, `[x]` done (with the commit), `[~]` in progress.
 ### A. Skeleton
 
 - [ ] A1 `feat(rutsa): app package on Expo SDK 58`: `package.json` (`@obop/rutsa`, Apache-2.0,
-      the exact versions of `mileage-app`, without `@obop/client` and `expo-web-browser`),
-      `tsconfig.json`, `vite.config.ts`, `.gitignore`, `index.ts`, `App.tsx` showing "Rutsa",
-      `pnpm-lock.yaml`
+      only the packages the skeleton uses, see "Dependencies"), `tsconfig.json`,
+      `vite.config.ts`, `.gitignore`, `index.ts`, `App.tsx` showing "Rutsa", `pnpm-lock.yaml`.
+      No scripts yet (A4), no tests yet (block B)
 - [ ] A2 `feat(rutsa): app config and placeholder identity`: `config/identity.ts` (placeholder id
       `org.obop.rutsa`, marked like `org.obop.mileage`), `app.config.ts` (minSdk 26, no cloud
       backup, location permission, iOS background mode `location`, SQLCipher)
@@ -112,11 +112,28 @@ Checkpoint: the APK builds and installs, a route gives a trip with the expected 
 
 ### F. Documentation
 
-- [ ] F1 `docs(rutsa): the local prototype`: `docs/spec/rutsa.md` phase 1 becomes the local
-      prototype (the calendar reminder moves to stage 3); 5.5 without "Calls to obop" for Rutsa;
-      what was run and what was not
+- [ ] F1 `docs(rutsa): the local prototype`: `docs/spec/rutsa.md` 1.1 describes two products
+      (Rutsa, local, no sign-in; companies on obop use the `mileage` module with the obop phone
+      app); phase 1 becomes the local prototype (the calendar reminder moves to stage 3); 5.5
+      without "Calls to obop" for Rutsa; what was run and what was not
 - [ ] F2 `docs: add the Rutsa app to the README`
 - [ ] F3 delete this file, then "Ready for review"
+
+## Dependencies
+
+A package is added in the commit that first uses it, so each commit shows why it came. Versions
+are exactly those of `mileage-app` (they have passed the cooldown of the pin policy, D23).
+
+| Commit | Packages |
+|---|---|
+| A1 | `expo` 58.0.16, `react` 19.3.0, `react-native` 0.88.0, `expo-status-bar` 58.0.3, `react-native-safe-area-context` 5.10.1, `@obop/ui-native`; dev: `typescript` 6.0.3, `@types/react` 19.3.0, `@types/node` 26.6.5 |
+| A2 | `expo-system-ui` 58.0.6 (light and dark on Android) |
+| A4 | `expo-dev-client` 58.0.14 (the development build of `vp run start`) |
+| B6 | `@obop/trip-core` |
+| C1 | `expo-sqlite` 58.0.13, `expo-secure-store` 58.0.2, `expo-crypto` 58.0.7 |
+| C2, C3 | `expo-location` 58.0.18, `expo-task-manager` 58.0.12 |
+| When needed | `expo-constants` 58.0.12 (the app version on a screen) |
+| Not taken | `@obop/client`, `expo-web-browser` (no sign-in); `react-dom` (a dev dependency of `mileage-app` with no stated reason; added only if `vp check` needs it, with the reason) |
 
 ## Taken from `mileage-app`, and left out
 
@@ -128,11 +145,7 @@ Checkpoint: the APK builds and installs, a route gives a trip with the expected 
 | `check-sdk.mjs`, `gradle.mjs`, iOS and emulator scripts | `Foreign.tsx`: no other person's trips |
 | The shape of `app.config.ts` | `schema.ts` as a whole (1,242 lines for the server) |
 
-## Open
-
-- The folder `web/apps/rutsa`: asked to the owner, no answer yet.
-- The app id: placeholder `org.obop.rutsa` until the owner rules (as `org.obop.mileage`, Q37).
-
 ## Log
 
 - 2026-11-16: plan written.
+- 2026-11-16: dependencies are added per commit, not all in A1 (section "Dependencies").
