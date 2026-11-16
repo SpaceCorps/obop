@@ -17,7 +17,7 @@ registerAppPages("hr", {
     setSignedInUser(ctx.email);
     const here = ctx.route.model === ORG_CHART;
     return {
-      navBefore: [
+      navMain: [
         {
           key: ORG_CHART,
           label: t("Org chart"),

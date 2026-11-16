@@ -33,6 +33,29 @@
   color: var(--text);
   font: inherit;
 }
+/* The ring is the box's (focus-within): none on the field inside it as well. */
+.hr-org .org-search input:is(:focus, :focus-visible, :hover) {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+.org-found {
+  margin-block-start: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.org-found:empty {
+  margin: 0;
+}
+/* Each person's initials in the tint the Employees gallery gives them (BoardCard `t-N`). */
+.org-face .avatar {
+  background: color-mix(in oklab, var(--tone, var(--accent-fill)) 22%, var(--surface));
+  color: color-mix(in oklab, var(--tone, var(--accent-fill)) 60%, var(--text));
+}
+.org-face {
+  display: inline-flex;
+  flex: none;
+}
 
 .org-tree,
 .org-group {
@@ -149,9 +172,6 @@
 .org-toggle:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
-}
-.org-none {
-  margin-block-start: var(--space-4);
 }
 .org-wait {
   display: flex;

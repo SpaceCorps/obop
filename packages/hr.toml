@@ -169,9 +169,10 @@ write_group = "hr.manager"
 
   [[model.field]]
   name = "user"
-  description = "The person's obop user name (login), when they have one: leave filed for this employee belongs to that user, and a new leave request of that user starts on this employee"
+  description = "The person's obop user name (login), when they have one: leave filed for this employee belongs to that user, and a new leave request of that user starts on this employee. One login belongs to one employee at most"
   class = "internal"
   personal_data = true
+  unique = true
 
   [[model.field]]
   name = "hired_on"
@@ -333,7 +334,7 @@ write_group = "hr.user"
   see_all_group = "hr.manager"
 
   [model.ui]
-  title = "{employee_id} · {leave_kind} · {start_on} | {employee_id} · {start_on} | {employee_id}"
+  title = "{employee_id} · {start_on} · {leave_kind} | {employee_id} · {start_on} | {employee_id}"
   subtitle = "{start_on} – {end_on}"
   list = ["employee_id", "leave_kind", "start_on", "end_on", "days", "state"]
   card = ["employee_id", "leave_kind", "start_on", "end_on", "days"]

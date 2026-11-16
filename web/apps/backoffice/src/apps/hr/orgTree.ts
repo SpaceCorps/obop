@@ -91,7 +91,11 @@ export function openToDepth(roots: readonly OrgNode[], depth: number): Set<strin
   return out;
 }
 
-/** The ids on the way from the top to every person whose name or job contains `q` (any case). */
+/**
+ * The people whose name, job or department contains `q` (any case): `hits`, and `open`, the ids on
+ * the way from the top to them (their managers), whose branches the search unfolds. The chart shows
+ * only those two while a search is typed.
+ */
 export function pathsTo(
   roots: readonly OrgNode[],
   q: string,
@@ -101,7 +105,7 @@ export function pathsTo(
   const needle = q.trim().toLocaleLowerCase();
   if (!needle) return { open, hits };
   const walk = (n: OrgNode, up: string[]) => {
-    if (`${n.name} ${n.job}`.toLocaleLowerCase().includes(needle)) {
+    if (`${n.name} ${n.job} ${n.department}`.toLocaleLowerCase().includes(needle)) {
       hits.add(n.id);
       for (const id of up) open.add(id);
     }
@@ -109,4 +113,11 @@ export function pathsTo(
   };
   for (const r of roots) walk(r, []);
   return { open, hits };
+}
+
+/** The chart narrowed to `keep` (the hits and their managers), in the same order. */
+export function narrowed(roots: readonly OrgNode[], keep: ReadonlySet<string>): OrgNode[] {
+  const cut = (ns: readonly OrgNode[]): OrgNode[] =>
+    ns.filter((n) => keep.has(n.id)).map((n) => ({ ...n, children: cut(n.children) }));
+  return cut(roots);
 }

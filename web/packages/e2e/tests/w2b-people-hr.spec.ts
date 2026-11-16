@@ -29,8 +29,17 @@ test.describe("employees", () => {
         job_title: "Stock Clerk",
         reports_to_id: lead.id,
       });
+      const picker = await api.create("root", "hr_employee", {
+        name: uid("Pia Picker"),
+        job_title: "Picker",
+        reports_to_id: lead.id,
+      });
 
       await signIn("root", "/hr/org_chart");
+      // The chart comes after the overview and the lists of the app, not above them.
+      const side = page.getByRole("navigation", { name: /menu$/ });
+      const entries = await side.getByRole("link").allTextContents();
+      expect(entries.indexOf("Org chart")).toBeGreaterThan(entries.indexOf("Overview"));
       await expect(page.getByRole("heading", { name: "Org chart" })).toBeVisible();
       const tree = page.getByRole("tree", { name: "Org chart" });
       const bossItem = tree.getByRole("treeitem").filter({ hasText: boss.name }).first();
@@ -39,12 +48,15 @@ test.describe("employees", () => {
       await expect(tree.getByRole("link", { name: new RegExp(lead.name) })).toBeVisible();
       await expect(tree.getByRole("link", { name: new RegExp(clerk.name) })).toBeVisible();
       // Folding the boss hides everyone below; the count says how many.
-      await bossItem.getByRole("button", { name: `Hide the 2 people below ${boss.name}` }).click();
+      await bossItem.getByRole("button", { name: `Hide the 3 people below ${boss.name}` }).click();
       await expect(tree.getByRole("link", { name: new RegExp(clerk.name) })).toHaveCount(0);
-      // A search opens the way to the person it finds.
+      // A search narrows the chart to the people it finds and their managers.
       await page.getByRole("searchbox", { name: "Find a person or a job" }).fill("Stock Clerk");
+      await expect(page.getByRole("status").filter({ hasText: "1 person matches" })).toBeVisible();
       const hit = tree.getByRole("link", { name: new RegExp(clerk.name) });
       await expect(hit).toBeVisible();
+      await expect(tree.getByRole("link", { name: new RegExp(lead.name) })).toBeVisible();
+      await expect(tree.getByRole("link", { name: new RegExp(picker.name) })).toHaveCount(0);
       await hit.click();
       await expect(page).toHaveURL(new RegExp(`hr_employee\\?id=${clerk.id}`));
       await expect(page.getByRole("complementary", { name: /record$/ })).toContainText(clerk.name);
@@ -62,7 +74,16 @@ test.describe("employees", () => {
     const root = await api.token("root");
     await api.post("/api/marketplace_listing/install", { id: "hr" }, root);
     try {
+      // One login belongs to one employee (a run before this one may have linked "eve").
+      for (const was of (await api.list("root", "hr_employee")).filter((r) => r.user === "eve"))
+        await api.post("/api/hr_employee/update", { id: was.id, user: null }, root);
       const eve = await api.create("root", "hr_employee", { name: uid("Eve Example"), user: "eve" });
+      const twice = await api.post(
+        "/api/hr_employee/create",
+        { name: uid("Eve Copy"), user: "eve" },
+        root,
+      );
+      expect(twice.status, JSON.stringify(twice.json)).toBe(400);
       await api.create("root", "hr_employee", { name: uid("Someone Else") });
 
       // HR files leave for her: it is hers, not HR's (B27).

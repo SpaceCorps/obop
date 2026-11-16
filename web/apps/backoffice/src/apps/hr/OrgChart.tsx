@@ -10,7 +10,7 @@ import { useData } from "../../data.tsx";
 import { href } from "../../route.ts";
 import { serverMessage } from "../../serverMessage.ts";
 import { EMPLOYEE } from "./links.ts";
-import { openToDepth, orgTree, pathsTo, type OrgNode } from "./orgTree.ts";
+import { narrowed, openToDepth, orgTree, pathsTo, type OrgNode } from "./orgTree.ts";
 import "./hr.css";
 
 const DEPARTMENT = "hr_department";
@@ -19,6 +19,13 @@ type State =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready"; roots: OrgNode[]; total: number };
+
+/** The tint of a person without a photo: the same as on their card in the Employees gallery. */
+function tint(name: string): number {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.codePointAt(0)!) >>> 0;
+  return (h % 6) + 1;
+}
 
 /** A photo from the file store, or the person's initials while it loads or when there is none. */
 function Face({ name, photo, size }: { name: string; photo: string; size: number }) {
@@ -33,7 +40,11 @@ function Face({ name, photo, size }: { name: string; photo: string; size: number
       live = false;
     };
   }, [d.token, photo, size]);
-  return <Avatar name={name} src={src} size={size} />;
+  return (
+    <span className={`org-face t-${tint(name)}`}>
+      <Avatar name={name} src={src} size={size} />
+    </span>
+  );
 }
 
 export function OrgChart({ app }: { app: App }) {
@@ -75,7 +86,18 @@ export function OrgChart({ app }: { app: App }) {
         : { open: new Set<string>(), hits: new Set<string>() },
     [state, q],
   );
-  const isOpen = (id: string) => open.has(id) || found.open.has(id);
+  const searching = q.trim() !== "";
+  // While a search is typed the chart shows only the matches and their managers, unfolded.
+  const roots = useMemo(() => {
+    if (state.kind !== "ready") return [];
+    return searching ? narrowed(state.roots, new Set([...found.hits, ...found.open])) : state.roots;
+  }, [state, searching, found]);
+  const isOpen = (id: string) => (searching ? found.open.has(id) : open.has(id));
+  const branches = useMemo(
+    () => (state.kind === "ready" ? openToDepth(state.roots, Infinity) : new Set<string>()),
+    [state],
+  );
+  const allOpen = [...branches].every((id) => open.has(id));
   const toggle = (id: string) =>
     setOpen((was) => {
       const next = new Set(was);
@@ -84,10 +106,7 @@ export function OrgChart({ app }: { app: App }) {
       return next;
     });
 
-  const all = () => {
-    if (state.kind !== "ready") return;
-    setOpen(openToDepth(state.roots, Infinity));
-  };
+  const foldAll = () => setOpen(allOpen ? new Set() : new Set(branches));
 
   const node = (n: OrgNode, level: number) => {
     const expanded = n.children.length > 0 && isOpen(n.id);
@@ -111,7 +130,7 @@ export function OrgChart({ app }: { app: App }) {
               )}
             </span>
           </a>
-          {n.children.length > 0 && (
+          {n.children.length > 0 && !searching && (
             <button
               type="button"
               className="org-toggle"
@@ -183,9 +202,15 @@ export function OrgChart({ app }: { app: App }) {
                 onChange={(e) => setQ(e.target.value)}
               />
             </label>
-            <Button variant="ghost" onClick={all}>
-              {t("Show everyone")}
-            </Button>
+            {!searching && branches.size > 0 && (
+              <Button
+                variant="ghost"
+                icon={allOpen ? "chevron-up" : "chevron-down"}
+                onClick={foldAll}
+              >
+                {allOpen ? t("Collapse all") : t("Expand all")}
+              </Button>
+            )}
           </div>
         )}
 
@@ -204,12 +229,22 @@ export function OrgChart({ app }: { app: App }) {
           </p>
         ) : (
           <>
-            {q.trim() && found.hits.size === 0 && (
-              <p className="hint org-none">{t("Nobody matches “{q}”.", { q: q.trim() })}</p>
+            <p className="org-found" role="status">
+              {!searching
+                ? ""
+                : found.hits.size === 0
+                  ? t("Nobody matches “{q}”.", { q: q.trim() })
+                  : found.hits.size === 1
+                    ? t("1 person matches, shown with their managers.")
+                    : t("{count} people match, shown with their managers.", {
+                        count: fmt.integer(found.hits.size),
+                      })}
+            </p>
+            {roots.length > 0 && (
+              <ul role="tree" className="org-tree" aria-label={t("Org chart")}>
+                {roots.map((r) => node(r, 1))}
+              </ul>
             )}
-            <ul role="tree" className="org-tree" aria-label={t("Org chart")}>
-              {state.roots.map((r) => node(r, 1))}
-            </ul>
           </>
         )}
       </div>
