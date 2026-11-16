@@ -3458,6 +3458,16 @@ export interface components {
         invoice: {
             /** @description ISO 4217 currency code */
             currency?: string;
+            /**
+             * Format: date
+             * @description Date the payment is due (YYYY-MM-DD); not before the issue date
+             */
+            due_date?: string;
+            /**
+             * Format: date
+             * @description Date the invoice is issued (YYYY-MM-DD)
+             */
+            issue_date?: string;
             /** @description Number from a gapless yearly series, such as INV-2026-00042, assigned when posted (a number the system assigns; read-only) */
             readonly number?: string;
             /** @description Customer party id */
@@ -8500,6 +8510,16 @@ export interface operations {
                     rows?: {
                         /** @description ISO 4217 currency code */
                         currency?: string;
+                        /**
+                         * Format: date
+                         * @description Date the payment is due (YYYY-MM-DD); not before the issue date
+                         */
+                        due_date?: string;
+                        /**
+                         * Format: date
+                         * @description Date the invoice is issued (YYYY-MM-DD)
+                         */
+                        issue_date?: string;
                         /** @description Customer party id */
                         party_id?: string;
                         /** @description Source sale order id */
@@ -8682,6 +8702,16 @@ export interface operations {
                 "application/json": {
                     /** @description ISO 4217 currency code */
                     currency?: string;
+                    /**
+                     * Format: date
+                     * @description Date the payment is due (YYYY-MM-DD); not before the issue date
+                     */
+                    due_date?: string;
+                    /**
+                     * Format: date
+                     * @description Date the invoice is issued (YYYY-MM-DD)
+                     */
+                    issue_date?: string;
                     /** @description Customer party id */
                     party_id?: string;
                     /** @description Source sale order id */
@@ -9201,7 +9231,17 @@ export interface operations {
                 "application/json": {
                     /** @description ISO 4217 currency code */
                     currency?: string;
+                    /**
+                     * Format: date
+                     * @description Date the payment is due (YYYY-MM-DD); not before the issue date
+                     */
+                    due_date?: string;
                     id: string;
+                    /**
+                     * Format: date
+                     * @description Date the invoice is issued (YYYY-MM-DD)
+                     */
+                    issue_date?: string;
                     /** @description Customer party id */
                     party_id?: string;
                     /** @description Source sale order id */
