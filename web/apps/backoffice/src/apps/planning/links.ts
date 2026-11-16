@@ -19,3 +19,14 @@ export function takeNewShift(): Record<string, unknown> | null {
   pending = null;
   return v;
 }
+
+let week: string | null = null;
+
+/** The Monday of the week the week plan shows, kept while the person opens and closes shifts. */
+export function rememberWeek(monday: string): void {
+  week = monday;
+}
+
+export function rememberedWeek(): string | null {
+  return week;
+}

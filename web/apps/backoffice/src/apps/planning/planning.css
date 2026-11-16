@@ -249,4 +249,9 @@
     flex: 1 1 100%;
     min-block-size: 44px;
   }
+  .pl-head .switcher button {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    justify-content: center;
+  }
 }

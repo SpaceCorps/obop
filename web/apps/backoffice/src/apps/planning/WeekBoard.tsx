@@ -6,14 +6,22 @@
 // as an agent or the command line would (OR-4). The data: `planning_shift.search` for the week and
 // `hr_employee.search` for the rows.
 import { useEffect, useMemo, useState } from "react";
-import { Button, IconButton, Segmented, t } from "@obop/ui";
+import { Button, Dialog, IconButton, Segmented, t } from "@obop/ui";
 import { search, type Row } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { ModelPageProps } from "../../extensions.ts";
 import { formatDate, isoDate, optionLabel } from "../../format.ts";
 import { clockText } from "../../inputs/display.ts";
 import { useMedia } from "../../media.ts";
-import { EMPLOYEE, NARROW, SHIFT, WEEK, setNewShift } from "./links.ts";
+import {
+  EMPLOYEE,
+  NARROW,
+  SHIFT,
+  WEEK,
+  rememberWeek,
+  rememberedWeek,
+  setNewShift,
+} from "./links.ts";
 import { addDays, mondayOf, weekDays } from "./week.ts";
 import "./planning.css";
 
@@ -24,7 +32,13 @@ export function WeekBoard(p: ModelPageProps) {
   const d = useData();
   const narrow = useMedia(NARROW);
   const today = isoDate(new Date());
-  const [monday, setMonday] = useState(() => mondayOf(today));
+  // The week the person was planning comes back after a shift is opened and closed.
+  const [monday, setMondayState] = useState(() => rememberedWeek() ?? mondayOf(today));
+  const setMonday = (m: string) => {
+    rememberWeek(m);
+    setMondayState(m);
+  };
+  const [asking, setAsking] = useState(false);
   const days = useMemo(() => weekDays(monday), [monday]);
   const [shifts, setShifts] = useState<Row[] | null>(null);
   const [people, setPeople] = useState<Row[]>([]);
@@ -105,16 +119,9 @@ export function WeekBoard(p: ModelPageProps) {
   };
 
   const publishWeek = async () => {
+    setAsking(false);
     const todo = unpublished;
     if (!todo.length) return;
-    const ok = await d.confirm(
-      t(
-        "Publish {count, plural, one {# shift} other {# shifts}} of this week? The employees see them and can confirm.",
-        { count: todo.length },
-      ),
-      t("Publish"),
-    );
-    if (!ok) return;
     setPublishing(true);
     let done = 0;
     let failed = "";
@@ -222,7 +229,7 @@ export function WeekBoard(p: ModelPageProps) {
               icon="check"
               loading={publishing}
               disabled={!unpublished.length || publishing}
-              onClick={() => void publishWeek()}
+              onClick={() => setAsking(true)}
             >
               {unpublished.length
                 ? t("Publish week ({count})", { count: unpublished.length })
@@ -231,6 +238,33 @@ export function WeekBoard(p: ModelPageProps) {
           )}
         </div>
         {error && <p className="hint">{error}</p>}
+        {asking && (
+          <Dialog
+            role="alertdialog"
+            size="sm"
+            title={t("Publish week")}
+            className="confirm"
+            describedBy="pl-publish-msg"
+            onClose={() => setAsking(false)}
+            footer={
+              <>
+                <Button data-autofocus onClick={() => setAsking(false)}>
+                  {t("Cancel")}
+                </Button>
+                <Button variant="primary" onClick={() => void publishWeek()}>
+                  {t("Publish")}
+                </Button>
+              </>
+            }
+          >
+            <p id="pl-publish-msg" className="confirm-msg">
+              {t(
+                "Publish {count, plural, one {# shift} other {# shifts}} of this week? The employees see them and can confirm.",
+                { count: unpublished.length },
+              )}
+            </p>
+          </Dialog>
+        )}
 
         {narrow ? (
           <ol className="pl-days">

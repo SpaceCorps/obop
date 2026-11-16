@@ -74,9 +74,29 @@ test.describe("Planning: the week plan", () => {
       await page.goBack();
       await expect(page.getByRole("heading", { name: "Week plan" })).toBeVisible();
 
+      // The week being planned comes back after a shift was opened and closed.
+      const range = page.locator(".pl-range");
+      const thisWeek = await range.innerText();
+      await page.getByRole("button", { name: "Next week" }).click();
+      await expect(range).not.toHaveText(thisWeek);
+      const nextWeek = await range.innerText();
+      await page
+        .getByRole("button", { name: /^Add a shift for / })
+        .first()
+        .click();
+      await expect(page.getByRole("combobox", { name: "Employee" })).toBeVisible();
+      await page.goBack();
+      await expect(range).toHaveText(nextWeek);
+      await page.getByRole("button", { name: "This week" }).click();
+      await expect(range).toHaveText(thisWeek);
+
       // Publish week: one publish per shift, each a command.
       await page.getByRole("button", { name: /^Publish week \(\d+\)$/ }).click();
-      await page.getByRole("alertdialog").getByRole("button", { name: "Publish" }).click();
+      // Publishing is not destructive: the question's button is the normal primary one.
+      const publish = page.getByRole("alertdialog").getByRole("button", { name: "Publish" });
+      await expect(publish).toHaveClass(/\bprimary\b/);
+      await expect(publish).not.toHaveClass(/\bdanger\b/);
+      await publish.click();
       await expect(page.getByRole("button", { name: "Week published" })).toBeVisible();
       for (const s of [morning, open])
         expect((await api.run("root", "planning_shift.get", { id: s.id })).state).toBe("published");
