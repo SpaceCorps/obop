@@ -116,7 +116,11 @@ const STORAGE_FAULTS: Record<string, () => string> = {
 
 type Rule = [RegExp, (m: RegExpExecArray) => string];
 
-const RULES: Rule[] = [
+/**
+ * The rules that name a field as `model.field`: they are applied in English too, so a refusal reads
+ * "Customer is required" and not "sale_order.customer_id is required" (B12).
+ */
+const FIELD_RULES: Rule[] = [
   [
     /^(\w+)\.(\w+) is required and must be set before (\w+) can change to "([^"]*)"$/,
     (m) =>
@@ -203,6 +207,52 @@ const RULES: Rule[] = [
         to: optionLabel(m[4]!, named(m)),
       }),
   ],
+];
+
+/**
+ * Guard refusals (D77, D95) that name a model and an id: a person needs the field and what to do,
+ * never a model name or a uuid. Applied in English too.
+ */
+const GUARD_RULES: Rule[] = [
+  [
+    /^(\w+)\.(\w+) falls in a locked period; choose a later date$/,
+    (m) =>
+      t("{field} is in a closed period. Choose a date in an open period, or reopen the period.", {
+        field: fieldName(m[1]!, m[2]!),
+      }),
+  ],
+  [
+    /^(\w+) \S+ can no longer be changed, so no (\w+) can be (added to|moved to) it$/,
+    (m) =>
+      m[3] === "added to"
+        ? t("This {parent} can no longer be changed, so nothing can be added to it.", {
+            parent: modelName(m[1]!),
+          })
+        : t("This {parent} can no longer be changed, so nothing can be moved to it.", {
+            parent: modelName(m[1]!),
+          }),
+  ],
+  [
+    /^(\w+)\.(\w+): the (\w+) \S+ cannot be picked here; it must satisfy .+$/,
+    (m) =>
+      t("This {model} cannot be picked for {field}. Pick another one.", {
+        model: modelName(m[3]!),
+        field: fieldName(m[1]!, m[2]!),
+      }),
+  ],
+  // Paying an invoice that is not in the ledger (bank_matching.book): the server names a command a
+  // person cannot run from a screen; the person needs to choose another account.
+  [
+    /^the invoice is not in the ledger yet \(it has no move\), so no receivable was booked for it and (\S+) cannot be credited with its payment;/,
+    (m) =>
+      t(
+        "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.",
+        { account: m[1]! },
+      ),
+  ],
+];
+
+const RULES: Rule[] = [
   [
     /^unknown field (\w+)\.(\w+)$/,
     (m) => t("Unknown field: {field}", { field: fieldName(m[1]!, m[2]!) }),
@@ -439,17 +489,34 @@ const RULES: Rule[] = [
   [/^not found$/, () => t("Not found")],
 ];
 
+/**
+ * The refusal of an assertion without the engine's suffix: the server writes
+ * `<message> (assertion <expression> failed)` (B12), and a person needs only the message.
+ */
+export function withoutAssertion(raw: string): string {
+  const m = /^(.+?) \(assertion .+ failed\)$/s.exec(raw);
+  return m ? m[1]! : raw;
+}
+
 /** Translate a server message when its pattern is known, else return it unchanged. */
 export function serverMessage(raw: string | undefined | null): string {
   if (!raw) return "";
   // A refused database call is a code word (D74), a sentence in every language, English too.
   const fault = STORAGE_FAULTS[raw];
   if (fault) return fault();
-  // The server's own words are English: in English they are shown exactly as received.
-  if (getLang() === "en") return raw;
-  for (const [re, fn] of RULES) {
-    const m = re.exec(raw);
+  // A step of an action that failed says which step; the person needs what was wrong.
+  const step = /^\w+\.\w+: effect \d+ \([\w ]+\) failed, nothing was changed: (.+)$/s.exec(raw);
+  if (step) return serverMessage(step[1]);
+  const text = withoutAssertion(raw);
+  for (const [re, fn] of [...FIELD_RULES, ...GUARD_RULES]) {
+    const m = re.exec(text);
     if (m) return fn(m);
   }
-  return raw;
+  // The server's own words are English: in English the rest is shown as received.
+  if (getLang() === "en") return text;
+  for (const [re, fn] of RULES) {
+    const m = re.exec(text);
+    if (m) return fn(m);
+  }
+  return text;
 }

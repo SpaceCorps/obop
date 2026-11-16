@@ -142,14 +142,14 @@ test.describe("agent tokens over the REST API", () => {
       [token, "agent"],
     );
     await page.goto("/#/base/party?view=list");
-    const grid = page.getByRole("grid", { name: "Party list" });
+    const grid = page.getByRole("grid", { name: "Contact list" });
     await expect(grid.getByRole("gridcell", { name: /^NAME_\d+$/ }).first()).toBeVisible();
     await expect(page.getByText(/Withheld from you: Tax/)).toBeVisible();
     await grid
       .getByRole("gridcell", { name: /^NAME_\d+$/ })
       .first()
       .click();
-    const panel = page.getByRole("complementary", { name: "Party record" });
+    const panel = page.getByRole("complementary", { name: "Contact record" });
     await expect(panel.getByText("Masked for this session").first()).toBeVisible();
   });
 });

@@ -4,7 +4,11 @@ summary = "Kundenrechnungen mit dem Lebenszyklus Entwurf, gebucht und storniert.
 
 [labels.de.model.invoice]
 name = "Rechnung"
+plural = "Ausgangsrechnungen"
 description = "Eine Kundenrechnung; keine Aktion setzt eine gebuchte Rechnung auf Entwurf zurück oder storniert sie"
+
+[labels.de.model.invoice.guard]
+message = "Eine gebuchte Rechnung kann nicht geändert werden."
 
 [labels.de.model.invoice.field.sale_order_id]
 label = "Verkaufsauftrag"
@@ -27,6 +31,14 @@ description = "Rechnungssumme in der kleinsten Währungseinheit, die Summe der P
 label = "Nummer"
 description = "Nummer aus einer lückenlosen jährlichen Folge, zum Beispiel INV-2026-00042, wird beim Buchen vergeben"
 
+[labels.de.model.invoice.field.issue_date]
+label = "Rechnungsdatum"
+description = "Datum, an dem die Rechnung ausgestellt wird (YYYY-MM-DD)"
+
+[labels.de.model.invoice.field.due_date]
+label = "Fälligkeitsdatum"
+description = "Datum, an dem die Zahlung fällig ist (YYYY-MM-DD); nicht vor dem Rechnungsdatum"
+
 [labels.de.model.invoice.action.post]
 label = "Buchen"
 description = "Einen Rechnungsentwurf buchen und ihm die nächste Nummer der Folge geben"
@@ -45,6 +57,7 @@ description = "Währungscode nach ISO 4217"
 
 [labels.de.model.invoice_line]
 name = "Rechnungsposition"
+plural = "Rechnungspositionen"
 description = "Ein Produkt oder eine Dienstleistung auf einer Rechnung"
 
 [labels.de.model.invoice_line.field.invoice_id]

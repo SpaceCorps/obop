@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Button, fmt, inSentence, msg, t } from "@obop/ui";
-import { search, type ModelMeta, type Row } from "./api.ts";
-import { collect } from "./bulk.ts";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { fmt, getCurrency, inSentence, t } from "@obop/ui";
+import { search, type FieldMeta, type ModelMeta, type Row } from "./api.ts";
+import { collect, EXPORT_CAP } from "./bulk.ts";
 import type { App } from "./Chrome.tsx";
 import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
 import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.ts";
-import { isState, visibleFields } from "./format.ts";
-import { DriveBrowser, takePendingDriveDefaults, useDriveStatus } from "./DriveBrowser.tsx";
+import { csvCell, download, plainText, rowCurrency, visibleFields } from "./format.ts";
 import { ImportDialog } from "./ImportDialog.tsx";
 import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
+import { PHONE_QUERY, useMedia } from "./media.ts";
+import { pluralTitle } from "./plural.ts";
+import { defaultView, listColumns, newDefaults } from "./presentation.ts";
 import { serverMessage } from "./serverMessage.ts";
 import {
   applyFacets,
@@ -20,18 +22,26 @@ import {
   type Cond,
   type ViewState,
 } from "./query.ts";
-import { RecordPanel } from "./RecordPanel.tsx";
-import type { Go, Route } from "./route.ts";
+import { RecordPanel, useMissingRecord } from "./RecordPanel.tsx";
+import { prefersFullPage } from "./recordLayout.ts";
+import { indexModels } from "./presentation.ts";
+import { isFull, type Go, type Route } from "./route.ts";
 import { isWithheldError, onServer, toServer } from "./serverQuery.ts";
 import { EmptyState, Skeleton } from "./ui.tsx";
 import { useRecord, useServerRows } from "./useServer.ts";
-import { CalendarView, dateFields } from "./views/CalendarView.tsx";
-import { GraphView } from "./views/GraphView.tsx";
-import { KanbanView, kanbanField } from "./views/KanbanView.tsx";
-import { ListView } from "./views/ListView.tsx";
-import { PivotView } from "./views/PivotView.tsx";
+import { dateFields } from "./views/CalendarView.tsx";
+import { hasGallery } from "./views/GalleryView.tsx";
+import { kanbanField } from "./views/KanbanView.tsx";
+import { listOrder } from "./views/listLayout.ts";
+import { VIEW_REGISTRY, viewOf } from "./views/registry.ts";
 import type { ViewProps } from "./views/types.ts";
 import { governedNames, moveRecord } from "./workflow.ts";
+
+/** What a page that wraps ModelPage (a registration of extensions.ts) may do with it. */
+export type ModelPageApi = {
+  /** Open the new record form with some fields filled in. */
+  openNew: (defaults?: Record<string, unknown>) => void;
+};
 
 type Props = {
   app: App;
@@ -42,15 +52,18 @@ type Props = {
   extra?: ReactNode;
   /** Replaces the generic "New" form, for a record an app creates with its own guided flow. */
   onNew?: () => void;
+  /**
+   * Asked once, when the page opens on a new record (`id=new`): the values the form starts with
+   * (a file picked on another page). `null`: none.
+   */
+  takeNewDefaults?: () => Record<string, unknown> | null;
+  /** Drawn after the page and its dialogs: an app's own dialog, which may open the new form. */
+  after?: (page: ModelPageApi) => ReactNode;
 };
 
-const VIEWS: Record<string, ViewDef> = {
-  list: { id: "list", label: msg("List"), icon: "list" },
-  kanban: { id: "kanban", label: msg("Kanban"), icon: "kanban" },
-  calendar: { id: "calendar", label: msg("Calendar"), icon: "calendar" },
-  pivot: { id: "pivot", label: msg("Pivot"), icon: "pivot" },
-  graph: { id: "graph", label: msg("Graph"), icon: "graph" },
-};
+const VIEWS: Record<string, ViewDef> = Object.fromEntries(
+  Object.values(VIEW_REGISTRY).map((v) => [v.id, { id: v.id, label: v.label, icon: v.icon }]),
+);
 
 const PAGE_SIZES = [25, 50, 100, 200];
 
@@ -62,22 +75,53 @@ function storedView(model: string): string {
   }
 }
 
-export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Props) {
+/** The signed-in user name (App keeps it in the session), for "Mine" and `$user` defaults. */
+function signedInUser(): string {
+  try {
+    return sessionStorage.getItem("obop-user") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** A single-value `is` facet on a ref: the parent a list of children is opened from. */
+function parentFacet(facets: Cond[], fields: FieldMeta[]) {
+  if (facets.length !== 1) return undefined;
+  const c = facets[0]!;
+  if (c.op !== "is" || c.v.length !== 1 || !c.v[0]) return undefined;
+  const f = fields.find((x) => x.name === c.f);
+  return f?.kind === "ref" && f.to ? { field: f, id: c.v[0] } : undefined;
+}
+
+export function ModelPage({
+  app,
+  model,
+  route,
+  go,
+  extra: appExtra,
+  onNew,
+  takeNewDefaults,
+  after,
+}: Props) {
   const d = useData();
   const title = modelTitle(model, app.module.id);
+  const plural = pluralTitle(model, title);
+  const user = useMemo(signedInUser, []);
+  const phone = useMedia(PHONE_QUERY);
   const state = useMemo(() => decodeState(route.st), [route.st]);
+  // The search text as it is typed (ControlPanel, 250 ms after the last key), before it becomes a
+  // chip: it narrows the records at once, and is not part of the address.
+  const [live, setLive] = useState("");
+  const liveCond = useMemo<Cond | null>(() => (live ? { op: "search", v: live } : null), [live]);
+  const query = useMemo<ViewState>(
+    () => (liveCond ? { ...state, facets: [...state.facets, liveCond] } : state),
+    [state, liveCond],
+  );
   // The dialogs a view opens (bulk edit and delete) share one slot, which the list view rewrites
   // whenever it mounts. The import dialog is the page's own, so it has a slot of its own: the first
   // import into an empty model turns the empty state into the list, and that mount must not close it.
   const [extraDialog, setExtraDialog] = useState<ReactNode>(null);
   const [importing, setImporting] = useState(false);
-  const [drive, setDrive] = useState(false);
-  // A file imported on the Drive page opens the new record form with its values.
-  const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>(() => {
-    const v =
-      route.id === "new" && model.name === "documents_document" ? takePendingDriveDefaults() : null;
-    return v ? { ...v, kind: "contract", confidentiality: "internal" } : {};
-  });
   const [pageSize, setPageSizeState] = useState(() => {
     const n = readPref<number>("obop-pagesize", 100);
     return PAGE_SIZES.includes(n) ? n : 100;
@@ -100,28 +144,30 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     const ids = ["list"];
     const canGroup = groupable(fields).length > 0;
     if (canGroup) ids.push("kanban");
+    // Cards with the record's picture (Products, Contacts, Listings), or a package that asks for them.
+    if (hasGallery(fields) || model.ui?.default_view === "gallery") ids.push("gallery");
     if (dateFields(fields).length) ids.push("calendar");
     if (canGroup) ids.push("pivot", "graph");
     return ids;
-  }, [fields]);
+  }, [fields, model]);
   const preferred = route.view || storedView(model.name);
-  const view = available.includes(preferred)
-    ? preferred
-    : fields.some(isState) && available.includes("kanban")
-      ? "kanban"
-      : "list";
+  const view = available.includes(preferred) ? preferred : defaultView(model, available);
 
   // The list pages on the server (D49) whenever the server can answer the whole search. Kanban,
   // pivot, graph and calendar ask the server for counts, sums and pages (D4, `aggregate`) whenever
   // the filter is expressible. Anything else (an any-field search, a "contains" on a select, grouping
   // the list, a sort by a ref) loads the records, up to 5,000, and works in the browser. See
   // serverQuery.ts.
+  // Without a sort of the person's own, the list starts in the model's default order (L2.4).
+  const listDefault = useMemo(() => listOrder(model, fields), [model, fields]);
   // i18n-memo-ok: a range bound is read the same in every language and region (a dot or a comma is
   // taken as the decimal mark); the only reader of the i18n store is fmt.exponent(), the digits of
   // the instance currency, which a change of language or region does not change
-  const plan = useMemo(() => toServer(state, fields), [state, fields]);
-  const grouped = state.group.length > 0;
-  const serverMode = view === "list" && onServer(plan, state);
+  const plan = useMemo(() => toServer(query, fields, listDefault), [query, fields, listDefault]);
+  // The search's order: the person's sort, else the list's default (listLayout.ts `listOrder`).
+  const order = plan.order;
+  const grouped = query.group.length > 0;
+  const serverMode = view === "list" && onServer(plan, query);
   const aggMode = view !== "list" && plan.rest.length === 0;
   const page = Math.max(1, parseInt(route.page, 10) || 1);
   const offset = (page - 1) * pageSize;
@@ -133,9 +179,16 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     enabled: serverMode || aggMode,
     model: model.name,
     filter: plan.filter,
-    order: aggMode ? [] : plan.order,
+    order: aggMode ? [] : order,
     offset: aggMode ? 0 : offset,
     limit: aggMode ? 1 : pageSize,
+    // Only an order by text follows the language (the server collates it in the locale).
+    collated:
+      !aggMode &&
+      order.some((o) => {
+        const k = fields.find((f) => f.name === o.field)?.kind;
+        return k === "text" || k === "longtext" || k === "select" || k === "ref";
+      }),
   });
   useEffect(() => {
     if (srv.denied.length || serverDenied.length) setServerDenied(srv.denied);
@@ -148,21 +201,44 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
 
   const base = useMemo(() => ({ app: route.app, model: route.model }), [route.app, route.model]);
   const put = useCallback(
-    (patch: { view?: string; id?: string; st?: string; page?: string }, replace = false) =>
+    (
+      patch: { view?: string; id?: string; st?: string; page?: string; full?: string },
+      replace = false,
+    ) => {
+      const id = patch.id ?? route.id;
       go(
         {
           ...base,
           view: patch.view ?? route.view,
-          id: patch.id ?? route.id,
+          id,
           st: patch.st ?? route.st,
           page: patch.page ?? route.page,
+          // The record as a page (`&full=1`) stays while a record is open, also while the view or
+          // the search changes; closing it goes back to the list.
+          full: patch.full ?? (id ? route.full : ""),
         },
         { replace },
-      ),
-    [go, base, route.view, route.id, route.st, route.page],
+      );
+    },
+    [go, base, route.view, route.id, route.st, route.page, route.full],
   );
   // A new search starts on the first page.
   const setState = useCallback((s: ViewState) => put({ st: encodeState(s), page: "" }), [put]);
+  // What a view hands back carries the live text as a facet: it stays out of the address.
+  const setViewState = useCallback(
+    (s: ViewState) =>
+      setState(liveCond ? { ...s, facets: s.facets.filter((c) => c !== liveCond) } : s),
+    [setState, liveCond],
+  );
+  // Typing narrows from the first page on, as a new search does.
+  const onLive = useCallback(
+    (text: string) => {
+      if (text === live) return;
+      setLive(text);
+      if (route.page && route.page !== "1") put({ page: "" }, true);
+    },
+    [live, put, route.page],
+  );
 
   // A favorite marked default applies when the model opens without any search of its own.
   useEffect(() => {
@@ -187,10 +263,16 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     () =>
       serverMode || aggMode
         ? []
-        : sortRows(applyFacets(rows, state.facets, fields, d.lookup), state.sort, fields, d.lookup),
+        : sortRows(
+            applyFacets(rows, query.facets, fields, d.lookup),
+            query.sort,
+            fields,
+            d.lookup,
+            listDefault,
+          ),
     // lookup changes when ref labels load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serverMode, aggMode, rows, state.facets, state.sort, fields, d.version, d.lang],
+    [serverMode, aggMode, rows, query.facets, query.sort, fields, listDefault, d.version, d.lang],
   );
   const paging = view === "list" && !grouped;
   const shown: Row[] = aggMode
@@ -221,24 +303,51 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     put,
   ]);
 
-  // Documents can be brought in from the connected Google Drive.
-  const driveField = model.fields.some((f) => f.name === "attachment" && f.kind === "file")
-    ? `${model.name}.attachment`
-    : "";
-  const { may: mayDrive, canSetUp: canSetUpDrive } = useDriveStatus(
-    d.token,
-    model.name === "documents_document" && !!driveField,
+  /**
+   * The values a new record starts with (UI plan 2.9, B5): what the caller gives (a kanban column,
+   * a calendar day, a quick-create title) over the single-value filters of the search (the parent
+   * a list of lines was opened from), over the defaults of presentation.ts `newDefaults` (today,
+   * the instance currency, `active`, the package's `default` hints).
+   */
+  const startValues = useCallback(
+    (given: Record<string, unknown> = {}) =>
+      newDefaults(model, {
+        facets: state.facets,
+        route: given,
+        user,
+        instanceCurrency: getCurrency(),
+      }),
+    [model, state.facets, user],
   );
+  const [newValues, setNewValues] = useState<Record<string, unknown>>(() =>
+    route.id === "new" ? startValues(takeNewDefaults?.() ?? {}) : {},
+  );
+  // `id=new` reached without openNew (the palette, a link): start from the search all the same.
+  const openedHere = useRef(route.id === "new");
+  useEffect(() => {
+    if (route.id !== "new") {
+      openedHere.current = false;
+      return;
+    }
+    if (!openedHere.current) setNewValues(startValues());
+    openedHere.current = true;
+    // only when the route turns to a new record
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.id]);
 
-  const open = (id: string) => put({ id });
-  const close = useCallback(() => put({ id: "" }), [put]);
-  const openNew = (defaults: Record<string, unknown> = {}) => {
+  // A record with lines or many fields opens as a page (record form, plan 2.6).
+  const asPage = useMemo(() => prefersFullPage(model, indexModels(d.modules)), [model, d.modules]);
+  const open = (id: string) => put({ id, full: asPage ? "1" : "" });
+  const close = useCallback(() => put({ id: "", full: "" }), [put]);
+  const openNew = (given: Record<string, unknown> = {}) => {
     if (onNew) return onNew();
-    setNewDefaults(defaults);
-    put({ id: "new" });
+    openedHere.current = true;
+    setNewValues(startValues(given));
+    put({ id: "new", full: asPage ? "1" : "" });
   };
   const found = useRecord(model.name, route.id, serverMode || aggMode ? srv.rows : rows);
   const selected = route.id === "new" ? "new" : found;
+  useMissingRecord(found, route.id, () => put({ id: "", full: "" }, true));
 
   const governed = useMemo(() => governedNames(model), [model]);
   const approval = (what: "change" | "create", planId: string) => {
@@ -262,8 +371,9 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     return serverMessage(r.message);
   };
   const create: ViewProps["create"] = async (body) => {
+    // A quick create (a kanban card) starts from the same values as the full form.
+    const clean = startValues(body);
     // A governed field starts at its first option; the server refuses anything else.
-    const clean = { ...body };
     for (const g of governed) delete clean[g];
     // Computed values and numbers are the server's.
     for (const f of model.fields) if (f.computed || f.sequence) delete clean[f.name];
@@ -307,12 +417,48 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
       async (offset, limit) => {
         const q: Record<string, unknown> = { offset, limit };
         if (plan.filter.length) q.filter = plan.filter;
-        if (plan.order.length) q.order = plan.order;
+        if (order.length) q.order = order;
         const r = await search(d.token, model.name, q);
         return "error" in r ? { error: r.error } : { rows: r.rows, total: r.total };
       },
       o.cap,
       o,
+    );
+  };
+
+  /**
+   * The phone's Export (its ⋯ menu): every record the search matches, with the list's columns.
+   * In aggregate views the page holds no rows, so the records are fetched from the server.
+   */
+  const exportCsv = async () => {
+    const got = !aggMode
+      ? await fetchAll({ cap: EXPORT_CAP })
+      : await collect(async (offset, limit) => {
+          const q: Record<string, unknown> = { offset, limit, order };
+          if (plan.filter.length) q.filter = plan.filter;
+          const r = await search(d.token, model.name, q);
+          return "error" in r ? { error: r.error } : { rows: r.rows, total: r.total };
+        }, EXPORT_CAP);
+    if ("error" in got) return d.notify(serverMessage(got.error), "error");
+    const chosen = readPref<string[] | null>(`obop-list-cols:${model.name}`, null);
+    const cols = chosen
+      ? fields.filter((f) => chosen.includes(f.name))
+      : listColumns(model, 1920, { fields });
+    const head = cols.map((f) => csvCell(fieldTitle(f))).join(",");
+    const body = got.rows.map((r) =>
+      cols.map((f) => csvCell(plainText(f, r[f.name], d.refText, rowCurrency(r)))).join(","),
+    );
+    // Inside the phone host app no file was saved, and the app's notice has said so.
+    if (!download(`${model.name}.csv`, [head, ...body].join("\r\n") + "\r\n")) return;
+    d.notify(
+      got.truncated
+        ? t("Exported the first {count} of {total} records only", {
+            count: fmt.integer(got.rows.length),
+            total: fmt.integer(got.total),
+          })
+        : t("{count, plural, one {Exported # record} other {Exported # records}}", {
+            count: got.rows.length,
+          }),
     );
   };
 
@@ -322,9 +468,11 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     fields,
     rows: shown,
     setDialog: setExtraDialog,
-    server: aggMode ? { filter: plan.filter, order: plan.order } : undefined,
-    state,
-    setState,
+    // A board's cards and a calendar keep the server's order unless the search sorts them; the
+    // list's default order (newest first) is the list's.
+    server: aggMode ? { filter: plan.filter, order: query.sort ? plan.order : [] } : undefined,
+    state: query,
+    setState: setViewState,
     selectedId: route.id,
     onOpen: open,
     canCreate: model.can_create,
@@ -352,16 +500,85 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
       : undefined,
   };
 
-  const filtering = state.facets.length > 0;
+  const View = viewOf(view).component;
   const kf = view === "kanban" ? kanbanField(fields, state.group[0]) : undefined;
   const loaded = serverMode || aggMode ? srv.loaded : store.loaded;
   const error = serverMode || aggMode ? srv.error : store.error;
   const withheldError = !!error && isWithheldError(error);
-  const modelEmpty =
-    serverMode || aggMode
-      ? srv.loaded && !srv.error && srv.total === 0 && plan.filter.length === 0
-      : store.loaded && rows.length === 0;
   const truncated = !serverMode && !aggMode && store.loaded && store.total > rows.length;
+  const canImport = !!model.can_bulk_create;
+  const parent = parentFacet(state.facets, fields);
+  const clearSearch = () => {
+    setLive("");
+    setState({ ...state, facets: [] });
+  };
+
+  /** What the page shows when nothing matches: the first record, a child's first, or no match. */
+  const empty = (): ReactNode => {
+    if (query.facets.length === 0)
+      return (
+        <EmptyState
+          icon="sparkle"
+          title={t("No {model} yet", { model: inSentence(plural) })}
+          hint={
+            model.access
+              ? t("You see only the records that are yours or shared with you.")
+              : model.can_create
+                ? canImport
+                  ? t("Create the first one, or bring them in from a spreadsheet.")
+                  : t("Create the first one to get started.")
+                : t("Records you create show up here.")
+          }
+          action={
+            model.can_create
+              ? {
+                  label: t("Create the first {model}", { model: inSentence(title) }),
+                  onClick: () => openNew(),
+                }
+              : undefined
+          }
+          secondary={
+            canImport
+              ? { label: t("Import a CSV file"), onClick: () => setImporting(true) }
+              : undefined
+          }
+        />
+      );
+    if (parent && !liveCond) {
+      const owner = d.refText(parent.field.to!, parent.id);
+      return (
+        <EmptyState
+          icon="plus"
+          title={t("No {model} on {parent} yet", { model: inSentence(plural), parent: owner })}
+          hint={t("Add the first one here; it is linked to {parent}.", { parent: owner })}
+          action={
+            model.can_create
+              ? {
+                  label: t("Add {model}", { model: inSentence(title) }),
+                  onClick: () => openNew(),
+                }
+              : undefined
+          }
+          secondary={{
+            label: t("Show all {model}", { model: inSentence(plural) }),
+            onClick: clearSearch,
+          }}
+        />
+      );
+    }
+    return (
+      <EmptyState
+        icon="search"
+        title={t("No matches")}
+        hint={
+          live
+            ? t("Nothing fits “{text}” with the current filters.", { text: live })
+            : t("No record fits the current search.")
+        }
+        action={{ label: t("Clear filters"), onClick: clearSearch }}
+      />
+    );
+  };
 
   return (
     <>
@@ -369,11 +586,14 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
         <ControlPanel
           appName={app.name}
           title={title}
+          heading={plural}
           model={model.name}
+          meta={model}
           fields={fields}
           canCreate={model.can_create}
           onNew={() => openNew()}
-          onImport={model.can_bulk_create ? () => setImporting(true) : undefined}
+          onImport={canImport ? () => setImporting(true) : undefined}
+          onExport={() => void exportCsv()}
           state={state}
           setState={setState}
           lookup={d.lookup}
@@ -382,9 +602,11 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
           setView={setView}
           applyFavorite={applyFavorite}
           count={total}
+          onLive={onLive}
+          user={user}
           extra={
             <>
-              {kf && (
+              {kf && !phone && (
                 <label className="inline-field">
                   <span>{t("Group by")}</span>
                   <select
@@ -400,19 +622,6 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
                     ))}
                   </select>
                 </label>
-              )}
-              {mayDrive && driveField && (
-                <Button icon="documents" onClick={() => setDrive(true)}>
-                  {t("From Google Drive")}
-                </Button>
-              )}
-              {canSetUpDrive && driveField && (
-                <Button
-                  icon="documents"
-                  onClick={() => go({ app: "connectors", model: "google_drive" })}
-                >
-                  {t("Connect Google Drive")}
-                </Button>
               )}
               {appExtra}
             </>
@@ -442,82 +651,47 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
               hint={serverMessage(error)}
               action={{
                 label: t("Clear filters and sorting"),
-                onClick: () => put({ st: "", page: "" }),
+                onClick: () => {
+                  setLive("");
+                  put({ st: "", page: "" });
+                },
               }}
             />
           ) : error ? (
             <EmptyState title={t("Could not load records")} hint={serverMessage(error)} />
           ) : !loaded ? (
             <Skeleton rows={8} cols={Math.min(fields.length, 5)} />
-          ) : modelEmpty ? (
-            <EmptyState
-              title={t("No {model} yet", { model: inSentence(title) })}
-              hint={
-                model.access
-                  ? t("You see only the records that are yours or shared with you.")
-                  : t("Records you create show up here.")
-              }
-              action={
-                model.can_create
-                  ? {
-                      label: t("Create the first {model}", { model: inSentence(title) }),
-                      onClick: () => openNew(),
-                    }
-                  : undefined
-              }
-            />
-          ) : total === 0 && view !== "calendar" ? (
-            <EmptyState
-              title={t("No matches")}
-              hint={t("No record fits the current search.")}
-              action={
-                filtering
-                  ? { label: t("Clear filters"), onClick: () => setState({ ...state, facets: [] }) }
-                  : undefined
-              }
-            />
-          ) : view === "kanban" ? (
-            <KanbanView {...vp} />
-          ) : view === "pivot" ? (
-            <PivotView {...vp} />
-          ) : view === "graph" ? (
-            <GraphView {...vp} />
-          ) : view === "calendar" ? (
-            <CalendarView {...vp} />
+          ) : total === 0 && (view !== "calendar" || query.facets.length === 0) ? (
+            empty()
           ) : (
-            <ListView {...vp} />
+            <View {...vp} />
           )}
         </div>
       </section>
       {extraDialog}
-      {drive && (
-        <DriveBrowser
-          token={d.token}
-          field={driveField}
-          onClose={() => setDrive(false)}
-          onPicked={(v) => {
-            setDrive(false);
-            openNew({ ...v, kind: "contract", confidentiality: "internal" });
-          }}
-        />
-      )}
+      {after?.({ openNew })}
       {importing && (
         <ImportDialog model={model} title={title} onClose={() => setImporting(false)} />
       )}
       {selected && (
         <RecordPanel
-          key={route.id === "new" ? `new-${JSON.stringify(newDefaults)}` : route.id}
+          key={route.id === "new" ? `new-${JSON.stringify(newValues)}` : route.id}
           model={model}
           fields={fields}
           row={selected === "new" ? null : selected}
-          defaults={newDefaults}
+          defaults={newValues}
           withheld={denied}
           title={title}
           onClose={close}
+          siblings={shown.map((r) => r.id)}
+          onOpen={(id) => put({ id })}
+          full={isFull(route)}
+          onFull={(on) => put({ full: on ? "1" : "" }, true)}
+          onDuplicate={(values) => openNew(values)}
           onSaved={(id) =>
-            // A new record sits at the end of an unsorted list: show the page it is on.
-            route.id === "new" && paging && !state.sort
-              ? put({ id, page: String(Math.max(1, Math.ceil((total + 1) / pageSize))) })
+            // A list in its default order shows the newest first: a new record is on the first page.
+            route.id === "new" && paging && !state.sort && listDefault[0]?.dir === "desc"
+              ? put({ id, page: "" })
               : put({ id })
           }
         />

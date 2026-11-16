@@ -23,3 +23,7 @@ postgres = "0.19"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# `testing::TempPath`: a directory of a test's own, removed again.
+obop-storage = { workspace = true, features = ["test-support"] }

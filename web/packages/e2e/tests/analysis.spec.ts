@@ -124,7 +124,8 @@ test.describe("calendar", () => {
     const day = page.locator(".daycell:not(.out) .daynum", { hasText: /^15$/ });
     await day.click();
     const panel = page.getByRole("complementary", { name: /record$/ });
-    await expect(panel.getByLabel("Due")).toHaveValue(/-15$/);
+    // The date reads in the region's own order (11/15/2026, 15.11.2026, 2026-11-15).
+    await expect(panel.getByLabel("Due")).toHaveValue(/(^|\D)15(\D|$)/);
     await panel.getByLabel("Title").fill(title);
     await panel.getByRole("button", { name: "Create" }).click();
     await expect(page.locator(".toast").filter({ hasText: "created" })).toBeVisible();

@@ -12,7 +12,7 @@ use crate::history::{ChangeCursor, ChangePage, ChangeQuery, HistoryQuery};
 use crate::sysfields::{self, ChangeRow, Clock, fmt_micros, parse_micros};
 use serde_json::json;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering::SeqCst};
+use std::sync::atomic::{AtomicI64, Ordering::SeqCst};
 
 /// 2026-10-26 in microseconds, an arbitrary but realistic start for the fake clock.
 const T0: i64 = 1_793_000_000_000_000;
@@ -71,26 +71,13 @@ fn patch(m: &str, id: &str, v: J, expect: Vec<(&str, J)>) -> Op {
     }
 }
 
-/// A directory that is removed when the test is over. Bound to a name by its user.
-struct TempDir(std::path::PathBuf);
+/// A directory of this run's own that is removed when the test is over. Bound to a name by its
+/// user.
+struct TempDir(crate::testing::TempPath);
 
 impl TempDir {
     fn new() -> TempDir {
-        static N: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "obop-sys-{}-{}",
-            std::process::id(),
-            N.fetch_add(1, SeqCst)
-        ));
-        std::fs::create_dir_all(&dir).expect("a temporary directory");
-        TempDir(dir)
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        // A file that cannot be removed is a leftover in the temporary directory, nothing more.
-        let _ = std::fs::remove_dir_all(&self.0);
+        TempDir(crate::testing::TempPath::dir("obop-sys"))
     }
 }
 
@@ -138,7 +125,7 @@ impl Fx {
     fn sqlite_file() -> Fx {
         let (now, clock) = clock();
         let dir = TempDir::new();
-        let path = dir.0.join("sys.db");
+        let path = dir.0.path().join("sys.db");
         let sqlite =
             Sqlite::open_with_clock(&path.display().to_string(), clock).expect("a database file");
         Fx {
@@ -1848,7 +1835,7 @@ fn the_history_rides_the_export_and_comes_back_with_its_numbers() {
     let file = Fx::sqlite_file();
     file.track_plain("deal", &["n"]);
     file.ok("ann", &[ins("deal", "d1", json!({"n": 1}))]);
-    let path = file._dir.as_ref().unwrap().0.join("sys.db");
+    let path = file._dir.as_ref().unwrap().0.path().join("sys.db");
     let again = crate::open(&format!("sqlite://{}", path.display())).unwrap();
     assert_eq!(
         again
@@ -2005,7 +1992,7 @@ const SCHEMA_BEFORE_THE_HISTORY: &str = "PRAGMA journal_mode = WAL;
 fn a_database_from_before_the_history_opens_without_a_schema_change_and_gets_the_table_when_needed()
 {
     let dir = TempDir::new();
-    let path = dir.0.join("old.db");
+    let path = dir.0.path().join("old.db");
     {
         let c = rusqlite::Connection::open(&path).unwrap();
         c.execute_batch(SCHEMA_BEFORE_THE_HISTORY).unwrap();

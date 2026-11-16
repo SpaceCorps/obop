@@ -5,6 +5,7 @@ summary = "Plan de cuentas, diarios, impuestos, periodos fiscales y asientos. Co
 
 [labels.es.model.accounting_account]
 name = "Cuenta"
+plural = "Plan de cuentas"
 description = "Una cuenta del plan de cuentas"
 
 [labels.es.model.accounting_account.field.code]
@@ -47,6 +48,7 @@ description = "Observaciones internas sobre el uso de la cuenta"
 
 [labels.es.model.accounting_journal]
 name = "Diario"
+plural = "Diarios"
 description = "Un diario que agrupa asientos de un mismo tipo (ventas, compras, banco, caja, varios)"
 
 [labels.es.model.accounting_journal.field.name]
@@ -82,6 +84,7 @@ description = "Indica si el diario todavía puede recibir asientos"
 
 [labels.es.model.accounting_tax]
 name = "Impuesto"
+plural = "Impuestos"
 description = "Un tipo de impuesto al que pueden hacer referencia las líneas de asiento"
 
 [labels.es.model.accounting_tax.field.name]
@@ -115,7 +118,11 @@ description = "Indica si el impuesto todavía se puede elegir en líneas nuevas"
 
 [labels.es.model.accounting_fiscal_year]
 name = "Ejercicio fiscal"
+plural = "Ejercicios fiscales"
 description = "Un ejercicio fiscal, que se abre y se cierra como un todo"
+
+[labels.es.model.accounting_fiscal_year.guard]
+message = "Un ejercicio cerrado no se puede modificar. Vuelva a abrirlo para corregirlo."
 
 [labels.es.model.accounting_fiscal_year.field.name]
 label = "Nombre"
@@ -147,7 +154,11 @@ description = "Reabrir un ejercicio fiscal cerrado para corregirlo (solo aprobad
 
 [labels.es.model.accounting_period]
 name = "Periodo"
+plural = "Periodos"
 description = "Un periodo contable (normalmente un mes) dentro de un ejercicio fiscal"
+
+[labels.es.model.accounting_period.guard]
+message = "Un periodo cerrado no se puede modificar. Vuelva a abrirlo para corregirlo."
 
 [labels.es.model.accounting_period.field.fiscal_year_id]
 label = "Ejercicio fiscal"
@@ -183,7 +194,11 @@ description = "Reabrir un periodo cerrado (solo aprobadores)"
 
 [labels.es.model.accounting_move]
 name = "Movimiento"
+plural = "Movimientos"
 description = "Un asiento contable: un conjunto fechado de líneas de debe y haber en un diario"
+
+[labels.es.model.accounting_move.guard]
+message = "Los asientos contabilizados, cancelados o revertidos, y los fechados en un periodo cerrado, no se pueden modificar. Revierta un asiento contabilizado para corregirlo."
 
 [labels.es.model.accounting_move.field.journal_id]
 label = "Diario"
@@ -221,7 +236,7 @@ reversed = "Revertido"
 
 [labels.es.model.accounting_move.action.post]
 label = "Contabilizar"
-description = "Contabilizar un asiento en borrador en el libro mayor y numerarlo (solo aprobadores; se rechaza si el debe y el haber no son iguales)"
+description = "Contabilizar un asiento en borrador en el libro mayor y numerarlo (solo aprobadores; se rechaza sin importe o si el debe y el haber no son iguales)"
 
 [labels.es.model.accounting_move.action.cancel]
 label = "Cancelar"
@@ -233,7 +248,11 @@ description = "Marcar un asiento contabilizado como revertido; el asiento contra
 
 [labels.es.model.accounting_move_line]
 name = "Línea de movimiento"
+plural = "Líneas de movimiento"
 description = "Una línea de debe o de haber de un asiento contable"
+
+[labels.es.model.accounting_move_line.guard]
+message = "Las líneas de un asiento contabilizado, cancelado o revertido, o fechado en un periodo cerrado, no se pueden modificar."
 
 [labels.es.model.accounting_move_line.field.move_id]
 label = "Movimiento"
@@ -273,7 +292,11 @@ description = "Indica si la línea se ha cruzado con un pago"
 
 [labels.es.model.accounting_bank_statement_line]
 name = "Línea de extracto bancario"
+plural = "Líneas de extracto bancario"
 description = "Una línea de extracto bancario pendiente de cruzar con asientos"
+
+[labels.es.model.accounting_bank_statement_line.guard]
+message = "Una transacción bancaria conciliada no se puede modificar."
 
 [labels.es.model.accounting_bank_statement_line.field.journal_id]
 label = "Diario"
@@ -303,6 +326,10 @@ description = "Cuenta bancaria del ordenante o del beneficiario"
 label = "Línea de movimiento"
 description = "La línea de asiento con la que se cruzó esta línea de extracto"
 
+[labels.es.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Partida abierta liquidada"
+description = "La partida abierta de cliente o proveedor que liquida este pago; dos transacciones bancarias no pueden liquidar la misma partida"
+
 [labels.es.model.accounting_bank_statement_line.field.state]
 label = "Estado"
 description = "Estado del cruce: sin cruzar, cruzada, conciliada"
@@ -314,7 +341,7 @@ reconciled = "Conciliado"
 
 [labels.es.model.accounting_bank_statement_line.action.match]
 label = "Emparejar"
-description = "Registrar que la línea corresponde a una línea de asiento"
+description = "Registrar que la línea corresponde a la línea de asiento indicada en move_line_id"
 
 [labels.es.model.accounting_bank_statement_line.action.reconcile]
 label = "Conciliar"
@@ -331,3 +358,12 @@ description = "Suma de los importes del debe de las líneas del asiento (unidad 
 [labels.es.model.accounting_move.field.total_credit]
 label = "Total haber"
 description = "Suma de los importes del haber de las líneas del asiento (unidad menor de la moneda)"
+
+[labels.es.model.accounting_move.action.post.assert.has_amount]
+message = "El asiento no tiene importe: añade líneas de debe y haber antes de contabilizarlo"
+
+[labels.es.model.accounting_move.action.post.assert.balanced]
+message = "El asiento no cuadra: el total del debe y el total del haber deben ser iguales"
+
+[labels.es.model.accounting_bank_statement_line.action.match.assert.has_line]
+message = "Elige la línea de asiento a la que corresponde esta transacción bancaria"

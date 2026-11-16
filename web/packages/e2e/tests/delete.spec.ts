@@ -6,6 +6,11 @@ const rowOf = (page: Page, name: string, text: string) =>
   grid(page, name).getByRole("row", { name: new RegExp(text) });
 const panelOf = (page: Page, name: string) =>
   page.getByRole("complementary", { name: `${name} record` });
+/** Delete waits in the record's More actions menu (record form, plan 2.6). */
+const deleteFrom = async (panel: ReturnType<Page["locator"]>) => {
+  await panel.getByRole("button", { name: "More actions" }).click();
+  await panel.page().getByRole("menuitem", { name: "Delete" }).click();
+};
 
 test.describe("delete", () => {
   test("a record is deleted from its panel after an in-app confirmation", async ({
@@ -20,7 +25,7 @@ test.describe("delete", () => {
     await api.create("root", "lead", { title: keep });
     await signIn("root", `/crm/lead?view=list&id=${lead.id}`);
     const panel = panelOf(page, "Lead");
-    await panel.getByRole("button", { name: "Delete" }).click();
+    await deleteFrom(panel);
 
     // The dialog names the record; Cancel (the default focus) keeps it.
     const dialog = page.getByRole("alertdialog", { name: "Delete lead?" });
@@ -30,7 +35,7 @@ test.describe("delete", () => {
     await expect(dialog).toHaveCount(0);
     expect((await api.list("root", "lead")).some((l) => l.id === lead.id)).toBe(true);
 
-    await panel.getByRole("button", { name: "Delete" }).click();
+    await deleteFrom(panel);
     await dialog.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.locator(".toast").filter({ hasText: "Lead deleted" })).toBeVisible();
     await expect(panel).toHaveCount(0);
@@ -51,14 +56,14 @@ test.describe("delete", () => {
     const party = await api.create("root", "party", { name });
     const order = await api.create("root", "sale_order", { party_id: party.id });
     await signIn("root", `/base/party?view=list&id=${party.id}`);
-    await panelOf(page, "Party").getByRole("button", { name: "Delete" }).click();
-    const dialog = page.getByRole("alertdialog", { name: "Delete party?" });
+    await deleteFrom(panelOf(page, "Contact"));
+    const dialog = page.getByRole("alertdialog", { name: "Delete contact?" });
     await dialog.getByRole("button", { name: "Delete", exact: true }).click();
 
     // The server's refusal is explained in the dialog, which names the model and links to the record.
-    const failed = page.getByRole("alertdialog", { name: "Could not delete party" });
+    const failed = page.getByRole("alertdialog", { name: "Could not delete contact" });
     await expect(failed.getByRole("alert")).toContainText("still used by other records");
-    await expect(failed).toContainText("Sale order (1)");
+    await expect(failed).toContainText("Quotation / Order (1)");
     const link = failed.getByRole("link");
     await expect(link).toHaveAttribute("href", new RegExp(`#/sales/sale_order\\?.*id=${order.id}`));
     expect((await api.list("root", "party")).some((p) => p.id === party.id)).toBe(true);
@@ -67,14 +72,14 @@ test.describe("delete", () => {
     await link.click();
     await expect(failed).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`#/sales/sale_order.*id=${order.id}`));
-    await expect(panelOf(page, "Sale order")).toBeVisible();
+    await expect(panelOf(page, "Quotation / Order")).toBeVisible();
 
     // Once nothing refers to it any more, the delete goes through.
     await api.run("root", "sale_order.delete", { id: order.id });
     await page.goto(`/#/base/party?view=list&id=${party.id}`);
-    await panelOf(page, "Party").getByRole("button", { name: "Delete" }).click();
+    await deleteFrom(panelOf(page, "Contact"));
     await dialog.getByRole("button", { name: "Delete", exact: true }).click();
-    await expect(page.locator(".toast").filter({ hasText: "Party deleted" })).toBeVisible();
+    await expect(page.locator(".toast").filter({ hasText: "Contact deleted" })).toBeVisible();
     expect((await api.list("root", "party")).some((p) => p.id === party.id)).toBe(false);
   });
 
@@ -130,18 +135,18 @@ test.describe("delete", () => {
     await search.fill(stem);
     await search.press("Enter");
     await expect(page.locator(".controlpanel .count")).toHaveText("2 records");
-    await grid(page, "Party").getByRole("checkbox", { name: "Select all records" }).check();
+    await grid(page, "Contact").getByRole("checkbox", { name: "Select all records" }).check();
     await page
       .getByRole("toolbar", { name: "Bulk actions" })
       .getByRole("button", { name: "Delete" })
       .click();
     await page
-      .getByRole("alertdialog", { name: "Delete 2 parties?" })
-      .getByRole("button", { name: "Delete 2 parties" })
+      .getByRole("alertdialog", { name: "Delete 2 contacts?" })
+      .getByRole("button", { name: "Delete 2 contacts" })
       .click();
 
     const done = page.getByRole("alertdialog", { name: "Delete finished" });
-    await expect(done.getByRole("status")).toHaveText("1 party deleted, 1 still in use.");
+    await expect(done.getByRole("status")).toHaveText("1 contact deleted, 1 still in use.");
     await expect(done.locator("li", { hasText: `${stem} free` })).toContainText("deleted");
     await expect(done.locator("li", { hasText: `${stem} used` })).toContainText("still in use");
     await expect(done.getByRole("link")).toHaveCount(1);
@@ -178,10 +183,7 @@ test.describe("delete", () => {
       [issued.json.token, "agent"],
     );
     await page.goto(`/#/${model}/${model}?view=list&id=${rec.id}`);
-    await page
-      .getByRole("complementary", { name: /record$/ })
-      .getByRole("button", { name: "Delete" })
-      .click();
+    await deleteFrom(page.getByRole("complementary", { name: /record$/ }));
     await page
       .getByRole("alertdialog", { name: /^Delete/ })
       .getByRole("button", { name: "Delete", exact: true })

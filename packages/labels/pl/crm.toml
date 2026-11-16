@@ -22,6 +22,18 @@ description = "Adres e-mail osoby kontaktowej"
 label = "Oczekiwany przychód"
 description = "Oczekiwany przychód w jednostkach podrzędnych waluty (np. grosze)"
 
+[labels.pl.model.lead.field.party_id]
+label = "Klient"
+description = "Klient: kontakt, dla którego tworzy się ofertę z leada"
+
+[labels.pl.model.lead.field.expected_close]
+label = "Planowane zamknięcie"
+description = "Dzień, w którym transakcja ma zostać zamknięta (RRRR-MM-DD)"
+
+[labels.pl.model.lead.field.lost_reason]
+label = "Powód utraty"
+description = "Dlaczego szansa sprzedaży została utracona"
+
 [labels.pl.model.lead.field.stage]
 label = "Etap"
 description = "Etap lejka sprzedaży: nowe, zakwalifikowane, wygrane lub przegrane"

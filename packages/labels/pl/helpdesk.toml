@@ -5,6 +5,7 @@ summary = "Zgłoszenia pomocy technicznej z priorytetem, istotnością, celami p
 
 [labels.pl.model.helpdesk_sla]
 name = "SLA"
+plural = "SLA"
 description = "Zasada poziomu usług: jak szybko zgłoszenia o danym priorytecie powinny zostać obsłużone i rozwiązane"
 
 [labels.pl.model.helpdesk_sla.field.name]
@@ -35,7 +36,11 @@ description = "Czy zasadę można przypisać do nowych zgłoszeń"
 
 [labels.pl.model.helpdesk_ticket]
 name = "Zgłoszenie"
+plural = "Zgłoszenia"
 description = "Zgłoszenie klienta do pomocy technicznej"
+
+[labels.pl.model.helpdesk_ticket.guard]
+message = "Zamkniętego zgłoszenia nie można zmienić. Otwórz nowe zgłoszenie, jeśli problem powróci."
 
 [labels.pl.model.helpdesk_ticket.field.subject]
 label = "Temat"

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { dayInZone, fromZonedInput, offsetSeconds, toZonedInput } from "./instants.ts";
+import {
+  dayInZone,
+  fromZonedInput,
+  instantShort,
+  offsetSeconds,
+  toZonedInput,
+} from "./instants.ts";
 
 const SE = "Europe/Berlin";
 const value = (text: string, zone = SE) => {
@@ -133,5 +139,20 @@ describe("instants in the platform zone", () => {
     expect(offsetSeconds(SE, Date.UTC(2026, 0, 1))).toBe(3600);
     expect(offsetSeconds(SE, Date.UTC(2026, 6, 1))).toBe(7200);
     expect(offsetSeconds("UTC", Date.UTC(2026, 6, 1))).toBe(0);
+  });
+});
+
+describe("instantShort", () => {
+  it("gives the date and the time to the minute in the zone, and the whole value for a title", () => {
+    const p = instantShort("2026-11-28T14:38:04.123262Z", "Europe/Stockholm", "en-US")!;
+    // ICU puts a narrow no-break space before AM/PM; the test reads any space there.
+    expect(p.text).toMatch(/^Nov 28, 2026, 3:38\sPM$/);
+    expect(p.full).toMatch(/^Nov 28, 2026, 3:38:04\sPM$/);
+  });
+
+  it("is nothing for a value that is not an instant", () => {
+    expect(instantShort("", "UTC", "en-US")).toBeNull();
+    expect(instantShort(undefined, "UTC", "en-US")).toBeNull();
+    expect(instantShort("yesterday", "UTC", "en-US")).toBeNull();
   });
 });

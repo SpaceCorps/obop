@@ -4,13 +4,15 @@
 >
 > Written against: `main` = origin/main at fe1b93a; `ios` = origin/feat/mileage-ios at 89c4e50 (PR 34, which contains PR 27); `sv` = origin/feat/mileage-sv at 5bdd17d (PR 45), read only for the Swedish items.
 >
+> Follow-up edit, 2026-11-09 (documentation only; branch `docs/host-direction`, based on main 9ba3afed): the records of section 0 are entered in `docs/DECISIONS.md` (D93, Q63, and OR-39 in a separate list of relayed items); the rows of section 10 that carry the codes H, M and P are applied, except the two paragraphs of D87's own record, which wait; and the table of section 10 says which rows are applied and which wait. Every row was found again by its text on main 9ba3afed, and the register lines named below were opened there; all other citations in this document still name the refs above. What the follow-up changed in this document: this note; section 0 (the first paragraph and the Records paragraph, which no longer say that the records will be entered or that the direction is not recorded on main; the new paragraph "The one wording"; and the paragraph "What this document is not", which now says that PR 51 is merged, that the follow-up edits other documents, and that it conflicts with PR 27, 34 and 45); section 10 (the opening paragraph, the heading and bullets, the merge order, the fifth column of the table with the state of each row, and the ROADMAP link in the quoted text, which is written to resolve from this file); and the last two bullets of section 11.
+>
 > Citations: `main:path:line`, `ios:path:line`, `sv:path:line`. `app/` stands for `web/apps/mileage-app/`. Server paths omit the leading `crates/kernel/`; the Mileage module is `crates/modules/mileage/`. A path without a prefix under `docs/` or the server crates is on `main`; a path under `app/` or `web/` is on `ios` unless the text says `main`. A bare `web/packages/client/src/oauth.ts` is on `ios` only; it is not on main.
 >
 > Marks: "verified" means the line was opened on the named ref while this document was written and says what the sentence claims; nothing was run. "Not verified" means it was not opened, or cannot be opened from the repository. "Reported" means it comes from a build report given to the project and was not reproduced here.
 
 ## 0. Status and scope
 
-Owner direction of 2026-11-03, reported to the project and not yet entered in the decision register: the phone client is to be one app that holds obop's apps as modules, Mileage the first. This document reads that as a host app with the Mileage app inside it. The reading is PROPOSED. The host design is not ruled. The direction is not recorded on main: `main:docs/DECISIONS.md:1269` says that the design of the host app is a separate proposal and is not described there, and `main:docs/DECISIONS.md:233` and `:1646` say that Q63 is reserved for the host questions.
+A direction of 2026-11-03, reported to the project as the owner's, second-hand, through another session, and not confirmed by the owner; it is entered in the decision register only as a relayed item, not as a ruling (OR-39, in the list "Relayed, not yet confirmed by the owner"; see Records below): the phone client is to be one app that holds obop's apps as modules, Mileage the first. This document reads that as a host app with the Mileage app inside it. The reading is PROPOSED. The host design is not ruled. The direction was not recorded on main when this document was written: `main:docs/DECISIONS.md:1269` said that the design of the host app is a separate proposal and is not described there, and `main:docs/DECISIONS.md:233` and `:1646` said that Q63 is reserved for the host questions (at 9ba3afed, before the follow-up edit, those lines are 1276, 236 and 1672).
 
 Not ruled. All of this stays PROPOSED or open:
 
@@ -23,9 +25,11 @@ Not ruled. All of this stays PROPOSED or open:
 7. Whether the phone is outside the UI-parity rule (OR-16, D80). No obop record of it exists on main, and `CLAUDE.md` says nothing is exempt until the owner approves it.
 8. Every server change in section 6.
 
-Records. The direction will be entered as OR-39 and the host design as D93 (PROPOSED); the host questions use the reserved Q63. They are entered in `docs/DECISIONS.md` by the follow-up documentation change of section 10, because open pull requests edit the register lines. D92 is taken by draft PR 51 (`origin/feat/sign-signer:docs/DECISIONS.md:232`).
+Records. The direction is entered as OR-39 and the host design as D93 (PROPOSED); the host questions use the Q63 that was reserved for them (a provisional number). They were entered in `docs/DECISIONS.md` by the follow-up documentation change of section 10; until then they were held back because open pull requests edit the register lines. OR-39 stands only in the separate list "Relayed, not yet confirmed by the owner" and in none of the ratified lists: it is not a ruling, and it becomes one only on the owner's own word. D92 was taken by draft PR 51 (`origin/feat/sign-signer:docs/DECISIONS.md:232`) when this document was written; PR 51 is merged since (09861505), and D92 is on main at `docs/DECISIONS.md:232` (9ba3afed).
 
-What this document is not: it is not an implementation, nothing was run on a phone as a host, and there is no store submission. It adds one file and edits no existing line. PR 27, 34 and 45 are open drafts of the standalone Mileage app (Android, iOS, Swedish). They are stacked: 27 is an ancestor of 34, and 34 is an ancestor of 45 (checked with `git merge-base --is-ancestor`). PR 51 is an open draft of another feature (signing a document) that edits some of the same documents. This document does not collide with any of them. Section 10 lists the lines that go stale and why they are edited later.
+The one wording. Prose that states the direction uses this sentence, defined here once: "The phone client is planned as one host app that holds modules, Mileage the first (Proposed: a direction relayed to the project and not yet confirmed by the owner; D93, spec/mobile-host.md)." Only the form of the link changes with the document. A tree comment, a table cell or a parenthesis that only places a module says "in the planned host design" and cites D93, and the README map entry says that the direction is relayed and not confirmed by the owner. No document says that the owner ratified, approved or decided the host direction or the wording of D87's limit.
+
+What this document is not: it is not an implementation, nothing was run on a phone as a host, and there is no store submission. As first written it added one file and edited no existing line; the follow-up change of 2026-11-09 (the note at the top and section 10) edits the documents that section 10 lists. PR 27, 34 and 45 are open drafts of the standalone Mileage app (Android, iOS, Swedish). They were stacked at the refs named at the top: 27 is an ancestor of 34, and 34 at 89c4e50 is an ancestor of 45 at 5bdd17d (checked with `git merge-base --is-ancestor`). On 2026-11-09 the heads are ae55abdc (27), 824ea59f (34) and 5700f257 (45): 27 is still an ancestor of both others, but 34 has moved on (it merged PR 63), and 45 is based on 89c4e50, so 34 is no longer an ancestor of 45. PR 51 was an open draft of another feature (signing a document) that edited some of the same documents; it is merged since (09861505). The follow-up change collides with PR 27, 34 and 45 when it is merged before them: it conflicts with each at `CLAUDE.md` line 42 and at the D87 summary row of `docs/DECISIONS.md` (line 237 on the branch), and with PR 45 also at `docs/ROADMAP.md` line 187 (found on 2026-11-09 with `git merge-tree --write-tree`; `docs/spec/mobile.md` merges without a conflict). The three PRs also conflict with main itself at `docs/DEPLOY.md` and `pnpm-lock.yaml`, which the follow-up does not touch. Section 10 gives the resolution and lists the lines that went stale.
 
 ## 1. The split in one picture
 
@@ -369,15 +373,17 @@ It does not prove:
 
 ## 10. Documents on main that this direction makes stale
 
-Why none of them is edited by this document:
+State after the follow-up change of 2026-11-09 (branch `docs/host-direction`, based on main 9ba3afed). The codes H, M and P are applied in the rows that carry them, except in the two paragraphs of D87's own record (the rows for `docs/DECISIONS.md` 1201 and 1221): the Decision paragraph opens with the owner's words (OR-34) and the Why paragraph gives the reason for them, so no sentence about a relayed direction goes into either, and those two rows wait. Code W is applied nowhere: the wording of D87's first-party limit is the owner's and is PROPOSED (Q63, question O2), and no ratified row is rewritten. A row whose only code is W is not touched, and in a row that carries W with other codes the W part waits. All 23 rows were found again by their text on main 9ba3afed; none had changed or gone. Six had moved, all in `docs/DECISIONS.md`: the Line column is that of main at fe1b93a, and the last column gives the line on main 9ba3afed where it differs (the branch has the new register entries above those lines, so its own line numbers are higher). H is the one wording of section 0. M and P are done as their codes say, with one choice: "a module of the host" is added beside the words "the app" or "the mobile app", in the form "in the planned host design a module of the host", and does not replace them, because the standalone app is still what D87 and `docs/spec/mobile.md` specify. Three rows say something other than that form, so that they do not state what the host design leaves open: the tree rows of `docs/ARCHITECTURE.md` 929 and `docs/spec/mobile.md` 259 say that the code would be the Mileage module of the host and that where it lives is not ruled (section 0, item 2), and the D13 amendment says that the host owns the key and recovery rule of the encrypted database and a module keeps its outbox contents behind a handle (section 1). In the table below the third column is the text on main 9ba3afed before the change, verbatim except for one link target (the quoted ROADMAP text writes `mobile.md` where main has `spec/mobile.md`, so that it resolves from this file; a row that is applied now reads as the edit made it), and "applied" and "waits" refer to that change.
 
-- PR 27, 34 and 45 are stacked and edit the same lines. The old-line starts of `git diff -U0` between the merge-base 36fa622 and `feat/mileage-sv` are merge-base line numbers, not main's. By content, `DECISIONS.md` lines 227 and 239 are the same on main fe1b93a, and merge-base lines 1197 and 1217 are 1199 and 1219 on main; the other hunks are not mapped. The hunks are `CLAUDE.md` 42; `docs/DECISIONS.md` 89, 130, 135, 227, 239, 1197, 1217, 1617, 1622; `docs/DEPLOY.md` 361, 364, 384; `docs/ROADMAP.md` 187, 379; `docs/ENGINEERING.md` 180, 186; `docs/ISSUES.md` 259, 263, 281 (these two files are not in the table below); `docs/spec/mobile.md` in many places (28 hunks).
+Why none of them was edited when this document was first written, and what still applies:
+
+- PR 27, 34 and 45 are stacked (at the refs named at the top) and edit the same lines. The old-line starts of `git diff -U0` between the merge-base 36fa622 and `feat/mileage-sv` are merge-base line numbers, not main's. By content, `DECISIONS.md` lines 227 and 239 are the same on main fe1b93a, and merge-base lines 1197 and 1217 are 1199 and 1219 on main; the other hunks are not mapped. The hunks are `CLAUDE.md` 42; `docs/DECISIONS.md` 89, 130, 135, 227, 239, 1197, 1217, 1617, 1622; `docs/DEPLOY.md` 361, 364, 384; `docs/ROADMAP.md` 187, 379; `docs/ENGINEERING.md` 180, 186; `docs/ISSUES.md` 259, 263, 281 (these two files are not in the table below); `docs/spec/mobile.md` in many places (28 hunks).
 - PR 51 edits some of the same files, but not the lines below. Its old-line starts, against its merge-base cff7076, are `CLAUDE.md:53`, `DECISIONS.md` 231, 590, 1280, 1387, 1389, 1581, 1646, `GLOSSARY.md:116`, `MODULES.md:33`, `PRODUCT.md:741`, `ROADMAP.md:520`, `ux.md:663`, `services.md:665`, `CONVENTIONS.md:52,246`. It also edits `ISSUES.md`, `SIGN-DOCUSEAL.md`, `spec/finance.md`, `spec/integrations.md` and `spec/security-privacy.md`, and adds `SIGN.md`; none of these is in the table. Line numbers shift on merge, so find each row again by its text.
-- The wording of D87's limit awaits the owner (`main:docs/DECISIONS.md:241`), and the direction is not recorded on main (section 0).
+- The wording of D87's limit awaits the owner (`main:docs/DECISIONS.md:241`), and the direction was not recorded on main when this document was written (section 0).
 
 Merge order that avoids conflicts, each merge on the owner's word:
 
-1. PR 27, then 34, then 45 (stacked). 2. PR 51 (independent of the lines below). 3. One docs-only PR from the new main with every row below, plus the entry for this file in the README document map and the entries OR-39, D93 and Q63 of section 0.
+1. PR 27, then 34, then 45 (stacked). 2. PR 51 (independent of the lines below; merged since, 09861505). 3. One docs-only PR from the new main with every row below, plus the entry for this file in the README document map and the entries OR-39, D93 and Q63 of section 0. Step 3 is the follow-up change of 2026-11-09, with the difference that the rows marked "waits" below are left for the owner; at that date PR 27, 34 and 45 are still not merged (none is an ancestor of main 9ba3afed or of origin/main e6a0ad0d). Because that change was made from main 9ba3afed, before step 1 (PR 27, 34 and 45) was done, merging it first conflicts as section 0 says: with each of the three at `CLAUDE.md` line 42 (the Native apps bullet) and at the D87 summary row of `docs/DECISIONS.md` (line 237 on the branch), and with PR 45 also at `docs/ROADMAP.md` line 187. The resolution once those PRs have landed is to take their side of each line and apply this change's part again: the H sentence and the removal P at `CLAUDE.md` line 42, the H sentence at the end of the D87 summary row, and, once PR 45 has landed, the M words in the ROADMAP row. The alternative is to hold the H, M and P edits of those three lines until the PRs have landed.
 
 Codes for the change column:
 
@@ -386,31 +392,31 @@ Codes for the change column:
 - M: say "a module of the host" where the text says "the app".
 - P: drop "planned at `web/apps/mileage-app` with `packages/mileage.toml`". The same bullet already says there is no `packages/mileage.toml`.
 
-| File | Line | Current text (cut to 160 characters) | Change |
-| --- | --- | --- | --- |
-| `CLAUDE.md` | 42 | the proposal limits them to first-party apps and to cases a PWA cannot serve (D87, Proposed). Expo SDK 57 for now; the app starts on SDK 58 if its packages | W, H, P |
-| `docs/ARCHITECTURE.md` | 809 | The proposal limits them to first-party apps and to cases a PWA cannot serve (recording a trip while the phone is locked is the first case) | W, H |
-| `docs/ARCHITECTURE.md` | 929 | mileage-app/        # React Native (Expo) app, the first native app (D87, Proposed; spec/mobile.md) | M |
-| `docs/ARCHITECTURE.md` | 933 | client  tokens  trip-core                # D87, Proposed: shared by the web and the mobile app (spec/mobile.md 8.1) | M |
-| `docs/DECISIONS.md` | 89 | D87 proposes to limit this to first-party apps and to cases a PWA cannot serve; that limit came with the proposal, is no | W (note, not a rewrite of the ratified row) |
-| `docs/DECISIONS.md` | 227 | the proposal limits them to first-party apps and to cases a PWA cannot serve (Proposed), keeps the PWA as the default and starts with Mileage | W, H |
-| `docs/DECISIONS.md` | 241 | Proposed and awaiting the owner: the scope limits of D87 (first-party apps only, only where a PWA cannot do the job, the PWA stays the default | W |
-| `docs/DECISIONS.md` | 1199 | The scope limits that came with the proposal (first-party apps only, only where a PWA cannot do the job, the PWA stays the default, Tauri mobile | W |
-| `docs/DECISIONS.md` | 1201 | The proposal limits them to first-party apps and to cases where a PWA cannot do the job, that is where a background capability is needed | W, H |
-| `docs/DECISIONS.md` | 1221 | A mileage report needs the route while the phone is in a pocket, which a PWA cannot promise (general knowledge), and a native client is the smallest th | H (the reason now includes the host app) |
-| `docs/DECISIONS.md` | 334 | A native app (D87) keeps its queued writes in a SQLite database on the device | M (the outbox contract is per module) |
-| `docs/DECISIONS.md` | 1541 | the limits to first-party apps and to cases a PWA cannot serve are Proposed (D87). Tauri mobile is still not pursued (Proposed), and the PWA stays | W |
-| `docs/GLOSSARY.md` | 194 | the proposal limits them to first-party apps and to cases a PWA cannot serve (D87, Proposed). The first is Mileage | W, H |
-| `docs/PRODUCT.md` | 380 | *Not planned*: a suite of native apps; the PWA stays the default client. *Ships* (Proposed, D87): one React Native (Expo) app, Mileage, which w | H |
-| `docs/PRODUCT.md` | 616 | (Proposed, D87: first-party apps only, and only where a PWA cannot serve; the first is Mileage | W |
-| `docs/ROADMAP.md` | 187 | The first native slice, "one background-recorded trip from a real phone" ([spec/mobile.md](spec/mobile.md) 9), is client work beside the waves | M |
-| `docs/spec/mobile.md` | 13 | D87 proposes to limit them to first-party apps and to cases a PWA cannot serve (Proposed), and names Mileage as the first. This document specifies that app | W, H, M |
-| `docs/spec/mobile.md` | 22 | The scope limits: first-party apps only, only where a PWA cannot do the job; the PWA stays the default; Tauri mobile is not pursued | W |
-| `docs/spec/mobile.md` | 259 | web/apps/mileage-app/     the Expo app (development build, config plugins, no checked-in ios/ or android/) | M (and a pointer to this file) |
-| `docs/spec/mobile.md` | 469 | obop does not plan a suite of native apps: the PWA stays the default client, and D87 proposes that a native app exists only where a PWA cannot do the job | W, H |
-| `docs/spec/people.md` | 351 | the proposal limits them to cases a PWA cannot serve (Proposed, D87, [mobile.md](mobile.md)); the first is Mileage, which is not a self-service page | W, H |
-| `docs/spec/people.md` | 590 | the limits to first-party apps and to cases a PWA cannot serve are Proposed, D87); employee self-service stays a PWA baseline | W |
-| `docs/spec/ux.md` | 629 | Proposed (D87): first-party apps only, only where a PWA cannot serve, the PWA stays the default client | W |
+| File | Line | Current text (cut to 160 characters) | Change | State on main 9ba3afed |
+| --- | --- | --- | --- | --- |
+| `CLAUDE.md` | 42 | the proposal limits them to first-party apps and to cases a PWA cannot serve (D87, Proposed). Expo SDK 57 for now; the app starts on SDK 58 if its packages | W, H, P | H and P applied; W waits |
+| `docs/ARCHITECTURE.md` | 809 | The proposal limits them to first-party apps and to cases a PWA cannot serve (recording a trip while the phone is locked is the first case) | W, H | H applied; W waits |
+| `docs/ARCHITECTURE.md` | 929 | mileage-app/        # React Native (Expo) app, the first native app (D87, Proposed; spec/mobile.md) | M | M applied |
+| `docs/ARCHITECTURE.md` | 933 | client  tokens  trip-core                # D87, Proposed: shared by the web and the mobile app (spec/mobile.md 8.1) | M | M applied |
+| `docs/DECISIONS.md` | 89 | D87 proposes to limit this to first-party apps and to cases a PWA cannot serve; that limit came with the proposal, is no | W (note, not a rewrite of the ratified row) | Waits (W): a ratified row, not touched |
+| `docs/DECISIONS.md` | 227 | the proposal limits them to first-party apps and to cases a PWA cannot serve (Proposed), keeps the PWA as the default and starts with Mileage | W, H | H applied; W waits |
+| `docs/DECISIONS.md` | 241 | Proposed and awaiting the owner: the scope limits of D87 (first-party apps only, only where a PWA cannot do the job, the PWA stays the default | W | Waits (W): not touched; line 244 on 9ba3afed |
+| `docs/DECISIONS.md` | 1199 | The scope limits that came with the proposal (first-party apps only, only where a PWA cannot do the job, the PWA stays the default, Tauri mobile | W | Waits (W): not touched; line 1206 on 9ba3afed |
+| `docs/DECISIONS.md` | 1201 | The proposal limits them to first-party apps and to cases where a PWA cannot do the job, that is where a background capability is needed | W, H | Waits (W and H): the Decision paragraph of D87 opens with the owner's words (OR-34), so neither is applied; line 1208 on 9ba3afed |
+| `docs/DECISIONS.md` | 1221 | A mileage report needs the route while the phone is in a pocket, which a PWA cannot promise (general knowledge), and a native client is the smallest th | H (the reason now includes the host app) | Waits (H): the Why paragraph of D87 gives the reason for OR-34, so H is not applied; line 1228 on 9ba3afed |
+| `docs/DECISIONS.md` | 334 | A native app (D87) keeps its queued writes in a SQLite database on the device | M (the outbox contract is per module) | M applied; line 337 on 9ba3afed |
+| `docs/DECISIONS.md` | 1541 | the limits to first-party apps and to cases a PWA cannot serve are Proposed (D87). Tauri mobile is still not pursued (Proposed), and the PWA stays | W | Waits (W): not touched; line 1567 on 9ba3afed |
+| `docs/GLOSSARY.md` | 194 | the proposal limits them to first-party apps and to cases a PWA cannot serve (D87, Proposed). The first is Mileage | W, H | H applied; W waits |
+| `docs/PRODUCT.md` | 380 | *Not planned*: a suite of native apps; the PWA stays the default client. *Ships* (Proposed, D87): one React Native (Expo) app, Mileage, which w | H | H applied |
+| `docs/PRODUCT.md` | 616 | (Proposed, D87: first-party apps only, and only where a PWA cannot serve; the first is Mileage | W | Waits (W): not touched |
+| `docs/ROADMAP.md` | 187 | The first native slice, "one background-recorded trip from a real phone" ([spec/mobile.md](mobile.md) 9), is client work beside the waves | M | M applied |
+| `docs/spec/mobile.md` | 13 | D87 proposes to limit them to first-party apps and to cases a PWA cannot serve (Proposed), and names Mileage as the first. This document specifies that app | W, H, M | H and M applied; W waits |
+| `docs/spec/mobile.md` | 22 | The scope limits: first-party apps only, only where a PWA cannot do the job; the PWA stays the default; Tauri mobile is not pursued | W | Waits (W): not touched |
+| `docs/spec/mobile.md` | 259 | web/apps/mileage-app/     the Expo app (development build, config plugins, no checked-in ios/ or android/) | M (and a pointer to this file) | M applied, with the pointer to this file |
+| `docs/spec/mobile.md` | 469 | obop does not plan a suite of native apps: the PWA stays the default client, and D87 proposes that a native app exists only where a PWA cannot do the job | W, H | H applied; W waits |
+| `docs/spec/people.md` | 351 | the proposal limits them to cases a PWA cannot serve (Proposed, D87, [mobile.md](mobile.md)); the first is Mileage, which is not a self-service page | W, H | H applied; W waits |
+| `docs/spec/people.md` | 590 | the limits to first-party apps and to cases a PWA cannot serve are Proposed, D87); employee self-service stays a PWA baseline | W | Waits (W): not touched |
+| `docs/spec/ux.md` | 629 | Proposed (D87): first-party apps only, only where a PWA cannot serve, the PWA stays the default client | W | Waits (W): not touched |
 
 Not stale by this direction, and so not in the table: `docs/spec/mobile.md:439` (Android first; stale by OR-36), `docs/DEPLOY.md:361` and `docs/DECISIONS.md:725` (the example scheme `org.obop.mileage:/oauth` is only an example, the server does not require it), and the licence uses of "first-party app" in `BUSINESS.md`, `PRODUCT.md:148,535` and `DECISIONS.md:248,639,1502`.
 
@@ -423,5 +429,194 @@ Not stale by this direction, and so not in the table: `docs/spec/mobile.md:439` 
 - Whether a refresh extends a grant (an earlier pass found a fixed expiry; it was not traced).
 - The Android branch was not read separately (PR 27 is inside `ios`). `sv` was read through its file list, `sv:app/src/i18n/languages.ts`, the `app.config.ts` lines named above and the config diff; its tests and the completeness of the Swedish text were not checked.
 - `web/packages/ui-native` (theme tokens) was not re-read. Each route under `/api/auth/*` was not re-read; the refusal rests on the doc comment at `obop-http/src/lib.rs:193-196` and on `main:docs/DEPLOY.md:366`.
-- The Xcode 27.2 report: the line number 200 and the version numbers 58.0.23, 58.0.29 and 58.0.22, the local patch, and the build and gate result on the iPhone. Only the upstream issue and PR were checked, and the lockfile line that locks 58.0.23. The direction of section 0 is not recorded on main.
-- Doc line numbers are for main at fe1b93a and will move when PR 27, 34, 45 and 51 merge.
+- The Xcode 27.2 report: the line number 200 and the version numbers 58.0.23, 58.0.29 and 58.0.22, the local patch, and the build and gate result on the iPhone. Only the upstream issue and PR were checked, and the lockfile line that locks 58.0.23. The direction of section 0 was not recorded on main when this document was written.
+- Doc line numbers are for main at fe1b93a (section 10 says main 9ba3afed where it gives lines of that commit) and will move when PR 27, 34 and 45 merge. The merge of PR 51 (09861505) has moved some of them already.
+
+## 12. What was built: the host shell, first slice (2026-11-15)
+
+Status: PROPOSED, like the rest of this document; nothing here is a ruling. This section is the only part of the document that describes code. The code is on the branch `feat/host-app` (pull request 136, a draft). The section was appended and edits no line of sections 0 to 11; where they say that nothing was built or run (the note at the top, section 0, section 11), that is still true of everything they describe.
+
+Marks in this section: "run" means it was started on 2026-11-15 and the result was seen; "not run" means it was not. Everything on a device was run on one Android emulator (the image `obophost36`, Android 16, x86_64) against a throwaway instance on the same PC with a new database and a new account, reached through `adb reverse`. No real phone and no iPhone was used, and no build met an instance with real data. The iOS Simulator was used on 2026-11-16 only, for what 12.8 describes. Paths in this section are on `feat/host-app`.
+
+### 12.1 What the shell is, and how it differs from sections 1 to 4
+
+`web/apps/host-app` is a React Native app (Expo SDK 58, `expo` 58.0.16, React Native 0.88.0, `react-native-webview` 14.0.1; every package pinned exactly) that asks for the address of one obop instance and then shows the back office of that instance in a WebView. It is a shell: it holds no module, and the Mileage app is not inside it.
+
+- Section 1 (the split): nothing was split. No file of the Mileage app was moved or lifted into a package. The shell shares `@obop/ui-native` (components and tokens) with it and nothing else.
+- Section 2 (the module descriptor): not built. There is no descriptor, no registry of modules and no module-qualified route.
+- Section 3 (configuration and identity): the shell stores one value, the address of the server, as one item in `expo-secure-store` (`src/native/storage.ts`, `src/core/server-record.ts`), and reads three build variables (`app.config.ts`): `OBOP_ALLOW_CLEARTEXT`, `OBOP_WEBVIEW_DEBUG` and `OBOP_DEFAULT_SERVER`. Every build of the slice has the application id `org.obop.app.test` and is signed with the template's debug key. It registers no OAuth client and declares no groups.
+- Section 4 (sign-in and the device flow): not used. The shell opens no system browser for a sign-in, creates no `device` record and holds no token. The person signs in on the back office's own sign-in page inside the WebView (12.2).
+
+The screens. All are native except the page itself.
+
+- The address screen: one field and Connect (the keyboard's Go key is Connect too). An address that answers with a 5xx is reported as a server that is busy or starting, not as one that is not obop. An address is stored only after `GET <origin>/api/openapi.json` answered as an obop server within 8 seconds (`src/core/probe.ts`). Only `https` is accepted, except in a build made with `OBOP_ALLOW_CLEARTEXT=1`, which also accepts `http` to this device or the local network; the rule runs again on the stored address at every start (`src/core/address.ts`, `src/core/local-host.ts`). One path segment is allowed, for an instance whose back office is under `/admin/`.
+- The page, in a WebView. A document of another origin is not loaded in it; it opens in the system browser (`src/core/nav-policy.ts`).
+- The host bar, drawn by the app above the page: while it is shown the WebView begins under it, so it covers nothing of the page, and when it goes the page takes the full height. It names the host and port, "not encrypted" for plain http, "test build", and "new since {date}" for seven days after the address was stored. It is shown at every start and at every return to the foreground, for at least two seconds and until the person touches the page; a tap on it opens "This app". No message and no navigation of a page hides it (`src/core/shell.ts`, `src/ui/HostBar.tsx`).
+- "This app": the address, whether the connection is encrypted, the server's version on the day the address was stored ("Server version when added"; it is not read again), the date the address was stored, the app's version and build, Open in browser, and Change server with one confirmation and no authentication.
+- The error screen, when the server does not answer: what the phone reported, Try again, Change server.
+
+### 12.2 Sign-in: the browser's session inside an app
+
+The sign-in is the page's own. The bearer token stays where the back office keeps it in any browser, in the page's `sessionStorage` (`web/apps/backoffice/src/App.tsx`, the key `obop-token`): a full person session of 12 hours that nothing extends. The app has no code that reads it, and no server code was changed.
+
+In the terms of D64 this is the phone browser's session inside an app, and it is outside the phone class. It carries every group the person holds, the groups of `never_for_mobile` and `NEVER_FOR_MOBILE` included (`crates/kernel/obop-commands/src/devices.rs`): those whose holders approve, post, pay, erase, export, publish, see special data or run standing outbound work, which `docs/CONVENTIONS.md` section 4 keeps off a mobile app because "a phone is lost" and neither the approval gates nor the masking hold such a token. It can do what `docs/spec/mobile.md` 8.5 decision 4 gives as the reason a phone token is never a person: issue an agent token, change a password, enrol a second factor, approve a proposal. It has no `device` record and cannot be ended under Devices. The slice has no control for any of this, because it changes no server code; the same account can do the same today in the phone's browser. Whether that is acceptable in an app is the owner's question, and it is the first item of 12.6. (The four citations of this paragraph were opened on `feat/host-app` on 2026-11-15.)
+
+Passkeys (D65) and Microsoft (D91) are not offered in the app. The host says so in its answer to `host.info` (`signIn: { passkeys: false, microsoft: false }`), and the page then draws neither button; where the instance has the Microsoft sign-in on, the page shows one sentence instead: "Sign-in with Microsoft is not available in this app yet. To sign in that way, use your browser." (`web/apps/backoffice/src/host/SignInNotes.tsx`). A person whose only second factor is a passkey, or whose account is Microsoft-only, cannot use the app yet. Nothing changes for a browser.
+
+### 12.3 The bridge
+
+The contract between the app and the page is the package `web/packages/host-bridge` (`@obop/host-bridge`): `src/protocol.ts` has the types, the constants and the validators both sides use, `src/host.ts` the host's side, `src/page.ts` the page's side, and `src/origin.ts` the one function both use to work out an origin. The app and the back office both import it, and so does the stand-in host of the end-to-end tests, so the three cannot drift.
+
+Version 1 has three commands. Each is a request of the page with one answer of the host; the host never calls the page.
+
+| Command | What it does |
+| --- | --- |
+| `host.info` | The first call of a page: the bridge version, the platform, the app's id and version, whether the build may speak plain http (`cleartext`) and whether the WebView is open to DevTools (`inspectable`), the list of commands this host answers, and what the sign-in page may offer |
+| `host.theme` | The page tells the host its ground colour (`#rrggbb`) and whether it is a dark one; the app paints the band behind the status bar and the system bars with it |
+| `host.settings` | Opens the native "This app" screen |
+
+- How a page knows that it is inside the host: the user agent ends in `ObopHost/1 (android; 0.1.0)` and the WebView's `postMessage` transport exists. Both are needed. A browser that has only one of them is a browser.
+- Whom the host answers: only a message that the WebView reports as sent by the document of the instance's origin, and only while that document is the one on top. A command that is not on the host's list cannot reach native code. A message longer than 65,536 characters is dropped by either side. The page waits five seconds for an answer and then treats the call as failed.
+- The page's side in the back office is `web/apps/backoffice/src/host/` (the state, the embed code, the theme reporter, the download catcher, the menu entry, the sign-in notes). Inside the host the page marks `<html data-host="1" data-host-info="ok">` (or `failed`), adds "This app" to the account menu directly above Sign out, and draws no passkey and no Microsoft button.
+- Files. Uploads work through the system's file chooser. Downloads do not exist in version 1: there is no command that saves a file. Where the page would save one (Export on a list, the recovery codes, a connector's CSV file), it saves nothing and says "Downloads are not available in the app yet."; it does not also say that it exported something (`hostSavesFiles` in `web/apps/backoffice/src/host/state.ts`).
+
+### 12.4 What stays on the phone or travels
+
+None of this is removed in the slice.
+
+1. On Android the page's `localStorage` for an origin stays after Change server: the theme, the language, favourites, recent apps and the titles of the last records opened. On iOS Change server removes it, for every origin (12.8).
+2. The session lives on the server to the end of its 12 hours whatever the page or the app does. Sign out in the page and Change server in the app remove the token from the page only.
+3. The token at rest (run, on the emulator with `adb root`). After a sign-in and `am force-stop`, the text of the token was in one file of the app's private data directory, `app_webview/Default/Session Storage/000003.log`, as UTF-16LE text, and in none of the other 81 files. Ten seconds after the next start it was in no file, and the page showed the sign-in page. So "the session ends when the app is closed" is true of what the page sees; on the disk the token stays from the moment the app is stopped until its next start, for as long as the server still accepts it. Only an uncompressed copy of the text would have been found by this search.
+4. Android: a photo or video taken through a file field stays in the app's external files directory (read in the library's source for the design; not run).
+5. Android: a file the WebView treats as a download from an http or https address is saved by the library to the public Downloads folder. The page starts none itself (not run).
+6. The WebView's HTTP cache holds answers fetched with the token, files of records included (the server lets a file be cached for a year). Change server empties it, the disk part too, before the WebView goes (`clearCache(true)` in `App.tsx`; on iOS only with the patch of 12.8); Sign out in the page does not.
+7. Backups: Android's cloud backup is off for the app (`allowBackup` false), but a phone-to-phone transfer and an iOS device backup are not stopped by that (general knowledge; not run).
+
+### 12.5 What was run, and what passed
+
+The joined tree is `feat/host-app` with `feat/host-app-web` and `origin/main` (c6846b24) merged into it. The test APK was built from it at 78c70ab9 with the three build variables set (`vp run android:prebuild`, `vp run android:build:release`); after that commit nothing in the app's folder changed except the script of the emulator check. The server was the binary of this tree (no Rust file differs from the commit it was built from).
+
+On the PC, at 13d02eb9 (run, all passed):
+
+- `vp check` and `vp test` in `web/packages/host-bridge` (193 tests), in `web/apps/host-app` (196 tests) and in `web/apps/backoffice` (937 tests); `vp run check:sdk` in the app; `vp build` in the back office; `vp check` and `vp run typecheck` in `web/packages/e2e`.
+- `tests/host.spec.ts` in `web/packages/e2e` (7 tests): the back office in Chrome with a stand-in host (`support/host.ts`) that answers through the host's side of `@obop/host-bridge`. It covers the page's side: `host.info` asked once, no passkey button although that browser knows passkeys, the ground colour reported and reported again for Dark, "This app" in the menu, no file saved for Export and for the recovery codes, a browser without the host's token left as it was, and a host that reports another sender getting no answer.
+
+On the emulator, the scripted check (`vp run emulator:check`, 7 checks; run, all passed):
+
+- The address screen refuses an address that answers but is not an obop server, and accepts the instance.
+- After a start the host bar shows the host and "test build".
+- The page's user agent holds `ObopHost/1`, and the page is a secure context.
+- A sign-in through the page's form ends with the top bar and a token in the page.
+- Android Back walks the page's history back and then leaves the app.
+- An address of another origin, assigned by a script and opened by a link in a new window, leaves the WebView where it was and opens outside the app.
+- With the server unreachable at start the error screen is shown, and Try again shows the sign-in page once the server answers.
+
+On the emulator by hand, driven over adb and the WebView's DevTools socket, once with the system in light and once in dark, with a screenshot of every screen looked at (run, all passed):
+
+- The page is marked `data-host="1"` and `data-host-info="ok"`. The sign-in page has two buttons, "Forgot your password?" and "Sign in". (`window.PublicKeyCredential` is undefined in this WebView, so the passkey button would not be drawn there in any case; that the host's answer takes it away is shown by the test in Chrome.)
+- The band behind the status bar has the page's ground colour: `#f1f2f6` in light, `#0a0c11` in dark, and the dark one with white icons when the page's theme is set to dark under a light system.
+- The host bar goes after a touch on the page and is back after Home and a return. A tap on it opens "This app"; Back closes it; the person is still signed in.
+- The launcher, the Contacts gallery and list, and the form of a record open and can be read. Account, "This app" opens the native screen.
+- After a rotation the page is in landscape and the person is still signed in, and again back in portrait.
+- Export on a list shows the downloads notice and no success message; the app stays on top.
+- The CSV field of the Import dialog opens the system's file chooser, and Back returns. Once, a file was chosen there: the page read it and two rows were imported.
+- When the system switches between light and dark, the page and the status bar follow, and the person stays signed in.
+- Cancel in the Change server confirmation leaves the app on the server and signed in.
+- Typed once on the on-screen keyboard into the form of a new contact in portrait: the last field and the Create and Discard buttons stayed above the keyboard, and the contact was created. The measured comparison of the keyboard's frame with the field was not run.
+- Started from the icon of the home screen, Back at the first page sends the app to the background, and the session is still there on return.
+
+The plain APK (built at e7f6e22b without the three variables; the app's source is the same) installed over the test one (run, passed): at start the stored `http` address is refused on the address screen with "This app connects over https only. An address that starts with http:// is not encrypted.", the screen has no test-build warning, and the process has no DevTools socket. No WebView was mounted in that build, because it loads no local instance; a mounted WebView of a plain build was not seen. Before the join, `vp run android:gate` passed on the plain APK and the manifests of the two APKs differed in one line, `usesCleartextTraffic`; neither was repeated at the joined tree.
+
+After a review, on 2026-11-15, at fcf42758 (run, all passed): `vp check` and `vp test` in `web/packages/host-bridge` (193 tests), `web/packages/ui-native` (15), `web/apps/host-app` (201), `web/apps/mileage-app` (1,954 and 1 skipped) and `web/apps/backoffice` (937); `vp run check:sdk`; `vp check` in `web/apps/storybook`; `vp build` of the back office; `vp check` and `vp run typecheck` in `web/packages/e2e`; `tests/host.spec.ts` (7 tests). A test APK built at that commit, installed on the same emulator against a throwaway instance of its own: `vp run emulator:check` passed its 7 checks, E6 now also reading the crash log after the third Back. By hand, in light and in dark, with screenshots looked at: an address that answers 502 gets the busy sentence with its host and no path hint; the keyboard's Go key connects; while the host bar is shown the WebView begins under it and the page's top bar is whole, and after a touch the WebView starts at the status bar; "This app" has Back at the start, and in landscape Back and the title share a line, the two buttons stand side by side and the footer reaches the left edge, as on the error screen; after a cold start the spinner stands until the page is drawn (about 3 to 4 seconds on this emulator) and no bare ground was seen; Change server shrank the WebView's HTTP cache from 1,748 KB to 112 KB (light only). Not run on a device: the page's `host.info` after a WebView mounted again because of a foreign document (unit tests only).
+
+Not run: anything on a real phone; anything for iOS until 12.8; the debug APK and the development client; the rule that a foreign document on top gets the WebView mounted again, on a device (unit tests of `src/core/shell.ts` only); passkeys and Microsoft in any WebView; a server other than a local throwaway one; the whole end-to-end suite locally (CI runs it).
+
+### 12.6 Before any build of the host meets real data
+
+None of this is in the slice.
+
+1. The owner's answers: whether an account that holds a never-for-mobile group may sign in in the app at all (12.2), and which instance a real phone is tried against. Until then every build meets throwaway instances only: a test build puts the password and the token on the network in clear, is open to DevTools and is signed with a public key.
+2. An app lock, a device prompt before Change server, and the page hidden in the app switcher. Today whoever holds the unlocked phone has the open back office until the session's fixed end.
+3. Photos and videos taken for an upload are deleted, and the lowest Android version is raised (on Android 7 to 10 another app with the storage permission can read them).
+4. The page's `localStorage` is cleared on Change server; a data-extraction rule keeps the app's data out of an Android phone-to-phone transfer; a decision about iOS backups.
+5. A release key, and the gate on every build meant for release.
+6. A decision about the token at rest (12.4 item 3): it is in the WebView's files while the app is stopped.
+7. Sign out and Change server end the session on the server. Today Sign out calls no server route, in every browser. The server can end all sessions of a person (`POST /api/auth/sessions/revoke-all`) and not one, and a session has no device, so a person cannot pick the phone's session out.
+8. The foreign-document rule run on a device.
+
+### 12.7 Seen and not fixed
+
+On the screen:
+
+- While the host bar is shown, the page is about a tenth of the screen shorter (three chips in a test build), and it grows again when the bar goes.
+- In landscape Android shows its full-screen text editor for the address field.
+- The first paint after a cold start is slow on the emulator (software graphics): the spinner stands for some seconds. Not measured on a phone.
+- In the form of a record the band behind the status bar keeps the page's ground colour while the form's own header is a sheet of another colour.
+- Three things are the page's own and the same in a phone's browser: on a short list the round New button stands over the pager's arrows; Back after Create returns to an empty New form; and after one Back, a change of view that the page makes with no touch is skipped by the next Back, which then leaves the app (Chromium's rule for history entries made without a gesture).
+- Started through adb and not from the home screen, Back at the first page ends the activity, and the session is gone with it.
+
+In the page inside the host:
+
+- A link that opens a `blob:` address for a preview gets the downloads sentence too. Customize, Security says "This browser cannot use passkeys" there. A `host.settings` call that fails says nothing to the person.
+- The new texts in German, French, Polish, Finnish, Swedish and Spanish are machine-drafted; no native speaker read them.
+- `crypto.randomUUID` does not exist on a plain-http LAN address, in any browser: the filter panel and the Import dialog use it (read for the design; not run, the emulator's `localhost` is a secure context).
+
+In the build and the tests:
+
+- The APKs hold the x86_64 libraries only and are signed with the debug key: they are for the emulator.
+- The manifest carries entries the app does not use, all from libraries: the dev-client scheme, a file provider and payment queries of `react-native-webview`, a file provider and two queries of `expo-file-system`.
+- `screenAvoidsKeyboard` of `@obop/ui-native` assumes that Android resizes the window for the keyboard; under Android 16 edge to edge it does not. The shell makes the room itself at its root; the Mileage app's screens were not looked at.
+- `gradle.mjs`, `check-sdk.mjs` and the gate exist twice, in this app and in the Mileage app.
+- `tests/host.spec.ts` borrows a user of `tests/mfa.spec.ts` for the recovery-codes test and turns two-factor off again afterwards.
+- The emulator restarted its Android once during the run by itself; the cause was not found, and the checks were run again after it.
+
+### 12.8 iOS: built and run in the Simulator (2026-11-16)
+
+OR-36 asks every native app to work on Android and on iOS. On 2026-11-16 the owner allowed a build for the iOS Simulator on the Mac mini, and nothing else: no Apple account, no signing for a device, no archive. "Run" in this subsection means that it was started in the Simulator on 2026-11-16 and the result was seen on a screenshot; "read" means read from a file of the build.
+
+**Where and how.** The Mac mini (macOS 27, Xcode 27.2, the iOS 27.2 Simulator runtime) in its own folder `~/build/obop-host-ios`: a shallow clone of `feat/host-app`, `vp install --frozen-lockfile --filter "@obop/host-app..."`, and every cache of the tools (CocoaPods, pnpm, Expo, the Node and pnpm that `vp` fetches) inside that folder (`web/apps/host-app/scripts/ios/env.sh`). One Simulator device was made for the run (`xcrun simctl create`, iPhone 18 Pro) and deleted after it. The throwaway instance ran on the PC and was reached from the Simulator as `http://127.0.0.1:18180` through an `ssh -R` tunnel, so nothing was opened on the network.
+
+**The scripts** (ported from the Mileage app; in `web/apps/host-app`):
+
+| Script | What it does |
+| --- | --- |
+| `scripts/ios/env.sh` | Sourced on the Mac: CocoaPods from where it is installed, every cache in `OBOP_HOST_IOS_ROOT` (default `~/build/obop-host-ios`, mode 700); sets no build variable |
+| `vp run ios:prebuild` | `expo prebuild --platform ios` |
+| `vp run ios:pods` | `pod install` |
+| `vp run ios:build:simulator [Release]` | `xcodebuild -sdk iphonesimulator`, derived data in `$OBOP_HOST_IOS_ROOT/dd`; signed ad hoc (`CODE_SIGN_IDENTITY=-`) or, with `OBOP_IOS_SIGNING=none`, not at all; `DEVELOPMENT_TEAM` and `PROVISIONING_PROFILE_SPECIFIER` are empty |
+| `vp run ios:gate APP [--test-build]` | Reads the built app: fails a provisioning profile, a team or a certificate in every mode; in a plain build also plain http, DevTools, an `http` default server and any App Transport Security exception |
+| `vp run simulator:drive -- --device UDID --script FILE` | XCUITest (`scripts/simulator/HostDrive.swift`) runs a script of actions (tap, type, key, wait, shot, orient, home) against the installed app; `simctl` cannot tap |
+
+When the workspace is installed only in part (as on the Mac), `vp run` cannot load the task graph; the same scripts are then started with `vp env exec node ...` (the mobile-toolchain exception, OR-34). The drive types the test account's password and `xcodebuild` may keep it in its results, so the folder is private and its `uitest` part was deleted after the run.
+
+**App Transport Security, per build.** The Expo template puts `NSAllowsLocalNetworking` into every build. `app.config.ts` now sets the entry whole (`withTransportSecurity`, `config/ios.ts`): a plain build gets `{NSAllowsArbitraryLoads: false}` and nothing more, a test build (`OBOP_ALLOW_CLEARTEXT=1`) or the development build also `NSAllowsLocalNetworking: true`. Read from the two built `Info.plist` files. The gate passed the plain build as a release (exit 0), and the test build only with `--test-build` (exit 1 without it, on plain http, DevTools, the http default server and local networking). The plain build installed over the test one refused the stored `http` address at start with the https-only sentence and showed no test-build warning (run).
+
+**Two fixes the Simulator needed, both patches of a dependency** (`patches/`, `patchedDependencies` in `pnpm-workspace.yaml`; `scripts/ios/patches.test.ts` fails when an install drops one):
+
+1. `expo-modules-core` 58.0.23 does not compile with Xcode 27.2: the Swift compiler crashes in `AsyncFunctionDefinition.swift` on `case .failure(let error as any Error)` inside a `switch consume` (every build, incremental ones too). The patch writes `case .failure(let error)`, which is what 58.0.30 ships. It applies to the Mileage app too; its iOS build was not run.
+2. `react-native-webview` 14.0.1: under the new architecture `clearCache` is empty on iOS (`// android only` in `RNCWebView.mm`), so Change server cleared nothing there. Measured in the app's container: HTTP cache 2,356 KB before and after, the `localStorage` of both origins kept. The patch hands the call to the view, whose method removes the memory and disk caches and the local and session storage of every origin. After it: HTTP cache 2,368 KB before and 368 KB after, and no `localStorage` left. So on iOS Change server also removes the page's settings (12.4 item 1); on Android it does not.
+
+**Signing.** A build with `CODE_SIGNING_ALLOWED=NO` started, and storing the address failed ("The phone could not store the address. Try again."): the Simulator's Keychain refuses an app without entitlements, as for the Mileage app (docs/spec/mobile.md 8.8). The ad hoc signature (no certificate, `TeamIdentifier=not set`, no `embedded.mobileprovision`; read with `codesign`) stores it. Ad hoc is therefore the default of `ios:build:simulator`.
+
+**The walk** (run; the test build, in light and in dark):
+
+- The address screen with the build's default address and the test-build warning. With the keyboard up the Connect button stands above it (button top at 475 pt, keyboard top at 590 pt). The keyboard's Go key connects, and the probe of `http://127.0.0.1:18180` passed App Transport Security.
+- The page under the host bar, which stands below the status bar and names "127.0.0.1:18180", "not encrypted", "test build" and "new since 16 Nov 2026". The page sees the host: through a logging proxy on a second port (a test tool, not committed) it reported the user agent `... (KHTML, like Gecko) Mobile/15E148 ObopHost/1 (ios; 0.1.0)` and `window.ReactNativeWebView.postMessage`, then `data-host="1"` and `data-host-info="ok"` within three seconds; the sign-in page had no passkey button. (Against a back office built before the host code it had one: the instance must serve the back office of this branch.)
+- Sign-in through the page's form (Return on the password field submits; the field stays above the keyboard), the launcher, the Contacts gallery, a record, "Back to list", the account menu with "This app", and the native "This app" with "Not encrypted (http)" and "Test build"; Back returns to the page, still signed in.
+- Change server: Cancel in the alert leaves everything as it was; the confirmation goes to the address screen.
+- With the instance stopped and the app started again: the error screen ("No answer from 127.0.0.1:18180"; what the phone reported: "The network connection was lost."). Try again, once the instance was back, showed the sign-in page (the session went with the old WebView, as on Android).
+- Rotation: in landscape the page fills the width between the two side insets (74 pt each) and the status bar is hidden; back in portrait the page is as before.
+- The system's light and dark: the page, the band behind the status bar and the status bar's icons follow (dark ground, white icons).
+- Home and a return show the host bar again.
+- A link to another origin (added to the page by the proxy for the test) opened in Safari; the app stayed on its page.
+- Export as CSV on the list shows "Downloads are not available in the app yet." and no success message. The CSV field of the Import dialog opens the system's document picker; Cancel returns to the dialog.
+
+**Seen and not fixed.**
+
+- The edge swipe that goes back in the page (`allowsBackForwardNavigationGestures`) did not go back when XCUITest dragged from the left edge, twice, on a record whose address was in the page's history. Whether the gesture works for a finger was not shown; the page's own Back works.
+- At the largest accessibility text size the native screens grow with it, and in "This app" the row labels break inside words ("Conne ction"). Following the system text size was a "later" item of the slice.
+- Below the page, the strip of the home indicator shows the app's ground, not the page.
+- In the form of a record the band behind the status bar keeps the page's ground while the form's header is white (as on Android, 12.7).
+- The user agent says "iPhone OS 18_7" on iOS 27.2: WebKit freezes that part.
+
+**Not done.** A real iPhone; any signing other than ad hoc for the Simulator; a build for a device, an archive, App Store review or TestFlight (Q37 is unchanged); the debug build and the development client on iOS; passkeys and Microsoft in the WKWebView; the drive in CI. The Mileage app was not built for iOS again after the `expo-modules-core` patch.

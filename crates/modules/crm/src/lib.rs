@@ -1,75 +1,153 @@
 //! `crm`: leads and opportunities.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
+use obop_registry::ui::{ReportUi, UiSection};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, ModelUi, Module, ModuleMeta};
 use obop_types::DataClass::*;
 
 pub fn module() -> Module {
     let m = Module {
         id: "crm".into(),
         name: "CRM".into(),
-        models: vec![ModelDef {
-            name: "lead",
-            description: "A prospective deal with a contact",
-            read_group: "crm.user",
-            write_group: "crm.user",
-            access: Option::None,
-            fields: vec![
-                F::new(
-                    "title",
-                    "Short description of the opportunity",
-                    None,
-                    false,
-                    "crm.user",
-                )
-                .required(),
-                F::new(
-                    "contact_name",
-                    "Name of the contact person",
-                    PublicDirectory,
-                    true,
-                    "crm.user",
-                ),
-                F::new(
-                    "contact_email",
-                    "Email of the contact person",
-                    PublicDirectory,
-                    true,
-                    "crm.user",
-                ),
-                F::new(
-                    "expected_revenue_minor",
-                    "Expected revenue in minor units",
-                    None,
-                    false,
-                    "crm.user",
-                )
-                .kind(FieldKind::Money),
-                F::new(
-                    "stage",
-                    "Pipeline stage: new, qualified, won or lost",
-                    None,
-                    false,
-                    "crm.user",
-                )
-                .select(&["new", "qualified", "won", "lost"]),
-            ],
-            commands: vec![
-                CommandDef::new(
-                    "qualify",
-                    "Move a new lead to the qualified stage",
-                    "crm.user",
-                )
-                .transition("stage", Some("new"), "qualified"),
-                CommandDef::new("mark_won", "Move the lead to the won stage", "crm.user")
-                    .transition("stage", Option::None, "won"),
-                CommandDef::new("mark_lost", "Move the lead to the lost stage", "crm.user")
-                    .transition("stage", Option::None, "lost"),
-                CommandDef::new("reopen", "Move the lead back to the new stage", "crm.user")
-                    .transition("stage", Option::None, "new"),
-            ],
-            ext: Default::default(),
-        }],
+        models: vec![
+            ModelDef {
+                name: "lead",
+                description: "A prospective deal with a contact",
+                read_group: "crm.user",
+                write_group: "crm.user",
+                access: Option::None,
+                fields: vec![
+                    F::new(
+                        "title",
+                        "Short description of the opportunity",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .required(),
+                    F::new(
+                        "party_id",
+                        "The customer: the contact record that a quotation made from the lead is for",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .reference("party"),
+                    F::new(
+                        "contact_name",
+                        "Name of the contact person",
+                        PublicDirectory,
+                        true,
+                        "crm.user",
+                    ),
+                    F::new(
+                        "contact_email",
+                        "Email of the contact person",
+                        PublicDirectory,
+                        true,
+                        "crm.user",
+                    )
+                    .display("email"),
+                    F::new(
+                        "expected_revenue_minor",
+                        "Expected revenue in minor units",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .kind(FieldKind::Money),
+                    F::new(
+                        "expected_close",
+                        "Day the deal is expected to close (YYYY-MM-DD)",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .kind(FieldKind::Date),
+                    F::new(
+                        "lost_reason",
+                        "Why the opportunity was lost",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .kind(FieldKind::LongText),
+                    F::new(
+                        "stage",
+                        "Pipeline stage: new, qualified, won or lost",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .select(&["new", "qualified", "won", "lost"])
+                    .tones(&[
+                        ("qualified", "info"),
+                        ("won", "ok"),
+                        ("lost", "bad"),
+                    ]),
+                ],
+                commands: vec![
+                    CommandDef::new(
+                        "qualify",
+                        "Move a new lead to the qualified stage",
+                        "crm.user",
+                    )
+                    .transition("stage", Some("new"), "qualified")
+                    .primary()
+                    .done("Lead qualified"),
+                    CommandDef::new("mark_won", "Move the lead to the won stage", "crm.user")
+                        .transition("stage", Option::None, "won")
+                        .primary()
+                        .done("Marked as won"),
+                    CommandDef::new("mark_lost", "Move the lead to the lost stage", "crm.user")
+                        .transition("stage", Option::None, "lost")
+                        .danger()
+                        .confirm("Mark this lead as lost?")
+                        .needs(&["lost_reason"])
+                        .done("Marked as lost"),
+                    CommandDef::new("reopen", "Move the lead back to the new stage", "crm.user")
+                        .transition("stage", Option::None, "new"),
+                ],
+                ext: Default::default(),
+            }
+            .with_ui(ModelUi {
+                title: Some("{title}".into()),
+                subtitle: Some("{contact_name}".into()),
+                list: vec![
+                    "title".into(),
+                    "party_id".into(),
+                    "contact_name".into(),
+                    "expected_revenue_minor".into(),
+                    "expected_close".into(),
+                    "stage".into(),
+                ],
+                card: vec![
+                    "title".into(),
+                    "contact_name".into(),
+                    "expected_revenue_minor".into(),
+                    "expected_close".into(),
+                ],
+                card_sum: Some("expected_revenue_minor".into()),
+                quick_create: vec![
+                    "title".into(),
+                    "contact_name".into(),
+                    "expected_revenue_minor".into(),
+                ],
+                sections: vec![UiSection {
+                    label: "Why it was lost".into(),
+                    fields: vec!["lost_reason".into()],
+                    collapsed: false,
+                    show_in: vec!["lost".into()],
+                }],
+                default_view: Some("kanban".into()),
+                report: Some(ReportUi {
+                    rows: Some("stage".into()),
+                    cols: Option::None,
+                    measure: Some("expected_revenue_minor".into()),
+                }),
+                ..Default::default()
+            }),
+        ],
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
@@ -79,9 +157,11 @@ pub fn module() -> Module {
             &["crm", "leads", "pipeline"],
             "crm",
             &["base"],
-        ),
+        )
+        .home("lead"),
     };
     m.translated(&[
+        include_str!("../../../../packages/labels/en/crm.toml"),
         include_str!("../../../../packages/labels/de/crm.toml"),
         include_str!("../../../../packages/labels/fr/crm.toml"),
         include_str!("../../../../packages/labels/pl/crm.toml"),
@@ -190,11 +270,30 @@ mod tests {
                 Value::map([("id", Value::text(&id)), ("stage", Value::text(stage))]),
             )
         };
-        // Kanban moves: new -> qualified -> won -> new (reopen) -> lost.
-        for stage in ["qualified", "won", "new", "lost"] {
+        // Kanban moves: new -> qualified -> won -> new (reopen).
+        for stage in ["qualified", "won", "new"] {
             set(stage).unwrap_or_else(|e| panic!("{stage}: {e:?}"));
             assert_eq!(s.field("lead", &id, "stage"), Some(Value::text(stage)));
         }
+        // Losing a deal needs a reason (`needs = ["lost_reason"]`): refused without one, and
+        // accepted once the record has it.
+        let e = set("lost");
+        assert!(
+            matches!(&e, Err(obop_commands::CallError::Handler(m)) if m.contains("needs lost_reason")),
+            "{e:?}"
+        );
+        call(
+            &d,
+            &u,
+            "lead.update",
+            Value::map([
+                ("id", Value::text(&id)),
+                ("lost_reason", Value::text("Chose a cheaper offer")),
+            ]),
+        )
+        .unwrap();
+        set("lost").unwrap();
+        assert_eq!(s.field("lead", &id, "stage"), Some(Value::text("lost")));
         // qualified is only reachable from new.
         let e = set("qualified");
         assert!(

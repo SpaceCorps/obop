@@ -5,6 +5,7 @@ summary = "Proyectos, hitos y tareas con responsables, plazos y flujos de estado
 
 [labels.es.model.projects_project]
 name = "Proyecto"
+plural = "Proyectos"
 description = "Un conjunto de trabajo con un objetivo"
 
 [labels.es.model.projects_project.field.name]
@@ -58,6 +59,7 @@ description = "Reabrir un proyecto terminado"
 
 [labels.es.model.projects_milestone]
 name = "Hito"
+plural = "Hitos"
 description = "Un punto de control de un proyecto"
 
 [labels.es.model.projects_milestone.field.project_id]
@@ -95,6 +97,7 @@ description = "Registrar que un hito pendiente se incumplió"
 
 [labels.es.model.projects_task]
 name = "Tarea"
+plural = "Tareas"
 description = "Una unidad de trabajo dentro de un proyecto"
 
 [labels.es.model.projects_task.field.title]
@@ -163,3 +166,23 @@ description = "Tiempo estimado para todas las tareas del proyecto que no están 
 [labels.es.model.projects_project.field.progress]
 label = "Avance"
 description = "Proporción de las tareas del proyecto que están hechas, en porcentaje; las tareas canceladas no cuentan"
+
+[labels.es.model.projects_milestone.action.reset]
+label = "Restablecer"
+description = "Devolver un hito alcanzado a pendiente, por ejemplo si se marcó por error"
+
+[labels.es.model.projects_milestone.action.reset_missed]
+label = "Restablecer"
+description = "Devolver un hito no alcanzado a pendiente, por ejemplo si su fecha cambió"
+
+[labels.es.model.projects_task.action.complete_now]
+label = "Completar"
+description = "Marcar una tarea pendiente como completada sin empezarla antes"
+
+[labels.es.model.projects_task.action.reopen]
+label = "Reabrir"
+description = "Reabrir una tarea completada, de vuelta a pendiente"
+
+[labels.es.model.projects_task.action.reopen_cancelled]
+label = "Reabrir"
+description = "Reabrir una tarea cancelada, de vuelta a pendiente"

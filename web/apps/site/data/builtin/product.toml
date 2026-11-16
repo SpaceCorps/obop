@@ -1,7 +1,7 @@
 # Snapshot of crates/modules/product/src/lib.rs (built-in).
 [module]
 id = "product"
-version = "0.2.1"
+version = "0.2.2"
 name = "Products"
 description = "Goods and services the business sells, with SKU, list price and cost."
 summary = "Products and services with prices and cost, shared by sales, invoicing and stock."
@@ -39,6 +39,12 @@ name = "list_price_minor"
 description = "List price in minor currency units"
 class = "none"
 kind = "money"
+
+[[model.field]]
+name = "image"
+description = "Picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB)"
+class = "none"
+kind = "image"
 
 [[model.field]]
 name = "cost_minor"

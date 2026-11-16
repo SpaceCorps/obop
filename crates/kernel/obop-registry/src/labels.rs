@@ -40,10 +40,16 @@ pub struct FieldTr {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ModelTr {
     pub entry: Entry,
+    /// The plural of the model's name per language (D95), `plural` under `[labels.<lang>.model.<m>]`;
+    /// English too, from `[labels.en...]`.
+    pub plurals: Texts,
     pub fields: BTreeMap<String, FieldTr>,
     pub actions: BTreeMap<String, Entry>,
     /// Action -> assertion key -> language -> the message of the refusal.
     pub asserts: BTreeMap<String, BTreeMap<String, Texts>>,
+    /// The message of the model's guard (D77) per language: what the lock banner says,
+    /// `[labels.<lang>.model.<m>.guard] message`.
+    pub guard: Texts,
 }
 
 /// All translations of one module.
@@ -79,11 +85,22 @@ pub struct NameDesc {
 #[serde(deny_unknown_fields)]
 pub struct ModelLabels {
     pub name: Option<String>,
+    /// The plural of the name ("Journal entries"), D95.
+    pub plural: Option<String>,
     pub description: Option<String>,
     #[serde(default)]
     pub field: BTreeMap<String, FieldLabels>,
     #[serde(default)]
     pub action: BTreeMap<String, ActionLabels>,
+    /// `[labels.<lang>.model.<m>.guard]`: the message of the model's guard.
+    pub guard: Option<GuardLabels>,
+}
+
+/// `message`: what an interface says about a record the model's guard (D77) freezes.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct GuardLabels {
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
@@ -164,6 +181,8 @@ pub struct ModelShape {
     pub fields: BTreeMap<String, Option<BTreeSet<String>>>,
     /// Action name -> the keys of its assertions that have a message to translate.
     pub actions: BTreeMap<String, BTreeSet<String>>,
+    /// The model has a guard with a message to translate.
+    pub guard_message: bool,
 }
 
 impl Shape {
@@ -202,6 +221,11 @@ impl Shape {
                                     )
                                 })
                                 .collect(),
+                            guard_message: m
+                                .ext
+                                .guard
+                                .as_ref()
+                                .is_some_and(|g| g.message.is_some()),
                         },
                     )
                 })
@@ -245,11 +269,24 @@ pub fn check_labels(labels: &BTreeMap<String, LangLabels>, shape: &Shape) -> Res
                 return Err(format!("labels.{at}: the package has no model {model:?}"));
             };
             val(format!("{at}.name"), &ml.name, MAX_LABEL_CHARS)?;
+            val(format!("{at}.plural"), &ml.plural, MAX_LABEL_CHARS)?;
             val(
                 format!("{at}.description"),
                 &ml.description,
                 MAX_DESCRIPTION_CHARS,
             )?;
+            if let Some(g) = &ml.guard {
+                if !ms.guard_message {
+                    return Err(format!(
+                        "labels.{at}.guard: {model} has no guard with a message"
+                    ));
+                }
+                val(
+                    format!("{at}.guard.message"),
+                    &g.message,
+                    MAX_DESCRIPTION_CHARS,
+                )?;
+            }
             for (field, fl) in &ml.field {
                 let at = format!("{at}.field.{field}");
                 let Some(opts) = ms.fields.get(field) else {
@@ -327,7 +364,11 @@ impl Translations {
             for (model, ml) in &l.model {
                 let mt = t.models.entry(model.clone()).or_default();
                 put(&mut mt.entry.labels, lang, &ml.name);
+                put(&mut mt.plurals, lang, &ml.plural);
                 put(&mut mt.entry.descriptions, lang, &ml.description);
+                if let Some(g) = &ml.guard {
+                    put(&mut mt.guard, lang, &g.message);
+                }
                 for (field, fl) in &ml.field {
                     let ft = mt.fields.entry(field.clone()).or_default();
                     put(&mut ft.entry.labels, lang, &fl.label);
@@ -368,6 +409,11 @@ impl Translations {
 
     pub fn is_empty(&self) -> bool {
         self == &Self::default()
+    }
+
+    /// The message of the guard of `model` in `lang`, if the tables have one.
+    pub fn guard_message(&self, model: &str, lang: &str) -> Option<&str> {
+        self.models.get(model)?.guard.get(lang).map(String::as_str)
     }
 
     /// The message of the assertion `key` of `model.action` in `lang`, if the tables have one.
@@ -459,6 +505,40 @@ mod tests {
     }
 
     #[test]
+    fn a_guard_message_is_translated_only_where_the_model_has_one() {
+        let mut shape = Shape::default();
+        for (m, has) in [("locked", true), ("plain", false)] {
+            shape.models.insert(
+                m.into(),
+                ModelShape {
+                    guard_message: has,
+                    ..ModelShape::default()
+                },
+            );
+        }
+        let doc = |m: &str, msg: &str| format!("[labels.de.model.{m}.guard]\nmessage = {msg}");
+        let check = |s: String| check_labels(&Translations::parse_labels(&s).unwrap(), &shape);
+        let ok = doc(
+            "locked",
+            "\"Ein gebuchter Beleg kann nicht geändert werden.\"",
+        );
+        assert!(check(ok.clone()).is_ok());
+        let t = Translations::from_labels(&Translations::parse_labels(&ok).unwrap());
+        assert_eq!(
+            t.guard_message("locked", "de"),
+            Some("Ein gebuchter Beleg kann nicht geändert werden.")
+        );
+        assert_eq!(t.guard_message("locked", "fr"), None);
+        let e = check(doc("plain", "\"x\"")).unwrap_err();
+        assert!(
+            e.contains("labels.de.model.plain.guard") && e.contains("no guard"),
+            "{e}"
+        );
+        assert!(check(doc("locked", "\"<b>x</b>\"")).is_err());
+        assert!(Translations::parse_labels(&doc("locked", "\"x\"\nlabel = \"y\"")).is_err());
+    }
+
+    #[test]
     fn assertion_messages_are_checked_against_the_keys_of_the_action() {
         let mut shape = Shape::default();
         shape.models.insert(
@@ -469,6 +549,7 @@ mod tests {
                     ("go".to_string(), BTreeSet::from(["only_open".to_string()])),
                     ("stop".to_string(), BTreeSet::new()),
                 ]),
+                guard_message: false,
             },
         );
         let doc = |at: &str, msg: &str| format!("[labels.sv.model.m.action.{at}]\nmessage = {msg}");

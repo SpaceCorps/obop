@@ -28,7 +28,7 @@ const kick = computed(() => ({
 const head = (s: string) => s.slice(0, s.lastIndexOf(" ") + 1);
 const tail = (s: string) => s.slice(s.lastIndexOf(" ") + 1);
 const OPEN = [
-  { icon: "plug", to: () => "/app/", text: () => m.value.home.ctaPrimary },
+  { icon: "plug", to: () => href("/pricing/"), text: () => m.value.home.pricingCta },
   {
     icon: "home",
     to: () => href("/docs/getting-started/"),
@@ -58,7 +58,9 @@ const openCards = computed(() =>
           <h1>{{ m.home.titleA }}<br />{{ m.home.titleB }}</h1>
           <p class="lead">{{ m.home.lead }}</p>
           <div class="actions">
-            <a class="btn primary large" href="/app/">{{ m.home.ctaPrimary }}</a>
+            <a class="btn primary large" :href="href('/docs/getting-started/')">{{
+              m.home.ctaPrimary
+            }}</a>
             <a class="btn large" :href="href('/apps/')">{{ m.home.ctaSecondary }}</a>
           </div>
         </div>
@@ -73,7 +75,7 @@ const openCards = computed(() =>
           <div class="mock-window">
             <div class="mock-side">
               <div class="mock-app"><Tile id="crm" name="CRM" :size="28" /><b>CRM</b></div>
-              <i class="on">Lead</i><i>Stage</i><i>Activity</i>
+              <i class="on">Lead</i>
             </div>
             <div class="mock-main">
               <div class="mock-head">
@@ -113,9 +115,8 @@ const openCards = computed(() =>
             <Icon name="sparkle" :size="18" />
             <div>
               <b>Waiting for a human to approve</b>
-              <span>post invoice INV-0042</span>
+              <span>post a draft invoice</span>
             </div>
-            <span class="mock-btn">Review</span>
           </div>
           <p class="mock-caption">{{ m.home.mockCaption }}</p>
         </div>
@@ -188,7 +189,11 @@ const openCards = computed(() =>
           </div>
           <div class="codebox">
             <div class="codebar"><i></i><i></i><i></i><span>obop.toml</span></div>
-            <pre class="code" aria-label="Example obop.toml"><code><span class="c">[module]</span>
+            <pre
+              class="code"
+              aria-label="Example obop.toml"
+            ><code># An excerpt of packages/fleet.toml
+<span class="c">[module]</span>
 <span class="k">id</span> = <span class="s">"fleet"</span>
 <span class="k">name</span> = <span class="s">"Fleet"</span>
 
@@ -229,7 +234,9 @@ const openCards = computed(() =>
             </li>
           </ol>
           <div class="steps-cta">
-            <a class="btn primary large" href="/app/">{{ m.home.stepsCta }}</a>
+            <a class="btn primary large" :href="href('/docs/getting-started/')">{{
+              m.home.stepsCta
+            }}</a>
           </div>
         </div>
       </div>
@@ -309,7 +316,7 @@ const openCards = computed(() =>
         <Logo variant="mark" :size="44" />
         <h2>{{ m.home.ctaTitle }}</h2>
         <p>{{ m.home.ctaBody }}</p>
-        <a class="btn large light" href="/app/">{{ m.home.ctaButton }}</a>
+        <a class="btn large light" :href="href('/docs/getting-started/')">{{ m.home.ctaButton }}</a>
       </div>
     </section>
     <component :is="'script'" type="module" src="/site/home.js" />

@@ -5,6 +5,7 @@ summary = "Ett register över affärsdokument med ägare, utgångsdatum och sekr
 
 [labels.sv.model.documents_folder]
 name = "Mapp"
+plural = "Mappar"
 description = "En mapp som samlar dokument"
 
 [labels.sv.model.documents_folder.field.name]
@@ -21,6 +22,7 @@ description = "Vad som hör hemma i mappen"
 
 [labels.sv.model.documents_document]
 name = "Dokument"
+plural = "Dokument"
 description = "Ett avtal, en policy, ett certifikat eller annat dokument i arkivet"
 
 [labels.sv.model.documents_document.field.title]

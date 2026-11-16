@@ -5,6 +5,7 @@ summary = "Wiki: puuksi järjestetyt artikkelit luonnos-, julkaistu- ja arkistoi
 
 [labels.fi.model.knowledge_article]
 name = "Artikkeli"
+plural = "Artikkelit"
 description = "Tietämyskannan artikkeli"
 
 [labels.fi.model.knowledge_article.field.title]

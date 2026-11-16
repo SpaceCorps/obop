@@ -17,24 +17,32 @@
 //! Afterwards the trial balance of the imported moves is compared with the one OAS computes from
 //! the same file, and a difference fails the run.
 //!
-//! Idempotency: a ledger of records `oas_import_map` (source, table, OAS id, obop model and id,
-//! and the OAS hash for a voucher) remembers what has been created. A second run creates only
-//! what is not in the ledger and refuses if a voucher that was imported has changed in the file.
-//! (A shared source-key store of another branch is not here; this ledger is local to the
-//! importer.)
+//! Idempotency: the shared import map (`obop_commands::import_map`, `obop import --source-system`,
+//! `obop import-map search|get`). Every record the importer makes gets one entry: source system
+//! `oas:<16 hex of the company name and organisation number>`, source table = the OAS table
+//! (`company`, `account`, `journal`, `voucher`, `customer`, `document`), source id = the OAS id
+//! (a voucher's is `<id>#<OAS hash>`, which is how a voucher that changed in the file is noticed).
+//! Accounts, journals, parties, vouchers and the company go through `bulk_create` with a
+//! `source`, so the record and its entry are written in one transaction; a receipt has a file
+//! field, which `bulk_create` does not take, so its entry is written right after the record.
+//! Existing accounts and journals that are matched by code get an entry too. A second run
+//! creates only what has no entry and refuses if a voucher that was imported has changed in the
+//! file. The importer used to keep a private table `oas_import_map`; a run adopts its rows into
+//! the shared map ([`adopt_legacy`]) and removes them from the private table.
 
 pub(crate) mod source;
 pub(crate) mod types;
 
 use crate::app::App;
-use obop_commands::{CallError, Principal, Surface, Value, Vault};
+use obop_commands::{CallError, Principal, Surface, Value, Vault, import_map};
 use serde_json::{Value as J, json};
 use source::{Oas, Voucher};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::path::Path;
 
-pub const MAP_MODEL: &str = "oas_import_map";
+/// The private ledger of earlier versions; read only to adopt its rows.
+pub const LEGACY_MAP_MODEL: &str = "oas_import_map";
 pub const RUN_MODEL: &str = "oas_import_run";
 
 #[derive(Debug, Clone, Default)]
@@ -199,17 +207,109 @@ fn models_of(app: &App, p: &Principal) -> HashSet<String> {
 
 type Ledger = HashMap<(String, String), (String, String)>;
 
-fn load_ledger(app: &App, source: &str) -> Result<Ledger, String> {
+/// The source id of one OAS row: a voucher carries its hash, the rest are the plain id.
+fn skey(table: &str, oas_id: &str, hash: &str) -> String {
+    if table == "voucher" && !hash.is_empty() {
+        format!("{oas_id}#{hash}")
+    } else {
+        oas_id.to_string()
+    }
+}
+
+/// The rows of the private ledger of earlier versions that belong to `source`:
+/// (table, OAS id, obop model, obop id, hash).
+fn legacy_rows(app: &App, source: &str) -> Vec<[String; 5]> {
     let rows = app
         .store
         .backend()
-        .list(MAP_MODEL)
-        .map_err(|e| format!("cannot read the import ledger: {e}"))?;
+        .find(LEGACY_MAP_MODEL, "source", &J::from(source))
+        .unwrap_or_default();
+    rows.into_iter()
+        .map(|(_, f)| {
+            let s = |k: &str| f.get(k).and_then(J::as_str).unwrap_or_default().to_string();
+            [s("table"), s("oas_id"), s("model"), s("obop_id"), s("hash")]
+        })
+        .collect()
+}
+
+fn write_entry(
+    app: &App,
+    by: &str,
+    source: &str,
+    (table, sid): (&str, &str),
+    (model, record): (&str, &str),
+) -> Result<(), String> {
+    let backend = app.store.backend();
+    let id = import_map::entry_id(model, source, table, sid);
+    // An entry whose record was deleted is replaced.
+    let _ = backend.delete(import_map::MODEL, &id);
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    backend
+        .insert(
+            import_map::MODEL,
+            &id,
+            &import_map::entry_fields((model, record), (source, table, sid), secs, by),
+        )
+        .map_err(|e| format!("cannot write the import map: {e}"))
+}
+
+/// One-time adoption: the rows of the private `oas_import_map` of earlier versions become
+/// entries of the shared import map (when their record still exists and the key has no entry),
+/// then they are removed from the private table. Returns how many entries were written.
+fn adopt_legacy(app: &App, by: &str, source: &str) -> Result<usize, String> {
+    let backend = app.store.backend();
+    let mut n = 0;
+    for [table, oas_id, model, record, hash] in legacy_rows(app, source) {
+        if backend.get(&model, &record).ok().flatten().is_none() {
+            continue;
+        }
+        let sid = skey(&table, &oas_id, &hash);
+        let id = import_map::entry_id(&model, source, &table, &sid);
+        if backend.get(import_map::MODEL, &id).ok().flatten().is_none() {
+            write_entry(app, by, source, (&table, &sid), (&model, &record))?;
+            n += 1;
+        }
+    }
+    for (id, _) in backend
+        .find(LEGACY_MAP_MODEL, "source", &J::from(source))
+        .unwrap_or_default()
+    {
+        let _ = backend.delete(LEGACY_MAP_MODEL, &id);
+    }
+    Ok(n)
+}
+
+/// (table, OAS id) -> (obop id, hash) of what the import map holds for `source`, plus, for a
+/// dry run, the rows of a private ledger that a real run would adopt.
+fn load_ledger(app: &App, source: &str) -> Result<Ledger, String> {
+    let backend = app.store.backend();
+    let rows = backend
+        .find(import_map::MODEL, "source_system", &J::from(source))
+        .map_err(|e| format!("cannot read the import map: {e}"))?;
     let mut out = Ledger::new();
     for (_, f) in rows {
         let s = |k: &str| f.get(k).and_then(J::as_str).unwrap_or_default().to_string();
-        if s("source") == source {
-            out.insert((s("table"), s("oas_id")), (s("obop_id"), s("hash")));
+        // An entry whose record was deleted counts as not imported.
+        if backend
+            .get(&s("model"), &s("record"))
+            .ok()
+            .flatten()
+            .is_none()
+        {
+            continue;
+        }
+        let (table, sid) = (s("source_table"), s("source_id"));
+        let (id, hash) = match sid.split_once('#') {
+            Some((i, h)) if table == "voucher" => (i.to_string(), h.to_string()),
+            _ => (sid, String::new()),
+        };
+        out.insert((table, id), (s("record"), hash));
+    }
+    for [table, oas_id, model, record, hash] in legacy_rows(app, source) {
+        if backend.get(&model, &record).ok().flatten().is_some() {
+            out.entry((table, oas_id)).or_insert((record, hash));
         }
     }
     Ok(out)
@@ -277,6 +377,73 @@ impl Ctx<'_> {
         self.ledger.get(&(table.to_string(), oas_id.to_string()))
     }
 
+    /// Call a command, waiting out the per-minute limit of `bulk_create` (a refused call
+    /// changed nothing, so repeating it is safe).
+    fn call_waiting(&self, cmd: &str, input: &J) -> Result<J, String> {
+        let mut waited = 0;
+        loop {
+            match self.call(cmd, input.clone()) {
+                Err(e) if e.contains("too many bulk imports") && waited < 5 => {
+                    waited += 1;
+                    std::thread::sleep(std::time::Duration::from_secs(61));
+                }
+                r => return r,
+            }
+        }
+    }
+
+    /// Create many records of one model with `bulk_create`, in chunks. With `table` each row
+    /// carries its source key (OAS id, hash) and the entry of the import map is written in the
+    /// same transaction as the record; without it the rows are plain (the lines of a move).
+    /// Returns the ids in the order of `items`.
+    fn bulk(
+        &mut self,
+        model: &str,
+        table: Option<&str>,
+        items: Vec<(String, String, J)>,
+    ) -> Result<Vec<String>, String> {
+        let mut out = Vec::with_capacity(items.len());
+        for chunk in items.chunks(obop_registry::MAX_BULK_ROWS) {
+            let mut input = json!({
+                "rows": chunk.iter().map(|c| c.2.clone()).collect::<Vec<_>>(),
+                "mode": "all_or_nothing",
+            });
+            if let Some(t) = table {
+                input["source"] = json!({
+                    "system": self.source,
+                    "table": t,
+                    "ids": chunk.iter().map(|c| skey(t, &c.0, &c.1)).collect::<Vec<_>>(),
+                });
+            }
+            let v = self.call_waiting(&format!("{model}.bulk_create"), &input)?;
+            let ids: Vec<String> = v["ids"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|i| i.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if ids.len() != chunk.len() {
+                return Err(format!(
+                    "{model}.bulk_create returned {} ids for {} rows",
+                    ids.len(),
+                    chunk.len()
+                ));
+            }
+            if let Some(t) = table {
+                for ((oas_id, hash, _), id) in chunk.iter().zip(&ids) {
+                    self.ledger
+                        .insert((t.to_string(), oas_id.clone()), (id.clone(), hash.clone()));
+                }
+            }
+            out.extend(ids);
+        }
+        Ok(out)
+    }
+
+    /// Record a source key for a record that `bulk_create` did not make (a receipt, or an
+    /// existing account or journal that was matched by its code).
     fn remember(
         &mut self,
         table: &str,
@@ -285,18 +452,13 @@ impl Ctx<'_> {
         obop_id: &str,
         hash: &str,
     ) -> Result<(), String> {
-        let fields = [
-            ("source", &self.source[..]),
-            ("table", table),
-            ("oas_id", oas_id),
-            ("model", model),
-            ("obop_id", obop_id),
-            ("hash", hash),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), Value::text(v)))
-        .collect();
-        self.app.store.insert(MAP_MODEL, fields)?;
+        write_entry(
+            self.app,
+            &self.p.id,
+            &self.source,
+            (table, &skey(table, oas_id, hash)),
+            (model, obop_id),
+        )?;
         self.ledger.insert(
             (table.to_string(), oas_id.to_string()),
             (obop_id.to_string(), hash.to_string()),
@@ -442,6 +604,18 @@ pub fn import(app: &App, p: &Principal, oas_path: &Path, opts: &Options) -> Resu
         se: models.contains("accounting_se_company"),
         documents: models.contains("documents_document"),
     };
+    if !opts.dry_run {
+        match adopt_legacy(app, &p.id, &source) {
+            Ok(0) => {}
+            Ok(n) => rep.notes.push(format!(
+                "adopted {n} row(s) of the private oas_import_map ledger of an earlier version into the shared import map"
+            )),
+            Err(e) => {
+                rep.problems.push(e);
+                return Err(rep);
+            }
+        }
+    }
     let ledger = match load_ledger(app, &source) {
         Ok(l) => l,
         Err(e) => {
@@ -490,14 +664,14 @@ pub fn import(app: &App, p: &Principal, oas_path: &Path, opts: &Options) -> Resu
     if oas.vouchers.iter().any(|v| v.corrects.is_some()) {
         let n = oas.vouchers.iter().filter(|v| v.corrects.is_some()).count();
         rep.notes.push(format!(
-            "{n} correcting voucher(s): kept as ordinary moves with 'Corrects OAS voucher X' in the narration; the corrected voucher is not marked reversed (the ledger sums are the same)"
+            "{n} correcting voucher(s): kept as ordinary moves with 'Corrects OAS voucher X' in the narration; the corrected voucher is not marked reversed (the totals are the same)"
         ));
     }
     rep.dropped.push(
         "voucher.prev_hash and hash (the OAS chain is verified, then dropped; the last hash of each series is kept in the import record)".into(),
     );
     rep.dropped.push(
-        "entry.id, entry.line_no (the order of the lines is kept), voucher.id (kept in the import ledger only)".into(),
+        "entry.id, entry.line_no (the order of the lines is kept), voucher.id (kept in the import map only, as part of the source id)".into(),
     );
     let linked: i64 = oas.tables.get("voucher_document").copied().unwrap_or(0);
     if linked > 0 {
@@ -649,7 +823,7 @@ pub fn import(app: &App, p: &Principal, oas_path: &Path, opts: &Options) -> Resu
     {
         problems.push("the company has no name".into());
     }
-    // A move that exists for a voucher the ledger does not know (an interrupted run).
+    // A move that exists for a voucher the import map does not know (an interrupted run).
     let journals_now = existing(app, "accounting_journal", "code");
     let mut moves_now: HashSet<(String, String)> = HashSet::new();
     if have.accounting {
@@ -678,7 +852,7 @@ pub fn import(app: &App, p: &Principal, oas_path: &Path, opts: &Options) -> Resu
                 && moves_now.contains(&(j, v.reference()))
             {
                 problems.push(format!(
-                    "a move with reference {} already exists in journal {} but is not in the import ledger (an interrupted run or a hand entry): delete or rename it, then run again",
+                    "a move with reference {} already exists in journal {} but is not in the import map (an interrupted run or a hand entry): delete or rename it, then run again",
                     v.reference(),
                     v.series
                 ));
@@ -730,7 +904,7 @@ pub fn import(app: &App, p: &Principal, oas_path: &Path, opts: &Options) -> Resu
     }
 }
 
-/// The report of a dry run (and of a refused run): counts from the ledger and the target.
+/// The report of a dry run (and of a refused run): counts from the import map and the target.
 fn fill_dry_rows(
     oas: &Oas,
     cx: &Ctx<'_>,
@@ -871,21 +1045,25 @@ fn run(
         } else if cx.done("company", "1").is_some() {
             r.already = 1;
         } else {
-            let id = cx.create(
+            cx.bulk(
                 "accounting_se_company",
-                nonempty(obj(&[
-                    ("name", json!(c.name)),
-                    ("org_number", json!(c.org_number)),
-                    ("vat_number", json!(c.vat_number)),
-                    ("f_skatt", json!(c.f_skatt)),
-                    ("fiscal_year_start_month", json!(1)),
-                    ("vat_period", json!("quarterly")),
-                    ("currency", json!("SEK")),
-                    ("address", json!(c.address)),
-                    ("contact_email", json!(c.contact_email)),
-                ])),
+                Some("company"),
+                vec![(
+                    "1".into(),
+                    String::new(),
+                    nonempty(obj(&[
+                        ("name", json!(c.name)),
+                        ("org_number", json!(c.org_number)),
+                        ("vat_number", json!(c.vat_number)),
+                        ("f_skatt", json!(c.f_skatt)),
+                        ("fiscal_year_start_month", json!(1)),
+                        ("vat_period", json!("quarterly")),
+                        ("currency", json!("SEK")),
+                        ("address", json!(c.address)),
+                        ("contact_email", json!(c.contact_email)),
+                    ])),
+                )],
             )?;
-            cx.remember("company", "1", "accounting_se_company", &id, "")?;
             r.new = 1;
             rep.notes.push(
                 "company: OAS has no fiscal year start or VAT period; set to month 1 and quarterly, CONFIRM them in accounting_se_company".into(),
@@ -900,6 +1078,7 @@ fn run(
         to: "accounting_account".into(),
         ..Row::default()
     };
+    let mut new_accounts: Vec<(i64, String, J)> = vec![];
     for (a, act) in actions {
         let key = a.number.to_string();
         match act {
@@ -918,17 +1097,27 @@ fn run(
                 r.matched += 1;
             }
             AccAction::Create(ty) => {
-                let id = cx.create(
-                    "accounting_account",
+                new_accounts.push((
+                    a.number,
+                    key.clone(),
                     json!({"code": key, "name": a.name, "account_type": ty,
                            "reconcile": matches!(*ty, "asset_receivable" | "liability_payable")}),
-                )?;
-                cx.remember("account", &key, "accounting_account", &id, "")?;
-                acc_id.insert(a.number, id);
+                ));
                 r.new += 1;
             }
             AccAction::NoType => return Err(format!("account {} has no type", a.number)),
         }
+    }
+    let ids = cx.bulk(
+        "accounting_account",
+        Some("account"),
+        new_accounts
+            .iter()
+            .map(|(_, k, j)| (k.clone(), String::new(), j.clone()))
+            .collect(),
+    )?;
+    for ((n, ..), id) in new_accounts.iter().zip(ids) {
+        acc_id.insert(*n, id);
     }
     rep.rows.push(r);
     // Journals, one per series.
@@ -944,6 +1133,7 @@ fn run(
         .iter()
         .map(|v| (v.series.as_str(), ()))
         .collect();
+    let mut new_journals: Vec<(String, J)> = vec![];
     for s in series.keys() {
         if let Some((id, _)) = cx.done("journal", s) {
             journal.insert((*s).to_string(), id.clone());
@@ -954,14 +1144,23 @@ fn run(
             journal.insert((*s).to_string(), id);
             r.matched += 1;
         } else {
-            let id = cx.create(
-                "accounting_journal",
+            new_journals.push((
+                (*s).to_string(),
                 json!({"name": format!("OAS series {s}"), "code": s, "kind": "general", "active": true}),
-            )?;
-            cx.remember("journal", s, "accounting_journal", &id, "")?;
-            journal.insert((*s).to_string(), id);
+            ));
             r.new += 1;
         }
+    }
+    let ids = cx.bulk(
+        "accounting_journal",
+        Some("journal"),
+        new_journals
+            .iter()
+            .map(|(s, j)| (s.clone(), String::new(), j.clone()))
+            .collect(),
+    )?;
+    for ((s, _), id) in new_journals.iter().zip(ids) {
+        journal.insert(s.clone(), id);
     }
     rep.rows.push(r);
     // Customers.
@@ -971,6 +1170,7 @@ fn run(
             to: "party".into(),
             ..Row::default()
         };
+        let mut new_customers: Vec<(String, String, J)> = vec![];
         for c in &oas.customers {
             if cx.done("customer", &c.id.to_string()).is_some() {
                 r.already += 1;
@@ -991,17 +1191,18 @@ fn run(
                 "Country: {}\nImported from OAS customer {}",
                 c.country, c.id
             );
-            let id = cx.create(
-                "party",
+            new_customers.push((
+                c.id.to_string(),
+                String::new(),
                 nonempty(obj(&[
                     ("name", json!(c.name)),
                     ("email", json!(c.email)),
                     ("notes", json!(notes)),
                 ])),
-            )?;
-            cx.remember("customer", &c.id.to_string(), "party", &id, "")?;
+            ));
             r.new += 1;
         }
+        cx.bulk("party", Some("customer"), new_customers)?;
         rep.rows.push(r);
     }
     // Receipts.
@@ -1091,6 +1292,8 @@ fn run(
         ..Row::default()
     };
     let mut lines_made = 0usize;
+    // The moves, with their source keys, in one call per 1,000 vouchers.
+    let mut new_moves: Vec<(String, String, J)> = vec![];
     for v in &oas.vouchers {
         if cx.done("voucher", &v.id.to_string()).is_some() {
             r.already += 1;
@@ -1100,53 +1303,60 @@ fn run(
             .corrects
             .and_then(|c| by_id.get(&c))
             .map(|c| c.reference());
-        let move_id = cx.create(
-            "accounting_move",
+        new_moves.push((
+            v.id.to_string(),
+            v.hash.clone(),
             json!({"journal_id": journal[&v.series], "date": v.event_date,
                    "reference": v.reference(), "narration": narration(v, corrected)}),
-        )?;
-        let mut made: Vec<String> = vec![];
+        ));
+        r.new += 1;
+    }
+    cx.bulk("accounting_move", Some("voucher"), new_moves)?;
+    // The lines of every move that has none (the new ones, and the ones of an interrupted run,
+    // whose moves are in the import map but whose lines were not written).
+    let mut have_lines: HashMap<String, usize> = HashMap::new();
+    for (_, f) in cx
+        .app
+        .store
+        .backend()
+        .list("accounting_move_line")
+        .map_err(|e| e.to_string())?
+    {
+        if let Some(m) = f.get("move_id").and_then(J::as_str) {
+            *have_lines.entry(m.to_string()).or_default() += 1;
+        }
+    }
+    let mut new_lines: Vec<(String, String, J)> = vec![];
+    for v in &oas.vouchers {
+        let Some((mid, _)) = cx.done("voucher", &v.id.to_string()).cloned() else {
+            continue;
+        };
+        let have = have_lines.get(&mid).copied().unwrap_or(0);
+        if have == v.lines.len() {
+            continue;
+        }
+        if have != 0 {
+            return Err(format!(
+                "{}: the move has {have} line(s) but OAS has {}; delete the move's lines or the move by hand and run again",
+                v.reference(),
+                v.lines.len()
+            ));
+        }
         for (acct, debit, credit, vat) in &v.lines {
             let label = match vat {
                 Some(c) if !c.is_empty() => format!("{} [{c}]", v.description),
                 _ => v.description.clone(),
             };
-            match cx.create(
-                "accounting_move_line",
-                json!({"move_id": move_id, "account_id": acc_id[acct], "label": label,
+            new_lines.push((
+                String::new(),
+                String::new(),
+                json!({"move_id": mid, "account_id": acc_id[acct], "label": label,
                        "debit": debit, "credit": credit}),
-            ) {
-                Ok(id) => made.push(id),
-                Err(e) => {
-                    // Take the half-made draft away so a re-run starts clean.
-                    for l in &made {
-                        let _ = cx.call("accounting_move_line.delete", json!({"id": l}));
-                    }
-                    let cleaned = cx
-                        .call("accounting_move.delete", json!({"id": move_id}))
-                        .is_ok();
-                    return Err(format!(
-                        "{}: {e}{}",
-                        v.reference(),
-                        if cleaned {
-                            " (the half-made draft was removed)"
-                        } else {
-                            " (the half-made draft could not be removed: delete move with reference it by hand)"
-                        }
-                    ));
-                }
-            }
+            ));
         }
-        lines_made += made.len();
-        cx.remember(
-            "voucher",
-            &v.id.to_string(),
-            "accounting_move",
-            &move_id,
-            &v.hash,
-        )?;
-        r.new += 1;
     }
+    lines_made += new_lines.len();
+    cx.bulk("accounting_move_line", None, new_lines)?;
     r.note = format!("{lines_made} line(s) created this run");
     rep.rows.push(r);
 
@@ -1234,7 +1444,7 @@ fn verify(
         })
         .collect();
     if moves.len() != oas.vouchers.len() {
-        return Err("verification: not every voucher is in the ledger".into());
+        return Err("verification: not every voucher is in the import map".into());
     }
     let code_of: HashMap<String, String> = backend
         .list("accounting_account")

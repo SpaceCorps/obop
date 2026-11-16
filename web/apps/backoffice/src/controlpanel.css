@@ -55,6 +55,11 @@
 .crumbs svg {
   color: var(--text-subtle);
 }
+/* Tabs (Customize, Dashboards) sit on the panel's bottom rule: one line, not two 12 px apart. */
+.controlpanel > .tabs {
+  margin-block-end: -0.85rem;
+  border-block-end: 0;
+}
 
 .searchwrap {
   position: relative;
@@ -152,36 +157,101 @@
   block-size: 1.75rem;
   margin-inline-start: auto;
 }
+.cp-clear {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+}
+.searchbox .cp-clear + .caretbtn {
+  margin-inline-start: 0;
+}
 
-.suggest,
-.fp-wrap {
-  position: absolute;
-  inset-inline-start: 0;
-  inset-block-start: calc(100% + 6px);
-  z-index: var(--z-popover);
-  box-shadow: var(--shadow-3);
+/* The suggestions and the filter panel sit in the top layer (popover="manual"), placed under the
+   search box by ControlPanel (--at-top, --at-left, --at-width, --at-room): nothing they are drawn
+   in can clip them, however short the list behind (B2). The popover's own frame is undone. */
+.suggest[popover],
+.fp-layer[popover] {
+  position: fixed;
+  inset: auto;
+  top: var(--at-top, 0);
+  left: var(--at-left, 0);
+  margin: 0;
+  color: inherit;
 }
 .suggest {
-  inset-inline-end: 0;
+  inline-size: var(--at-width, 20rem);
+  max-block-size: min(var(--at-room, 60vh), 26rem);
   margin: 0;
   padding: 0.35rem;
+  overflow-y: auto;
   list-style: none;
+  box-shadow: var(--shadow-3);
+  animation: cp-pop var(--dur-2) var(--ease-out);
 }
 .suggest li {
-  padding: 0.45rem 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-block-size: 2.25rem;
+  padding: 0.4rem 0.65rem;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   cursor: pointer;
 }
+.suggest li > svg {
+  flex: none;
+  color: var(--text-subtle);
+}
+.suggest li > span {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A rule between the kinds: search everywhere, exact matches, search in one field. */
+.suggest li.sg-first {
+  margin-block-start: 0.35rem;
+  box-shadow:
+    0 -0.2rem 0 -0.1rem var(--surface),
+    0 -0.25rem 0 -0.1rem var(--border);
+}
 .suggest li[aria-selected="true"] {
   background: var(--accent-soft);
 }
+.suggest li[aria-selected="true"] > svg {
+  color: var(--accent-ink);
+}
+.fp-layer {
+  inline-size: min(46rem, calc(100vw - 2rem));
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
 .fp-wrap {
-  inline-size: min(46rem, 90vw);
-  max-block-size: min(70vh, 34rem);
-  padding: 1.1rem;
+  max-block-size: min(var(--at-room, 70vh), 38rem);
+  padding: 1.25rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-3);
+  animation: cp-pop var(--dur-2) var(--ease-out);
+}
+@keyframes cp-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .suggest,
+  .fp-wrap {
+    animation: none;
+  }
+}
+/* The backdrop and the head with Done belong to the bottom sheet a phone shows. */
+.fp-scrim,
+.fp-head {
+  display: none;
 }
 .fpanel {
   display: grid;
@@ -226,6 +296,68 @@
 }
 .fp-item .chip {
   margin-inline-start: auto;
+}
+.fpanel .fp-group + .fp-group,
+.fpanel .fp-group + .fp-dates,
+.fpanel .fp-dates + .fp-dates {
+  margin-block-start: 0.35rem;
+  padding-block-start: 0.35rem;
+  border-block-start: 1px solid var(--border);
+}
+/* Date ranges: the field's name over a row of pills that wrap. */
+.fp-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-inline: 0.4rem;
+}
+.fp-sub {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+.fp-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.fp-pill {
+  min-block-size: 1.75rem;
+  padding: 0.15rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
+}
+.fp-pill:hover {
+  background: var(--surface-3);
+}
+.fp-pill[aria-pressed="true"] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.fp-pill:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.fp-sort {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-block-start: 1rem;
+}
+.fp-sort h4 {
+  margin-block-end: 0.1rem;
+}
+.fp-sort .btn svg {
+  flex: none;
 }
 .fp-custom {
   margin-block-start: 0.5rem;
@@ -278,12 +410,111 @@
 .fp-fav-apply:hover {
   background: var(--surface-3);
 }
-.fp-wrap input:not([type="checkbox"]),
+.fp-wrap input:not([type="checkbox"], [type="radio"]),
 .fp-wrap select {
   min-block-size: var(--control-h-sm);
   font-size: var(--text-sm);
 }
 
+/* A phone's title row: the view as a menu that names it, and ⋯ for Import and Export. */
+.cp-phone {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+.cp-viewmenu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-block-size: var(--control-h);
+  padding-inline: 0.6rem 0.45rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.cp-viewmenu:focus-within {
+  border-color: var(--accent-fill);
+  box-shadow: var(--ring);
+}
+.cp-viewmenu > svg {
+  flex: none;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+/* The native list opens the phone's own picker; the select spans the whole pill. */
+.cp-viewmenu select {
+  min-block-size: 0;
+  inline-size: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+.cp-viewmenu select::after {
+  content: none;
+}
+.cp-viewmenu select:focus {
+  border: 0;
+  box-shadow: none;
+  outline: none;
+}
+.cp-more {
+  inline-size: var(--control-h);
+  block-size: var(--control-h);
+  color: var(--text);
+}
+/* New on a phone: one round button at the thumb, above the home bar. */
+.cp-fab {
+  position: fixed;
+  inset-block-end: max(var(--space-4), calc(env(safe-area-inset-bottom) + var(--space-2)));
+  inset-inline-end: var(--space-4);
+  z-index: var(--z-sticky);
+  display: inline-grid;
+  place-items: center;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  padding: 0;
+  border: 1px solid color-mix(in oklab, var(--accent-fill) 82%, var(--text));
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  box-shadow: var(--edge), var(--shadow-3);
+  cursor: pointer;
+  transition:
+    transform var(--dur-1) var(--ease-out),
+    background-color var(--dur-1) var(--ease-out);
+}
+.cp-fab:active {
+  transform: scale(0.96);
+  background: color-mix(in oklab, var(--accent-fill) 85%, var(--text));
+}
+.cp-fab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+/* A list keeps its pager on the bottom edge: the button floats above it. */
+.main:has(.listview > .pager) > .controlpanel > .cp-fab {
+  inset-block-end: calc(4.75rem + env(safe-area-inset-bottom));
+}
+/* The last card scrolls clear of the floating button. */
+.controlpanel:has(> .cp-fab) ~ .content:not(.view-list),
+.controlpanel:has(> .cp-fab) ~ .content .tablewrap {
+  padding-block-end: 5rem;
+}
+
+.cp-bottom > .switcher {
+  /* When the row wraps, the views go to the end of the next line, under the count. */
+  margin-inline-start: auto;
+}
 .count {
   color: var(--text-muted);
   font-size: var(--text-sm);
@@ -327,28 +558,186 @@
 }
 
 @media (max-width: 40rem) {
+  /* The 16 px phone gutter. The model bar keeps to two rows: the title with the view and ⋯, and
+     the search; New floats at the thumb. */
   .controlpanel {
-    padding: 0.75rem;
+    padding: var(--space-3) var(--space-4);
+  }
+  /* Only the model bar: Dashboards in edit mode has five buttons there, which must wrap. */
+  .cp-top:has(> :is(.cp-actions, .cp-phone)) {
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+  }
+  .crumbs {
+    flex: 1 1 auto;
+  }
+  /* The app name is in the top bar. */
+  .crumbs > span,
+  .crumbs > svg {
+    display: none;
+  }
+  .crumbs strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cp-actions {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+  /* Import shows its icon only; the button keeps its name in aria-label. */
+  .cp-label {
+    display: none;
   }
   .searchwrap {
     flex-basis: 100%;
     max-inline-size: none;
   }
+  .cp-bottom > .grow {
+    display: none;
+  }
+  /* Still announced; the pager and the kanban columns show the numbers. */
+  .cp-bottom > .count {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .cp-bottom > .switcher {
+    flex: 1 1 100%;
+  }
+  .fp-dates {
+    padding-inline: 0;
+  }
+  .cp-bottom > .switcher > button {
+    flex: 1;
+    justify-content: center;
+  }
+  /* Group by, Rows, Columns, Measure, Dimension, Date: one per row, the selects in one column. */
+  :is(.viewbar, .cp-bottom) > .inline-field {
+    display: grid;
+    flex: 1 1 100%;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+  }
+  :is(.viewbar, .cp-bottom) > .inline-field > :is(select, input) {
+    inline-size: 100%;
+  }
+  /* The filter panel is a bottom sheet over a backdrop, with a head that keeps Done in reach. The
+     layer covers the screen; the position ControlPanel works out is not used. */
+  .fp-layer[popover] {
+    inset: 0;
+    inline-size: auto;
+    block-size: auto;
+  }
+  .fp-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: var(--overlay);
+    animation: scrim var(--dur-3) var(--ease-out);
+  }
+  /* The 16 px gutter of every page and sheet, and no frame down the screen's edges or along its
+     bottom: only the top edge meets the backdrop. */
   .fp-wrap {
     position: fixed;
-    inset: auto 8px 8px;
-    z-index: var(--z-overlay);
+    inset: auto 0 0;
     inline-size: auto;
-    max-block-size: 75vh;
+    max-block-size: 85dvh;
+    border-start-start-radius: var(--radius-xl);
+    border-start-end-radius: var(--radius-xl);
+    animation: cp-sheet var(--dur-3) var(--ease-out);
+    padding: var(--space-4);
+    padding-block-end: max(var(--space-4), env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+    border-inline: 0;
+    border-block-end: 0;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+  /* The negative offset and margins take the head over the sheet's padding to its edges. */
+  .fp-head {
+    display: flex;
+    position: sticky;
+    inset-block-start: calc(-1 * var(--space-4));
+    z-index: 1;
+    align-items: center;
+    justify-content: space-between;
+    margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border-block-end: 1px solid var(--border);
+    background: var(--surface);
+  }
+  /* The head already says "Filters"; the section keeps its heading for aria-labelledby. */
+  .fp-wrap #fp-filters {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .fpanel {
     grid-template-columns: 1fr;
   }
+  /* The checkboxes line up with the headings and "Use by default"; the hover pad stays. */
+  .fp-item {
+    margin-inline: -0.4rem;
+  }
   .vlabel {
     display: none;
   }
-  .cp-bottom .count {
-    margin-inline-start: auto;
+  .controlpanel > .tabs {
+    margin: 0 calc(-1 * var(--space-4)) calc(-1 * var(--space-3));
+    padding-inline: var(--space-4);
+  }
+  /* The top bar and the selected tab already say "Customize" and which tab. */
+  .customize .controlpanel > .cp-top {
+    display: none;
+  }
+  /* A long name and column, joined by a no-break space, still breaks before the sheet's edge. */
+  .import-dialog > .hint {
+    font-size: var(--text-base);
+    overflow-wrap: break-word;
+  }
+  .import-dialog .import-pick > .btn {
+    flex: 1 1 100%;
+  }
+}
+/* Touch targets. The facet's remove button grows; negative margins keep the chip as tall. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .facet button {
+    inline-size: 2rem;
+    block-size: 2rem;
+    margin-block: -0.375rem;
+  }
+  .caretbtn {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  .fp-item {
+    min-block-size: 2.75rem;
+  }
+  .fp-pill {
+    min-block-size: 2.25rem;
+    padding-inline: 0.85rem;
+  }
+  .cp-clear {
+    inline-size: 2rem;
+    block-size: 2rem;
+  }
+  /* Done, the custom filter, the search name and Save are as tall as the controls behind the panel. */
+  .fp-wrap input:not([type="checkbox"], [type="radio"]),
+  .fp-wrap select,
+  .fp-wrap .btn {
+    min-block-size: var(--control-h);
+  }
+}
+@keyframes cp-sheet {
+  from {
+    transform: translateY(1.5rem);
+    opacity: 0;
   }
 }
 @media (max-width: 60rem) {
@@ -373,4 +762,18 @@
   max-block-size: 10rem;
   margin-block-start: 0.3rem;
   box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fp-wrap,
+  .fp-scrim {
+    animation: none;
+  }
+}
+/* A tap leaves :hover behind on a touch screen: the filter button does not look pressed after it. */
+@media (hover: none) {
+  .caretbtn:hover:not([aria-expanded="true"]),
+  .cp-clear:hover {
+    background: transparent;
+    color: var(--text-muted);
+  }
 }

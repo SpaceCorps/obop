@@ -5,7 +5,11 @@ summary = "Páginas, menús, entradas de blog y formularios, servidos como sitio
 
 [labels.es.model.website_page]
 name = "Página"
+plural = "Páginas"
 description = "Una página del sitio web"
+
+[labels.es.model.website_page.guard]
+message = "Una página archivada queda retirada para siempre. Cree una página nueva para sustituirla."
 
 [labels.es.model.website_page.field.title]
 label = "Título"
@@ -54,6 +58,7 @@ description = "Retirar definitivamente una página publicada"
 
 [labels.es.model.website_menu_item]
 name = "Elemento de menú"
+plural = "Menú"
 description = "Un elemento de la navegación del sitio"
 
 [labels.es.model.website_menu_item.field.label]
@@ -82,7 +87,11 @@ description = "Indica si el enlace se abre en una ventana nueva"
 
 [labels.es.model.website_blog_post]
 name = "Entrada de blog"
+plural = "Entradas de blog"
 description = "Una entrada de blog"
+
+[labels.es.model.website_blog_post.guard]
+message = "Una entrada archivada queda retirada para siempre. Escriba una entrada nueva para sustituirla."
 
 [labels.es.model.website_blog_post.field.title]
 label = "Título"
@@ -139,6 +148,7 @@ description = "Retirar una entrada publicada"
 
 [labels.es.model.website_form_submission]
 name = "Envío de formulario"
+plural = "Envíos de formulario"
 description = "Un mensaje que un visitante envió mediante un formulario del sitio"
 
 [labels.es.model.website_form_submission.field.form_name]
@@ -192,6 +202,7 @@ description = "Marcar el mensaje como spam"
 
 [labels.es.model.website_page_translation]
 name = "Traducción de la página"
+plural = "Traducciones de páginas"
 description = "Una página traducida a otro idioma; el sitio público la muestra a los visitantes que leen ese idioma"
 
 [labels.es.model.website_page_translation.field.page_id]
@@ -233,6 +244,7 @@ description = "Indica si la traducción se muestra; solo es accesible mientras s
 
 [labels.es.model.website_blog_post_translation]
 name = "Traducción de la entrada"
+plural = "Traducciones de entradas"
 description = "Una entrada de blog traducida a otro idioma"
 
 [labels.es.model.website_blog_post_translation.field.post_id]

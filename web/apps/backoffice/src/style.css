@@ -87,6 +87,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A touch screen has no ⌘K to press, so the search field does not show it. */
+@media (hover: none) and (pointer: coarse) {
+  .searchpill .kbd {
+    display: none;
+  }
+}
 .systray {
   display: flex;
   align-items: center;
@@ -176,6 +182,42 @@
   border-radius: 0 3px 3px 0;
   background: var(--accent-fill);
 }
+/* Configuration, folded under its heading; the heading is a button that opens it in place. */
+.side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.side-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  inline-size: 100%;
+  margin-block-start: 1rem;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.side-toggle:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.side-toggle > .ico {
+  flex: none;
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.side-group.open > .side-toggle > .ico {
+  transform: rotate(180deg);
+}
 .main {
   display: flex;
   flex: 1;
@@ -221,9 +263,12 @@
 .dialog.palette .dialog-body {
   padding: 0;
 }
-.dialog.launcher > h2 + .searchfield,
-.dialog.palette > h2 + .searchfield {
-  margin: 0;
+/* The search stays on top and only the apps scroll under it. */
+.dialog.launcher .dialog-body {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  overflow: hidden;
 }
 .searchfield {
   display: flex;
@@ -246,12 +291,38 @@
 .searchfield input::placeholder {
   color: var(--text-subtle);
 }
+/* Drawn only on a phone or a touch screen (Chrome.tsx): the launcher and the palette have no close
+   button, and there is no Escape key to press. */
+.searchfield > .search-cancel {
+  flex: none;
+  min-block-size: 2.75rem;
+  padding-inline: 0.5rem;
+  color: var(--accent-ink);
+}
+.searchfield:has(> .search-cancel) {
+  padding-inline-end: 0.5rem;
+}
+/* The palette opens its Cancel right under the pointer that tapped search, so a hover box would
+   greet it at once; it stays a plain word as in the launcher, and only a press shows. */
+.searchfield > .btn.search-cancel:hover:not(:disabled, :active) {
+  background: transparent;
+  color: var(--accent-ink);
+}
 .launcher-body {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--space-5);
+  min-block-size: 0;
   padding: var(--space-4) var(--space-5) var(--space-5);
   overflow-y: auto;
+  /* A flick at the end of the list does not scroll the page behind. */
+  overscroll-behavior: contain;
+}
+/* On a touch screen focus starts here, so the keyboard does not cover the grid; a ring around the
+   whole grid would say nothing. */
+.launcher-body:focus {
+  outline: none;
 }
 .launcher-body h3,
 .home-body h2 {
@@ -292,7 +363,9 @@
   border-color: var(--border);
   text-align: start;
 }
+/* display: the Customize .card rule below would otherwise make the tile a grid. */
 .app-tile.card {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 0.85rem;
@@ -324,6 +397,17 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* On the home the summary may take two lines (the launcher and recent rows keep one). */
+.home .app-tile-text small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+}
+.home .app-tile.card {
+  align-items: flex-start;
+}
 
 .dialog.palette {
   inline-size: min(38rem, 100%);
@@ -333,6 +417,7 @@
   margin: 0;
   padding: 0.4rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
 }
 .palette li {
@@ -367,6 +452,12 @@
   padding: 1rem;
   cursor: default;
 }
+/* Found records are listed under the name of their app. */
+.palette li.pal-group {
+  padding: 0.75rem 0.65rem 0.3rem;
+  border-radius: 0;
+  cursor: default;
+}
 
 /* ---------- Home ---------- */
 .home {
@@ -390,8 +481,9 @@
   border-radius: var(--radius-md);
   background: var(--surface);
 }
+/* 38 px with a mouse at either density, like before; 44 px where a finger needs it (--control-h). */
 .home-head .searchfield input {
-  min-block-size: 2.25rem;
+  min-block-size: max(2.25rem, calc(var(--control-h) - 2px));
 }
 .home-body {
   display: flex;
@@ -402,6 +494,331 @@
 .home .app-grid {
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   gap: var(--space-3);
+}
+
+/* ---------- Setup card (home screen of an administrator) ---------- */
+.setup-card {
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--accent-fill) 5%, var(--surface));
+  box-shadow: var(--shadow-1);
+}
+.setup-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.setup-head h2 {
+  font-size: var(--text-lg);
+  margin-block-end: 0.15rem;
+}
+.setup-bar {
+  block-size: 6px;
+  margin-block: var(--space-3) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.setup-bar > span {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--accent-fill);
+  transition: inline-size var(--dur-3) var(--ease-out);
+}
+.setup-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.setup-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  block-size: 100%;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+}
+a.setup-step:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-1);
+}
+.setup-step > .ico {
+  color: var(--text-subtle);
+}
+:dir(rtl) .setup-step > .ico {
+  transform: scaleX(-1);
+}
+.setup-mark {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.setup-step.done .setup-mark {
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+.setup-step.done .setup-text {
+  opacity: 0.65;
+}
+.setup-text {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+.setup-text small {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---------- App overview ---------- */
+.overview .content {
+  padding: var(--space-8);
+}
+.ov-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+.ov-title {
+  flex: 1 1 10rem;
+  min-inline-size: 0;
+}
+.ov-title h1 {
+  font-size: var(--text-2xl);
+  letter-spacing: var(--tracking-tight);
+}
+.ov-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.ov-section {
+  margin-block-start: var(--space-8);
+}
+.ov-section > h2 {
+  margin-block-end: var(--space-3);
+}
+.ov-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--space-3);
+}
+/* The band is the accent unless a tone class (t-ok, t-warn, ...) says otherwise. */
+:where(.ov-card) {
+  --tone: var(--accent-fill);
+}
+.ov-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-inline-size: 0;
+  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) + 3px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: var(--text);
+  overflow: hidden;
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+/* The colour of the state, as a band down the start edge. */
+.ov-card::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  background: var(--tone);
+}
+a.ov-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
+}
+.ov-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.ov-card-top > .ico {
+  flex: none;
+  color: var(--tone-ink, var(--text-muted));
+}
+.ov-overline {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: var(--weight-medium);
+}
+.ov-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+}
+.ov-figure strong {
+  font-size: var(--text-2xl);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.1;
+}
+.ov-money {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+button.ov-more {
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  box-shadow: none;
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+button.ov-more::before {
+  display: none;
+}
+button.ov-more:hover {
+  background: var(--surface-2);
+}
+/* An overview's key figure (charts/KpiTile.tsx) with the colour of its state as a band. */
+:where(.ov-kpi) {
+  --tone: var(--accent-fill);
+}
+.kpi.ov-kpi {
+  position: relative;
+  overflow: hidden;
+  padding-inline-start: calc(var(--space-4) + 3px);
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+.kpi.ov-kpi::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  background: var(--tone);
+}
+a.kpi.ov-kpi:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
+}
+.ov-card-wait {
+  min-block-size: 6.5rem;
+  background: var(--surface-2);
+  box-shadow: none;
+}
+.ov-card-wait::before {
+  display: none;
+}
+.ov-calm {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+}
+.ov-calm > .ico {
+  color: var(--success-ink);
+}
+.ov-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ov-lists a {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-block-size: 2.75rem;
+  padding: 0.55rem 0.75rem 0.55rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+.ov-lists a:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+.ov-lists a > span {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-lists em {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+.ov-lists a > .ico {
+  flex: none;
+  color: var(--text-subtle);
+}
+:dir(rtl) .ov-lists a > .ico {
+  transform: scaleX(-1);
+}
+.ov-config {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+  margin-block-start: var(--space-3);
+}
+.ov-config a {
+  color: var(--accent-ink);
+  font-weight: var(--weight-medium);
+}
+
+/* Toasts stay clear of the Save and Discard bar at the foot of an open record. */
+.canvas:has(.record .formbar) {
+  --toast-offset: 4.25rem;
+}
+/* A keyboard shortcut means nothing where there is no keyboard to press it on. */
+@media (hover: none) and (pointer: coarse) {
+  .kbd-hint {
+    display: none;
+  }
 }
 
 /* ---------- Customize ---------- */
@@ -508,6 +925,16 @@
   font-size: var(--text-sm);
   line-height: 1.6;
 }
+/* The module builder renders the preview one line to a block (no newline characters between them),
+   so every width needs the block; the hanging indent for a wrapped line is in the phone block. */
+.code-line {
+  display: block;
+}
+/* The module builder's secondary "Add field" keeps its own width; only the primary action may fill
+   the row (on a phone, below). */
+.add-field {
+  align-self: flex-start;
+}
 
 /* ---------- Sign-in ---------- */
 .signin-wrap {
@@ -578,6 +1005,33 @@
   font-size: var(--text-2xl);
   margin-block-end: 0.2rem;
 }
+/* "Forgot your password?": a quiet link under the field, its answer right below it. */
+.signin-forgot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-block-start: calc(-1 * var(--space-2));
+}
+.signin-forgot .hint {
+  align-self: stretch;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.linklike {
+  padding: 0.25rem 0;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.linklike:hover {
+  text-decoration: underline;
+}
 .signin-message {
   margin-block-start: var(--space-2);
   overflow-wrap: anywhere;
@@ -606,16 +1060,34 @@
   .sidebar a {
     white-space: nowrap;
   }
+  /* The strip scrolls sideways: its end fades, so a cut-off entry reads as "more this way". */
+  .sidebar {
+    mask-image: linear-gradient(to right, currentColor calc(100% - 1.5rem), transparent);
+    padding-inline-end: 1.5rem;
+  }
+  :dir(rtl) .sidebar {
+    mask-image: linear-gradient(to left, currentColor calc(100% - 1.5rem), transparent);
+  }
+  .side-group {
+    flex-direction: row;
+  }
+  .side-toggle {
+    inline-size: auto;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: inherit;
+    font-weight: var(--weight-medium);
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+  }
   .two {
     grid-template-columns: 1fr;
   }
-  .searchpill span:not(.kbd) {
-    display: none;
-  }
+  /* A tablet keeps the search field with its words (they end in an ellipsis when the bar is short);
+     a box with only a magnifier and ⌘K in the middle of the bar read as neither a field nor a button. */
   .searchpill {
-    inline-size: auto;
-    flex: none;
-    margin-inline: auto 0;
+    max-inline-size: 22rem;
   }
   .signin-wrap {
     grid-template-columns: 1fr;
@@ -630,20 +1102,88 @@
   .home-body {
     padding-inline: var(--space-5);
   }
+  /* The document scrolls here, not the panel: a panel that can still scroll sideways only lets a
+     swipe or a focused field slide every line off the left edge (Customize > Security). Clip, not
+     hidden, so neither box is a scroll container (`.home` would otherwise make it one). Wide content
+     brings its own scroller or wraps. */
+  .main {
+    overflow: clip;
+  }
+  .content {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
 }
 @media (max-width: 40rem) {
+  /* No frame on a phone: the panel is the page, with one 16 px gutter inside it. */
   .workspace {
-    gap: 0.5rem;
-    padding: 0 0.5rem 0.5rem;
+    gap: 0;
+    padding: 0;
   }
-  .brand-app {
-    max-inline-size: 36vw;
+  .main.panel {
+    min-block-size: calc(100dvh - 3.5rem);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
+  /* The bar keeps every button at 44 px and gives the rest to the app's name: the logo and the
+     slash go (the name links home all the same), and Theme stays in the account menu. */
+  .topbar {
+    gap: 0;
+    padding-inline: 0.25rem;
+  }
+  .brand {
+    gap: 0.4rem;
+    margin-inline-start: 0;
+    padding-inline: 0.35rem;
+  }
+  .brand:has(.brand-app) > :is(.logo, .instance-logo),
+  .brand-sep {
+    display: none;
+  }
+  .systray {
+    gap: 0;
+  }
+  .systray > .tip:has(> .theme-btn) {
+    display: none;
+  }
+  /* One icon size in the bar (it mixed 16, 18 and 20); the account menu's items keep theirs. */
+  .topbar :is(.icon-btn, .searchpill) > .ico {
+    inline-size: 20px;
+    block-size: 20px;
+  }
+  /* The avatar stays 34 px to look at; a ring around it takes the tap to about 44 px. Its end
+     margin puts it on the page's 16 px gutter, level with the content below. */
+  .avatar-btn {
+    position: relative;
+    margin-inline: 0.3rem 0.75rem;
+  }
+  .avatar-btn::after {
+    content: "";
+    position: absolute;
+    inset: -0.3rem;
+    border-radius: 50%;
+  }
+  /* A phone shows search as an icon button beside the theme and account buttons, drawn like them. */
   .searchpill {
-    inline-size: 2.25rem;
+    flex: none;
+    inline-size: var(--control-h);
+    block-size: var(--control-h);
+    margin-inline: auto 0;
     padding: 0;
     justify-content: center;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
   }
+  .searchpill:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
+  .searchpill + .systray {
+    margin-inline-start: 0;
+  }
+  .searchpill span:not(.kbd),
   .searchpill .kbd {
     display: none;
   }
@@ -658,20 +1198,182 @@
   }
   .sidebar.open {
     display: flex;
+    margin: 0 var(--space-2) var(--space-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface);
     box-shadow: var(--shadow-1);
+    mask-image: none;
+    padding-inline-end: 0.25rem;
   }
-  .main {
-    min-block-size: 70vh;
+  .sidebar a {
+    min-block-size: 2.75rem;
+    display: flex;
+    align-items: center;
   }
+  .side-group {
+    flex-direction: column;
+  }
+  .side-toggle {
+    inline-size: 100%;
+    min-block-size: 2.75rem;
+    margin-block-start: 0.25rem;
+  }
+  .home-head,
+  .home-body {
+    padding-inline: var(--space-4);
+  }
+  .home-head {
+    gap: var(--space-3);
+    padding-block: var(--space-5) var(--space-3);
+  }
+  /* The filter runs to the same gutter as the app cards under it; the desktop cap of 20rem left it
+     short of their edge on a phone wider than 320 px. */
+  .home-head .searchfield {
+    inline-size: 100%;
+  }
+  /* The home is an icon grid on a phone, four apps a row as on the launcher and the phone's own
+     home screen; the one-line summaries are for wider screens. */
   .home .app-grid,
+  .home .app-grid.small {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3) var(--space-1);
+  }
+  .home .app-tile.card {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: var(--space-2) 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    text-align: center;
+  }
+  .home .app-tile-text {
+    align-items: center;
+    inline-size: 100%;
+  }
+  .home .app-tile-text strong {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    line-height: 1.25;
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+  .home .app-tile-text small {
+    display: none;
+  }
   .app-grid.small {
     grid-template-columns: 1fr;
   }
+  .setup-card {
+    padding: var(--space-4);
+  }
+  /* A phone shows only the steps left, each on one line: the apps stay in reach. */
+  .setup-steps li.is-done,
+  .setup-text small {
+    display: none;
+  }
+  .setup-bar {
+    margin-block-end: var(--space-3);
+  }
+  .overview .content {
+    padding: var(--space-5) var(--space-4) var(--space-8);
+  }
+  .ov-actions {
+    flex: 1 1 100%;
+  }
+  .ov-actions > .btn.primary {
+    order: -1;
+    flex: 1 1 100%;
+  }
+  .ov-grid {
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+    gap: var(--space-2);
+  }
+  .ov-card {
+    padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-3) + 3px);
+  }
+  .ov-section {
+    margin-block-start: var(--space-6);
+  }
   .home-head h1 {
     font-size: var(--text-2xl);
+  }
+  /* The launcher shows three apps a row at 320 px and four at 375. */
+  .launcher-body {
+    gap: var(--space-4);
+    padding-inline: var(--space-4);
+  }
+  .launcher .app-grid:not(.small) {
+    grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+    gap: var(--space-3) var(--space-1);
+  }
+  .launcher .app-tile:not(.row) {
+    gap: 0.35rem;
+    padding: var(--space-2) var(--space-1);
+  }
+  /* A long name (a German compound, say) breaks inside its tile instead of running into the next. */
+  .launcher .app-tile:not(.row) > span {
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+  .palette li {
+    min-block-size: 2.75rem;
+  }
+  /* Customize > Apps: the icon and the name on the first line, colour, Shown and the arrows on the
+     second, every control big enough for a finger. */
+  .app-row {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .app-row > input:not([type="checkbox"], [type="color"]) {
+    flex: 1 1 calc(100% - 36px - var(--space-2));
+  }
+  .app-row .btn.small {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    padding: 0;
+  }
+  .app-row .check {
+    padding-inline: var(--space-2);
+  }
+  .app-row > input[type="color"] {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  /* Theme colours: two even rows of four, each a finger wide. */
+  .theme-tab .swatches {
+    display: grid;
+    grid-template-columns: repeat(4, 2.75rem);
+    justify-content: space-between;
+    row-gap: var(--space-3);
+  }
+  .theme-tab .swatch {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  /* The obop.toml preview wraps instead of being a second scroller inside the page. */
+  .code {
+    max-block-size: none;
+    padding: var(--space-3);
+    overflow: visible;
+    font-size: var(--text-xs);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  /* A wrapped line goes on 4ch in, so its tail does not read as a new key at column 0. */
+  .code-line {
+    padding-inline-start: 4ch;
+    text-indent: -4ch;
+  }
+  .build-actions > .btn.primary {
+    flex: 1 1 100%;
   }
 }
 

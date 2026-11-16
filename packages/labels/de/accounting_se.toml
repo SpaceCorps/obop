@@ -4,6 +4,7 @@ description = "Schwedische Lokalisierung der Buchführung: Firmendaten, Belegser
 
 [labels.de.model.accounting_se_company]
 name = "Unternehmen"
+plural = "Unternehmen"
 description = "Das schwedische Unternehmen, dem die Bücher gehören; normalerweise ein Datensatz"
 
 [labels.de.model.accounting_se_company.field.name]
@@ -49,6 +50,7 @@ description = "Kontakt-E-Mail für die Buchführung"
 
 [labels.de.model.accounting_se_voucher_series]
 name = "Belegserie"
+plural = "Belegserien"
 description = "Eine Belegserie, ein Buchstabe wie A, der Belege einer Art zusammenfasst"
 
 [labels.de.model.accounting_se_voucher_series.field.code]
@@ -77,6 +79,7 @@ description = "Anmerkungen dazu, wie die Serie verwendet wird"
 
 [labels.de.model.accounting_se_vat_box]
 name = "Umsatzsteuerfeld"
+plural = "Umsatzsteuerfelder"
 description = "Ein Feld der schwedischen Umsatzsteuererklärung. UNGEPRÜFT, bis es mit SKV 4700 abgeglichen wurde"
 
 [labels.de.model.accounting_se_vat_box.field.box]
@@ -115,11 +118,11 @@ description = "Ob das Feld vom Eigentümer geprüft wurde; bis dahin falsch"
 
 [labels.de.model.accounting_se_vat_box.field.verified_by]
 label = "Geprüft von"
-description = "Anmeldename der Person, die geprüft hat"
+description = "Anmeldename der Person, die geprüft hat; beim Prüfen erfasst"
 
 [labels.de.model.accounting_se_vat_box.field.verified_on]
 label = "Geprüft am"
-description = "Datum der Prüfung (JJJJ-MM-TT)"
+description = "Datum der Prüfung (JJJJ-MM-TT); beim Prüfen erfasst"
 
 [labels.de.model.accounting_se_vat_box.field.source]
 label = "Quelle"
@@ -127,7 +130,7 @@ description = "Woher das Feld stammt und was geprüft wurde, zum Beispiel die Au
 
 [labels.de.model.accounting_se_vat_box.action.verify]
 label = "Prüfen"
-description = "Das Feld als mit SKV 4700 abgeglichen markieren (nur Freigeber)"
+description = "Das Feld als mit SKV 4700 abgeglichen markieren (nur Freigeber); erfasst, wer wann geprüft hat"
 
 [labels.de.model.accounting_se_vat_box.action.unverify]
 label = "Prüfung zurücknehmen"
@@ -135,6 +138,7 @@ description = "Die Prüfung des Feldes zurücknehmen (nur Freigeber)"
 
 [labels.de.model.accounting_se_vat_code]
 name = "Umsatzsteuercode"
+plural = "Umsatzsteuercodes"
 description = "Ein Umsatzsteuercode, den eine Hauptbuchzeile tragen kann, verknüpft mit einem Grundlagenfeld, einem Steuerfeld und Konten. UNGEPRÜFT, bis er mit SKV 4700 abgeglichen wurde"
 
 [labels.de.model.accounting_se_vat_code.field.code]
@@ -214,11 +218,11 @@ description = "Ob der Code vom Eigentümer geprüft wurde; bis dahin falsch"
 
 [labels.de.model.accounting_se_vat_code.field.verified_by]
 label = "Geprüft von"
-description = "Anmeldename der Person, die geprüft hat"
+description = "Anmeldename der Person, die geprüft hat; beim Prüfen erfasst"
 
 [labels.de.model.accounting_se_vat_code.field.verified_on]
 label = "Geprüft am"
-description = "Datum der Prüfung (JJJJ-MM-TT)"
+description = "Datum der Prüfung (JJJJ-MM-TT); beim Prüfen erfasst"
 
 [labels.de.model.accounting_se_vat_code.field.source]
 label = "Quelle"
@@ -226,7 +230,7 @@ description = "Woher der Code stammt und was geprüft wurde, zum Beispiel die Au
 
 [labels.de.model.accounting_se_vat_code.action.verify]
 label = "Prüfen"
-description = "Den Code als mit SKV 4700 abgeglichen markieren (nur Freigeber)"
+description = "Den Code als mit SKV 4700 abgeglichen markieren (nur Freigeber); erfasst, wer wann geprüft hat"
 
 [labels.de.model.accounting_se_vat_code.action.unverify]
 label = "Prüfung zurücknehmen"
@@ -234,7 +238,11 @@ description = "Die Prüfung des Codes zurücknehmen (nur Freigeber)"
 
 [labels.de.model.accounting_se_vat_report]
 name = "Umsatzsteuerbericht"
+plural = "Umsatzsteuerberichte"
 description = "Ein Umsatzsteuerbericht für eine Periode, aus dem Hauptbuch erstellt und vor der Verwendung von einer Person freigegeben. UNGEPRÜFT: von diesem Paket nicht mit SKV 4700 verglichen"
+
+[labels.de.model.accounting_se_vat_report.guard]
+message = "Ein genehmigter oder eingereichter Umsatzsteuerbericht kann nicht geändert werden, nur seine Notizen."
 
 [labels.de.model.accounting_se_vat_report.field.name]
 label = "Name"
@@ -274,7 +282,7 @@ label = "Vorsteuer"
 description = "Abziehbare Vorsteuer der Periode in Öre, Summe der Eingangszeilen"
 
 [labels.de.model.accounting_se_vat_report.field.vat_to_pay]
-label = "Zu zahlende Umsatzsteuer"
+label = "Zu zahlende oder zu erstattende Umsatzsteuer"
 description = "Ausgangsumsatzsteuer minus Vorsteuer in Öre; negativ bedeutet Erstattung (Feld 49)"
 
 [labels.de.model.accounting_se_vat_report.field.boxes_confirmed]
@@ -316,7 +324,11 @@ description = "Erfassen, dass die Erklärung außerhalb dieses Systems bei Skatt
 
 [labels.de.model.accounting_se_vat_report_line]
 name = "Umsatzsteuerberichtszeile"
+plural = "Umsatzsteuerberichtszeilen"
 description = "Ein Feld eines Umsatzsteuerberichts mit seinem Betrag"
+
+[labels.de.model.accounting_se_vat_report_line.guard]
+message = "Die Zeilen eines genehmigten oder eingereichten Umsatzsteuerberichts können nicht geändert werden."
 
 [labels.de.model.accounting_se_vat_report_line.field.report_id]
 label = "Bericht"

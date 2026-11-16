@@ -38,28 +38,34 @@ function sortGroups(all: string[]): string[] {
 }
 
 /** A checkbox list of permission groups with a filter. */
-function GroupPicker({
+export function GroupPicker({
   groups,
   value,
   onChange,
+  filterAbove,
 }: {
   groups: string[];
   value: string[];
   onChange: (next: string[]) => void;
+  /** Show the filter only when there are more groups than this. Not given: always. */
+  filterAbove?: number;
 }) {
   const [filter, setFilter] = useState("");
-  const shown = sortGroups([...groups, ...value]).filter((g) =>
-    g.toLowerCase().includes(filter.trim().toLowerCase()),
-  );
+  const all = sortGroups([...groups, ...value]);
+  const filtering = filterAbove === undefined || all.length > filterAbove;
+  const wanted = filtering ? filter.trim().toLowerCase() : "";
+  const shown = all.filter((g) => g.toLowerCase().includes(wanted));
   return (
     <fieldset className="group-picker">
       <legend>{t("Permission groups")}</legend>
-      <Input
-        label={t("Filter groups")}
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        autoComplete="off"
-      />
+      {filtering && (
+        <Input
+          label={t("Filter groups")}
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          autoComplete="off"
+        />
+      )}
       <div className="group-list" role="group" aria-label={t("Permission groups")}>
         {shown.map((g) => (
           <Checkbox
@@ -339,7 +345,7 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
         </Button>
       </div>
       {people !== null && (
-        <Table caption={t("People")} dense className="people-table">
+        <Table caption={t("People")} dense stack className="people-table">
           <thead>
             <tr>
               <th scope="col">{t("Person")}</th>
@@ -357,7 +363,7 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
             {people.map((p) => (
               <tr key={p.name} data-person={p.name}>
                 <td>{p.name}</td>
-                <td>{p.admin ? t("Administrator") : t("Member")}</td>
+                <td data-label={t("Role")}>{p.admin ? t("Administrator") : t("Member")}</td>
                 <td className="group-cell" title={p.groups.join(", ")}>
                   {p.groups.length === 0 ? (
                     <span className="hint">{t("None")}</span>
@@ -365,8 +371,9 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
                     p.groups.join(", ")
                   )}
                 </td>
-                <td>{p.mfa_enabled ? t("On") : t("Off")}</td>
-                <td>{p.sessions}</td>
+                <td data-label={t("Two-factor")}>{p.mfa_enabled ? t("On") : t("Off")}</td>
+                <td data-label={t("Sessions")}>{p.sessions}</td>
+                {/* No label on a phone: the badge sits beside the name and says what it is. */}
                 <td>
                   {p.offboarded ? (
                     <Badge tone="danger">{t("Offboarded")}</Badge>
@@ -378,7 +385,7 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
                     <Badge tone="success">{t("Active")}</Badge>
                   )}
                 </td>
-                <td>
+                <td className="cell-actions">
                   <div className="actionrow">
                     <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
                       {t("Groups")}
@@ -419,7 +426,10 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
         </Table>
       )}
       {resetting && (
+        // A new form for each person, so its field takes the focus and is scrolled to: on a phone
+        // it renders far below the row that was tapped.
         <form
+          key={resetting}
           className="stack"
           onSubmit={async (e) => {
             e.preventDefault();
@@ -455,6 +465,7 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
             type="password"
             name="temporary_password"
             autoComplete="new-password"
+            autoFocus
             value={temp}
             onChange={(e) => setTemp(e.target.value)}
             error={error ?? undefined}

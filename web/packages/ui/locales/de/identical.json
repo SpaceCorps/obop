@@ -11,7 +11,9 @@
   "Google Drive",
   "Indigo",
   "Kanban",
+  "Link",
   "Logo",
+  "MM",
   "Marketing",
   "Name",
   "Passkeys",
@@ -49,6 +51,9 @@
   "option\u0004Software",
   "option\u0004Spam",
   "option\u0004Transit",
+  "optional",
+  "{field} in {model}",
   "{field} ≤ {to}",
-  "{field} ≥ {from}"
+  "{field} ≥ {from}",
+  "{quantity} × {price}"
 ]

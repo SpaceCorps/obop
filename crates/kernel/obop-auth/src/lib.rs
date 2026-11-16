@@ -459,6 +459,84 @@ impl Auth {
     }
 }
 
+impl Auth {
+    /// `obop agent-token USER --scopes ...`: the operator, whose authority is the access to the
+    /// database, issues an agent token of `owner` by the same rule as the owner would. The log
+    /// names the actor `operator`, as for the other operator commands (D69).
+    pub fn issue_agent_token_by_operator(
+        &self,
+        owner: &Principal,
+        scopes: &[String],
+        label: &str,
+        registered: &[String],
+    ) -> Result<String, String> {
+        self.issue_agent_token_as("operator", owner, scopes, label, registered)
+    }
+
+    /// The one rule for issuing an agent token (D69 amendment of 2026-11-14). `actor` is who the
+    /// security log names: the owner, or `operator` for the command line.
+    fn issue_agent_token_as(
+        &self,
+        actor: &str,
+        owner: &Principal,
+        scopes: &[String],
+        label: &str,
+        registered: &[String],
+    ) -> Result<String, String> {
+        if !owner.is_person() {
+            return Err("only a human user can issue agent tokens".into());
+        }
+        if scopes.is_empty() {
+            return Err("an agent token needs at least one scope".into());
+        }
+        let label = match label.trim() {
+            "" => "agent",
+            l => l,
+        };
+        if label.chars().count() > AGENT_LABEL_MAX || label.chars().any(char::is_control) {
+            return Err(format!(
+                "the label of an agent token is at most {AGENT_LABEL_MAX} characters on one line"
+            ));
+        }
+        // An administrator holds every group (`Principal::allows`), so may hand on any group the
+        // instance has; a session limited to enrolment holds nothing (D53).
+        let admin = owner.groups.contains(obop_commands::ADMIN_GROUP) && !owner.mfa_limited;
+        let mut through_admin = Vec::new();
+        for s in scopes {
+            if s == obop_commands::ANY_GROUP {
+                return Err(
+                    "`*` names no group and gives a token nothing: list the groups the agent may use"
+                        .into(),
+                );
+            }
+            if owner.groups.contains(s) {
+                continue;
+            }
+            if !admin {
+                return Err(format!("you do not hold {s}, so you cannot delegate it"));
+            }
+            if !registered.contains(s) {
+                return Err(format!(
+                    "{s} is not a registered permission group, so it cannot be delegated"
+                ));
+            }
+            through_admin.push(s.as_str());
+        }
+        let token = self.issue(&owner.id, "agent", scopes, label, None)?;
+        // The log says what the token may do and how the right to give it was held; never the token.
+        let mut detail = format!("label {label:?}; scopes {}", scopes.join(", "));
+        if !through_admin.is_empty() {
+            detail.push_str(&format!(
+                "; held through {}: {}",
+                obop_commands::ADMIN_GROUP,
+                through_admin.join(", ")
+            ));
+        }
+        self.event(&owner.id, "agent_token_issued", actor, &detail);
+        Ok(token)
+    }
+}
+
 impl Authenticator for Auth {
     fn resolve(&self, token: &str) -> Option<Principal> {
         self.resolve_full(token).map(|(p, _)| p)
@@ -534,17 +612,98 @@ impl Authenticator for Auth {
         scopes: &[String],
         label: &str,
     ) -> Result<String, String> {
-        if !owner.is_person() {
-            return Err("only a human user can issue agent tokens".into());
-        }
-        if scopes.is_empty() {
-            return Err("an agent token needs at least one scope".into());
-        }
-        if let Some(bad) = scopes.iter().find(|s| !owner.groups.contains(*s)) {
-            return Err(format!("you do not hold {bad}, so you cannot delegate it"));
-        }
-        self.issue(&owner.id, "agent", scopes, label, None)
+        // No list of registered groups from the caller: only what the owner holds by name.
+        self.issue_agent_token_among(owner, scopes, label, &[])
     }
+
+    fn issue_agent_token_among(
+        &self,
+        owner: &Principal,
+        scopes: &[String],
+        label: &str,
+        registered: &[String],
+    ) -> Result<String, String> {
+        self.issue_agent_token_as(&owner.id, owner, scopes, label, registered)
+    }
+
+    fn agent_tokens_of(&self, owner: &Principal) -> Option<Vec<obop_commands::AgentTokenInfo>> {
+        if !owner.is_person() {
+            return Some(Vec::new());
+        }
+        let now = self.now();
+        let mut out: Vec<_> = self
+            .backend
+            .find("auth_token", "owner", &J::from(owner.id.as_str()))
+            .ok()?
+            .into_iter()
+            .filter(|(_, t)| plain_agent_token(t, now))
+            .map(|(id, t)| {
+                let mut scopes = t.get("scopes").map(str_list).unwrap_or_default();
+                scopes.sort_unstable();
+                obop_commands::AgentTokenInfo {
+                    id,
+                    label: t
+                        .get("label")
+                        .and_then(J::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    scopes,
+                    created_at: t.get("created_at").and_then(J::as_u64).unwrap_or(0),
+                }
+            })
+            .collect();
+        out.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Some(out)
+    }
+
+    fn revoke_agent_token(&self, owner: &Principal, id: &str) -> bool {
+        if !owner.is_person() {
+            return false;
+        }
+        let Ok(Some(t)) = self.backend.get("auth_token", id) else {
+            return false;
+        };
+        // Somebody else's token answers like one that is not there.
+        if t.get("owner").and_then(J::as_str) != Some(owner.id.as_str())
+            || !plain_agent_token(&t, self.now())
+        {
+            return false;
+        }
+        let mut p = Fields::new();
+        p.insert("revoked".into(), J::Bool(true));
+        if !self.backend.update("auth_token", id, &p).unwrap_or(false) {
+            return false;
+        }
+        let label = t.get("label").and_then(J::as_str).unwrap_or_default();
+        self.event(
+            &owner.id,
+            "agent_token_revoked",
+            &owner.id,
+            &format!("label {label:?}"),
+        );
+        true
+    }
+}
+
+/// The longest label of an agent token, in characters.
+pub const AGENT_LABEL_MAX: usize = 80;
+
+/// An agent token a person issued by hand and that still works: not revoked, not expired, and
+/// not the access token of a connected application or of a phone (those are shown, and ended,
+/// with their grant or device).
+fn plain_agent_token(t: &Fields, now: u64) -> bool {
+    t.get("kind").and_then(J::as_str) == Some("agent")
+        && t.get("revoked").and_then(J::as_bool) != Some(true)
+        && t.get("expires_at")
+            .and_then(J::as_u64)
+            .is_none_or(|e| e > now)
+        && t.get("oauth_grant").is_none_or(J::is_null)
+        && t.get("audience").is_none_or(J::is_null)
+        && t.get("mobile").and_then(J::as_bool) != Some(true)
 }
 
 #[cfg(test)]
@@ -615,6 +774,128 @@ mod tests {
                 .contains("exists")
         );
         assert!(a.create_user("a b", "correct horse battery", &[]).is_err());
+    }
+
+    /// D69 amendment of 2026-11-14: the administrator group holds every group, so its holder may
+    /// hand on a registered group the account does not list by name. Nobody else gains anything.
+    #[test]
+    fn an_administrator_delegates_any_registered_group_and_nobody_else_does() {
+        let a = auth();
+        a.create_user(
+            "root",
+            "correct horse battery",
+            &groups(&["platform.admin"]),
+        )
+        .unwrap();
+        a.create_user("ada", "correct horse battery", &groups(&["base.user"]))
+            .unwrap();
+        let admin = a.principal("root").unwrap();
+        let ada = a.principal("ada").unwrap();
+        let registered = groups(&["platform.admin", "base.user", "documents.user"]);
+        let wanted = groups(&["documents.user"]);
+        // A caller that does not say which groups exist changes nothing: only what the account lists.
+        assert!(a.issue_agent_token(&admin, &wanted, "x").is_err());
+        let t = a
+            .issue_agent_token_among(&admin, &wanted, "files", &registered)
+            .unwrap();
+        let agent = a.resolve(&t).unwrap();
+        assert_eq!(agent.kind, PrincipalKind::Agent);
+        assert!(agent.allows("documents.user"));
+        assert!(
+            !agent.allows("base.user") && !agent.allows("platform.admin"),
+            "the token is its scopes, not the administrator"
+        );
+        // Not a group that does not exist, and never `*`.
+        assert_eq!(
+            a.issue_agent_token_among(&admin, &groups(&["nope.user"]), "x", &registered)
+                .unwrap_err(),
+            "nope.user is not a registered permission group, so it cannot be delegated"
+        );
+        assert!(
+            a.issue_agent_token_among(&admin, &groups(&["*"]), "x", &registered)
+                .unwrap_err()
+                .starts_with("`*` names no group")
+        );
+        // A person who is not an administrator hands on what their account lists, as before.
+        assert_eq!(
+            a.issue_agent_token_among(&ada, &wanted, "x", &registered)
+                .unwrap_err(),
+            "you do not hold documents.user, so you cannot delegate it"
+        );
+        assert!(
+            a.issue_agent_token_among(&ada, &groups(&["base.user"]), "x", &registered)
+                .is_ok()
+        );
+        // A session limited to enrolment holds nothing to hand on.
+        let mut limited = admin.clone();
+        limited.mfa_limited = true;
+        assert!(
+            a.issue_agent_token_among(&limited, &wanted, "x", &registered)
+                .is_err()
+        );
+        // The label is short and on one line; an empty one is "agent".
+        let own = groups(&["platform.admin"]);
+        assert!(
+            a.issue_agent_token_among(&admin, &own, &"x".repeat(81), &registered)
+                .is_err()
+        );
+        assert!(
+            a.issue_agent_token_among(&admin, &own, "two\nlines", &registered)
+                .is_err()
+        );
+        assert!(
+            a.issue_agent_token_among(&admin, &own, "  ", &registered)
+                .is_ok()
+        );
+        assert!(
+            a.agent_tokens_of(&admin)
+                .unwrap()
+                .iter()
+                .any(|t| t.label == "agent")
+        );
+    }
+
+    #[test]
+    fn a_person_lists_and_ends_their_own_agent_tokens_and_no_one_elses() {
+        let a = auth();
+        a.create_user(
+            "root",
+            "correct horse battery",
+            &groups(&["platform.admin"]),
+        )
+        .unwrap();
+        a.create_user(
+            "ada",
+            "correct horse battery",
+            &groups(&["base.user", "sales.user"]),
+        )
+        .unwrap();
+        let root = a.principal("root").unwrap();
+        let ada = a.principal("ada").unwrap();
+        let token = a
+            .issue_agent_token(&ada, &groups(&["sales.user", "base.user"]), "crm bot")
+            .unwrap();
+        // A session of the same person is not an agent token.
+        a.login("ada", "correct horse battery").unwrap();
+        let list = a.agent_tokens_of(&ada).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].label, "crm bot");
+        assert_eq!(list[0].scopes, groups(&["base.user", "sales.user"]));
+        assert_ne!(list[0].id, token, "the id is not the token");
+        let id = list[0].id.clone();
+        // Nobody else sees or ends it, an administrator included, and an agent ends nothing.
+        assert!(a.agent_tokens_of(&root).unwrap().is_empty());
+        assert!(!a.revoke_agent_token(&root, &id));
+        let agent = a.resolve(&token).unwrap();
+        assert!(!a.revoke_agent_token(&agent, &id));
+        assert!(a.agent_tokens_of(&agent).unwrap().is_empty());
+        assert!(a.resolve(&token).is_some());
+        // Its owner ends it, once.
+        assert!(a.revoke_agent_token(&ada, &id));
+        assert!(a.resolve(&token).is_none());
+        assert!(a.agent_tokens_of(&ada).unwrap().is_empty());
+        assert!(!a.revoke_agent_token(&ada, &id));
+        assert!(!a.revoke_agent_token(&ada, "not-an-id"));
     }
 
     #[test]

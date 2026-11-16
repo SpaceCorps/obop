@@ -17,9 +17,10 @@ import {
   type Reply,
   type Row,
 } from "./api.ts";
-import { t, useI18n } from "@obop/ui";
+import { getCurrency, t, useI18n, type ToastAction } from "@obop/ui";
 import type { App } from "./Chrome.tsx";
 import { isEmpty, shownLabel } from "./format.ts";
+import { titleOf } from "./presentation.ts";
 import { registerMeta } from "./serverMessage.ts";
 import type { Lookup } from "./query.ts";
 
@@ -126,9 +127,10 @@ type Ctx = {
   lang: string;
   /** Counts successful writes, so server-side queries know when to ask again. */
   mutations: number;
-  notify: (text: string, tone?: Tone) => void;
+  /** A toast; `opts.action` adds a link or a button at its end ("Open" the record an action made). */
+  notify: (text: string, tone?: Tone, opts?: { action?: ToastAction }) => void;
   confirm: (message: string, confirmLabel?: string, cancelLabel?: string) => Promise<boolean>;
-  /** The label of one record: the first text field, or the short id. */
+  /** The name of one record, as its form names it (presentation.ts titleOf). */
   recordLabel: (model: string, row: Row) => string;
   refText: (model: string, id: string) => string;
   lookup: Lookup;
@@ -190,7 +192,7 @@ export function DataProvider(props: {
   token: string;
   modules: ModuleMeta[];
   apps: App[];
-  notify: (text: string, tone?: Tone) => void;
+  notify: Ctx["notify"];
   confirm: Ctx["confirm"];
   linkFor: Ctx["linkTo"];
   children: ReactNode;
@@ -220,11 +222,26 @@ export function DataProvider(props: {
   }, [models]);
 
   const value = useMemo<Ctx>(() => {
-    const recordLabel = (model: string, row: Row) => recordLabelOf(models, model, row);
-    const refText = (model: string, id: string) => {
-      const row = store.peek(model)?.find((r) => r.id === id);
-      return row ? recordLabel(model, row) : id.slice(0, 8);
+    // A record is named the way its form names it (titleOf): "1400 Receivables", the vendor's
+    // party name, "Showroom counter · Nov 14", in lists, cards, subtitles, exports and chips alike.
+    // A title that names another record follows at most a few steps, so a cycle cannot loop.
+    const labelAt = (model: string, row: Row, depth: number): string => {
+      const info = models.get(model);
+      if (!info || depth > 3) return recordLabelOf(models, model, row);
+      return titleOf(info.model, row, {
+        refText: (m, id) => refTextAt(m, id, depth + 1),
+        rowOf: (m, id) => store.peek(m)?.find((r) => r.id === id),
+        modelOf: (m) => models.get(m)?.model,
+        instanceCurrency: getCurrency(),
+        moduleId: info.module.id,
+      });
     };
+    const refTextAt = (model: string, id: string, depth: number) => {
+      const row = store.peek(model)?.find((r) => r.id === id);
+      return row ? labelAt(model, row, depth) : id.slice(0, 8);
+    };
+    const recordLabel = (model: string, row: Row) => labelAt(model, row, 0);
+    const refText = (model: string, id: string) => refTextAt(model, id, 0);
     return {
       token,
       modules,

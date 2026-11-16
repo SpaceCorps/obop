@@ -4,6 +4,7 @@ description = "Kirjanpidon ruotsalainen lokalisointi: yrityksen tiedot, tositesa
 
 [labels.fi.model.accounting_se_company]
 name = "Yritys"
+plural = "Yritys"
 description = "Ruotsalainen yritys, jonka kirjat ovat; yleensä yksi tietue"
 
 [labels.fi.model.accounting_se_company.field.name]
@@ -49,6 +50,7 @@ description = "Kirjanpidon yhteyssähköposti"
 
 [labels.fi.model.accounting_se_voucher_series]
 name = "Tositesarja"
+plural = "Tositesarjat"
 description = "Tositesarja, kirjain kuten A, joka kokoaa yhden lajin tositteet"
 
 [labels.fi.model.accounting_se_voucher_series.field.code]
@@ -77,6 +79,7 @@ description = "Huomautuksia sarjan käytöstä"
 
 [labels.fi.model.accounting_se_vat_box]
 name = "Alv-ruutu"
+plural = "Alv-ruudut"
 description = "Ruotsin arvonlisäveroilmoituksen ruutu. TARKISTAMATON, kunnes se on tarkistettu SKV 4700:n mukaan"
 
 [labels.fi.model.accounting_se_vat_box.field.box]
@@ -115,11 +118,11 @@ description = "Onko omistaja tarkistanut ruudun; siihen asti epätosi"
 
 [labels.fi.model.accounting_se_vat_box.field.verified_by]
 label = "Tarkistaja"
-description = "Tarkistaneen henkilön kirjautumisnimi"
+description = "Tarkistaneen henkilön kirjautumisnimi; tallentuu tarkistettaessa"
 
 [labels.fi.model.accounting_se_vat_box.field.verified_on]
 label = "Tarkistettu pvm"
-description = "Tarkistuksen päivämäärä (VVVV-KK-PP)"
+description = "Tarkistuksen päivämäärä (VVVV-KK-PP); tallentuu tarkistettaessa"
 
 [labels.fi.model.accounting_se_vat_box.field.source]
 label = "Lähde"
@@ -127,7 +130,7 @@ description = "Mistä ruutu on peräisin ja mitä on tarkistettu, esimerkiksi SK
 
 [labels.fi.model.accounting_se_vat_box.action.verify]
 label = "Tarkista"
-description = "Merkitse ruutu SKV 4700:n mukaan tarkistetuksi (vain hyväksyjät)"
+description = "Merkitse ruutu SKV 4700:n mukaan tarkistetuksi (vain hyväksyjät); tallentaa tarkistajan ja päivämäärän"
 
 [labels.fi.model.accounting_se_vat_box.action.unverify]
 label = "Peru tarkistus"
@@ -135,6 +138,7 @@ description = "Peru ruudun tarkistus (vain hyväksyjät)"
 
 [labels.fi.model.accounting_se_vat_code]
 name = "Alv-koodi"
+plural = "Alv-koodit"
 description = "Alv-koodi, jonka pääkirjan rivi voi sisältää; liitetty peruste- ja alv-ruutuun sekä tileihin. TARKISTAMATON, kunnes se on tarkistettu SKV 4700:n mukaan"
 
 [labels.fi.model.accounting_se_vat_code.field.code]
@@ -214,11 +218,11 @@ description = "Onko omistaja tarkistanut koodin; siihen asti epätosi"
 
 [labels.fi.model.accounting_se_vat_code.field.verified_by]
 label = "Tarkistaja"
-description = "Tarkistaneen henkilön kirjautumisnimi"
+description = "Tarkistaneen henkilön kirjautumisnimi; tallentuu tarkistettaessa"
 
 [labels.fi.model.accounting_se_vat_code.field.verified_on]
 label = "Tarkistettu pvm"
-description = "Tarkistuksen päivämäärä (VVVV-KK-PP)"
+description = "Tarkistuksen päivämäärä (VVVV-KK-PP); tallentuu tarkistettaessa"
 
 [labels.fi.model.accounting_se_vat_code.field.source]
 label = "Lähde"
@@ -226,7 +230,7 @@ description = "Mistä koodi on peräisin ja mitä on tarkistettu, esimerkiksi SK
 
 [labels.fi.model.accounting_se_vat_code.action.verify]
 label = "Tarkista"
-description = "Merkitse koodi SKV 4700:n mukaan tarkistetuksi (vain hyväksyjät)"
+description = "Merkitse koodi SKV 4700:n mukaan tarkistetuksi (vain hyväksyjät); tallentaa tarkistajan ja päivämäärän"
 
 [labels.fi.model.accounting_se_vat_code.action.unverify]
 label = "Peru tarkistus"
@@ -234,7 +238,11 @@ description = "Peru koodin tarkistus (vain hyväksyjät)"
 
 [labels.fi.model.accounting_se_vat_report]
 name = "Alv-raportti"
+plural = "Alv-raportit"
 description = "Jakson alv-raportti, laadittu pääkirjasta ja henkilön hyväksymä ennen käyttöä. TARKISTAMATON: tämä paketti ei ole verrannut sitä SKV 4700:aan"
+
+[labels.fi.model.accounting_se_vat_report.guard]
+message = "Hyväksyttyä tai jätettyä arvonlisäveroilmoitusta ei voi muuttaa, vain sen muistiinpanoja."
 
 [labels.fi.model.accounting_se_vat_report.field.name]
 label = "Nimi"
@@ -274,7 +282,7 @@ label = "Ostojen vero"
 description = "Jakson vähennyskelpoinen ostojen vero örinä, ostorivien summa"
 
 [labels.fi.model.accounting_se_vat_report.field.vat_to_pay]
-label = "Maksettava alv"
+label = "Maksettava tai palautettava alv"
 description = "Myynnin vero miinus ostojen vero örinä; negatiivinen tarkoittaa palautusta (ruutu 49)"
 
 [labels.fi.model.accounting_se_vat_report.field.boxes_confirmed]
@@ -316,7 +324,11 @@ description = "Kirjaa, että ilmoitus on toimitettu Skatteverketille tämän jä
 
 [labels.fi.model.accounting_se_vat_report_line]
 name = "Alv-raportin rivi"
+plural = "Alv-raportin rivit"
 description = "Alv-raportin ruutu summineen"
+
+[labels.fi.model.accounting_se_vat_report_line.guard]
+message = "Hyväksytyn tai jätetyn arvonlisäveroilmoituksen rivejä ei voi muuttaa."
 
 [labels.fi.model.accounting_se_vat_report_line.field.report_id]
 label = "Raportti"

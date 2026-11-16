@@ -1,6 +1,6 @@
 [module]
 id = "website"
-version = "0.4.0"
+version = "0.5.0"
 name = "Website"
 description = "Content for a public website: pages with a slug and a draft, published, archived flow, navigation menu items, blog posts with a byline and a publish date, translations of both, and the form submissions visitors send in. When the instance runs with the public site enabled it serves the published content to visitors as a server-rendered website with SEO and no login; only the fields marked public are ever visible to them. Publishing makes content public and needs a human approval, agents may only propose it. Senders are personal data and are never public."
 author = "SpaceCorps"
@@ -11,13 +11,44 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["website", "cms", "blog", "seo"]
 categories = ["marketing"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+changelog = "The app opens on an overview; pages and posts link to where they are seen on the site, and their content is edited as Markdown. Publishing a page or a post dates it today when it has no date yet. The menu is shown as a tree, and the newest form submissions come first. An archived page or post can no longer be changed."
+home = "overview"
 
 [[model]]
 name = "website_page"
 description = "A page of the website"
 read_group = "website.user"
 write_group = "website.user"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "/{slug}"
+  list = ["title", "slug", "published_on", "state"]
+  card = ["cover_image", "title", "slug", "published_on"]
+  quick_create = ["title", "slug"]
+  order = "title asc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 1
+  public_url = "/{slug}"
+
+  [[model.ui.section]]
+  label = "Content"
+  fields = ["title", "slug", "body"]
+
+  [[model.ui.section]]
+  label = "Cover picture"
+  fields = ["cover_image", "cover_alt"]
+
+  [[model.ui.section]]
+  label = "Search engines"
+  fields = ["seo_title", "seo_description"]
+  collapsed = true
+
+  [model.guard]
+  immutable_when = ["archived"]
+  message = "An archived page is retired for good. Make a new page to replace it."
 
   [model.public]
   read = true
@@ -44,6 +75,8 @@ write_group = "website.user"
   description = "Page content in Markdown (a safe subset: headings, lists, links, emphasis, code, quotes, tables)"
   class = "none"
   kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
   [[model.field]]
   name = "seo_title"
@@ -57,7 +90,7 @@ write_group = "website.user"
 
   [[model.field]]
   name = "published_on"
-  description = "Day the page went public (YYYY-MM-DD)"
+  description = "Day the page went public (YYYY-MM-DD); publishing sets it to today when it is empty"
   class = "none"
   kind = "date"
 
@@ -79,6 +112,8 @@ write_group = "website.user"
   kind = "select"
   options = ["draft", "published", "archived"]
   required = true
+  [model.field.ui]
+  tones = { draft = "info", published = "ok", archived = "neutral" }
 
   [[model.action]]
   name = "publish"
@@ -88,6 +123,14 @@ write_group = "website.user"
   to = "published"
   group = "website.manager"
   approval = true
+  [model.action.ui]
+  primary = true
+  done = "Published"
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { published_on = "$today" }
+    when = "!is_set(published_on)"
 
   [[model.action]]
   name = "unpublish"
@@ -104,12 +147,25 @@ write_group = "website.user"
   from = "published"
   to = "archived"
   group = "website.manager"
+  [model.action.ui]
+  danger = true
+  confirm = "Archive this page? It goes offline for good, its address answers that it is gone, and it can no longer be changed."
 
 [[model]]
 name = "website_menu_item"
 description = "An entry of the site navigation"
 read_group = "website.user"
 write_group = "website.manager"
+
+  [model.ui]
+  title = "{label}"
+  subtitle = "{url}"
+  list = ["label", "url", "parent_id", "sequence", "visible", "new_window"]
+  quick_create = ["label", "url"]
+  order = "sequence asc, label asc"
+  default_view = "tree"
+  menu = "main"
+  menu_order = 3
 
   [model.public]
   read = true
@@ -141,12 +197,15 @@ write_group = "website.manager"
   description = "Order among its siblings, lowest first"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "visible"
   description = "Whether the entry is shown"
   class = "none"
   kind = "bool"
+  default = true
 
   [[model.field]]
   name = "new_window"
@@ -159,6 +218,31 @@ name = "website_blog_post"
 description = "A blog post"
 read_group = "website.user"
 write_group = "website.user"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{byline}"
+  list = ["title", "author_name", "byline", "published_on", "tags", "state"]
+  card = ["cover_image", "title", "summary", "published_on"]
+  quick_create = ["title", "slug", "author_name"]
+  order = "published_on desc, title asc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 2
+  public_url = "/blog/{slug}"
+  calendar = { start = "published_on" }
+
+  [[model.ui.section]]
+  label = "Content"
+  fields = ["title", "slug", "author_name", "byline", "summary", "body", "tags"]
+
+  [[model.ui.section]]
+  label = "Cover picture"
+  fields = ["cover_image", "cover_alt"]
+
+  [model.guard]
+  immutable_when = ["archived"]
+  message = "An archived post is retired for good. Write a new post to replace it."
 
   [model.public]
   read = true
@@ -183,7 +267,7 @@ write_group = "website.user"
 
   [[model.field]]
   name = "author_name"
-  description = "Name of the author, for the team's own records"
+  description = "Name of the author, for the team's own records; never shown on the site (the byline is)"
   class = "public_directory"
   personal_data = true
   required = true
@@ -203,6 +287,8 @@ write_group = "website.user"
   description = "Post content in Markdown (a safe subset: headings, lists, links, emphasis, code, quotes, tables)"
   class = "none"
   kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
   [[model.field]]
   name = "tags"
@@ -211,7 +297,7 @@ write_group = "website.user"
 
   [[model.field]]
   name = "published_on"
-  description = "Day the post is dated (YYYY-MM-DD)"
+  description = "Day the post is dated (YYYY-MM-DD); publishing sets it to today when it is empty"
   class = "none"
   kind = "date"
 
@@ -233,6 +319,8 @@ write_group = "website.user"
   kind = "select"
   options = ["draft", "published", "archived"]
   required = true
+  [model.field.ui]
+  tones = { draft = "info", published = "ok", archived = "neutral" }
 
   [[model.action]]
   name = "publish"
@@ -242,6 +330,14 @@ write_group = "website.user"
   to = "published"
   group = "website.manager"
   approval = true
+  [model.action.ui]
+  primary = true
+  done = "Published"
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { published_on = "$today" }
+    when = "!is_set(published_on)"
 
   [[model.action]]
   name = "unpublish"
@@ -258,12 +354,29 @@ write_group = "website.user"
   from = "published"
   to = "archived"
   group = "website.manager"
+  [model.action.ui]
+  danger = true
+  confirm = "Archive this post? It goes offline for good and can no longer be changed."
 
 [[model]]
 name = "website_form_submission"
 description = "A message a visitor sent through a form on the site"
 read_group = "website.user"
 write_group = "website.user"
+
+  [model.ui]
+  title = "{sender_name} · {form_name} | {sender_email} · {form_name}"
+  subtitle = "{submitted_on}"
+  list = ["submitted_on", "form_name", "sender_name", "sender_email", "message", "state"]
+  card = ["sender_name", "form_name", "message", "submitted_on"]
+  order = "submitted_on desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 4
+
+  [[model.ui.filter]]
+  label = "New"
+  where = "state = new"
 
   [model.public]
   submit = true
@@ -288,12 +401,16 @@ write_group = "website.user"
   class = "internal"
   personal_data = true
   required = true
+  [model.field.ui]
+  display = "email"
 
   [[model.field]]
   name = "sender_phone"
   description = "Phone number the visitor gave"
   class = "internal"
   personal_data = true
+  [model.field.ui]
+  display = "tel"
 
   [[model.field]]
   name = "message"
@@ -312,6 +429,7 @@ write_group = "website.user"
   description = "Day of the submission (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  default = "today"
 
   [[model.field]]
   name = "consent_given"
@@ -326,6 +444,8 @@ write_group = "website.user"
   kind = "select"
   options = ["new", "handled", "spam"]
   required = true
+  [model.field.ui]
+  tones = { new = "info", handled = "ok", spam = "neutral" }
 
   [[model.action]]
   name = "handle"
@@ -333,6 +453,9 @@ write_group = "website.user"
   field = "state"
   from = "new"
   to = "handled"
+  [model.action.ui]
+  primary = true
+  done = "Marked as handled"
 
   [[model.action]]
   name = "mark_spam"
@@ -340,12 +463,22 @@ write_group = "website.user"
   field = "state"
   from = "new"
   to = "spam"
+  [model.action.ui]
+  danger = true
+  done = "Marked as spam"
 
 [[model]]
 name = "website_page_translation"
 description = "A page translated into another language; the public site shows it to visitors who read that language"
 read_group = "website.user"
 write_group = "website.user"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{lang}"
+  list = ["lang", "title", "published"]
+  quick_create = ["lang", "title"]
+  menu = "hidden"
 
   [model.public]
   read = true
@@ -379,6 +512,8 @@ write_group = "website.user"
   description = "Translated page content in Markdown"
   class = "none"
   kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
   [[model.field]]
   name = "seo_title"
@@ -395,12 +530,20 @@ write_group = "website.user"
   description = "Whether the translation is shown; it is only reachable while its page is published"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "website_blog_post_translation"
 description = "A blog post translated into another language"
 read_group = "website.user"
 write_group = "website.user"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{lang}"
+  list = ["lang", "title", "published"]
+  quick_create = ["lang", "title"]
+  menu = "hidden"
 
   [model.public]
   read = true
@@ -439,9 +582,12 @@ write_group = "website.user"
   description = "Translated post content in Markdown"
   class = "none"
   kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
   [[model.field]]
   name = "published"
   description = "Whether the translation is shown; it is only reachable while its post is published"
   class = "none"
   kind = "bool"
+  default = true

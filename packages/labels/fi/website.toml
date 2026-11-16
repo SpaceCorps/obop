@@ -5,7 +5,11 @@ summary = "Sivut, valikot, blogikirjoitukset ja lomakeviestit, jotka tarjoillaan
 
 [labels.fi.model.website_page]
 name = "Sivu"
+plural = "Sivut"
 description = "Verkkosivuston sivu"
+
+[labels.fi.model.website_page.guard]
+message = "Arkistoitu sivu on poistettu käytöstä lopullisesti. Tee uusi sivu sen tilalle."
 
 [labels.fi.model.website_page.field.title]
 label = "Otsikko"
@@ -54,6 +58,7 @@ description = "Poista julkaistu sivu lopullisesti käytöstä"
 
 [labels.fi.model.website_menu_item]
 name = "Valikkokohta"
+plural = "Valikko"
 description = "Sivuston navigaation kohta"
 
 [labels.fi.model.website_menu_item.field.label]
@@ -82,7 +87,11 @@ description = "Aukeaako linkki uuteen ikkunaan"
 
 [labels.fi.model.website_blog_post]
 name = "Blogikirjoitus"
+plural = "Blogikirjoitukset"
 description = "Blogikirjoitus"
+
+[labels.fi.model.website_blog_post.guard]
+message = "Arkistoitu kirjoitus on poistettu käytöstä lopullisesti. Kirjoita uusi kirjoitus sen tilalle."
 
 [labels.fi.model.website_blog_post.field.title]
 label = "Otsikko"
@@ -139,6 +148,7 @@ description = "Poista julkaistu kirjoitus käytöstä"
 
 [labels.fi.model.website_form_submission]
 name = "Lomakeviesti"
+plural = "Lomakeviestit"
 description = "Kävijän sivuston lomakkeella lähettämä viesti"
 
 [labels.fi.model.website_form_submission.field.form_name]
@@ -192,6 +202,7 @@ description = "Merkitse viesti roskapostiksi"
 
 [labels.fi.model.website_page_translation]
 name = "Sivun käännös"
+plural = "Sivujen käännökset"
 description = "Sivu käännettynä toiselle kielelle; julkinen sivusto näyttää sen sitä kieltä lukeville kävijöille"
 
 [labels.fi.model.website_page_translation.field.page_id]
@@ -233,6 +244,7 @@ description = "Näytetäänkö käännös; se on tavoitettavissa vain, kun sen s
 
 [labels.fi.model.website_blog_post_translation]
 name = "Blogikirjoituksen käännös"
+plural = "Blogikirjoitusten käännökset"
 description = "Blogikirjoitus käännettynä toiselle kielelle"
 
 [labels.fi.model.website_blog_post_translation.field.post_id]

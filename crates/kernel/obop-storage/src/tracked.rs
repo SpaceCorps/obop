@@ -885,8 +885,8 @@ mod tests {
 
     #[test]
     fn the_stores_take_the_context_without_calling_themselves() {
-        let path = std::env::temp_dir().join(format!("obop-tracked-{}.db", std::process::id()));
-        let url = format!("sqlite://{}", path.display());
+        let path = crate::testing::TempPath::new("obop-tracked");
+        let url = path.url();
         for url in ["memory:", "sqlite::memory:", url.as_str()] {
             let b = crate::open(url).unwrap();
             let c = WriteCtx::new("ann", "rest", "x").ticket("m", "1", "post");
@@ -900,9 +900,6 @@ mod tests {
             )
             .unwrap();
             assert!(b.get("m", "1").unwrap().is_some(), "{url}");
-        }
-        for ext in ["", "-wal", "-shm"] {
-            let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
         }
     }
 }

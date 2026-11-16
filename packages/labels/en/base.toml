@@ -1,0 +1,6 @@
+# English names and plurals of the built-in Contacts module (D52, D95). The module's Rust source is
+# the English source of descriptions; this file adds the business names it does not have.
+
+[labels.en.model.party]
+name = "Contact"
+plural = "Contacts"

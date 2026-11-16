@@ -130,8 +130,8 @@ pub trait Marketplace: Send + Sync {
 pub struct Bundled;
 
 /// A bundled package: its id, the English `obop.toml` and one labels document per language
-/// (`packages/labels/<lang>/<id>.toml`, D52).
-type Bundle = (&'static str, &'static str, [&'static str; 6]);
+/// (`packages/labels/<lang>/<id>.toml`, D52; `en` holds the English names and plurals of D95).
+type Bundle = (&'static str, &'static str, [&'static str; 7]);
 
 macro_rules! bundle {
     ($id:literal) => {
@@ -139,6 +139,7 @@ macro_rules! bundle {
             $id,
             include_str!(concat!("../../../../packages/", $id, ".toml")),
             [
+                include_str!(concat!("../../../../packages/labels/en/", $id, ".toml")),
                 include_str!(concat!("../../../../packages/labels/de/", $id, ".toml")),
                 include_str!(concat!("../../../../packages/labels/fr/", $id, ".toml")),
                 include_str!(concat!("../../../../packages/labels/pl/", $id, ".toml")),
@@ -212,7 +213,8 @@ impl Marketplace for Bundled {
         BUNDLED
             .iter()
             .map(|b| {
-                let m = Manifest::parse(&combined(b))?;
+                let m = Manifest::parse(&combined(b))
+                    .map_err(|e| format!("bundled package {}: {e}", b.0))?;
                 let problems = m.catalog_problems();
                 if !problems.is_empty() {
                     return Err(format!("bundled package {}: {}", b.0, problems.join("; ")));

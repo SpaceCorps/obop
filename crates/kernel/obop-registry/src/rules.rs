@@ -331,13 +331,15 @@ impl Src {
             ("now", None) => Ok(Src::Now),
             ("today", None) => Ok(Src::Today),
             ("caller", None) => Ok(Src::Caller),
+            // `$null`: empties the field (TOML has no null), say a link an undone action ends.
+            ("null", None) => Ok(Src::Const(Lit::Null)),
             ("self", Some("id")) => Ok(Src::SelfId),
             ("self", Some(f)) if name_ok(f) => Ok(Src::SelfField(f.to_string())),
             ("line", Some("id")) => Ok(Src::LineId),
             ("line", Some(f)) if name_ok(f) => Ok(Src::Line(f.to_string())),
             ("created", Some(n)) if name_ok(n) => Ok(Src::Created(n.to_string())),
             _ => Err(format!(
-                "{s:?} is not a value (use $self.field, $self.id, $line.field, $created.name, $now, $today, $caller, or a constant)"
+                "{s:?} is not a value (use $self.field, $self.id, $line.field, $created.name, $now, $today, $caller, $null, or a constant)"
             )),
         }
     }
@@ -351,6 +353,9 @@ pub enum Target {
     /// Every record of the target model that refers to this record (through `via`, or its only
     /// ref to this model).
     Children(Option<&'static str>),
+    /// The record the action runs on (D95: `kind = "set"`, a field of the record itself, such
+    /// as `published_on = "$today"`).
+    This,
 }
 
 /// How an `adjust` effect finds its record.
@@ -407,6 +412,10 @@ impl Effect {
     pub fn kind_name(&self) -> &'static str {
         match self.kind {
             EffectKind::Create { .. } => "create",
+            EffectKind::Update {
+                target: Target::This,
+                ..
+            } => "set",
             EffectKind::Update { .. } => "update",
             EffectKind::Adjust { .. } => "adjust",
             EffectKind::SetState { .. } => "set_state",
@@ -635,6 +644,16 @@ impl Effect {
         Self::new(EffectKind::Update {
             model: intern(model),
             target: Target::Children(None),
+            set: pairs(set),
+        })
+    }
+
+    /// Set fields of the record the action runs on (D95, `kind = "set"`); combine with `when`
+    /// (`set_self("published_on", &[("published_on", "$today")]).when("!is_set(published_on)")`).
+    pub fn set_self(model: &str, set: &[(&str, &str)]) -> Self {
+        Self::new(EffectKind::Update {
+            model: intern(model),
+            target: Target::This,
             set: pairs(set),
         })
     }
@@ -903,6 +922,12 @@ impl Ctx<'_> {
                     target.name
                 ));
             }
+            if f.required && matches!(src, Src::Const(Lit::Null)) {
+                return Err(format!(
+                    "{what}: {}.{k} is required and cannot be emptied with $null",
+                    target.name
+                ));
+            }
             let shape = self.shape(src).map_err(|e| format!("{what}: {k}: {e}"))?;
             if !shape_ok(&f.kind, &shape) {
                 return Err(format!(
@@ -928,6 +953,11 @@ impl Ctx<'_> {
                 )),
                 None => Err(format!("{what}: {} has no field {f}", self.this.name)),
             },
+            Target::This if model.name == self.this.name => Ok(()),
+            Target::This => Err(format!(
+                "{what}: a set effect changes the record itself, so its model is {}, not {}",
+                self.this.name, model.name
+            )),
             Target::Children(via) => {
                 let refs: Vec<&str> = model
                     .fields
@@ -1834,6 +1864,10 @@ mod tests {
             "sku is required",
         );
         has(
+            &one(Effect::create("t_item", &[("sku", "$null")])),
+            "cannot be emptied with $null",
+        );
+        has(
             &one(Effect::create("t_item", &[("sku", "x"), ("state", "used")])),
             "governed state field",
         );
@@ -2323,8 +2357,13 @@ mod tests {
             Src::parse("plain").unwrap(),
             Src::Const(Lit::Text("plain".into()))
         );
+        assert_eq!(Src::parse("$null").unwrap(), Src::Const(Lit::Null));
+        assert_eq!(
+            Src::parse("$$null").unwrap(),
+            Src::Const(Lit::Text("$null".into()))
+        );
         for bad in [
-            "$", "$self", "$self.", "$self.A", "$nope.x", "$now.x", "$line",
+            "$", "$self", "$self.", "$self.A", "$nope.x", "$now.x", "$line", "$null.x",
         ] {
             assert!(Src::parse(bad).is_err(), "{bad}");
         }

@@ -23,6 +23,7 @@ test.describe("Customize: marketplace, module builder and theme", () => {
       // The new app is in the launcher and works like a built-in one.
       await page.getByRole("button", { name: "Open the app launcher" }).click();
       await page.getByRole("dialog", { name: "Apps" }).getByRole("link", { name: "Fleet" }).click();
+      // Fleet opens on its vehicles (the package's `home`, D95).
       await expect(page).toHaveURL(/#\/fleet\/fleet_vehicle/);
       await page
         .getByRole("button", { name: /^(New|Create the first vehicle)$/ })
@@ -30,10 +31,12 @@ test.describe("Customize: marketplace, module builder and theme", () => {
         .click();
       const panel = page.getByRole("complementary", { name: "Vehicle record" });
       await panel.getByLabel("Plate").fill(plate);
-      await panel.getByLabel("Odometer km").fill("120000");
+      await panel.getByLabel("Odometer (km)").fill("120000");
       await panel.getByRole("button", { name: "Create" }).click();
       // Wait for the save: switching views while the form is still dirty would ask to discard it.
       await expect(page.locator(".toast").filter({ hasText: "created" })).toBeVisible();
+      // A vehicle has many fields, so it opened as a page over the list: close it first.
+      await page.getByRole("button", { name: "Close record" }).click();
       await page.getByRole("button", { name: "List", exact: true }).click();
       await expect(page.getByRole("row", { name: new RegExp(plate) })).toContainText("120,000");
 
@@ -112,6 +115,9 @@ test.describe("Customize: marketplace, module builder and theme", () => {
       await expect(page.locator(".toast").filter({ hasText: "created" })).toBeVisible();
 
       await page.getByRole("button", { name: "List", exact: true }).click();
+      // Closed, the record leaves the whole width to the list and its columns.
+      await page.keyboard.press("Escape");
+      await expect(panel).toHaveCount(0);
       const row = page.getByRole("row", { name: new RegExp(title) });
       await expect(row).toContainText("High");
       await expect(row).toContainText("€12.50");

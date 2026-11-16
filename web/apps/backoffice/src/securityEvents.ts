@@ -29,6 +29,8 @@ export const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   user_create: msg("Account created"),
   user_groups: msg("Groups changed"),
   user_offboard: msg("Account offboarded"),
+  agent_token_issued: msg("Agent token issued"),
+  agent_token_revoked: msg("Agent token revoked"),
   settings_change: msg("Security setting changed"),
   oauth_authorize: msg("App connected"),
   oauth_denied: msg("App refused"),

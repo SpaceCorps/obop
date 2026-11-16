@@ -5,7 +5,11 @@ summary = "Pages, menus, articles de blog et formulaires envoyés, servis comme 
 
 [labels.fr.model.website_page]
 name = "Page"
+plural = "Pages"
 description = "Une page du site web"
+
+[labels.fr.model.website_page.guard]
+message = "Une page archivée est retirée pour de bon. Créez une nouvelle page pour la remplacer."
 
 [labels.fr.model.website_page.field.title]
 label = "Titre"
@@ -54,6 +58,7 @@ description = "Retire définitivement une page publiée"
 
 [labels.fr.model.website_menu_item]
 name = "Élément de menu"
+plural = "Menu"
 description = "Une entrée de la navigation du site"
 
 [labels.fr.model.website_menu_item.field.label]
@@ -82,7 +87,11 @@ description = "Indique si le lien s’ouvre dans une nouvelle fenêtre"
 
 [labels.fr.model.website_blog_post]
 name = "Article de blog"
+plural = "Articles de blog"
 description = "Un article de blog"
+
+[labels.fr.model.website_blog_post.guard]
+message = "Un article archivé est retiré pour de bon. Écrivez un nouvel article pour le remplacer."
 
 [labels.fr.model.website_blog_post.field.title]
 label = "Titre"
@@ -139,6 +148,7 @@ description = "Retire un article publié"
 
 [labels.fr.model.website_form_submission]
 name = "Envoi de formulaire"
+plural = "Envois de formulaire"
 description = "Un message qu’un visiteur a envoyé par un formulaire du site"
 
 [labels.fr.model.website_form_submission.field.form_name]
@@ -192,6 +202,7 @@ description = "Marque le message comme spam"
 
 [labels.fr.model.website_page_translation]
 name = "Traduction de page"
+plural = "Traductions de page"
 description = "Une page traduite dans une autre langue ; le site public la montre aux visiteurs qui lisent cette langue"
 
 [labels.fr.model.website_page_translation.field.page_id]
@@ -233,6 +244,7 @@ description = "Indique si la traduction est affichée ; elle n’est accessible
 
 [labels.fr.model.website_blog_post_translation]
 name = "Traduction d’article de blog"
+plural = "Traductions d’articles de blog"
 description = "Un article de blog traduit dans une autre langue"
 
 [labels.fr.model.website_blog_post_translation.field.post_id]

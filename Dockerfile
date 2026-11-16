@@ -32,6 +32,9 @@ FROM node:24-slim AS web
 RUN corepack enable
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# pnpm-workspace.yaml names patch files (patchedDependencies); pnpm reads them on every install,
+# also when the patched package is filtered out.
+COPY patches ./patches
 COPY web ./web
 # The website (web/apps/site) is generated from these: bundled packages, the module guide, the
 # ASCII hero. It has no .git here, so its changelog comes from data/changelog.snapshot.json.
@@ -41,7 +44,7 @@ COPY docs/MODULES.md ./docs/MODULES.md
 # The website reports the core version, which is the workspace version in Cargo.toml (D55).
 COPY Cargo.toml ./Cargo.toml
 RUN corepack prepare pnpm@12.6.0 --activate \
- && pnpm install --frozen-lockfile --filter '!@obop/mileage-app' \
+ && pnpm install --frozen-lockfile --filter '!@obop/mileage-app' --filter '!@obop/host-app' --filter '!@obop/ui-native' --filter '!@obop/storybook' \
  && OBOP_ADMIN_BASE=/admin/ pnpm --filter @obop/backoffice exec vp build \
  && pnpm --filter @obop/platform exec vp build \
  && pnpm --filter @obop/site exec vp build \

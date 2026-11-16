@@ -5,6 +5,7 @@ summary = "Projekt, milstolpar och uppgifter med ansvariga, tidsfrister och stat
 
 [labels.sv.model.projects_project]
 name = "Projekt"
+plural = "Projekt"
 description = "Ett arbete med ett mål"
 
 [labels.sv.model.projects_project.field.name]
@@ -58,6 +59,7 @@ description = "Öppna ett avslutat projekt igen"
 
 [labels.sv.model.projects_milestone]
 name = "Milstolpe"
+plural = "Milstolpar"
 description = "En kontrollpunkt i ett projekt"
 
 [labels.sv.model.projects_milestone.field.project_id]
@@ -95,6 +97,7 @@ description = "Registrera att en väntande milstolpe missades"
 
 [labels.sv.model.projects_task]
 name = "Uppgift"
+plural = "Uppgifter"
 description = "En arbetsuppgift inom ett projekt"
 
 [labels.sv.model.projects_task.field.title]
@@ -163,3 +166,23 @@ description = "Uppskattad tid för alla projektets uppgifter som inte är annull
 [labels.sv.model.projects_project.field.progress]
 label = "Framsteg"
 description = "Andel av projektets uppgifter som är klara, i procent; annullerade uppgifter räknas inte"
+
+[labels.sv.model.projects_milestone.action.reset]
+label = "Återställ"
+description = "Sätt tillbaka en uppnådd milstolpe till väntande, till exempel om den markerades av misstag"
+
+[labels.sv.model.projects_milestone.action.reset_missed]
+label = "Återställ"
+description = "Sätt tillbaka en missad milstolpe till väntande, till exempel om dess datum flyttades"
+
+[labels.sv.model.projects_task.action.complete_now]
+label = "Slutför"
+description = "Markera en uppgift att göra som klar utan att påbörja den först"
+
+[labels.sv.model.projects_task.action.reopen]
+label = "Öppna igen"
+description = "Öppna en klar uppgift igen, tillbaka till att göra"
+
+[labels.sv.model.projects_task.action.reopen_cancelled]
+label = "Öppna igen"
+description = "Öppna en annullerad uppgift igen, tillbaka till att göra"

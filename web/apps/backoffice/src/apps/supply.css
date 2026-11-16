@@ -1,0 +1,254 @@
+/* The screens of the supply apps (Inventory, Purchase, Products, Manufacturing). Tokens only. */
+
+.sup-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.sup-form > .hint {
+  margin: 0;
+}
+.sup-what {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+}
+.sup-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+.sup-figures > div {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.sup-figures dt {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.sup-figures dd {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.sup-up {
+  color: var(--success-ink);
+}
+.sup-down {
+  color: var(--danger-ink);
+}
+
+/* Receive: one row per line, the product on the left and a stepper on the right. */
+.sup-lines {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.sup-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+.sup-line + .sup-line {
+  border-block-start: 1px solid var(--border);
+}
+.sup-line-name {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.sup-line-name strong {
+  overflow-wrap: break-word;
+}
+.sup-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-inline-start: auto;
+}
+.sup-stepper .input {
+  inline-size: 4.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.sup-stepper .icon-btn {
+  border: 1px solid var(--border-control);
+}
+
+/* A note of a record panel: the receipts of an order, the components of a manufacturing order. */
+.sup-receipts,
+.sup-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-md);
+  background: var(--info-soft);
+  font-size: var(--text-sm);
+}
+.sup-receipts {
+  margin: 0.85rem 1.25rem 0;
+}
+.sup-receipts.sup-waiting {
+  background: var(--warning-soft);
+}
+.sup-receipts-text {
+  flex: 1 1 12rem;
+}
+.sup-receipts > a {
+  color: var(--accent-ink);
+  font-weight: var(--weight-medium);
+}
+/* On a touch screen the link is a full touch target. */
+@media (pointer: coarse) {
+  .sup-receipts > a,
+  .sup-onhand-link {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+    min-inline-size: 2.75rem;
+    padding-inline: var(--space-2);
+  }
+}
+.sup-there {
+  margin: var(--space-1) 0 0;
+}
+.sup-onhand-total {
+  margin-inline-start: auto;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.sup-onhand-total + .sup-onhand-link {
+  margin-inline-start: var(--space-3);
+}
+.sup-note .ico {
+  color: var(--info-ink);
+}
+.sup-note.sup-ok {
+  background: var(--success-soft);
+}
+.sup-note.sup-ok .ico {
+  color: var(--success-ink);
+}
+.sup-note.sup-short {
+  background: var(--warning-soft);
+}
+.sup-note.sup-short .ico {
+  color: var(--warning-ink);
+}
+.sup-avail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0.85rem 1.25rem 0;
+}
+.sup-avail-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.sup-avail-empty > .hint {
+  flex: 1 1 14rem;
+  margin: 0;
+}
+.sup-shortlist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sup-shortlist li,
+.sup-onhand-places li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+.sup-shortlist li > :first-child,
+.sup-onhand-places li > :first-child {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.sup-shortlist li > :last-child,
+.sup-onhand-places li > :last-child {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* On hand, on a product. */
+.sup-onhand {
+  margin: 0.85rem 1.25rem 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.sup-onhand-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+.sup-onhand-head > * {
+  white-space: nowrap;
+}
+.sup-onhand-head .ico {
+  color: var(--text-muted);
+}
+.sup-onhand-label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.sup-onhand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: auto;
+  min-block-size: 2.75rem;
+  color: var(--accent-ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.sup-onhand-places {
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.sup-onhand > .hint {
+  margin: var(--space-1) 0 0;
+}
+
+@media (max-width: 40rem) {
+  .ov-actions > .sup-job {
+    flex: 1 1 0;
+  }
+  .sup-receipts,
+  .sup-avail,
+  .sup-onhand {
+    margin-inline: var(--space-4);
+  }
+  .sup-stepper .icon-btn {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  .sup-stepper .input {
+    block-size: 2.75rem;
+  }
+}

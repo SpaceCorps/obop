@@ -6,6 +6,7 @@ summary = "Sklep internetowy: oferty, dostawa, kody rabatowe i zamówienia z wit
 
 [labels.pl.model.ecommerce_category]
 name = "Kategoria"
+plural = "Kategorie"
 description = "Grupa pozycji wyświetlanych razem w sklepie"
 
 [labels.pl.model.ecommerce_category.field.name]
@@ -30,6 +31,7 @@ description = "Czy kategoria jest widoczna dla kupujących"
 
 [labels.pl.model.ecommerce_listing]
 name = "Pozycja w sklepie"
+plural = "Pozycje w sklepie"
 description = "Produkt w postaci, w jakiej pojawia się w sklepie internetowym"
 
 [labels.pl.model.ecommerce_listing.field.product_id]
@@ -91,6 +93,7 @@ description = "Czy pozycja jest widoczna dla kupujących"
 
 [labels.pl.model.ecommerce_listing_translation]
 name = "Tłumaczenie pozycji"
+plural = "Tłumaczenia pozycji"
 description = "Pozycja przetłumaczona na inny język"
 
 [labels.pl.model.ecommerce_listing_translation.field.listing_id]
@@ -128,6 +131,7 @@ description = "Czy tłumaczenie jest wyświetlane; jest dostępne tylko, gdy jeg
 
 [labels.pl.model.ecommerce_shipping_method]
 name = "Metoda dostawy"
+plural = "Metody dostawy"
 description = "Sposób dostarczania zamówień wraz z ceną"
 
 [labels.pl.model.ecommerce_shipping_method.field.name]
@@ -156,6 +160,7 @@ description = "Czy kupujący mogą ją wybrać"
 
 [labels.pl.model.ecommerce_discount_code]
 name = "Kod rabatowy"
+plural = "Kody rabatowe"
 description = "Kod wpisywany przez kupującego przy zamówieniu w celu uzyskania obniżki"
 
 [labels.pl.model.ecommerce_discount_code.field.code]
@@ -199,8 +204,12 @@ label = "Aktywny"
 description = "Czy kod można użyć"
 
 [labels.pl.model.ecommerce_order]
-name = "Zamówienie"
+name = "Zamówienie online"
+plural = "Zamówienia online"
 description = "Zamówienie złożone online"
+
+[labels.pl.model.ecommerce_order.guard]
+message = "Dostarczonego, anulowanego lub zwróconego zamówienia nie można zmienić, z wyjątkiem kontaktu i numeru przesyłki."
 
 [labels.pl.model.ecommerce_order.field.number]
 label = "Numer"
@@ -312,7 +321,11 @@ description = "Zwraca pieniądze za dostarczone zamówienie, na przykład po zwr
 
 [labels.pl.model.ecommerce_order_line]
 name = "Pozycja zamówienia"
+plural = "Pozycje zamówienia"
 description = "Jedna pozycja produktowa zamówienia internetowego"
+
+[labels.pl.model.ecommerce_order_line.guard]
+message = "Pozycji dostarczonego, anulowanego lub zwróconego zamówienia nie można zmienić."
 
 [labels.pl.model.ecommerce_order_line.field.order_id]
 label = "Zamówienie"
@@ -352,6 +365,7 @@ description = "Tekst opisujący główne zdjęcie dla osób, które go nie widz�
 
 [labels.pl.model.ecommerce_listing_image]
 name = "Zdjęcie oferty"
+plural = "Zdjęcia oferty"
 description = "Dodatkowe zdjęcie oferty do galerii"
 
 [labels.pl.model.ecommerce_listing_image.field.listing_id]
@@ -384,6 +398,7 @@ description = "Tylko oferty z tej kategorii dostają rabat; puste oznacza całe 
 
 [labels.pl.model.ecommerce_discount_use]
 name = "Użycie kodu"
+plural = "Użycia kodu"
 description = "Ile razy jeden klient użył jednego kodu rabatowego (klient jest zapisany jako skrót, nigdy jako adres e-mail)"
 
 [labels.pl.model.ecommerce_discount_use.field.code_id]
@@ -400,6 +415,7 @@ description = "Dotychczasowe użycia"
 
 [labels.pl.model.ecommerce_tax_rate]
 name = "Stawka podatku"
+plural = "Stawki podatku"
 description = "Stawka podatku stosowana przez sklep do ofert, liczona na serwerze"
 
 [labels.pl.model.ecommerce_tax_rate.field.name]
@@ -477,6 +493,7 @@ description = "Podatek od tej pozycji, zawarty w cenach lub doliczony (najmniejs
 
 [labels.pl.model.ecommerce_payment]
 name = "Płatność"
+plural = "Płatności"
 description = "Płatność za zamówienie internetowe: który operator, jego numer, kwota i co się z nią stało. Sklep nigdy nie widzi danych karty"
 
 [labels.pl.model.ecommerce_payment.field.order_id]

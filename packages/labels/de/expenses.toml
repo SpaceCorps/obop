@@ -1,11 +1,15 @@
 [labels.de.module]
 name = "Spesen"
-description = "Spesenabrechnungen von Mitarbeitern mit dem Ablauf Entwurf, eingereicht, genehmigt und bezahlt. Das Bezahlen braucht eine eigene Berechtigung. Genehmigen, Ablehnen und Bezahlen brauchen eine menschliche Genehmigung; Agenten dürfen sie nur vorschlagen. Belege werden per Notiz referenziert. Nummer aus einer Jahresserie; Mitarbeiter sehen nur eigene Abrechnungen, Führungskräfte und Finanzen alle."
+description = "Spesenabrechnungen mit dem Ablauf Entwurf, eingereicht, genehmigt und bezahlt. Bezahlen ist eine eigene Berechtigung. Genehmigen, Ablehnen und Bezahlen brauchen eine menschliche Genehmigung; Agenten schlagen nur vor. Belege als Foto oder Scan; genehmigte, bezahlte und abgelehnte Abrechnungen sind gesperrt. Jahresnummern; Mitarbeiter sehen nur eigene Abrechnungen, Führungskräfte und Finanzen alle."
 summary = "Spesenabrechnungen von Mitarbeitern mit dem Ablauf Entwurf, eingereicht, genehmigt und bezahlt."
 
 [labels.de.model.expenses_expense]
 name = "Ausgabe"
+plural = "Ausgaben"
 description = "Ein Betrag, den ein Mitarbeiter für das Unternehmen ausgegeben hat und erstattet haben möchte"
+
+[labels.de.model.expenses_expense.guard]
+message = "Eine genehmigte, bezahlte oder abgelehnte Spesenabrechnung kann nicht geändert werden, außer ihrem Beleg und den Zahlungsangaben."
 
 [labels.de.model.expenses_expense.field.description]
 label = "Beschreibung"
@@ -72,7 +76,7 @@ description = "Eine eingereichte Abrechnung genehmigen (nur Führungskräfte)"
 
 [labels.de.model.expenses_expense.action.pay]
 label = "Bezahlen"
-description = "Die Erstattung als bezahlt erfassen (nur Finanzen)"
+description = "Die Erstattung als bezahlt erfassen (nur Finanzen); Zahlungsdatum ist heute, wenn keines angegeben ist"
 
 [labels.de.model.expenses_expense.action.refuse]
 label = "Ablehnen"
@@ -81,3 +85,7 @@ description = "Eine eingereichte Abrechnung ablehnen (nur Führungskräfte)"
 [labels.de.model.expenses_expense.field.number]
 label = "Nummer"
 description = "Abrechnungsnummer wie EXP-2026-0042, wird beim Anlegen vergeben; die Serie beginnt jedes Jahr neu"
+
+[labels.de.model.expenses_expense.field.receipt]
+description = "Foto oder Scan des Belegs (PDF oder Bild); nur als Download für Personen, die die Abrechnung lesen dürfen"
+label = "Beleg"

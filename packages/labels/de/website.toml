@@ -5,7 +5,11 @@ summary = "Seiten, Menüs, Blogbeiträge und Formulareingänge, als öffentliche
 
 [labels.de.model.website_page]
 name = "Seite"
+plural = "Seiten"
 description = "Eine Seite der Website"
+
+[labels.de.model.website_page.guard]
+message = "Eine archivierte Seite ist endgültig außer Betrieb. Erstellen Sie eine neue Seite als Ersatz."
 
 [labels.de.model.website_page.field.title]
 label = "Titel"
@@ -54,6 +58,7 @@ description = "Eine veröffentlichte Seite endgültig außer Dienst stellen"
 
 [labels.de.model.website_menu_item]
 name = "Menüeintrag"
+plural = "Menü"
 description = "Ein Eintrag der Seitennavigation"
 
 [labels.de.model.website_menu_item.field.label]
@@ -82,7 +87,11 @@ description = "Ob der Link in einem neuen Fenster geöffnet wird"
 
 [labels.de.model.website_blog_post]
 name = "Blogbeitrag"
+plural = "Blogbeiträge"
 description = "Ein Beitrag im Blog"
+
+[labels.de.model.website_blog_post.guard]
+message = "Ein archivierter Beitrag ist endgültig außer Betrieb. Schreiben Sie einen neuen Beitrag als Ersatz."
 
 [labels.de.model.website_blog_post.field.title]
 label = "Titel"
@@ -139,6 +148,7 @@ description = "Einen veröffentlichten Beitrag außer Dienst stellen"
 
 [labels.de.model.website_form_submission]
 name = "Formulareingang"
+plural = "Formulareingänge"
 description = "Eine Nachricht, die ein Besucher über ein Formular der Website gesendet hat"
 
 [labels.de.model.website_form_submission.field.form_name]
@@ -192,6 +202,7 @@ description = "Die Nachricht als Spam markieren"
 
 [labels.de.model.website_page_translation]
 name = "Seitenübersetzung"
+plural = "Seitenübersetzungen"
 description = "Eine in eine andere Sprache übersetzte Seite; die öffentliche Website zeigt sie Besuchern, die diese Sprache lesen"
 
 [labels.de.model.website_page_translation.field.page_id]
@@ -233,6 +244,7 @@ description = "Ob die Übersetzung angezeigt wird; sie ist nur erreichbar, solan
 
 [labels.de.model.website_blog_post_translation]
 name = "Übersetzung des Blogbeitrags"
+plural = "Übersetzungen von Blogbeiträgen"
 description = "Ein in eine andere Sprache übersetzter Blogbeitrag"
 
 [labels.de.model.website_blog_post_translation.field.post_id]

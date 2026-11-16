@@ -5,6 +5,7 @@ summary = "Återkommande planer och kundabonnemang med flödet provperiod, aktiv
 
 [labels.sv.model.subscriptions_plan]
 name = "Plan"
+plural = "Planer"
 description = "Ett återkommande erbjudande som kunder kan prenumerera på"
 
 [labels.sv.model.subscriptions_plan.field.name]
@@ -38,7 +39,11 @@ description = "Om nya kunder kan välja planen"
 
 [labels.sv.model.subscriptions_subscription]
 name = "Abonnemang"
+plural = "Abonnemang"
 description = "En kunds återkommande abonnemang på en plan"
+
+[labels.sv.model.subscriptions_subscription.guard]
+message = "Ett avslutat abonnemang kan inte ändras. Starta ett nytt abonnemang i stället."
 
 [labels.sv.model.subscriptions_subscription.field.customer_id]
 label = "Kund"
@@ -58,7 +63,7 @@ description = "Datum då den kostnadsfria provperioden slutar (ÅÅÅÅ-MM-DD)"
 
 [labels.sv.model.subscriptions_subscription.field.next_invoice_on]
 label = "Nästa fakturadatum"
-description = "Datum då nästa faktura ska skickas (ÅÅÅÅ-MM-DD)"
+description = "Datum då nästa faktura ska skickas (ÅÅÅÅ-MM-DD), anges för hand: ingen faktura skapas ännu från ett abonnemang, så skapa den i Fakturering"
 
 [labels.sv.model.subscriptions_subscription.field.recurring_amount]
 label = "Återkommande belopp"

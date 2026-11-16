@@ -1,10 +1,11 @@
 [labels.es.module]
 name = "Inventario"
-description = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock. Al validar un movimiento, la cantidad sale del artículo de stock de la ubicación de origen y se suma al de destino, en un solo paso; si el artículo aún no existe, se crea. Hay un artículo por producto, ubicación y lote. Se permiten cantidades negativas, como en ubicaciones virtuales como los proveedores."
+description = "Almacenes, ubicaciones, niveles y movimientos de stock. Al validar un movimiento, la cantidad sale del origen y se suma al destino en un solo paso; si el artículo no existe, se crea. Un artículo por producto, ubicación y lote; se permiten cantidades negativas. La cantidad solo cambia con movimientos; los hechos o cancelados quedan bloqueados. Producto y ubicación de un artículo son fijos."
 summary = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock."
 
 [labels.es.model.inventory_warehouse]
 name = "Almacén"
+plural = "Almacenes"
 description = "Un edificio o lugar donde se guarda el stock"
 
 [labels.es.model.inventory_warehouse.field.name]
@@ -25,6 +26,7 @@ description = "Indica si el almacén está en uso"
 
 [labels.es.model.inventory_location]
 name = "Ubicación"
+plural = "Ubicaciones"
 description = "Un lugar dentro de un almacén donde puede haber stock"
 
 [labels.es.model.inventory_location.field.name]
@@ -52,7 +54,11 @@ description = "Indica si la ubicación está en uso"
 
 [labels.es.model.inventory_item]
 name = "Existencia"
+plural = "Existencias"
 description = "La cantidad de un producto que hay en una ubicación"
+
+[labels.es.model.inventory_item.guard]
+message = "Un artículo de stock conserva su producto, su ubicación y su lote. Mueva el stock para cambiar dónde está."
 
 [labels.es.model.inventory_item.field.product_id]
 label = "Producto"
@@ -64,7 +70,7 @@ description = "Dónde se encuentra"
 
 [labels.es.model.inventory_item.field.quantity]
 label = "Cantidad"
-description = "Unidades disponibles"
+description = "Unidades disponibles; solo cambian con movimientos de stock validados"
 
 [labels.es.model.inventory_item.field.reorder_level]
 label = "Nivel de reaprovisionamiento"
@@ -76,7 +82,11 @@ description = "Número de lote, si se controla"
 
 [labels.es.model.inventory_move]
 name = "Movimiento"
+plural = "Movimientos de stock"
 description = "Un movimiento de un producto entre ubicaciones, o hacia dentro o fuera de la empresa"
+
+[labels.es.model.inventory_move.guard]
+message = "Un movimiento hecho o cancelado no se puede modificar. Cree un movimiento nuevo para corregir el stock."
 
 [labels.es.model.inventory_move.field.reference]
 label = "Referencia"
@@ -92,7 +102,7 @@ description = "De dónde sale; vacío para una recepción de un proveedor"
 
 [labels.es.model.inventory_move.field.to_location_id]
 label = "Ubicación de destino"
-description = "A dónde llega; vacío para una entrega a un cliente"
+description = "A dónde llega; vacío para una entrega a un cliente o para desecho"
 
 [labels.es.model.inventory_move.field.quantity]
 label = "Cantidad"
@@ -118,3 +128,23 @@ description = "Confirmar que la mercancía se movió de verdad: la cantidad sale
 [labels.es.model.inventory_move.action.cancel]
 label = "Cancelar"
 description = "Cancelar un movimiento en borrador"
+
+[labels.es.model.inventory_item.field.below_reorder]
+description = "Si el artículo necesita atención: la cantidad es negativa, o está en el nivel de reposición o por debajo"
+label = "Stock bajo"
+
+[labels.es.model.inventory_move.field.kind]
+label = "Tipo"
+description = "Qué es el movimiento: una recepción de un proveedor, una entrega a un cliente, un traslado interno, desecho, un ajuste tras un recuento de inventario o producción (componentes consumidos y productos fabricados)"
+
+[labels.es.model.inventory_move.field.kind.options]
+receipt = "Recepción"
+delivery = "Entrega"
+internal = "Interno"
+scrap = "Desecho"
+adjustment = "Ajuste de inventario"
+production = "Producción"
+
+[labels.es.model.inventory_move.field.origin]
+label = "Origen"
+description = "El documento del que procede el movimiento, por ejemplo un número de pedido de compra como PO-00042 o una orden de fabricación"

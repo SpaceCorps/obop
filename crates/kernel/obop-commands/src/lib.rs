@@ -183,6 +183,8 @@ pub struct CommandInfo {
     /// Display name per language (D52); empty in the command catalog, set in `meta`.
     pub labels: Texts,
     pub descriptions: Texts,
+    /// `[model.action.ui]` (D95); `None` in the command catalog and when none is declared.
+    pub ui: Option<Arc<obop_registry::ActionUi>>,
 }
 
 /// What a guard decides about one call (D48).
@@ -202,13 +204,14 @@ pub struct Verdict {
 }
 
 /// An action the dispatcher runs ahead of an `update` that moves a governed field.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Pre {
     /// Command id, `model.action`.
     pub command: String,
     pub input: Value,
     /// The governed field the action sets. When the action has a registered handler the field
-    /// is dropped from the update, which would only repeat the write.
+    /// is dropped from the update, which would only repeat the write. So is every other field of
+    /// `input` but `id` (the fields the action needs, D95).
     pub field: &'static str,
 }
 
@@ -253,6 +256,10 @@ struct Registered {
     actor: bool,
     /// The command changes records.
     writes: bool,
+    /// The handler is one of the generated ones, not one a module wrote by hand. Only the
+    /// generated `update` and the generic handler of an action share a unit of work
+    /// (`engine::implied`); a handler written by hand reads and writes the store itself.
+    generated: bool,
     handler: Handler,
 }
 
@@ -300,7 +307,16 @@ pub struct Dispatcher {
     clock_replaced: Arc<std::sync::atomic::AtomicBool>,
     /// The time zone database and the platform zone (D72).
     zones: engine::SharedZones,
+    /// The instance currency (D95 `$instance.currency`, `currency` in `/api/meta`); empty until
+    /// set, which reads as [`DEFAULT_CURRENCY`].
+    currency: Arc<std::sync::RwLock<String>>,
+    /// Commands a module refuses for everyone (`refuse_always`): the metadata says the caller
+    /// cannot do them (`can_delete: false`), so the interface agrees with the server.
+    never: std::sync::RwLock<HashMap<String, String>>,
 }
+
+/// The instance currency when none is configured (the first target is Germany, OR-7).
+pub const DEFAULT_CURRENCY: &str = "EUR";
 
 /// The clock of the engine; tests replace it to cross a year end.
 #[derive(Clone)]
@@ -330,6 +346,15 @@ pub(crate) struct ModelMeta {
     description: &'static str,
     pub(crate) fields: Vec<FieldDef>,
     module_description: String,
+    /// The module's catalogue summary, categories and maturity (D55), for the interface.
+    module_summary: String,
+    /// `[module] home` and `launcher` (D95).
+    module_ui: obop_registry::ModuleUi,
+    module_categories: Vec<String>,
+    module_maturity: String,
+    /// The model's place in its module's declaration (`Module::models`): the interface lists
+    /// models in this order, so an app opens on the model its module declares first.
+    index: usize,
     translations: Arc<Translations>,
     /// The generated `create` and `update` are bound for this model (`register_crud`). An action
     /// effect writes a record the way those two commands do, for the caller, so it reaches only a
@@ -373,6 +398,9 @@ pub struct FieldInfo {
     pub unique: bool,
     /// Numbered by the system (D57).
     pub sequence: bool,
+    /// The numbers come from a gapless series (a posted entry, a receipt): the interface lists
+    /// such records rather than putting them on a board.
+    pub gapless: bool,
     /// A text field shown, in the back office, with the label of the option of the select field
     /// `model.field` that its value equals (D52 amendment). Display only: values are as stored.
     pub shows_option_of: Option<String>,
@@ -391,6 +419,9 @@ pub struct FieldInfo {
     /// `(at most 2000 characters)` or `(from 0 to 100)`; empty when it declares none (the default
     /// of its kind is in `max_length`, not in the description).
     pub limits_note: String,
+    /// The D95 hints: `default`, `fill_from`, `readonly`, `ref_filter` and `ui`; `None` when the
+    /// field declares none.
+    pub hints: Option<Arc<obop_registry::FieldHints>>,
 }
 
 impl FieldInfo {
@@ -444,6 +475,20 @@ pub struct ModelInfo {
     pub descriptions: Texts,
     /// Records the caller sees are limited by these rules (D58); none: all of the model.
     pub access: Option<AccessInfo>,
+    /// `[model.ui]` (D95); `None` when the model declares none.
+    pub ui: Option<Arc<obop_registry::ModelUi>>,
+    /// The child models drawn inside this model's form (D95): those the `resolve_child` rule finds
+    /// (a model `<name>_<x>` with one ref to this one) and the declared ones, that the caller
+    /// may list.
+    pub children: Vec<obop_registry::ChildDecl>,
+    /// The plural of the model's name per language (D95), English included when the module has
+    /// an `en` label table.
+    pub plurals: Texts,
+    /// The immutability guard (D77), so an interface can show which records are locked; `None`
+    /// when the model declares none.
+    pub guard: Option<obop_registry::Guard>,
+    /// The message of the guard per language (D52), empty when untranslated.
+    pub guard_messages: Texts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -456,7 +501,15 @@ pub struct ModuleInfo {
     pub descriptions: Texts,
     /// The card summary per language (D52); empty when untranslated.
     pub summaries: Texts,
+    /// The English card summary, the categories and the maturity (`stable`, `beta`,
+    /// `experimental`) the module declares (D55); empty when it declares none.
+    pub summary: String,
+    pub categories: Vec<String>,
+    pub maturity: String,
+    /// Models in the module's declaration order (not alphabetical).
     pub models: Vec<ModelInfo>,
+    /// `[module] home` and `launcher` (D95).
+    pub ui: obop_registry::ModuleUi,
 }
 
 impl Dispatcher {
@@ -523,6 +576,7 @@ impl Dispatcher {
                     transition: c.transition,
                     labels: Texts::new(),
                     descriptions: Texts::new(),
+                    ui: None,
                 }
             })
             .collect()
@@ -546,7 +600,8 @@ impl Dispatcher {
                 .filter(|(_, m)| &m.module == module)
                 .map(|(n, _)| n)
                 .collect();
-            names.sort();
+            // The module's declaration order, so the first model is the one it declares first.
+            names.sort_by_key(|n| (models[n.as_str()].index, n.as_str()));
             for name in names {
                 let m = &models[name];
                 let Some(list) = cmds.get(&format!("{name}.list")) else {
@@ -555,7 +610,11 @@ impl Dispatcher {
                 if !visible(list) {
                     continue;
                 }
-                let can = |c: &str| cmds.get(&format!("{name}.{c}")).is_some_and(|r| visible(r));
+                let never = self.never.read().unwrap();
+                let can = |c: &str| {
+                    let id = format!("{name}.{c}");
+                    !never.contains_key(&id) && cmds.get(&id).is_some_and(|r| visible(r))
+                };
                 let mut actions: Vec<CommandInfo> = cmds
                     .iter()
                     .filter(|(id, c)| {
@@ -578,12 +637,43 @@ impl Dispatcher {
                             transition: c.transition,
                             labels: tr.map(|t| t.labels.clone()).unwrap_or_default(),
                             descriptions: tr.map(|t| t.descriptions.clone()).unwrap_or_default(),
+                            ui: m
+                                .def
+                                .commands
+                                .iter()
+                                .find(|d| d.name == &id[name.len() + 1..])
+                                .and_then(|d| d.ui.clone()),
                         }
                     })
                     .collect();
-                actions.sort_by(|a, b| a.id.cmp(&b.id));
+                // The order of `ModelDef::commands`: the module declares its actions in the
+                // order a record moves through them.
+                let place = |id: &str| {
+                    let short = &id[name.len() + 1..];
+                    m.def
+                        .commands
+                        .iter()
+                        .position(|c| c.name == short)
+                        .unwrap_or(usize::MAX)
+                };
+                actions.sort_by(|a, b| (place(&a.id), &a.id).cmp(&(place(&b.id), &b.id)));
                 let mtr = m.translations.models.get(name.as_str());
                 infos.push(ModelInfo {
+                    ui: m.def.ext.ui.clone(),
+                    children: {
+                        let all: Vec<&obop_registry::ModelDef> =
+                            models.values().map(|x| &*x.def).collect();
+                        obop_registry::ui::children_of(&m.def, &all)
+                            .into_iter()
+                            .filter(|c| {
+                                cmds.get(&format!("{}.list", c.model))
+                                    .is_some_and(|r| visible(r))
+                            })
+                            .collect()
+                    },
+                    plurals: mtr.map(|t| t.plurals.clone()).unwrap_or_default(),
+                    guard: m.def.ext.guard.clone(),
+                    guard_messages: mtr.map(|t| t.guard.clone()).unwrap_or_default(),
                     name: name.clone(),
                     description: m.description,
                     labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
@@ -622,6 +712,7 @@ impl Dispatcher {
                                 computed: f.computed.is_some(),
                                 unique: f.unique.is_some() || f.sequence.is_some(),
                                 sequence: f.sequence.is_some(),
+                                gapless: f.sequence.as_ref().is_some_and(|s| s.gapless),
                                 shows_option_of: f.shows_option.as_ref().map(|s| s.target()),
                                 shows_option_when: f
                                     .shows_option
@@ -633,6 +724,7 @@ impl Dispatcher {
                                 min: f.lower_bound(),
                                 max: f.upper_bound(),
                                 limits_note: f.limits_note(),
+                                hints: f.hints.clone(),
                             }
                         })
                         .collect(),
@@ -669,13 +761,25 @@ impl Dispatcher {
                             m.translations.summaries.clone(),
                         )
                     });
+                let (summary, categories, maturity) = first.map_or_else(Default::default, |m| {
+                    (
+                        m.module_summary.clone(),
+                        m.module_categories.clone(),
+                        m.module_maturity.clone(),
+                    )
+                });
+                let ui = first.map(|m| m.module_ui.clone()).unwrap_or_default();
                 out.push(ModuleInfo {
+                    ui,
                     id: module.clone(),
                     name,
                     description,
                     labels,
                     descriptions,
                     summaries,
+                    summary,
+                    categories,
+                    maturity,
                     models: infos,
                 });
             }
@@ -710,9 +814,7 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
     ) {
-        // The generated `create` and `update` are what lets an effect write the model.
-        let writes = matches!(command, "create" | "update");
-        self.register_inner(module, model, command, handler, true, writes);
+        self.register_inner(module, model, command, handler, true, true);
     }
 
     fn register_inner(
@@ -722,12 +824,15 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
         actor: bool,
-        generated_write: bool,
+        generated: bool,
     ) {
-        let m = module
+        // The generated `create` and `update` are what lets an effect write the model.
+        let generated_write = generated && matches!(command, "create" | "update");
+        let (index, m) = module
             .models
             .iter()
-            .find(|m| m.name == model)
+            .enumerate()
+            .find(|(_, m)| m.name == model)
             .unwrap_or_else(|| panic!("{}: no model {model}", module.id));
         let c = m
             .all_commands()
@@ -748,6 +853,11 @@ impl Dispatcher {
                     module: module.id.clone(),
                     module_name: module.name.clone(),
                     module_description: module.description.clone(),
+                    module_summary: module.meta.summary.clone(),
+                    module_ui: module.meta.ui.clone(),
+                    module_categories: module.meta.categories.clone(),
+                    module_maturity: module.meta.maturity.clone(),
+                    index,
                     translations: module.translations.clone(),
                     description: m.description,
                     fields: m.fields.clone(),
@@ -778,6 +888,7 @@ impl Dispatcher {
                 envelope: matches!(command, "search" | "bulk_create"),
                 actor,
                 writes: !matches!(command, "get" | "list" | "search"),
+                generated,
                 handler,
             }),
         );
@@ -924,6 +1035,7 @@ impl Dispatcher {
             }
         }
         self.order.write().unwrap().retain(|x| x != module);
+        self.never.write().unwrap().retain(|_, m| m != module);
         self.refresh_lock_models();
     }
 
@@ -960,6 +1072,40 @@ impl Dispatcher {
     /// The time zone settings in force.
     pub fn zones(&self) -> Arc<obop_values::Zones> {
         self.zones.read().unwrap().clone()
+    }
+
+    /// Set the instance currency (D95): three capital letters (ISO 4217). The server sets it from
+    /// `OBOP_CURRENCY` at start.
+    pub fn set_currency(&self, code: &str) -> Result<(), String> {
+        if code.len() != 3 || !code.bytes().all(|b| b.is_ascii_uppercase()) {
+            return Err(format!(
+                "the currency {code:?} must be three capital letters (ISO 4217), such as EUR or SEK"
+            ));
+        }
+        *self.currency.write().unwrap() = code.to_string();
+        Ok(())
+    }
+
+    /// The instance currency (D95): what `set_currency` set, else [`DEFAULT_CURRENCY`].
+    pub fn currency(&self) -> String {
+        let c = self.currency.read().unwrap();
+        if c.is_empty() {
+            DEFAULT_CURRENCY.to_string()
+        } else {
+            c.clone()
+        }
+    }
+
+    /// Refuse the command `id` of `module` for every caller with `reason` (a trip is never
+    /// deleted), and say so in the metadata: `can_delete`, `can_update` or `can_create` is then
+    /// false for everyone (D95), so the interface offers nothing the server refuses. Added like
+    /// `add_guard`, after the guards already on the command; removed with the module.
+    pub fn refuse_always(&self, module: &str, id: &str, reason: &'static str) {
+        self.add_guard(module, id, true, Box::new(move |_, _| Err(reason.into())));
+        self.never
+            .write()
+            .unwrap()
+            .insert(id.to_string(), module.to_string());
     }
 
     /// Every permission group the registered models, fields and commands refer to (the
@@ -1093,6 +1239,11 @@ impl Dispatcher {
             }
         }
         if (c.needs_approval || guard_approval) && p.kind == PrincipalKind::Agent {
+            // A call that mixes what cannot be stored as a whole gets no plan: the plan would
+            // be refused when a person approves it, and spent by that. The agent hears it now.
+            if let Some(why) = self.mixed(&c, p, &input, &pre) {
+                return Err(refusal(why, &input));
+            }
             // Dry-run: keep the restored input, hand back a plan id (D18, D42).
             let plan_id = uuid::Uuid::now_v7().to_string();
             self.plans
@@ -1235,6 +1386,94 @@ impl Dispatcher {
         }
     }
 
+    /// The actions an `update` of a governed field implies (D48), each ready to run as a call
+    /// of the action runs it. The fields that go to an action leave `input`, the input of the
+    /// update.
+    fn steps_of(
+        &self,
+        c: &Registered,
+        p: &Principal,
+        input: &mut Value,
+        pre: Vec<Pre>,
+    ) -> Vec<engine::implied::Step> {
+        let mut steps = Vec::with_capacity(pre.len());
+        for step in pre {
+            let action = self.commands.read().unwrap().get(&step.command).cloned();
+            let Some(action) = action else { continue };
+            let mut i = step.input;
+            // The fields the action needs (D95) travel with it and are written by it; the
+            // governed field is set by it, and the update would only repeat the write.
+            if let (Value::Map(of_update), Value::Map(of_action)) = (&mut *input, &i) {
+                of_update.remove(step.field);
+                for k in of_action.keys().filter(|k| *k != "id") {
+                    of_update.remove(k.as_str());
+                }
+            }
+            if let Value::Map(m) = &mut i {
+                m.insert("_caller".into(), Value::text(&p.id));
+                if action.actor {
+                    Actor::of(p).stamp(m);
+                }
+            }
+            // Through the action's own wrapper, like a call of the action (`invoke`): a drag of
+            // an order to "refunded" must return the money exactly as the refund action does.
+            let wrapper = self.around.read().unwrap().get(&action.id).cloned();
+            let who = p.clone();
+            steps.push(engine::implied::Step {
+                command: action.id.clone(),
+                field: step.field.to_string(),
+                // Generic all the way: the generated `update`, the generic handler of the
+                // action, and no wrapper around it.
+                joins: c.generated
+                    && action.generated
+                    && action.transition.is_some()
+                    && wrapper.is_none(),
+                run: Box::new(move || match &wrapper {
+                    Some(w) => w(&who, &i, &|x| (action.handler)(x)),
+                    None => (action.handler)(&i),
+                }),
+            });
+        }
+        steps
+    }
+
+    /// Handlers that need to know who is calling (audit trails) read `_caller`. The dispatcher
+    /// sets it after discarding anything a client sent under that name.
+    fn stamp_caller(c: &Registered, p: &Principal, input: &mut Value) {
+        if let Value::Map(m) = input {
+            m.insert("_caller".into(), Value::text(&p.id));
+            if c.actor {
+                Actor::of(p).stamp(m);
+            }
+        }
+    }
+
+    /// Why the run of this `update` would refuse the call for what it puts together, asked
+    /// without running anything: a move through an `update` that a module wrote by hand
+    /// (`implied::by_hand`), or an action that is run by itself together with an edit or with
+    /// another move (`implied::not_mixed`). For the second the generated `update` is asked
+    /// (`implied::ask`). It answers by the fields that were sent, not by their values: this is
+    /// asked for an agent, ahead of the wrapper of the update, and the answer must not tell
+    /// whether a value equals the stored one.
+    fn mixed(&self, c: &Registered, p: &Principal, input: &Value, pre: &[Pre]) -> Option<String> {
+        if pre.is_empty() {
+            return None;
+        }
+        let mut input = input.clone();
+        let steps = self.steps_of(c, p, &mut input, pre.to_vec());
+        if !c.generated {
+            return engine::implied::by_hand(&c.id, &steps);
+        }
+        // Only the generated `update` can be asked: it stops before it writes.
+        let update = c.id.strip_prefix(c.model) == Some(".update");
+        if !update || steps.iter().all(|s| s.joins) {
+            return None;
+        }
+        Self::stamp_caller(c, p, &mut input);
+        // Not through the wrapper of the update: only the generated handler is asked.
+        engine::implied::ask(steps, || (c.handler)(&input))
+    }
+
     fn run(
         &self,
         c: &Registered,
@@ -1244,33 +1483,34 @@ impl Dispatcher {
         pre: Vec<Pre>,
     ) -> Result<Response, CallError> {
         let mut input = input;
-        for step in pre {
-            let action = self.commands.read().unwrap().get(&step.command).cloned();
-            if let Some(action) = action {
-                let mut i = step.input;
-                if let Value::Map(m) = &mut i {
-                    m.insert("_caller".into(), Value::text(&p.id));
-                    if action.actor {
-                        Actor::of(p).stamp(m);
-                    }
-                }
-                // Through the action's own wrapper, like a call of the action: a drag of an order
-                // to "refunded" must return the money exactly as the refund action does.
-                self.invoke(&action, p, &i).map_err(|m| refusal(m, &i))?;
-                if let Value::Map(m) = &mut input {
-                    m.remove(step.field);
-                }
-            }
+        // The actions an `update` of a governed field implies (D48). They do not run here, ahead
+        // of the update: the handler of the update runs them in its own unit of work, after the
+        // other fields of the call are checked and written, so the edits and the move are stored
+        // together or not at all (`engine::implied`).
+        // A refusal is read against everything the caller sent, also the fields that go to an
+        // action below and so leave the input of the update.
+        let asked = (!pre.is_empty()).then(|| input.clone());
+        let steps = self.steps_of(c, p, &mut input, pre);
+        // An `update` whose handler a module wrote by hand knows nothing of the actions and
+        // writes the store itself, so nothing can share a unit with it, and whichever of the
+        // two ran first would stay stored when the other refused. Such an update takes no
+        // move: the caller calls the action.
+        if !c.generated
+            && let Some(why) = engine::implied::by_hand(&c.id, &steps)
+        {
+            return Err(refusal(why, asked.as_ref().unwrap_or(&input)));
         }
-        // Handlers that need to know who is calling (audit trails) read `_caller`. The dispatcher
-        // sets it after discarding anything a client sent under that name.
-        if let Value::Map(m) = &mut input {
-            m.insert("_caller".into(), Value::text(&p.id));
-            if c.actor {
-                Actor::of(p).stamp(m);
-            }
+        // One scope per run of a command, also when it implies nothing: a command that a wrapper
+        // calls through the dispatcher must not see the actions or the unit of the call around it.
+        let _scope = engine::implied::open(steps);
+        Self::stamp_caller(c, p, &mut input);
+        let sent = asked.as_ref().unwrap_or(&input);
+        let out = self.invoke(c, p, &input).map_err(|m| refusal(m, sent))?;
+        // The generated `update` has taken the actions and run them. Should a wrapper around it
+        // have answered without calling it, the move it was asked for still happens.
+        for step in engine::implied::take_steps() {
+            (step.run)().map_err(|m| refusal(m, sent))?;
         }
-        let out = self.invoke(c, p, &input).map_err(|m| refusal(m, &input))?;
         let observers: Vec<Arc<Observer>> = self
             .observers
             .read()
@@ -1360,8 +1600,11 @@ impl Dispatcher {
                         // definition for it is what a field of that name left behind in records
                         // written before the model dropped it (`connection.created_at`): it is
                         // withheld too, but nobody was denied it, so it is not reported as denied.
+                        // An empty value is what a `rename_field` or `drop_field` step leaves under
+                        // the old name (`manufacturing_order.reference`): nothing is withheld, so
+                        // it is not reported as denied either.
                         if k != "id" {
-                            if !obop_registry::is_system_name(&k) {
+                            if !obop_registry::is_system_name(&k) && !matches!(v, Value::Null) {
                                 denied.push(format!("{model}.{k}"));
                             }
                             continue;
@@ -1483,6 +1726,41 @@ pub trait Authenticator: Send + Sync {
         scopes: &[String],
         label: &str,
     ) -> Result<String, String>;
+    /// As `issue_agent_token`, from a caller that knows the permission groups the instance has
+    /// registered (`Dispatcher::known_groups`): a person who holds the administrator group, and so
+    /// every group, may also put a group of `registered` on the token that their account does not
+    /// list by name (D69 amendment of 2026-11-14, PROPOSED). The token still lists concrete groups.
+    /// An authenticator that does not know the rule answers as `issue_agent_token`.
+    fn issue_agent_token_among(
+        &self,
+        owner: &Principal,
+        scopes: &[String],
+        label: &str,
+        _registered: &[String],
+    ) -> Result<String, String> {
+        self.issue_agent_token(owner, scopes, label)
+    }
+    /// The agent tokens `owner` issued that still work, newest first; never a token itself.
+    /// `None` when the authenticator keeps no such list.
+    fn agent_tokens_of(&self, _owner: &Principal) -> Option<Vec<AgentTokenInfo>> {
+        None
+    }
+    /// End one agent token of `owner` by its id. False when there is no such token of theirs.
+    fn revoke_agent_token(&self, _owner: &Principal, _id: &str) -> bool {
+        false
+    }
+}
+
+/// One agent token as its owner sees it in a list: what it is called and may do, never the token.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentTokenInfo {
+    /// The id of the stored record (a hash of the token), for `revoke_agent_token`.
+    pub id: String,
+    pub label: String,
+    /// The permission groups the token is narrowed to, sorted.
+    pub scopes: Vec<String>,
+    /// Unix seconds.
+    pub created_at: u64,
 }
 
 /// The few identity operations the OAuth authorization server (D64) needs. Tokens it issues are
@@ -1855,6 +2133,12 @@ pub mod names {
 mod assert_lang_tests;
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod guard_tests;
+#[cfg(test)]
+mod hints_tests;
+#[cfg(test)]
+mod implied_tests;
 #[cfg(test)]
 mod import_map_tests;
 #[cfg(test)]

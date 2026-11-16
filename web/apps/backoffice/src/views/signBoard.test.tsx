@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // The board and the list of sign requests, mounted (D92): a request about a Document is not moved to Signed by
 // hand, because the signer signs it through the link and the server refuses the manual step. The
-// card's "Move to" menu and the state cell of the list must grey that step out, and a move that is
-// tried anyway must be refused with the reason and send nothing; a request from a template keeps it.
+// card's ⋯ "Move to" menu and the state cell of the list must grey that step out, and a move that is
+// tried anyway (a drop on the column) must be refused with the reason and send nothing; a request
+// from a template keeps it.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -141,33 +142,44 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-const menu = (id: string) =>
-  container.querySelector<HTMLSelectElement>(`[data-card="${id}"] select.moveto`)!;
-const option = (id: string, label: string) =>
-  [...menu(id).options].find((o) => o.textContent?.trim().startsWith(label))!;
+/** Open the ⋯ menu of a card (drawn over the page) and return its items. */
+const menu = async (id: string) => {
+  const button = container.querySelector<HTMLButtonElement>(`[data-card="${id}"] .kmore-btn`)!;
+  if (button.getAttribute("aria-expanded") !== "true") await act(async () => button.click());
+  return [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] [role="menuitem"]')];
+};
+const option = async (id: string, label: string) => {
+  const items = await menu(id);
+  const item = items.find((o) => o.textContent?.trim().startsWith(label))!;
+  // Close it again, so the next card opens its own.
+  await act(async () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+  return item;
+};
 const REASON =
   "A request about a document is signed by the signer through the signing link. It cannot be marked signed by hand.";
 
 describe("the 'Move to' menu of a card on the sign board", () => {
   beforeEach(() => mount(KanbanView));
 
-  it("greys out Signed, with the reason, for a request about a document", () => {
-    expect(option("doc", "Signed").disabled).toBe(true);
-    expect(option("doc", "Signed").title).toBe(REASON);
+  it("greys out Signed, with the reason, for a request about a document", async () => {
+    const signed = await option("doc", "Signed");
+    expect(signed.disabled).toBe(true);
+    expect(signed.title).toBe(REASON);
   });
 
-  it("greys it out for a request that was left holding only a document's hash", () => {
-    expect(option("cleared", "Signed").disabled).toBe(true);
-    expect(option("cleared", "Signed").title).toBe(REASON);
+  it("greys it out for a request that was left holding only a document's hash", async () => {
+    const signed = await option("cleared", "Signed");
+    expect(signed.disabled).toBe(true);
+    expect(signed.title).toBe(REASON);
   });
 
-  it("keeps Signed for a request from a template, also one with a hash typed by hand", () => {
-    expect(option("tpl", "Signed").disabled).toBe(false);
-    expect(option("legacy", "Signed").disabled).toBe(false);
+  it("keeps Signed for a request from a template, also one with a hash typed by hand", async () => {
+    expect((await option("tpl", "Signed")).disabled).toBe(false);
+    expect((await option("legacy", "Signed")).disabled).toBe(false);
   });
 
-  it("does not touch the other steps of a request about a document", () => {
-    expect(option("doc", "Declined").disabled).toBe(false);
+  it("does not touch the other steps of a request about a document", async () => {
+    expect((await option("doc", "Declined")).disabled).toBe(false);
   });
 });
 
@@ -230,11 +242,24 @@ describe("a card dragged over the columns", () => {
 describe("a move that is tried anyway", () => {
   beforeEach(() => mount(KanbanView));
 
+  /** Drop the card on the Signed column, whatever the column says while it is dragged. */
   const tryMove = async (id: string) => {
-    await act(async () => {
-      menu(id).value = "signed";
-      menu(id).dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    const dt = {
+      dropEffect: "move",
+      effectAllowed: "all",
+      setData: () => {},
+      getData: () => id,
+    };
+    const fire = (el: Element, type: string) => {
+      const e = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(e, { dataTransfer: dt });
+      el.dispatchEvent(e);
+    };
+    const signed = [...container.querySelectorAll<HTMLElement>("section.kcol")].find((c) =>
+      (c.getAttribute("aria-label") ?? "").startsWith("Signed,"),
+    )!;
+    await act(async () => fire(container.querySelector(`[data-card="${id}"]`)!, "dragstart"));
+    await act(async () => fire(signed, "drop"));
     for (let i = 0; i < 5; i++) await act(async () => void (await Promise.resolve()));
   };
 
@@ -257,7 +282,11 @@ describe("a move that is tried anyway", () => {
 });
 
 describe("the state cell of a row in the list of sign requests", () => {
-  beforeEach(() => mount(ListView));
+  // "Edit in list" is on, so a click on a cell edits it in place (without it a click opens the record).
+  beforeEach(() => {
+    localStorage.setItem("obop-list-edit:sign_request", "true");
+    return mount(ListView);
+  });
 
   /** Click the State cell of the row, which edits it in place, and read the options of its menu. */
   const states = async (title: string) => {

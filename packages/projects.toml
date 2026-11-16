@@ -1,6 +1,6 @@
 [module]
 id = "projects"
-version = "0.4.0"
+version = "0.5.0"
 name = "Projects"
 description = "Projects, milestones and tasks with assignees, deadlines and status flows. A project shows its progress, the share of its tasks that are done, and the time estimated for them."
 author = "SpaceCorps"
@@ -11,13 +11,37 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["projects", "tasks", "milestones"]
 categories = ["services", "productivity"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+changelog = "The app opens on Projects, which show their progress as a percentage and their estimate as a duration, with their milestones and tasks inside. A task picks only milestones of its own project, can be completed straight from To do, and a done or cancelled task can be reopened; a reached or missed milestone can be set back to pending."
+home = "projects_project"
 
 [[model]]
 name = "projects_project"
 description = "A body of work with a goal"
 read_group = "projects.user"
 write_group = "projects.manager"
+
+  [model.ui]
+  title = "{code} {name} | {name}"
+  subtitle = "{project_manager}"
+  list = ["code", "name", "project_manager", "start_on", "deadline", "progress", "budget", "state"]
+  card = ["name", "project_manager", "deadline", "progress"]
+  quick_create = ["name", "code", "project_manager"]
+  order = "deadline asc, name asc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "start_on", end = "deadline" }
+
+  [[model.child]]
+  model = "projects_milestone"
+  via = "project_id"
+  shape = "list"
+
+  [[model.child]]
+  model = "projects_task"
+  via = "project_id"
+  shape = "list"
 
   [[model.field]]
   name = "name"
@@ -47,6 +71,8 @@ write_group = "projects.manager"
   description = "Date the project must be finished (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  [model.field.ui]
+  warn_before_days = 14
 
   [[model.field]]
   name = "budget"
@@ -66,6 +92,8 @@ write_group = "projects.manager"
   class = "none"
   kind = "number"
   computed = 'sum(projects_task.estimate_minutes where state != "cancelled")'
+  [model.field.ui]
+  display = "duration_minutes"
 
   [[model.field]]
   name = "progress"
@@ -73,6 +101,9 @@ write_group = "projects.manager"
   class = "none"
   kind = "number"
   computed = 'if(count(projects_task where state != "cancelled") == 0, 0, count(projects_task where state == "done") * 100 / count(projects_task where state != "cancelled"))'
+  [model.field.ui]
+  display = "percent"
+  aggregate = "avg"
 
   [[model.field]]
   name = "state"
@@ -81,6 +112,8 @@ write_group = "projects.manager"
   kind = "select"
   options = ["planned", "active", "done"]
   required = true
+  [model.field.ui]
+  tones = { planned = "info", active = "warn", done = "ok" }
 
   [[model.action]]
   name = "start"
@@ -88,6 +121,8 @@ write_group = "projects.manager"
   field = "state"
   from = "planned"
   to = "active"
+  [model.action.ui]
+  primary = true
 
   [[model.action]]
   name = "finish"
@@ -95,6 +130,9 @@ write_group = "projects.manager"
   field = "state"
   from = "active"
   to = "done"
+  [model.action.ui]
+  primary = true
+  done = "Project done"
 
   [[model.action]]
   name = "reopen"
@@ -108,6 +146,18 @@ name = "projects_milestone"
 description = "A checkpoint in a project"
 read_group = "projects.user"
 write_group = "projects.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{project_id}"
+  list = ["name", "project_id", "due_on", "state"]
+  card = ["name", "project_id", "due_on"]
+  quick_create = ["name", "project_id", "due_on"]
+  order = "due_on asc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 3
+  calendar = { start = "due_on", color = "project_id" }
 
   [[model.field]]
   name = "project_id"
@@ -128,6 +178,8 @@ write_group = "projects.manager"
   description = "Date the milestone is due (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  [model.field.ui]
+  warn_before_days = 7
 
   [[model.field]]
   name = "description"
@@ -142,6 +194,8 @@ write_group = "projects.manager"
   kind = "select"
   options = ["pending", "reached", "missed"]
   required = true
+  [model.field.ui]
+  tones = { pending = "info", reached = "ok", missed = "bad" }
 
   [[model.action]]
   name = "reach"
@@ -149,6 +203,8 @@ write_group = "projects.manager"
   field = "state"
   from = "pending"
   to = "reached"
+  [model.action.ui]
+  primary = true
 
   [[model.action]]
   name = "miss"
@@ -156,12 +212,54 @@ write_group = "projects.manager"
   field = "state"
   from = "pending"
   to = "missed"
+  [model.action.ui]
+  danger = true
+  confirm = "Record this milestone as missed?"
+
+  [[model.action]]
+  name = "reset"
+  description = "Set a reached milestone back to pending, for example when it was marked by mistake"
+  field = "state"
+  from = "reached"
+  to = "pending"
+  [model.action.ui]
+  group = "reset"
+
+  [[model.action]]
+  name = "reset_missed"
+  description = "Set a missed milestone back to pending, for example when its date moved"
+  field = "state"
+  from = "missed"
+  to = "pending"
+  [model.action.ui]
+  group = "reset"
 
 [[model]]
 name = "projects_task"
 description = "A unit of work inside a project"
 read_group = "projects.user"
 write_group = "projects.user"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{project_id}"
+  list = ["title", "project_id", "milestone_id", "assignee", "priority", "due_on", "estimate_minutes", "state"]
+  card = ["title", "project_id", "assignee", "due_on", "priority", "estimate_minutes"]
+  card_sum = "estimate_minutes"
+  quick_create = ["title", "project_id", "assignee"]
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 2
+  calendar = { start = "due_on", color = "project_id" }
+  report = { rows = "project_id", cols = "state", measure = "estimate_minutes" }
+
+  [[model.ui.filter]]
+  label = "Open"
+  where = "state != done && state != cancelled"
+
+  [[model.ui.filter]]
+  label = "Overdue"
+  where = "due_on != null && due_on < today && state != done && state != cancelled"
 
   [[model.field]]
   name = "title"
@@ -182,6 +280,7 @@ write_group = "projects.user"
   class = "none"
   kind = "ref"
   to = "projects_milestone"
+  ref_filter = "project_id = $project_id"
 
   [[model.field]]
   name = "assignee"
@@ -195,18 +294,25 @@ write_group = "projects.user"
   class = "none"
   kind = "select"
   options = ["low", "normal", "high"]
+  default = "normal"
+  [model.field.ui]
+  tones = { low = "neutral", normal = "neutral", high = "warn" }
 
   [[model.field]]
   name = "due_on"
   description = "Date the task is due (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  [model.field.ui]
+  warn_before_days = 3
 
   [[model.field]]
   name = "estimate_minutes"
   description = "Planned effort in minutes"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  display = "duration_minutes"
 
   [[model.field]]
   name = "description"
@@ -220,6 +326,8 @@ write_group = "projects.user"
   class = "none"
   kind = "select"
   options = ["todo", "doing", "done", "cancelled"]
+  [model.field.ui]
+  tones = { todo = "info", doing = "warn", done = "ok", cancelled = "neutral" }
 
   [[model.action]]
   name = "begin"
@@ -227,6 +335,8 @@ write_group = "projects.user"
   field = "state"
   from = "todo"
   to = "doing"
+  [model.action.ui]
+  primary = true
 
   [[model.action]]
   name = "complete"
@@ -234,6 +344,9 @@ write_group = "projects.user"
   field = "state"
   from = "doing"
   to = "done"
+  [model.action.ui]
+  primary = true
+  group = "complete"
 
   [[model.action]]
   name = "cancel"
@@ -241,3 +354,33 @@ write_group = "projects.user"
   field = "state"
   from = "todo"
   to = "cancelled"
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this task?"
+
+  [[model.action]]
+  name = "complete_now"
+  description = "Mark a todo task as done without starting it first"
+  field = "state"
+  from = "todo"
+  to = "done"
+  [model.action.ui]
+  group = "complete"
+
+  [[model.action]]
+  name = "reopen"
+  description = "Reopen a done task, back to todo"
+  field = "state"
+  from = "done"
+  to = "todo"
+  [model.action.ui]
+  group = "reopen"
+
+  [[model.action]]
+  name = "reopen_cancelled"
+  description = "Reopen a cancelled task, back to todo"
+  field = "state"
+  from = "cancelled"
+  to = "todo"
+  [model.action.ui]
+  group = "reopen"

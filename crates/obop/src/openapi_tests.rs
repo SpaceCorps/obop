@@ -14,8 +14,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tower::ServiceExt;
 
-/// Commands of models that have no `list` command: registered on REST, absent from the document.
+/// Commands of models that have no `list` command, and the commands a module refuses for everyone
+/// (`Dispatcher::refuse_always`, D95: `can_delete` / `can_update` false in the metadata): registered
+/// on REST, absent from the document.
 const KNOWN_OMITTED: &[&str] = &[
+    "bank_matching.book",
+    "bank_matching.suggest",
     "import_map.get",
     "import_map.search",
     "instance_brand.clear",
@@ -25,11 +29,17 @@ const KNOWN_OMITTED: &[&str] = &[
     "instance_update.rollback",
     "instance_update.start",
     "instance_update.status",
+    "invoice_posting.create_move",
+    "mileage_point.delete",
+    "mileage_point.update",
+    "mileage_trip.delete",
     "module_plan.preview",
     "setting.get",
     "setting.update",
     "sie_exchange.export",
     "sie_exchange.import",
+    "stock_count.apply",
+    "time_billing.create_invoice",
     "vat_computation.compute",
 ];
 
@@ -228,15 +238,15 @@ async fn the_export_is_what_a_running_instance_serves_to_an_administrator() {
 
 #[test]
 fn out_writes_the_document_to_a_file_and_refuses_a_path_it_cannot_write() {
-    let dir = std::env::temp_dir().join(format!("obop-openapi-cmd-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-openapi-cmd");
+    let dir = _guard.path().to_path_buf();
     let file = dir.join("openapi.json");
     assert!(run(Some(file.to_str().unwrap())).is_ok());
     assert_eq!(std::fs::read_to_string(&file).unwrap(), document());
     // A directory that does not exist is a failure with a message, not a panic.
     let nowhere = dir.join("missing").join("openapi.json");
     assert!(run(Some(nowhere.to_str().unwrap())).is_err());
-    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 /// The drift gate of the TypeScript client: `web/packages/client/openapi.json` is the input of
@@ -337,11 +347,16 @@ async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_
     pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
 }
 
-// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+// Printed by `OBOP_PRINT_PINS=1` and pasted here. First on origin/main 12a59a79; again on
+// `feat/agent-token-admin` (the D69 amendment of 2026-11-14), which moved the document on purpose:
+// the two paths `/api/auth/agent-tokens` and `/api/auth/agent-tokens/{id}/revoke`, the description
+// of the scopes of `issueAgentToken`, and two more kinds in the description of `security_event.kind`.
+// Again on `feat/ui-L9` (D95, 2026-11-15), on purpose: `info.version` 0.2.2 and the `message` key of
+// the error schema.
 #[rustfmt::skip]
 const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
-    ("dev/openapi", "dfb5fe807d7fdcba1a5a57aedb327f1f6fec2ffe6089d5ba2ce00405743a68f6"),
-    ("auth/openapi", "00ccf5de37ea58c660fe82c8033793864d1f7070ed4bc12bc0f5c486dfdf2162"),
+    ("dev/openapi", "d1b7773e2f91902681b0db0b9ca338701d5adc59e4a6461dfdf3e7aa78d377b3"),
+    ("auth/openapi", "616e8ce32ec207981409617e50638069128fed26e16f13ed87a3684d305aba73"),
 ];
 
 /// With a brand row in the store the anonymous document is the one an instance with no row sends,

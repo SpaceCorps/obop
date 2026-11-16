@@ -1,0 +1,121 @@
+# English names and plurals of accounting_se (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.accounting_se_company]
+name = "Company"
+plural = "Company"
+
+[labels.en.model.accounting_se_company.field.org_number]
+label = "Organisation number"
+
+[labels.en.model.accounting_se_company.field.vat_number]
+label = "VAT number"
+
+[labels.en.model.accounting_se_company.field.f_skatt]
+label = "F-tax approved"
+
+[labels.en.model.accounting_se_company.field.vat_period]
+label = "VAT period"
+
+[labels.en.model.accounting_se_voucher_series]
+name = "Voucher series"
+plural = "Voucher series"
+
+[labels.en.model.accounting_se_voucher_series.field.is_default]
+label = "Default series"
+
+[labels.en.model.accounting_se_vat_box]
+name = "VAT box"
+plural = "VAT boxes"
+
+[labels.en.model.accounting_se_vat_box.field.box]
+label = "Box"
+
+[labels.en.model.accounting_se_vat_box.field.kind.options]
+base = "Taxable amount"
+output = "Output VAT"
+input = "Input VAT"
+result = "VAT to pay or reclaim"
+
+[labels.en.model.accounting_se_vat_code]
+name = "VAT code"
+plural = "VAT codes"
+
+[labels.en.model.accounting_se_vat_code.field.rate_bp]
+label = "Rate"
+
+[labels.en.model.accounting_se_vat_code.field.treatment.options]
+sale_domestic = "Domestic sale"
+purchase_domestic = "Domestic purchase"
+reverse_charge_eu = "EU reverse charge"
+reverse_charge_non_eu = "Non-EU reverse charge"
+sale_eu_goods = "EU sale of goods"
+sale_eu_services = "EU sale of services"
+export = "Export"
+exempt = "Exempt"
+none = "None"
+
+[labels.en.model.accounting_se_vat_code.field.base_box_id]
+label = "Base box"
+
+[labels.en.model.accounting_se_vat_code.field.vat_box_id]
+label = "VAT box"
+
+[labels.en.model.accounting_se_vat_code.field.vat_account_id]
+label = "VAT account"
+
+[labels.en.model.accounting_se_vat_code.field.tax_id]
+label = "Tax"
+
+[labels.en.model.accounting_se_vat_report]
+name = "VAT report"
+plural = "VAT reports"
+
+[labels.en.model.accounting_se_vat_report.field.name]
+label = "Period"
+
+[labels.en.model.accounting_se_vat_report.field.period_kind]
+label = "Period length"
+
+[labels.en.model.accounting_se_vat_report.field.start_on]
+label = "Start date"
+
+[labels.en.model.accounting_se_vat_report.field.end_on]
+label = "End date"
+
+[labels.en.model.accounting_se_vat_report.field.due_on]
+label = "Due date"
+
+[labels.en.model.accounting_se_vat_report.field.company_id]
+label = "Company"
+
+[labels.en.model.accounting_se_vat_report.field.output_vat]
+label = "Output VAT"
+
+[labels.en.model.accounting_se_vat_report.field.input_vat]
+label = "Input VAT"
+
+[labels.en.model.accounting_se_vat_report.field.vat_to_pay]
+label = "VAT to pay or get back"
+
+[labels.en.model.accounting_se_vat_report.field.boxes_confirmed]
+label = "Boxes checked against SKV 4700"
+
+[labels.en.model.accounting_se_vat_report.action.record_filed]
+label = "Record as filed"
+
+[labels.en.model.accounting_se_vat_report_line]
+name = "VAT report line"
+plural = "VAT report lines"
+
+[labels.en.model.accounting_se_vat_report_line.field.report_id]
+label = "VAT report"
+
+[labels.en.model.accounting_se_vat_report_line.field.box_id]
+label = "Box"
+
+[labels.en.model.accounting_se_vat_report_line.field.kind.options]
+base = "Taxable amount"
+output = "Output VAT"
+input = "Input VAT"
+result = "VAT to pay or reclaim"

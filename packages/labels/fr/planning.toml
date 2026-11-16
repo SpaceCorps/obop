@@ -5,6 +5,7 @@ summary = "Créneaux des employés avec rôles et modèles de créneau ; les cr
 
 [labels.fr.model.planning_role]
 name = "Rôle"
+plural = "Rôles"
 description = "Un rôle pour lequel un créneau est planifié, par exemple caissier ou électricien"
 
 [labels.fr.model.planning_role.field.name]
@@ -17,6 +18,7 @@ description = "Ce que le rôle implique"
 
 [labels.fr.model.planning_template]
 name = "Modèle"
+plural = "Modèles"
 description = "Un schéma de créneau nommé, avec un rôle et des heures de début et de fin ; aucune action ne crée de créneaux à partir de lui"
 
 [labels.fr.model.planning_template.field.name]
@@ -37,6 +39,7 @@ description = "Fin en minutes depuis minuit (1020 correspond à 17:00)"
 
 [labels.fr.model.planning_shift]
 name = "Créneau"
+plural = "Créneaux"
 description = "Une plage de travail sur un jour pour un rôle, éventuellement affectée à un employé"
 
 [labels.fr.model.planning_shift.field.name]
@@ -72,7 +75,7 @@ label = "Statut"
 description = "Statut du créneau : ouvert, publié, confirmé"
 
 [labels.fr.model.planning_shift.field.state.options]
-open = "Ouvert"
+open = "Non publié"
 published = "Publié"
 confirmed = "Confirmé"
 

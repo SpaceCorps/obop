@@ -1,6 +1,6 @@
 [module]
 id = "accounting_se"
-version = "0.2.0"
+version = "0.2.3"
 name = "Accounting Sweden"
 description = "Swedish localisation of Accounting, ported from the domain model of open-accounting-sweden: company data (organisation number, VAT number, F-tax, start of the fiscal year), voucher series (verifikationsserier) tied to journals, Swedish VAT (moms) codes with the box and the account each code feeds, the boxes of the VAT return, and a VAT report per period that anyone may propose and only the stricter accounting.approver group may approve. UNVERIFIED: nothing in this package has been checked against Skatteverket (form SKV 4700) or the SIE specification. Every VAT box and every VAT code starts as unverified, the package ships no box or code rows, and a report cannot be approved until the approver confirms that the boxes were compared with the official form. The package contains no chart of accounts: the BAS chart is not redistributed here (decision D34), account numbers are chosen by the user, and a later version takes a BAS file supplied by the licensee. Amounts are money fields in minor units (ore) and rates are in basis points. Nothing is filed with Skatteverket from here."
 author = "SpaceCorps"
@@ -11,16 +11,26 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["accounting", "sweden", "vat", "moms"]
 categories = ["finance"]
 maturity = "experimental"
-requires_core = "^0.2.1"
+requires_core = "^0.2.2"
+home = "accounting_se_vat_report"
+changelog = "Runs with Accounting 0.3 and 0.4. Box 49 is called VAT to pay or get back everywhere, with one sign: below zero is VAT you get back. A VAT report card shows the name, the due date and box 49, no longer three unlabelled amounts. An approved or filed VAT report and its lines are frozen; only its notes can still change. Verifying a box or a VAT code records who verified it and when, and those two fields are no longer typed by hand. Approving a report asks for the confirmation that the boxes were checked against SKV 4700 in the same step. Amounts follow the currency of the company (normally SEK), a new company starts in SEK with a calendar year, and the app opens on the VAT reports with the configuration in its own menu. English names for the VAT treatments."
 
 [module.dependencies]
-accounting = "^0.3"
+accounting = ">=0.3, <0.5"
 
 [[model]]
 name = "accounting_se_company"
 description = "The Swedish company the books belong to; normally one record"
 read_group = "accounting.user"
 write_group = "accounting.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{org_number}"
+  list = ["name", "org_number", "vat_number", "vat_period", "currency"]
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 1
 
   [[model.field]]
   name = "name"
@@ -55,6 +65,10 @@ write_group = "accounting.manager"
   required = true
   min = 1
   max = 12
+  default = 1
+
+    [model.field.ui]
+    aggregate = "none"
 
   [[model.field]]
   name = "vat_period"
@@ -71,6 +85,7 @@ write_group = "accounting.manager"
   required = true
   max_length = 3
   min_length = 3
+  default = "SEK"
 
   [[model.field]]
   name = "address"
@@ -78,17 +93,31 @@ write_group = "accounting.manager"
   class = "internal"
   kind = "longtext"
 
+    [model.field.ui]
+    display = "address"
+
   [[model.field]]
   name = "contact_email"
   description = "Contact email for the books"
   class = "internal"
   personal_data = true
 
+    [model.field.ui]
+    display = "email"
+
 [[model]]
 name = "accounting_se_voucher_series"
 description = "A voucher series (verifikationsserie), a letter such as A that groups vouchers of one kind"
 read_group = "accounting.user"
 write_group = "accounting.manager"
+
+  [model.ui]
+  title = "{code} {name}"
+  list = ["code", "name", "journal_id", "is_default", "active"]
+  order = "code asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 2
 
   [[model.field]]
   name = "code"
@@ -111,6 +140,7 @@ write_group = "accounting.manager"
   class = "none"
   kind = "ref"
   to = "accounting_journal"
+  ref_filter = "active = true"
 
   [[model.field]]
   name = "is_default"
@@ -123,6 +153,7 @@ write_group = "accounting.manager"
   description = "Whether the series can still be used"
   class = "none"
   kind = "bool"
+  default = true
 
   [[model.field]]
   name = "note"
@@ -135,6 +166,18 @@ name = "accounting_se_vat_box"
 description = "A box of the Swedish VAT return (momsdeklaration). UNVERIFIED until checked against SKV 4700"
 read_group = "accounting.user"
 write_group = "accounting.manager"
+
+  [model.ui]
+  title = "{box} {label}"
+  list = ["box", "label", "kind", "not_used", "review", "verified_by", "verified_on"]
+  order = "box asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 3
+
+  [[model.ui.filter]]
+  label = "Unverified"
+  where = "review = unverified"
 
   [[model.field]]
   name = "box"
@@ -172,6 +215,9 @@ write_group = "accounting.manager"
   options = ["unverified", "verified"]
   required = true
 
+    [model.field.ui]
+    tones = { unverified = "warn", verified = "ok" }
+
   [[model.field]]
   name = "verified"
   description = "Whether this box has been verified by the owner; false until then"
@@ -179,17 +225,22 @@ write_group = "accounting.manager"
   kind = "bool"
   computed = 'review == "verified"'
 
+    [model.field.ui]
+    hidden = true
+
   [[model.field]]
   name = "verified_by"
-  description = "Login name of the person who verified it"
+  description = "Login name of the person who verified it; recorded by the verify action"
   class = "internal"
   personal_data = true
+  readonly = true
 
   [[model.field]]
   name = "verified_on"
-  description = "Date it was verified (YYYY-MM-DD)"
+  description = "Date it was verified (YYYY-MM-DD); recorded by the verify action"
   class = "none"
   kind = "date"
+  readonly = true
 
   [[model.field]]
   name = "source"
@@ -199,12 +250,21 @@ write_group = "accounting.manager"
 
   [[model.action]]
   name = "verify"
-  description = "Mark the box as checked against SKV 4700 (approver only)"
+  description = "Mark the box as checked against SKV 4700 (approver only); records who verified it and when"
   field = "review"
   from = "unverified"
   to = "verified"
   group = "accounting.approver"
   approval = true
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { verified_on = "$today", verified_by = "$caller" }
+
+    [model.action.ui]
+    primary = true
+    confirm = "Mark this box as checked against form SKV 4700?"
+    done = "Box verified"
 
   [[model.action]]
   name = "unverify"
@@ -215,11 +275,28 @@ write_group = "accounting.manager"
   group = "accounting.approver"
   approval = true
 
+    [model.action.ui]
+    danger = true
+    confirm = "Withdraw the verification of this box?"
+    done = "Verification withdrawn"
+
 [[model]]
 name = "accounting_se_vat_code"
 description = "A VAT code that a ledger line can carry, mapped to a base box, a VAT box and accounts. UNVERIFIED until checked against SKV 4700"
 read_group = "accounting.user"
 write_group = "accounting.manager"
+
+  [model.ui]
+  title = "{code} {label}"
+  list = ["code", "label", "treatment", "rate_bp", "tax_id", "base_box_id", "vat_box_id", "active", "review"]
+  order = "code asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 4
+
+  [[model.ui.filter]]
+  label = "Unverified"
+  where = "review = unverified"
 
   [[model.field]]
   name = "code"
@@ -251,6 +328,10 @@ write_group = "accounting.manager"
   required = true
   min = 0
   max = 10000
+
+    [model.field.ui]
+    display = "percent_bp"
+    aggregate = "none"
 
   [[model.field]]
   name = "base_box_id"
@@ -293,12 +374,14 @@ write_group = "accounting.manager"
   class = "none"
   kind = "ref"
   to = "accounting_tax"
+  ref_filter = "active = true"
 
   [[model.field]]
   name = "active"
   description = "Whether the code can still be put on new lines"
   class = "none"
   kind = "bool"
+  default = true
 
   [[model.field]]
   name = "review"
@@ -308,6 +391,9 @@ write_group = "accounting.manager"
   options = ["unverified", "verified"]
   required = true
 
+    [model.field.ui]
+    tones = { unverified = "warn", verified = "ok" }
+
   [[model.field]]
   name = "verified"
   description = "Whether this code has been verified by the owner; false until then"
@@ -315,17 +401,22 @@ write_group = "accounting.manager"
   kind = "bool"
   computed = 'review == "verified"'
 
+    [model.field.ui]
+    hidden = true
+
   [[model.field]]
   name = "verified_by"
-  description = "Login name of the person who verified it"
+  description = "Login name of the person who verified it; recorded by the verify action"
   class = "internal"
   personal_data = true
+  readonly = true
 
   [[model.field]]
   name = "verified_on"
-  description = "Date it was verified (YYYY-MM-DD)"
+  description = "Date it was verified (YYYY-MM-DD); recorded by the verify action"
   class = "none"
   kind = "date"
+  readonly = true
 
   [[model.field]]
   name = "source"
@@ -335,12 +426,21 @@ write_group = "accounting.manager"
 
   [[model.action]]
   name = "verify"
-  description = "Mark the code as checked against SKV 4700 (approver only)"
+  description = "Mark the code as checked against SKV 4700 (approver only); records who verified it and when"
   field = "review"
   from = "unverified"
   to = "verified"
   group = "accounting.approver"
   approval = true
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { verified_on = "$today", verified_by = "$caller" }
+
+    [model.action.ui]
+    primary = true
+    confirm = "Mark this VAT code as checked against form SKV 4700?"
+    done = "VAT code verified"
 
   [[model.action]]
   name = "unverify"
@@ -351,11 +451,39 @@ write_group = "accounting.manager"
   group = "accounting.approver"
   approval = true
 
+    [model.action.ui]
+    danger = true
+    confirm = "Withdraw the verification of this VAT code?"
+    done = "Verification withdrawn"
+
 [[model]]
 name = "accounting_se_vat_report"
 description = "A VAT report (momsrapport) for one period, prepared from the ledger and approved by a person before it is used. UNVERIFIED: not compared with SKV 4700 by this package"
 read_group = "accounting.user"
 write_group = "accounting.user"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{start_on} → {end_on}"
+  list = ["name", "period_kind", "start_on", "end_on", "due_on", "output_vat", "input_vat", "vat_to_pay", "state"]
+  card = ["name", "due_on", "vat_to_pay"]
+  card_sum = "vat_to_pay"
+  quick_create = ["name", "period_kind", "start_on", "end_on"]
+  order = "start_on desc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+
+  [[model.child]]
+  model = "accounting_se_vat_report_line"
+  via = "report_id"
+  shape = "lines"
+
+  [model.guard]
+  immutable_when = ["approved", "filed"]
+  mutable_fields = ["notes"]
+  exit_to = ["filed"]
+  message = "An approved or filed VAT report cannot be changed; only its notes can."
 
   [[model.field]]
   name = "name"
@@ -392,6 +520,9 @@ write_group = "accounting.user"
   class = "none"
   kind = "date"
 
+    [model.field.ui]
+    warn_before_days = 14
+
   [[model.field]]
   name = "company_id"
   description = "The company the report is for"
@@ -406,6 +537,9 @@ write_group = "accounting.user"
   kind = "money"
   computed = 'sum(lines.amount where kind == "output")'
 
+    [model.field.ui]
+    currency_from = "company_id.currency"
+
   [[model.field]]
   name = "input_vat"
   description = "Total deductible input VAT of the period in ore, the sum of the input lines"
@@ -413,12 +547,18 @@ write_group = "accounting.user"
   kind = "money"
   computed = 'sum(lines.amount where kind == "input")'
 
+    [model.field.ui]
+    currency_from = "company_id.currency"
+
   [[model.field]]
   name = "vat_to_pay"
   description = "Output VAT minus input VAT in ore; negative means a refund (box 49)"
   class = "financial"
   kind = "money"
   computed = 'output_vat - input_vat'
+
+    [model.field.ui]
+    currency_from = "company_id.currency"
 
   [[model.field]]
   name = "boxes_confirmed"
@@ -440,6 +580,9 @@ write_group = "accounting.user"
   options = ["draft", "proposed", "approved", "filed"]
   required = true
 
+    [model.field.ui]
+    tones = { proposed = "warn", approved = "info", filed = "ok" }
+
   [[model.action]]
   name = "propose"
   description = "Propose the report for approval; agents may do this"
@@ -447,12 +590,19 @@ write_group = "accounting.user"
   from = "draft"
   to = "proposed"
 
+    [model.action.ui]
+    primary = true
+    done = "Proposed for approval"
+
   [[model.action]]
   name = "withdraw"
   description = "Send a proposed report back to draft"
   field = "state"
   from = "proposed"
   to = "draft"
+
+    [model.action.ui]
+    done = "Back to draft"
 
   [[model.action]]
   name = "approve"
@@ -464,6 +614,12 @@ write_group = "accounting.user"
   approval = true
   assert = [{ expr = "boxes_confirmed", message = "The boxes were not confirmed as checked against SKV 4700", key = "boxes_checked" }]
 
+    [model.action.ui]
+    primary = true
+    needs = ["boxes_confirmed"]
+    confirm = "Approve this VAT report? It can no longer be changed."
+    done = "VAT report approved"
+
   [[model.action]]
   name = "record_filed"
   description = "Record that the return was filed with Skatteverket outside this system (approver only)"
@@ -473,11 +629,28 @@ write_group = "accounting.user"
   group = "accounting.approver"
   approval = true
 
+    [model.action.ui]
+    primary = true
+    confirm = "Record that this return was filed with Skatteverket?"
+    done = "Recorded as filed"
+
 [[model]]
 name = "accounting_se_vat_report_line"
 description = "One box of a VAT report with its amount"
 read_group = "accounting.user"
 write_group = "accounting.user"
+
+  [model.ui]
+  title = "{box_id}"
+  subtitle = "{report_id}"
+  list = ["box_id", "kind", "amount", "vouchers"]
+  quick_create = ["box_id", "kind", "amount"]
+  default_view = "list"
+  menu = "hidden"
+
+  [model.guard]
+  children_of = "report_id"
+  message = "The lines of an approved or filed VAT report cannot be changed."
 
   [[model.field]]
   name = "report_id"
@@ -509,6 +682,9 @@ write_group = "accounting.user"
   class = "financial"
   kind = "money"
   required = true
+
+    [model.field.ui]
+    aggregate = "none"
 
   [[model.field]]
   name = "vouchers"

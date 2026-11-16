@@ -5,6 +5,7 @@ summary = "Turnos de empleados con funciones y plantillas de turno; los turnos a
 
 [labels.es.model.planning_role]
 name = "Rol"
+plural = "Roles"
 description = "Una función para la que se planifica un turno, por ejemplo cajero o electricista"
 
 [labels.es.model.planning_role.field.name]
@@ -17,6 +18,7 @@ description = "En qué consiste la función"
 
 [labels.es.model.planning_template]
 name = "Plantilla"
+plural = "Plantillas"
 description = "Un patrón de turno con nombre, función y horas de inicio y fin; ninguna acción crea turnos a partir de él"
 
 [labels.es.model.planning_template.field.name]
@@ -37,6 +39,7 @@ description = "Fin en minutos desde la medianoche (1020 son las 17:00)"
 
 [labels.es.model.planning_shift]
 name = "Turno"
+plural = "Turnos"
 description = "Un tramo de trabajo en un día para una función, asignado opcionalmente a un empleado"
 
 [labels.es.model.planning_shift.field.name]
@@ -72,7 +75,7 @@ label = "Estado"
 description = "Estado del turno: abierto, publicado, confirmado"
 
 [labels.es.model.planning_shift.field.state.options]
-open = "Abierto"
+open = "Sin publicar"
 published = "Publicado"
 confirmed = "Confirmado"
 

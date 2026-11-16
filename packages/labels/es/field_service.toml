@@ -5,7 +5,11 @@ summary = "Trabajos in situ para clientes, hechos por un técnico, con piezas us
 
 [labels.es.model.field_service_job]
 name = "Trabajo"
+plural = "Trabajos"
 description = "Un trabajo in situ para un cliente"
+
+[labels.es.model.field_service_job.guard]
+message = "Un trabajo terminado o cancelado no se puede modificar. Programe un trabajo de seguimiento en su lugar."
 
 [labels.es.model.field_service_job.field.name]
 label = "Nombre"
@@ -118,7 +122,11 @@ description = "Cancelar un trabajo que no ha empezado"
 
 [labels.es.model.field_service_part]
 name = "Pieza"
+plural = "Piezas"
 description = "Una pieza o producto usado en un trabajo"
+
+[labels.es.model.field_service_part.guard]
+message = "Las piezas de un trabajo terminado o cancelado no se pueden modificar."
 
 [labels.es.model.field_service_part.field.job_id]
 label = "Trabajo"
@@ -139,3 +147,6 @@ description = "Precio por unidad cobrado al cliente (unidad menor de la moneda, 
 [labels.es.model.field_service_part.field.note]
 label = "Nota"
 description = "Observación sobre la pieza, por ejemplo el número de serie"
+
+[labels.es.model.field_service_job.action.complete.assert.signed]
+message = "El cliente tiene que firmar primero este trabajo: indique quién firmó y en qué fecha"

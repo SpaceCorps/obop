@@ -1,11 +1,15 @@
 [labels.pl.module]
 name = "Wydatki"
-description = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone i opłacone. Wypłata to osobne uprawnienie. Zatwierdzenie, odrzucenie i wypłata wymagają akceptacji człowieka; agenci mogą je tylko zaproponować. Wniosek ma numer z serii rocznej, a pracownik widzi i edytuje tylko własne wnioski; kierownicy i finanse widzą wszystkie."
+description = "Wnioski o zwrot wydatków z obiegiem wersja robocza, przesłane, zatwierdzone i opłacone. Wypłata to osobne uprawnienie. Zatwierdzenie, odrzucenie i wypłata wymagają akceptacji człowieka; agenci tylko proponują. Paragon jako zdjęcie lub skan; zatwierdzone, opłacone i odrzucone wnioski są zablokowane. Numer z serii rocznej; pracownik widzi tylko własne wnioski, kierownicy i finanse wszystkie."
 summary = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone, opłacone."
 
 [labels.pl.model.expenses_expense]
 name = "Wydatek"
+plural = "Wydatki"
 description = "Kwota wydana przez pracownika na potrzeby firmy, o której zwrot się on ubiega"
+
+[labels.pl.model.expenses_expense.guard]
+message = "Zatwierdzonego, wypłaconego lub odrzuconego wniosku nie można zmienić, z wyjątkiem paragonu i danych płatności."
 
 [labels.pl.model.expenses_expense.field.description]
 label = "Opis"
@@ -72,7 +76,7 @@ description = "Zatwierdza przesłany wniosek (tylko kierownik)"
 
 [labels.pl.model.expenses_expense.action.pay]
 label = "Zapłać"
-description = "Rejestruje zwrot jako opłacony (tylko dział finansów)"
+description = "Rejestruje zwrot jako opłacony (tylko dział finansów); data wypłaty to dziś, jeśli nie podano innej"
 
 [labels.pl.model.expenses_expense.action.refuse]
 label = "Odrzuć"
@@ -81,3 +85,7 @@ description = "Odrzuca przesłany wniosek (tylko kierownik)"
 [labels.pl.model.expenses_expense.field.number]
 label = "Numer"
 description = "Numer wniosku, np. EXP-2026-0042, nadawany przy utworzeniu wniosku; seria zaczyna się od nowa każdego roku"
+
+[labels.pl.model.expenses_expense.field.receipt]
+description = "Zdjęcie lub skan paragonu (PDF lub obraz); do pobrania tylko dla osób, które mogą czytać wniosek"
+label = "Paragon"

@@ -7,5 +7,7 @@
   "app\u0004CRM",
   "option\u0004Diesel",
   "{field} ≤ {to}",
-  "{field} ≥ {from}"
+  "{field} ≥ {from}",
+  "{minutes} min",
+  "{quantity} × {price}"
 ]

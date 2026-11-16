@@ -5,7 +5,11 @@ summary = "Zlecenia u klientów wykonywane na miejscu przez technika, z użytymi
 
 [labels.pl.model.field_service_job]
 name = "Zlecenie"
+plural = "Zlecenia"
 description = "Zlecenie wykonywane u klienta na miejscu"
+
+[labels.pl.model.field_service_job.guard]
+message = "Zakończonego lub anulowanego zlecenia nie można zmienić. Zaplanuj zamiast tego zlecenie uzupełniające."
 
 [labels.pl.model.field_service_job.field.name]
 label = "Nazwa"
@@ -118,7 +122,11 @@ description = "Anuluje zlecenie, którego nie rozpoczęto"
 
 [labels.pl.model.field_service_part]
 name = "Część"
+plural = "Części"
 description = "Część lub produkt użyty przy zleceniu"
+
+[labels.pl.model.field_service_part.guard]
+message = "Części zakończonego lub anulowanego zlecenia nie można zmienić."
 
 [labels.pl.model.field_service_part.field.job_id]
 label = "Zlecenie"
@@ -139,3 +147,6 @@ description = "Cena za sztukę naliczona klientowi (w jednostkach podrzędnych w
 [labels.pl.model.field_service_part.field.note]
 label = "Notatka"
 description = "Uwaga o części, na przykład numer seryjny"
+
+[labels.pl.model.field_service_job.action.complete.assert.signed]
+message = "Klient musi najpierw odebrać to zlecenie: wpisz, kto podpisał i kiedy"

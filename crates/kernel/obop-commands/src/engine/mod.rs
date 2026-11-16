@@ -9,12 +9,16 @@
 //! - `seq`: sequence numbers, counters and uniqueness.
 //! - `effects`: running an action: assertions, the transition, sequences and effects.
 //! - `crud`: the generated create, update and delete, built from the above.
+//! - `implied`: the actions an update of a governed field implies, in the unit of the update.
 
 pub(crate) mod access;
 pub(crate) mod bulk;
 pub(crate) mod computed;
 pub(crate) mod crud;
 pub(crate) mod effects;
+pub(crate) mod frozen;
+pub(crate) mod hints;
+pub(crate) mod implied;
 pub(crate) mod seq;
 pub(crate) mod unit;
 
@@ -51,6 +55,8 @@ pub(crate) struct Engine {
     /// Set when a test replaced the clock: `$now` is then whole seconds of that clock, not the
     /// system time down to the microsecond.
     pub clock_replaced: Arc<AtomicBool>,
+    /// The instance currency, for the default `$instance.currency` (D95).
+    pub currency: Arc<RwLock<String>>,
 }
 
 impl Engine {
@@ -86,6 +92,16 @@ impl Engine {
         self.zones.read().unwrap().clone()
     }
 
+    /// The instance currency (D95 `$instance.currency`).
+    pub fn currency(&self) -> String {
+        let c = self.currency.read().unwrap();
+        if c.is_empty() {
+            crate::DEFAULT_CURRENCY.to_string()
+        } else {
+            c.clone()
+        }
+    }
+
     pub fn backend(&self) -> &dyn obop_storage::Backend {
         &*self.store.backend
     }
@@ -95,18 +111,23 @@ impl Engine {
     /// Every handler starts its unit here and not with `Unit::new(eng.backend())`, so what a unit
     /// needs to know about the call it serves (who writes, which rules guard the records) is
     /// added in this one place later and no handler changes (K18).
+    /// It checks the immutability guards of D77 before every write.
     pub fn unit(&self) -> unit::Unit<'_> {
-        unit::Unit::new(self.backend())
+        unit::Unit::new(self.backend()).guarded(self.def_look())
     }
 
     /// As `unit`, with another cap on the records the unit may touch (bulk work).
     pub fn unit_with_cap(&self, cap: usize) -> unit::Unit<'_> {
-        unit::Unit::with_cap(self.backend(), cap)
+        unit::Unit::with_cap(self.backend(), cap).guarded(self.def_look())
     }
 
     /// As `unit`, with no cap (sequence and counter work that is bounded by its own rules).
     pub fn unit_unbounded(&self) -> unit::Unit<'_> {
-        unit::Unit::unbounded(self.backend())
+        unit::Unit::unbounded(self.backend()).guarded(self.def_look())
+    }
+
+    fn def_look(&self) -> unit::DefLook<'_> {
+        Box::new(move |n: &str| self.def(n))
     }
 }
 
@@ -138,7 +159,17 @@ impl Actor {
         Self {
             id: p.id.strip_suffix("/agent").unwrap_or(&p.id).to_string(),
             admin: p.allows(ADMIN_GROUP),
-            groups: p.groups.iter().filter(|g| p.allows(g)).cloned().collect(),
+            // The groups `allows` grants: those held, and for a scoped principal the groups of its
+            // scopes too, which an administrator holds through `platform.admin` without holding
+            // them by name (an administrator's agent scoped to `purchase.user` may run the
+            // purchase actions and their effects, as the dispatcher already lets it).
+            groups: p
+                .groups
+                .iter()
+                .chain(p.scopes.iter().flatten())
+                .filter(|g| p.allows(g))
+                .cloned()
+                .collect(),
             caller: p.id.clone(),
             agent: p.kind == crate::PrincipalKind::Agent,
         }
@@ -248,6 +279,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_administrators_scoped_agent_holds_its_scopes_and_nothing_else() {
+        let p = Principal::agent(
+            "root/agent",
+            &[ADMIN_GROUP],
+            &["purchase.user", "inventory.user"],
+        );
+        let a = Actor::of(&p);
+        assert!(!a.admin);
+        assert!(a.holds("purchase.user") && a.holds("inventory.user"));
+        assert!(!a.holds("purchase.manager"));
+        // A person's agent still gets only the scopes the person holds.
+        let p = Principal::agent(
+            "ann/agent",
+            &["purchase.user"],
+            &["purchase.user", "hr.user"],
+        );
+        let a = Actor::of(&p);
+        assert!(a.holds("purchase.user") && !a.holds("hr.user"));
+        // An unscoped person keeps exactly the groups held.
+        let a = Actor::of(&Principal::user("bo", &["sales.user"]));
+        assert!(a.holds("sales.user") && !a.holds("purchase.user"));
+    }
+
+    #[test]
     fn civil_time_is_right_across_leap_days_and_year_ends() {
         assert_eq!(civil(0).date(), "1970-01-01");
         assert_eq!(civil(951_782_400).date(), "2000-02-29");
@@ -273,6 +328,27 @@ mod tests {
 
         let mut u = eng.unit_unbounded();
         u.spend(MAX_EFFECT_RECORDS * 10).unwrap();
+    }
+
+    /// An action that goes on in the unit of an update may write as many records as when it is
+    /// called by itself: what the update wrote before it does not count against its budget.
+    #[test]
+    fn a_unit_that_goes_on_with_a_budget_of_its_own_counts_from_where_it_took_over() {
+        use obop_registry::rules::MAX_EFFECT_RECORDS;
+        let eng = crate::Dispatcher::new().engine(&Store::new());
+        let held = |n: usize| {
+            let mut u = eng.unit();
+            u.spend(n).unwrap();
+            u.hold()
+        };
+        // Carried as it is, the three writes count.
+        let mut u = eng.unit().resume(held(3));
+        u.spend(MAX_EFFECT_RECORDS - 3).unwrap();
+        assert!(u.spend(1).is_err());
+        // With a budget of its own, the cap is counted from the three.
+        let mut u = eng.unit().resume(held(3)).own_budget();
+        u.spend(MAX_EFFECT_RECORDS).unwrap();
+        assert!(u.spend(1).is_err());
     }
 
     /// Every unit of work, in every handler, starts from the engine (`Engine::unit*`), and the

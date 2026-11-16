@@ -40,6 +40,7 @@ fn error_schema() -> J {
             "error": {"type": "string", "description": "What went wrong, in a sentence."},
             "code": {"type": "string", "description": "Stable machine-readable code such as not_found, unauthorized, invalid_input, forbidden, rate_limited, assertion_failed."},
             "hint": {"type": "string", "description": "What to do next."},
+            "message": {"type": "string", "description": "Only on a 400 with code assertion_failed (D95): the package author's sentence alone, without the expression that error ends with, for a person to read; a generic sentence when the assertion has no message of its own."},
             "assert_key": {"type": "string", "description": "Only on a 400 with code assertion_failed, and only when the assertion that refused has a key (D52): the key the package gave it, unique in its action, so a client that translates by itself does not have to match the text of error. The text of error is in the language of the request (the lang parameter, then the obop_lang cookie, then Accept-Language) when the package translated the assertion's message for it, else the manifest's own, and in both cases has the manifest's pattern: the message, then (assertion <expression> failed)."},
             "applied": {"type": "string", "enum": ["none", "unknown", "partial"], "description": "Only on a 503 (D74): what became of the request's own changes. none: nothing was changed, repeat the request. unknown: storage_unavailable, a change in flight when the connection broke may or may not have been applied, read before you repeat a write. partial: a change was committed and a step the request needed was refused, do not repeat it blindly. The same word is in the X-Obop-Applied header."}
         }
@@ -219,7 +220,15 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     );
     paths.insert(
         "/api/auth/agent-token".into(),
-        json!({"post": {"operationId": "issueAgentToken", "summary": "A signed-in human issues a scoped agent token", "security": sec.clone(), "requestBody": json_body(json!({"type": "object", "required": ["scopes"], "properties": {"scopes": {"type": "array", "items": {"type": "string"}, "description": "Permission groups, each one the issuer holds."}, "label": {"type": "string"}}})), "responses": {"200": ok(json!({"type": "object", "properties": {"token": {"type": "string"}}}), "The token, shown once."), "400": error_responses()["400"].clone()}}}),
+        json!({"post": {"operationId": "issueAgentToken", "summary": "A signed-in human issues a scoped agent token", "security": sec.clone(), "requestBody": json_body(json!({"type": "object", "required": ["scopes"], "properties": {"scopes": {"type": "array", "items": {"type": "string"}, "description": "Permission groups by name, each one the issuer holds; an administrator may name any registered group. Never `*`."}, "label": {"type": "string"}}})), "responses": {"200": ok(json!({"type": "object", "properties": {"token": {"type": "string"}}}), "The token, shown once."), "400": error_responses()["400"].clone()}}}),
+    );
+    paths.insert(
+        "/api/auth/agent-tokens".into(),
+        json!({"get": {"operationId": "listAgentTokens", "summary": "The agent tokens the signed-in human issued that still work, and the groups they may put on a new one", "security": sec.clone(), "responses": {"200": ok(json!({"type": "object", "properties": {"tokens": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "scopes": {"type": "array", "items": {"type": "string"}}, "created_at": {"type": "integer", "description": "Unix seconds."}}}}, "delegable": {"type": "array", "items": {"type": "string"}, "description": "Permission groups the caller may delegate: their own, and every registered group for an administrator."}}}), "The tokens (never a token itself) and the groups."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
+    );
+    paths.insert(
+        "/api/auth/agent-tokens/{id}/revoke".into(),
+        json!({"post": {"operationId": "revokeAgentToken", "summary": "End one agent token the signed-in human issued", "security": sec.clone(), "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": ok(json!({"type": "object", "properties": {"revoked": {"type": "boolean"}}}), "Revoked."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
     );
     paths.insert(
         "/api/meta".into(),

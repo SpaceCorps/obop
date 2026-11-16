@@ -1,0 +1,138 @@
+# English names and plurals of accounting (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.accounting_account]
+name = "Account"
+plural = "Chart of accounts"
+
+[labels.en.model.accounting_account.field.account_type]
+label = "Type"
+
+[labels.en.model.accounting_account.field.account_type.options]
+asset_receivable = "Receivable"
+asset_cash = "Bank and cash"
+asset_current = "Current assets"
+asset_fixed = "Fixed assets"
+liability_payable = "Payable"
+liability_current = "Current liabilities"
+liability_non_current = "Non-current liabilities"
+equity = "Equity"
+income = "Income"
+income_other = "Other income"
+expense = "Expenses"
+expense_direct_cost = "Cost of revenue"
+
+[labels.en.model.accounting_account.field.reconcile]
+label = "Allow reconciliation"
+
+[labels.en.model.accounting_journal]
+name = "Journal"
+plural = "Journals"
+
+[labels.en.model.accounting_journal.field.kind]
+label = "Type"
+
+[labels.en.model.accounting_journal.field.kind.options]
+sale = "Sales"
+purchase = "Purchases"
+cash = "Cash"
+bank = "Bank"
+general = "Miscellaneous"
+
+[labels.en.model.accounting_journal.field.default_account_id]
+label = "Default account"
+
+[labels.en.model.accounting_tax]
+name = "Tax"
+plural = "Taxes"
+
+[labels.en.model.accounting_tax.field.rate_bp]
+label = "Rate"
+
+[labels.en.model.accounting_tax.field.scope]
+label = "Tax scope"
+
+[labels.en.model.accounting_tax.field.price_included]
+label = "Included in price"
+
+[labels.en.model.accounting_tax.field.tax_account_id]
+label = "Tax account"
+
+[labels.en.model.accounting_fiscal_year]
+name = "Fiscal year"
+plural = "Fiscal years"
+
+[labels.en.model.accounting_fiscal_year.field.start_on]
+label = "Start date"
+
+[labels.en.model.accounting_fiscal_year.field.end_on]
+label = "End date"
+
+[labels.en.model.accounting_period]
+name = "Period"
+plural = "Periods"
+
+[labels.en.model.accounting_period.field.fiscal_year_id]
+label = "Fiscal year"
+
+[labels.en.model.accounting_period.field.start_on]
+label = "Start date"
+
+[labels.en.model.accounting_period.field.end_on]
+label = "End date"
+
+[labels.en.model.accounting_move]
+name = "Journal entry"
+plural = "Journal entries"
+
+[labels.en.model.accounting_move.field.partner_id]
+label = "Contact"
+
+[labels.en.model.accounting_move.field.narration]
+label = "Notes"
+
+[labels.en.model.accounting_move_line]
+name = "Journal item"
+plural = "Journal items"
+
+[labels.en.model.accounting_move_line.field.move_id]
+label = "Journal entry"
+
+[labels.en.model.accounting_move_line.field.partner_id]
+label = "Contact"
+
+[labels.en.model.accounting_move_line.field.tax_id]
+label = "Tax"
+
+[labels.en.model.accounting_move_line.field.due_on]
+label = "Due date"
+
+[labels.en.model.accounting_bank_statement_line]
+name = "Bank transaction"
+plural = "Bank transactions"
+
+[labels.en.model.accounting_bank_statement_line.field.journal_id]
+label = "Bank journal"
+
+[labels.en.model.accounting_bank_statement_line.field.label]
+label = "Payment reference"
+
+[labels.en.model.accounting_bank_statement_line.field.counterparty_name]
+label = "Counterparty"
+
+[labels.en.model.accounting_bank_statement_line.field.counterparty_iban]
+label = "Counterparty IBAN"
+
+[labels.en.model.accounting_bank_statement_line.field.move_line_id]
+label = "Matched journal item"
+
+[labels.en.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Settled open item"
+
+[labels.en.model.accounting_bank_statement_line.field.state.options]
+unmatched = "To match"
+matched = "Matched"
+reconciled = "Reconciled"
+
+[labels.en.model.accounting_bank_statement_line.action.unmatch]
+label = "Undo match"

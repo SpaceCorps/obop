@@ -1,4 +1,4 @@
-import { Suspense, lazy, useId, useState } from "react";
+import { Suspense, lazy, useEffect, useId, useState } from "react";
 import { saveSettings, type ModuleMeta, type Settings, type Theme } from "./api.ts";
 import { AppIcon, type App } from "./Chrome.tsx";
 import { DetailPanel } from "./modules/DetailPanel.tsx";
@@ -79,12 +79,66 @@ const TABS = [
   { id: "guide", label: msg("Guide"), icon: "help" },
 ] as const;
 
+/**
+ * The models of the platform module and where each is managed in Customize: the tab, and the
+ * heading of its section there. `#/customize/user_account` (a link, the palette, a related record)
+ * opens People under Security instead of falling back to the first tab (B6).
+ */
+const MODEL_TABS: Record<string, { tab: (typeof TABS)[number]["id"]; heading?: string }> = {
+  user_account: { tab: "security", heading: msg("People") },
+  device: { tab: "security", heading: msg("Devices") },
+  security_event: { tab: "security", heading: msg("Security log") },
+  sso_provider: { tab: "security" },
+  module: { tab: "modules" },
+  marketplace_listing: { tab: "modules" },
+};
+
+/**
+ * Scroll the section whose heading reads `text` into view, and keep it there while the sections
+ * above it load and push it down (about two seconds), unless the person scrolls first.
+ */
+function revealHeading(text: string): () => void {
+  let timer = 0;
+  let stop = false;
+  const started = Date.now();
+  const quit = () => {
+    stop = true;
+  };
+  const look = () => {
+    if (stop) return;
+    const h = [...document.querySelectorAll<HTMLElement>(".content h2, .content h3")].find(
+      (x) => x.textContent?.trim() === text,
+    );
+    if (h) {
+      // Where "start" puts it: the top of the scrolling panel, or of the window on a phone.
+      const top = Math.max(h.closest(".content")?.getBoundingClientRect().top ?? 0, 0);
+      if (Math.abs(h.getBoundingClientRect().top - top) > 24) h.scrollIntoView({ block: "start" });
+    }
+    if (Date.now() - started < 2500) timer = window.setTimeout(look, 100);
+  };
+  addEventListener("wheel", quit, { once: true, passive: true });
+  addEventListener("touchstart", quit, { once: true, passive: true });
+  addEventListener("keydown", quit, { once: true });
+  timer = window.setTimeout(look, 50);
+  return () => {
+    stop = true;
+    window.clearTimeout(timer);
+    removeEventListener("wheel", quit);
+    removeEventListener("touchstart", quit);
+    removeEventListener("keydown", quit);
+  };
+}
+
 export function Customize(p: Props) {
   // Everyone gets their own theme and the read-only brand book; the rest changes the instance. The
   // Brand book and the Guide go when the instance hides them, and the address of a tab that is not
   // shown opens the first one that is.
   const tabs = visibleTabs(TABS, { isAdmin: p.isAdmin, docs: productDocsVisible() });
-  const tab = tabs.some((x) => x.id === p.tab) ? p.tab : tabs[0]!.id;
+  const byModel = MODEL_TABS[p.tab];
+  const asked = byModel?.tab ?? p.tab;
+  const tab = tabs.some((x) => x.id === asked) ? asked : tabs[0]!.id;
+  const heading = byModel?.heading && tab === byModel.tab ? t(byModel.heading) : "";
+  useEffect(() => (heading ? revealHeading(heading) : undefined), [heading]);
   const current = tabs.find((x) => x.id === tab)!;
   const view = useModulesView({
     token: p.token,
@@ -219,9 +273,7 @@ function LanguageSection({ settings, isAdmin, token, onSettings, notify }: Props
       )}
       <div className="actionrow">
         {i18n.personal && (
-          <Button variant="ghost" onClick={() => void i18n.resetLanguage()}>
-            {t("Use the instance default")}
-          </Button>
+          <Button onClick={() => void i18n.resetLanguage()}>{t("Use the instance default")}</Button>
         )}
         {isAdmin && (
           <Button
@@ -404,7 +456,7 @@ function ThemeTab(props: Props) {
               )}
             </Notice>
             <div>
-              <Button variant="ghost" iconEnd="arrow-right" onClick={() => go("brand")}>
+              <Button iconEnd="arrow-right" onClick={() => go("brand")}>
                 {t("Open the Brand book")}
               </Button>
             </div>
@@ -448,7 +500,7 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
       </p>
       <ul className="rows">
         {real.map((a, i) => (
-          <li key={a.id} className="row">
+          <li key={a.id} className="row app-row">
             <AppIcon app={a} size={36} />
             <input
               value={typed[a.id] ?? a.name}

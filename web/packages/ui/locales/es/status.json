@@ -2,6 +2,7 @@
   "{count, plural, one {# recovery code left.} other {# recovery codes left.}}": "machine-drafted",
   "{from}–{to} of {total}": "machine-drafted",
   "{lang} example": "machine-drafted",
+  "{size} per page": "machine-drafted",
   "6-digit code": "machine-drafted",
   "Accent fill against the canvas": "machine-drafted",
   "Accent fill against the panel": "machine-drafted",

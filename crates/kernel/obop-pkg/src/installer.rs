@@ -918,6 +918,13 @@ impl Installer {
     /// stays where it is and is reported with the reason; the others still update.
     pub fn update_all(&self, by: &str) -> Result<UpdateAll, String> {
         let _x = self.exclusive()?;
+        // A catalog that cannot be read offers nothing; say why instead of answering that nothing
+        // was updated (a bundled package whose manifest or labels fail the gate names itself).
+        if let Err(e) = self.market.list() {
+            return Err(format!(
+                "the catalog cannot be read, so nothing was updated: {e}"
+            ));
+        }
         let mut applied: Vec<(PackageInfo, StepAction)> = Vec::new();
         let mut skipped: BTreeMap<String, String> = BTreeMap::new();
         for _round in 0..=self.installed_manifests().len() {
@@ -2237,6 +2244,7 @@ impl Installer {
                         .iter()
                         .map(|(a, b)| (a.clone(), b.clone()))
                         .collect(),
+                    ui: Default::default(),
                 };
                 // For a listing, "update available" compares the installed version to the
                 // offered one, which is this listing.
@@ -2738,7 +2746,7 @@ pub fn admin_module() -> Module {
                     f("user", "The account the event is about"),
                     f(
                         "kind",
-                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
                     ),
                     f(
                         "actor",
@@ -3318,10 +3326,78 @@ mod tests {
                 .iter()
                 .map(|a| a.id.as_str())
                 .collect::<Vec<_>>(),
-            ["fleet_vehicle.dispatch", "fleet_vehicle.return_to_pool"]
+            [
+                "fleet_vehicle.dispatch",
+                "fleet_vehicle.return_to_pool",
+                "fleet_vehicle.send_to_workshop",
+                "fleet_vehicle.back_in_service"
+            ]
         );
         let driver = model.fields.iter().find(|f| f.name == "driver").unwrap();
         assert_eq!((driver.class, driver.personal_data), ("internal", true));
+    }
+
+    #[test]
+    fn meta_keeps_the_declared_order_of_models_and_actions() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.install(
+            include_str!("../../../../packages/projects.toml"),
+            "marketplace",
+            "root",
+        )
+        .unwrap();
+        let projects = d
+            .meta(
+                Surface::Rest,
+                &Principal::user("m", &["projects.user", "projects.manager"]),
+            )
+            .into_iter()
+            .find(|m| m.id == "projects")
+            .unwrap();
+        let names: Vec<&str> = projects.models.iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["projects_project", "projects_milestone", "projects_task"],
+            "the order of projects.toml, not the alphabet"
+        );
+        let actions = |model: &str| -> Vec<String> {
+            projects
+                .models
+                .iter()
+                .find(|m| m.name == model)
+                .unwrap()
+                .actions
+                .iter()
+                .map(|a| a.id.clone())
+                .collect()
+        };
+        assert_eq!(
+            actions("projects_project"),
+            [
+                "projects_project.start",
+                "projects_project.finish",
+                "projects_project.reopen"
+            ]
+        );
+        assert_eq!(
+            actions("projects_task"),
+            [
+                "projects_task.begin",
+                "projects_task.complete",
+                "projects_task.cancel",
+                "projects_task.complete_now",
+                "projects_task.reopen",
+                "projects_task.reopen_cancelled"
+            ]
+        );
+        // The catalogue data of D55 that the interface shows.
+        assert_eq!(
+            projects.summary,
+            "Projects, milestones and tasks with assignees, deadlines and status flows."
+        );
+        assert_eq!(projects.categories, ["services", "productivity"]);
+        assert_eq!(projects.maturity, "beta");
     }
 
     #[test]
@@ -3425,7 +3501,7 @@ mod tests {
                 .unwrap_err()
                 .contains("already installed")
         );
-        let newer = fleet.replace("version = \"0.3.1\"", "version = \"0.4.0\"");
+        let newer = fleet.replace("version = \"0.3.2\"", "version = \"0.4.0\"");
         assert_eq!(
             inst.install(&newer, "upload", "r").unwrap().version,
             "0.4.0"
@@ -4014,6 +4090,19 @@ write_group = "gadget.manager"
         let e = handler_error(set(&agent, "closed"));
         assert!(e.contains("it can only go to: in_progress"), "{e}");
         set(&agent, "in_progress").unwrap();
+        // Resolving needs the resolution (D95 `needs`): without it the move is refused.
+        let e = handler_error(set(&agent, "resolved"));
+        assert!(e.contains("needs resolution"), "{e}");
+        call(
+            &d,
+            &agent,
+            "helpdesk_ticket.update",
+            Value::map([
+                ("id", Value::text(&id)),
+                ("resolution", Value::text("new toner")),
+            ]),
+        )
+        .unwrap();
         set(&agent, "resolved").unwrap();
         // Closing needs helpdesk.manager and, for an agent, an approval.
         let e = handler_error(set(&agent, "closed"));
@@ -4222,7 +4311,7 @@ label = "Ota käyttöön"
 
     fn fleet_with_labels(version: &str, labels: &str) -> String {
         Manifest::combine(
-            &include_str!("../../../../packages/fleet.toml").replace("0.3.1", version),
+            &include_str!("../../../../packages/fleet.toml").replace("0.3.2", version),
             labels,
         )
     }

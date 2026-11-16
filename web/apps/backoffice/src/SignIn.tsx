@@ -21,6 +21,8 @@ import {
   takeSsoReturn,
   type SsoErrorWord,
 } from "./api.ts";
+import { SignInNotes } from "./host/SignInNotes.tsx";
+import { useHost } from "./host/useHost.ts";
 import { passkeyMessage } from "./Passkeys.tsx";
 import { passkeysSupported, signInWithPasskey } from "./passkeys.ts";
 import { storageFaultMessage } from "./serverMessage.ts";
@@ -64,11 +66,14 @@ export function SignIn({
     null,
   );
   const [asking, setAsking] = useState(false);
+  // "Forgot your password?" is open: obop sends no mail yet, so the way back is an administrator.
+  const [forgot, setForgot] = useState(false);
   const [microsoft, setMicrosoft] = useState(false);
   // The browser is on its way to Microsoft: the button waits, so that a second click does not
   // begin a second sign-in.
   const [leaving, setLeaving] = useState(false);
   const i18n = useI18n();
+  const host = useHost();
   // The brand of the instance, from the page (docs/spec/branding.md): with one, the logo and the
   // name stand in the aside instead of the product's own copy, and its message sits under the hint.
   const brand = pageBrand();
@@ -261,6 +266,24 @@ export function SignIn({
             autoComplete="current-password"
             required
           />
+          <div className="signin-forgot">
+            <button
+              type="button"
+              className="linklike"
+              aria-expanded={forgot}
+              aria-controls="signin-forgot-help"
+              onClick={() => setForgot(!forgot)}
+            >
+              {t("Forgot your password?")}
+            </button>
+            {forgot && (
+              <p id="signin-forgot-help" className="hint" role="status">
+                {t(
+                  "Ask your administrator to reset it. They give you a temporary password, and you choose a new one when you sign in.",
+                )}
+              </p>
+            )}
+          </div>
           {error && <Notice tone="danger" title={error} />}
           <Button type="submit" variant="primary" size="lg" loading={busy}>
             {t("Sign in")}
@@ -270,7 +293,7 @@ export function SignIn({
               {t("Sign in with a passkey")}
             </Button>
           )}
-          {microsoft && (
+          {microsoft && host.allows("microsoft") && (
             <>
               <Button
                 icon="shield-check"
@@ -289,6 +312,7 @@ export function SignIn({
               </span>
             </>
           )}
+          <SignInNotes microsoft={microsoft} />
           <LanguageSelect value={i18n.lang} onChange={(l) => void i18n.setLanguage(l)} />
         </form>
       )}

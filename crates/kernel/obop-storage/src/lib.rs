@@ -927,8 +927,8 @@ pub(crate) mod tests {
     #[test]
     fn sqlite_meets_contract_and_persists() {
         contract(&*open("sqlite::memory:").unwrap());
-        let path = std::env::temp_dir().join(format!("obop-test-{}.db", std::process::id()));
-        let url = format!("sqlite://{}", path.display());
+        let path = crate::testing::TempPath::new("obop-test");
+        let url = path.url();
         open(&url)
             .unwrap()
             .insert("m", "x", &fields("k", J::from("v")))
@@ -938,9 +938,6 @@ pub(crate) mod tests {
             open(&url).unwrap().get("m", "x").unwrap().unwrap()["k"],
             J::from("v")
         );
-        for ext in ["", "-wal", "-shm"] {
-            let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
-        }
     }
 
     #[test]

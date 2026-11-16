@@ -263,8 +263,8 @@ fn mem_with(u: &Fields) -> Arc<dyn Backend> {
 
 #[test]
 fn it_works_on_a_sqlite_file_shared_by_two_handles() {
-    let path = std::env::temp_dir().join(format!("obop-migrate-{}.db", std::process::id()));
-    let url = format!("sqlite://{}", path.display());
+    let path = obop_storage::testing::TempPath::new("obop-migrate");
+    let url = path.url();
     let (a, b) = (
         obop_storage::open(&url).unwrap(),
         obop_storage::open(&url).unwrap(),
@@ -281,9 +281,4 @@ fn it_works_on_a_sqlite_file_shared_by_two_handles() {
     });
     assert_eq!(version(&b), Some(3));
     assert_eq!(a.counter_get("ran:three").unwrap(), 1);
-    drop((a, b));
-    for ext in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
-    }
-    let _ = std::fs::remove_file(format!("{}.lock-obop.migrate", path.display()));
 }

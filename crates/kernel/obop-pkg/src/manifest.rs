@@ -97,6 +97,10 @@ pub struct Meta {
     /// this must stay empty; the field exists so the contract is the same for later tiers.
     #[serde(default)]
     pub network_destinations: Vec<String>,
+    /// D95: where the app opens, a model of the package or `"overview"`.
+    pub home: Option<String>,
+    /// D95: `false` keeps the app off the launcher (it lives under another app).
+    pub launcher: Option<bool>,
 }
 
 /// `[[migration]]` (D63): one declarative data step of an upgrade.
@@ -146,6 +150,173 @@ pub struct ModelM {
     pub history_reason: Option<String>,
     /// Days to keep history entries; absent keeps them for ever. Not with `history = "none"`.
     pub history_retention_days: Option<u32>,
+    /// `[model.ui]` (D95): how the records are shown.
+    pub ui: Option<ModelUiM>,
+    /// `[[model.child]]` (D95): models drawn inside this model's form, besides the ones named
+    /// `<model>_<x>` with one ref to it.
+    #[serde(default)]
+    pub child: Vec<ChildM>,
+    /// `[model.guard]` (D77, command-layer check): when records are frozen and what may still
+    /// change.
+    pub guard: Option<GuardM>,
+}
+
+/// `[model.guard]` (D77).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GuardM {
+    pub immutable_when: Option<StatesM>,
+    #[serde(default)]
+    pub mutable_fields: Vec<String>,
+    #[serde(default)]
+    pub exit_to: Vec<ExitM>,
+    pub no_delete_when: Option<StatesM>,
+    pub lock_date: Option<LockDateM>,
+    pub children_of: Option<String>,
+    #[serde(default)]
+    pub append_only: bool,
+    pub message: Option<String>,
+}
+
+/// States of a governed select: `["posted"]` (the model's one governed select) or
+/// `{ field = "state", values = ["posted"] }`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum StatesM {
+    Values(Vec<String>),
+    Full { field: String, values: Vec<String> },
+}
+
+/// An exit edge: `"cancelled"` (the one action that moves a frozen record there) or
+/// `{ to = "cancelled", action = "cancel", may_change = [...] }`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum ExitM {
+    To(String),
+    Full(ExitFull),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExitFull {
+    pub to: String,
+    pub action: Option<String>,
+    #[serde(default)]
+    pub may_change: Vec<String>,
+}
+
+/// `lock_date = { field = "date", closed_by = "accounting_period" }` or `{ field, setting }`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LockDateM {
+    pub field: String,
+    pub setting: Option<String>,
+    pub closed_by: Option<String>,
+}
+
+/// `[model.ui]` (D95).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelUiM {
+    pub title: Option<String>,
+    pub subtitle: Option<String>,
+    #[serde(default)]
+    pub list: Vec<String>,
+    #[serde(default)]
+    pub card: Vec<String>,
+    pub card_sum: Option<String>,
+    #[serde(default)]
+    pub quick_create: Vec<String>,
+    pub order: Option<String>,
+    pub default_view: Option<String>,
+    pub menu: Option<String>,
+    pub menu_section: Option<String>,
+    pub menu_order: Option<i64>,
+    pub calendar: Option<CalendarM>,
+    pub report: Option<ReportM>,
+    #[serde(default)]
+    pub section: Vec<SectionM>,
+    #[serde(default)]
+    pub filter: Vec<FilterM>,
+    pub public_url: Option<String>,
+}
+
+/// `[model.ui] calendar = { start, end, color }`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarM {
+    pub start: String,
+    pub end: Option<String>,
+    pub color: Option<String>,
+}
+
+/// `[model.ui] report = { rows, cols, measure }`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReportM {
+    pub rows: Option<String>,
+    pub cols: Option<String>,
+    pub measure: Option<String>,
+}
+
+/// `[[model.ui.section]]`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SectionM {
+    pub label: String,
+    pub fields: Vec<String>,
+    #[serde(default)]
+    pub collapsed: bool,
+    #[serde(default)]
+    pub show_in: Vec<String>,
+}
+
+/// `[[model.ui.filter]]`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FilterM {
+    pub label: String,
+    #[serde(rename = "where")]
+    pub where_: String,
+}
+
+/// `[[model.child]]`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChildM {
+    pub model: String,
+    pub via: String,
+    pub shape: Option<String>,
+}
+
+/// `[model.field.ui]` (D95).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FieldUiM {
+    pub display: Option<String>,
+    pub aggregate: Option<String>,
+    #[serde(default)]
+    pub tones: std::collections::BTreeMap<String, String>,
+    pub warn_before_days: Option<u32>,
+    #[serde(default)]
+    pub hidden: bool,
+    pub currency_from: Option<String>,
+}
+
+/// `[model.action.ui]` (D95).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ActionUiM {
+    #[serde(default)]
+    pub primary: bool,
+    #[serde(default)]
+    pub danger: bool,
+    pub confirm: Option<String>,
+    pub done: Option<String>,
+    pub group: Option<String>,
+    #[serde(default)]
+    pub needs: Vec<String>,
+    pub not_by: Option<String>,
 }
 
 /// `[model.access]`: which records a caller may see and change besides the groups (D58).
@@ -298,6 +469,20 @@ pub struct FieldM {
     pub min: Option<toml::Value>,
     /// As `min`: the largest value, inclusive.
     pub max: Option<toml::Value>,
+    /// D95: filled in by the server on create when the field is missing: a literal of the field's
+    /// kind, or `"today"`, `"today+N"`, `"$user"`, `"$instance.currency"`, `"$open:<model>"`.
+    pub default: Option<toml::Value>,
+    /// D95: `ref.field`, copied on create from the record the ref points at when the field is
+    /// missing, if the caller may read it.
+    pub fill_from: Option<String>,
+    /// D95: only the server sets the field; create and update refuse it (`readonly_field`).
+    #[serde(default)]
+    pub readonly: bool,
+    /// D95, a ref field: what the record it names must satisfy, such as
+    /// `"active = true && project_id = $project_id"`.
+    pub ref_filter: Option<String>,
+    /// `[model.field.ui]` (D95).
+    pub ui: Option<FieldUiM>,
 }
 
 /// The registry kind of a manifest field (`sequence` is a text field that is numbered).
@@ -507,6 +692,8 @@ pub struct ActionM {
     /// Conditions that must hold before the action runs (D56).
     #[serde(default)]
     pub assert: Vec<AssertM>,
+    /// `[model.action.ui]` (D95).
+    pub ui: Option<ActionUiM>,
 }
 
 /// An assertion: an expression, or an expression with the message to show when it fails and a
@@ -533,9 +720,11 @@ pub struct AssertFull {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EffectM {
-    /// `create`, `update`, `adjust` or `set_state`.
+    /// `create`, `update`, `adjust`, `set_state` or `set` (D95: fields of the record itself).
     pub kind: String,
-    /// The model of the records created or changed.
+    /// The model of the records created or changed; for `set` the model of the action (it may
+    /// be left out).
+    #[serde(default)]
     pub model: String,
     /// `create`: a name that later effects use as `$created.name`.
     #[serde(rename = "as")]
@@ -696,6 +885,7 @@ impl Manifest {
                                     )
                                 })
                                 .collect(),
+                            guard_message: m.guard.as_ref().is_some_and(|g| g.message.is_some()),
                         },
                     )
                 })
@@ -1429,9 +1619,15 @@ impl Manifest {
                     ));
                 }
             }
+            for c in &m.child {
+                if !self.model.iter().any(|x| x.name == c.model) {
+                    v.push((format!("{} child", m.name), c.model.clone()));
+                }
+            }
             for a in &m.action {
                 for (i, e) in a.effect.iter().enumerate() {
-                    if !self.model.iter().any(|x| x.name == e.model) {
+                    // A `set` effect without a model changes the record itself (D95).
+                    if !e.model.is_empty() && !self.model.iter().any(|x| x.name == e.model) {
                         v.push((
                             format!("{}.{} effect {}", m.name, a.name, i + 1),
                             e.model.clone(),
@@ -1489,6 +1685,10 @@ impl Manifest {
                 .into_iter()
                 .map(|r| (r.id, r.req.to_string()))
                 .collect(),
+            ui: obop_registry::ModuleUi {
+                home: m.home.clone(),
+                launcher: m.launcher,
+            },
         }
     }
 
@@ -1521,7 +1721,8 @@ impl Manifest {
     /// is checked here; the gate checks the rest.
     fn effect_of(m: &ModelM, a: &ActionM, i: usize, e: &EffectM) -> Result<Effect, String> {
         let what = format!("{}.{} effect {}", m.name, a.name, i + 1);
-        if !ident_ok(&e.model) {
+        let own = e.kind == "set" && e.model.is_empty();
+        if !own && !ident_ok(&e.model) {
             return Err(format!("{what}: {:?} is not a model name", e.model));
         }
         let stray = |name: &str, present: bool| {
@@ -1570,8 +1771,36 @@ impl Manifest {
                 )),
             }
         };
-        let model = intern(&e.model);
+        let model = intern(if own { &m.name } else { &e.model });
         let kind = match e.kind.as_str() {
+            "set" => {
+                stray("map", e.map.is_some())?;
+                stray("ref", e.ref_field.is_some())?;
+                stray("children", e.children)?;
+                stray("via", e.via.is_some())?;
+                stray("match", e.match_fields.is_some())?;
+                stray("field", e.field.is_some())?;
+                stray("op", e.op.is_some())?;
+                stray("by", e.by.is_some())?;
+                stray("create_missing", e.create_missing)?;
+                stray("min", e.min.is_some())?;
+                stray("action", e.action.is_some())?;
+                stray("for_each", e.for_each.is_some())?;
+                if model != m.name {
+                    return Err(format!(
+                        "{what}: set changes the record itself, so its model is {} (leave model out)",
+                        m.name
+                    ));
+                }
+                let Some(set) = &e.set else {
+                    return Err(format!("{what}: set needs set = {{ field = value }}"));
+                };
+                EffectKind::Update {
+                    model,
+                    target: Target::This,
+                    set: Self::mapping(&what, set)?,
+                }
+            }
             "create" => {
                 stray("set", e.set.is_some())?;
                 stray("ref", e.ref_field.is_some())?;
@@ -1686,7 +1915,7 @@ impl Manifest {
             }
             other => {
                 return Err(format!(
-                    "{what}: unknown kind {other:?} (use create, update, adjust or set_state)"
+                    "{what}: unknown kind {other:?} (use create, update, adjust, set_state or set)"
                 ));
             }
         };
@@ -1766,6 +1995,7 @@ impl Manifest {
             sequence,
             shows_option,
             limits: (!limits.is_empty()).then(|| std::sync::Arc::new(limits)),
+            hints: Self::field_hints(f).map_err(|e| format!("{at}: {e}"))?,
         };
         // The limits are checked here as well as by the gate, so the error of a bad one names the
         // file's field before anything else is parsed (D90).
@@ -1773,6 +2003,239 @@ impl Manifest {
             return Err(format!("{at}: {problem}"));
         }
         Ok(def)
+    }
+
+    /// The D95 hints of a field, read; their meaning is checked by the gate (`obop_registry::ui`).
+    fn field_hints(
+        f: &FieldM,
+    ) -> Result<Option<std::sync::Arc<obop_registry::FieldHints>>, String> {
+        use obop_registry::ui::{DefaultLit, DefaultSpec, Filter, Path};
+        let default = match &f.default {
+            None => None,
+            Some(toml::Value::String(t)) => Some(DefaultSpec::parse_text(t)?),
+            Some(toml::Value::Integer(n)) => Some(DefaultSpec::Literal(DefaultLit::Int(*n))),
+            Some(toml::Value::Boolean(b)) => Some(DefaultSpec::Literal(DefaultLit::Bool(*b))),
+            Some(_) => {
+                return Err(
+                    "default is text, a whole number or true/false (write a decimal as text, \"12.50\")"
+                        .into(),
+                );
+            }
+        };
+        let ui = match &f.ui {
+            None => obop_registry::FieldUi::default(),
+            Some(u) => obop_registry::FieldUi {
+                display: u.display.clone(),
+                aggregate: u.aggregate.clone(),
+                tones: u.tones.clone(),
+                warn_before_days: u.warn_before_days,
+                hidden: u.hidden,
+                currency_from: u.currency_from.clone(),
+            },
+        };
+        let hints = obop_registry::FieldHints {
+            default,
+            fill_from: f
+                .fill_from
+                .as_deref()
+                .map(Path::parse)
+                .transpose()
+                .map_err(|e| format!("fill_from: {e}"))?,
+            readonly: f.readonly,
+            ref_filter: f
+                .ref_filter
+                .as_deref()
+                .map(Filter::parse)
+                .transpose()
+                .map_err(|e| format!("ref_filter: {e}"))?,
+            ui,
+        };
+        Ok((!hints.is_empty()).then(|| std::sync::Arc::new(hints)))
+    }
+
+    /// `[model.ui]` and `[[model.child]]`, read; the gate checks what they name.
+    fn model_ui(m: &ModelM) -> Result<Option<std::sync::Arc<obop_registry::ModelUi>>, String> {
+        use obop_registry::ui::{CalendarUi, ChildDecl, Filter, ReportUi, UiFilter, UiSection};
+        let u = m.ui.clone().unwrap_or_default();
+        let ui = obop_registry::ModelUi {
+            title: u.title,
+            subtitle: u.subtitle,
+            list: u.list,
+            card: u.card,
+            card_sum: u.card_sum,
+            quick_create: u.quick_create,
+            order: u.order,
+            default_view: u.default_view,
+            menu: u.menu,
+            menu_section: u.menu_section,
+            menu_order: u.menu_order,
+            calendar: u.calendar.map(|c| CalendarUi {
+                start: c.start,
+                end: c.end,
+                color: c.color,
+            }),
+            report: u.report.map(|r| ReportUi {
+                rows: r.rows,
+                cols: r.cols,
+                measure: r.measure,
+            }),
+            sections: u
+                .section
+                .into_iter()
+                .map(|s| UiSection {
+                    label: s.label,
+                    fields: s.fields,
+                    collapsed: s.collapsed,
+                    show_in: s.show_in,
+                })
+                .collect(),
+            filters: u
+                .filter
+                .into_iter()
+                .map(|f| {
+                    Ok(UiFilter {
+                        filter: Filter::parse(&f.where_).map_err(|e| {
+                            format!("{}.ui filter {:?}: where: {e}", m.name, f.label)
+                        })?,
+                        label: f.label,
+                    })
+                })
+                .collect::<Result<_, String>>()?,
+            public_url: u.public_url,
+            children: m
+                .child
+                .iter()
+                .map(|c| ChildDecl {
+                    model: c.model.clone(),
+                    via: c.via.clone(),
+                    shape: c.shape.clone(),
+                })
+                .collect(),
+        };
+        Ok((!ui.is_empty()).then(|| std::sync::Arc::new(ui)))
+    }
+
+    /// `[model.guard]`, read: the short forms resolved against the model's actions. The gate
+    /// (`obop_registry::guard::check`) checks the rest.
+    fn model_guard(
+        m: &ModelM,
+        commands: &[CommandDef],
+    ) -> Result<Option<obop_registry::Guard>, String> {
+        use obop_registry::ext::{Exit, LockDate, StateSet};
+        let Some(g) = &m.guard else {
+            return Ok(None);
+        };
+        let at = |key: &str, e: String| format!("{}.guard.{key}: {e}", m.name);
+        // The governed select fields of the model, for the short forms.
+        let mut governed: Vec<&str> = commands
+            .iter()
+            .filter_map(|c| c.transition.map(|t| t.field))
+            .collect();
+        governed.sort_unstable();
+        governed.dedup();
+        let states = |key: &str, s: &StatesM| -> Result<StateSet, String> {
+            let (field, values) = match s {
+                StatesM::Full { field, values } => (intern(field), values),
+                StatesM::Values(values) => match governed.as_slice() {
+                    [one] => (intern(one), values),
+                    [] => {
+                        return Err(at(
+                            key,
+                            "no action of the model moves a state; a guard follows a governed state".into(),
+                        ));
+                    }
+                    _ => {
+                        return Err(at(
+                            key,
+                            format!(
+                                "the model has several governed fields ({}): write {key} = {{ field = \"...\", values = [...] }}",
+                                governed.join(", ")
+                            ),
+                        ));
+                    }
+                },
+            };
+            Ok(StateSet {
+                field,
+                values: values.iter().map(|v| intern(v)).collect(),
+            })
+        };
+        let immutable_when = g
+            .immutable_when
+            .as_ref()
+            .map(|s| states("immutable_when", s))
+            .transpose()?;
+        let mut exit_to = Vec::new();
+        for e in &g.exit_to {
+            let (to, action, may_change) = match e {
+                ExitM::To(to) => (to.as_str(), None, &[][..]),
+                ExitM::Full(f) => (f.to.as_str(), f.action.as_deref(), &f.may_change[..]),
+            };
+            let action = match action {
+                Some(a) => intern(a),
+                None => {
+                    // The one declared action that moves a frozen record to `to`.
+                    let frozen = immutable_when.as_ref().ok_or_else(|| {
+                        at(
+                            "exit_to",
+                            "an exit leaves an immutable state: declare immutable_when".into(),
+                        )
+                    })?;
+                    let found: Vec<&'static str> = commands
+                        .iter()
+                        .filter(|c| {
+                            c.transition.is_some_and(|t| {
+                                t.field == frozen.field
+                                    && t.to == to
+                                    && t.from.is_none_or(|f| frozen.values.contains(&f))
+                            })
+                        })
+                        .map(|c| c.name)
+                        .collect();
+                    match found.as_slice() {
+                        [one] => *one,
+                        [] => {
+                            return Err(at(
+                                "exit_to",
+                                format!("no action moves a frozen record to {to:?}"),
+                            ));
+                        }
+                        _ => {
+                            return Err(at(
+                                "exit_to",
+                                format!(
+                                    "several actions move a frozen record to {to:?} ({}): name one with {{ to, action }}",
+                                    found.join(", ")
+                                ),
+                            ));
+                        }
+                    }
+                }
+            };
+            exit_to.push(Exit {
+                to: intern(to),
+                action,
+                may_change: may_change.iter().map(|f| intern(f)).collect(),
+            });
+        }
+        Ok(Some(obop_registry::Guard {
+            immutable_when,
+            mutable_fields: g.mutable_fields.iter().map(|f| intern(f)).collect(),
+            exit_to,
+            no_delete_when: g
+                .no_delete_when
+                .as_ref()
+                .map(|s| states("no_delete_when", s))
+                .transpose()?,
+            lock_date: g.lock_date.as_ref().map(|l| LockDate {
+                field: intern(&l.field),
+                setting: l.setting.as_deref().map(intern),
+                closed_by: l.closed_by.as_deref().map(intern),
+            }),
+            children_of: g.children_of.as_deref().map(intern),
+            append_only: g.append_only,
+            message: g.message.as_deref().map(intern),
+        }))
     }
 
     /// The models as registry data, rules included. Syntax errors in expressions, formats and
@@ -1795,6 +2258,17 @@ impl Manifest {
                 let mut c = c.transition(&a.field, a.from.as_deref(), &a.to);
                 if a.approval {
                     c = c.approval();
+                }
+                if let Some(u) = &a.ui {
+                    c = c.ui(obop_registry::ActionUi {
+                        primary: u.primary,
+                        danger: u.danger,
+                        confirm: u.confirm.clone(),
+                        done: u.done.clone(),
+                        group: u.group.clone(),
+                        needs: u.needs.clone(),
+                        not_by: u.not_by.clone(),
+                    });
                 }
                 if a.effect.len() > MAX_EFFECTS {
                     return Err(format!(
@@ -1848,6 +2322,7 @@ impl Manifest {
                     .map(intern)
                     .collect(),
             });
+            let guard = Self::model_guard(m, &commands)?;
             out.push(ModelDef {
                 name: intern(&m.name),
                 description: intern(&m.description),
@@ -1864,6 +2339,8 @@ impl Manifest {
                             .then(|| intern(m.history_reason.as_deref().unwrap_or("").trim())),
                         retention_days: m.history_retention_days,
                     },
+                    ui: Self::model_ui(m)?,
+                    guard,
                     ..ModelExt::default()
                 },
             });

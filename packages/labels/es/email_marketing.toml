@@ -5,6 +5,7 @@ summary = "Listas de correo, contactos con consentimiento y campañas. No se env
 
 [labels.es.model.email_marketing_list]
 name = "Lista"
+plural = "Listas"
 description = "Una lista de correo a la que pueden pertenecer contactos"
 
 [labels.es.model.email_marketing_list.field.name]
@@ -21,6 +22,7 @@ description = "Indica si los visitantes pueden suscribirse por sí mismos"
 
 [labels.es.model.email_marketing_contact]
 name = "Contacto"
+plural = "Contactos"
 description = "Una persona de una lista de correo"
 
 [labels.es.model.email_marketing_contact.field.list_id]
@@ -55,7 +57,11 @@ description = "Dónde se obtuvo el consentimiento, por ejemplo formulario de sus
 
 [labels.es.model.email_marketing_campaign]
 name = "Campaña"
+plural = "Campañas"
 description = "Un envío a una lista"
+
+[labels.es.model.email_marketing_campaign.guard]
+message = "Una campaña enviada o cancelada no se puede modificar; solo se pueden introducir aún sus estadísticas."
 
 [labels.es.model.email_marketing_campaign.field.name]
 label = "Nombre"
@@ -132,11 +138,11 @@ label = "Programar"
 description = "Marcar la campaña como programada para su día"
 
 [labels.es.model.email_marketing_campaign.action.send]
-label = "Enviar"
+label = "Marcar como enviada"
 description = "Marcar la campaña programada como enviada; no se envía ningún correo (solo responsables)"
 
 [labels.es.model.email_marketing_campaign.action.send_now]
-label = "Enviar ahora"
+label = "Marcar como enviada"
 description = "Marcar como enviada una campaña en borrador; no se envía ningún correo (solo responsables)"
 
 [labels.es.model.email_marketing_campaign.action.unschedule]

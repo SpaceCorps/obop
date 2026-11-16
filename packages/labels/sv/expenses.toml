@@ -1,11 +1,15 @@
 [labels.sv.module]
 name = "Utlägg"
-description = "Anställdas utläggsansökningar med flödet utkast, inskickad, godkänd och betald. Utbetalning är en separat behörighet. Att godkänna, avslå och betala ut kräver mänskligt godkännande; agenter får bara föreslå det. Kvitton anges i en anteckning och lagras inte. Ett utlägg har ett nummer ur en årlig serie, och en anställd ser och ändrar bara sina egna utlägg; chefer och ekonomi ser alla."
+description = "Anställdas utlägg med flödet utkast, inskickad, godkänd och betald. Utbetalning är en separat behörighet. Att godkänna, avslå och betala ut kräver mänskligt godkännande; agenter får bara föreslå. Kvitto som foto eller skanning; godkända, betalda och avslagna utlägg är låsta. Nummer ur en årlig serie; en anställd ser bara sina egna utlägg, chefer och ekonomi ser alla."
 summary = "Anställdas utläggsansökningar med flödet utkast, inskickad, godkänd och betald."
 
 [labels.sv.model.expenses_expense]
 name = "Utlägg"
+plural = "Utlägg"
 description = "Ett belopp som en anställd lagt ut för företaget och vill få ersatt"
+
+[labels.sv.model.expenses_expense.guard]
+message = "Ett godkänt, utbetalt eller avslaget utlägg kan inte ändras, utom dess kvitto och betalningsuppgifterna."
 
 [labels.sv.model.expenses_expense.field.description]
 label = "Beskrivning"
@@ -72,7 +76,7 @@ description = "Godkänn en inskickad ansökan (endast chef)"
 
 [labels.sv.model.expenses_expense.action.pay]
 label = "Betala"
-description = "Registrera ersättningen som utbetald (endast ekonomi)"
+description = "Registrera ersättningen som utbetald (endast ekonomi); betaldatum blir i dag om inget anges"
 
 [labels.sv.model.expenses_expense.action.refuse]
 label = "Avslå"
@@ -81,3 +85,7 @@ description = "Avslå en inskickad ansökan (endast chef)"
 [labels.sv.model.expenses_expense.field.number]
 label = "Nummer"
 description = "Utläggsnummer som EXP-2026-0042, tilldelas när utlägget skapas; serien börjar om varje år"
+
+[labels.sv.model.expenses_expense.field.receipt]
+description = "Foto eller skanning av kvittot (PDF eller bild); kan bara laddas ned av den som får läsa utlägget"
+label = "Kvitto"

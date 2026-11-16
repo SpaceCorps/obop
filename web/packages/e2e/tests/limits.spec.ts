@@ -210,11 +210,11 @@ test.describe("field limits", () => {
     await panel(page).getByLabel("Code").fill("abcdefghijk");
     await expect(counter(page)).toHaveCount(0);
     await panel(page).getByRole("button", { name: "Create" }).click();
-    // The server's sentence, on the field, in the words it sent.
+    // The server's sentence, on the field, naming the field by its label (B12).
     await expect(
       panel(page)
         .getByRole("alert")
-        .filter({ hasText: `${model}.code must be at most 10 characters; this has 11` }),
+        .filter({ hasText: "Code must be at most 10 characters; this has 11" }),
     ).toBeVisible();
     expect((await api.list("root", model)).length).toBe(0);
   });
@@ -258,7 +258,8 @@ test.describe("field limits", () => {
     // The same in a cell of the list.
     await page.goto(`/#/${id}/${model}?view=list`);
     const row = page.locator("tr").filter({ hasText: headline });
-    await row.locator("td", { hasText: "abcdefgh" }).click();
+    // A double-click edits a cell in place (a click opens the record).
+    await row.locator("td", { hasText: "abcdefgh" }).dblclick();
     const input = page.locator("td.editing input");
     await expect(input).toHaveValue("abcdefgh");
     await expect(input).not.toHaveAttribute("aria-invalid", /.*/);

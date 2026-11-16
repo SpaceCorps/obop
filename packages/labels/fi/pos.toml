@@ -5,6 +5,7 @@ summary = "Myymälän kassat: kassavuorot, myynnit riveineen ja maksut. Hyvitys 
 
 [labels.fi.model.pos_config]
 name = "Kassapiste"
+plural = "Kassapisteet"
 description = "Kassapiste (kassa tai myymälä) ja sen asetukset"
 
 [labels.fi.model.pos_config.field.name]
@@ -37,7 +38,11 @@ description = "Onko kassapiste käytössä"
 
 [labels.fi.model.pos_session]
 name = "Kassavuoro"
+plural = "Kassavuorot"
 description = "Yksi myyntivuoro kassapisteessä, kassalaatikon avaamisesta sulkemiseen"
+
+[labels.fi.model.pos_session.guard]
+message = "Suljettua istuntoa ei voi muuttaa; vain sen muistiinpano voi vielä selittää kassaeron."
 
 [labels.fi.model.pos_session.field.config_id]
 label = "Kassapiste"
@@ -87,9 +92,16 @@ closed = "Suljettu"
 label = "Sulje"
 description = "Sulje kassavuoro, kun laatikko on laskettu (vain esihenkilö)"
 
+[labels.fi.model.pos_session.action.close.assert.difference_explained]
+message = "Kassaeroa ei ole selitetty: kirjoita syy muistiinpanoon ennen sulkemista"
+
 [labels.fi.model.pos_order]
 name = "Kassamyynti"
+plural = "Kassamyynnit"
 description = "Kassapisteessä tehty myynti"
+
+[labels.fi.model.pos_order.guard]
+message = "Maksettua, hyvitettyä tai peruttua myyntiä ei voi muuttaa. Hyvitä se peruaksesi sen."
 
 [labels.fi.model.pos_order.field.session_id]
 label = "Kassavuoro"
@@ -143,7 +155,11 @@ description = "Hyvitä maksettu myynti asiakkaalle (vain esihenkilö)"
 
 [labels.fi.model.pos_order_line]
 name = "Kassamyynnin rivi"
+plural = "Kassamyynnin rivit"
 description = "Myynnin yksi tuoterivi"
+
+[labels.fi.model.pos_order_line.guard]
+message = "Maksetun, hyvitetyn tai perutun myynnin rivejä ei voi muuttaa."
 
 [labels.fi.model.pos_order_line.field.order_id]
 label = "Kassamyynti"
@@ -175,7 +191,11 @@ description = "Rivin summa alennuksen jälkeen: määrä kertaa yksikköhinta mi
 
 [labels.fi.model.pos_payment]
 name = "Maksu"
+plural = "Maksut"
 description = "Myynnistä saatu maksu; myynti voidaan maksaa usealla maksutavalla"
+
+[labels.fi.model.pos_payment.guard]
+message = "Maksetun, hyvitetyn tai perutun myynnin maksuja ei voi muuttaa."
 
 [labels.fi.model.pos_payment.field.order_id]
 label = "Kassamyynti"
@@ -207,3 +227,6 @@ description = "Korttipäätteen tai maksupalvelun viite; ei koskaan korttinumero
 [labels.fi.model.pos_order.field.stock_location_id]
 label = "Varastopaikka"
 description = "Mistä tavarat poistuvat varastosta; maksu luo varastosiirrot tästä paikasta"
+
+[labels.fi.model.pos_order.action.pay.assert.covered]
+message = "Maksut eivät kata myynnin summaa: lisää maksu loppusummalle"

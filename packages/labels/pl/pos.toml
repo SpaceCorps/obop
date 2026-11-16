@@ -5,6 +5,7 @@ summary = "Kasy sklepowe: sesje, zamówienia z pozycjami i płatnościami. Zwrot
 
 [labels.pl.model.pos_config]
 name = "Kasa"
+plural = "Kasy"
 description = "Punkt sprzedaży (kasa lub sklep) i jego ustawienia"
 
 [labels.pl.model.pos_config.field.name]
@@ -37,7 +38,11 @@ description = "Czy punkt sprzedaży jest w użyciu"
 
 [labels.pl.model.pos_session]
 name = "Sesja"
+plural = "Sesje"
 description = "Jedna zmiana sprzedaży w punkcie sprzedaży, od otwarcia do zamknięcia szuflady kasowej"
+
+[labels.pl.model.pos_session.guard]
+message = "Zamkniętej sesji nie można zmienić; tylko jej notatka może jeszcze wyjaśnić różnicę w kasie."
 
 [labels.pl.model.pos_session.field.config_id]
 label = "Kasa"
@@ -87,9 +92,16 @@ closed = "Zamknięte"
 label = "Zamknij"
 description = "Zamyka sesję po przeliczeniu szuflady (tylko kierownik)"
 
+[labels.pl.model.pos_session.action.close.assert.difference_explained]
+message = "Różnica w kasie nie jest wyjaśniona: przed zamknięciem podaj przyczynę w notatce"
+
 [labels.pl.model.pos_order]
-name = "Zamówienie"
+name = "Sprzedaż"
+plural = "Sprzedaże"
 description = "Sprzedaż zarejestrowana w punkcie sprzedaży"
+
+[labels.pl.model.pos_order.guard]
+message = "Opłaconej, zwróconej lub anulowanej sprzedaży nie można zmienić. Zwróć ją, aby ją cofnąć."
 
 [labels.pl.model.pos_order.field.session_id]
 label = "Sesja"
@@ -142,8 +154,12 @@ label = "Zwróć środki"
 description = "Zwraca klientowi środki za opłaconą sprzedaż (tylko kierownik)"
 
 [labels.pl.model.pos_order_line]
-name = "Pozycja zamówienia"
+name = "Pozycja sprzedaży"
+plural = "Pozycje sprzedaży"
 description = "Jedna pozycja produktowa sprzedaży"
+
+[labels.pl.model.pos_order_line.guard]
+message = "Pozycji opłaconej, zwróconej lub anulowanej sprzedaży nie można zmienić."
 
 [labels.pl.model.pos_order_line.field.order_id]
 label = "Zamówienie"
@@ -175,7 +191,11 @@ description = "Wartość pozycji po rabacie: ilość razy cena jednostkowa, pomn
 
 [labels.pl.model.pos_payment]
 name = "Płatność"
+plural = "Płatności"
 description = "Płatność przyjęta za sprzedaż; sprzedaż może być opłacona kilkoma metodami"
+
+[labels.pl.model.pos_payment.guard]
+message = "Płatności opłaconej, zwróconej lub anulowanej sprzedaży nie można zmienić."
 
 [labels.pl.model.pos_payment.field.order_id]
 label = "Zamówienie"
@@ -207,3 +227,6 @@ description = "Referencja z terminala płatniczego lub operatora płatności; ni
 [labels.pl.model.pos_order.field.stock_location_id]
 label = "Lokalizacja magazynowa"
 description = "Skąd towar opuszcza magazyn; płatność tworzy operacje magazynowe z tej lokalizacji"
+
+[labels.pl.model.pos_order.action.pay.assert.covered]
+message = "Płatności nie pokrywają sumy sprzedaży: dodaj płatność na pozostałą kwotę"

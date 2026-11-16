@@ -5,6 +5,7 @@ summary = "Lieferanten, Bestellungen und Bestellpositionen mit dem Ablauf Entwur
 
 [labels.de.model.purchase_vendor]
 name = "Lieferant"
+plural = "Lieferanten"
 description = "Einkaufskonditionen für einen Kontakt, bei dem Sie einkaufen"
 
 [labels.de.model.purchase_vendor.field.party_id]
@@ -33,11 +34,15 @@ description = "Ob Sie noch bei diesem Lieferanten einkaufen"
 
 [labels.de.model.purchase_order]
 name = "Bestellung"
+plural = "Bestellungen"
 description = "Eine Anfrage an einen Lieferanten, Waren oder Dienstleistungen zu liefern"
 
+[labels.de.model.purchase_order.guard]
+message = "Eine empfangene oder stornierte Bestellung kann nicht geändert werden, nur ihre Notizen."
+
 [labels.de.model.purchase_order.field.reference]
-label = "Referenz"
-description = "Auf dem Beleg gedruckte Bestellnummer"
+label = "Lieferantenreferenz"
+description = "Angebots- oder Referenznummer des Lieferanten für diese Bestellung, falls vorhanden"
 
 [labels.de.model.purchase_order.field.vendor_id]
 label = "Lieferant"
@@ -92,7 +97,11 @@ description = "Eine noch nicht gesendete Bestellung stornieren"
 
 [labels.de.model.purchase_order_line]
 name = "Bestellposition"
+plural = "Bestellpositionen"
 description = "Ein Produkt oder eine Dienstleistung einer Bestellung"
+
+[labels.de.model.purchase_order_line.guard]
+message = "Die Zeilen einer empfangenen oder stornierten Bestellung können nicht geändert werden."
 
 [labels.de.model.purchase_order_line.field.order_id]
 label = "Bestellung"
@@ -116,7 +125,7 @@ description = "Vereinbarter Preis pro Stück (kleinste Währungseinheit, z. B. C
 
 [labels.de.model.purchase_order_line.field.received_quantity]
 label = "Erhaltene Menge"
-description = "Bisher erhaltene Stückzahl"
+description = "Tatsächlich angekommene Stückzahl, wenn sie von der Bestellung abweicht; leer bedeutet, dass die bestellte Menge angekommen ist. Vor dem Wareneingang der Bestellung setzen"
 
 [labels.de.model.purchase_order.field.number]
 label = "Nummer"
@@ -129,3 +138,7 @@ description = "Wo die Ware eingehen soll; der Wareneingang der Bestellung erzeug
 [labels.de.model.purchase_order_line.field.amount]
 label = "Betrag"
 description = "Positionsbetrag: Menge mal Stückpreis (kleinste Währungseinheit)"
+
+[labels.de.model.purchase_order_line.field.receipt_quantity]
+label = "Eingangsmenge"
+description = "Stückzahl, die der Wareneingang ins Lager bucht: die erhaltene Menge, wenn angegeben, sonst die bestellte Menge"

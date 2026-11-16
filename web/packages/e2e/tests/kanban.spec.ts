@@ -70,7 +70,7 @@ test.describe("kanban board", () => {
     expect(await stateOf(api, model, title)).toBe("lost");
   });
 
-  test("the Move to select and Shift+Arrow keys are the keyboard twin of dragging", async ({
+  test("the Move to menu and Shift+Arrow keys are the keyboard twin of dragging", async ({
     page,
     signIn,
     api,
@@ -83,9 +83,11 @@ test.describe("kanban board", () => {
     await signIn("root", `/${model}/${model}?view=kanban`);
 
     const cardIn = (stage: string) => card(column(page, stage), title);
+    // The ⋯ menu of a card lists the other columns.
     await cardIn("New")
-      .getByLabel(/^Move .* to$/)
-      .selectOption({ label: "Lost" });
+      .getByRole("button", { name: /^Move .* to$/ })
+      .click();
+    await page.getByRole("menuitem", { name: "Lost" }).click();
     await expect(cardIn("Lost")).toHaveCount(1);
     expect(await stateOf(api, model, title)).toBe("lost");
 
@@ -115,23 +117,46 @@ test.describe("kanban board", () => {
     // Diagnosis of the old flaky drag: a long column pushes the other columns off screen, and a
     // pointer drag needs source and target on screen together. This drives the same handlers the
     // browser would (dragstart, dragover, drop) without any pointer, so it does not depend on scroll.
+    // (The tall column is an open stage: a finished one with more than ten cards starts folded.)
     const model = await scratchModule({ title: "Tall board", fields });
     const title = uid("Far");
     await api.create("root", model, { title, state: "new" });
     for (let i = 0; i < 30; i++)
-      await api.create("root", model, { title: uid("Filler"), state: "won" });
+      await api.create("root", model, { title: uid("Filler"), state: "qualified" });
     await signIn("root", `/${model}/${model}?view=kanban`);
 
-    await expect(column(page, "Won").locator(".kcard")).toHaveCount(30);
+    await expect(column(page, "Qualified").locator(".kcard")).toHaveCount(30);
     const source = card(column(page, "New"), title);
-    const target = column(page, "Won");
+    const target = column(page, "Qualified");
     const data = await page.evaluateHandle(() => new DataTransfer());
     await source.dispatchEvent("dragstart", { dataTransfer: data });
     await target.dispatchEvent("dragover", { dataTransfer: data });
     await target.dispatchEvent("drop", { dataTransfer: data });
 
-    await expect(card(column(page, "Won"), title)).toHaveCount(1);
-    expect(await stateOf(api, model, title)).toBe("won");
+    await expect(card(column(page, "Qualified"), title)).toHaveCount(1);
+    expect(await stateOf(api, model, title)).toBe("qualified");
+  });
+
+  test("a finished column with more than ten cards starts folded; opening it is remembered", async ({
+    page,
+    signIn,
+    api,
+    uid,
+    scratchModule,
+  }) => {
+    const model = await scratchModule({ title: "Busy board", fields });
+    await api.create("root", model, { title: uid("Open"), state: "new" });
+    for (let i = 0; i < 11; i++)
+      await api.create("root", model, { title: uid("Closed"), state: "won" });
+    await signIn("root", `/${model}/${model}?view=kanban`);
+
+    await expect(page.getByRole("button", { name: "Unfold Won" })).toBeVisible();
+    await expect(column(page, "Won").locator(".kcard")).toHaveCount(0);
+    await page.getByRole("button", { name: "Unfold Won" }).click();
+    await expect(column(page, "Won").locator(".kcard")).toHaveCount(11);
+    await page.reload();
+    await expect(column(page, "Won").locator(".kcard")).toHaveCount(11);
+    await expect(page.getByRole("button", { name: "Fold Won" })).toBeVisible();
   });
 
   test("a column folds away and stays folded after a reload", async ({

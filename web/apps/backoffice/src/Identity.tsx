@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Button,
   InstanceLogo,
@@ -35,6 +35,24 @@ type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
 
 /** The seven languages by their own names, which are never translated. */
 const NAMES = LANGS.map((lang) => ({ lang, native: LANG_INFO[lang].native }));
+/** English, the text every other language falls back to, and the six that are folded away. */
+const ENGLISH = NAMES.filter(({ lang }) => lang === "en");
+const OTHERS = NAMES.filter(({ lang }) => lang !== "en");
+
+/**
+ * The fields of the six other languages, closed unless one of them had something in it when the
+ * form was read: a phone would otherwise scroll past twelve empty fields to reach Save. Opened or
+ * closed by the person after that, never by what they type.
+ */
+function OtherLanguages({ filled, children }: { filled: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(filled);
+  return (
+    <details className="identity-langs" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>{t("Other languages")}</summary>
+      <div className="stack">{children}</div>
+    </details>
+  );
+}
 
 /** An address that shows nothing: the logo of a preview before anything is saved. */
 const BLANK = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
@@ -142,6 +160,34 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
     setForm((f) => ({ ...f, titles: { ...f.titles, [l]: clip(v, LIMITS.title) } }));
   const setMessage = (l: Lang, v: string) =>
     setForm((f) => ({ ...f, messages: { ...f.messages, [l]: clip(v, LIMITS.message) } }));
+  const messageField = ({ lang, native }: (typeof NAMES)[number]) => (
+    <Input
+      key={lang}
+      label={native}
+      lang={lang}
+      value={form.messages[lang]}
+      autoComplete="off"
+      onChange={(e) => setMessage(lang, e.target.value)}
+    />
+  );
+  const titleField = ({ lang, native }: (typeof NAMES)[number]) => (
+    <Input
+      key={lang}
+      label={native}
+      lang={lang}
+      value={form.titles[lang]}
+      autoComplete="off"
+      onChange={(e) => setTitle(lang, e.target.value)}
+    />
+  );
+  // Nothing that is there is folded away: a text in one of the other languages, or a stored one
+  // that cannot be used and has to be typed again (the notice above names it), opens them.
+  const othersFilled = (prefix: "message" | "title") =>
+    OTHERS.some(
+      ({ lang }) =>
+        (prefix === "message" ? form.messages : form.titles)[lang] !== "" ||
+        loaded.fallbacks.some((f) => f.field === `${prefix}_${lang}`),
+    );
 
   async function chosen(f: File | undefined) {
     setFileError("");
@@ -306,16 +352,10 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               "Shown under the sign-in line in the language of the screen. A language without one shows the English message.",
             )}
           </p>
-          {NAMES.map(({ lang, native }) => (
-            <Input
-              key={lang}
-              label={native}
-              lang={lang}
-              value={form.messages[lang]}
-              autoComplete="off"
-              onChange={(e) => setMessage(lang, e.target.value)}
-            />
-          ))}
+          {ENGLISH.map(messageField)}
+          <OtherLanguages filled={othersFilled("message")}>
+            {OTHERS.map(messageField)}
+          </OtherLanguages>
         </div>
         <div className="stack" role="group" aria-labelledby={`${ids}-title`}>
           <h3 id={`${ids}-title`} className="overline">
@@ -326,16 +366,8 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               "Shown beside the logo where an app asks to connect. A language without one shows the English title, then the name.",
             )}
           </p>
-          {NAMES.map(({ lang, native }) => (
-            <Input
-              key={lang}
-              label={native}
-              lang={lang}
-              value={form.titles[lang]}
-              autoComplete="off"
-              onChange={(e) => setTitle(lang, e.target.value)}
-            />
-          ))}
+          {ENGLISH.map(titleField)}
+          <OtherLanguages filled={othersFilled("title")}>{OTHERS.map(titleField)}</OtherLanguages>
         </div>
         <div className="stack">
           <h3 className="overline">{t("Product pages")}</h3>

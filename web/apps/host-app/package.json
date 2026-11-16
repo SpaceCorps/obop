@@ -1,0 +1,44 @@
+{
+  "name": "@obop/host-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "obop: React Native (Expo SDK 58) app that shows the back office of one obop instance in a WebView.",
+  "license": "Apache-2.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "export:android": "expo export --platform android",
+    "check:sdk": "node scripts/check-sdk.mjs",
+    "check:sdk:latest": "node scripts/check-sdk.mjs --latest",
+    "android:prebuild": "expo prebuild --platform android --no-install",
+    "android:build": "node scripts/gradle.mjs assembleDebug",
+    "android:build:release": "node scripts/gradle.mjs assembleRelease",
+    "android:gate": "node scripts/gate.mjs",
+    "ios:prebuild": "expo prebuild --platform ios --no-install",
+    "ios:pods": "node scripts/ios/xcode.mjs pods",
+    "ios:build:simulator": "node scripts/ios/xcode.mjs build-simulator",
+    "ios:gate": "node scripts/ios/gate.mjs",
+    "emulator:check": "node scripts/emulator/check.mjs",
+    "simulator:drive": "node scripts/simulator/drive.mjs"
+  },
+  "dependencies": {
+    "@obop/host-bridge": "workspace:*",
+    "@obop/ui-native": "workspace:*",
+    "expo": "58.0.16",
+    "expo-constants": "58.0.12",
+    "expo-dev-client": "58.0.14",
+    "expo-secure-store": "58.0.2",
+    "expo-status-bar": "58.0.3",
+    "expo-system-ui": "58.0.6",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-safe-area-context": "5.10.1",
+    "react-native-webview": "14.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "react-dom": "19.3.0",
+    "typescript": "6.0.3"
+  }
+}

@@ -236,6 +236,7 @@ test.describe("a text field that shows the label of an option", () => {
       // Switching the language leaves the panel and its picker as they are, and the next look at the
       // options is in the new language, not in the one the list was first made in.
       await page.getByRole("button", { name: tr("sv", "Account") }).click();
+      await page.getByRole("menuitem", { name: new RegExp(tr("sv", "Language")) }).click();
       await page.getByRole("menuitem", { name: "Deutsch" }).click();
       await expect(page.locator("html")).toHaveAttribute("lang", "de");
       await expect(picker).toBeVisible();
@@ -256,11 +257,11 @@ test.describe("a text field that shows the label of an option", () => {
       // `sam` reads through base.user and has no write group of the package.
       await signIn("sam", `/${id}/${entry}?view=list&id=${made.id}`);
       const panel = page.locator("aside.record");
-      await expect(panel.locator(`#f-${entry}-note`)).toHaveValue("Pågår");
-      await expect(panel.locator(`#f-${entry}-note`)).not.toBeEditable();
-      await expect(panel.locator(`#f-${entry}-details`)).toHaveValue("Pågår");
-      await expect(panel.locator(`#f-${entry}-details`)).not.toBeEditable();
-      await expect(panel.locator(`#f-${entry}-role`)).toHaveValue("Ägare");
+      // A record the person may not change reads as text, not as inputs (record form, plan 2.6).
+      await expect(panel.locator(`#f-${entry}-note`)).toHaveText("Pågår");
+      await expect(panel.locator(`#f-${entry}-details`)).toHaveText("Pågår");
+      await expect(panel.locator(`#f-${entry}-role`)).toHaveText("Ägare");
+      await expect(panel.locator("input, textarea, select")).toHaveCount(0);
       // The stored text is unchanged for the same person through the API.
       const sam = await api.token("sam");
       const got = await api.post(`/api/${entry}/get`, { id: made.id }, sam);

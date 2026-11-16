@@ -39,6 +39,10 @@
           "hint": {
             "description": "What to do next.",
             "type": "string"
+          },
+          "message": {
+            "description": "Only on a 400 with code assertion_failed (D95): the package author's sentence alone, without the expression that error ends with, for a person to read; a generic sentence when the assertion has no message of its own.",
+            "type": "string"
           }
         },
         "required": [
@@ -534,6 +538,16 @@
             "description": "ISO 4217 currency code",
             "type": "string"
           },
+          "due_date": {
+            "description": "Date the payment is due (YYYY-MM-DD); not before the issue date",
+            "format": "date",
+            "type": "string"
+          },
+          "issue_date": {
+            "description": "Date the invoice is issued (YYYY-MM-DD)",
+            "format": "date",
+            "type": "string"
+          },
           "number": {
             "description": "Number from a gapless yearly series, such as INV-2026-00042, assigned when posted (a number the system assigns; read-only)",
             "readOnly": true,
@@ -606,9 +620,22 @@
             "description": "Name of the contact person (personal data: agents see it masked)",
             "type": "string"
           },
+          "expected_close": {
+            "description": "Day the deal is expected to close (YYYY-MM-DD)",
+            "format": "date",
+            "type": "string"
+          },
           "expected_revenue_minor": {
             "description": "Expected revenue in minor units",
             "type": "integer"
+          },
+          "lost_reason": {
+            "description": "Why the opportunity was lost",
+            "type": "string"
+          },
+          "party_id": {
+            "description": "The customer: the contact record that a quotation made from the lead is for",
+            "type": "string"
           },
           "stage": {
             "description": "Pipeline stage: new, qualified, won or lost (moves only through the model's actions)",
@@ -1366,6 +1393,10 @@
             "description": "ISO 4217 currency code",
             "type": "string"
           },
+          "lead_id": {
+            "description": "The CRM lead the quotation was made for; its customer unless one is given",
+            "type": "string"
+          },
           "number": {
             "description": "Order number such as SO-00042, assigned when the order is created (a number the system assigns; read-only)",
             "readOnly": true,
@@ -1439,7 +1470,7 @@
             "type": "string"
           },
           "kind": {
-            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
+            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
             "type": "string"
           },
           "user": {
@@ -1634,7 +1665,7 @@
   "info": {
     "description": "Every model has the same generated commands: list, search, get, create, update, delete and its own actions, all POST with a JSON body. Personal and financial fields are masked for agent tokens; irreversible steps answer 202 with a plan for a human to approve. Errors are JSON with error, code and hint. Every operation can answer 503 (storage_busy, storage_unavailable or storage_timeout) with a Retry-After header; its applied field says what became of the request's own changes: none (repeat it), unknown (after storage_unavailable: read before you repeat a write) or partial (a step was refused after a change committed: do not repeat it blindly). Sign in (or present a token) to see the commands your token may use; this document lists only those.",
     "title": "obop instance API",
-    "version": "0.2.1"
+    "version": "0.2.2"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1715,7 +1746,7 @@
                     "type": "string"
                   },
                   "scopes": {
-                    "description": "Permission groups, each one the issuer holds.",
+                    "description": "Permission groups by name, each one the issuer holds; an administrator may name any registered group. Never `*`.",
                     "items": {
                       "type": "string"
                     },
@@ -1793,6 +1824,198 @@
           }
         ],
         "summary": "A signed-in human issues a scoped agent token"
+      }
+    },
+    "/api/auth/agent-tokens": {
+      "get": {
+        "operationId": "listAgentTokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "delegable": {
+                      "description": "Permission groups the caller may delegate: their own, and every registered group for an administrator.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "tokens": {
+                      "items": {
+                        "properties": {
+                          "created_at": {
+                            "description": "Unix seconds.",
+                            "type": "integer"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "scopes": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The tokens (never a token itself) and the groups."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "The agent tokens the signed-in human issued that still work, and the groups they may put on a new one"
+      }
+    },
+    "/api/auth/agent-tokens/{id}/revoke": {
+      "post": {
+        "operationId": "revokeAgentToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "revoked": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Revoked."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "End one agent token the signed-in human issued"
       }
     },
     "/api/auth/login": {
@@ -9295,6 +9518,16 @@
                           "maxLength": 2048,
                           "type": "string"
                         },
+                        "due_date": {
+                          "description": "Date the payment is due (YYYY-MM-DD); not before the issue date",
+                          "format": "date",
+                          "type": "string"
+                        },
+                        "issue_date": {
+                          "description": "Date the invoice is issued (YYYY-MM-DD)",
+                          "format": "date",
+                          "type": "string"
+                        },
                         "party_id": {
                           "description": "Customer party id",
                           "type": "string"
@@ -9610,6 +9843,16 @@
                   "currency": {
                     "description": "ISO 4217 currency code",
                     "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "description": "Date the payment is due (YYYY-MM-DD); not before the issue date",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "issue_date": {
+                    "description": "Date the invoice is issued (YYYY-MM-DD)",
+                    "format": "date",
                     "type": "string"
                   },
                   "party_id": {
@@ -10521,7 +10764,17 @@
                     "maxLength": 2048,
                     "type": "string"
                   },
+                  "due_date": {
+                    "description": "Date the payment is due (YYYY-MM-DD); not before the issue date",
+                    "format": "date",
+                    "type": "string"
+                  },
                   "id": {
+                    "type": "string"
+                  },
+                  "issue_date": {
+                    "description": "Date the invoice is issued (YYYY-MM-DD)",
+                    "format": "date",
                     "type": "string"
                   },
                   "party_id": {
@@ -11844,9 +12097,23 @@
                           "maxLength": 2048,
                           "type": "string"
                         },
+                        "expected_close": {
+                          "description": "Day the deal is expected to close (YYYY-MM-DD)",
+                          "format": "date",
+                          "type": "string"
+                        },
                         "expected_revenue_minor": {
                           "description": "Expected revenue in minor units",
                           "type": "integer"
+                        },
+                        "lost_reason": {
+                          "description": "Why the opportunity was lost",
+                          "maxLength": 100000,
+                          "type": "string"
+                        },
+                        "party_id": {
+                          "description": "The customer: the contact record that a quotation made from the lead is for",
+                          "type": "string"
                         },
                         "stage": {
                           "description": "Pipeline stage: new, qualified, won or lost (moves only through the model's actions)",
@@ -12047,9 +12314,23 @@
                     "maxLength": 2048,
                     "type": "string"
                   },
+                  "expected_close": {
+                    "description": "Day the deal is expected to close (YYYY-MM-DD)",
+                    "format": "date",
+                    "type": "string"
+                  },
                   "expected_revenue_minor": {
                     "description": "Expected revenue in minor units",
                     "type": "integer"
+                  },
+                  "lost_reason": {
+                    "description": "Why the opportunity was lost",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "party_id": {
+                    "description": "The customer: the contact record that a quotation made from the lead is for",
+                    "type": "string"
                   },
                   "stage": {
                     "description": "Pipeline stage: new, qualified, won or lost (moves only through the model's actions)",
@@ -13337,11 +13618,25 @@
                     "maxLength": 2048,
                     "type": "string"
                   },
+                  "expected_close": {
+                    "description": "Day the deal is expected to close (YYYY-MM-DD)",
+                    "format": "date",
+                    "type": "string"
+                  },
                   "expected_revenue_minor": {
                     "description": "Expected revenue in minor units",
                     "type": "integer"
                   },
                   "id": {
+                    "type": "string"
+                  },
+                  "lost_reason": {
+                    "description": "Why the opportunity was lost",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "party_id": {
+                    "description": "The customer: the contact record that a quotation made from the lead is for",
                     "type": "string"
                   },
                   "stage": {
@@ -14593,119 +14888,6 @@
         ]
       }
     },
-    "/api/mileage_point/delete": {
-      "post": {
-        "operationId": "mileage_point.delete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Deleted."
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApprovalRequired"
-                }
-              }
-            },
-            "description": "Proposed; needs a human to approve."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "The input was rejected; the error says which field and why."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "Missing, expired or revoked bearer token."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "No such command or record, or it is hidden from this token."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait before trying again.",
-                "schema": {
-                  "type": "integer"
-                }
-              },
-              "X-Obop-Applied": {
-                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
-                "schema": {
-                  "enum": [
-                    "none",
-                    "unknown",
-                    "partial"
-                  ],
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Delete a mileage_point (agents only propose)",
-        "tags": [
-          "Mileage"
-        ]
-      }
-    },
     "/api/mileage_point/get": {
       "post": {
         "operationId": "mileage_point.get",
@@ -15232,173 +15414,6 @@
           }
         ],
         "summary": "Search mileage_point records with filter, order, limit and offset",
-        "tags": [
-          "Mileage"
-        ]
-      }
-    },
-    "/api/mileage_point/update": {
-      "post": {
-        "operationId": "mileage_point.update",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "accuracy_m": {
-                    "description": "Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
-                    "example": "12.33",
-                    "pattern": "^-?(0|[1-9][0-9]{0,5})(\\.[0-9]{1,2})?$",
-                    "type": "string"
-                  },
-                  "driver": {
-                    "description": "Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked)",
-                    "maxLength": 2048,
-                    "type": "string"
-                  },
-                  "id": {
-                    "type": "string"
-                  },
-                  "lat": {
-                    "description": "Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
-                    "example": "12.3333333",
-                    "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
-                    "type": "string"
-                  },
-                  "lon": {
-                    "description": "Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
-                    "example": "12.3333333",
-                    "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
-                    "type": "string"
-                  },
-                  "recorded_at": {
-                    "description": "When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
-                    "example": "2026-03-29T01:30:00.000000Z",
-                    "format": "date-time",
-                    "type": "string"
-                  },
-                  "seq": {
-                    "description": "Position of the point in the trip, counted by the device; unique within the trip (unique)",
-                    "type": "integer"
-                  },
-                  "speed_mps": {
-                    "description": "Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
-                    "example": "12.33",
-                    "pattern": "^-?(0|[1-9][0-9]{0,4})(\\.[0-9]{1,2})?$",
-                    "type": "string"
-                  },
-                  "trip": {
-                    "description": "The trip the point belongs to (its server id)",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "denied": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    "value": {
-                      "$ref": "#/components/schemas/mileage_point"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "A record."
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApprovalRequired"
-                }
-              }
-            },
-            "description": "Proposed; needs a human to approve."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "The input was rejected; the error says which field and why."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "Missing, expired or revoked bearer token."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "No such command or record, or it is hidden from this token."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait before trying again.",
-                "schema": {
-                  "type": "integer"
-                }
-              },
-              "X-Obop-Applied": {
-                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
-                "schema": {
-                  "enum": [
-                    "none",
-                    "unknown",
-                    "partial"
-                  ],
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Update a mileage_point; a status field only moves along a declared action",
         "tags": [
           "Mileage"
         ]
@@ -16068,119 +16083,6 @@
           }
         ],
         "summary": "Create a mileage_trip",
-        "tags": [
-          "Mileage"
-        ]
-      }
-    },
-    "/api/mileage_trip/delete": {
-      "post": {
-        "operationId": "mileage_trip.delete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Deleted."
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApprovalRequired"
-                }
-              }
-            },
-            "description": "Proposed; needs a human to approve."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "The input was rejected; the error says which field and why."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "Missing, expired or revoked bearer token."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "No such command or record, or it is hidden from this token."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait before trying again.",
-                "schema": {
-                  "type": "integer"
-                }
-              },
-              "X-Obop-Applied": {
-                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
-                "schema": {
-                  "enum": [
-                    "none",
-                    "unknown",
-                    "partial"
-                  ],
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Delete a mileage_trip (agents only propose)",
         "tags": [
           "Mileage"
         ]
@@ -23927,6 +23829,10 @@
                           "maxLength": 2048,
                           "type": "string"
                         },
+                        "lead_id": {
+                          "description": "The CRM lead the quotation was made for; its customer unless one is given",
+                          "type": "string"
+                        },
                         "party_id": {
                           "description": "Customer party id",
                           "type": "string"
@@ -24362,6 +24268,10 @@
                   "currency": {
                     "description": "ISO 4217 currency code",
                     "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "lead_id": {
+                    "description": "The CRM lead the quotation was made for; its customer unless one is given",
                     "type": "string"
                   },
                   "party_id": {
@@ -25269,6 +25179,10 @@
                     "type": "string"
                   },
                   "id": {
+                    "type": "string"
+                  },
+                  "lead_id": {
+                    "description": "The CRM lead the quotation was made for; its customer unless one is given",
                     "type": "string"
                   },
                   "party_id": {

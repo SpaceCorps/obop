@@ -5,6 +5,7 @@ summary = "Dostawcy, zamówienia zakupu i ich pozycje z obiegiem wersja robocza,
 
 [labels.pl.model.purchase_vendor]
 name = "Dostawca"
+plural = "Dostawcy"
 description = "Warunki zakupu od kontaktu, u którego firma kupuje"
 
 [labels.pl.model.purchase_vendor.field.party_id]
@@ -33,11 +34,15 @@ description = "Czy nadal kupujesz od tego dostawcy"
 
 [labels.pl.model.purchase_order]
 name = "Zamówienie zakupu"
+plural = "Zamówienia zakupu"
 description = "Zlecenie dla dostawcy na dostarczenie towarów lub usług"
 
+[labels.pl.model.purchase_order.guard]
+message = "Przyjętego lub anulowanego zamówienia nie można zmienić, z wyjątkiem jego notatek."
+
 [labels.pl.model.purchase_order.field.reference]
-label = "Referencja"
-description = "Numer zamówienia drukowany na dokumencie"
+label = "Referencja dostawcy"
+description = "Numer oferty lub referencja dostawcy dla tego zamówienia, jeśli jest"
 
 [labels.pl.model.purchase_order.field.vendor_id]
 label = "Dostawca"
@@ -92,7 +97,11 @@ description = "Anuluje zamówienie, które nie zostało jeszcze wysłane"
 
 [labels.pl.model.purchase_order_line]
 name = "Pozycja zamówienia"
+plural = "Pozycje zamówienia"
 description = "Jeden produkt lub usługa w zamówieniu zakupu"
+
+[labels.pl.model.purchase_order_line.guard]
+message = "Pozycji przyjętego lub anulowanego zamówienia nie można zmienić."
 
 [labels.pl.model.purchase_order_line.field.order_id]
 label = "Zamówienie"
@@ -116,7 +125,7 @@ description = "Uzgodniona cena za sztukę (w jednostkach podrzędnych waluty, np
 
 [labels.pl.model.purchase_order_line.field.received_quantity]
 label = "Ilość przyjęta"
-description = "Liczba dotychczas przyjętych sztuk"
+description = "Liczba sztuk, które faktycznie dotarły, jeśli różni się od zamówionej; puste oznacza, że dotarła zamówiona ilość. Ustaw przed przyjęciem zamówienia"
 
 [labels.pl.model.purchase_order.field.number]
 label = "Numer"
@@ -129,3 +138,7 @@ description = "Gdzie towar ma zostać przyjęty; przyjęcie zamówienia tworzy o
 [labels.pl.model.purchase_order_line.field.amount]
 label = "Kwota"
 description = "Kwota pozycji: ilość razy cena jednostkowa (w jednostkach podrzędnych waluty)"
+
+[labels.pl.model.purchase_order_line.field.receipt_quantity]
+label = "Ilość do przyjęcia"
+description = "Liczba sztuk, które przyjęcie wprowadza na stan: ilość przyjęta, jeśli podana, w przeciwnym razie ilość zamówiona"

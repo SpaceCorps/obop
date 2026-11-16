@@ -5,6 +5,7 @@ summary = "Instrumentpaneler och rutor lagrade som data, som backoffice visar so
 
 [labels.sv.model.dashboards_dashboard]
 name = "Instrumentpanel"
+plural = "Instrumentpaneler"
 description = "En instrumentpanel: en titulerad, ordnad samling rutor"
 
 [labels.sv.model.dashboards_dashboard.field.title]
@@ -29,6 +30,7 @@ description = "Ordning bland panelerna, lägst först"
 
 [labels.sv.model.dashboards_widget]
 name = "Ruta"
+plural = "Rutor"
 description = "En ruta på en instrumentpanel, definierad av vad som läses och hur det sammanställs"
 
 [labels.sv.model.dashboards_widget.field.dashboard_id]

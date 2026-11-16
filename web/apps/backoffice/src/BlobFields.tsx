@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type DragEvent } from "react";
 import { t } from "@obop/ui";
 import type { FieldMeta } from "./api.ts";
 import {
@@ -205,9 +205,17 @@ type BlobInputProps = {
   describedBy?: string;
   /** When the model has a `<name>_alt` field: its title, and whether it is still empty. */
   altHint?: { title: string; empty: boolean };
+  /** Told about the file once it is stored (to name an untitled record after it). */
+  onUploaded?: (file: File) => void;
+  /** A cell of a table: the control alone, no hint. */
+  compact?: boolean;
 };
 
-/** Upload control for an `image` or `file` field: choose or drop, progress, errors, remove. */
+/**
+ * Upload control for an `image` or `file` field: choose or drop, progress, errors, remove. An
+ * image is a small avatar that is itself the button (and the drop target); a file shows its chip
+ * and, for a PDF or a picture, a preview under it.
+ */
 export function BlobInput(p: BlobInputProps) {
   const { field: f, value, onChange, readOnly } = p;
   const d = useData();
@@ -240,6 +248,7 @@ export function BlobInput(p: BlobInputProps) {
     setProgress(null);
     if ("ok" in r) {
       onChange(r.ok.id);
+      p.onUploaded?.(file);
       if (input.current) input.current.value = "";
     } else if (r.status === -1) {
       // cancelled
@@ -257,38 +266,127 @@ export function BlobInput(p: BlobInputProps) {
   const busy = progress !== null;
   const pct = Math.round((progress ?? 0) * 100);
   const title = fieldTitle(f);
-  return (
+  const choose = () => input.current?.click();
+  const drop = {
+    onDragOver: (e: DragEvent) => {
+      if (readOnly || busy) return;
+      e.preventDefault();
+      setOver(true);
+    },
+    onDragLeave: () => setOver(false),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      setOver(false);
+      void send(e.dataTransfer.files[0]);
+    },
+  };
+  const fileInput = (
+    <input
+      ref={input}
+      type="file"
+      hidden
+      tabIndex={-1}
+      accept={isImage ? IMAGE_ACCEPT : FILE_ACCEPT}
+      onChange={(e) => void send(e.target.files?.[0])}
+    />
+  );
+  const progressBar = busy && (
     <div
-      className="blobfield"
-      data-over={over || undefined}
-      onDragOver={(e) => {
-        if (readOnly || busy) return;
-        e.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        void send(e.dataTransfer.files[0]);
-      }}
+      className="blobprogress"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={pct}
+      aria-label={t("Uploading… {percent}%", { percent: pct })}
     >
-      <div className="blobrow">
-        {isImage ? (
-          value ? (
-            <BlobThumb id={value} alt={title} size={96} className="preview" />
-          ) : (
-            <span className="blobthumb preview empty" style={{ inlineSize: 96, blockSize: 96 }}>
-              <span className="blobthumb-ph">
-                <Icon name="upload" size={22} />
-              </span>
-            </span>
-          )
-        ) : value ? (
-          <FileChip id={value} field={f} />
+      <span style={{ inlineSize: `${pct}%` }} />
+    </div>
+  );
+  const errorLine = error && (
+    <p role="alert" className="error">
+      {error}
+    </p>
+  );
+  const describedBy =
+    [readOnly ? "" : hintId, p.describedBy].filter(Boolean).join(" ") || undefined;
+
+  if (isImage) {
+    const size = p.compact ? 40 : 64;
+    const thumb = value ? (
+      <BlobThumb id={value} alt={title} size={size} className="preview" />
+    ) : (
+      <span className="blobthumb preview vacant" style={{ inlineSize: size, blockSize: size }}>
+        <span className="blobthumb-ph">
+          <Icon name="upload" size={p.compact ? 14 : 18} />
+        </span>
+      </span>
+    );
+    return (
+      <div className="avatarfield" data-over={over || undefined} {...drop}>
+        {readOnly ? (
+          <span id={p.id}>{thumb}</span>
         ) : (
-          <span className="dim">{t("No file")}</span>
+          <button
+            type="button"
+            className="avatarbtn"
+            id={p.id}
+            disabled={busy}
+            title={value ? t("Replace image…") : t("Choose image…")}
+            aria-describedby={describedBy}
+            aria-invalid={p.invalid || undefined}
+            onClick={choose}
+          >
+            {thumb}
+            <span className="avatar-badge" aria-hidden="true">
+              <Icon name={value ? "edit" : "plus"} size={12} />
+            </span>
+          </button>
         )}
+        {!p.compact && (
+          <div className="avatarside">
+            {!readOnly && (
+              <div className="blobactions">
+                <button type="button" className="linkbtn" disabled={busy} onClick={choose}>
+                  {value ? t("Replace image…") : t("Choose image…")}
+                </button>
+                {value && !busy && (
+                  <button type="button" className="linkbtn" onClick={() => onChange("")}>
+                    {t("Remove")}
+                  </button>
+                )}
+                {busy && (
+                  <button type="button" className="linkbtn" onClick={() => job.current?.abort()}>
+                    {t("Cancel")}
+                  </button>
+                )}
+              </div>
+            )}
+            {!readOnly && (
+              <small className="hint" id={hintId}>
+                {t("PNG, JPEG, WebP or GIF, up to {size}. You can also drop one here.", {
+                  size: formatBytes(max),
+                })}
+                {p.altHint?.empty && value
+                  ? " " +
+                    t("Describe the picture in “{field}” for people who cannot see it.", {
+                      field: p.altHint.title,
+                    })
+                  : ""}
+              </small>
+            )}
+            {progressBar}
+            {errorLine}
+          </div>
+        )}
+        {fileInput}
+      </div>
+    );
+  }
+
+  return (
+    <div className="blobfield" data-over={over || undefined} {...drop}>
+      <div className="blobrow">
+        {value ? <FileChip id={value} field={f} /> : <span className="dim">{t("No file")}</span>}
         {!readOnly && (
           <div className="blobactions">
             <button
@@ -296,18 +394,11 @@ export function BlobInput(p: BlobInputProps) {
               className="btn small"
               id={p.id}
               disabled={busy}
-              aria-describedby={[hintId, p.describedBy].filter(Boolean).join(" ")}
+              aria-describedby={describedBy}
               aria-invalid={p.invalid || undefined}
-              onClick={() => input.current?.click()}
+              onClick={choose}
             >
-              <Icon name="upload" size={14} />{" "}
-              {isImage
-                ? value
-                  ? t("Replace image…")
-                  : t("Choose image…")
-                : value
-                  ? t("Replace file…")
-                  : t("Choose file…")}
+              <Icon name="upload" size={14} /> {value ? t("Replace file…") : t("Choose file…")}
             </button>
             {value && !busy && (
               <button type="button" className="btn small" onClick={() => onChange("")}>
@@ -322,47 +413,15 @@ export function BlobInput(p: BlobInputProps) {
           </div>
         )}
       </div>
-      {!isImage && value && <FilePreview key={value} id={value} title={title} />}
-      <input
-        ref={input}
-        type="file"
-        hidden
-        tabIndex={-1}
-        accept={isImage ? IMAGE_ACCEPT : FILE_ACCEPT}
-        onChange={(e) => void send(e.target.files?.[0])}
-      />
-      {busy && (
-        <div
-          className="blobprogress"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={pct}
-          aria-label={t("Uploading… {percent}%", { percent: pct })}
-        >
-          <span style={{ inlineSize: `${pct}%` }} />
-        </div>
-      )}
-      {!readOnly && (
+      {!p.compact && !isImage && value && <FilePreview key={value} id={value} title={title} />}
+      {fileInput}
+      {progressBar}
+      {!readOnly && !p.compact && (
         <small className="hint" id={hintId}>
-          {isImage
-            ? t("Drop an image here or choose one. PNG, JPEG, WebP or GIF, up to {size}.", {
-                size: formatBytes(max),
-              })
-            : t("Drop a file here or choose one. Up to {size}.", { size: formatBytes(max) })}
-          {isImage && p.altHint?.empty && value
-            ? " " +
-              t("Describe the picture in “{field}” for people who cannot see it.", {
-                field: p.altHint.title,
-              })
-            : ""}
+          {t("Drop a file here or choose one. Up to {size}.", { size: formatBytes(max) })}
         </small>
       )}
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
+      {errorLine}
     </div>
   );
 }

@@ -5,7 +5,11 @@ summary = "Asiakkaiden luona tehtävät työtehtävät asentajan hoitamina, käy
 
 [labels.fi.model.field_service_job]
 name = "Työtehtävä"
+plural = "Työtehtävät"
 description = "Asiakkaan luona tehtävä työtehtävä"
+
+[labels.fi.model.field_service_job.guard]
+message = "Valmista tai peruttua työtä ei voi muuttaa. Ajoita sen sijaan jatkotyö."
 
 [labels.fi.model.field_service_job.field.name]
 label = "Nimi"
@@ -118,7 +122,11 @@ description = "Peruuta työtehtävä, jota ei ole aloitettu"
 
 [labels.fi.model.field_service_part]
 name = "Varaosa"
+plural = "Varaosat"
 description = "Työtehtävässä käytetty osa tai tuote"
+
+[labels.fi.model.field_service_part.guard]
+message = "Valmiin tai perutun työn osia ei voi muuttaa."
 
 [labels.fi.model.field_service_part.field.job_id]
 label = "Työtehtävä"
@@ -139,3 +147,6 @@ description = "Asiakkaalta veloitettava yksikköhinta (valuutan pienin yksikkö,
 [labels.fi.model.field_service_part.field.note]
 label = "Huomautus"
 description = "Huomautus osasta, esimerkiksi sarjanumero"
+
+[labels.fi.model.field_service_job.action.complete.assert.signed]
+message = "Asiakkaan on ensin kuitattava tämä työtehtävä: täytä allekirjoittaja ja päivä"

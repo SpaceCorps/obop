@@ -5,9 +5,13 @@ import "@obop/ui/styles.css";
 import { App } from "./App.tsx";
 import { applyBrandToPage } from "./brandPage.ts";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
+import { startHostEmbed } from "./host/embed.ts";
 import "./style.css";
 import "./controlpanel.css";
-import "./views.css";
+import "./list.css";
+import "./kanban.css";
+import "./charts.css";
+import "./calendar.css";
 import "./record.css";
 import "./blobs.css";
 import "./customize.css";
@@ -35,6 +39,8 @@ addEventListener("unhandledrejection", (e) => {
 
 // The brand of the page (tab title, accent of the sign-in screens) is in place before the first paint.
 applyBrandToPage();
+// Inside the phone host app the page speaks its bridge; in a browser this does nothing.
+startHostEmbed();
 
 void initI18n({ loaders }).then(() =>
   createRoot(document.getElementById("root")!).render(

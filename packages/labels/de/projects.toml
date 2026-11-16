@@ -5,6 +5,7 @@ summary = "Projekte, Meilensteine und Aufgaben mit Zuständigen, Fristen und Sta
 
 [labels.de.model.projects_project]
 name = "Projekt"
+plural = "Projekte"
 description = "Ein Arbeitspaket mit einem Ziel"
 
 [labels.de.model.projects_project.field.name]
@@ -58,6 +59,7 @@ description = "Ein abgeschlossenes Projekt wieder öffnen"
 
 [labels.de.model.projects_milestone]
 name = "Meilenstein"
+plural = "Meilensteine"
 description = "Ein Kontrollpunkt in einem Projekt"
 
 [labels.de.model.projects_milestone.field.project_id]
@@ -95,6 +97,7 @@ description = "Festhalten, dass ein ausstehender Meilenstein verfehlt wurde"
 
 [labels.de.model.projects_task]
 name = "Aufgabe"
+plural = "Aufgaben"
 description = "Eine Arbeitseinheit innerhalb eines Projekts"
 
 [labels.de.model.projects_task.field.title]
@@ -163,3 +166,23 @@ description = "Für alle nicht stornierten Aufgaben des Projekts geschätzte Zei
 [labels.de.model.projects_project.field.progress]
 label = "Fortschritt"
 description = "Anteil der erledigten Aufgaben des Projekts in Prozent; stornierte Aufgaben zählen nicht"
+
+[labels.de.model.projects_milestone.action.reset]
+label = "Zurücksetzen"
+description = "Einen erreichten Meilenstein wieder auf ausstehend setzen, etwa wenn er versehentlich markiert wurde"
+
+[labels.de.model.projects_milestone.action.reset_missed]
+label = "Zurücksetzen"
+description = "Einen verpassten Meilenstein wieder auf ausstehend setzen, etwa wenn sich sein Termin verschoben hat"
+
+[labels.de.model.projects_task.action.complete_now]
+label = "Erledigen"
+description = "Eine offene Aufgabe als erledigt markieren, ohne sie vorher zu beginnen"
+
+[labels.de.model.projects_task.action.reopen]
+label = "Wieder öffnen"
+description = "Eine erledigte Aufgabe wieder öffnen, zurück zu offen"
+
+[labels.de.model.projects_task.action.reopen_cancelled]
+label = "Wieder öffnen"
+description = "Eine stornierte Aufgabe wieder öffnen, zurück zu offen"

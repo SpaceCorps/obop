@@ -5,6 +5,7 @@ summary = "Buchbare Personen, Räume und Ausstattung sowie Termine mit Start, En
 
 [labels.de.model.appointments_resource]
 name = "Ressource"
+plural = "Ressourcen"
 description = "Etwas oder jemand, das oder der gebucht werden kann"
 
 [labels.de.model.appointments_resource.field.name]
@@ -30,7 +31,11 @@ description = "Ob die Ressource gebucht werden kann"
 
 [labels.de.model.appointments_appointment]
 name = "Termin"
+plural = "Termine"
 description = "Eine Buchung einer Ressource zu einer bestimmten Zeit"
+
+[labels.de.model.appointments_appointment.guard]
+message = "Ein stattgefundener, abgesagter oder versäumter Termin kann nicht geändert werden. Buchen Sie stattdessen einen neuen."
 
 [labels.de.model.appointments_appointment.field.resource_id]
 label = "Ressource"
@@ -94,3 +99,6 @@ description = "Einen terminierten Termin stornieren"
 [labels.de.model.appointments_appointment.action.mark_no_show]
 label = "Als nicht erschienen markieren"
 description = "Festhalten, dass die teilnehmende Person nicht gekommen ist"
+
+[labels.de.model.appointments_appointment.action.confirm.assert.ends_after_start]
+message = "Der Termin endet, bevor er beginnt: Legen Sie ein Ende nach dem Beginn fest"

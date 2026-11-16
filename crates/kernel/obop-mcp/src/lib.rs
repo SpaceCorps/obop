@@ -7,7 +7,10 @@
 //! Protocol: the handshake-based revisions `2025-11-25`, `2025-06-18` and `2025-03-26`. The
 //! stateless `2026-07-28` revision is not implemented (docs/DECISIONS.md D51).
 
+#[cfg(test)]
+mod hint_tests;
 pub mod schema;
+mod ui;
 
 use obop_brand::{Brand, DEFAULT_NAME};
 use obop_commands::{CallError, Dispatcher, Principal, Surface, Value, Vault, errors, names};
@@ -358,6 +361,10 @@ fn call_tool(d: &Dispatcher, p: &Principal, s: &mut Session, params: &J) -> Resu
     // Unknown, hidden, forbidden and not-on-this-surface all answer the same, so a caller cannot
     // probe for commands it may not see.
     let cmd = names::from_mcp(name).ok_or_else(|| unknown_tool(name))?;
+    // A refusal by an assertion is named by its code, key and message (D95), as on REST: the
+    // engine notes it in a request scope. Over HTTP the route has none of its own, so one is
+    // opened here (in the manifest's language); a scope already open is kept.
+    let _scope = (!obop_commands::locale::in_scope()).then(|| obop_commands::locale::scope(None));
     let result = d.call(
         Surface::Mcp,
         p,
@@ -449,6 +456,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             if let Some(n) = f.max_bytes {
                                 o["max_bytes"] = json!(n);
                             }
+                            if f.gapless {
+                                o["gapless"] = json!(true);
+                            }
                             // Length and range limits (D90). `max_length` is always there for
                             // a text field: the field's own, else the default of the kind.
                             if let Some(n) = f.max_length {
@@ -480,6 +490,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                                     o["shows_option_when"] = json!(w);
                                 }
                             }
+                            if let Some(h) = &f.hints {
+                                ui::field_hints(&mut o, h);
+                            }
                             o
                         }).collect::<Vec<_>>(),
                         "actions": x.actions.iter().map(|a| {
@@ -490,6 +503,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                                 "to": a.transition.map(|t| t.to),
                             });
                             translations(&mut o, &a.labels, &a.descriptions);
+                            if let Some(u) = &a.ui {
+                                o["ui"] = ui::action_ui(u);
+                            }
                             o
                         }).collect::<Vec<_>>(),
                     });
@@ -500,6 +516,7 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             "shared_with": a.shared_with, "see_all_group": a.see_all,
                         });
                     }
+                    ui::model_hints(&mut o, x);
                     o
                 }).collect::<Vec<_>>(),
             });
@@ -510,6 +527,24 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
             if !m.summaries.is_empty() {
                 mo["summaries"] = json!(m.summaries);
             }
+            // The catalogue data of D55 the interface shows: the English card summary, the
+            // categories (the launcher groups by them) and the maturity (a banner when not stable).
+            if !m.summary.is_empty() {
+                mo["summary"] = json!(m.summary);
+            }
+            if !m.categories.is_empty() {
+                mo["categories"] = json!(m.categories);
+            }
+            if !m.maturity.is_empty() {
+                mo["maturity"] = json!(m.maturity);
+            }
+            // Where the app opens and whether it is on the launcher (D95).
+            if let Some(h) = &m.ui.home {
+                mo["home"] = json!(h);
+            }
+            if let Some(l) = m.ui.launcher {
+                mo["launcher"] = json!(l);
+            }
             mo
         })
         .collect();
@@ -519,6 +554,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
         // The platform zone and the pinned IANA database behind every date bucket and `today`
         // (D72). A new database arrives with a release.
         "time": {"zone": zones.platform().name(), "tzdb_version": zones.db().version()},
+        // The instance currency (D95): the default `$instance.currency` and what the interface
+        // shows a money value in when the record names none.
+        "currency": d.currency(),
         "modules": modules
     })
 }

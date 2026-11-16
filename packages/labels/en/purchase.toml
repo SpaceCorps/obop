@@ -1,0 +1,56 @@
+# English names and plurals of purchase (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.purchase_vendor]
+name = "Vendor"
+plural = "Vendors"
+
+[labels.en.model.purchase_vendor.field.party_id]
+label = "Contact"
+
+[labels.en.model.purchase_vendor.field.vendor_reference]
+label = "Our customer number"
+
+[labels.en.model.purchase_vendor.field.payment_terms_days]
+label = "Payment terms (days)"
+
+[labels.en.model.purchase_vendor.field.lead_time_days]
+label = "Lead time (days)"
+
+[labels.en.model.purchase_vendor.field.iban]
+label = "IBAN"
+
+[labels.en.model.purchase_order]
+name = "Purchase order"
+plural = "Purchase orders"
+
+[labels.en.model.purchase_order.field.reference]
+label = "Vendor quote / reference"
+
+[labels.en.model.purchase_order.field.vendor_id]
+label = "Vendor"
+
+[labels.en.model.purchase_order.field.ordered_on]
+label = "Order date"
+
+[labels.en.model.purchase_order.field.expected_on]
+label = "Expected arrival"
+
+[labels.en.model.purchase_order.field.receive_location_id]
+label = "Receive at"
+
+[labels.en.model.purchase_order_line]
+name = "Purchase order line"
+plural = "Purchase order lines"
+
+[labels.en.model.purchase_order_line.field.order_id]
+label = "Purchase order"
+
+[labels.en.model.purchase_order_line.field.quantity]
+label = "Ordered"
+
+[labels.en.model.purchase_order_line.field.received_quantity]
+label = "Received"
+
+[labels.en.model.purchase_order_line.field.receipt_quantity]
+label = "To receive"

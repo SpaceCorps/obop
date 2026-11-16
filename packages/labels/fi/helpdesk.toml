@@ -5,6 +5,7 @@ summary = "Asiakastukitiketit prioriteetin, vakavuuden ja palvelutasotavoitteide
 
 [labels.fi.model.helpdesk_sla]
 name = "SLA"
+plural = "SLA:t"
 description = "Palvelutasosopimus: kuinka nopeasti tietyn prioriteetin tiketteihin pitää vastata ja ne ratkaista"
 
 [labels.fi.model.helpdesk_sla.field.name]
@@ -35,7 +36,11 @@ description = "Voiko sopimuksen liittää uusiin tiketteihin"
 
 [labels.fi.model.helpdesk_ticket]
 name = "Tiketti"
+plural = "Tiketit"
 description = "Asiakastukipyyntö"
+
+[labels.fi.model.helpdesk_ticket.guard]
+message = "Suljettua tikettiä ei voi muuttaa. Avaa uusi tiketti, jos ongelma palaa."
 
 [labels.fi.model.helpdesk_ticket.field.subject]
 label = "Aihe"

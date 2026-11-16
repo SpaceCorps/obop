@@ -5,6 +5,7 @@ summary = "Toistuvat paketit ja asiakkaiden kestotilaukset kokeilu-, aktiivinen-
 
 [labels.fi.model.subscriptions_plan]
 name = "Paketti"
+plural = "Paketit"
 description = "Toistuva tarjous, jonka asiakkaat voivat tilata"
 
 [labels.fi.model.subscriptions_plan.field.name]
@@ -38,7 +39,11 @@ description = "Voivatko uudet asiakkaat valita paketin"
 
 [labels.fi.model.subscriptions_subscription]
 name = "Kestotilaus"
+plural = "Kestotilaukset"
 description = "Asiakkaan toistuva tilaus pakettiin"
+
+[labels.fi.model.subscriptions_subscription.guard]
+message = "Peruttua tilausta ei voi muuttaa. Aloita sen sijaan uusi tilaus."
 
 [labels.fi.model.subscriptions_subscription.field.customer_id]
 label = "Asiakas"
@@ -58,7 +63,7 @@ description = "Päivä, jona ilmainen kokeilu päättyy (YYYY-MM-DD)"
 
 [labels.fi.model.subscriptions_subscription.field.next_invoice_on]
 label = "Seuraava lasku"
-description = "Päivä, jona seuraava lasku erääntyy laskutettavaksi (YYYY-MM-DD)"
+description = "Päivä, jona seuraava lasku erääntyy laskutettavaksi (YYYY-MM-DD), kirjataan käsin: tilauksesta ei vielä tehdä laskua, joten tee se Laskutuksessa"
 
 [labels.fi.model.subscriptions_subscription.field.recurring_amount]
 label = "Toistuva summa"

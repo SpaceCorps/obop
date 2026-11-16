@@ -5,6 +5,7 @@ summary = "Wiederkehrende Tarife und Kundenabonnements mit dem Ablauf Testphase,
 
 [labels.de.model.subscriptions_plan]
 name = "Tarif"
+plural = "Tarife"
 description = "Ein wiederkehrendes Angebot, das Kunden abonnieren können"
 
 [labels.de.model.subscriptions_plan.field.name]
@@ -38,7 +39,11 @@ description = "Ob neue Kunden den Tarif wählen können"
 
 [labels.de.model.subscriptions_subscription]
 name = "Abonnement"
+plural = "Abonnements"
 description = "Das wiederkehrende Abonnement eines Kunden für einen Tarif"
+
+[labels.de.model.subscriptions_subscription.guard]
+message = "Ein gekündigtes Abonnement kann nicht geändert werden. Schließen Sie stattdessen ein neues ab."
 
 [labels.de.model.subscriptions_subscription.field.customer_id]
 label = "Kunde"
@@ -58,7 +63,7 @@ description = "Datum, an dem die kostenlose Testphase endet (YYYY-MM-DD)"
 
 [labels.de.model.subscriptions_subscription.field.next_invoice_on]
 label = "Nächste Rechnung am"
-description = "Datum, an dem die nächste Rechnung fällig wird (YYYY-MM-DD)"
+description = "Datum, an dem die nächste Rechnung fällig wird (YYYY-MM-DD), von Hand eingetragen: Aus einem Abonnement wird noch keine Rechnung erstellt, erstellen Sie sie in Rechnungen"
 
 [labels.de.model.subscriptions_subscription.field.recurring_amount]
 label = "Wiederkehrender Betrag"

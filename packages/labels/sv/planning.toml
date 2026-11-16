@@ -5,6 +5,7 @@ summary = "Arbetspass för anställda med roller och passmallar; öppna pass pub
 
 [labels.sv.model.planning_role]
 name = "Roll"
+plural = "Roller"
 description = "En roll som ett pass planeras för, till exempel kassör eller elektriker"
 
 [labels.sv.model.planning_role.field.name]
@@ -17,6 +18,7 @@ description = "Vad rollen innebär"
 
 [labels.sv.model.planning_template]
 name = "Mall"
+plural = "Mallar"
 description = "Ett namngivet passmönster med roll samt start- och sluttid; ingen åtgärd skapar pass från det"
 
 [labels.sv.model.planning_template.field.name]
@@ -37,6 +39,7 @@ description = "Slut i minuter efter midnatt (1020 är 17:00)"
 
 [labels.sv.model.planning_shift]
 name = "Arbetspass"
+plural = "Arbetspass"
 description = "Ett arbetspass en dag för en roll, som kan tilldelas en anställd"
 
 [labels.sv.model.planning_shift.field.name]
@@ -72,7 +75,7 @@ label = "Status"
 description = "Passets status: öppet, publicerat, bekräftat"
 
 [labels.sv.model.planning_shift.field.state.options]
-open = "Öppet"
+open = "Ej publicerat"
 published = "Publicerat"
 confirmed = "Bekräftat"
 

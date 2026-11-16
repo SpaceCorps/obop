@@ -7,11 +7,16 @@
 //! PostgreSQL. Nothing is written before that, so a failure at any step leaves no trace,
 //! including no consumed sequence number.
 
+use obop_registry::ModelDef;
 use obop_registry::rules::MAX_EFFECT_RECORDS;
 use obop_storage::{Backend, Fields, Op, unique_matches};
 use serde_json::Value as J;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::Arc;
+
+/// The model definitions a unit asks the immutability guard about (D77).
+pub(crate) type DefLook<'a> = Box<dyn Fn(&str) -> Option<Arc<ModelDef>> + 'a>;
 
 pub(crate) type R<T> = Result<T, String>;
 
@@ -122,6 +127,22 @@ pub(crate) struct Mark {
     undo: usize,
     written: usize,
     touched: usize,
+    tickets: usize,
+}
+
+/// The writes of a unit that has not committed, apart from the store the unit borrows: what one
+/// handler hands to the next when two of them make one unit of work (`Unit::hold`,
+/// `Unit::resume`). The generated `update` hands its edits to the action that a move of a
+/// governed field implies this way (`engine::implied`). Dropped, it leaves no trace.
+pub(crate) struct Held {
+    overlay: HashMap<Key, Option<Fields>>,
+    inserted: HashMap<String, Vec<String>>,
+    ops: Vec<Op>,
+    written: usize,
+    touched: Vec<Key>,
+    undo: Vec<Undo>,
+    keyed: HashMap<String, Vec<Keyed>>,
+    tickets: Vec<(String, String, &'static str)>,
 }
 
 pub(crate) struct Unit<'a> {
@@ -139,6 +160,12 @@ pub(crate) struct Unit<'a> {
     undo: Vec<Undo>,
     /// The overlay by the keys of the uniqueness rules asked about so far, by model.
     keyed: RefCell<HashMap<String, Vec<Keyed>>>,
+    /// The definitions of the models, when the unit checks the immutability guards (D77): every
+    /// unit the engine starts does (`Engine::unit`).
+    guards: Option<DefLook<'a>>,
+    /// The actions the unit runs, as (model, id, action): the tickets that let a frozen record
+    /// leave along an `exit_to` edge (D77 Decision 3).
+    tickets: Vec<(String, String, &'static str)>,
     /// For the tests: the records of the unit that `find_unique` has looked at.
     #[cfg(test)]
     examined: std::cell::Cell<usize>,
@@ -156,9 +183,83 @@ impl<'a> Unit<'a> {
             cap: MAX_EFFECT_RECORDS,
             undo: Vec::new(),
             keyed: RefCell::new(HashMap::new()),
+            guards: None,
+            tickets: Vec::new(),
             #[cfg(test)]
             examined: std::cell::Cell::new(0),
         }
+    }
+
+    /// This unit, checking the immutability guards (D77) of the models `look` finds before every
+    /// insert, merge and delete.
+    pub fn guarded(mut self, look: DefLook<'a>) -> Self {
+        self.guards = Some(look);
+        self
+    }
+
+    /// Stop here without committing: everything the unit has done so far, for another handler to
+    /// go on with (`resume`). The frozen checks of what follows still ask about the records as
+    /// they are stored, so the two handlers are one unit for the guard of D77 too.
+    pub fn hold(self) -> Held {
+        Held {
+            overlay: self.overlay,
+            inserted: self.inserted,
+            ops: self.ops,
+            written: self.written,
+            touched: self.touched,
+            undo: self.undo,
+            keyed: self.keyed.into_inner(),
+            tickets: self.tickets,
+        }
+    }
+
+    /// This unit, which has done nothing yet, going on from where another stopped (`hold`): it
+    /// reads the other's writes, counts them against its own cap (unless it takes a budget of
+    /// its own, `own_budget`) and commits them with its own.
+    pub fn resume(mut self, held: Held) -> Self {
+        debug_assert!(self.ops.is_empty(), "a unit resumes before its first write");
+        self.overlay = held.overlay;
+        self.inserted = held.inserted;
+        self.ops = held.ops;
+        self.written = held.written;
+        self.touched = held.touched;
+        self.undo = held.undo;
+        self.keyed = RefCell::new(held.keyed);
+        self.tickets = held.tickets;
+        self
+    }
+
+    /// Give what follows a budget of its own: an action that goes on in the unit of an update
+    /// may write as many records as when it is called by itself, whatever was written before it.
+    pub fn own_budget(mut self) -> Self {
+        self.cap = self.written.saturating_add(MAX_EFFECT_RECORDS);
+        self
+    }
+
+    /// Record that the unit runs `action` on the record `model` `id` (the ticket of an exit edge).
+    pub fn ticket(&mut self, model: &str, id: &str, action: &'static str) {
+        self.tickets
+            .push((model.to_string(), id.to_string(), action));
+    }
+
+    /// The actions the unit runs on the record `model` `id`.
+    pub fn tickets_of(&self, model: &str, id: &str) -> Vec<&'static str> {
+        self.tickets
+            .iter()
+            .filter(|(m, i, _)| m == model && i == id)
+            .map(|(_, _, a)| *a)
+            .collect()
+    }
+
+    /// The record as it is stored, before any write of this unit.
+    pub fn stored(&self, model: &str, id: &str) -> R<Option<Fields>> {
+        self.backend.get(model, id)
+    }
+
+    /// The definition of `model`, when the unit checks guards and the model declares one.
+    fn guarded_def(&self, model: &str) -> Option<Arc<ModelDef>> {
+        let look = self.guards.as_ref()?;
+        look(model).filter(|d| d.guard().is_some())
     }
 
     /// The record at `key` was just written to the overlay: list it under its key in each rule
@@ -188,6 +289,7 @@ impl<'a> Unit<'a> {
             undo: self.undo.len(),
             written: self.written,
             touched: self.touched.len(),
+            tickets: self.tickets.len(),
         }
     }
 
@@ -213,6 +315,7 @@ impl<'a> Unit<'a> {
         }
         self.ops.truncate(mark.ops);
         self.touched.truncate(mark.touched);
+        self.tickets.truncate(mark.tickets);
         self.written = mark.written;
     }
 
@@ -250,6 +353,10 @@ impl<'a> Unit<'a> {
     }
 
     pub fn insert(&mut self, model: &str, id: &str, fields: Fields) -> R<()> {
+        if let Some(def) = self.guarded_def(model) {
+            let look = |n: &str| self.guards.as_ref().and_then(|l| l(n));
+            super::frozen::on_insert(self, &look, &def, &fields)?;
+        }
         self.spend(1)?;
         let key = (model.to_string(), id.to_string());
         self.ops.push(Op::Insert {
@@ -277,6 +384,10 @@ impl<'a> Unit<'a> {
         let Some(mut cur) = self.get(model, id)? else {
             return Err(format!("no {model} {id}"));
         };
+        if let Some(def) = self.guarded_def(model) {
+            let look = |n: &str| self.guards.as_ref().and_then(|l| l(n));
+            super::frozen::on_merge(self, &look, &def, id, &cur, &patch)?;
+        }
         self.spend(1)?;
         let key = (model.to_string(), id.to_string());
         cur.extend(patch.clone());
@@ -297,8 +408,12 @@ impl<'a> Unit<'a> {
     }
 
     pub fn delete(&mut self, model: &str, id: &str) -> R<()> {
-        if self.get(model, id)?.is_none() {
+        let Some(cur) = self.get(model, id)? else {
             return Err(format!("no {model} {id}"));
+        };
+        if let Some(def) = self.guarded_def(model) {
+            let look = |n: &str| self.guards.as_ref().and_then(|l| l(n));
+            super::frozen::on_delete(self, &look, &def, id, &cur)?;
         }
         self.spend(1)?;
         let key = (model.to_string(), id.to_string());

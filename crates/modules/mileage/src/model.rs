@@ -2,7 +2,10 @@
 //! actions of 5.2, and the row rules of 5.7.
 
 use crate::policy::{ADMIN, DRIVER, POINT, REVIEWER, TRIP};
-use obop_registry::{Access, CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
+use obop_registry::ui::UiFilter;
+use obop_registry::{
+    Access, CommandDef, FieldDef as F, FieldKind, Filter, ModelDef, ModelUi, Module, ModuleMeta,
+};
 use obop_types::DataClass::{ConfidentialHr, Internal};
 use obop_values::Round;
 
@@ -24,9 +27,11 @@ pub fn module() -> Module {
             &["mileage", "trips", "kilometres"],
             "fleet",
             &[],
-        ),
+        )
+        .home(TRIP),
     };
     m.translated(&[
+        include_str!("../../../../packages/labels/en/mileage.toml"),
         include_str!("../../../../packages/labels/de/mileage.toml"),
         include_str!("../../../../packages/labels/fr/mileage.toml"),
         include_str!("../../../../packages/labels/pl/mileage.toml"),
@@ -108,7 +113,9 @@ fn trip() -> ModelDef {
                 false,
                 DRIVER,
             )
-            .decimal(12, 2),
+            .decimal(12, 2)
+            .readonly()
+            .display("km_from_m"),
             F::new(
                 "expected_points",
                 "How many points the device sent for this trip; the driver sets it before ending the trip",
@@ -149,7 +156,8 @@ fn trip() -> ModelDef {
                 Internal,
                 false,
                 DRIVER,
-            ),
+            )
+            .readonly(),
             F::new(
                 "start_lat",
                 "Latitude of the first accepted fix, set by the server",
@@ -157,7 +165,8 @@ fn trip() -> ModelDef {
                 true,
                 DRIVER,
             )
-            .decimal_rounded(DEGREES.0, DEGREES.1, Round::HalfEven),
+            .decimal_rounded(DEGREES.0, DEGREES.1, Round::HalfEven)
+            .readonly(),
             F::new(
                 "start_lon",
                 "Longitude of the first accepted fix, set by the server",
@@ -165,7 +174,8 @@ fn trip() -> ModelDef {
                 true,
                 DRIVER,
             )
-            .decimal_rounded(DEGREES.0, DEGREES.1, Round::HalfEven),
+            .decimal_rounded(DEGREES.0, DEGREES.1, Round::HalfEven)
+            .readonly(),
             F::new(
                 "end_lat",
                 "Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported",
@@ -173,7 +183,8 @@ fn trip() -> ModelDef {
                 true,
                 DRIVER,
             )
-            .decimal_rounded(DEGREES.0, DEGREES.1, Round::HalfEven),
+            .decimal_rounded(DEGREES.0, DEGREES.1, Round::HalfEven)
+            .readonly(),
             F::new(
                 "end_lon",
                 "Longitude of the last accepted fix, set by the server",
@@ -181,7 +192,8 @@ fn trip() -> ModelDef {
                 true,
                 DRIVER,
             )
-            .decimal_rounded(DEGREES.0, DEGREES.1, Round::HalfEven),
+            .decimal_rounded(DEGREES.0, DEGREES.1, Round::HalfEven)
+            .readonly(),
             F::new(
                 "discard_reason",
                 "Why the driver discards the trip; written before discard",
@@ -204,7 +216,8 @@ fn trip() -> ModelDef {
                 Internal,
                 true,
                 DRIVER,
-            ),
+            )
+            .readonly(),
             F::new(
                 "confirmed_at",
                 "When the trip was confirmed, set by confirm; the month of this instant in the platform zone is the month the trip counts in",
@@ -212,7 +225,8 @@ fn trip() -> ModelDef {
                 false,
                 DRIVER,
             )
-            .datetime(),
+            .datetime()
+            .readonly(),
             F::new(
                 "reviewable",
                 "True while the trip is in review, confirmed or rejected: the states a reviewer reads",
@@ -236,6 +250,12 @@ fn trip() -> ModelDef {
                 "confirmed",
                 "rejected",
                 "discarded",
+            ])
+            .tones(&[
+                ("in_review", "info"),
+                ("confirmed", "ok"),
+                ("rejected", "bad"),
+                ("discarded", "neutral"),
             ]),
         ],
         commands: vec![
@@ -245,25 +265,31 @@ fn trip() -> ModelDef {
                 DRIVER,
             )
             .transition("state", Some("recording"), "ended"),
-            CommandDef::new("submit", "Send an ended trip to review", DRIVER).transition(
-                "state",
-                Some("ended"),
-                "in_review",
-            ),
+            CommandDef::new("submit", "Send an ended trip to review", DRIVER)
+                .transition("state", Some("ended"), "in_review")
+                .primary()
+                .done("Sent to review"),
             CommandDef::new(
                 "confirm",
                 "Confirm a trip in review; from now on it counts. A reviewer cannot confirm their own trip",
                 REVIEWER,
             )
             .transition("state", Some("in_review"), "confirmed")
-            .approval(),
+            .approval()
+            .primary()
+            .not_by("driver")
+            .done("Trip confirmed"),
             CommandDef::new(
                 "reject",
                 "Reject a trip in review; write reject_reason first. A reviewer cannot reject their own trip",
                 REVIEWER,
             )
             .transition("state", Some("in_review"), "rejected")
-            .approval(),
+            .approval()
+            .danger()
+            .needs(&["reject_reason"])
+            .not_by("driver")
+            .done("Trip rejected"),
             CommandDef::new(
                 "reopen",
                 "Take a rejected trip back to ended so that the driver can correct it and submit it again",
@@ -276,17 +302,47 @@ fn trip() -> ModelDef {
                 DRIVER,
             )
             .transition("state", None, "discarded")
-            .approval(),
+            .approval()
+            .danger()
+            .needs(&["discard_reason"])
+            .done("Trip discarded"),
             CommandDef::new(
                 "discard_stuck",
                 "Discard a trip that is stuck in recording or ended, as an administrator",
                 ADMIN,
             )
             .transition("state", None, "discarded")
-            .approval(),
+            .approval()
+            .danger()
+            .confirm("Discard this stuck trip? It will never count.")
+            .done("Trip discarded"),
         ],
         ext: Default::default(),
     }
+    .with_ui(ModelUi {
+        title: Some("{driver} · {vehicle} | {driver}".into()),
+        subtitle: Some("{vehicle}".into()),
+        list: vec![
+            "driver".into(),
+            "started_at".into(),
+            "vehicle".into(),
+            "purpose".into(),
+            "distance_m".into(),
+            "state".into(),
+        ],
+        card: vec![
+            "driver".into(),
+            "started_at".into(),
+            "distance_m".into(),
+        ],
+        order: Some("started_at desc".into()),
+        default_view: Some("list".into()),
+        filters: vec![UiFilter {
+            label: "To review".into(),
+            filter: Filter::parse("state = in_review").expect("a valid filter"),
+        }],
+        ..Default::default()
+    })
 }
 
 fn point() -> ModelDef {
@@ -377,4 +433,9 @@ fn point() -> ModelDef {
         commands: vec![],
         ext: Default::default(),
     }
+    // The points are read through their trip (D95 children), not from the menu.
+    .with_ui(ModelUi {
+        menu: Some("hidden".into()),
+        ..Default::default()
+    })
 }

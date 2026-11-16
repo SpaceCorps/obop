@@ -1,0 +1,23 @@
+# English names and plurals of sign (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.sign_template]
+name = "Template"
+plural = "Templates"
+
+[labels.en.model.sign_request]
+name = "Signature request"
+plural = "Signature requests"
+
+[labels.en.model.sign_request.field.signer_ip]
+label = "Signer IP address"
+
+[labels.en.model.sign_request.field.document_hash]
+label = "Document hash (SHA-256)"
+
+[labels.en.model.sign_link]
+name = "Signing link"
+plural = "Signing links"
+
+[labels.en.model.sign_request.action.sign]
+label = "Mark signed"

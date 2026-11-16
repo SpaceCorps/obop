@@ -6,6 +6,7 @@ summary = "Une boutique en ligne : fiches produit, livraison, codes de réductio
 
 [labels.fr.model.ecommerce_category]
 name = "Catégorie"
+plural = "Catégories"
 description = "Un groupe de fiches produit présentées ensemble dans la boutique"
 
 [labels.fr.model.ecommerce_category.field.name]
@@ -30,6 +31,7 @@ description = "Indique si la catégorie est visible des clients"
 
 [labels.fr.model.ecommerce_listing]
 name = "Fiche produit"
+plural = "Fiches produit"
 description = "Un produit tel qu’il apparaît dans la boutique en ligne"
 
 [labels.fr.model.ecommerce_listing.field.product_id]
@@ -91,6 +93,7 @@ description = "Indique si la fiche est visible des clients"
 
 [labels.fr.model.ecommerce_listing_translation]
 name = "Traduction de fiche produit"
+plural = "Traductions de fiches produit"
 description = "Une fiche produit traduite dans une autre langue"
 
 [labels.fr.model.ecommerce_listing_translation.field.listing_id]
@@ -128,6 +131,7 @@ description = "Indique si la traduction est affichée ; elle n’est accessible
 
 [labels.fr.model.ecommerce_shipping_method]
 name = "Mode de livraison"
+plural = "Modes de livraison"
 description = "Une façon de livrer les commandes, avec son prix"
 
 [labels.fr.model.ecommerce_shipping_method.field.name]
@@ -156,6 +160,7 @@ description = "Indique si les clients peuvent le choisir"
 
 [labels.fr.model.ecommerce_discount_code]
 name = "Code de réduction"
+plural = "Codes de réduction"
 description = "Un code que le client saisit au paiement pour obtenir une réduction"
 
 [labels.fr.model.ecommerce_discount_code.field.code]
@@ -199,8 +204,12 @@ label = "Actif"
 description = "Indique si le code peut être utilisé"
 
 [labels.fr.model.ecommerce_order]
-name = "Commande"
+name = "Commande en ligne"
+plural = "Commandes en ligne"
 description = "Une commande passée en ligne"
+
+[labels.fr.model.ecommerce_order.guard]
+message = "Une commande livrée, annulée ou remboursée ne peut pas être modifiée, sauf son contact et son numéro de suivi."
 
 [labels.fr.model.ecommerce_order.field.number]
 label = "Numéro"
@@ -312,7 +321,11 @@ description = "Rend l’argent d’une commande livrée, par exemple après un r
 
 [labels.fr.model.ecommerce_order_line]
 name = "Ligne de commande"
+plural = "Lignes de commande"
 description = "Une ligne de produit d’une commande web"
+
+[labels.fr.model.ecommerce_order_line.guard]
+message = "Les lignes d’une commande livrée, annulée ou remboursée ne peuvent pas être modifiées."
 
 [labels.fr.model.ecommerce_order_line.field.order_id]
 label = "Commande"
@@ -352,6 +365,7 @@ description = "Texte qui décrit l'image principale pour les personnes qui ne pe
 
 [labels.fr.model.ecommerce_listing_image]
 name = "Image d'offre"
+plural = "Images d'offre"
 description = "Une image supplémentaire d'une offre pour sa galerie"
 
 [labels.fr.model.ecommerce_listing_image.field.listing_id]
@@ -384,6 +398,7 @@ description = "Seules les offres de cette catégorie sont réduites ; vide : tou
 
 [labels.fr.model.ecommerce_discount_use]
 name = "Utilisation de code"
+plural = "Utilisations de code"
 description = "Combien de fois un client a utilisé un code de réduction (le client est conservé sous forme de hash, jamais d'adresse e-mail)"
 
 [labels.fr.model.ecommerce_discount_use.field.code_id]
@@ -400,6 +415,7 @@ description = "Utilisations à ce jour"
 
 [labels.fr.model.ecommerce_tax_rate]
 name = "Taux de taxe"
+plural = "Taux de taxe"
 description = "Un taux de taxe que la boutique applique aux offres, calculé sur le serveur"
 
 [labels.fr.model.ecommerce_tax_rate.field.name]
@@ -477,6 +493,7 @@ description = "Taxe sur cette ligne, incluse dans les prix ou ajoutée (plus pet
 
 [labels.fr.model.ecommerce_payment]
 name = "Paiement"
+plural = "Paiements"
 description = "Un paiement pour une commande web : quel prestataire, sa référence, le montant et son issue. La boutique ne voit jamais de données de carte"
 
 [labels.fr.model.ecommerce_payment.field.order_id]

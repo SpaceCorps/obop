@@ -4,7 +4,11 @@ summary = "Kundfakturor med livscykeln utkast, bokförd och annullerad."
 
 [labels.sv.model.invoice]
 name = "Faktura"
+plural = "Kundfakturor"
 description = "En kundfaktura; ingen åtgärd återför en bokförd faktura till utkast eller annullerar den"
+
+[labels.sv.model.invoice.guard]
+message = "En bokförd faktura kan inte ändras."
 
 [labels.sv.model.invoice.field.sale_order_id]
 label = "Försäljningsorder"
@@ -27,6 +31,14 @@ description = "Fakturans totalbelopp i valutans minsta enhet, summan av raderna"
 label = "Nummer"
 description = "Nummer ur en årlig nummerserie utan luckor, som INV-2026-00042, tilldelas vid bokföring"
 
+[labels.sv.model.invoice.field.issue_date]
+label = "Fakturadatum"
+description = "Datum då fakturan utfärdas (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.invoice.field.due_date]
+label = "Förfallodatum"
+description = "Datum då betalningen förfaller (ÅÅÅÅ-MM-DD); inte före fakturadatum"
+
 [labels.sv.model.invoice.action.post]
 label = "Bokför"
 description = "Bokför en faktura i utkast och ge den nästa nummer i serien"
@@ -45,6 +57,7 @@ description = "Valutakod enligt ISO 4217"
 
 [labels.sv.model.invoice_line]
 name = "Fakturarad"
+plural = "Fakturarader"
 description = "En produkt eller tjänst på en faktura"
 
 [labels.sv.model.invoice_line.field.invoice_id]

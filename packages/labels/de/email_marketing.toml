@@ -5,6 +5,7 @@ summary = "Verteilerlisten, Kontakte mit Einwilligung und Kampagnen. Kein E-Mail
 
 [labels.de.model.email_marketing_list]
 name = "Liste"
+plural = "Listen"
 description = "Eine Verteilerliste, der Kontakte angehören können"
 
 [labels.de.model.email_marketing_list.field.name]
@@ -21,6 +22,7 @@ description = "Ob sich Besucher selbst anmelden können"
 
 [labels.de.model.email_marketing_contact]
 name = "Kontakt"
+plural = "Kontakte"
 description = "Eine Person auf einer Verteilerliste"
 
 [labels.de.model.email_marketing_contact.field.list_id]
@@ -55,7 +57,11 @@ description = "Wo die Einwilligung eingeholt wurde, zum Beispiel Anmeldeformular
 
 [labels.de.model.email_marketing_campaign]
 name = "Kampagne"
+plural = "Kampagnen"
 description = "Ein Mailing an eine Liste"
+
+[labels.de.model.email_marketing_campaign.guard]
+message = "Eine versendete oder abgebrochene Kampagne kann nicht geändert werden; nur ihre Statistik kann noch eingetragen werden."
 
 [labels.de.model.email_marketing_campaign.field.name]
 label = "Name"
@@ -132,11 +138,11 @@ label = "Einplanen"
 description = "Die Kampagne für den geplanten Tag vormerken"
 
 [labels.de.model.email_marketing_campaign.action.send]
-label = "Senden"
+label = "Als gesendet markieren"
 description = "Die terminierte Kampagne als gesendet markieren; es wird keine E-Mail versendet (nur Führungskräfte)"
 
 [labels.de.model.email_marketing_campaign.action.send_now]
-label = "Jetzt senden"
+label = "Als gesendet markieren"
 description = "Eine Kampagne im Entwurf als gesendet markieren; es wird keine E-Mail versendet (nur Führungskräfte)"
 
 [labels.de.model.email_marketing_campaign.action.unschedule]

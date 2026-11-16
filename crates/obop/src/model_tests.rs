@@ -187,9 +187,9 @@ fn an_entry_posts_only_when_balanced_gets_a_gapless_number_and_totals_follow_the
         get(&app, &clerk, "accounting_move", &b)["number"],
         "JE/2026/00002"
     );
-    // A numbered entry cannot be deleted, and a clerk cannot post.
+    // A numbered entry cannot be deleted (a posted one is frozen, D77), and a clerk cannot post.
     let e = run(&app, &admin(), "accounting_move.delete", json!({"id": b})).unwrap_err();
-    assert!(e.contains("gapless number"), "{e}");
+    assert!(e.contains("is posted and cannot be deleted"), "{e}");
     assert_eq!(
         run(&app, &clerk, "accounting_move.post", json!({"id": a})).unwrap_err(),
         "forbidden"
@@ -310,7 +310,7 @@ fn validating_a_stock_move_changes_the_quantities_at_both_ends_and_nowhere_else(
         &app,
         &boss,
         "inventory_item.create",
-        json!({"product_id": bolt, "location_id": shelf, "quantity": 1}),
+        json!({"product_id": bolt, "location_id": shelf}),
     )
     .unwrap_err();
     assert!(
@@ -773,6 +773,12 @@ fn agents_only_propose_approving_or_refusing_expenses_and_time_entries() {
     }
 }
 
+/// The `version` of a package document.
+fn version_of(doc: &str) -> String {
+    let v = doc.split("version = \"").nth(1).expect("a version");
+    v[..v.find('"').expect("a closing quote")].to_string()
+}
+
 /// The approval flags reach an instance that installed Expenses 0.3.0 only through an update to
 /// the bundled version, which is why the version moved: before the update the agent's approve
 /// runs, after it the agent gets a plan. The update needs no data step.
@@ -786,7 +792,10 @@ fn updating_expenses_brings_the_approval_of_approve_and_refuse() {
     assert_eq!(bundled.matches(flagged).count(), 2, "approve and refuse");
     let old = bundled
         .replace(flagged, "group = \"expenses.manager\"\n")
-        .replace("version = \"0.3.1\"", "version = \"0.3.0\"");
+        .replace(
+            &format!("version = \"{}\"", version_of(&bundled)),
+            "version = \"0.3.0\"",
+        );
     assert_ne!(old, bundled);
     app.installer.install(&old, "upload", "test").unwrap();
 
@@ -812,7 +821,7 @@ fn updating_expenses_brings_the_approval_of_approve_and_refuse() {
     );
 
     let updated = app.installer.install(&bundled, "upload", "test").unwrap();
-    assert_eq!(updated.version, "0.3.1");
+    assert_eq!(updated.version, version_of(&bundled));
     let c = claim();
     plan_of(run(
         &app,
@@ -1050,14 +1059,22 @@ fn a_project_shows_its_progress_and_tickets_are_numbered() {
 
 #[test]
 fn the_sale_flow_is_atomic_on_a_real_sqlite_file() {
-    let dir = std::env::temp_dir().join(format!("obop-model-{}.db", std::process::id()));
-    let url = format!("sqlite://{}", dir.display());
+    // A path of this run's own, removed again (with the side files of SQLite) when the test ends.
+    let file = obop_storage::testing::TempPath::new("obop-model");
+    let url = file.url();
     let store = obop_commands::Store::open(&url).unwrap();
     let app = App::with_store(store);
     app.dispatcher
         .set_clock(std::sync::Arc::new(|| SEPTEMBER_2026));
     let sales = user("sam", &["base.user", "sales.user", "invoicing.user"]);
-    let order = id(&ok(&app, &sales, "sale_order.create", json!({})));
+    // Confirming needs a customer and a line (B26).
+    let party = id(&ok(&app, &sales, "party.create", json!({"name": "Acme"})));
+    let order = id(&ok(
+        &app,
+        &sales,
+        "sale_order.create",
+        json!({"party_id": party}),
+    ));
     ok(
         &app,
         &sales,
@@ -1085,7 +1102,4 @@ fn the_sale_flow_is_atomic_on_a_real_sqlite_file() {
         "the invoice of effect 1 was rolled back"
     );
     assert!(list(&app, &admin(), "invoice_line").is_empty());
-    for ext in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{ext}", dir.display()));
-    }
 }

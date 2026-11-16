@@ -1,11 +1,15 @@
 [labels.fr.module]
 name = "Notes de frais"
-description = "Notes de frais des employés : brouillon, soumise, approuvée, payée. Le paiement est une permission distincte. Approuver, refuser ou payer exige une approbation humaine ; les agents peuvent seulement le proposer. Justificatifs référencés par une note, pas stockés. Numéro d’une série annuelle ; un employé ne voit et ne modifie que ses propres demandes ; responsables et finance les voient toutes."
+description = "Notes de frais : brouillon, soumise, approuvée, payée. Le paiement est une permission distincte. Approuver, refuser ou payer exige une approbation humaine ; les agents proposent seulement. Justificatif en photo ou scan ; une demande approuvée, payée ou refusée est figée. Numéro annuel ; un employé ne voit et ne modifie que ses demandes ; responsables et finance les voient toutes."
 summary = "Notes de frais des employés avec un flux brouillon, soumise, approuvée et payée."
 
 [labels.fr.model.expenses_expense]
 name = "Dépense"
+plural = "Dépenses"
 description = "Un montant qu’un employé a dépensé pour l’entreprise et dont il demande le remboursement"
+
+[labels.fr.model.expenses_expense.guard]
+message = "Une note de frais approuvée, payée ou refusée ne peut pas être modifiée, sauf son justificatif et les détails du paiement."
 
 [labels.fr.model.expenses_expense.field.description]
 label = "Description"
@@ -72,7 +76,7 @@ description = "Approuve une demande soumise (responsable uniquement)"
 
 [labels.fr.model.expenses_expense.action.pay]
 label = "Payer"
-description = "Enregistre le remboursement comme payé (service financier uniquement)"
+description = "Enregistre le remboursement comme payé (service financier uniquement) ; la date de paiement est aujourd’hui si aucune n’est indiquée"
 
 [labels.fr.model.expenses_expense.action.refuse]
 label = "Refuser"
@@ -81,3 +85,7 @@ description = "Refuse une demande soumise (responsable uniquement)"
 [labels.fr.model.expenses_expense.field.number]
 label = "Numéro"
 description = "Numéro de demande tel que EXP-2026-0042, attribué à la création ; la série repart chaque année"
+
+[labels.fr.model.expenses_expense.field.receipt]
+description = "Photo ou scan du justificatif (PDF ou image) ; téléchargeable uniquement par les personnes qui peuvent lire la demande"
+label = "Justificatif"

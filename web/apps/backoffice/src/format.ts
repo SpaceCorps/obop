@@ -9,7 +9,8 @@ import {
 } from "@obop/ui";
 import { getTime, type FieldMeta } from "./api.ts";
 import { formatDecimal } from "./decimals.ts";
-import { formatInstant } from "./instants.ts";
+import { hostSavesFiles } from "./host/state.ts";
+import { formatInstant, instantShort as shortInstant } from "./instants.ts";
 import { shownOptionTarget } from "./shownOption.ts";
 
 /**
@@ -120,6 +121,11 @@ export function instantText(v: unknown): string {
   return formatInstant(v, getTime().zone, fmt.locale);
 }
 
+/** An instant to the minute, for a narrow place, with the full value for a title (`instantShort`). */
+export function instantShort(v: unknown): { text: string; full: string } | null {
+  return shortInstant(v, getTime().zone, fmt.locale);
+}
+
 export function formatDate(s: unknown): string {
   return fmt.date(s);
 }
@@ -171,8 +177,12 @@ export function plainText(
   }
 }
 
-/** Download text as a file; used by the CSV export. */
-export function download(name: string, text: string, type = "text/csv;charset=utf-8") {
+/**
+ * Download text as a file; used by the CSV export. The answer is whether the file reaches the
+ * person: inside the phone host app, which saves no file yet, the click is stopped with a notice
+ * (`host/downloads.ts`) and the answer is `false`, so that the caller reports no success.
+ */
+export function download(name: string, text: string, type = "text/csv;charset=utf-8"): boolean {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement("a");
   a.href = url;
@@ -181,6 +191,7 @@ export function download(name: string, text: string, type = "text/csv;charset=ut
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return hostSavesFiles();
 }
 
 export function csvCell(s: string): string {

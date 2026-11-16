@@ -22,6 +22,18 @@ description = "Yhteyshenkilön sähköpostiosoite"
 label = "Odotettu tuotto"
 description = "Odotettu tuotto valuutan pienimmässä yksikössä"
 
+[labels.fi.model.lead.field.party_id]
+label = "Asiakas"
+description = "Asiakas: yhteystieto, jolle liidistä tehty tarjous laaditaan"
+
+[labels.fi.model.lead.field.expected_close]
+label = "Arvioitu päättyminen"
+description = "Päivä, jona kaupan odotetaan toteutuvan (VVVV-KK-PP)"
+
+[labels.fi.model.lead.field.lost_reason]
+label = "Menetyksen syy"
+description = "Miksi myyntimahdollisuus menetettiin"
+
 [labels.fi.model.lead.field.stage]
 label = "Vaihe"
 description = "Myyntiputken vaihe: uusi, kvalifioitu, voitettu tai hävitty"
