@@ -243,3 +243,22 @@ fn dry_run_text_is_read_without_regard_to_case_and_unknown_text_is_refused() {
     );
     assert_eq!((out["written"].as_bool(), s.on_hand()), (Some(true), 40));
 }
+
+#[test]
+fn a_count_too_large_for_the_difference_is_refused_in_words() {
+    let s = shelf();
+    s.moved(46, false);
+    assert_eq!(s.on_hand(), -10);
+    let n = s.moves().len();
+    for counted in [i64::MAX, 9_007_199_254_740_992] {
+        let e = run(
+            &s.app,
+            &s.keeper,
+            "stock_count.apply",
+            json!({"item": s.item, "counted": counted}),
+        )
+        .unwrap_err();
+        assert!(e.contains("too large"), "{counted}: {e}");
+    }
+    assert_eq!((s.on_hand(), s.moves().len()), (-10, n));
+}

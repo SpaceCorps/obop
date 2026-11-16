@@ -20,6 +20,8 @@ use std::sync::{Arc, Weak};
 const MODEL: &str = "stock_count";
 /// The group of `inventory_move.validate`.
 const GROUP: &str = "inventory.manager";
+/// The largest count: the largest whole number a JSON client reads exactly (2^53 - 1).
+const MAX_COUNT: i64 = 9_007_199_254_740_991;
 const DRY_RUN_WORDS: &str =
     "dry_run must be true or false (also yes, no, 1 or 0); nothing was counted";
 
@@ -122,7 +124,10 @@ pub fn apply(
         );
     }
     let before = int(&row["quantity"]);
-    let difference = counted - before;
+    let difference = counted
+        .checked_sub(before)
+        .filter(|_| counted <= MAX_COUNT)
+        .ok_or_else(|| format!("counted is too large: a count may be at most {MAX_COUNT} units"))?;
     let mut out = Counted {
         before,
         difference,
