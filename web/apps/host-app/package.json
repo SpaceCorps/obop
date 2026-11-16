@@ -15,7 +15,11 @@
     "android:build:release": "node scripts/gradle.mjs assembleRelease",
     "android:gate": "node scripts/gate.mjs",
     "ios:prebuild": "expo prebuild --platform ios --no-install",
-    "emulator:check": "node scripts/emulator/check.mjs"
+    "ios:pods": "node scripts/ios/xcode.mjs pods",
+    "ios:build:simulator": "node scripts/ios/xcode.mjs build-simulator",
+    "ios:gate": "node scripts/ios/gate.mjs",
+    "emulator:check": "node scripts/emulator/check.mjs",
+    "simulator:drive": "node scripts/simulator/drive.mjs"
   },
   "dependencies": {
     "@obop/host-bridge": "workspace:*",
