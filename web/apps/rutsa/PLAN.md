@@ -43,7 +43,7 @@ except those that start with `config/` or `scripts/`.
 - [x] A1 `feat(rutsa): app package on Expo SDK 58`: `package.json` (`@obop/rutsa`, Apache-2.0,
       only the packages the skeleton uses), `tsconfig.json`, `vite.config.ts`, `.gitignore`,
       `index.ts`, `App.tsx` showing "Rutsa", `pnpm-lock.yaml`
-- [ ] A2 `feat(rutsa): app config and placeholder identity`: `config/identity.ts` (placeholder id
+- [x] A2 `feat(rutsa): app config and placeholder identity`: `config/identity.ts` (placeholder id
       `org.obop.rutsa`, marked like `org.obop.mileage`; version), `config/native-texts.ts` (the
       texts the system shows: the name under the icon; the text of the iOS location dialog comes
       in C2), `config/ios.ts` (`iosBundleId`: `OBOP_IOS_BUNDLE_ID` for a test build signed with a
