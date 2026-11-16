@@ -112,3 +112,21 @@ test.describe("field inputs", () => {
     await expect(page.getByRole("row", { name: new RegExp(title) })).toContainText("1 h 30");
   });
 });
+
+test.describe("pickers on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("every option of a picker is 44 px to tap", async ({ page, signIn, uid }) => {
+    await signIn("root", "/sales/sale_order?view=list&id=new");
+    const party = page.getByRole("combobox", { name: "Customer" });
+    await party.click();
+    await party.fill(uid("Zzz Neu"));
+    const options = page.getByRole("listbox", { name: "Customer options" }).getByRole("option");
+    await expect(options.first()).toBeVisible();
+    const heights = await options.evaluateAll((els) =>
+      els.map((e) => Math.round(e.getBoundingClientRect().height)),
+    );
+    expect(heights.length).toBeGreaterThan(0);
+    for (const h of heights) expect(h).toBeGreaterThanOrEqual(44);
+  });
+});
