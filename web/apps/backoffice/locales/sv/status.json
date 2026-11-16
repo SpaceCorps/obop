@@ -2635,5 +2635,9 @@
   "Production finished; no stock moved (the order has no location or components)": "machine-drafted",
   "Stock is {count}: another move changed it meanwhile. Count again.": "machine-drafted",
   "The stock is set to the counted figure now; the difference is booked as a stock count move.": "machine-drafted",
-  "This invoice is not in the ledger yet, so there is no receivable to pay. Choose the account the payment goes to, such as revenue.": "machine-drafted"
+  "This invoice is not in the ledger yet, so there is no receivable to pay. Choose the account the payment goes to, such as revenue.": "machine-drafted",
+  "This app": "machine-drafted",
+  "Downloads are not available in the app yet.": "machine-drafted",
+  "Copy the codes or write them down.": "machine-drafted",
+  "Sign-in with Microsoft is not available in this app yet. To sign in that way, use your browser.": "machine-drafted"
 }

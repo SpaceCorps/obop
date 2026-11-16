@@ -77,7 +77,8 @@ export function ConnectionDetail({ id, onClose }: { id: string; onClose: () => v
     if (r.kind === "error") return setMessage({ tone: "danger", text: serverMessage(r.message) });
     const result = parseJson<Record<string, unknown>>((r.value as { result?: string }).result, {});
     if (typeof result.csv === "string") {
-      downloadText(String(result.filename ?? "export.csv"), result.csv);
+      // Inside the phone host app no file was saved, and the app's notice has said so.
+      if (!downloadText(String(result.filename ?? "export.csv"), result.csv)) return;
       return setMessage({
         tone: "success",
         text: t("The file was downloaded: {count, plural, one {# record} other {# records}}.", {

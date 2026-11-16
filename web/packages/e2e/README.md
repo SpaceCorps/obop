@@ -50,6 +50,7 @@ HTML report goes to `playwright-report/`. `OBOP_E2E_KEEP=1` keeps the temp direc
 - `support/fixtures.ts`: `signIn(user)` (API login, then open the app), `api` (REST client), `scratchModule`,
   and an automatic guard that fails any test with a page error or console error. Chrome logs every 4xx/5xx
   response as a console error, so a test that provokes one on purpose declares it with `allowHttpErrors(400)`.
+- `support/host.ts` stands in for the phone host app (`web/apps/host-app`) in `tests/host.spec.ts`: the user agent ends in the host's token, the page's messages are answered in Node by `createHostBridge` of `@obop/host-bridge`, and only the native handlers are stand-ins.
 - Drag and drop: a pointer drag needs the card and the drop target on screen together, so tests drop on a
   column header. See the "tall board" test in `tests/kanban.spec.ts` for the synthetic-event variant.
 - Redirects back to a client: `page.route()` is never called for a request that is a redirect target (Playwright

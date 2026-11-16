@@ -2635,5 +2635,9 @@
   "Could not copy. Select the token and copy it yourself.": "Kopiointi ei onnistunut. Valitse tunnus ja kopioi se itse.",
   "You have no permission groups to give to a token.": "Sinulla ei ole käyttöoikeusryhmiä, joita voisit antaa tunnukselle.",
   "Agent token issued": "Agenttitunnus annettu",
-  "Agent token revoked": "Agenttitunnus peruutettu"
+  "Agent token revoked": "Agenttitunnus peruutettu",
+  "This app": "Tämä sovellus",
+  "Downloads are not available in the app yet.": "Lataukset eivät ole vielä käytettävissä sovelluksessa.",
+  "Copy the codes or write them down.": "Kopioi koodit tai kirjoita ne muistiin.",
+  "Sign-in with Microsoft is not available in this app yet. To sign in that way, use your browser.": "Kirjautuminen Microsoftilla ei ole vielä käytettävissä tässä sovelluksessa. Kirjaudu sillä tavalla selaimessa."
 }

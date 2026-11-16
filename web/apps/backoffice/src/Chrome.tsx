@@ -31,6 +31,7 @@ import { appColor } from "./theme.ts";
 import { modulesHref } from "./modules/route.ts";
 import { href, nav, type Route } from "./route.ts";
 import { appHomeOf } from "./extensions.ts";
+import { hostMenuItems } from "./host/menu.ts";
 import "./registrations.ts";
 import { productDocsVisible } from "./productDocs.ts";
 import { actionTitle, appTitle, modelTitle } from "./labels.ts";
@@ -211,6 +212,7 @@ export function TopBar(props: {
             ...(docs
               ? [{ label: t("Brand book"), icon: "sparkle" as const, onSelect: props.onBrand }]
               : []),
+            ...hostMenuItems(),
             "separator",
             { label: t("Sign out"), icon: "log-out", onSelect: props.onSignOut },
           ]}

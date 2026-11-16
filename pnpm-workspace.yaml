@@ -13,3 +13,12 @@ minimumReleaseAgeStrict: true
 # dependency and works without it, so the script stays off.
 allowBuilds:
   esbuild: false
+
+# Two one-line fixes of iOS sources, needed by the host app's iOS build (docs/spec/mobile-host.md
+# 12.8). expo-modules-core: Xcode 27.2's Swift compiler crashes on `let error as any Error` in a
+# `switch consume`; the pattern is the one 58.0.30 ships. react-native-webview: under the new
+# architecture `clearCache` is a no-op on iOS ("android only"); the patch hands it to the view,
+# whose method exists. Drop each patch when the pinned version carries the fix.
+patchedDependencies:
+  expo-modules-core@58.0.23: patches/expo-modules-core@58.0.23.patch
+  react-native-webview@14.0.1: patches/react-native-webview@14.0.1.patch
