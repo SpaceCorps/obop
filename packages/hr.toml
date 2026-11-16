@@ -13,7 +13,7 @@ categories = ["people"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "hr_employee"
-changelog = "An employee can be linked to their obop user name, so leave that HR files for them is theirs (they see it: Requested by is filled in from the employee). A department head can be an employee. The back office gains an org chart, and a new leave request starts on the person's own employee record."
+changelog = "An employee can be linked to their obop user name, so leave that HR files for them is theirs (they see it: Requested by is filled in from the employee). A department head can be an employee. The back office gains an org chart, and a new leave request starts on the person's own employee record. Changed: someone without hr.manager can no longer file leave for a colleague who has a login (the request would be the colleague's, out of their sight); hr.manager files it."
 
 [[model]]
 name = "hr_department"
