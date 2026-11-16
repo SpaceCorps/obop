@@ -242,4 +242,15 @@
     flex-basis: 100%;
     padding-inline-start: calc(2.75rem - 0.75rem - var(--space-2) + var(--space-3));
   }
+  /* Tap targets of 44 px: the All tasks link, a milestone's name and the new task box. */
+  .prj-all,
+  .prj-stone-name {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: 2.75rem;
+  }
+  .prj-panel .prj-add input {
+    min-block-size: 2.75rem;
+  }
 }

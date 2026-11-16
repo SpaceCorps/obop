@@ -82,6 +82,14 @@ test.describe("on a phone", () => {
       const box = await tick.boundingBox();
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+      // The All tasks link and the new task box are 44 px high too.
+      for (const target of [
+        panel.getByRole("link", { name: "All tasks" }),
+        panel.locator(".prj-add input"),
+      ]) {
+        await expect(target).toBeVisible();
+        expect((await target.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+      }
       // A tap near the corner of the target, outside the box itself, still ticks the task.
       await tick.tap({ position: { x: 4, y: 4 } });
       await expect(panel).toContainText("1 of 1 task done");

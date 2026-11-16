@@ -134,6 +134,16 @@
   text-align: center;
 }
 @media (max-width: 47.99rem) {
+  /* Tap targets of 44 px: Mine / Everyone and the All jobs link. */
+  .fs-day-head .switcher button {
+    min-block-size: 2.75rem;
+  }
+  .fs-day-foot a {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+    padding-inline: var(--space-3);
+  }
   .fs-job {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);

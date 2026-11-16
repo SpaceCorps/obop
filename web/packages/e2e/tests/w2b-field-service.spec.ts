@@ -70,6 +70,14 @@ test.describe("Field Service: a technician's day on a phone", () => {
         await expect(page.getByRole("heading", { name: "My day" })).toBeVisible();
         const card = page.locator(".fs-job", { hasText: name });
         await expect(card).toContainText("09:00");
+        // On a phone, Mine / Everyone and the All jobs link are 44 px high.
+        for (const target of [
+          page.getByRole("radiogroup", { name: "Whose jobs" }).getByRole("radio", { name: "Mine" }),
+          page.getByRole("link", { name: "All jobs" }),
+        ]) {
+          await expect(target).toBeVisible();
+          expect((await target.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+        }
         await expect(card).toContainText("1 h 30");
         await expect(
           card.getByRole("link", { name: /Hafenstrasse 1, 20457 Hamburg/ }),
