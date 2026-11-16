@@ -2698,5 +2698,9 @@
   "Vehicle": "Vehículo",
   "Vehicles": "Vehículos",
   "Who reports to whom": "Quién reporta a quién",
-  "Who reports to whom.": "Quién reporta a quién."
+  "Who reports to whom.": "Quién reporta a quién.",
+  "section\u0004Trip": "Trayecto",
+  "section\u0004Review": "Revisión",
+  "section\u0004Discard": "Descarte",
+  "section\u0004Recorded by the app": "Registrado por la aplicación"
 }

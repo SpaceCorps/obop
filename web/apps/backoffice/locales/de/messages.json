@@ -2698,5 +2698,9 @@
   "Vehicle": "Fahrzeug",
   "Vehicles": "Fahrzeuge",
   "Who reports to whom": "Wer an wen berichtet",
-  "Who reports to whom.": "Wer an wen berichtet."
+  "Who reports to whom.": "Wer an wen berichtet.",
+  "section\u0004Trip": "Fahrt",
+  "section\u0004Review": "Prüfung",
+  "section\u0004Discard": "Verwerfen",
+  "section\u0004Recorded by the app": "Von der App erfasst"
 }

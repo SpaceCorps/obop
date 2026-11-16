@@ -112,6 +112,21 @@ describe("sections", () => {
     expect(paid.map((x) => x.label)).toEqual(["Claim", "Payment", "Notes"]);
   });
 
+  it("translates a section the module names, falling back to its English label", async () => {
+    provideCatalogue("de", { "section\u0004Review": "Prüfung" });
+    await setLanguage("de");
+    const m = model("trip", [f("name", "text"), f("note", "text")], {
+      ui: {
+        section: [
+          { label: "Review", fields: ["name"] },
+          { label: "Unknown", fields: ["note"] },
+        ],
+      },
+    });
+    const s = sectionsOf(m, m.fields, { creating: true, row: null, filled: () => false });
+    expect(s.map((x) => x.label)).toEqual(["Prüfung", "Unknown"]);
+  });
+
   it("puts the fields an action asks for under More on a new record", () => {
     const reject: Command = {
       id: "trip.reject",

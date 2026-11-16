@@ -2698,5 +2698,9 @@
   "Vehicle": "Pojazd",
   "Vehicles": "Pojazdy",
   "Who reports to whom": "Kto komu podlega",
-  "Who reports to whom.": "Kto komu podlega."
+  "Who reports to whom.": "Kto komu podlega.",
+  "section\u0004Trip": "Przejazd",
+  "section\u0004Review": "Weryfikacja",
+  "section\u0004Discard": "Odrzucenie",
+  "section\u0004Recorded by the app": "Zapisane przez aplikację"
 }

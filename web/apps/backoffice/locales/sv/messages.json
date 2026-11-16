@@ -2698,5 +2698,9 @@
   "Vehicle": "Fordon",
   "Vehicles": "Fordon",
   "Who reports to whom": "Vem rapporterar till vem",
-  "Who reports to whom.": "Vem rapporterar till vem."
+  "Who reports to whom.": "Vem rapporterar till vem.",
+  "section\u0004Trip": "Resa",
+  "section\u0004Review": "Granskning",
+  "section\u0004Discard": "Kassering",
+  "section\u0004Recorded by the app": "Registrerat av appen"
 }

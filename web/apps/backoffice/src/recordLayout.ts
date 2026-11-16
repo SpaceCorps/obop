@@ -3,7 +3,7 @@
 // functions over `/api/meta` and a row, so they are tested without a browser. Each reads the D95
 // hint first (`ui.section`, `guard`, `children`, `readonly`, action `ui`) and falls back to a
 // heuristic, because no server sends the hints yet.
-import { t } from "@obop/ui";
+import { msgx, t, tx } from "@obop/ui";
 import { fixedOnceCreated, type Command, type FieldMeta, type ModelMeta, type Row } from "./api.ts";
 import { isEmpty, optionLabel } from "./format.ts";
 import { actionTitle, guardMessage } from "./labels.ts";
@@ -95,6 +95,18 @@ export type SectionCtx = {
 };
 
 /**
+ * The section labels of the built-in modules (Mileage), message ids in the context `section`, so
+ * the catalogue has them; `sectionsOf` shows every manifest section with `tx("section", label)`
+ * and a label without a translation stays English.
+ */
+export const BUILT_IN_SECTIONS = [
+  msgx("section", "Trip"),
+  msgx("section", "Review"),
+  msgx("section", "Discard"),
+  msgx("section", "Recorded by the app"),
+];
+
+/**
  * The sections of the form, in order. `ui.section` hints come first (a section with `show_in`
  * only in those states); every field they do not name goes to the fallback groups: Main (title,
  * refs, selects, dates, required), Amounts (money), groups by name prefix (site_, requester_,
@@ -119,7 +131,7 @@ export function sectionsOf(model: ModelMeta, fields: FieldMeta[], c: SectionCtx)
     if (fs.length === 0) continue;
     out.push({
       key: `hint-${i}`,
-      label: s.label,
+      label: tx("section", s.label),
       fields: fs,
       collapsed: !!s.collapsed || (i > 0 && closedWhenEmpty(fs)),
       personal: personal(fs),
