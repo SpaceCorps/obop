@@ -48,6 +48,13 @@ describe("the kinds of the security log", () => {
     }
   });
 
+  it("lists the kinds of the first-administrator set-up and has words for each", () => {
+    for (const k of ["setup_open", "setup_refused", "setup_complete"]) {
+      expect(listed, k).toContain(k);
+      expect(EVENT_KINDS[k], `no label for ${k}`).toBeDefined();
+    }
+  });
+
   it("has words for every device kind", () => {
     const device = listed.filter((k) => k.startsWith("device_"));
     expect(device.length).toBeGreaterThanOrEqual(4);

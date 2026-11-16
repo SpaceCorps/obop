@@ -59,6 +59,13 @@ HTML report goes to `playwright-report/`. `OBOP_E2E_KEEP=1` keeps the temp direc
   A route-based version passes on a desktop Chrome, which reloads its error page, and times out in CI's headless shell.
 - `test.fixme` marks a known application bug with its reproduction in a comment; fix the app, then remove it.
 
+## The set-up page of an empty instance
+
+`tests/setup.spec.ts` (D96) starts an instance of its own with an empty database and no `obop admin create`, with
+`OBOP_SECRET_KEY` set and the default two-factor policy (it removes `OBOP_REQUIRE_MFA_FOR_ADMINS`), reads the set-up
+code from the server's standard error, creates the first administrator on the page at 390 px, enrols an authenticator
+app and reaches the launcher; a second visit shows the sign-in form. The server is stopped at the end of the spec.
+
 ## Languages
 
 The suite pins English: the `language` option (default `en`) stores `obop-lang` before any page script

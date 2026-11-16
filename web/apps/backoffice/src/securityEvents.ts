@@ -55,4 +55,7 @@ export const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   mileage_discard_stuck: msg("Stuck trip discarded"),
   brand_configured: msg("The identity of the instance changed"),
   brand_cleared: msg("The identity of the instance was removed"),
+  setup_open: msg("Set-up code printed"),
+  setup_refused: msg("Set-up refused"),
+  setup_complete: msg("First administrator created"),
 };
