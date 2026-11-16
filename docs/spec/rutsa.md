@@ -191,6 +191,16 @@ The system chooses the presentation; the app has no switch for it.
 | BR-22 | A trip being recorded shows as a Live Activity on iOS with the presentations of 5.6 (compact, expanded on a long press, lock screen, minimal), with the time, the distance and Stop and Pause buttons; on Android the ongoing notification shows the same | Must for the release, after the first prototype |
 | BR-23 | The first prototype uses a minimal standard iOS look; the release uses the obop design system (the `ui-native` tokens and components) with Liquid Glass where the iOS version has it and a plain fallback elsewhere | Must for the release |
 | BR-24 | The app runs on iOS 17 and later (the first version with buttons in a Live Activity) | Must (proposed minimum) |
+| BR-25 | The app learns from repeats: when the driver gives the same classification and purpose to trips between the same two places twice, it offers to propose them that way from then on; a learned rule only proposes (BR-4), and the driver can see and delete each rule | Should |
+| BR-26 | The driver can save named places (home, office, a customer) with a radius; proposals use them (home to office is commute, office to a customer is business); places stay on the phone | Should |
+| BR-27 | A trip can be classified without opening it: from the notification at its end (Business, Private) and by a swipe in the trip list (one direction business, the other private) | Should |
+| BR-28 | The driver can add a trip by hand afterwards (date, start and end address, kilometres, purpose); it is stored like a recorded trip but marked as manual, and the report and the logbook show that mark | Must |
+| BR-29 | A home screen widget shows today's and this month's business kilometres and the recording state, with Start and Stop | Should |
+| BR-30 | Siri and Shortcuts can start and stop a recording and say this month's business kilometres | Could |
+| BR-31 | Odometer: the driver enters the reading at the start of the year (and when a vehicle is added); the reading at the start and end of each trip is computed from it and the trip distances; the app reminds the driver to enter the real reading (monthly and at the end of the year) and shows the difference to the computed one, which the driver accepts or explains in a note. A strict mode, off by default, asks for the reading at each trip. A missing reading never blocks or stops a recording | Should (needed for a company car, BR-12) |
+| BR-32 | A report for a period is made on the phone as a PDF: page 1 is a summary (period, driver, vehicle, number of business trips, kilometres, rate, amount); each business trip follows as a block with date, start and end time, start and end address, kilometres, duration, purpose and a map of the route, which the driver can switch off. Private trips never appear in it | Must |
+| BR-33 | The report has two variants: an employee's claim to the employer (no VAT) and a sole trader's document (VAT, the F-skatt statement, the organisation number) | Must for the employee; the sole trader later (11.1) |
+| BR-34 | The driver keeps a list of recipients (name, email, company) and sends the report from the phone's own mail app, with the PDF and a CSV of the same trips (one row per trip) attached; the app sends nothing itself | Must |
 
 ## 7. User stories
 
@@ -201,7 +211,7 @@ Each story has acceptance criteria (AC). "Built" marks what exists today.
 - AC2: A walk, a bus or a train ride is not recorded as a car trip.
 - AC3: Recording is visible while it runs; I can pause it; it only runs in my working hours.
 
-**US-2 Manual fallback.** As a driver, I can start and stop a trip by hand, and I can choose manual recording instead of automatic. *(Built in the backend; the app is on branches.)*
+**US-2 Manual fallback.** As a driver, I can start and stop a trip by hand, and I can choose manual recording instead of automatic. *(Built: the backend, and the app in `web/apps/mileage-app` on main.)*
 
 **US-3 Proposed classification.** As a driver, I want each trip proposed as business, private or commute with a purpose, so that I only have to confirm.
 - AC1: A trip ending near a calendar event's location around its start time is proposed as business, with the event title as purpose.
@@ -240,6 +250,25 @@ Each story has acceptance criteria (AC). "Built" marks what exists today.
 **US-12 Import.** As a driver, I can import past drives from Google Timeline and classify them. *(Built as `obop import timeline`.)*
 
 **US-13 Lost phone.** As an administrator, I revoke a lost phone; it can no longer send. *(Device revocation built, D64 amendment.)*
+
+**US-14 Less tapping.** As a driver, I want the app to learn my usual trips, so that after a week I mostly just confirm.
+- AC1: After I classify two trips between the same two places the same way, the app offers a rule; if I accept, the next such trip is proposed that way. (BR-25)
+- AC2: I can save home, office and customers as places, and a trip from home to the office is proposed as commute. (BR-26)
+- AC3: I can mark a trip business or private from the notification at its end, or by a swipe in the list, without opening it. (BR-27)
+- AC4: I can see and delete every learned rule and place.
+
+**US-15 Odometer.** As a driver of a company car, I want the odometer in my logbook without writing it down at every trip.
+- AC1: I enter the reading once at the start of the year; each trip then shows a computed reading at its start and end. (BR-31)
+- AC2: Once a month and at the end of the year the app asks for the real reading and shows the difference; I accept it or add a note.
+- AC3: With strict mode on, the app asks for the reading at each trip; with it off it never asks per trip.
+- AC4: A trip is recorded even when no reading was entered.
+
+**US-16 Sending the report.** As a driver, I want to send my month's trips to my employer or my accountant in a few taps.
+- AC1: I pick a period and a recipient from my list; the phone's mail app opens with the PDF and the CSV attached and the recipient filled in. (BR-32, BR-34)
+- AC2: The PDF starts with a summary page and then one block per business trip; I can switch the maps off.
+- AC3: No private trip is in the PDF or the CSV.
+- AC4: A trip I added by hand is marked as manual in both. (BR-28)
+- AC5: As a sole trader, I can choose the variant with VAT and the F-skatt statement. (BR-33)
 
 ## 8. Countries and rates
 
