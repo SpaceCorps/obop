@@ -1,7 +1,7 @@
 # Rutsa: product requirements (PROPOSED)
 
 - **Status:** Draft 0.2. PROPOSED. This is the product view of Rutsa (working name, 1.2), the phone app built on the `mileage` module: the problem, who it is for, what it must do, how it competes and what is still to decide. The technical design of the `mileage` package and the app stays in [mobile.md](mobile.md), which this document does not replace. Nothing here is ratified unless it cites an owner ruling (OR-n) in [DECISIONS.md](../DECISIONS.md). Section 11.1 lists product positions discussed with the owner on 2026-11-10 to 2026-11-12; they are relayed, not quoted, unconfirmed, and PROPOSED until each is recorded as an owner ruling (OR-n).
-- **Date:** 2026-11-12 (first draft 2026-11-11)
+- **Date:** 2026-11-16 (first draft 2026-11-11; 1.2 added 2026-11-14)
 - **Scope:** Rutsa as a product built on obop and its `mileage` module: automatic recording of business trips, sorting them into business and private, approval, turning approved kilometres into money for the employee, and the logbook a tax authority accepts. Country rules are data, not code.
 
 **Reading notes.** Decisions are cited by ID and owner rulings as OR-n. Facts are marked as in [mobile.md](mobile.md): **verified** means a page was read on the date above; **search** means it comes from a search result summary and the page itself was not opened; **general knowledge** means no source was checked and it must be verified before anything depends on it. Nothing here is legal or tax advice. Prices of other products come from third-party comparison sites, disagree with each other and must be checked on each vendor's site.
@@ -121,6 +121,8 @@ AI is optional and only for unclear trips (for example, proposing a purpose text
 
 This keeps the built rule that the server computes the distance and never trusts the phone's number ([mobile.md](mobile.md) 5.4: a prior app once recorded a trip of 8,666 km), but only for trips the employer pays for. The retention job that deletes raw points is not built (ISSUES M5).
 
+**Open: the company car.** The table and BR-5 fit the allowance for an own car, where only business trips matter. For a company car the Swedish logbook lists every trip, private ones without a purpose, because it shows the split between business and private use (search: Företagarna, Fortnox; Skatteverket's own page not read). 2.1 and US-9 AC1 describe that logbook, and with BR-5 as written the server cannot produce it. What the phone sends for the private trips of a company car (for example a row with date and kilometres but no points, or only a total per period) is not decided; it is a privacy position for the owner, and until it is ruled BR-5 stands as written.
+
 [mobile.md](mobile.md) 5.6 and its open question 4 (15) still treat what happens to private trips as open; mobile.md is out of step with this section until the owner rules on it.
 
 ### 5.5 Technology
@@ -129,7 +131,7 @@ The stack is set in [mobile.md](mobile.md) and [CLAUDE.md](../../CLAUDE.md); thi
 
 | Part | Technology |
 |---|---|
-| Phone app | React Native with Expo (SDK 57, or 58 if it passes the cooldown, OR-34 e), TypeScript, `expo prebuild`; iOS built with Xcode on a Mac. Started through `vp run` (the mobile-toolchain exception, OR-34 b); pnpm only |
+| Phone app | React Native with Expo SDK 58 (OR-34 e; [mobile.md](mobile.md) 8.7), TypeScript, `expo prebuild`; iOS built with Xcode on a Mac. Started through `vp run` (the mobile-toolchain exception, OR-34 b); pnpm only |
 | Calls to obop | `@obop/client` (types generated from the OpenAPI document) and the mobile OAuth sign-in (D64 amendment) |
 | Trip detection | An Expo native module of our own (Swift, Kotlin) for motion and Bluetooth; `expo-location` for GPS while driving |
 | Distance rules | `@obop/trip-core`, shared test vectors with the server |
@@ -227,7 +229,7 @@ Each story has acceptance criteria (AC). "Built" marks what exists today.
 **US-8 Finance.** As finance, I want approved mileage to arrive as normal expense claims I can pay and book as usual.
 
 **US-9 Swedish logbook.** As a driver or finance, I want the month's and the year's logbook in a form Skatteverket accepts.
-- AC1: The export holds, per trip, the date, start and end address, kilometres and purpose (purpose not needed for private trips), and for a company car the odometer at the start and end of each trip and of the year, the registration number and the year.
+- AC1: The export holds, per trip, the date, start and end address, kilometres and purpose (purpose not needed for private trips), and for a company car the odometer at the start and end of each trip and of the year, the registration number and the year. How the private trips of a company car reach the export is open (5.4, "Open: the company car").
 
 **US-10 Company car.** As a driver of a company car, I want trips linked to the car I was given in `fleet`.
 
