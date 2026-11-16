@@ -262,3 +262,26 @@ fn a_count_too_large_for_the_difference_is_refused_in_words() {
     }
     assert_eq!((s.on_hand(), s.moves().len()), (-10, n));
 }
+
+#[test]
+fn a_count_where_the_product_is_kept_in_lots_is_refused_before_any_move_is_made() {
+    let s = shelf();
+    ok(
+        &s.app,
+        &s.keeper,
+        "inventory_item.create",
+        json!({"product_id": s.product, "location_id": s.shelf, "lot": "L-1"}),
+    );
+    let n = s.moves().len();
+    let e = run(
+        &s.app,
+        &s.keeper,
+        "stock_count.apply",
+        json!({"item": s.item, "counted": 40}),
+    )
+    .unwrap_err();
+    assert!(e.contains("lot"), "{e}");
+    assert!(!e.contains("effect"), "{e}");
+    // No cancelled move is left behind.
+    assert_eq!((s.on_hand(), s.moves().len()), (36, n));
+}

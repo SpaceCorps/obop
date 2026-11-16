@@ -97,7 +97,9 @@ fn text(v: &J, k: &str) -> String {
     v[k].as_str().unwrap_or_default().to_string()
 }
 
-/// Apply a count as `p`. Every refusal is in words and leaves nothing behind.
+/// Apply a count as `p`. Every refusal is in words. A refusal before the move is made leaves
+/// nothing behind; a move that is made and then cannot be validated is cancelled, so a cancelled
+/// stock count move remains and the stock is unchanged.
 pub fn apply(
     env: Env<'_>,
     p: &Principal,
@@ -135,10 +137,25 @@ pub fn apply(
         move_id: None,
         notes: Vec::new(),
     };
-    if difference == 0 || dry_run {
-        if dry_run {
-            out.quantity = counted;
-        }
+    if difference == 0 {
+        return Ok(out);
+    }
+    // A stock move carries no lot, so validating it must find exactly one item of this product
+    // at this location (docs/ISSUES.md Q5); say so before a move is made.
+    let same = call(
+        env,
+        p,
+        "inventory_item.search",
+        json!({"filter": [
+            {"field": "product_id", "op": "eq", "value": product},
+            {"field": "location_id", "op": "eq", "value": location}
+        ], "limit": 2}),
+    )?;
+    if same["rows"].as_array().is_some_and(|r| r.len() > 1) {
+        return Err("this product is kept in several lots at this location, and a stock count cannot book one lot yet (a stock move carries no lot); nothing was counted. Move the lot's stock with a stock move instead".into());
+    }
+    if dry_run {
+        out.quantity = counted;
         return Ok(out);
     }
     let mut mv = json!({
