@@ -105,15 +105,15 @@ done = "Klar"
 cancelled = "Annullerad"
 
 [labels.sv.model.field_service_job.action.depart]
-label = "Åk iväg"
+label = "Jag åker nu"
 description = "Teknikern är på väg"
 
 [labels.sv.model.field_service_job.action.start]
-label = "Starta"
+label = "Börja arbeta"
 description = "Teknikern har kommit fram och påbörjat arbetet"
 
 [labels.sv.model.field_service_job.action.complete]
-label = "Slutför"
+label = "Slutför uppdraget"
 description = "Avsluta uppdraget; om signatur krävs, registrera först vem som signerat och när"
 
 [labels.sv.model.field_service_job.action.cancel]

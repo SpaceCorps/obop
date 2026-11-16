@@ -2050,7 +2050,7 @@ test.describe("crawlers and agents", () => {
     expect(sv).toContain(messages.sv.apps.store.purposeEnglish);
     expect(sv).toContain("Fakturering");
     expect(app).toContain("### Models");
-    expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.5.0`);
+    expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.5.1`);
     // The page breaks a table token after an underscore or a dot with <wbr>; the copy, and
     // llms-full.txt which agents read, keep the plain token in backticks and no HTML tag.
     expect(app).toContain("`requester_email`");

@@ -105,15 +105,15 @@ done = "Erledigt"
 cancelled = "Storniert"
 
 [labels.de.model.field_service_job.action.depart]
-label = "Losfahren"
+label = "Ich bin unterwegs"
 description = "Der Techniker ist unterwegs"
 
 [labels.de.model.field_service_job.action.start]
-label = "Starten"
+label = "Arbeit beginnen"
 description = "Der Techniker ist angekommen und hat die Arbeit begonnen"
 
 [labels.de.model.field_service_job.action.complete]
-label = "Erledigen"
+label = "Einsatz abschließen"
 description = "Den Einsatz abschließen; ist eine Unterschrift erforderlich, zuerst Unterzeichnet von und Unterzeichnet am erfassen"
 
 [labels.de.model.field_service_job.action.cancel]

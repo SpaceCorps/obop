@@ -325,15 +325,16 @@ export function FormBody(p: FormBodyProps) {
             </section>
           );
         })}
+        {/* An app's sections see the record being edited too (useFieldForm: peek and fill). */}
+        <SectionSlot
+          model={model}
+          fields={fields}
+          row={row}
+          creating={creating}
+          canEdit={canEdit}
+          busy={busy}
+        />
       </FieldFormProvider>
-      <SectionSlot
-        model={model}
-        fields={fields}
-        row={row}
-        creating={creating}
-        canEdit={canEdit}
-        busy={busy}
-      />
       <LinesSlot
         model={model}
         fields={fields}
