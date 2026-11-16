@@ -196,7 +196,7 @@ description = "Foto de la persona (PNG, JPEG, WebP o GIF; los metadatos como la 
 
 [labels.es.model.hr_leave_request.field.requested_by]
 label = "Solicitada por"
-description = "Nombre de usuario al que pertenece la solicitud, fijado por el servidor: el usuario de obop del empleado si tiene uno; si no, quien presenta la solicitud. Solo esa persona y hr.manager ven la solicitud"
+description = "Nombre de usuario al que pertenece la solicitud, fijado por el servidor si se deja vacío (y de nuevo cuando un cambio pasa la solicitud a otro empleado): el usuario de obop del empleado si tiene uno; si no, quien presenta la solicitud. Solo esa persona y hr.manager ven la solicitud"
 
 [labels.es.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "El último día de la ausencia es anterior a su primer día"

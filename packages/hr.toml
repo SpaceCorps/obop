@@ -370,7 +370,7 @@ write_group = "hr.user"
 
   [[model.field]]
   name = "requested_by"
-  description = "User name the request belongs to, set by the server when left out: the employee's obop user when the employee has one, else the person who files the request. Only they and hr.manager see the request"
+  description = "User name the request belongs to, set by the server when left out (and again when an update moves the request to another employee): the employee's obop user when the employee has one, else the person who files the request. Only they and hr.manager see the request"
   class = "internal"
   personal_data = true
   fill_from = "employee_id.user"

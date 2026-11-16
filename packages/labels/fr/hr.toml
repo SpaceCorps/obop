@@ -196,7 +196,7 @@ description = "Photo de la personne (PNG, JPEG, WebP ou GIF ; les métadonnées 
 
 [labels.fr.model.hr_leave_request.field.requested_by]
 label = "Demandé par"
-description = "Nom d’utilisateur auquel appartient la demande, fixé par le serveur : l’utilisateur obop de l’employé s’il en a un, sinon la personne qui dépose la demande. Seuls elle et hr.manager voient la demande"
+description = "Nom d’utilisateur auquel appartient la demande, fixé par le serveur s’il est laissé vide (et de nouveau quand une modification passe la demande à un autre employé) : l’utilisateur obop de l’employé s’il en a un, sinon la personne qui dépose la demande. Seuls elle et hr.manager voient la demande"
 
 [labels.fr.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Le dernier jour du congé est avant son premier jour"

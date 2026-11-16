@@ -196,7 +196,7 @@ description = "Henkilön valokuva (PNG, JPEG, WebP tai GIF; metatiedot, kuten si
 
 [labels.fi.model.hr_leave_request.field.requested_by]
 label = "Pyytäjä"
-description = "Käyttäjänimi, jolle pyyntö kuuluu, palvelimen asettama: työntekijän obop-käyttäjä, jos hänellä on sellainen, muuten pyynnön jättävä henkilö. Vain hän ja hr.manager näkevät pyynnön"
+description = "Käyttäjänimi, jolle pyyntö kuuluu, palvelimen asettama, kun se jätetään tyhjäksi (ja uudelleen, kun muutos siirtää pyynnön toiselle työntekijälle): työntekijän obop-käyttäjä, jos hänellä on sellainen, muuten pyynnön jättävä henkilö. Vain hän ja hr.manager näkevät pyynnön"
 
 [labels.fi.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Poissaolon viimeinen päivä on ennen sen ensimmäistä päivää"
