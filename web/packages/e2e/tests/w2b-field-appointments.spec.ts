@@ -63,19 +63,27 @@ test.describe("Appointments: book a free slot", () => {
         .click();
 
       const slots = page.getByRole("group", { name: "Free times" });
-      await expect(slots.getByRole("button", { name: "10:00" })).toBeDisabled();
-      await expect(slots.getByRole("button", { name: "10:30" })).toBeDisabled();
-      await expect(slots.getByRole("button", { name: "09:30" })).toBeEnabled();
+      await expect(slots.getByRole("button", { name: "10:00 AM" })).toBeDisabled();
+      await expect(slots.getByRole("button", { name: "10:30 AM" })).toBeDisabled();
+      await expect(slots.getByRole("button", { name: "09:30 AM" })).toBeEnabled();
 
       // A time that overlaps the booking is named before saving.
       await page.getByRole("textbox", { name: "Start", exact: true }).fill("10:15");
       await page.getByRole("textbox", { name: "End", exact: true }).fill("10:45");
       await expect(page.getByRole("alert").filter({ hasText: "Clashes with" })).toBeVisible();
 
+      // With an hour chosen, 09:30 is free but too short (it runs into 10:00): dashed, not struck
+      // through like the booked 10:00.
+      await page.getByRole("textbox", { name: "Start", exact: true }).fill("09:00");
+      await page.getByRole("textbox", { name: "End", exact: true }).fill("10:00");
+      await expect(slots.getByRole("button", { name: "09:30 AM" })).toHaveClass(/is-short/);
+      await expect(slots.getByRole("button", { name: "10:00 AM" })).toHaveClass(/is-booked/);
+      await expect(page.getByText(/Dashed: free, but too short for 60 minutes/)).toBeVisible();
+
       // A free slot fills Start and End and the clash is gone.
-      await slots.getByRole("button", { name: "11:00" }).click();
+      await slots.getByRole("button", { name: "11:00 AM" }).click();
       await expect(page.getByRole("textbox", { name: "Start", exact: true })).toHaveValue("11:00");
-      await expect(page.getByRole("textbox", { name: "End", exact: true })).toHaveValue("11:30");
+      await expect(page.getByRole("textbox", { name: "End", exact: true })).toHaveValue("12:00");
       await expect(page.getByRole("alert").filter({ hasText: "Clashes with" })).toHaveCount(0);
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
@@ -89,7 +97,7 @@ test.describe("Appointments: book a free slot", () => {
           });
           return r.rows.map((x: any) => [x.start_minute, x.end_minute, x.resource_id]);
         })
-        .toEqual([[660, 690, room.id]]);
+        .toEqual([[660, 720, room.id]]);
     });
   });
 });

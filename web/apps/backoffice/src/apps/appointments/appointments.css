@@ -26,7 +26,7 @@
 }
 .ap-slot-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
   gap: var(--space-2);
 }
 .ap-slot {
@@ -54,6 +54,17 @@
   color: var(--text-subtle);
   text-decoration: line-through;
   border-color: transparent;
+}
+/* Free, but the length chosen runs into a booking: not struck through, a dashed outline. */
+.ap-slot.is-short:disabled {
+  text-decoration: none;
+}
+.ap-slot.is-short:disabled:not(.is-chosen) {
+  background: var(--surface);
+  border: 1px dashed var(--border-control);
+}
+.ap-slots-legend {
+  margin: var(--space-2) 0 0;
 }
 .ap-slot.is-chosen {
   background: var(--accent-fill);

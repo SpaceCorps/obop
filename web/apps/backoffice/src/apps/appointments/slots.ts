@@ -7,7 +7,11 @@ const OPEN = 8 * 60;
 const CLOSE = 18 * 60;
 
 export type Booking = { id: string; title: string; start: number; end: number };
-export type Slot = { start: number; free: boolean };
+/**
+ * `free`: a booking of the chosen length fits there. `short`: the half hour itself is free, but the
+ * chosen length runs into a booking (or past midnight). `booked`: another booking covers it.
+ */
+export type Slot = { start: number; free: boolean; kind: "free" | "short" | "booked" };
 
 /** Whether `b` overlaps the time from `start` to `end` (touching ends do not overlap). */
 export const overlaps = (b: Booking, start: number, end: number): boolean =>
@@ -23,7 +27,23 @@ export function freeSlots(taken: readonly Booking[], length: number): Slot[] {
   }
   to = Math.min(to, 1440);
   const out: Slot[] = [];
-  for (let s = from; s + STEP <= to; s += STEP)
-    out.push({ start: s, free: s + len <= 1440 && !taken.some((b) => overlaps(b, s, s + len)) });
+  for (let s = from; s + STEP <= to; s += STEP) {
+    const free = s + len <= 1440 && !taken.some((b) => overlaps(b, s, s + len));
+    const booked = taken.some((b) => overlaps(b, s, s + STEP));
+    out.push({ start: s, free, kind: free ? "free" : booked ? "booked" : "short" });
+  }
   return out;
 }
+
+const clock = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "UTC",
+});
+
+/**
+ * A time of day in the browser's own format, the one the Start and End inputs show (`10:30` or
+ * `10:30 AM`), so the slots and the inputs of the form read alike.
+ */
+export const slotTime = (minutes: number): string =>
+  clock.format(new Date(Date.UTC(2000, 0, 1, Math.floor(minutes / 60), minutes % 60)));

@@ -9,9 +9,8 @@ import { search, type Row } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { RecordSectionProps } from "../../extensions.ts";
 import { formatDate, validDate } from "../../format.ts";
-import { clockText } from "../../inputs/display.ts";
 import { useFieldForm } from "../../inputs/form.ts";
-import { APPOINTMENT, freeSlots, overlaps, type Booking } from "./slots.ts";
+import { APPOINTMENT, freeSlots, overlaps, slotTime, type Booking } from "./slots.ts";
 import "./appointments.css";
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -93,8 +92,8 @@ export function SlotPicker(p: RecordSectionProps) {
               <Icon name="warning" size={15} />
               {t("Clashes with {title}, {from} to {to}", {
                 title: b.title || t("another booking"),
-                from: clockText(b.start),
-                to: clockText(b.end),
+                from: slotTime(b.start),
+                to: slotTime(b.end),
               })}
             </p>
           ))}
@@ -118,10 +117,16 @@ export function SlotPicker(p: RecordSectionProps) {
                   <button
                     key={s.start}
                     type="button"
-                    className={`ap-slot${chosen ? " is-chosen" : ""}`}
+                    className={`ap-slot is-${s.kind}${chosen ? " is-chosen" : ""}`}
                     disabled={!s.free || p.busy}
                     aria-pressed={chosen}
-                    title={s.free ? undefined : t("Booked")}
+                    title={
+                      s.kind === "booked"
+                        ? t("Booked")
+                        : s.kind === "short"
+                          ? t("Free, but too short for {length} minutes", { length })
+                          : undefined
+                    }
                     onClick={() =>
                       form.fill({
                         start_minute: String(s.start),
@@ -129,11 +134,19 @@ export function SlotPicker(p: RecordSectionProps) {
                       })
                     }
                   >
-                    {clockText(s.start)}
+                    {slotTime(s.start)}
                   </button>
                 );
               })}
             </div>
+          )}
+          {slots.some((s) => s.kind === "short") && (
+            <p className="hint ap-slots-legend">
+              {t(
+                "Struck through: booked. Dashed: free, but too short for {length} minutes from there.",
+                { length },
+              )}
+            </p>
           )}
         </>
       )}
