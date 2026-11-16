@@ -63,6 +63,7 @@
   "field\u0004Slug",
   "field\u0004Total",
   "field\u0004Visible",
+  "km",
   "model\u0004Article",
   "model\u0004Contact",
   "model\u0004Document",
@@ -83,6 +84,8 @@
   "{field} ≥ {from}",
   "{hours} h",
   "{hours} h {minutes}",
+  "{h} h {m} min",
   "{minutes} min",
+  "{m} min",
   "{quantity} × {price}"
 ]

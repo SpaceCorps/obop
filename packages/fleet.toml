@@ -1,6 +1,6 @@
 [module]
 id = "fleet"
-version = "0.3.2"
+version = "0.3.3"
 name = "Fleet"
 description = "Vehicles, drivers and service history for a small fleet. Tracks status and service records; it does not compute running costs or fuel use. A driver's status and licence expiry are only recorded: nothing checks them, not even when a driver is assigned to a vehicle."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["supply-chain"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "fleet_vehicle"
-changelog = "Clearer screens: the app opens on Vehicles, with business names (Drivers, Services, VIN, Odometer), list and card columns, saved filters, licence expiry warnings and a cost total on services. A vehicle can now be sent to the workshop and brought back, so the Maintenance column is used. A new service takes the vehicle's odometer reading when none is given."
+changelog = "Clearer screens: the app opens on Vehicles, with business names (Drivers, Services, VIN, Odometer), list and card columns, saved filters, licence expiry warnings and a cost total on services. A vehicle can now be sent to the workshop and brought back, so the Maintenance column is used. A new service takes the vehicle's odometer reading when none is given. An active driver whose licence expires within 30 days, or has expired, is now marked amber or red, and the Fleet home lists the licences and services that need attention."
 
 [[model]]
 name = "fleet_vehicle"
@@ -235,7 +235,7 @@ write_group = "fleet.manager"
   required = true
 
     [model.field.ui]
-    tones = { active = "ok", suspended = "bad" }
+    tones = { active = "info", suspended = "bad" }
 
   [[model.action]]
   name = "suspend"

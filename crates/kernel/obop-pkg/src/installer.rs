@@ -3501,7 +3501,7 @@ mod tests {
                 .unwrap_err()
                 .contains("already installed")
         );
-        let newer = fleet.replace("version = \"0.3.2\"", "version = \"0.4.0\"");
+        let newer = fleet.replace("version = \"0.3.3\"", "version = \"0.4.0\"");
         assert_eq!(
             inst.install(&newer, "upload", "r").unwrap().version,
             "0.4.0"
@@ -4311,7 +4311,7 @@ label = "Ota käyttöön"
 
     fn fleet_with_labels(version: &str, labels: &str) -> String {
         Manifest::combine(
-            &include_str!("../../../../packages/fleet.toml").replace("0.3.2", version),
+            &include_str!("../../../../packages/fleet.toml").replace("0.3.3", version),
             labels,
         )
     }

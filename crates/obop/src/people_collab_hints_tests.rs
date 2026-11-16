@@ -196,6 +196,106 @@ fn a_leave_request_needs_its_days_in_order_before_it_is_requested_or_approved() 
 }
 
 #[test]
+fn leave_follows_the_employee_when_hr_moves_it_to_another_one() {
+    let app = app();
+    let hanna = Principal::user("hanna", &["hr.user", "hr.manager"]);
+    let julia = Principal::user("julia", &["hr.user"]);
+    let frank = Principal::user("frank", &["hr.user"]);
+    let emp = |name: &str, user: &str| {
+        id(&ok(
+            &app,
+            &hanna,
+            "hr_employee.create",
+            json!({"name": name, "user": user}),
+        ))
+    };
+    let (ju, fr) = (emp("Julia Brandt", "julia"), emp("Frank Lehmann", "frank"));
+    let leave = ok(
+        &app,
+        &hanna,
+        "hr_leave_request.create",
+        json!({"employee_id": ju, "start_on": "2026-10-05", "end_on": "2026-10-06", "days": 2}),
+    );
+    assert_eq!(leave["requested_by"], "julia");
+    let moved = ok(
+        &app,
+        &hanna,
+        "hr_leave_request.update",
+        json!({"id": id(&leave), "employee_id": fr}),
+    );
+    assert_eq!(moved["requested_by"], "frank");
+    ok(
+        &app,
+        &frank,
+        "hr_leave_request.get",
+        json!({"id": id(&leave)}),
+    );
+    assert!(
+        run(
+            &app,
+            &julia,
+            "hr_leave_request.get",
+            json!({"id": id(&leave)})
+        )
+        .is_err()
+    );
+    // An employee without a login: the request is the filer's, as on create.
+    let none = id(&ok(
+        &app,
+        &hanna,
+        "hr_employee.create",
+        json!({"name": "No Login"}),
+    ));
+    let r = ok(
+        &app,
+        &hanna,
+        "hr_leave_request.update",
+        json!({"id": id(&leave), "employee_id": none}),
+    );
+    assert_eq!(r["requested_by"], "hanna");
+    // An owner the call names itself is the caller's.
+    let r = ok(
+        &app,
+        &hanna,
+        "hr_leave_request.update",
+        json!({"id": id(&leave), "employee_id": ju, "requested_by": "hanna"}),
+    );
+    assert_eq!(r["requested_by"], "hanna");
+}
+
+#[test]
+fn leave_an_agent_files_for_a_linked_employee_is_the_employees() {
+    let app = app();
+    let hanna = Principal::user("hanna", &["hr.user", "hr.manager"]);
+    let agent = Principal::agent(
+        "hanna",
+        &["hr.user", "hr.manager"],
+        &["hr.user", "hr.manager"],
+    );
+    let ju = id(&ok(
+        &app,
+        &hanna,
+        "hr_employee.create",
+        json!({"name": "Julia Brandt", "user": "julia"}),
+    ));
+    let leave = ok(
+        &app,
+        &agent,
+        "hr_leave_request.create",
+        json!({"employee_id": ju, "start_on": "2026-10-05", "end_on": "2026-10-06", "days": 2}),
+    );
+    // The agent reads the login masked; what is stored is the employee's.
+    assert_ne!(leave["requested_by"], "julia");
+    let stored = ok(
+        &app,
+        &hanna,
+        "hr_leave_request.get",
+        json!({"id": id(&leave)}),
+    );
+    assert_eq!(stored["requested_by"], "julia");
+}
+
+#[test]
 fn a_vehicle_goes_to_the_workshop_and_a_service_starts_from_its_odometer() {
     let app = app();
     let m = Principal::user("m", &["fleet.user", "fleet.manager"]);

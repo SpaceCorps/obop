@@ -1,0 +1,238 @@
+/* Employees: the org chart. Tokens only. */
+
+.org-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-block-start: var(--space-6);
+}
+.org-search {
+  display: flex;
+  flex: 1 1 16rem;
+  align-items: center;
+  gap: var(--space-2);
+  max-inline-size: 28rem;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+.org-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+.org-search input {
+  flex: 1;
+  min-inline-size: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+/* The ring is the box's (focus-within): none on the field inside it as well. */
+.hr-org .org-search input:is(:focus, :focus-visible, :hover) {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+.org-found {
+  margin-block-start: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.org-found:empty {
+  margin: 0;
+}
+/* Each person's initials in the tint the Employees gallery gives them (BoardCard `t-N`). */
+.org-face .avatar {
+  background: color-mix(in oklab, var(--tone, var(--accent-fill)) 22%, var(--surface));
+  color: color-mix(in oklab, var(--tone, var(--accent-fill)) 60%, var(--text));
+}
+.org-face {
+  display: inline-flex;
+  flex: none;
+}
+
+.org-tree,
+.org-group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.org-tree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-inline-size: 44rem;
+  margin-block-start: var(--space-5);
+}
+/* Each level hangs from a line under its manager. */
+.org-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+  margin-inline-start: 1.375rem;
+  padding-inline-start: var(--space-5);
+  border-inline-start: 2px solid var(--border);
+}
+.org-group > li {
+  position: relative;
+}
+.org-group > li::before {
+  position: absolute;
+  inset-block-start: 1.85rem;
+  inset-inline-start: calc(-1 * var(--space-5) - 2px);
+  inline-size: var(--space-5);
+  border-block-start: 2px solid var(--border);
+  content: "";
+}
+
+.org-node {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-2) var(--ease-out);
+}
+.org-node:hover {
+  border-color: var(--border-strong);
+}
+.org-node.hit {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.org-person {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  min-block-size: 44px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  color: inherit;
+  text-decoration: none;
+}
+.org-person:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.org-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-inline-size: 0;
+}
+.org-name {
+  overflow: hidden;
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-meta {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.org-toggle:hover {
+  color: var(--text);
+}
+.org-toggle[aria-expanded="true"] {
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
+}
+.org-toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.org-wait {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block-start: var(--space-6);
+}
+.org-wait .skel {
+  display: block;
+  max-inline-size: 36rem;
+  block-size: 3.75rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface-3);
+}
+
+/* A phone: the levels step in less, so a deep chart keeps its names readable. */
+@media (max-width: 40rem) {
+  .org-group {
+    margin-inline-start: 0.75rem;
+    padding-inline-start: var(--space-3);
+  }
+  .org-group > li::before {
+    inset-inline-start: calc(-1 * var(--space-3) - 2px);
+    inline-size: var(--space-3);
+  }
+  .org-search {
+    max-inline-size: none;
+  }
+  .org-toggle {
+    padding-inline: var(--space-2);
+  }
+  .org-toggle > .ico:first-child {
+    display: none;
+  }
+  /* From the fourth level down the step is a hair, so the tenth level keeps most of its width. */
+  .org-group .org-group .org-group .org-group {
+    margin-inline-start: 0;
+    padding-inline-start: var(--space-1);
+  }
+  .org-group .org-group .org-group .org-group > li::before {
+    inset-inline-start: calc(-1 * var(--space-1) - 2px);
+    inline-size: var(--space-1);
+  }
+  .org-person {
+    gap: var(--space-2);
+    padding-inline: var(--space-1);
+    block-size: auto;
+    min-block-size: 3.75rem;
+  }
+  /* A long name wraps (up to three lines) instead of ending in an ellipsis. */
+  .org-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .org-meta {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+}

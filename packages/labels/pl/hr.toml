@@ -13,8 +13,8 @@ label = "Nazwa"
 description = "Nazwa działu"
 
 [labels.pl.model.hr_department.field.head]
-label = "Kierownik"
-description = "Imię i nazwisko kierownika działu"
+label = "Kierownik (nazwa jako tekst)"
+description = "Imię i nazwisko kierownika działu jako dowolny tekst, z czasów, gdy kierownik nie mógł być pracownikiem; zostaw puste, gdy Kierownik jest ustawiony"
 
 [labels.pl.model.hr_department.field.cost_centre]
 label = "Centrum kosztów"
@@ -196,7 +196,7 @@ description = "Zdjęcie osoby (PNG, JPEG, WebP lub GIF; metadane, takie jak loka
 
 [labels.pl.model.hr_leave_request.field.requested_by]
 label = "Wnioskujący"
-description = "Nazwa użytkownika osoby, która prosi o urlop; domyślnie osoba składająca wniosek. Widzą go tylko ona i hr.manager"
+description = "Nazwa użytkownika, do którego należy wniosek, ustawiana przez serwer, gdy pozostawiona pusta (i ponownie, gdy zmiana przenosi wniosek na innego pracownika): użytkownik obop pracownika, jeśli go ma, w przeciwnym razie osoba składająca wniosek. Widzą go tylko ona i hr.manager"
 
 [labels.pl.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Ostatni dzień urlopu przypada przed jego pierwszym dniem"
@@ -209,3 +209,11 @@ message = "Ostatni dzień urlopu przypada przed jego pierwszym dniem"
 
 [labels.pl.model.hr_leave_request.action.approve.assert.days_given]
 message = "Podaj liczbę dni roboczych urlopu"
+
+[labels.pl.model.hr_department.field.head_id]
+label = "Kierownik"
+description = "Pracownik, który kieruje działem"
+
+[labels.pl.model.hr_employee.field.user]
+label = "Użytkownik obop"
+description = "Nazwa użytkownika obop (login) osoby, jeśli ją ma: urlop złożony dla tego pracownika należy do tego użytkownika, a nowy wniosek urlopowy tego użytkownika zaczyna się od tego pracownika"

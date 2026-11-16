@@ -5,9 +5,11 @@
   "Kanban",
   "Logo",
   "app\u0004CRM",
+  "km",
   "option\u0004Diesel",
   "{field} ≤ {to}",
   "{field} ≥ {from}",
   "{minutes} min",
+  "{m} min",
   "{quantity} × {price}"
 ]

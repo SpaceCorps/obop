@@ -59,6 +59,11 @@ type Props = {
   takeNewDefaults?: () => Record<string, unknown> | null;
   /** Drawn after the page and its dialogs: an app's own dialog, which may open the new form. */
   after?: (page: ModelPageApi) => ReactNode;
+  /**
+   * What the page shows when the search finds nothing, instead of the generic "No matches" (an
+   * empty review queue is good news). `null`: the generic one. Not asked while text is typed.
+   */
+  noMatch?: (state: ViewState) => ReactNode | null;
 };
 
 const VIEWS: Record<string, ViewDef> = Object.fromEntries(
@@ -102,6 +107,7 @@ export function ModelPage({
   onNew,
   takeNewDefaults,
   after,
+  noMatch,
 }: Props) {
   const d = useData();
   const title = modelTitle(model, app.module.id);
@@ -566,6 +572,8 @@ export function ModelPage({
         />
       );
     }
+    const own = live ? null : (noMatch?.(state) ?? null);
+    if (own) return own;
     return (
       <EmptyState
         icon="search"
