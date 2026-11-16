@@ -2702,5 +2702,6 @@
   "section\u0004Trip": "machine-drafted",
   "section\u0004Review": "machine-drafted",
   "section\u0004Discard": "machine-drafted",
-  "section\u0004Recorded by the app": "machine-drafted"
+  "section\u0004Recorded by the app": "machine-drafted",
+  "This trip was already reviewed.": "machine-drafted"
 }

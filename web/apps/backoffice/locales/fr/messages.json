@@ -2702,5 +2702,6 @@
   "section\u0004Trip": "Trajet",
   "section\u0004Review": "Vérification",
   "section\u0004Discard": "Abandon",
-  "section\u0004Recorded by the app": "Enregistré par l’application"
+  "section\u0004Recorded by the app": "Enregistré par l’application",
+  "This trip was already reviewed.": "Ce trajet a déjà été vérifié."
 }

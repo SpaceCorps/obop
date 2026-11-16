@@ -2702,5 +2702,6 @@
   "section\u0004Trip": "Matka",
   "section\u0004Review": "Tarkastus",
   "section\u0004Discard": "Hylkäys",
-  "section\u0004Recorded by the app": "Sovelluksen tallentama"
+  "section\u0004Recorded by the app": "Sovelluksen tallentama",
+  "This trip was already reviewed.": "Tämä matka on jo tarkastettu."
 }

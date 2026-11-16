@@ -2702,5 +2702,6 @@
   "section\u0004Trip": "Resa",
   "section\u0004Review": "Granskning",
   "section\u0004Discard": "Kassering",
-  "section\u0004Recorded by the app": "Registrerat av appen"
+  "section\u0004Recorded by the app": "Registrerat av appen",
+  "This trip was already reviewed.": "Den här resan är redan granskad."
 }

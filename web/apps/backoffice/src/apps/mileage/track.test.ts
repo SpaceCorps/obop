@@ -1,6 +1,6 @@
 // track.ts: the route and the check of a trip, for the review screen.
 import { describe, expect, it } from "vite-plus/test";
-import { drawRoute, flagsOf, kmOf, minutesBetween, pointsOf } from "./track.ts";
+import { drawRoute, flagsOf, kmOf, minutesBetween, pointsOf, reviewRefusal } from "./track.ts";
 
 const r = (id: string, lat: string, lon: string, accuracy_m: string | null = "8.00") => ({
   id,
@@ -61,5 +61,12 @@ describe("mileage track", () => {
     expect(kmOf("165142.69")).toBe(165.1);
     expect(kmOf(null)).toBeNull();
     expect(minutesBetween("2026-11-03T13:00:07Z", "2026-11-03T14:43:44Z")).toBe(104);
+  });
+
+  it("says plainly that a trip was already reviewed", () => {
+    expect(reviewRefusal('state must be in_review to do this, it is "confirmed"')).toBe(
+      "This trip was already reviewed.",
+    );
+    expect(reviewRefusal("not allowed")).toBeNull();
   });
 });

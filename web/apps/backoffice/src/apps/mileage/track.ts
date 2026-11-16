@@ -1,5 +1,6 @@
 // The trip review of Mileage: the route of a trip drawn from its points, and what the server's
 // check of the track found, in words. Pure, so it is tested without a browser.
+import { t } from "@obop/ui";
 import type { Row } from "../../api.ts";
 
 /** The server drops a fix whose accuracy radius is above this (mileage `track.rs` MAX_ACCURACY_M). */
@@ -108,4 +109,14 @@ export function minutesBetween(from: unknown, to: unknown): number | null {
   if (typeof from !== "string" || typeof to !== "string") return null;
   const ms = Date.parse(to) - Date.parse(from);
   return Number.isFinite(ms) && ms >= 0 ? Math.round(ms / 60_000) : null;
+}
+
+/**
+ * A plain sentence for the server's refusal of Confirm or Reject on a trip that is no longer in
+ * review (someone reviewed it meanwhile); null for any other refusal.
+ */
+export function reviewRefusal(message: string): string | null {
+  return message.startsWith("state must be in_review to do this, it is ")
+    ? t("This trip was already reviewed.")
+    : null;
 }

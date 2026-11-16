@@ -10,6 +10,7 @@ import { ActionDialog } from "../../ActionDialog.tsx";
 import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
 import { serverMessage } from "../../serverMessage.ts";
+import { reviewRefusal } from "./track.ts";
 import { Button } from "../../ui.tsx";
 
 export const REJECT = "mileage_trip.reject";
@@ -33,7 +34,11 @@ export function RejectAction({ model, row, busy }: RecordExtProps) {
     if (r.kind === "ok") d.notify(reject!.ui?.done ?? t("Trip rejected"));
     else if (r.kind === "approval")
       d.notify(t("Rejecting was proposed and waits for approval."), "info");
-    else d.notify(serverMessage(r.message), "error");
+    else {
+      d.notify(reviewRefusal(r.message) ?? serverMessage(r.message), "error");
+      // The trip may have moved on (reviewed by someone else): show it as it is now.
+      await d.changed(model.name);
+    }
   }
 
   return (
