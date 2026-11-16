@@ -12,7 +12,7 @@ keywords = ["helpdesk", "tickets", "support", "sla"]
 categories = ["services"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "A ticket is named by its subject, with its number above it on a card and next to the requester in the form. The app opens on Tickets; the SLA policies sit under Configuration. A new ticket is dated today with normal priority. Taking a ticket assigns it to you when nobody has it yet; resolving one asks how it was solved and dates it today. A closed ticket can no longer be changed."
+changelog = "A ticket is named by its subject, with its number above it on a card and next to the requester in the form."
 home = "helpdesk_ticket"
 
 [[model]]
