@@ -21,11 +21,11 @@ of the server version; Rutsa needs the points for the map in the report, decided
 
 ## How it is tested
 
-| Where | GPS | Who |
-|---|---|---|
-| Android emulator on Windows | A script feeds a route to the emulator (`adb emu geo fix`); no phone and no drive needed | Developer |
-| iOS Simulator on a Mac | `xcrun simctl location` feeds the same route (as `mileage-app` `simulator:route`) | Owner (Mac) |
-| A real iPhone | A real drive; built with Xcode on a Mac | Owner, later the developer |
+| Where                       | GPS                                                                                      | Who                        |
+| --------------------------- | ---------------------------------------------------------------------------------------- | -------------------------- |
+| Android emulator on Windows | A script feeds a route to the emulator (`adb emu geo fix`); no phone and no drive needed | Developer                  |
+| iOS Simulator on a Mac      | `xcrun simctl location` feeds the same route (as `mileage-app` `simulator:route`)        | Owner (Mac)                |
+| A real iPhone               | A real drive; built with Xcode on a Mac                                                  | Owner, later the developer |
 
 `vp check` and `vp test` run on any system; blocks A and B need no emulator.
 
@@ -35,7 +35,7 @@ Status: `[ ]` to do, `[x]` done (with the commit), `[~]` in progress.
 
 ### A. Skeleton
 
-- [ ] A1 `feat(rutsa): app package on Expo SDK 58`: `package.json` (`@obop/rutsa`, Apache-2.0,
+- [x] A1 `feat(rutsa): app package on Expo SDK 58`: `package.json` (`@obop/rutsa`, Apache-2.0,
       only the packages the skeleton uses, see "Dependencies"), `tsconfig.json`,
       `vite.config.ts`, `.gitignore`, `index.ts`, `App.tsx` showing "Rutsa", `pnpm-lock.yaml`.
       No scripts yet (A4), no tests yet (block B)
@@ -124,26 +124,26 @@ Checkpoint: the APK builds and installs, a route gives a trip with the expected 
 A package is added in the commit that first uses it, so each commit shows why it came. Versions
 are exactly those of `mileage-app` (they have passed the cooldown of the pin policy, D23).
 
-| Commit | Packages |
-|---|---|
-| A1 | `expo` 58.0.16, `react` 19.3.0, `react-native` 0.88.0, `expo-status-bar` 58.0.3, `react-native-safe-area-context` 5.10.1, `@obop/ui-native`; dev: `typescript` 6.0.3, `@types/react` 19.3.0, `@types/node` 26.6.5 |
-| A2 | `expo-system-ui` 58.0.6 (light and dark on Android) |
-| A4 | `expo-dev-client` 58.0.14 (the development build of `vp run start`) |
-| B6 | `@obop/trip-core` |
-| C1 | `expo-sqlite` 58.0.13, `expo-secure-store` 58.0.2, `expo-crypto` 58.0.7 |
-| C2, C3 | `expo-location` 58.0.18, `expo-task-manager` 58.0.12 |
-| When needed | `expo-constants` 58.0.12 (the app version on a screen) |
-| Not taken | `@obop/client`, `expo-web-browser` (no sign-in); `react-dom` (a dev dependency of `mileage-app` with no stated reason; added only if `vp check` needs it, with the reason) |
+| Commit      | Packages                                                                                                                                                                                                          |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1          | `expo` 58.0.16, `react` 19.3.0, `react-native` 0.88.0, `expo-status-bar` 58.0.3, `react-native-safe-area-context` 5.10.1, `@obop/ui-native`; dev: `typescript` 6.0.3, `@types/react` 19.3.0, `@types/node` 26.6.5 |
+| A2          | `expo-system-ui` 58.0.6 (light and dark on Android)                                                                                                                                                               |
+| A4          | `expo-dev-client` 58.0.14 (the development build of `vp run start`)                                                                                                                                               |
+| B6          | `@obop/trip-core`                                                                                                                                                                                                 |
+| C1          | `expo-sqlite` 58.0.13, `expo-secure-store` 58.0.2, `expo-crypto` 58.0.7                                                                                                                                           |
+| C2, C3      | `expo-location` 58.0.18, `expo-task-manager` 58.0.12                                                                                                                                                              |
+| When needed | `expo-constants` 58.0.12 (the app version on a screen)                                                                                                                                                            |
+| Not taken   | `@obop/client`, `expo-web-browser` (no sign-in); `react-dom` (a dev dependency of `mileage-app` with no stated reason; added only if `vp check` needs it, with the reason)                                        |
 
 ## Taken from `mileage-app`, and left out
 
-| Taken (copied and simplified) | Left out |
-|---|---|
-| `sql.ts`, `fix.ts`, `thin.ts` | `@obop/client`, `auth.ts`, `SignIn.tsx`: no sign-in |
-| `recorder.ts`, `task.ts`, `permissions.ts` | `sync.ts`, `engine.ts`, `api.ts`: no server |
-| `keychain.ts`, `database.ts` | `host-config.ts`, `host-state.ts`: the host app's |
-| `check-sdk.mjs`, `gradle.mjs`, iOS and emulator scripts | `Foreign.tsx`: no other person's trips |
-| The shape of `app.config.ts` | `schema.ts` as a whole (1,242 lines for the server) |
+| Taken (copied and simplified)                           | Left out                                            |
+| ------------------------------------------------------- | --------------------------------------------------- |
+| `sql.ts`, `fix.ts`, `thin.ts`                           | `@obop/client`, `auth.ts`, `SignIn.tsx`: no sign-in |
+| `recorder.ts`, `task.ts`, `permissions.ts`              | `sync.ts`, `engine.ts`, `api.ts`: no server         |
+| `keychain.ts`, `database.ts`                            | `host-config.ts`, `host-state.ts`: the host app's   |
+| `check-sdk.mjs`, `gradle.mjs`, iOS and emulator scripts | `Foreign.tsx`: no other person's trips              |
+| The shape of `app.config.ts`                            | `schema.ts` as a whole (1,242 lines for the server) |
 
 ## Log
 

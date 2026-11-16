@@ -1,0 +1,21 @@
+{
+  "name": "@obop/rutsa",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Rutsa: a mileage log that runs on the phone alone (React Native, Expo SDK 58). docs/spec/rutsa.md",
+  "license": "Apache-2.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@obop/ui-native": "workspace:*",
+    "expo": "58.0.16",
+    "expo-status-bar": "58.0.3",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-safe-area-context": "5.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "typescript": "6.0.3"
+  }
+}
