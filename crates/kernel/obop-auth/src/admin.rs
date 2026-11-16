@@ -81,7 +81,7 @@ pub fn clean_groups(groups: &[String]) -> Result<Vec<String>, MfaError> {
     Ok(out)
 }
 
-fn valid_name(name: &str) -> Result<(), MfaError> {
+pub(crate) fn valid_name(name: &str) -> Result<(), MfaError> {
     let ok = !name.is_empty()
         && name.chars().count() <= MAX_NAME_CHARS
         && name

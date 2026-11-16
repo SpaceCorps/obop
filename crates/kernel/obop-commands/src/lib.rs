@@ -1704,6 +1704,11 @@ pub trait Authenticator: Send + Sync {
     fn sso(&self) -> Option<&dyn SsoApi> {
         None
     }
+    /// The first administrator of a new instance, made in the browser with a set-up code (D96,
+    /// PROPOSED), for authenticators that support it. `None`: the set-up routes do not exist.
+    fn setup(&self) -> Option<&dyn SetupApi> {
+        None
+    }
     /// Resolve a bearer token and say which audience (resource) it was issued for. Tokens from
     /// the OAuth flow (D64) carry one and work only there; every other token has none.
     fn resolve_with_audience(&self, token: &str) -> Option<(Principal, Option<String>)> {
@@ -2084,6 +2089,7 @@ mod kinds;
 pub mod pay;
 pub mod public;
 pub mod query;
+pub mod setup;
 pub mod sign;
 pub mod sso;
 pub mod store;
@@ -2099,6 +2105,7 @@ pub use public::{
     Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,
 };
+pub use setup::{SetupApi, SetupError, SetupRequest, SetupStatus};
 pub use sign::{Client as SignClient, DoorError, SignForm, SignService};
 pub use sso::{
     AnonGroup, AnonLine, SsoApi, SsoEndpoints, SsoError, SsoFlowSignIn, SsoIdentity, SsoLeg,

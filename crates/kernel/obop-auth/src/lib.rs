@@ -20,6 +20,7 @@ mod oauth;
 pub mod oidc;
 mod passkey;
 pub mod seal;
+mod setup;
 pub mod totp;
 pub mod webauthn;
 
@@ -27,6 +28,9 @@ pub use account::{MIN_PASSWORD_CHARS, suggest_temporary_password};
 pub use admin::{ImportOutcome, ImportRow, clean_groups};
 pub use mfa::{AuthConfig, EVENT_TABLE};
 pub use passkey::{CHALLENGE_SECS, MAX_PASSKEYS, PASSKEY_TABLE, ceremony_site_ok};
+pub use setup::{
+    ADDR_MAX, ADDR_WINDOW_MS, ALL_MAX, ALL_WINDOW_MS, CODE_TTL_MS, SETUP_LOCK, SetupOpened,
+};
 
 const SESSION_SECS: u64 = 12 * 3600;
 const MAX_FAILURES: u32 = 5;
@@ -41,6 +45,9 @@ pub struct Auth {
     /// address stands in for it in tests (`OBOP_OIDC_TEST_AUTHORITY`, honoured only together with
     /// `OBOP_CONNECTORS_ALLOW_LOOPBACK`).
     oidc_authority: std::sync::RwLock<Option<String>>,
+    /// The groups of the first administrator made on the set-up page (`enable_setup`); unset: the
+    /// page is off.
+    setup_groups: std::sync::OnceLock<Vec<String>>,
 }
 
 fn now_system() -> u64 {
@@ -104,6 +111,7 @@ impl Auth {
             config,
             fake_now: AtomicU64::new(0),
             oidc_authority: std::sync::RwLock::new(oidc::authority_from_env()),
+            setup_groups: std::sync::OnceLock::new(),
         }
     }
 
@@ -606,6 +614,11 @@ impl Authenticator for Auth {
         Some(self)
     }
 
+    fn setup(&self) -> Option<&dyn obop_commands::SetupApi> {
+        self.setup_on()
+            .then_some(self as &dyn obop_commands::SetupApi)
+    }
+
     fn issue_agent_token(
         &self,
         owner: &Principal,
@@ -720,6 +733,8 @@ mod lockout_tests;
 mod mfa_tests;
 #[cfg(test)]
 mod passkey_tests;
+#[cfg(test)]
+mod setup_tests;
 
 #[cfg(test)]
 mod tests {
