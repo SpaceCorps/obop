@@ -63,6 +63,11 @@
   background: var(--surface);
   border: 1px dashed var(--border-control);
 }
+/* Today, already begun: faded, not struck through (nothing is booked there). */
+.ap-slot.is-past:disabled {
+  text-decoration: none;
+  opacity: 0.55;
+}
 .ap-slots-legend {
   margin: var(--space-2) 0 0;
 }

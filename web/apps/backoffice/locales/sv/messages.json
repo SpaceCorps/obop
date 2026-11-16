@@ -2789,5 +2789,7 @@
   "Whose time": "Vems tid",
   "Work done": "Utfört arbete",
   "Work started": "Arbetet har börjat",
-  "Your user is not linked to an employee, so this shows every job of today. An HR manager links it on the employee record.": "Din användare är inte kopplad till en anställd, så här visas alla dagens uppdrag. En HR-ansvarig kopplar den på den anställdas post."
+  "Your user is not linked to an employee, so this shows every job of today. An HR manager links it on the employee record.": "Din användare är inte kopplad till en anställd, så här visas alla dagens uppdrag. En HR-ansvarig kopplar den på den anställdas post.",
+  "Earlier times today have passed.": "Tidigare tider i dag har passerat.",
+  "Passed": "Passerad"
 }

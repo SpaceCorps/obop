@@ -2789,5 +2789,7 @@
   "Whose time": "Tiempo de quién",
   "Work done": "Trabajo realizado",
   "Work started": "Trabajo empezado",
-  "Your user is not linked to an employee, so this shows every job of today. An HR manager links it on the employee record.": "Su usuario no está vinculado a un empleado, así que aquí se ven todos los trabajos de hoy. Un responsable de RR. HH. lo vincula en la ficha del empleado."
+  "Your user is not linked to an employee, so this shows every job of today. An HR manager links it on the employee record.": "Su usuario no está vinculado a un empleado, así que aquí se ven todos los trabajos de hoy. Un responsable de RR. HH. lo vincula en la ficha del empleado.",
+  "Earlier times today have passed.": "Las horas anteriores de hoy ya han pasado.",
+  "Passed": "Pasado"
 }

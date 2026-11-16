@@ -5,12 +5,13 @@
 // When the times chosen overlap another booking it says which, before the form is saved.
 import { useEffect, useState } from "react";
 import { Icon, t } from "@obop/ui";
-import { search, type Row } from "../../api.ts";
+import { getTime, search, type Row } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { RecordSectionProps } from "../../extensions.ts";
+import { todayIn } from "../../filters.ts";
 import { formatDate, validDate } from "../../format.ts";
 import { useFieldForm } from "../../inputs/form.ts";
-import { APPOINTMENT, freeSlots, overlaps, slotTime, type Booking } from "./slots.ts";
+import { APPOINTMENT, freeSlots, minuteIn, overlaps, slotTime, type Booking } from "./slots.ts";
 import "./appointments.css";
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -69,7 +70,10 @@ export function SlotPicker(p: RecordSectionProps) {
     taken && start !== null && end !== null && end > start
       ? taken.filter((b) => overlaps(b, start, end))
       : [];
-  const slots = taken ? freeSlots(taken, length) : [];
+  // On today's date (in the instance's zone) the slots that have begun are past.
+  const zone = getTime().zone;
+  const now = day === todayIn(zone) ? minuteIn(zone) : undefined;
+  const slots = taken ? freeSlots(taken, length, now) : [];
 
   return (
     <section className="fsec ap-slots" aria-labelledby="ap-slots-head">
@@ -123,9 +127,11 @@ export function SlotPicker(p: RecordSectionProps) {
                     title={
                       s.kind === "booked"
                         ? t("Booked")
-                        : s.kind === "short"
-                          ? t("Free, but too short for {length} minutes", { length })
-                          : undefined
+                        : s.kind === "past"
+                          ? t("Passed")
+                          : s.kind === "short"
+                            ? t("Free, but too short for {length} minutes", { length })
+                            : undefined
                     }
                     onClick={() =>
                       form.fill({
@@ -139,6 +145,9 @@ export function SlotPicker(p: RecordSectionProps) {
                 );
               })}
             </div>
+          )}
+          {slots.some((s) => s.kind === "past") && (
+            <p className="hint ap-slots-legend">{t("Earlier times today have passed.")}</p>
           )}
           {slots.some((s) => s.kind === "short") && (
             <p className="hint ap-slots-legend">
