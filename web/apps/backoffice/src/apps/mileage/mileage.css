@@ -1,0 +1,176 @@
+/* Mileage: the trip review above the form of a trip. Tokens only. */
+
+/* Between the action row and the fields, with the same side padding as both (record.css). */
+.trip-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) 1.25rem 0;
+}
+@media (max-width: 40rem) {
+  .trip-review {
+    padding-inline: var(--space-4);
+  }
+}
+.trip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+}
+.trip-km {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+.trip-km strong {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+.trip-km span {
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+}
+.trip-ask {
+  flex: 1 1 14rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.trip-map {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.trip-map svg {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 640 / 300;
+}
+.trip-map-wait {
+  aspect-ratio: 640 / 300;
+  background: var(--surface-3);
+}
+.trip-map-none {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  color: var(--text-muted);
+}
+.trip-line,
+.trip-line-halo {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.trip-line {
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+.trip-line-halo {
+  stroke: var(--surface);
+  stroke-width: 9;
+}
+.trip-start {
+  fill: var(--success);
+  stroke: var(--surface);
+  stroke-width: 3;
+}
+.trip-end {
+  fill: var(--danger);
+  stroke: var(--surface);
+  stroke-width: 3;
+}
+.trip-dropped {
+  fill: var(--warning);
+  opacity: 0.55;
+}
+.trip-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-block-start: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.trip-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.trip-legend .dot {
+  display: inline-block;
+  inline-size: 0.6rem;
+  block-size: 0.6rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+.trip-legend .dot.trip-start {
+  background: var(--success);
+}
+.trip-legend .dot.trip-end {
+  background: var(--danger);
+}
+.trip-legend .dot.trip-dropped {
+  background: var(--warning);
+  opacity: 1;
+}
+
+.trip-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+}
+.trip-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-inline-size: 0;
+}
+.trip-facts dt {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.trip-facts dd {
+  margin: 0;
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.trip-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trip-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+.trip-note > .ico {
+  flex: none;
+  margin-block-start: 0.1rem;
+}
+.trip-note.ok {
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+.trip-note.warn {
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+}

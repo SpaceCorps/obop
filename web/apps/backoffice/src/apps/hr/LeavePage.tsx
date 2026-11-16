@@ -11,12 +11,10 @@ import { EMPLOYEE } from "./links.ts";
 
 const cache = new Map<string, Promise<string>>();
 
-function signedIn(): string {
-  try {
-    return sessionStorage.getItem("obop-user") ?? "";
-  } catch {
-    return "";
-  }
+/** The signed-in user name, as the shell knows it (set by the registration of the app). */
+let signedInUser = "";
+export function setSignedInUser(user: string): void {
+  signedInUser = user;
 }
 
 /**
@@ -24,7 +22,7 @@ function signedIn(): string {
  * or the reader cannot see the field). Asked once per session and user.
  */
 export function myEmployee(token: string): Promise<string> {
-  const user = signedIn();
+  const user = signedInUser;
   if (!user || !token) return Promise.resolve("");
   const key = `${token.slice(-8)}:${user}`;
   let p = cache.get(key);
