@@ -104,6 +104,13 @@ test.describe("Planning: the week plan", () => {
       // On a phone the week is a list by day, with no sideways scroll.
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(page.locator(".pl-days")).toContainText(morning.name);
+      // A long shift name wraps onto a second line instead of being cut.
+      const name = page.locator(".pl-day-list .pl-shift-name", { hasText: morning.name });
+      expect(
+        await name.evaluate(
+          (e) => e.scrollWidth <= e.clientWidth && e.scrollHeight <= e.clientHeight,
+        ),
+      ).toBe(true);
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
       ).toBeLessThanOrEqual(0);

@@ -230,8 +230,15 @@
 .pl-day-list .pl-shift-time {
   grid-area: time;
 }
+/* On the phone's list a long name takes two lines instead of an ellipsis after 15 characters. */
 .pl-day-list .pl-shift-name {
   grid-area: name;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .pl-day-list .pl-shift-who {
   grid-area: who;
