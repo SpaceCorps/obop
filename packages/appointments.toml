@@ -1,6 +1,6 @@
 [module]
 id = "appointments"
-version = "0.3.0"
+version = "0.3.1"
 name = "Appointments"
 description = "Bookable resources (people, rooms, equipment) and appointments with a date, start and end time and a status flow. Overlaps are not prevented automatically."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["booking", "scheduling", "resources"]
 categories = ["services"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "The app opens on the appointments calendar; resources sit under Configuration. Start and end read as times of day, a time outside 00:00 to 24:00 is refused, only active resources can be booked, and an appointment that ends before it starts cannot be confirmed. A held, cancelled or missed appointment can no longer be changed."
+changelog = "The booking form asks what the appointment is and who comes first, then the resource, the day and the time, and shows the free half-hour slots of that resource on that day: a free slot fills the start and the end, and a time that clashes with another booking is named before saving."
 home = "appointments_appointment"
 
 [[model]]
@@ -77,12 +77,12 @@ write_group = "appointments.user"
   report = { rows = "resource_id", cols = "state" }
 
   [[model.ui.section]]
-  label = "Booking"
-  fields = ["title", "resource_id", "day", "start_minute", "end_minute"]
+  label = "Appointment"
+  fields = ["title", "attendee_name", "attendee_email", "attendee_phone", "notes"]
 
   [[model.ui.section]]
-  label = "Attendee"
-  fields = ["attendee_name", "attendee_email", "attendee_phone", "notes"]
+  label = "Resource and time"
+  fields = ["resource_id", "day", "start_minute", "end_minute"]
 
   [[model.ui.filter]]
   label = "Today"

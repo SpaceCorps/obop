@@ -1,0 +1,78 @@
+/* Appointments: the free times inside the booking form (SlotPicker.tsx). Tokens only. */
+.ap-slots {
+  padding-block: var(--space-2) var(--space-4);
+}
+.ap-slots-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ap-slots-sub {
+  margin: var(--space-1) 0 var(--space-3);
+}
+.ap-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+}
+.ap-warn > svg {
+  flex: none;
+  margin-block-start: 2px;
+}
+.ap-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: var(--space-2);
+}
+.ap-slot {
+  min-block-size: 2.5rem;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.ap-slot:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.ap-slot:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.ap-slot:disabled {
+  cursor: default;
+  background: var(--surface-2);
+  color: var(--text-subtle);
+  text-decoration: line-through;
+  border-color: transparent;
+}
+/* Free, but the length chosen runs into a booking: not struck through, a dashed outline. */
+.ap-slot.is-short:disabled {
+  text-decoration: none;
+}
+.ap-slot.is-short:disabled:not(.is-chosen) {
+  background: var(--surface);
+  border: 1px dashed var(--border-control);
+}
+.ap-slots-legend {
+  margin: var(--space-2) 0 0;
+}
+.ap-slot.is-chosen {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
+}
+@media (max-width: 47.99rem) {
+  .ap-slot {
+    min-block-size: 44px;
+  }
+}
