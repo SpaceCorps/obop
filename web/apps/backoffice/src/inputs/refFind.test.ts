@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { Row } from "../api.ts";
-import { byName, nameKey, searchWord } from "./refFind.ts";
+import { byName, existing, nameKey, searchWord } from "./refFind.ts";
 
 const party = (id: string, name: string): Row => ({ id, name });
 
@@ -32,5 +32,18 @@ describe("a typed name finds the record it means", () => {
 
   it("asks the server for the longest word", () => {
     expect(searchWord("Elektro  Petersen GmbH")).toBe("petersen");
+  });
+});
+
+describe("the record that already stands for a contact", () => {
+  it("is the active one, else the archived one", () => {
+    expect(
+      existing([
+        { id: "old", active: false },
+        { id: "new", active: true },
+      ]),
+    ).toEqual({ kind: "active", id: "new" });
+    expect(existing([{ id: "old", active: false }])).toEqual({ kind: "archived", id: "old" });
+    expect(existing([])).toEqual({ kind: "none" });
   });
 });

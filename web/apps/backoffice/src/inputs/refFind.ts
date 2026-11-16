@@ -35,3 +35,16 @@ export function byName(
   if (hits.length > 1 || !complete) return { kind: "several" };
   return { kind: "none" };
 }
+
+/**
+ * The record that already stands for the found one (the vendor of a contact): an active one
+ * first, else an archived one, which a person may restore instead of making a second.
+ */
+export function existing(
+  rows: readonly Row[],
+): { kind: "active"; id: string } | { kind: "archived"; id: string } | { kind: "none" } {
+  const active = rows.find((r) => r.active !== false);
+  if (active) return { kind: "active", id: active.id };
+  const archived = rows[0];
+  return archived ? { kind: "archived", id: archived.id } : { kind: "none" };
+}

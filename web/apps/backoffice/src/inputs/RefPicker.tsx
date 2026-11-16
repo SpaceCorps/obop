@@ -41,7 +41,7 @@ import { serverMessage } from "../serverMessage.ts";
 import { Icon } from "../ui.tsx";
 import { fillsFor, fillValues, meets, refConditions, useFieldForm, type RefCond } from "./form.ts";
 import { useAnchored } from "./popover.ts";
-import { byName, searchWord } from "./refFind.ts";
+import { byName, existing, searchWord } from "./refFind.ts";
 
 const RecordPanel = lazy(() =>
   import("../RecordPanel.tsx").then((m) => ({ default: m.RecordPanel })),
@@ -374,6 +374,44 @@ export function RefPicker(p: RefPickerProps) {
     return null;
   }
 
+  /**
+   * A record of this model that already stands for the found one (the vendor of a contact): an
+   * active one is picked, an archived one is restored when the person agrees. True when it was
+   * dealt with and nothing is to be made.
+   */
+  async function reuseFor(refId: string, text: string): Promise<boolean> {
+    if (!viaRef) return false;
+    const there = await search(d.token, to, {
+      filter: [{ field: viaRef.field, op: "eq", value: refId }],
+      limit: 5,
+    });
+    if ("error" in there) return false;
+    const old = existing(there.rows);
+    if (old.kind === "none") return false;
+    if (old.kind === "active") {
+      pick(old.id);
+      return true;
+    }
+    const restore = await d.confirm(
+      t("“{name}” is an archived {model}. Restore it instead of making a second one?", {
+        name: text,
+        model: inSentence(targetTitle),
+      }),
+      t("Restore"),
+    );
+    if (!restore) {
+      close();
+      return true;
+    }
+    const r = await d.run(`${to}.update`, { id: old.id, active: true });
+    if (r.kind === "ok") {
+      d.notify(t("{model} “{name}” restored", { model: targetTitle, name: text }));
+      pick(old.id);
+    } else if (r.kind === "error") d.notify(serverMessage(r.message), "error");
+    else close();
+    return true;
+  }
+
   async function quickCreate(text: string) {
     if ((!labelName && !viaRef) || making) return;
     setMaking(true);
@@ -383,6 +421,10 @@ export function RefPicker(p: RefPickerProps) {
       if (!ref) {
         setMaking(false);
         openStacked(text);
+        return;
+      }
+      if (ref.found && (await reuseFor(ref.id, text))) {
+        setMaking(false);
         return;
       }
       start[viaRef.field] = ref.id;

@@ -3,7 +3,8 @@ import { expect, test, type Api } from "../support/fixtures.ts";
 
 // The Vendor picker of a purchase order (a vendor is named by its contact): typing a name finds
 // the contact of that name whatever its case and spacing, never makes a second contact for a name
-// two contacts share (the full form opens instead).
+// two contacts share (the full form opens instead), and offers to restore an archived vendor of
+// that contact instead of making a second vendor.
 
 async function withPurchase(api: Api, run: () => Promise<void>) {
   const root = await api.token("root");
@@ -72,5 +73,27 @@ test("a name two contacts share opens the full form instead of making a third", 
     await page.getByRole("option", { name: `Create “${name}”` }).click();
     await expect(page.getByRole("dialog", { name: "New vendor" })).toBeVisible();
     expect((await rows(api, "party", "name", name)).length).toBe(2);
+  });
+});
+
+test("an archived vendor of the contact is restored, not made a second time", async ({
+  page,
+  signIn,
+  api,
+  uid,
+}) => {
+  await withPurchase(api, async () => {
+    const name = uid("Einzel Kontakt GmbH");
+    const party = await api.create("root", "party", { name });
+    const vendor = await api.create("root", "purchase_vendor", { party_id: party.id });
+    await api.run("root", "purchase_vendor.update", { id: vendor.id, active: false });
+    const picker = await vendorPicker(page, signIn);
+    await picker.click();
+    await picker.fill(name);
+    await page.getByRole("option", { name: `Create “${name}”` }).click();
+    await page.getByRole("button", { name: "Restore", exact: true }).click();
+    await expect(picker).toHaveValue(name);
+    const vendors = await rows(api, "purchase_vendor", "party_id", party.id);
+    expect(vendors.map((v) => [v.id, v.active])).toEqual([[vendor.id, true]]);
   });
 });
