@@ -41,6 +41,7 @@ import { serverMessage } from "../serverMessage.ts";
 import { Icon } from "../ui.tsx";
 import { fillsFor, fillValues, meets, refConditions, useFieldForm, type RefCond } from "./form.ts";
 import { useAnchored } from "./popover.ts";
+import { byName, searchWord } from "./refFind.ts";
 
 const RecordPanel = lazy(() =>
   import("../RecordPanel.tsx").then((m) => ({ default: m.RecordPanel })),
@@ -345,16 +346,30 @@ export function RefPicker(p: RefPickerProps) {
     return out;
   }
 
-  /** The record a ref-named model points at: the one of that exact name, else a new one. */
-  async function refFor(text: string): Promise<string | null> {
+  /**
+   * The record a ref-named model points at: the one of that name (case and repeated spaces do not
+   * count), else a new one. Null when a person must choose: several records have that name, or
+   * the search failed; the full form then opens.
+   */
+  async function refFor(text: string): Promise<{ id: string; found: boolean } | null> {
     if (!viaRef) return null;
+    const asked = 50;
     const found = await search(d.token, viaRef.to, {
-      filter: [{ field: viaRef.name, op: "eq", value: text }],
-      limit: 2,
+      filter: [{ field: viaRef.name, op: "contains", value: searchWord(text) }],
+      limit: asked,
     });
-    if (!("error" in found) && found.rows.length === 1) return found.rows[0]!.id;
+    if ("error" in found) return null;
+    const hit = byName(found.rows, viaRef.name, text, found.rows.length < asked);
+    if (hit.kind === "one") return { id: hit.id, found: true };
+    if (hit.kind === "several") {
+      d.notify(t("Several records are named “{name}”. Choose one in the form.", { name: text }));
+      return null;
+    }
     const made = await d.run(`${viaRef.to}.create`, { [viaRef.name]: text });
-    if (made.kind === "ok") return String((made.value as Row).id ?? "") || null;
+    if (made.kind === "ok") {
+      const id = String((made.value as Row).id ?? "");
+      return id ? { id, found: false } : null;
+    }
     if (made.kind === "error") d.notify(serverMessage(made.message), "error");
     return null;
   }
@@ -364,13 +379,13 @@ export function RefPicker(p: RefPickerProps) {
     setMaking(true);
     const start = startValues(text);
     if (viaRef) {
-      const rid = await refFor(text);
-      if (!rid) {
+      const ref = await refFor(text);
+      if (!ref) {
         setMaking(false);
         openStacked(text);
         return;
       }
-      start[viaRef.field] = rid;
+      start[viaRef.field] = ref.id;
     }
     const r = await d.run(`${to}.create`, start);
     setMaking(false);

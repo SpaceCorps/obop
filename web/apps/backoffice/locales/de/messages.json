@@ -2,6 +2,7 @@
   " Show records.": " Datensätze anzeigen.",
   "(needs a human's approval when an agent runs it)": "(erfordert die Genehmigung einer Person, wenn ein Agent sie ausführt)",
   "(opens in a new tab)": "(öffnet in einem neuen Tab)",
+  "Several records are named “{name}”. Choose one in the form.": "Mehrere Einträge heißen „{name}“. Wählen Sie einen im Formular.",
   "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.": "{account} ist ein Forderungskonto, und diese Rechnung ist noch nicht im Hauptbuch, daher kann es die Zahlung nicht aufnehmen. Wählen Sie ein anderes Konto, etwa ein Erlöskonto. Es wurde nichts gebucht.",
   "{action} “{name}”?": "{action}: „{name}“?",
   "{action} {noun}": "{noun}: {action}",

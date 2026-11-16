@@ -1,5 +1,6 @@
 {
   " Show records.": " Show records.",
+  "Several records are named “{name}”. Choose one in the form.": "Several records are named “{name}”. Choose one in the form.",
   "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.": "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.",
   "“{label}” is still used by other records. Remove or change them first.": "“{label}” is still used by other records. Remove or change them first.",
   "“{part}” has no value": "“{part}” has no value",
