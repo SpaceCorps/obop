@@ -49,9 +49,12 @@ export function drawRoute(
 ): Drawn {
   const empty: Drawn = { path: "", start: null, end: null, dropped: [] };
   if (!points.length) return empty;
-  const lat0 = (points.reduce((s, p) => s + p.lat, 0) / points.length) * (Math.PI / 180);
+  // The box fits the accepted route; one far-off dropped fix must not shrink it to a dot.
+  const fit = points.some(accepted) ? points.filter(accepted) : points;
+  const lat0 = (fit.reduce((s, p) => s + p.lat, 0) / fit.length) * (Math.PI / 180);
   const k = Math.cos(lat0);
-  const xy = points.map((p) => [p.lon * k, -p.lat] as const);
+  const proj = (p: Point) => [p.lon * k, -p.lat] as const;
+  const xy = fit.map(proj);
   const xs = xy.map((p) => p[0]);
   const ys = xy.map((p) => p[1]);
   const [minX, maxX, minY, maxY] = [
@@ -65,13 +68,19 @@ export function drawRoute(
   const scale = Math.min((width - 2 * pad) / spanX, (height - 2 * pad) / spanY);
   const offX = (width - spanX * scale) / 2;
   const offY = (height - spanY * scale) / 2;
-  const at = (i: number): [number, number] => [
-    Math.round((offX + (xy[i]![0] - minX) * scale) * 10) / 10,
-    Math.round((offY + (xy[i]![1] - minY) * scale) * 10) / 10,
-  ];
+  const round = (v: number) => Math.round(v * 10) / 10;
+  // A dropped point outside the box is pinned to its edge.
+  const pin = (v: number, max: number) => Math.min(Math.max(v, 2), max - 2);
+  const at = (p: Point): [number, number] => {
+    const [x, y] = proj(p);
+    return [
+      round(pin(offX + (x - minX) * scale, width)),
+      round(pin(offY + (y - minY) * scale, height)),
+    ];
+  };
   const kept: [number, number][] = [];
   const dropped: [number, number][] = [];
-  points.forEach((p, i) => (accepted(p) ? kept : dropped).push(at(i)));
+  for (const p of points) (accepted(p) ? kept : dropped).push(at(p));
   const path = kept.map(([x, y], i) => `${i ? "L" : "M"}${x} ${y}`).join(" ");
   return { path, start: kept[0] ?? null, end: kept[kept.length - 1] ?? null, dropped };
 }

@@ -30,6 +30,26 @@ describe("mileage track", () => {
     }
   });
 
+  it("fits the box to the accepted route, not to a far-off dropped point", () => {
+    // 30 points along about 3 km, and one dropped fix about 55 km away.
+    const rows = Array.from({ length: 30 }, (_, i) =>
+      r(String(i), (53.55 + i * 0.001).toFixed(7), (9.93 + i * 0.001).toFixed(7)),
+    );
+    rows.splice(15, 0, r("far", "54.0500000", "9.9400000", "1900.00"));
+    const d = drawRoute(pointsOf(rows), 320, 200);
+    const [sx, sy] = d.start!;
+    const [ex, ey] = d.end!;
+    // The route fills the box: start and end are far apart.
+    expect(Math.hypot(ex - sx, ey - sy)).toBeGreaterThan(150);
+    // The dropped point is pinned inside the box.
+    expect(d.dropped).toHaveLength(1);
+    const [dx, dy] = d.dropped[0]!;
+    expect(dx).toBeGreaterThanOrEqual(0);
+    expect(dx).toBeLessThanOrEqual(320);
+    expect(dy).toBeGreaterThanOrEqual(0);
+    expect(dy).toBeLessThanOrEqual(200);
+  });
+
   it("draws nothing without points", () => {
     expect(drawRoute([], 320, 200).path).toBe("");
   });
