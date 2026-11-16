@@ -538,6 +538,16 @@
             "description": "ISO 4217 currency code",
             "type": "string"
           },
+          "due_date": {
+            "description": "Date the payment is due (YYYY-MM-DD); not before the issue date",
+            "format": "date",
+            "type": "string"
+          },
+          "issue_date": {
+            "description": "Date the invoice is issued (YYYY-MM-DD)",
+            "format": "date",
+            "type": "string"
+          },
           "number": {
             "description": "Number from a gapless yearly series, such as INV-2026-00042, assigned when posted (a number the system assigns; read-only)",
             "readOnly": true,
@@ -9491,6 +9501,16 @@
                           "maxLength": 2048,
                           "type": "string"
                         },
+                        "due_date": {
+                          "description": "Date the payment is due (YYYY-MM-DD); not before the issue date",
+                          "format": "date",
+                          "type": "string"
+                        },
+                        "issue_date": {
+                          "description": "Date the invoice is issued (YYYY-MM-DD)",
+                          "format": "date",
+                          "type": "string"
+                        },
                         "party_id": {
                           "description": "Customer party id",
                           "type": "string"
@@ -9806,6 +9826,16 @@
                   "currency": {
                     "description": "ISO 4217 currency code",
                     "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "description": "Date the payment is due (YYYY-MM-DD); not before the issue date",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "issue_date": {
+                    "description": "Date the invoice is issued (YYYY-MM-DD)",
+                    "format": "date",
                     "type": "string"
                   },
                   "party_id": {
@@ -10717,7 +10747,17 @@
                     "maxLength": 2048,
                     "type": "string"
                   },
+                  "due_date": {
+                    "description": "Date the payment is due (YYYY-MM-DD); not before the issue date",
+                    "format": "date",
+                    "type": "string"
+                  },
                   "id": {
+                    "type": "string"
+                  },
+                  "issue_date": {
+                    "description": "Date the invoice is issued (YYYY-MM-DD)",
+                    "format": "date",
                     "type": "string"
                   },
                   "party_id": {

@@ -27,6 +27,14 @@ description = "Total de la facture en plus petite unité monétaire, somme des l
 label = "Numéro"
 description = "Numéro d’une série annuelle sans rupture, par exemple INV-2026-00042, attribué à la comptabilisation"
 
+[labels.fr.model.invoice.field.issue_date]
+label = "Date d’émission"
+description = "Date à laquelle la facture est émise (YYYY-MM-DD)"
+
+[labels.fr.model.invoice.field.due_date]
+label = "Date d’échéance"
+description = "Date à laquelle le paiement est dû (YYYY-MM-DD) ; pas avant la date d’émission"
+
 [labels.fr.model.invoice.action.post]
 label = "Comptabiliser"
 description = "Comptabilise une facture en brouillon et lui attribue le numéro suivant de la série"

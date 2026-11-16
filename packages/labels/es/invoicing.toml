@@ -27,6 +27,14 @@ description = "Total de la factura en unidades menores, la suma de las líneas"
 label = "Número"
 description = "Número de una serie anual sin huecos, como INV-2026-00042, asignado al contabilizar"
 
+[labels.es.model.invoice.field.issue_date]
+label = "Fecha de emisión"
+description = "Fecha en que se emite la factura (YYYY-MM-DD)"
+
+[labels.es.model.invoice.field.due_date]
+label = "Fecha de vencimiento"
+description = "Fecha en que vence el pago (YYYY-MM-DD); no anterior a la fecha de emisión"
+
 [labels.es.model.invoice.action.post]
 label = "Contabilizar"
 description = "Contabilizar una factura en borrador y asignarle el siguiente número de la serie"
