@@ -31,13 +31,13 @@ test.describe("apps open on their home", () => {
       page.getByRole("navigation", { name: "CRM menu" }).getByRole("link", { name: "Open" }),
     ).toBeVisible();
 
-    // Mileage declares its home (D95): it opens on its trips.
+    // Mileage declares its home (D95): it opens on its trips, filtered to the ones to review.
     await page.goto("/#/");
     await page
       .locator(".home")
       .getByRole("link", { name: /^Mileage/ })
       .click();
-    await expect(page).toHaveURL(/#\/mileage\/mileage_trip$/);
+    await expect(page).toHaveURL(/#\/mileage\/mileage_trip\?st=/);
 
     // Connectors has several main lists and no home: it opens on its generated overview.
     await page.goto("/#/");
