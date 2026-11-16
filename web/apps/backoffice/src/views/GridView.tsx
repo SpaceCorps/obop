@@ -17,7 +17,7 @@ import { fmt, t } from "@obop/ui";
 import { getTime, search, type Command, type Row, type ServerFilter } from "../api.ts";
 import { useData } from "../data.tsx";
 import { todayIn, addDays } from "../filters.ts";
-import { durationClock, durationText, parseDuration } from "../inputs/display.ts";
+import { durationClock, durationText } from "../inputs/display.ts";
 import { RefPicker } from "../inputs/RefPicker.tsx";
 import { actionTitle, fieldTitle } from "../labels.ts";
 import { PHONE_QUERY, useMedia } from "../media.ts";
@@ -29,6 +29,7 @@ import {
   cellPlan,
   gridSpecOf,
   minutesOf,
+  parseCellHours,
   submittable,
   weekDays,
   weekStart,
@@ -168,9 +169,9 @@ export function GridView(p: ViewProps) {
   /** Type `text` into the cell of line `l` on `day`. */
   const commit = async (l: GridLine, day: string, text: string): Promise<Committed> => {
     const typed = text.trim();
-    const minutes = typed === "" ? null : parseDuration(typed);
+    const minutes = typed === "" ? null : parseCellHours(typed);
     if (typed !== "" && (minutes === null || minutes > 1440)) {
-      d.notify(t("Type the time as 1:30, 1.5h or 90 (minutes), at most 24 hours."), "error");
+      d.notify(t("Type hours as 8, 1.5 or 1:30, at most 24."), "error");
       return "failed";
     }
     const plan = cellPlan(l.cells[day] ?? [], minutes, spec);
@@ -213,7 +214,11 @@ export function GridView(p: ViewProps) {
     }
     setBusy(false);
     if (failed) d.notify(failed, "error");
-    if (done) d.notify(t("{count} entries submitted", { count: String(done) }), "success");
+    if (done)
+      d.notify(
+        t("{count, plural, one {# entry submitted} other {# entries submitted}}", { count: done }),
+        "success",
+      );
   };
 
   const addLine = (ref: string) => {
@@ -465,6 +470,8 @@ function Cell(p: {
   // What was typed, shown until the server's answer changes the cell (or the write fails).
   const [pending, setPending] = useState<string | null>(null);
   const saving = useRef(false);
+  // Escape puts the old value back: the blur that follows must not save what was typed.
+  const cancelled = useRef(false);
   useEffect(() => setPending(null), [minutes]);
 
   if (!cellEditable(entries, p.spec) || p.disabled) {
@@ -491,6 +498,10 @@ function Cell(p: {
   }
 
   const save = async () => {
+    if (cancelled.current) {
+      cancelled.current = false;
+      return;
+    }
     if (saving.current) return;
     saving.current = true;
     const typed = text;
@@ -504,6 +515,8 @@ function Cell(p: {
       e.preventDefault();
       e.currentTarget.blur();
     } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelled.current = true;
       setText(shown);
       setFocused(false);
       e.currentTarget.blur();
@@ -516,6 +529,7 @@ function Cell(p: {
       inputMode="decimal"
       aria-label={p.label}
       placeholder="0:00"
+      title={t("Hours: 8, 1.5 or 1:30")}
       value={focused ? text : (pending ?? (minutes ? durationText(minutes) : ""))}
       onFocus={(e) => {
         setText(shown);

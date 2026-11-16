@@ -97,6 +97,30 @@
   background: var(--surface-2);
   font-weight: var(--weight-semibold);
 }
+/* When the grid is narrower than the week (a side panel is open), the task and the total stay in
+   view and the days scroll between them. */
+.tsgrid-table .tsgrid-line,
+.tsgrid-table .tsgrid-linehead,
+.tsgrid-table tfoot th,
+.tsgrid-table .tsgrid-total {
+  position: sticky;
+  z-index: 1;
+  background: var(--surface);
+}
+.tsgrid-table .tsgrid-line,
+.tsgrid-table .tsgrid-linehead,
+.tsgrid-table tfoot th {
+  inset-inline-start: 0;
+}
+.tsgrid-table .tsgrid-total {
+  inset-inline-end: 0;
+}
+.tsgrid-table thead th.tsgrid-linehead,
+.tsgrid-table thead th.tsgrid-total,
+.tsgrid-table tfoot th,
+.tsgrid-table tfoot .tsgrid-total {
+  background: var(--surface-2);
+}
 .tsgrid .tsgrid-input {
   inline-size: 100%;
   max-inline-size: 5.5rem;
@@ -187,6 +211,10 @@
 }
 .tsgrid-phone .tsgrid-bar {
   padding-inline: var(--space-4);
+}
+/* The Mine / Everyone switch is a tap target on a phone. */
+.tsgrid-phone .switcher button {
+  min-block-size: 2.75rem;
 }
 .tsgrid-phone .calhead {
   font-size: var(--text-md);

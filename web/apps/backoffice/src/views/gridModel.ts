@@ -9,6 +9,7 @@
 import type { FieldMeta, ModelMeta, Row } from "../api.ts";
 import { displayOf, stateFieldOf } from "../presentation.ts";
 import { addDays } from "../filters.ts";
+import { parseDuration } from "../inputs/display.ts";
 
 export type GridSpec = {
   /** The ref each line stands for (`task_id`). */
@@ -119,6 +120,17 @@ export function buildGrid(
   }
   for (const x of extra) if (x.ref) lineOf(x.ref, x.owner);
   return { lines: [...lines.values()], dayTotals, total };
+}
+
+/**
+ * What is typed into a cell, in minutes: in a grid of hours a bare number is hours ("8", "1.5",
+ * "1,5"), as in a paper timesheet; "1:30", "1h 30", "1.5h" and "90m" read as everywhere else.
+ * `null` when it cannot be read; 0 for an empty box is the caller's business.
+ */
+export function parseCellHours(text: string): number | null {
+  const s = text.trim().replace(/,/g, ".");
+  if (/^\d+(?:\.\d+)?$/.test(s) || /^\.\d+$/.test(s)) return Math.round(Number(s) * 60);
+  return parseDuration(s);
 }
 
 /** Whether an entry may still be typed over: no status, or the first one (draft). */

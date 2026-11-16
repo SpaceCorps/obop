@@ -53,15 +53,35 @@ test("a week of time is typed into the grid and submitted for approval", async (
     await expect.poll(async () => (await mine(api, task.id)).map((r) => r.minutes)).toEqual([150]);
     await expect(page.getByRole("row", { name: new RegExp(task.title) })).toContainText("2 h 30");
 
+    // A bare number is hours, as on a paper timesheet: 8 on the fourth day is a working day.
+    await cells.nth(3).fill("8");
+    await cells.nth(3).press("Enter");
+    await expect
+      .poll(async () => (await mine(api, task.id)).map((r) => r.minutes).sort((x, y) => x - y))
+      .toEqual([150, 480]);
+    await expect(cells.nth(3)).toHaveValue("8 h");
+
+    // Escape puts the old value back and writes nothing, in an empty cell and in a filled one.
+    await cells.nth(4).fill("4");
+    await cells.nth(4).press("Escape");
+    await cells.nth(3).fill("3");
+    await cells.nth(3).press("Escape");
+    await expect(cells.nth(4)).toHaveValue("");
+    await expect(cells.nth(3)).toHaveValue("8 h");
+    await page.waitForTimeout(500);
+    expect((await mine(api, task.id)).map((r) => r.minutes).sort((x, y) => x - y)).toEqual([
+      150, 480,
+    ]);
+
     // Submit week: the draft is submitted and its cell is no longer typed over.
     await page.getByRole("button", { name: /^Submit week \(\d+\)$/ }).click();
     await expect
       .poll(async () => (await mine(api, task.id)).map((r) => r.state))
-      .toEqual(["submitted"]);
+      .toEqual(["submitted", "submitted"]);
     await expect(
       page.getByRole("button", { name: new RegExp(`^${task.title} on .*: 2 h 30$`) }),
     ).toBeVisible();
-    await expect(cells).toHaveCount(6);
+    await expect(cells).toHaveCount(5);
   } finally {
     await tearDown(api, root);
   }
@@ -89,10 +109,14 @@ test.describe("on a phone", () => {
       await expect(box).toHaveCount(1);
       const height = (await box.boundingBox())?.height ?? 0;
       expect(height).toBeGreaterThanOrEqual(44);
-      await box.fill("45");
+      await box.fill("45m");
       await box.press("Enter");
       await expect.poll(async () => (await mine(api, task.id)).map((r) => r.minutes)).toEqual([45]);
       await expect(days.nth(1)).toContainText("45 min");
+      // The Mine / Everyone switch is a tap target too.
+      await expect(page.locator(".tsgrid .switcher button")).toHaveCount(2);
+      for (const b of await page.locator(".tsgrid .switcher button").all())
+        expect((await b.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
       const sideways = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,
       );

@@ -4,6 +4,7 @@ import {
   buildGrid,
   cellEditable,
   cellPlan,
+  parseCellHours,
   gridSpecOf,
   submittable,
   weekDays,
@@ -135,5 +136,19 @@ describe("typing into a cell", () => {
     expect(cellEditable(sent, spec)).toBe(false);
     expect(cellPlan(two, 60, spec)).toEqual({ kind: "locked" });
     expect(cellPlan(sent, 60, spec)).toEqual({ kind: "locked" });
+  });
+});
+
+describe("reading what is typed into a cell", () => {
+  it("reads a bare number as hours, and the other forms as everywhere else", () => {
+    expect(parseCellHours("8")).toBe(480);
+    expect(parseCellHours("1.5")).toBe(90);
+    expect(parseCellHours("1,5")).toBe(90);
+    expect(parseCellHours(".5")).toBe(30);
+    expect(parseCellHours("1:30")).toBe(90);
+    expect(parseCellHours("2.5h")).toBe(150);
+    expect(parseCellHours("90m")).toBe(90);
+    expect(parseCellHours("90 min")).toBe(90);
+    expect(parseCellHours("eight")).toBeNull();
   });
 });
