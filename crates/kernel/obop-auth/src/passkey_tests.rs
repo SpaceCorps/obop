@@ -856,7 +856,7 @@ fn removing_the_last_passkey_of_an_ordinary_user_ends_their_two_factor_state() {
     let opts = r.a.proof_options(&p, &ctx()).unwrap();
     r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
     r.a.remove(&p, &token, &id, &pw()).unwrap();
-    assert!(!r.a.has_second_factor("ada"));
+    assert!(!r.a.has_second_factor("ada").unwrap());
     assert!(r.b.get("auth_user", "ada").unwrap().unwrap()["recovery"].is_null());
     // Password sign-in works again.
     assert!(matches!(
@@ -990,7 +990,7 @@ fn the_break_glass_reset_and_the_administrators_reset_clear_passkeys_too() {
     r.b.update("auth_user", "ada", &f).unwrap();
     r.a.operator_reset_mfa("ada").unwrap();
     assert_eq!(r.a.passkey_count("ada"), 0);
-    assert!(!r.a.has_second_factor("ada"));
+    assert!(!r.a.has_second_factor("ada").unwrap());
     assert!(r.b.get("auth_user", "ada").unwrap().unwrap()["passkey_login"] == false);
     assert!(matches!(
         r.a.login_step("ada", PW).unwrap(),
@@ -1233,7 +1233,7 @@ fn totp_and_passkeys_coexist_and_either_completes_the_second_step() {
     let opts = r.a.proof_options(&p, &ctx()).unwrap();
     r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
     r.a.disable(&p, PW, None, None).unwrap();
-    assert!(!r.a.mfa_enabled("ada") && r.a.has_second_factor("ada"));
+    assert!(!r.a.mfa_enabled("ada") && r.a.has_second_factor("ada").unwrap());
     assert!(!r.b.get("auth_user", "ada").unwrap().unwrap()["recovery"].is_null());
 }
 

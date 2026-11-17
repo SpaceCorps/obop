@@ -54,21 +54,23 @@ fn admin_name(p: &Principal) -> Result<&str, MfaError> {
 }
 
 impl Auth {
-    /// Whether an administrator disabled the account.
-    pub(crate) fn is_disabled(&self, name: &str) -> bool {
-        self.backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .is_some_and(|u| u.get("disabled").and_then(J::as_bool) == Some(true))
+    /// A flag of the account that is set to `true`. A read the store refused is the error, never
+    /// "not set": a sign-in decided from a refused read would let a disabled or Microsoft-only
+    /// account in, or skip its second factor (N22).
+    pub(crate) fn account_flag(&self, name: &str, key: &str) -> Result<bool, String> {
+        Ok(self
+            .backend
+            .get("auth_user", name)?
+            .is_some_and(|u| u.get(key).and_then(J::as_bool) == Some(true)))
     }
 
-    pub(crate) fn must_change_password(&self, name: &str) -> bool {
-        self.backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .is_some_and(|u| u.get("must_change_password").and_then(J::as_bool) == Some(true))
+    /// Whether an administrator disabled the account.
+    pub(crate) fn is_disabled(&self, name: &str) -> Result<bool, String> {
+        self.account_flag(name, "disabled")
+    }
+
+    pub(crate) fn must_change_password(&self, name: &str) -> Result<bool, String> {
+        self.account_flag(name, "must_change_password")
     }
 
     /// Revoke the sessions of a user, all but the one whose token hash is `keep`. Agent tokens
@@ -461,7 +463,10 @@ impl Auth {
             return Err(MfaError::BadPassword);
         }
         // With two-factor on, the password alone does not change the password.
-        if self.has_second_factor(name) {
+        if self
+            .has_second_factor(name)
+            .map_err(MfaError::Unavailable)?
+        {
             self.check_second_factor(name, code, recovery)?;
         }
         if new.chars().count() < MIN_PASSWORD_CHARS {
@@ -499,7 +504,8 @@ impl Auth {
         // Read until no read of it was refused: a policy read as "not required" because the store
         // refused the lookup would free a session that still owes its two-factor enrolment.
         let still_limited = self
-            .settled(|| self.enrolment_required_for(&groups) && !self.has_second_factor(name))
+            .settled(|| Ok(self.enrolment_required_for(&groups) && !self.has_second_factor(name)?))
+            .and_then(|r: Result<bool, String>| r.map_err(MfaError::Unavailable))
             .map_err(|e| match e {
                 MfaError::Unavailable(m) => {
                     self.incomplete(&ch, "reading the two-factor policy", m)

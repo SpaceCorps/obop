@@ -151,9 +151,10 @@ impl Auth {
     fn resync_limits(&self, name: &str, groups: &[String], ch: &Change) -> Result<usize, MfaError> {
         let limited = self
             .settled(|| {
-                self.must_change_password(name)
-                    || (self.enrolment_required_for(groups) && !self.has_second_factor(name))
+                Ok(self.must_change_password(name)?
+                    || (self.enrolment_required_for(groups) && !self.has_second_factor(name)?))
             })
+            .and_then(|r: Result<bool, String>| r.map_err(MfaError::Unavailable))
             .map_err(|e| match e {
                 MfaError::Unavailable(m) => self.incomplete(ch, "reading the two-factor policy", m),
                 other => other,

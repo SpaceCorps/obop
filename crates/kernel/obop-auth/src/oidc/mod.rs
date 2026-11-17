@@ -212,12 +212,8 @@ impl Auth {
     }
 
     /// Whether the account signs in with Microsoft only.
-    pub(crate) fn is_sso_only(&self, name: &str) -> bool {
-        self.backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .is_some_and(|u| u.get("sso_only").and_then(J::as_bool) == Some(true))
+    pub(crate) fn is_sso_only(&self, name: &str) -> Result<bool, String> {
+        self.account_flag(name, "sso_only")
     }
 
     /// The binding of an account as `(link id, record)`, with a lookup that reports a refusal.
@@ -1239,7 +1235,10 @@ impl SsoApi for Auth {
             self.event(&name, "oidc_refused", "-", why);
             return Err(MfaError::Expired);
         }
-        if !self.has_second_factor(&name) {
+        if !self
+            .has_second_factor(&name)
+            .map_err(MfaError::Unavailable)?
+        {
             return Err(MfaError::Expired);
         }
         match self.after_first_factor(&name, &pending) {

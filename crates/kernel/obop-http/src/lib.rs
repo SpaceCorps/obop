@@ -557,6 +557,8 @@ fn login_blocking(s: Arc<HttpState>, body: J) -> Response {
         Err(e) if e.contains("too many") => {
             (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": e}))).into_response()
         }
+        // A refused read of the account is no wrong password: the client may try again (D74, N22).
+        Err(e) if obop_storage::fault::Fault::is_transient(&e) => unavailable(&e),
         Err(e) => (StatusCode::UNAUTHORIZED, Json(json!({"error": e}))).into_response(),
     }
 }

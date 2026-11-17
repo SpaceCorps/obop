@@ -433,14 +433,14 @@ impl Auth {
         }
         // Same answer as a wrong password, so nobody can tell a disabled account from none; the
         // security log says what happened.
-        if self.is_disabled(&name) {
+        if self.is_disabled(&name)? {
             self.event(&name, "login_refused", &name, "the account is disabled");
             return Err("invalid username or password".into());
         }
         // An account that signs in with Microsoft only (D91) has no password step. Same answer as
         // a wrong password, and counted like one, so that a right password is not told from a
         // wrong one by the lockout; the log says what happened.
-        if self.is_sso_only(&name) {
+        if self.is_sso_only(&name)? {
             self.record_failure(&name)?;
             self.event(
                 &name,
@@ -463,7 +463,7 @@ impl Auth {
         name: &str,
         epoch: &Epoch,
     ) -> Result<LoginOutcome, String> {
-        if self.has_second_factor(name) {
+        if self.has_second_factor(name)? {
             let token = format!("obopmfa_{}", hex(&random_bytes::<32>()));
             let mut f = Fields::new();
             f.insert("user".into(), J::from(name));
@@ -476,11 +476,10 @@ impl Auth {
                 .insert(MFA_TOKEN_TABLE, &token_hash(&token), &f)?;
             return Ok(LoginOutcome::MfaRequired { mfa_token: token });
         }
+        // A refused read is the error: no groups would make the enrolment policy see none (N22).
         let groups = self
             .backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
+            .get("auth_user", name)?
             .map(|u| str_list(u.get("groups").unwrap_or(&J::Null)))
             .unwrap_or_default();
         let limited = self.enrolment_required_for(&groups);
@@ -601,7 +600,9 @@ impl Auth {
         enrol: bool,
         epoch: &Epoch,
     ) -> Result<LoginOutcome, SessionError> {
-        let must_change = self.must_change_password(name);
+        let must_change = self
+            .must_change_password(name)
+            .map_err(SessionError::Store)?;
         let token = self
             .issue_session(name, enrol || must_change)
             .map_err(SessionError::Store)?;
@@ -811,6 +812,9 @@ impl MfaApi for Auth {
         let name = person(p)?;
         let u = self.user_record(name)?;
         let key = !self.config.keys.is_empty();
+        let second_factor = self
+            .has_second_factor(name)
+            .map_err(MfaError::Unavailable)?;
         Ok(json!({
             "user": name,
             "available": key,
@@ -818,7 +822,7 @@ impl MfaApi for Auth {
             "pending": u["totp_pending"].is_string(),
             "recovery_remaining": str_list(&u["recovery"]).len(),
             "passkeys": self.passkeys_of(name).len(),
-            "second_factor": self.has_second_factor(name),
+            "second_factor": second_factor,
             "limited": p.mfa_limited,
             "password_change_required": u["must_change_password"].as_bool() == Some(true),
             "is_admin": p.groups.contains(ADMIN_GROUP),
@@ -945,7 +949,10 @@ impl MfaApi for Auth {
         let name = person(p)?;
         let _g = self.mfa_guard()?;
         self.user_record(name)?;
-        if !self.has_second_factor(name) {
+        if !self
+            .has_second_factor(name)
+            .map_err(MfaError::Unavailable)?
+        {
             return Err(MfaError::Invalid("two-factor is not on".into()));
         }
         if !self.password_ok(name, password)? {

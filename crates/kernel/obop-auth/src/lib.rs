@@ -720,6 +720,8 @@ mod lockout_tests;
 mod mfa_tests;
 #[cfg(test)]
 mod passkey_tests;
+#[cfg(test)]
+mod signin_fault_tests;
 
 #[cfg(test)]
 mod tests {

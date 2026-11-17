@@ -110,8 +110,13 @@ impl Auth {
     }
 
     /// A second factor of any kind: an authenticator app or a passkey.
-    pub fn has_second_factor(&self, name: &str) -> bool {
-        self.mfa_enabled(name) || !self.passkeys_of(name).is_empty()
+    /// A read the store refused is the error, never "none" (N22).
+    pub fn has_second_factor(&self, name: &str) -> Result<bool, String> {
+        Ok(self.account_flag(name, "mfa_enabled")?
+            || !self
+                .backend
+                .find(PASSKEY_TABLE, "user", &J::from(name))?
+                .is_empty())
     }
 
     /// Remove every passkey of the person (the break-glass reset and the administrator's reset).
@@ -268,7 +273,10 @@ impl Auth {
             );
             return Err(MfaError::BadPassword);
         }
-        if self.has_second_factor(name) {
+        if self
+            .has_second_factor(name)
+            .map_err(MfaError::Unavailable)?
+        {
             self.check_second_factor(name, r.code, r.recovery_code)?;
         }
         Ok(())
@@ -347,7 +355,7 @@ impl Auth {
                 ));
             }
             epoch = account.as_ref().and_then(epoch_of);
-            if self.is_disabled(&owner) {
+            if self.is_disabled(&owner).map_err(MfaError::Unavailable)? {
                 self.event(&owner, "login_refused", &owner, "the account is disabled");
                 return Err(denied("this passkey cannot be used to sign in"));
             }
@@ -531,7 +539,7 @@ impl Auth {
     ) -> Result<LoginOutcome, MfaError> {
         let (name, _, epoch) = self.verify_assertion(ctx, "login", credential, true)?;
         // An account that signs in with Microsoft only (D91) has no passkey sign-in of its own.
-        if self.is_sso_only(&name) {
+        if self.is_sso_only(&name).map_err(MfaError::Unavailable)? {
             self.event(
                 &name,
                 "login_refused",
