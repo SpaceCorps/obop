@@ -353,11 +353,12 @@ async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_
 // the two paths `/api/auth/agent-tokens` and `/api/auth/agent-tokens/{id}/revoke`, the description
 // of the scopes of `issueAgentToken`, and two more kinds in the description of `security_event.kind`.
 // Again on `feat/ui-L9` (D95, 2026-11-15), on purpose: `info.version` 0.2.2 and the `message` key of
-// the error schema.
+// the error schema. Again on `feat/approvals-inbox` (D97, 2026-11-17), on purpose: the
+// description of the `ApprovalRequired` schema names the Approvals page and `/api/plan/*`.
 #[rustfmt::skip]
 const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
-    ("dev/openapi", "d1b7773e2f91902681b0db0b9ca338701d5adc59e4a6461dfdf3e7aa78d377b3"),
-    ("auth/openapi", "616e8ce32ec207981409617e50638069128fed26e16f13ed87a3684d305aba73"),
+    ("dev/openapi", "3e752740067945a2d7db5a0b9bdab2ce50e1a9fb4de0e285f97f25752255c2c9"),
+    ("auth/openapi", "268d82b8159772fa8f2e581a435c3179722f7d75f92a858e4fdee6576bddc2e1"),
 ];
 
 /// With a brand row in the store the anonymous document is the one an instance with no row sends,
