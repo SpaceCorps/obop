@@ -369,15 +369,31 @@ test.describe("access by app", () => {
         expect(
           await summary.evaluate((el) => (el as HTMLElement).offsetHeight),
         ).toBeGreaterThanOrEqual(44);
+        // A real click on the summary: the hand opens or closes it, and the browser's toggle echo
+        // does not put it back (two frames later it is still as the hand left it).
+        const twoFrames = () =>
+          page.evaluate(
+            () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+          );
+        await summary.click();
+        await twoFrames();
+        await expect(more).toHaveJSProperty("open", !opens);
+        await summary.click();
+        await twoFrames();
+        await expect(more).toHaveJSProperty("open", opens);
+        // Other access: open for the person who holds a group there, closed for the one who does not.
         const other = dialog.locator("details.access-other");
+        await expect(other).toHaveCount(1);
+        expect(await other.evaluate((el) => (el as HTMLDetailsElement).open)).toBe(opens);
+        const so = other.locator("summary");
+        expect(await so.evaluate((el) => getComputedStyle(el).display)).toBe("list-item");
+        expect(await so.evaluate((el) => (el as HTMLElement).offsetHeight)).toBeGreaterThanOrEqual(
+          44,
+        );
+        await so.click();
+        await twoFrames();
+        await expect(other).toHaveJSProperty("open", !opens);
         if (opens) {
-          await expect(other).toHaveCount(1);
-          expect(await other.evaluate((el) => (el as HTMLDetailsElement).open)).toBe(true);
-          const so = other.locator("summary");
-          expect(await so.evaluate((el) => getComputedStyle(el).display)).toBe("list-item");
-          expect(
-            await so.evaluate((el) => (el as HTMLElement).offsetHeight),
-          ).toBeGreaterThanOrEqual(44);
           // The held reviewer box is visible without a click.
           await expect(more.getByRole("checkbox", { name: /Reviewer/ })).toBeChecked();
         }
