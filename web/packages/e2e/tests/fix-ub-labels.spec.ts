@@ -36,6 +36,22 @@ test("Accounting Sweden has its card summary in the six languages (G9)", async (
   });
 });
 
+test("every installed module with an English card summary has it in the six languages (G9)", async ({
+  api,
+}) => {
+  const root = await api.token("root");
+  const meta = (await api.get("/api/meta", root)).json.modules;
+  const missing: string[] = [];
+  for (const m of meta) {
+    if (typeof m.summary !== "string" || m.summary.trim() === "") continue;
+    for (const lang of LANGS) {
+      const text = m.summaries?.[lang];
+      if (!(typeof text === "string" && text.trim().length > 0)) missing.push(`${m.id}/${lang}`);
+    }
+  }
+  expect(missing).toEqual([]);
+});
+
 test.describe("the German invoices list at 320 px (Q18)", () => {
   test.use({
     language: "de",

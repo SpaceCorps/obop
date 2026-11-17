@@ -1,5 +1,6 @@
 [labels.fr.module]
 name = "Personnaliser"
+summary = "Personnaliser l’instance : thème, applications, modules et place de marché."
 
 [labels.fr.model.module]
 name = "Module"
