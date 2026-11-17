@@ -286,6 +286,8 @@ fn reversing_a_posted_entry_books_the_opposite_entry_as_a_draft_that_cancels_it(
     assert_eq!(reversal["number"], J::Null);
     assert_eq!(reversal["journal_id"], journal.as_str());
     assert_eq!(reversal["reference"], before["number"]);
+    // No fixed sentence is stored: the reference already names the original.
+    assert_eq!(reversal["narration"], J::Null);
     assert_eq!(
         (
             reversal["total_debit"].as_i64(),

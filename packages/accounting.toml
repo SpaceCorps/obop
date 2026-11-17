@@ -560,12 +560,13 @@ write_group = "accounting.user"
     done = "Entry reversed; the opposite entry is a draft"
 
     # The reversal is a new draft entry in the same journal, dated today, that refers to the
-    # original by its number. Posting it is a separate step (`post`: approver, human approval).
+    # original by its number. It has no narration: a fixed sentence would be stored in one
+    # language. Posting it is a separate step (`post`: approver, human approval).
     [[model.action.effect]]
     kind = "create"
     model = "accounting_move"
     as = "reversal"
-    map = { journal_id = "$self.journal_id", date = "$today", partner_id = "$self.partner_id", reference = "$self.number", narration = "Reversal entry: every line of the entry named in the reference with debit and credit swapped" }
+    map = { journal_id = "$self.journal_id", date = "$today", partner_id = "$self.partner_id", reference = "$self.number" }
 
     # One line per original line with debit and credit swapped. The tax stays on the line, so a
     # tax report that sums by tax sees the reversal cancel the original.
