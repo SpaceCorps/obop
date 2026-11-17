@@ -300,6 +300,43 @@ impl Auth {
             .map(|(k, f)| (k, J::Object(f))))
     }
 
+    /// N18 for the agent tokens a person made before their account was bound: each live one that
+    /// has no end, or a later one, ends `MICROSOFT_AGENT_TOKEN_SECS` from now (an earlier end is
+    /// kept, so a repeat changes nothing). The tokens of phone apps and of the OAuth sign-in keep
+    /// their own short lives. Answers how many tokens got an end.
+    pub(crate) fn end_agent_tokens_of(&self, user: &str) -> Result<usize, String> {
+        let now = self.now();
+        let end = now + MICROSOFT_AGENT_TOKEN_SECS;
+        let mut n = 0;
+        for (id, t) in self.backend.find("auth_token", "owner", &J::from(user))? {
+            if !crate::plain_agent_token(&t, now)
+                || t.get("expires_at")
+                    .and_then(J::as_u64)
+                    .is_some_and(|e| e <= end)
+            {
+                continue;
+            }
+            let mut p = Fields::new();
+            p.insert("expires_at".into(), J::from(end));
+            if self.backend.update("auth_token", &id, &p)? {
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
+
+    /// The same for every bound account, at the start of a server: a binding made by a build
+    /// before N18 left the tokens of the account without an end. Answers how many got one.
+    pub fn end_agent_tokens_of_bound_accounts(&self) -> Result<usize, String> {
+        let mut n = 0;
+        for (_, link) in self.backend.list(LINK_TABLE)? {
+            if let Some(user) = link.get("user").and_then(J::as_str) {
+                n += self.end_agent_tokens_of(user)?;
+            }
+        }
+        Ok(n)
+    }
+
     /// A working second factor: a passkey, or an authenticator app whose secret the key ring
     /// of this server really opens (a replaced `OBOP_SECRET_KEY` leaves the flag on and the
     /// secret unreadable). A lookup the store refused is "none" (the guard fails closed).
@@ -705,11 +742,25 @@ impl Auth {
                 unavailable(e)
             }
         })?;
+        // The agent tokens the account made before it was bound end as the ones it makes from now
+        // on do (N18). A token issued after the binding was written gets its end when it is made.
+        // When the store refuses, the binding is taken back and the repeat finishes it; if that
+        // is refused too, the pass at the next start ends the tokens.
+        let ended = match self.end_agent_tokens_of(&user) {
+            Ok(n) => n,
+            Err(e) => {
+                let _ = self.backend.delete(LINK_TABLE, &id);
+                return Err(unavailable(e));
+            }
+        };
         self.sso_event(
             &user,
             "oidc_bind",
             actor,
-            &format!("bound to object id {oid} in tenant {tenant}"),
+            &format!(
+                "bound to object id {oid} in tenant {tenant}; {ended} agent token(s) now end in {} days",
+                MICROSOFT_AGENT_TOKEN_SECS / 86_400
+            ),
         );
         Ok(json!({"user": user, "oid": oid, "tenant": tenant}))
     }

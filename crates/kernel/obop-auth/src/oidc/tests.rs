@@ -1737,6 +1737,52 @@ fn an_agent_token_of_a_microsoft_bound_account_ends_after_ninety_days() {
     assert!(r.a.resolve(&bound).is_none(), "ended after 90 days");
 }
 
+/// N18 for the tokens made before the binding: binding an account ends its agent tokens within 90
+/// days, and the pass at the start of a server does the same for an account bound by a build that
+/// did not, once.
+#[test]
+fn agent_tokens_made_before_a_microsoft_binding_end_within_ninety_days() {
+    let r = world();
+    let scopes = vec!["base.user".to_string()];
+    let expiry = |token: &str| {
+        r.b.get("auth_token", &token_hash(token)).unwrap().unwrap()["expires_at"].clone()
+    };
+    let (_, bob) = session(&r.a, "bob");
+    let old = r.a.issue_agent_token(&bob, &scopes, "old").unwrap();
+    let gone = r.a.issue_agent_token(&bob, &scopes, "gone").unwrap();
+    assert!(r.a.revoke(&gone));
+    assert_eq!(expiry(&old), J::Null, "not bound yet: no end");
+    r.a.set_clock_for_test(r.a.now() + 3_600);
+    r.a.operator_sso_bind("bob", BOB_OID).unwrap();
+    let end = r.a.now() + super::MICROSOFT_AGENT_TOKEN_SECS;
+    assert_eq!(expiry(&old), json!(end), "bound: it ends in 90 days");
+    assert_eq!(expiry(&gone), J::Null, "a revoked token is left as it is");
+    assert!(
+        events(&r, "oidc_bind")
+            .last()
+            .unwrap()
+            .contains("1 agent token(s) now end in 90 days"),
+        "{:?}",
+        events(&r, "oidc_bind")
+    );
+    // A token of a bound account that an older build made without an end gets one at the start,
+    // and a second pass changes nothing.
+    let (_, ada) = session(&r.a, "ada");
+    let legacy = r.a.issue_agent_token(&ada, &scopes, "legacy").unwrap();
+    let mut p = Fields::new();
+    p.insert("expires_at".into(), J::Null);
+    assert!(r.b.update("auth_token", &token_hash(&legacy), &p).unwrap());
+    r.a.set_clock_for_test(r.a.now() + 86_400);
+    assert_eq!(r.a.end_agent_tokens_of_bound_accounts().unwrap(), 1);
+    let later = r.a.now() + super::MICROSOFT_AGENT_TOKEN_SECS;
+    assert_eq!(expiry(&legacy), json!(later));
+    assert_eq!(expiry(&old), json!(end), "an earlier end is kept");
+    assert_eq!(r.a.end_agent_tokens_of_bound_accounts().unwrap(), 0);
+    r.a.set_clock_for_test(later + 1);
+    assert!(r.a.resolve(&legacy).is_none());
+    assert!(r.a.resolve(&old).is_none());
+}
+
 #[test]
 fn unbinding_ends_the_sessions_and_a_code_in_the_air_and_says_how_many() {
     let r = world();
