@@ -1,7 +1,11 @@
-//! Company settings of the finance flows, kept where the other instance settings are: one key of
-//! the instance settings object (`obop_setting/instance`, the JSON that `setting.get` answers),
-//! such as `{"invoicing": {"book_on_post": false}}` or `{"expenses": {"allow_self_approval": true}}`.
-//! An instance is one company, so these are the company's settings.
+//! Company settings of the finance flows, kept in the settings table next to the instance settings
+//! but in a row of their own (`obop_setting/company`), one key per section, such as
+//! `{"invoicing": {"book_on_post": false}}` or `{"expenses": {"allow_self_approval": true}}`. An
+//! instance is one company, so these are the company's settings.
+//!
+//! Not inside the instance settings object (`obop_setting/instance`): the back office saves that
+//! object whole from the copy it read at sign-in (`setting.update`), which would put back an old
+//! value of a setting changed since. Only the commands of each section write this row.
 //!
 //! A change reads the whole object and writes it back with only its section changed; a refused
 //! read is an error and nothing is written (D74: never write what could not be read).
@@ -10,7 +14,7 @@ use obop_storage::{Backend, Fields};
 use serde_json::{Map, Value as J};
 
 const MODEL: &str = "obop_setting";
-const ID: &str = "instance";
+const ID: &str = "company";
 
 fn read_all(b: &dyn Backend) -> Result<Map<String, J>, String> {
     let text = b

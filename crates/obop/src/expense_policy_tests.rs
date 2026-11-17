@@ -96,6 +96,76 @@ fn the_maker_of_a_claim_cannot_approve_it_by_default() {
 }
 
 #[test]
+fn another_spelling_of_the_maker_or_a_changed_employee_does_not_get_round_the_rule() {
+    let a = app();
+    // The same account written another way, as the sign-in reads it (trimmed, lower case).
+    for spelled in ["ROOT", " root", "Root "] {
+        let p = manager("root");
+        let id = call(
+            &a,
+            &p,
+            "expenses_expense.create",
+            json!({"description": "Taxi", "amount": 900, "category": "travel", "employee": spelled}),
+        )
+        .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        call(&a, &p, "expenses_expense.submit", json!({"id": id})).unwrap();
+        let e = refused(call(&a, &p, "expenses_expense.approve", json!({"id": id})));
+        assert!(
+            e.contains("someone else has to approve it"),
+            "{spelled:?}: {e}"
+        );
+        assert_eq!(state(&a, &id), "submitted");
+    }
+    // Once submitted, the employee stays: another name is refused, the same name in another
+    // spelling is no change.
+    let id = claim(&a, "root");
+    let e = refused(call(
+        &a,
+        &manager("root"),
+        "expenses_expense.update",
+        json!({"id": id, "employee": "bob"}),
+    ));
+    assert!(e.contains("can no longer be changed"), "{e}");
+    call(
+        &a,
+        &manager("root"),
+        "expenses_expense.update",
+        json!({"id": id, "employee": "Root"}),
+    )
+    .unwrap();
+    let e = refused(call(
+        &a,
+        &manager("root"),
+        "expenses_expense.approve",
+        json!({"id": id}),
+    ));
+    assert!(e.contains("someone else has to approve it"), "{e}");
+    assert_eq!(state(&a, &id), "submitted");
+    // A draft may still name someone else.
+    let p = manager("root");
+    let draft = call(
+        &a,
+        &p,
+        "expenses_expense.create",
+        json!({"description": "Lunch", "amount": 1200, "category": "meals"}),
+    )
+    .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    call(
+        &a,
+        &p,
+        "expenses_expense.update",
+        json!({"id": draft, "employee": "bob"}),
+    )
+    .unwrap();
+}
+
+#[test]
 fn an_approved_plan_is_refused_when_the_maker_approves_it() {
     let a = app();
     let id = claim(&a, "alice");
@@ -145,8 +215,20 @@ fn the_company_setting_allows_self_approval_and_only_an_administrator_changes_it
     )
     .unwrap();
     assert_eq!(set["allow_self_approval"], true);
-    // Stored with the other instance settings.
-    let stored: J = serde_json::from_str(&a.installer.try_settings().unwrap()).unwrap();
+    // Stored in the company row, so saving the instance settings whole from an older copy (as
+    // the back office does on Customize) does not turn it off again.
+    a.installer
+        .set_settings(r##"{"theme":{"accent":"#123456"}}"##)
+        .unwrap();
+    let get = call(&a, &manager("alice"), "expenses_setting.get", json!({})).unwrap();
+    assert_eq!(get["allow_self_approval"], true);
+    let row = a
+        .store
+        .backend()
+        .get("obop_setting", "company")
+        .unwrap()
+        .unwrap();
+    let stored: J = serde_json::from_str(row["value"].as_str().unwrap()).unwrap();
     assert_eq!(stored["expenses"]["allow_self_approval"], true);
     call(
         &a,
@@ -165,6 +247,11 @@ fn the_refusal_is_worded_in_the_language_of_the_request() {
         assert!(!t.is_empty());
         if lang != "en" {
             assert_ne!(t, crate::expense_policy::refusal_text(None), "{lang}");
+            assert_ne!(
+                crate::expense_policy::frozen_employee_text(Some(lang)),
+                crate::expense_policy::frozen_employee_text(None),
+                "{lang}"
+            );
         }
     }
     let a = app();

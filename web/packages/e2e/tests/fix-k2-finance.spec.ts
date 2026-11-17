@@ -176,11 +176,16 @@ test.describe("finance flows of stream k2", () => {
           "submitted",
         );
 
+        // The copy of the instance settings the back office holds from sign-in.
+        const stale = await api.run("root", "setting.get", { id: "instance" });
         await page.goto("/#/expenses/settings");
         const allow = page.getByRole("switch", { name: "People may approve their own claims" });
         await expect(allow).not.toBeChecked();
         await allow.check();
         await expect(page.getByText("Expense settings saved")).toBeVisible();
+        expect((await api.run("root", "expenses_setting.get", {})).allow_self_approval).toBe(true);
+        // A Customize save writes that older copy back whole: the company setting stays on.
+        await api.run("root", "setting.update", { id: "instance", value: stale.value ?? "{}" });
         expect((await api.run("root", "expenses_setting.get", {})).allow_self_approval).toBe(true);
         await api.run("root", "expenses_expense.approve", { id: claim.id });
         expect((await api.run("root", "expenses_expense.get", { id: claim.id })).state).toBe(

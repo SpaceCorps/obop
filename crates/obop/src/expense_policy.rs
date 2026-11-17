@@ -8,6 +8,12 @@
 //! the administrator group. The rule wraps `expenses_expense.approve`, so it holds for a direct
 //! call, for an approved plan (the person who approves the plan is the one who approves the
 //! claim) and for an `update` that moves the state to approved (it runs the action).
+//!
+//! Names are compared as the sign-in compares them (trimmed, lower case), so `ROOT` or ` root`
+//! is the account `root`. Once a claim is submitted its `employee` no longer changes (a wrapper of
+//! `expenses_expense.update`), so the maker cannot put another name on a claim and then approve
+//! it. A claim written in another person's name while it is a draft is that person's claim: the
+//! rule knows the claimant by `employee` only.
 
 use crate::company_settings;
 use obop_commands::{ADMIN_GROUP, Dispatcher, Principal, Store, Value};
@@ -105,6 +111,38 @@ fn text_of(v: &Value, k: &str) -> String {
     }
 }
 
+/// The refusal of a changed employee on a claim that is no longer a draft.
+pub fn frozen_employee_text(lang: Option<&str>) -> &'static str {
+    match lang {
+        Some("de") => {
+            "Die Person einer eingereichten Abrechnung kann nicht mehr geändert werden. Lehnen Sie die Abrechnung ab und legen Sie eine neue an, wenn sie falsch ist."
+        }
+        Some("fr") => {
+            "La personne d'une note de frais soumise ne peut plus être modifiée. Refusez la note et créez-en une nouvelle si elle est erronée."
+        }
+        Some("pl") => {
+            "Osoby we wniosku, który został złożony, nie można już zmienić. Odrzuć wniosek i utwórz nowy, jeśli jest błędny."
+        }
+        Some("fi") => {
+            "Lähetetyn kulukorvauksen henkilöä ei voi enää muuttaa. Hylkää korvaus ja tee uusi, jos se on väärin."
+        }
+        Some("sv") => {
+            "Personen på ett inskickat utlägg kan inte längre ändras. Avslå utlägget och gör ett nytt om det är fel."
+        }
+        Some("es") => {
+            "La persona de una solicitud de gastos enviada ya no se puede cambiar. Rechace la solicitud y cree una nueva si es incorrecta."
+        }
+        _ => {
+            "The employee of a submitted claim can no longer be changed. Refuse the claim and make a new one if it is wrong."
+        }
+    }
+}
+
+/// A user name as the sign-in compares it: trimmed and in lower case.
+fn norm(name: &str) -> String {
+    name.trim().to_lowercase()
+}
+
 /// Who approves: the person who approved the plan, else the person behind the caller.
 fn approver(p: &Principal, input: &Value) -> String {
     let stamped = text_of(
@@ -161,8 +199,29 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                     .map_err(|e| e.to_string())?
                     .and_then(|f| f.get("employee").and_then(J::as_str).map(String::from))
                     .unwrap_or_default();
-                if !employee.is_empty() && employee == approver(p, input) {
+                if !norm(&employee).is_empty() && norm(&employee) == norm(&approver(p, input)) {
                     return Err(refusal_text(obop_commands::locale::language()).into());
+                }
+            }
+            inner(input)
+        }),
+    );
+    let s = store.clone();
+    d.around(
+        "expenses_expense.update",
+        Box::new(move |_, input, inner| {
+            let id = text_of(input, "id");
+            if let Value::Map(x) = input
+                && let Some(Value::Text(new)) = x.get("employee")
+                && !id.is_empty()
+                && let Some(cur) = s
+                    .backend()
+                    .get("expenses_expense", &id)
+                    .map_err(|e| e.to_string())?
+            {
+                let field = |k: &str| cur.get(k).and_then(J::as_str).unwrap_or_default();
+                if field("state") != "draft" && norm(new) != norm(field("employee")) {
+                    return Err(frozen_employee_text(obop_commands::locale::language()).into());
                 }
             }
             inner(input)
