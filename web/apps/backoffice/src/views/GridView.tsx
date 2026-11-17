@@ -237,7 +237,7 @@ export function GridView(p: ViewProps) {
     if (done)
       d.notify(
         t("{count, plural, one {# entry submitted} other {# entries submitted}}", { count: done }),
-        "success",
+        "ok",
       );
   };
 
