@@ -65,6 +65,7 @@ menu_order = 2
 calendar = { start = "due", color = "project_id" }
 report = { rows = "project_id", cols = "state", measure = "rate" }
 public_url = "/tasks/{title}"
+default_filter = "Due soon"
 
 [[model.ui.section]]
 label = "Money"
@@ -101,6 +102,7 @@ kind = "date"
 default = "today+7"
 [model.field.ui]
 warn_before_days = 3
+readonly_when = "state == \"done\""
 
 [[model.field]]
 name = "owner"
@@ -253,6 +255,11 @@ fn every_key_is_read_into_the_registry() {
     );
     assert_eq!(h("due").default, Some(DefaultSpec::Today(7)));
     assert_eq!(h("due").ui.warn_before_days, Some(3));
+    assert_eq!(
+        h("due").ui.readonly_when.as_deref(),
+        Some("state == \"done\"")
+    );
+    assert_eq!(ui.default_filter.as_deref(), Some("Due soon"));
     assert_eq!(h("owner").default, Some(DefaultSpec::User));
     assert!(h("owner").readonly);
     assert_eq!(
@@ -356,6 +363,26 @@ fn a_key_that_cannot_work_is_refused_where_it_is() {
             "warn_before_days = 3",
             "warn_before_days = 0",
             "warn_before_days must be",
+        ),
+        (
+            "default_filter = \"Due soon\"",
+            "default_filter = \"Gone\"",
+            "default_filter \"Gone\" must be the label",
+        ),
+        (
+            "readonly_when = \"state == \\\"done\\\"\"",
+            "readonly_when = \"rate + 1 > 2\"",
+            "readonly_when `rate + 1 > 2`: arithmetic cannot be used",
+        ),
+        (
+            "readonly_when = \"state == \\\"done\\\"\"",
+            "readonly_when = \"nope == 1\"",
+            "readonly_when `nope == 1`",
+        ),
+        (
+            "readonly_when = \"state == \\\"done\\\"\"",
+            "readonly_when = \"state\"",
+            "it must be a comparison",
         ),
         (
             "display = \"markdown\"",

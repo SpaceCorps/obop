@@ -39,6 +39,7 @@ import {
   sectionsOf,
   serverSet,
 } from "./recordLayout.ts";
+import { readonlyByState } from "./readonlyWhen.ts";
 import { RecordHeader } from "./RecordHeader.tsx";
 import { RelatedChips } from "./RelatedChips.tsx";
 import { nav, useRoute } from "./route.ts";
@@ -209,9 +210,11 @@ export function RecordPanel({
   // The save that is on its way: leaving waits for it instead of asking about it (`nav.saving`).
   const saving = useRef<Promise<void> | null>(null);
 
-  // A frozen record (meta `guard`) keeps only its mutable fields; the server says the same.
+  // A frozen record (meta `guard`) keeps only its mutable fields; the server says the same. A field
+  // whose `ui.readonly_when` holds on the saved record is shown read-only too (R6).
   const lock = lockOf(model, row);
-  const fixed = (f: FieldMeta) => !canEdit || serverSet(f) || (!!lock && !lock.mutable.has(f.name));
+  const fixed = (f: FieldMeta) =>
+    !canEdit || serverSet(f) || (!!lock && !lock.mutable.has(f.name)) || readonlyByState(f, row);
   const editable = fields.some((f) => !fixed(f) && !governed(f) && f !== statusField);
   const writable = (f: FieldMeta) => !fixed(f) && !masked(f);
 

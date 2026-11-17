@@ -26,11 +26,24 @@ pub const LANGUAGES: [&str; 7] = ["en", "de", "fr", "pl", "fi", "sv", "es"];
 /// How many assertion refusals one scope remembers; the newest are kept.
 const MAX_NOTED: usize = 8;
 
-/// One assertion that refused in this scope: the whole text of the refusal, and its key.
+/// One assertion that refused in this scope: the whole text of the refusal, its key, and the
+/// author's message without the expression (`None` for an assertion without a message). The
+/// refusal of several assertions of one action is noted as one more entry (`note_joined`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Noted {
     text: String,
     key: Option<String>,
+    message: Option<String>,
+}
+
+/// The author's message inside the text of one assertion's refusal: the text without the
+/// ` (assertion <expression> failed)` suffix, or `None` when it has no such suffix.
+fn message_of(text: &str) -> Option<String> {
+    // An assertion of an action, or a model rule (D88).
+    let cut = text
+        .rfind(" (assertion ")
+        .or_else(|| text.rfind(" (rule "))?;
+    text.ends_with(" failed)").then(|| text[..cut].to_string())
 }
 
 #[derive(Debug, Clone, Default)]
@@ -96,9 +109,49 @@ pub(crate) fn note_assertion(text: &str, key: Option<&str>) {
             s.noted.push(Noted {
                 text: text.to_string(),
                 key: key.map(String::from),
+                message: message_of(text),
             });
         }
     });
+}
+
+/// The refusal of several assertions of one action that all failed (Q17): their texts, each noted
+/// already by [`note_assertion`], joined with `; `. It is noted as one assertion with the key of
+/// the first that has one and the authors' messages joined as sentences, so that `errors::classify`
+/// names `assertion_failed` and gives a person every message at once. Outside a scope it is only
+/// the joined text.
+pub(crate) fn note_joined(texts: &[String]) -> String {
+    let joined = texts.join("; ");
+    CURRENT.with(|c| {
+        if let Some(s) = c.borrow_mut().as_mut() {
+            let found: Vec<Option<Noted>> = texts
+                .iter()
+                .map(|t| s.noted.iter().rev().find(|n| &n.text == t).cloned())
+                .collect();
+            let key = found.iter().flatten().find_map(|n| n.key.clone());
+            let messages: Vec<String> = texts
+                .iter()
+                .filter_map(|t| message_of(t))
+                .map(|m| {
+                    let m = m.trim_end().to_string();
+                    if m.ends_with(['.', '!', '?']) {
+                        m
+                    } else {
+                        format!("{m}.")
+                    }
+                })
+                .collect();
+            if s.noted.len() == MAX_NOTED {
+                s.noted.remove(0);
+            }
+            s.noted.push(Noted {
+                text: joined.clone(),
+                key,
+                message: (!messages.is_empty()).then(|| messages.join(" ")),
+            });
+        }
+    });
+    joined
 }
 
 /// The assertion behind a refusal `message`: when the text of an assertion that refused in this
@@ -123,14 +176,7 @@ pub(crate) fn assertion_message_behind(message: &str) -> Option<String> {
     CURRENT.with(|c| {
         c.borrow().as_ref().and_then(|s| {
             let n = s.noted.iter().rev().find(|n| message.contains(&n.text))?;
-            // An assertion of an action, or a model rule (D88).
-            let cut = n
-                .text
-                .rfind(" (assertion ")
-                .or_else(|| n.text.rfind(" (rule "))?;
-            n.text
-                .ends_with(" failed)")
-                .then(|| n.text[..cut].to_string())
+            n.message.clone()
         })
     })
 }

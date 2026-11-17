@@ -276,6 +276,7 @@ pub struct ModelUiM {
     pub section: Vec<SectionM>,
     #[serde(default)]
     pub filter: Vec<FilterM>,
+    pub default_filter: Option<String>,
     pub public_url: Option<String>,
 }
 
@@ -339,6 +340,7 @@ pub struct FieldUiM {
     #[serde(default)]
     pub hidden: bool,
     pub currency_from: Option<String>,
+    pub readonly_when: Option<String>,
 }
 
 /// `[model.action.ui]` (D95).
@@ -2179,6 +2181,7 @@ impl Manifest {
                 warn_before_days: u.warn_before_days,
                 hidden: u.hidden,
                 currency_from: u.currency_from.clone(),
+                readonly_when: u.readonly_when.clone(),
             },
         };
         let hints = obop_registry::FieldHints {
@@ -2249,6 +2252,7 @@ impl Manifest {
                     })
                 })
                 .collect::<Result<_, String>>()?,
+            default_filter: u.default_filter,
             public_url: u.public_url,
             children: m
                 .child
