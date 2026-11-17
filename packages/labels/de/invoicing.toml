@@ -39,6 +39,14 @@ description = "Datum, an dem die Rechnung ausgestellt wird (YYYY-MM-DD)"
 label = "Fälligkeitsdatum"
 description = "Datum, an dem die Zahlung fällig ist (YYYY-MM-DD); nicht vor dem Rechnungsdatum"
 
+[labels.de.model.invoice.field.our_reference]
+label = "Unsere Referenz"
+description = "Unsere Referenz auf der Rechnung, Freitext"
+
+[labels.de.model.invoice.field.their_reference]
+label = "Ihre Referenz"
+description = "Referenz des Kunden auf der Rechnung, Freitext"
+
 [labels.de.model.invoice.action.post]
 label = "Buchen"
 description = "Einen Rechnungsentwurf buchen und ihm die nächste Nummer der Folge geben"

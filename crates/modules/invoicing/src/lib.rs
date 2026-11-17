@@ -88,6 +88,20 @@ pub fn module() -> Module {
                         "invoicing.user",
                     )
                     .kind(FieldKind::Date),
+                    F::new(
+                        "our_reference",
+                        "Our reference printed on the invoice (Var referens), free text",
+                        NoClass,
+                        false,
+                        "invoicing.user",
+                    ),
+                    F::new(
+                        "their_reference",
+                        "The customer's reference printed on the invoice (Er referens), free text",
+                        NoClass,
+                        false,
+                        "invoicing.user",
+                    ),
                 ],
                 commands: vec![
                     CommandDef::new(

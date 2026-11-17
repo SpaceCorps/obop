@@ -175,6 +175,7 @@ Built in `crates/obop/src/time_billing.rs` (typed command on REST and MCP, like 
 
 - picks entries of the project's tasks that are billable, dated inside the period and not yet linked; a billable entry in the period that is not `approved` refuses the whole run in words (nothing is written); no qualifying entry, a rate of zero or less, an unknown customer or project, a missing date and a non-positive minute count are refused too;
 - creates a draft `invoice` and one `invoice_line` per entry (quantity 1, unit price the line amount, because the line quantity is a whole number). Amount is `minutes * rate / 60` rounded half up per entry in integer minor units; hours are shown as an `obop_values::Decimal` with two places. No float;
+- optional `round_hours` (bool): the period becomes ONE invoice line, quantity the total minutes rounded up to whole hours (5759 min is 96, 5760 is 96, 5761 is 97), unit price `hourly_rate_minor`; optional `description` is that line's text, default `Datakonsult - <project name>, <from> till <to>`. Every entry is still linked, so none is billed twice. Without either option the output is as before;
 - idempotent: one `time_billing` row (entry id, invoice id) per billed entry; an entry is never billed twice. The check and the writes are not one transaction;
 - governed: needs `invoicing.user` and `timesheets.manager`; an agent may only `dry_run`. The invoice is a draft; posting is `invoice.post`;
 - UNVERIFIED: no VAT, issue or due date, and no check against Swedish invoice rules. Gaps in the surfaces: docs/ISSUES.md K62.

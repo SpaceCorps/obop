@@ -3470,6 +3470,8 @@ export interface components {
             issue_date?: string;
             /** @description Number from a gapless yearly series, such as INV-2026-00042, assigned when posted (a number the system assigns; read-only) */
             readonly number?: string;
+            /** @description Our reference printed on the invoice (Var referens), free text */
+            our_reference?: string;
             /** @description Customer party id */
             party_id?: string;
             /** @description Source sale order id */
@@ -3479,6 +3481,8 @@ export interface components {
              * @enum {string}
              */
             state?: "draft" | "posted" | "cancelled";
+            /** @description The customer's reference printed on the invoice (Er referens), free text */
+            their_reference?: string;
             /** @description Invoice total in minor units, the sum of the lines (computed when read; read-only) */
             readonly total_minor?: number;
         };
@@ -8520,6 +8524,8 @@ export interface operations {
                          * @description Date the invoice is issued (YYYY-MM-DD)
                          */
                         issue_date?: string;
+                        /** @description Our reference printed on the invoice (Var referens), free text */
+                        our_reference?: string;
                         /** @description Customer party id */
                         party_id?: string;
                         /** @description Source sale order id */
@@ -8529,6 +8535,8 @@ export interface operations {
                          * @enum {string}
                          */
                         state?: "draft" | "posted" | "cancelled";
+                        /** @description The customer's reference printed on the invoice (Er referens), free text */
+                        their_reference?: string;
                     }[];
                 };
             };
@@ -8712,6 +8720,8 @@ export interface operations {
                      * @description Date the invoice is issued (YYYY-MM-DD)
                      */
                     issue_date?: string;
+                    /** @description Our reference printed on the invoice (Var referens), free text */
+                    our_reference?: string;
                     /** @description Customer party id */
                     party_id?: string;
                     /** @description Source sale order id */
@@ -8721,6 +8731,8 @@ export interface operations {
                      * @enum {string}
                      */
                     state?: "draft" | "posted" | "cancelled";
+                    /** @description The customer's reference printed on the invoice (Er referens), free text */
+                    their_reference?: string;
                 };
             };
         };
@@ -9242,6 +9254,8 @@ export interface operations {
                      * @description Date the invoice is issued (YYYY-MM-DD)
                      */
                     issue_date?: string;
+                    /** @description Our reference printed on the invoice (Var referens), free text */
+                    our_reference?: string;
                     /** @description Customer party id */
                     party_id?: string;
                     /** @description Source sale order id */
@@ -9251,6 +9265,8 @@ export interface operations {
                      * @enum {string}
                      */
                     state?: "draft" | "posted" | "cancelled";
+                    /** @description The customer's reference printed on the invoice (Er referens), free text */
+                    their_reference?: string;
                 };
             };
         };

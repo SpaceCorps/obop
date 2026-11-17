@@ -229,3 +229,87 @@ fn a_dry_run_writes_nothing_and_an_agent_may_only_dry_run() {
         Err(CallError::Forbidden(_))
     ));
 }
+
+impl Fx {
+    /// Approved billable entries of at most a day (1440 minutes) each, summing to `total`.
+    fn fill(&self, total: i64) {
+        let (mut left, mut day) = (total, 1);
+        while left > 0 {
+            let m = left.min(1440);
+            self.entry(&format!("2026-09-{day:02}"), m, true, true);
+            left -= m;
+            day += 1;
+        }
+    }
+}
+
+fn with(input: J, extra: J) -> J {
+    let mut m = input.as_object().unwrap().clone();
+    m.extend(extra.as_object().unwrap().clone());
+    J::Object(m)
+}
+
+#[test]
+fn round_hours_bills_one_line_rounded_up_and_links_every_entry_once() {
+    let f = fixture();
+    f.fill(5759); // 95.98 h in four entries
+    let r = f
+        .run(with(f.input(false), json!({"round_hours": true})))
+        .unwrap();
+    assert_eq!(r["entries"], json!(1));
+    assert_eq!(r["minutes"], json!(5759));
+    assert_eq!(r["net"], json!(96 * 90_000));
+    let lines = rows(&f.app, "invoice_line");
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].1["quantity"], json!(96));
+    assert_eq!(lines[0].1["unit_price_minor"], json!(90_000));
+    assert_eq!(
+        lines[0].1["description"],
+        json!("Datakonsult - Website, 2026-09-01 till 2026-09-30")
+    );
+    assert_eq!(rows(&f.app, "time_billing").len(), 4, "every entry linked");
+    let m = refusal(f.run(f.input(false)));
+    assert!(m.contains("no approved, billable, unbilled"), "{m}");
+    assert_eq!(rows(&f.app, "invoice").len(), 1);
+}
+
+#[test]
+fn round_hours_keeps_exact_hours_and_uses_the_description() {
+    let f = fixture();
+    f.fill(5760); // exactly 96 h
+    let r = f
+        .run(with(
+            f.input(false),
+            json!({"round_hours": true, "description": "Konsulttjänster september"}),
+        ))
+        .unwrap();
+    assert_eq!(r["net"], json!(96 * 90_000));
+    let lines = rows(&f.app, "invoice_line");
+    assert_eq!(lines[0].1["quantity"], json!(96));
+    assert_eq!(
+        lines[0].1["description"],
+        json!("Konsulttjänster september")
+    );
+}
+
+#[test]
+fn round_hours_rounds_one_minute_over_up() {
+    let f = fixture();
+    f.fill(5761);
+    let r = f
+        .run(with(f.input(true), json!({"round_hours": true})))
+        .unwrap();
+    assert_eq!(r["net"], json!(97 * 90_000));
+    assert!(rows(&f.app, "invoice").is_empty(), "dry run writes nothing");
+}
+
+#[test]
+fn without_the_new_options_each_entry_stays_its_own_line() {
+    let f = fixture();
+    f.entry("2026-09-02", 90, true, true);
+    f.entry("2026-09-03", 7, true, true);
+    f.run(f.input(false)).unwrap();
+    let lines = rows(&f.app, "invoice_line");
+    assert_eq!(lines.len(), 2);
+    assert!(lines.iter().all(|(_, l)| l["quantity"] == json!(1)));
+}

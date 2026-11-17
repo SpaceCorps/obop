@@ -39,6 +39,14 @@ description = "Päivä, jona lasku annetaan (YYYY-MM-DD)"
 label = "Eräpäivä"
 description = "Päivä, jona maksu erääntyy (YYYY-MM-DD); ei ennen laskun päivämäärää"
 
+[labels.fi.model.invoice.field.our_reference]
+label = "Meidän viitteemme"
+description = "Meidän viitteemme laskulla, vapaa teksti"
+
+[labels.fi.model.invoice.field.their_reference]
+label = "Teidän viitteenne"
+description = "Asiakkaan viite laskulla, vapaa teksti"
+
 [labels.fi.model.invoice.action.post]
 label = "Kirjaa"
 description = "Kirjaa luonnoslasku ja anna sille sarjan seuraava numero"

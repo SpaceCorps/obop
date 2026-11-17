@@ -39,6 +39,14 @@ description = "Fecha en que se emite la factura (YYYY-MM-DD)"
 label = "Fecha de vencimiento"
 description = "Fecha en que vence el pago (YYYY-MM-DD); no anterior a la fecha de emisión"
 
+[labels.es.model.invoice.field.our_reference]
+label = "Nuestra referencia"
+description = "Nuestra referencia impresa en la factura, texto libre"
+
+[labels.es.model.invoice.field.their_reference]
+label = "Su referencia"
+description = "Referencia del cliente impresa en la factura, texto libre"
+
 [labels.es.model.invoice.action.post]
 label = "Contabilizar"
 description = "Contabilizar una factura en borrador y asignarle el siguiente número de la serie"

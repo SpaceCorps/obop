@@ -39,6 +39,14 @@ description = "Datum då fakturan utfärdas (ÅÅÅÅ-MM-DD)"
 label = "Förfallodatum"
 description = "Datum då betalningen förfaller (ÅÅÅÅ-MM-DD); inte före fakturadatum"
 
+[labels.sv.model.invoice.field.our_reference]
+label = "Vår referens"
+description = "Vår referens som skrivs på fakturan, fri text"
+
+[labels.sv.model.invoice.field.their_reference]
+label = "Er referens"
+description = "Kundens referens som skrivs på fakturan, fri text"
+
 [labels.sv.model.invoice.action.post]
 label = "Bokför"
 description = "Bokför en faktura i utkast och ge den nästa nummer i serien"

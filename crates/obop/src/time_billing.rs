@@ -6,7 +6,8 @@
 //! `customer` (a `party`) and the `hourly_rate_minor`; nothing is built in. The command picks the
 //! billable, approved entries of one project in a period that no earlier run has billed, creates
 //! a draft `invoice` with one `invoice_line` per entry (quantity 1, the amount in the unit price:
-//! the line quantity is a whole number and hours are not), and writes one link row per entry
+//! the line quantity is a whole number and hours are not; with `round_hours` one line of whole
+//! hours, rounded up, at the hourly rate, every entry still linked), and writes one link row per entry
 //! (`time_billing`: entry id, invoice id). An entry is billed at most once. Posting the invoice is
 //! `invoice.post`, as for any invoice. An agent may only dry-run.
 //!
@@ -57,6 +58,15 @@ pub fn module() -> Module {
                     "currency",
                     "Input, optional: ISO 4217 code written on the invoice",
                 ),
+                f(
+                    "round_hours",
+                    "Input, optional: bill the period as ONE line, the total minutes rounded up to whole hours at the hourly rate",
+                )
+                .kind(FieldKind::Bool),
+                f(
+                    "description",
+                    "Input, optional: the text of that single line (default: Datakonsult - project, from till to)",
+                ),
                 f("dry_run", "Input: only show the lines, write nothing").kind(FieldKind::Bool),
                 f("entry_id", "Link: the time entry id"),
                 f("invoice_id", "Link and answer: the draft invoice id"),
@@ -99,6 +109,10 @@ pub struct Input {
     pub to: String,
     pub hourly_rate_minor: Option<i64>,
     pub currency: String,
+    /// Bill one line of whole hours instead of one line per entry.
+    pub round_hours: bool,
+    /// Text of the single line when `round_hours` is set; empty means the default.
+    pub description: String,
 }
 
 /// One planned invoice line.
@@ -108,12 +122,18 @@ pub struct Line {
     pub description: String,
     pub minutes: i64,
     pub amount: i64,
+    /// Invoice line quantity (whole number): 1, or the whole hours with `round_hours`.
+    pub quantity: i64,
+    /// Unit price in minor units: the amount, or the hourly rate with `round_hours`.
+    pub unit_price: i64,
 }
 
 pub struct Planned {
     pub party_id: String,
     pub currency: String,
     pub lines: Vec<Line>,
+    /// Every entry that is billed, linked to the invoice whatever the line layout.
+    pub entry_ids: Vec<String>,
     pub minutes: i64,
     pub net: i64,
     pub notes: Vec<String>,
@@ -182,12 +202,8 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
         return Err("from is after to".into());
     }
     let (party_id, _) = pick(&list("party")?, "customer", &i.customer, &["name"])?;
-    let (pid, _) = pick(
-        &list("projects_project")?,
-        "project",
-        &i.project,
-        &["code", "name"],
-    )?;
+    let projects = list("projects_project")?;
+    let (pid, _) = pick(&projects, "project", &i.project, &["code", "name"])?;
     let tasks: HashMap<String, String> = list("projects_task")?
         .into_iter()
         .filter(|(_, f)| text(f, "project_id") == pid)
@@ -225,7 +241,9 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
     }
     entries.sort_by(|(ia, a), (ib, b)| (text(a, "worked_on"), ia).cmp(&(text(b, "worked_on"), ib)));
     let mut lines = Vec::new();
+    let mut entry_ids = Vec::new();
     for (id, f) in entries {
+        entry_ids.push(id.clone());
         let minutes = f.get("minutes").and_then(J::as_i64).unwrap_or(0);
         if minutes <= 0 {
             return Err(format!(
@@ -242,12 +260,37 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
         if !note.is_empty() {
             d = format!("{d}, {note}");
         }
+        let amount = amount_of(minutes, rate)?;
         lines.push(Line {
             entry_id: id,
             description: d,
             minutes,
-            amount: amount_of(minutes, rate)?,
+            amount,
+            quantity: 1,
+            unit_price: amount,
         });
+    }
+    if i.round_hours {
+        let minutes = lines
+            .iter()
+            .try_fold(0i64, |a, l| a.checked_add(l.minutes))
+            .ok_or("the minutes overflow")?;
+        let hours = minutes.checked_add(59).ok_or("the minutes overflow")? / 60;
+        let amount = hours.checked_mul(rate).ok_or("an amount overflows")?;
+        let description = if i.description.trim().is_empty() {
+            let name = tasks_project_name(&projects, &pid);
+            format!("Datakonsult - {name}, {} till {}", i.from, i.to)
+        } else {
+            i.description.clone()
+        };
+        lines = vec![Line {
+            entry_id: entry_ids.first().cloned().unwrap_or_default(),
+            description,
+            minutes,
+            amount,
+            quantity: hours,
+            unit_price: rate,
+        }];
     }
     let minutes = lines
         .iter()
@@ -269,12 +312,23 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
         party_id,
         currency,
         lines,
+        entry_ids,
         minutes,
         net,
         notes: vec![
             "each line is minutes times the rate over 60, rounded half up to a minor unit; the invoice has no VAT, due date or issue date of its own and is a draft until invoice.post".into(),
         ],
     })
+}
+
+/// The name of project `pid`, or its id when it has none.
+fn tasks_project_name(projects: &[(String, Fields)], pid: &str) -> String {
+    projects
+        .iter()
+        .find(|(id, _)| id == pid)
+        .map(|(_, f)| text(f, "name"))
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| pid.to_string())
 }
 
 /// Plan, and unless `dry_run` create the draft invoice, its lines and the links as the caller.
@@ -302,8 +356,8 @@ pub fn create_invoice(
         .lines
         .iter()
         .map(|l| {
-            json!({"invoice_id": iid, "description": l.description, "quantity": 1,
-                "unit_price_minor": l.amount})
+            json!({"invoice_id": iid, "description": l.description, "quantity": l.quantity,
+                "unit_price_minor": l.unit_price})
         })
         .collect();
     if let Err(e) = crate::sie::bulk(env, p, "invoice_line", rows, None, false) {
@@ -312,11 +366,11 @@ pub fn create_invoice(
             "the invoice lines were refused, the draft invoice {iid} was cancelled: {e}"
         ));
     }
-    for l in &pl.lines {
+    for entry_id in &pl.entry_ids {
         env.store.insert(
             MODEL,
             [
-                ("entry_id".to_string(), Value::text(&l.entry_id)),
+                ("entry_id".to_string(), Value::text(entry_id)),
                 ("invoice_id".to_string(), Value::text(&iid)),
             ]
             .into(),
@@ -359,6 +413,8 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 to: s("to"),
                 hourly_rate_minor: rate,
                 currency: s("currency"),
+                round_hours: matches!(map.get("round_hours"), Some(Value::Bool(true))),
+                description: s("description"),
             };
             let (pl, iid) = create_invoice(Env { d: &d, store: &st }, &p, &inp, dry)?;
             let lines = pl
