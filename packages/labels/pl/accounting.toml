@@ -373,3 +373,7 @@ message = "Rok obrotowy kończy się, zanim się zacznie: ustaw ostatni dzień w
 
 [labels.pl.model.accounting_period.rule.ends_after_start]
 message = "Okres kończy się, zanim się zacznie: ustaw ostatni dzień w dniu pierwszym lub później"
+
+[labels.pl.model.accounting_move_line.field.settled]
+label = "Rozliczona"
+description = "Czy transakcja bankowa rozlicza tę należność lub zobowiązanie (wskazuje ją jej settles_line_id); obliczane, więc pokazuje to także zaksięgowana pozycja"

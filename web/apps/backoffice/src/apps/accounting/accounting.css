@@ -451,3 +451,24 @@
   margin: 0;
   font-weight: var(--weight-semibold);
 }
+
+/* Invoice booking settings (BookingSettings.tsx): one card of fields, as wide as a form. */
+.acc-settings-card {
+  display: grid;
+  gap: var(--space-4);
+  max-inline-size: 40rem;
+  padding: var(--space-5);
+}
+.acc-settings-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+@media (max-width: 40rem) {
+  .acc-settings .home-head,
+  .acc-settings .home-body {
+    padding-inline: var(--space-4);
+  }
+  .acc-settings-actions .btn {
+    inline-size: 100%;
+  }
+}

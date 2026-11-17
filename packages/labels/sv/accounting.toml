@@ -373,3 +373,7 @@ message = "Räkenskapsåret slutar innan det börjar: ange en sista dag samma da
 
 [labels.sv.model.accounting_period.rule.ends_after_start]
 message = "Perioden slutar innan den börjar: ange en sista dag samma dag som eller efter den första dagen"
+
+[labels.sv.model.accounting_move_line.field.settled]
+label = "Reglerad"
+description = "Om en banktransaktion reglerar den här kund- eller leverantörsposten (dess settles_line_id anger den); beräknad, så även en bokförd rad visar det"

@@ -373,3 +373,7 @@ message = "Das Geschäftsjahr endet, bevor es beginnt: Legen Sie einen letzten T
 
 [labels.de.model.accounting_period.rule.ends_after_start]
 message = "Die Periode endet, bevor sie beginnt: Legen Sie einen letzten Tag am oder nach dem ersten Tag fest"
+
+[labels.de.model.accounting_move_line.field.settled]
+label = "Beglichen"
+description = "Ob eine Banktransaktion diesen Forderungs- oder Verbindlichkeitsposten begleicht (ihr settles_line_id nennt ihn); berechnet, daher zeigt es auch eine gebuchte Zeile"

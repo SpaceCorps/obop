@@ -19,7 +19,11 @@ use tower::ServiceExt;
 /// on REST, absent from the document.
 const KNOWN_OMITTED: &[&str] = &[
     "bank_matching.book",
+    "bank_matching.get",
     "bank_matching.suggest",
+    "bank_matching.unbook",
+    "expenses_setting.get",
+    "expenses_setting.update",
     "import_map.get",
     "import_map.search",
     "instance_brand.clear",
@@ -31,16 +35,21 @@ const KNOWN_OMITTED: &[&str] = &[
     "instance_update.status",
     "invoice_credit.create",
     "invoice_posting.create_move",
+    "invoice_posting.get",
+    "invoice_posting_setting.get",
+    "invoice_posting_setting.update",
     "mileage_point.delete",
     "mileage_point.update",
     "mileage_trip.delete",
     "module_plan.preview",
+    "pos_opening.propose",
     "setting.get",
     "setting.update",
     "sie_exchange.export",
     "sie_exchange.import",
     "stock_count.apply",
     "time_billing.create_invoice",
+    "time_billing.get",
     "vat_computation.compute",
 ];
 

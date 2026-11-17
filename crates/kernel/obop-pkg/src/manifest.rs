@@ -109,7 +109,8 @@ pub struct Meta {
 pub struct MigrationM {
     /// The installed versions the step applies to, a requirement such as `<0.4`.
     pub from: String,
-    /// `rename_field`, `set_default`, `drop_field` or `reformat_field`.
+    /// `rename_field`, `set_default`, `drop_field`, `reformat_field`, `fill_from` or
+    /// `link_by_name`.
     pub op: String,
     pub model: String,
     /// The field: the old name for `rename_field`, the field filled for `set_default`, the field
@@ -122,6 +123,10 @@ pub struct MigrationM {
     /// `drop_field`: must be `true`, because the values are deleted.
     #[serde(default)]
     pub confirm: bool,
+    /// `fill_from`: where the value comes from, `ref.field` (a ref of this model and a field of
+    /// the record it points at), as a field's `fill_from` says it. `link_by_name`: the text field
+    /// of this model whose value is matched against the `name` of the record the ref points at.
+    pub source: Option<String>,
     /// A sentence for the plan the administrator confirms.
     #[serde(default)]
     pub description: String,
@@ -1159,9 +1164,11 @@ impl Manifest {
                             st.model
                         ));
                     }
-                    if exists(&st.field).is_some() {
+                    // A field that became computed keeps no stored value of its own (the computed
+                    // value is read instead), so its old stored values may move to a new field.
+                    if exists(&st.field).is_some_and(|f| f.computed.is_none()) {
                         return Err(format!(
-                            "{at}: {} is still a field of {} in this version, so it is not renamed away",
+                            "{at}: {} is still a stored field of {} in this version, so it is not renamed away",
                             st.field, st.model
                         ));
                     }
@@ -1225,11 +1232,82 @@ impl Manifest {
                         return Err(format!("{at}: reformat_field takes no other key"));
                     }
                 }
+                "fill_from" => {
+                    // Q8: the value a field's `fill_from` gives a new record, for the records made
+                    // before the field had it: copied through a ref, never over a value.
+                    let Some(f) = exists(&st.field) else {
+                        return Err(format!(
+                            "{at}: {} is not a field of {} in this version",
+                            st.field, st.model
+                        ));
+                    };
+                    let Some((via, from)) = st.source.as_deref().and_then(|s| s.split_once('.'))
+                    else {
+                        return Err(format!(
+                            "{at}: fill_from needs `source = \"ref.field\"`, the ref of {} and the field of the record it points at",
+                            st.model
+                        ));
+                    };
+                    let Some(r) = exists(via).filter(|r| r.kind == "ref") else {
+                        return Err(format!("{at}: {via} is not a ref field of {}", st.model));
+                    };
+                    if let Some(target) = self.model.iter().find(|m| Some(&m.name) == r.to.as_ref())
+                    {
+                        let Some(src) = target.field.iter().find(|x| x.name == from) else {
+                            return Err(format!("{at}: {from} is not a field of {}", target.name));
+                        };
+                        if src.kind != f.kind || src.to != f.to {
+                            return Err(format!(
+                                "{at}: {}.{from} is a {} and {} is a {}; the kinds must be the same",
+                                target.name, src.kind, st.field, f.kind
+                            ));
+                        }
+                    }
+                    if f.computed.is_some() || st.to.is_some() || st.value.is_some() || st.confirm {
+                        return Err(format!(
+                            "{at}: fill_from fills a stored field and takes only `source`"
+                        ));
+                    }
+                }
+                "link_by_name" => {
+                    // R8: a ref set from a text field that names the record (`head` -> `head_id`).
+                    let Some(f) = exists(&st.field).filter(|f| f.kind == "ref") else {
+                        return Err(format!(
+                            "{at}: {} is not a ref field of {} in this version",
+                            st.field, st.model
+                        ));
+                    };
+                    let Some(src) = st.source.as_deref().and_then(exists) else {
+                        return Err(format!(
+                            "{at}: link_by_name needs `source`, a text field of {} in this version",
+                            st.model
+                        ));
+                    };
+                    if !matches!(src.kind.as_str(), "text" | "") {
+                        return Err(format!("{at}: {} is not a text field", src.name));
+                    }
+                    if let Some(target) = self.model.iter().find(|m| Some(&m.name) == f.to.as_ref())
+                        && !target.field.iter().any(|x| x.name == "name")
+                    {
+                        return Err(format!(
+                            "{at}: {} has no field name to match against",
+                            target.name
+                        ));
+                    }
+                    if st.to.is_some() || st.value.is_some() || st.confirm {
+                        return Err(format!("{at}: link_by_name takes only `source`"));
+                    }
+                }
                 other => {
                     return Err(format!(
-                        "{at}: unknown op {other:?} (use rename_field, set_default, drop_field or reformat_field)"
+                        "{at}: unknown op {other:?} (use rename_field, set_default, drop_field, reformat_field, fill_from or link_by_name)"
                     ));
                 }
+            }
+            if st.source.is_some() && !matches!(st.op.as_str(), "fill_from" | "link_by_name") {
+                return Err(format!(
+                    "{at}: `source` belongs to fill_from and link_by_name only"
+                ));
             }
         }
         Ok(())
