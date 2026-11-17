@@ -26,4 +26,4 @@ no_show = "No-show"
 label = "Mark as held"
 
 [labels.en.model.appointments_appointment.action.mark_no_show]
-label = "No-show"
+label = "Mark as no-show"
