@@ -43,7 +43,7 @@ import { RecordHeader } from "./RecordHeader.tsx";
 import { RelatedChips } from "./RelatedChips.tsx";
 import { nav } from "./route.ts";
 import "./registrations.ts";
-import { initialOption, isGoverned, moveRecord } from "./workflow.ts";
+import { canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -394,9 +394,23 @@ export function RecordPanel({
     }
   }
 
+  /**
+   * A move by "Move to…" or the status bar that an action makes asks what the action button asks
+   * (its words, its confirm, a danger): the same move never runs unasked by another way (#104).
+   * True when the question is now open.
+   */
+  function askedFirst(f: FieldMeta, to: string): boolean {
+    if (!row) return false;
+    const m = canMove(model, f, row[f.name] as string | undefined, to, title, row);
+    if (!m.action || !m.allowed || !asks(m.action)) return false;
+    setAsking(m.action);
+    return true;
+  }
+
   async function setStatus(s: string) {
     if (!statusField || creating || busy) return;
     if (!governed(statusField) && !model.can_update) return;
+    if (askedFirst(statusField, s)) return;
     setBusy(true);
     setError(null);
     const out = await moveRecord(d.run, model, statusField, row, s, title);
@@ -423,9 +437,11 @@ export function RecordPanel({
       .filter((f): f is FieldMeta => !!f);
 
   /** An action button was pressed: ask first when it needs words or a confirm, else run it. */
+  const asks = (a: Command) =>
+    needsOf(a).length > 0 || !!a.ui?.confirm || actions.danger.some((x) => x.id === a.id);
   function requestAction(a: Command) {
     if (!row || busy) return;
-    if (needsOf(a).length || a.ui?.confirm || actions.danger.includes(a)) setAsking(a);
+    if (asks(a)) setAsking(a);
     else void runAction(a, {});
   }
 
@@ -474,7 +490,8 @@ export function RecordPanel({
   }
 
   async function moveField(f: FieldMeta, to: string) {
-    if (!row) return;
+    if (!row || busy) return;
+    if (askedFirst(f, to)) return;
     if (dirtyRef.current && (await save()) === null) return;
     setBusy(true);
     setError(null);
@@ -612,14 +629,14 @@ export function RecordPanel({
             needs={needsOf(asking)}
             question={
               asking.ui?.confirm ??
-              (actions.danger.includes(asking)
+              (actions.danger.some((x) => x.id === asking.id)
                 ? t("{action} “{name}”?", {
                     action: actionLabelFor(asking, inSentence(title)),
                     name: label,
                   })
                 : undefined)
             }
-            danger={actions.danger.includes(asking)}
+            danger={actions.danger.some((x) => x.id === asking.id)}
             currency={currency}
             onCancel={() => setAsking(null)}
             onConfirm={(values) => void runAction(asking, values)}
