@@ -300,6 +300,11 @@ pub fn may_list(p: &Principal) -> bool {
     p.is_person() || administers(p)
 }
 
+/// What `device.update` does, for the API description (L6): its guard refuses every field but the
+/// name, so the generic sentence of the model engine would describe a command that does not exist.
+pub const UPDATE_SUMMARY: &str =
+    "Rename a device: give id and name; nothing else of a device can be changed";
+
 /// Commands of group `*` that a mobile app's token is refused (L20). The instance's setting record
 /// holds the whole settings object (the theme, the app order, the security policy, the shop's
 /// payment instructions and whatever an administrator saves there), and an app needs none of it: a

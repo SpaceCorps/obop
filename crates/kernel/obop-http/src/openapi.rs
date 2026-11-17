@@ -454,16 +454,19 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             if model.can_update {
                 let mut upd = json!({"type": "object", "required": ["id"], "properties": input_props.clone()});
                 upd["properties"]["id"] = json!({"type": "string"});
+                let mut summary =
+                    format!("Update a {name}; a status field only moves along a declared action");
+                // A device takes its name and nothing else (its guard says so; L6).
+                if name == obop_commands::devices::MODEL {
+                    summary = obop_commands::devices::UPDATE_SUMMARY.into();
+                    if let Some(props) = upd["properties"].as_object_mut() {
+                        props.retain(|k, _| k == "id" || k == "name");
+                    }
+                    upd["required"] = json!(["id", "name"]);
+                }
                 paths.insert(
                     format!("/api/{name}/update"),
-                    op(
-                        "update",
-                        &format!(
-                            "Update a {name}; a status field only moves along a declared action"
-                        ),
-                        Some(json_body(upd)),
-                        one.clone(),
-                    ),
+                    op("update", &summary, Some(json_body(upd)), one.clone()),
                 );
             }
             if model.can_delete {

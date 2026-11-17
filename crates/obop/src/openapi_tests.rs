@@ -363,3 +363,26 @@ async fn with_a_brand_row_the_anonymous_openapi_document_is_what_it_was_but_for_
     }
     pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
 }
+
+/// L6: `device.update` takes the name and nothing else (its guard refuses every other field), and
+/// the document says so, in its summary and in its body; the generic sentence of the model engine
+/// ("a status field only moves along a declared action") described another command.
+#[test]
+fn the_device_update_operation_says_it_renames_and_takes_only_the_name() {
+    let doc: J = serde_json::from_str(&document()).unwrap();
+    let op = &doc["paths"]["/api/device/update"]["post"];
+    assert_eq!(
+        op["summary"],
+        obop_commands::devices::UPDATE_SUMMARY,
+        "{op}"
+    );
+    let body = &op["requestBody"]["content"]["application/json"]["schema"];
+    let keys: BTreeSet<&str> = body["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(keys, BTreeSet::from(["id", "name"]), "{body}");
+    assert_eq!(body["required"], serde_json::json!(["id", "name"]));
+}
