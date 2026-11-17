@@ -522,6 +522,8 @@ obop supplies controls and evidence; certificates belong to the operator of a se
 9. **Human gates** (D18). `--yes` answers only a local prompt; it never satisfies a server-side approval or step-up. A non-interactive caller gets exit 10 at an approval and exit 12 at a step-up. The one credential issued without an existing principal is the 24-hour bootstrap profile that `obop init` writes; it has local machine and database access anyway, and `logout` discards it (Proposed, [cli.md](cli.md) open question 8).
 10. **Untrusted content and abuse.** Payee, bank account and amount taken from a document are untrusted and need a human ([ai.md](ai.md) 4.3); the CLI never executes server-provided content; the client-supplied model id is recorded as asserted, not trusted. Per-principal token buckets apply across surfaces, and the CLI backs off on 429 (exit 75) ([integrations.md](integrations.md) 4.10). A prompt-injection flaw in the agent surface is a security vulnerability under the runbook of 4.8.
 
+**Approvals in the log (D97, PROPOSED, built 2026-11-17).** Five `security_event` kinds follow an agent's proposal: `plan_proposed` (the agent as actor), `plan_approved`, `plan_rejected`, `plan_failed` (the person who decided as actor) and `plan_expired` (actor `system`, written once by the first process that finds the plan past its seven days); `user` is the proposing agent, and `detail` is `plan {id}: {command} on {model}:{record}`, never an input value or the person's reason. With `plan_lost` (D74) they are the whole trail of a plan.
+
 **Command audit entry (Proposed).** A `security_event` of type `command` (hash-chained with the rest of the log) that shares its `command_id` with the `audit_change` rows of the same transaction.
 
 | Field | Content |
