@@ -83,7 +83,7 @@ test.describe("administering Sign in with Microsoft", () => {
     await expect(form).toHaveCount(0);
     await expect(setUp).toBeFocused();
     await setUp.click();
-    await expect(form.getByLabel("Redirect address")).toHaveValue(
+    await expect(form.getByLabel("Redirect address", { exact: true })).toHaveValue(
       `${ssoAdminUrl()}/api/auth/oidc/callback`,
     );
     await expect(form.getByLabel("Client secret")).toHaveAttribute("type", "password");
@@ -137,10 +137,14 @@ test.describe("administering Sign in with Microsoft", () => {
       de.getByRole("switch", { name: tr("de", "Show the button on the sign-in page") }),
     ).toBeVisible();
     await expect(
-      row(page, "bea").getByRole("button", {
-        name: tr("de", "Microsoft sign-in for {user}").replace("{user}", "bea"),
-        exact: true,
-      }),
+      page
+        .getByRole("table", { name: tr("de", "People") })
+        .getByRole("row")
+        .filter({ has: page.getByRole("cell", { name: "bea", exact: true }) })
+        .getByRole("button", {
+          name: tr("de", "Microsoft sign-in for {user}").replace("{user}", "bea"),
+          exact: true,
+        }),
     ).toBeVisible();
     await de.getByRole("button", { name: tr("de", "Change settings"), exact: true }).click();
     const deForm = page.getByRole("dialog", { name: tr("de", "Change Microsoft sign-in") });
@@ -241,7 +245,7 @@ test.describe("administering Sign in with Microsoft", () => {
     await expect(dialog.getByRole("alert")).toContainText("other enabled administrators");
     await expect(dialog.getByRole("checkbox", { name: /Microsoft only/ })).not.toBeChecked();
     // The keyboard goes back to the row's button when the dialog is closed.
-    await dialog.getByRole("button", { name: "Close" }).click();
+    await dialog.locator("button.btn", { hasText: "Close" }).click();
     await expect(microsoft(page, "bea")).toBeFocused();
   });
 
