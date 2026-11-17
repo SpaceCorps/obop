@@ -55,8 +55,9 @@ export function Badge({ field, value }: { field?: FieldMeta; value: string }) {
 
 export type ConfirmRequest = {
   message: string;
-  confirmLabel: string;
-  cancelLabel: string;
+  /** The buttons; left out, they say Discard and Keep editing, worded when drawn (D8). */
+  confirmLabel?: string;
+  cancelLabel?: string;
   resolve: (ok: boolean) => void;
 };
 
@@ -73,10 +74,10 @@ export function ConfirmDialog({ req }: { req: ConfirmRequest }) {
       footer={
         <>
           <Button data-autofocus onClick={() => req.resolve(false)}>
-            {req.cancelLabel}
+            {req.cancelLabel ?? t("Keep editing")}
           </Button>
           <Button variant="danger" onClick={() => req.resolve(true)}>
-            {req.confirmLabel}
+            {req.confirmLabel ?? t("Discard")}
           </Button>
         </>
       }

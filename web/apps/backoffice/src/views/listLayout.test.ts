@@ -22,6 +22,7 @@ import {
   listSummable,
   nextSort,
   trimColumns,
+  canSortBy,
 } from "./listLayout.ts";
 
 beforeEach(async () => {
@@ -310,8 +311,9 @@ describe("the default order", () => {
     expect(listOrder({ ...expense, ui: { order: "spent_on desc" } }, noDate)).toEqual([
       { field: "id", dir: "desc" },
     ]);
+    // An agent reads the name masked (meta `masked`): the server would refuse that sort.
     const secret = model("hr_employee", [
-      f("name", "text", { required: true, personal_data: true }),
+      f("name", "text", { required: true, personal_data: true, masked: true }),
     ]);
     expect(listOrder(secret, secret.fields)).toEqual([{ field: "id", dir: "desc" }]);
   });
@@ -395,5 +397,39 @@ describe("the totals and the order of rows in the browser (query.ts)", () => {
       sortRows(rows, { f: "spent_on", dir: "asc" }, [date], lk, order).map((r) => r.id),
     ).toEqual(["01", "03", "04", "02"]);
     expect(sortRows(rows, undefined, [date], lk)).toBe(rows);
+  });
+});
+
+describe("what a list may be sorted by (#89, R13)", () => {
+  const trip = model(
+    "mileage_trip",
+    [
+      f("driver", "text", { required: true }),
+      f("started_at", "datetime", { class: "confidential_hr", personal_data: true }),
+      f("photo", "image"),
+      f("receipt", "file"),
+    ],
+    { ui: { order: "started_at desc" } },
+  );
+  it("never by a picture or a file, a masked value or a secret", () => {
+    const by = (name: string) => trip.fields.find((x) => x.name === name)!;
+    expect(canSortBy(by("photo"))).toBe(false);
+    expect(canSortBy(by("receipt"))).toBe(false);
+    expect(canSortBy(by("started_at"))).toBe(true);
+    expect(canSortBy({ ...by("started_at"), masked: true })).toBe(false);
+    expect(canSortBy(f("pin", "text", { class: "secret" }))).toBe(false);
+  });
+  it("the trip queue is in trip order for a person, who reads personal data in clear", () => {
+    expect(listOrder(trip, trip.fields)).toEqual([{ field: "started_at", dir: "desc" }]);
+    const agent = trip.fields.map((x) => (x.personal_data ? { ...x, masked: true } : x));
+    expect(listOrder(trip, agent)).toEqual([{ field: "id", dir: "desc" }]);
+  });
+  it("a saved or linked sort on a picture is ignored, on the server too", () => {
+    const sort = { f: "photo", dir: "asc" as const };
+    const fallback = listOrder(trip, trip.fields);
+    expect(effectiveOrder(trip, trip.fields, sort)).toEqual(fallback);
+    expect(toServer({ facets: [], group: [], sort }, trip.fields, fallback).order).toEqual(
+      fallback,
+    );
   });
 });

@@ -1,6 +1,7 @@
 import type { FieldMeta, ServerFilter, ServerOrder } from "./api.ts";
 import { validDate } from "./format.ts";
 import { rangeDecimal, rangeNum, type Cond, type ViewState } from "./query.ts";
+import { canSortBy } from "./views/listLayout.ts";
 
 /**
  * Turns the control panel's search state into a `<model>.search` query (D49).
@@ -126,8 +127,9 @@ export function toServer(
     if (out === null) rest.push(c);
     else filter.push(...out);
   }
-  const sf = state.sort && fields.find((x) => x.name === state.sort!.f);
-  // A sort on a field the person cannot read is ignored, like the browser does.
+  // A sort on a field the person cannot read, or cannot sort by (a picture, a file, a masked
+  // value: a saved view or an old link may name one), is ignored, like the browser does.
+  const sf = state.sort && fields.find((x) => x.name === state.sort!.f && canSortBy(x));
   const sortOnServer = !sf || sf.kind !== "ref";
   const order: ServerOrder[] =
     state.sort && sf

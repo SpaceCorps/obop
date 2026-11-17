@@ -19,6 +19,8 @@ export type Route = {
   section: string;
   /** "1": the open record fills the page instead of the side panel (`&full=1`); empty: the panel. */
   full: string;
+  /** A field of the open record to bring into view and focus (`&field=tax_id`, Q19). */
+  field: string;
 };
 
 /** The route name of an app's generated overview page: `#/<app>/overview`. */
@@ -54,6 +56,7 @@ export function parse(hash: string): Route {
     page: q.get("page") ?? "",
     section: q.get("section") ?? "",
     full: q.get("full") === "1" ? "1" : "",
+    field: /^[a-z][a-z0-9_]*$/.test(q.get("field") ?? "") ? q.get("field")! : "",
   };
 }
 
@@ -73,6 +76,7 @@ export function href(r: Partial<Route>): string {
   if (r.page && r.page !== "1") q.set("page", r.page);
   if (r.section) q.set("section", r.section);
   if (r.full === "1") q.set("full", "1");
+  if (r.field) q.set("field", r.field);
   const qs = q.toString();
   return `#/${[r.app, r.model].filter(Boolean).join("/")}${qs ? `?${qs}` : ""}`;
 }
