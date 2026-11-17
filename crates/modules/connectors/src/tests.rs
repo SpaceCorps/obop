@@ -2489,7 +2489,18 @@ fn site_snapshot() -> String {
                 out.push_str(&format!("kind = {:?}\n", f.kind.name()));
             }
             if !f.kind.options().is_empty() {
-                out.push_str(&format!("options = {:?}\n", f.kind.options()));
+                // The website's formatter (`vp check` in web/apps/site) breaks a line longer than
+                // 100 characters into one option per line; the snapshot is written that way.
+                let line = format!("options = {:?}", f.kind.options());
+                if line.len() <= 100 {
+                    out.push_str(&format!("{line}\n"));
+                } else {
+                    out.push_str("options = [\n");
+                    for o in f.kind.options() {
+                        out.push_str(&format!("  {o:?},\n"));
+                    }
+                    out.push_str("]\n");
+                }
             }
             if let Some(to) = f.kind.target() {
                 out.push_str(&format!("to = {to:?}\n"));
