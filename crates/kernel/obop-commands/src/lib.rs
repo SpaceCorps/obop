@@ -313,6 +313,14 @@ pub struct Dispatcher {
     /// Commands a module refuses for everyone (`refuse_always`): the metadata says the caller
     /// cannot do them (`can_delete: false`), so the interface agrees with the server.
     never: std::sync::RwLock<HashMap<String, String>>,
+    /// The ids of the modules that the package installer registered (`as_package`): nothing else
+    /// may register under them (K57), since the package's uninstall removes all that the id holds.
+    packages: std::sync::RwLock<HashSet<String>>,
+}
+
+thread_local! {
+    /// The package whose registration runs on this thread (`Dispatcher::as_package`).
+    static PACKAGE_SCOPE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 /// The instance currency when none is configured (the first target is Germany, OR-7).
@@ -825,6 +833,37 @@ impl Dispatcher {
         out
     }
 
+    /// Run `f`, which registers the package module `id` (its generated commands, transitions,
+    /// guards and public entries): the id is the package's from now on, until the module is
+    /// unregistered, and only registrations made inside such a call may use it. A module of the
+    /// program that is registered under the id of a package is a programming error and panics
+    /// (K57): the package's uninstall would take its commands with it.
+    pub fn as_package<T>(&self, id: &str, f: impl FnOnce() -> T) -> T {
+        self.packages.write().unwrap().insert(id.to_string());
+        let previous = PACKAGE_SCOPE.with(|s| s.borrow_mut().replace(id.to_string()));
+        struct Restore(Option<String>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let p = self.0.take();
+                PACKAGE_SCOPE.with(|s| *s.borrow_mut() = p);
+            }
+        }
+        let _restore = Restore(previous);
+        f()
+    }
+
+    /// Refuse a registration under `module` when a package holds that id and the registration is
+    /// not the package's own (`as_package`).
+    fn claim(&self, module: &str) {
+        if self.packages.read().unwrap().contains(module)
+            && PACKAGE_SCOPE.with(|s| s.borrow().as_deref() != Some(module))
+        {
+            panic!(
+                "{module} is the id of an installed package: a module of the program cannot be registered under it"
+            );
+        }
+    }
+
     /// Bind a handler to a command declared in `module`'s registry metadata. A handler for an
     /// undeclared command is a programming error: the surface is generated from the registry.
     pub fn register(&self, module: &Module, model: &str, command: &str, handler: Handler) {
@@ -864,6 +903,7 @@ impl Dispatcher {
         actor: bool,
         generated: bool,
     ) {
+        self.claim(&module.id);
         // The generated `create` and `update` are what lets an effect write the model.
         let generated_write = generated && matches!(command, "create" | "update");
         let (index, m) = module
@@ -935,6 +975,7 @@ impl Dispatcher {
     /// Attach a guard to the command `id` (`model.command`) of `module`. It is removed with the
     /// module. `serialize` makes the call hold the transaction lock from guard to handler.
     pub fn register_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        self.claim(module);
         self.guards.write().unwrap().insert(
             id.to_string(),
             Arc::new(Guarded {
@@ -950,6 +991,7 @@ impl Dispatcher {
     /// A module uses this to add rules that need the caller (ownership of a record) without
     /// replacing what the registry metadata implies.
     pub fn add_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        self.claim(module);
         let mut guards = self.guards.write().unwrap();
         let inner = guards.get(id).cloned();
         let combined: Guard = match inner {
@@ -982,6 +1024,7 @@ impl Dispatcher {
     /// answer as a record that does not exist, which the generated guard would otherwise refuse
     /// in its own words (it names the state, the referrers, the group).
     pub fn prepend_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        self.claim(module);
         let mut guards = self.guards.write().unwrap();
         let inner = guards.get(id).cloned();
         let combined: Guard = match inner {
@@ -1024,6 +1067,7 @@ impl Dispatcher {
     /// with it). Observers run inside the call, under the dispatcher's locks: they must be quick
     /// and must not call the dispatcher; hand the work to another thread.
     pub fn observe(&self, module: &str, observer: Box<Observer>) {
+        self.claim(module);
         self.observers
             .write()
             .unwrap()
@@ -1074,6 +1118,7 @@ impl Dispatcher {
         }
         self.order.write().unwrap().retain(|x| x != module);
         self.never.write().unwrap().retain(|_, m| m != module);
+        self.packages.write().unwrap().remove(module);
         self.refresh_lock_models();
     }
 
@@ -1186,16 +1231,33 @@ impl Dispatcher {
         names
     }
 
-    /// The ids of the modules that have a command registered right now, sorted. The installer
-    /// takes them when it starts, beside [`Dispatcher::model_names`]: every module that exists
-    /// before any package is registered is the program's, and no package may take its id (a
-    /// package called `sie` would be unregistered together with the commands of the module `sie`).
-    /// It asks again when it registers a package, for a module that something else registered
-    /// since.
+    /// The ids of the modules that hold anything right now, sorted: a command, and also only an
+    /// observer, a guard, a public entry or a command refused for everyone (K58), since an
+    /// uninstall under the id would remove those too. The installer takes them when it starts,
+    /// beside [`Dispatcher::model_names`]: every module that exists before any package is
+    /// registered is the program's, and no package may take its id (a package called `sie` would
+    /// be unregistered together with the commands of the module `sie`). It asks again when it
+    /// registers a package, for a module that something else registered since.
     pub fn module_ids(&self) -> Vec<String> {
-        let mut ids = self.order.read().unwrap().clone();
-        ids.sort();
-        ids
+        let mut ids: std::collections::BTreeSet<String> =
+            self.order.read().unwrap().iter().cloned().collect();
+        ids.extend(
+            self.observers
+                .read()
+                .unwrap()
+                .iter()
+                .map(|(m, _)| m.clone()),
+        );
+        ids.extend(
+            self.guards
+                .read()
+                .unwrap()
+                .values()
+                .map(|g| g.module.clone()),
+        );
+        ids.extend(self.public.read().unwrap().values().map(|(m, _)| m.clone()));
+        ids.extend(self.never.read().unwrap().values().cloned());
+        ids.into_iter().collect()
     }
 
     /// The id of the module that registered `model` (the last one to register a command of it),
