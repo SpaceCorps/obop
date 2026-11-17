@@ -1881,6 +1881,13 @@
                             "description": "Unix seconds.",
                             "type": "integer"
                           },
+                          "expires_at": {
+                            "description": "Unix seconds when the token ends by itself (90 days after it was made by an account bound to a Microsoft identity); null when it has no end of its own.",
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
                           "id": {
                             "type": "string"
                           },
@@ -8908,79 +8915,18 @@
             "application/json": {
               "schema": {
                 "properties": {
-                  "app_version": {
-                    "description": "The version of the app, as it reported it at sign-in and at each refresh",
-                    "maxLength": 2048,
-                    "type": "string"
-                  },
-                  "client_name": {
-                    "description": "The mobile app that signed in, as it called itself",
-                    "maxLength": 2048,
-                    "type": "string"
-                  },
-                  "expires_at": {
-                    "description": "When the sign-in of the device ends unless it is renewed (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
-                    "example": "2026-03-29T01:30:00.000000Z",
-                    "format": "date-time",
-                    "type": "string"
-                  },
-                  "grant": {
-                    "description": "The refresh-token family the device is bound to (an identifier, not a token)",
-                    "maxLength": 2048,
-                    "type": "string"
-                  },
                   "id": {
-                    "type": "string"
-                  },
-                  "last_seen": {
-                    "description": "When the device last refreshed its sign-in (the time of the last refresh, not of every request) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
-                    "example": "2026-03-29T01:30:00.000000Z",
-                    "format": "date-time",
                     "type": "string"
                   },
                   "name": {
                     "description": "What the device is called; the person can rename it (personal data: agents see it masked)",
                     "maxLength": 2048,
                     "type": "string"
-                  },
-                  "platform": {
-                    "description": "The platform the app reported, such as android or ios",
-                    "maxLength": 2048,
-                    "type": "string"
-                  },
-                  "push_token": {
-                    "description": "The address of the push service for this device. Never shown to anyone and not written in this version: push is not part of the first mobile slice",
-                    "maxLength": 2048,
-                    "type": "string"
-                  },
-                  "registered_at": {
-                    "description": "When the app signed in on this device (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
-                    "example": "2026-03-29T01:30:00.000000Z",
-                    "format": "date-time",
-                    "type": "string"
-                  },
-                  "revoked_at": {
-                    "description": "When the device was ended (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
-                    "example": "2026-03-29T01:30:00.000000Z",
-                    "format": "date-time",
-                    "type": "string"
-                  },
-                  "state": {
-                    "description": "active while the device may sign in; revoked once it was ended (moves only through the model's actions)",
-                    "enum": [
-                      "active",
-                      "revoked"
-                    ],
-                    "type": "string"
-                  },
-                  "user": {
-                    "description": "The account the device belongs to (personal data: agents see it masked)",
-                    "maxLength": 2048,
-                    "type": "string"
                   }
                 },
                 "required": [
-                  "id"
+                  "id",
+                  "name"
                 ],
                 "type": "object"
               }
@@ -9085,7 +9031,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Update a device; a status field only moves along a declared action",
+        "summary": "Rename a device: give id and name; nothing else of a device can be changed",
         "tags": [
           "Customize"
         ]

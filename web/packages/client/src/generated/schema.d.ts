@@ -910,7 +910,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Update a device; a status field only moves along a declared action */
+        /** Rename a device: give id and name; nothing else of a device can be changed */
         post: operations["device.update"];
         delete?: never;
         options?: never;
@@ -4693,6 +4693,8 @@ export interface operations {
                         tokens?: {
                             /** @description Unix seconds. */
                             created_at?: number;
+                            /** @description Unix seconds when the token ends by itself (90 days after it was made by an account bound to a Microsoft identity); null when it has no end of its own. */
+                            expires_at?: number | null;
                             id?: string;
                             label?: string;
                             scopes?: string[];
@@ -8691,50 +8693,9 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description The version of the app, as it reported it at sign-in and at each refresh */
-                    app_version?: string;
-                    /** @description The mobile app that signed in, as it called itself */
-                    client_name?: string;
-                    /**
-                     * Format: date-time
-                     * @description When the sign-in of the device ends unless it is renewed (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    expires_at?: string;
-                    /** @description The refresh-token family the device is bound to (an identifier, not a token) */
-                    grant?: string;
                     id: string;
-                    /**
-                     * Format: date-time
-                     * @description When the device last refreshed its sign-in (the time of the last refresh, not of every request) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    last_seen?: string;
                     /** @description What the device is called; the person can rename it (personal data: agents see it masked) */
-                    name?: string;
-                    /** @description The platform the app reported, such as android or ios */
-                    platform?: string;
-                    /** @description The address of the push service for this device. Never shown to anyone and not written in this version: push is not part of the first mobile slice */
-                    push_token?: string;
-                    /**
-                     * Format: date-time
-                     * @description When the app signed in on this device (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    registered_at?: string;
-                    /**
-                     * Format: date-time
-                     * @description When the device was ended (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    revoked_at?: string;
-                    /**
-                     * @description active while the device may sign in; revoked once it was ended (moves only through the model's actions)
-                     * @enum {string}
-                     */
-                    state?: "active" | "revoked";
-                    /** @description The account the device belongs to (personal data: agents see it masked) */
-                    user?: string;
+                    name: string;
                 };
             };
         };

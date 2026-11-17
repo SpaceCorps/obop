@@ -224,7 +224,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     );
     paths.insert(
         "/api/auth/agent-tokens".into(),
-        json!({"get": {"operationId": "listAgentTokens", "summary": "The agent tokens the signed-in human issued that still work, and the groups they may put on a new one", "security": sec.clone(), "responses": {"200": ok(json!({"type": "object", "properties": {"tokens": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "scopes": {"type": "array", "items": {"type": "string"}}, "created_at": {"type": "integer", "description": "Unix seconds."}}}}, "delegable": {"type": "array", "items": {"type": "string"}, "description": "Permission groups the caller may delegate: their own, and every registered group for an administrator."}}}), "The tokens (never a token itself) and the groups."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
+        json!({"get": {"operationId": "listAgentTokens", "summary": "The agent tokens the signed-in human issued that still work, and the groups they may put on a new one", "security": sec.clone(), "responses": {"200": ok(json!({"type": "object", "properties": {"tokens": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "scopes": {"type": "array", "items": {"type": "string"}}, "created_at": {"type": "integer", "description": "Unix seconds."}, "expires_at": {"type": ["integer", "null"], "description": "Unix seconds when the token ends by itself (90 days after it was made by an account bound to a Microsoft identity); null when it has no end of its own."}}}}, "delegable": {"type": "array", "items": {"type": "string"}, "description": "Permission groups the caller may delegate: their own, and every registered group for an administrator."}}}), "The tokens (never a token itself) and the groups."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
     );
     paths.insert(
         "/api/auth/agent-tokens/{id}/revoke".into(),
@@ -454,16 +454,19 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             if model.can_update {
                 let mut upd = json!({"type": "object", "required": ["id"], "properties": input_props.clone()});
                 upd["properties"]["id"] = json!({"type": "string"});
+                let mut summary =
+                    format!("Update a {name}; a status field only moves along a declared action");
+                // A device takes its name and nothing else (its guard says so; L6).
+                if name == obop_commands::devices::MODEL {
+                    summary = obop_commands::devices::UPDATE_SUMMARY.into();
+                    if let Some(props) = upd["properties"].as_object_mut() {
+                        props.retain(|k, _| k == "id" || k == "name");
+                    }
+                    upd["required"] = json!(["id", "name"]);
+                }
                 paths.insert(
                     format!("/api/{name}/update"),
-                    op(
-                        "update",
-                        &format!(
-                            "Update a {name}; a status field only moves along a declared action"
-                        ),
-                        Some(json_body(upd)),
-                        one.clone(),
-                    ),
+                    op("update", &summary, Some(json_body(upd)), one.clone()),
                 );
             }
             if model.can_delete {

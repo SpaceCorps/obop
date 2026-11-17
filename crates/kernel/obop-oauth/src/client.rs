@@ -128,6 +128,19 @@ impl OAuth {
                 Class::Mobile => redirect::validate_mobile(u),
             };
             checked.map_err(|e| OAuthError::new(400, "invalid_redirect_uri", e))?;
+            // The operator's list of the mobile apps that may register, by redirect scheme (L10).
+            if class.is_mobile()
+                && let Some(allowed) = &self.cfg.mobile_schemes
+            {
+                let scheme = u.split(':').next().unwrap_or("").to_ascii_lowercase();
+                if !allowed.contains(&scheme) {
+                    return Err(OAuthError::new(
+                        400,
+                        "invalid_redirect_uri",
+                        "this instance accepts only the mobile apps its operator listed (OBOP_OAUTH_MOBILE_SCHEMES), and this redirect scheme is not one of them",
+                    ));
+                }
+            }
             if !redirect_uris.iter().any(|x| x == u) {
                 redirect_uris.push(u.to_string());
             }
