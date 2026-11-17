@@ -41,6 +41,10 @@ description = "Szablon dokumentu do wysłania; puste przy prośbie o dokument z 
 label = "Dokument"
 description = "Plik PDF w Dokumentach, który osoba podpisująca czyta i podpisuje; wysłanie prośby zapisuje jego SHA-256 i zachowuje dokładną kopię"
 
+[labels.pl.model.sign_request.field.no_document]
+label = "Bez dokumentu"
+description = "Czy prośba nie dotyczy dokumentu w Dokumentach; taką prośbę widzi każdy, kto czyta prośby, a prośbę dotyczącą dokumentu tylko ci, którzy mogą zobaczyć ten dokument"
+
 [labels.pl.model.sign_request.field.title]
 label = "Tytuł"
 description = "Temat widoczny dla podpisującego"

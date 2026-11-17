@@ -41,6 +41,10 @@ description = "Le modèle de document à envoyer ; vide pour une demande portant
 label = "Document à signer"
 description = "Le PDF de Documents que le signataire lit et signe ; l'envoi de la demande en prend l'empreinte SHA-256 et en garde une copie exacte"
 
+[labels.fr.model.sign_request.field.no_document]
+label = "Sans document"
+description = "Indique si la demande ne porte pas sur un document de Documents ; une telle demande est visible par toute personne qui lit les demandes, et une demande portant sur un document seulement par celles qui peuvent voir ce document"
+
 [labels.fr.model.sign_request.field.title]
 label = "Titre"
 description = "Objet affiché au signataire"
