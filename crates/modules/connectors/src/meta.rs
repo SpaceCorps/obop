@@ -28,6 +28,15 @@ fn sel(name: &'static str, desc: &'static str, g: &'static str, o: &[&str]) -> F
 fn person(name: &'static str, desc: &'static str, g: &'static str) -> F {
     F::new(name, desc, Internal, true, g)
 }
+/// The provider of a setting or a connection: one of the catalogue ids, so every surface offers
+/// the catalogue to pick from (GitHub issue 108) and stores the id, as before.
+fn provider(desc: &'static str, g: &'static str) -> F {
+    let ids: Vec<&'static str> = obop_connectors::catalog::providers()
+        .iter()
+        .map(|p| p.id)
+        .collect();
+    sel("provider", desc, g, &ids)
+}
 fn class(name: &'static str, desc: &'static str, c: DataClass, g: &'static str) -> F {
     F::new(name, desc, c, false, g).kind(FieldKind::LongText)
 }
@@ -111,7 +120,7 @@ pub fn models() -> Vec<ModelDef> {
             write_group: ADMIN,
             access: None,
             fields: vec![
-                t("provider", "Id of the provider this policy is for", ADMIN).required(),
+                provider("Id of the provider this policy is for", ADMIN).required(),
                 flag("enabled", "The provider may be connected at all", ADMIN),
                 flag("users_may_use", "People with connectors.user may connect their own accounts", ADMIN),
                 t("allowed_group", "Permission group that may use it; empty means connectors.user", ADMIN),
@@ -137,7 +146,7 @@ pub fn models() -> Vec<ModelDef> {
             access: None,
             fields: vec![
                 t("name", "A name that tells you what the connection is for", USER).required(),
-                t("provider", "Id of the provider from the catalogue", USER).required(),
+                provider("Id of the provider from the catalogue", USER).required(),
                 sel("owner_scope", "Whether the connection belongs to the instance or to one person", USER, &["instance", "user"]).required(),
                 person("owner_user", "The person who owns the connection", USER),
                 t("owner_groups", "Permission groups the owner held when the connection was last changed", ADMIN),

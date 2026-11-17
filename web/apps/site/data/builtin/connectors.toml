@@ -179,6 +179,8 @@ write_group = "connectors.admin"
 name = "provider"
 description = "Id of the provider this policy is for"
 class = "none"
+kind = "select"
+options = ["webhook_out", "webhook_in", "rest_api_pull", "csv_export", "slack_webhook", "stripe", "docuseal", "github_webhook", "google_drive", "google_oauth", "microsoft_oauth", "zapier", "make", "n8n"]
 required = true
 
 [[model.field]]
@@ -270,6 +272,8 @@ required = true
 name = "provider"
 description = "Id of the provider from the catalogue"
 class = "none"
+kind = "select"
+options = ["webhook_out", "webhook_in", "rest_api_pull", "csv_export", "slack_webhook", "stripe", "docuseal", "github_webhook", "google_drive", "google_oauth", "microsoft_oauth", "zapier", "make", "n8n"]
 required = true
 
 [[model.field]]
