@@ -230,6 +230,34 @@ pub fn revoked_patch(now_secs: u64) -> Fields {
     f
 }
 
+/// End the device `id` and write its `device_revoked` entry in one atomic batch (L11): the entry
+/// exists exactly when the device was ended by this call, so a repeat writes no second one and a
+/// refused batch loses none. `Ok(false)`: the device was no longer in force (ended meanwhile), and
+/// nothing was written.
+pub fn end_with_entry(
+    backend: &dyn obop_storage::Backend,
+    id: &str,
+    now_secs: u64,
+    user: &str,
+    actor: &str,
+    detail: &str,
+) -> Result<bool, String> {
+    let ops = [
+        obop_storage::Op::Patch {
+            model: MODEL.into(),
+            id: id.into(),
+            patch: revoked_patch(now_secs),
+            expect: vec![("state".into(), J::from(ACTIVE))],
+        },
+        crate::audit::event_op(now_secs, user, EVENT_REVOKED, actor, detail),
+    ];
+    match backend.apply_checked(&ops) {
+        Ok(()) => Ok(true),
+        Err(obop_storage::ApplyError::Conflict { index: 0, .. }) => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 /// Whether the record is one that is in force: not ended by a person, by reuse or by an offboarding.
 pub fn is_active(rec: &Fields) -> bool {
     rec.get("state").and_then(J::as_str) == Some(ACTIVE)

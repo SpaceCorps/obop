@@ -1262,9 +1262,7 @@ fn a_mobile_refresh_refused_at_any_call_keeps_the_old_token_and_makes_no_orphan(
 fn ending_a_device_refused_at_any_call_is_never_reported_as_done_and_asking_again_finishes_it() {
     // A refusal of one call at every position, and a store that stays refused for longer than a
     // step is tried again from a few positions.
-    let sweep = (0..60)
-        .map(|k| (k, 1))
-        .chain([1, 3, 5, 8, 12, 16].map(|k| (k, 6)));
+    let sweep = (0..60).map(|k| (k, 1)).chain((0..20).map(|k| (k, 6)));
     let mut refused = 0;
     let mut past_the_end = false;
     for (skip, stays) in sweep {
@@ -1314,9 +1312,11 @@ fn ending_a_device_refused_at_any_call_is_never_reported_as_done_and_asking_agai
             "invalid_grant",
             "skip={skip}"
         );
-        assert!(
-            r.events("device_revoked").len() <= 1,
-            "skip={skip}: one entry at most, however many tries"
+        // The record and its entry are one atomic write (L11): exactly one, however many tries.
+        assert_eq!(
+            r.events("device_revoked").len(),
+            1,
+            "skip={skip}: one entry, however many tries"
         );
     }
     assert!(refused >= 3, "the sweep reached the revocation: {refused}");
@@ -1336,10 +1336,11 @@ fn a_refused_write_of_the_device_still_ends_the_token_and_a_refused_token_still_
     let (id, _) = r.the_device();
     let access = t["access_token"].as_str().unwrap();
     fault::begin_request(Default::default());
-    flaky.refuse_model(dev::MODEL, Mode::Updates);
+    // The record is marked in an atomic batch with its entry of the log (L11).
+    flaky.refuse_applies(100);
     let e = r.o.revoke_device(&id, "ada", None).unwrap_err();
     fault::end_request();
-    flaky.allow_models();
+    flaky.refuse_applies(0);
     assert_eq!(e.status, 503);
     assert!(
         r.auth.resolve(access).is_none(),

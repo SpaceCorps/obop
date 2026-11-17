@@ -923,20 +923,15 @@ impl OAuth {
         let Some(rec) = rec.filter(dev::is_active) else {
             return Ok(());
         };
+        let owner = grant.get("owner").and_then(J::as_str).unwrap_or("");
+        let detail = format!("{}: {why}", dev::describe(&rec, did));
+        // The record and its entry of the log in one batch (L11): neither is lost without the other.
         fault::patiently(TRIES, PAUSE, || {
             fault::allow(|| {
-                self.backend
-                    .update(dev::MODEL, did, &dev::revoked_patch(self.now()))
+                dev::end_with_entry(&*self.backend, did, self.now(), owner, actor, &detail)
             })
         })
         .map_err(|_| storage_busy())?;
-        let owner = grant.get("owner").and_then(J::as_str).unwrap_or("");
-        self.audit_by(
-            owner,
-            dev::EVENT_REVOKED,
-            actor,
-            &format!("{}: {why}", dev::describe(&rec, did)),
-        );
         Ok(())
     }
 

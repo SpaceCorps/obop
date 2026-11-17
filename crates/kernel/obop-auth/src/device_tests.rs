@@ -504,3 +504,41 @@ fn a_row_of_another_table_with_the_same_name_is_not_ended_as_a_device() {
     assert_eq!(theirs["state"], "active", "{theirs:?}");
     assert_eq!(device_events(&r, "ada").len(), 1);
 }
+
+/// L11: the device and its `device_revoked` entry are one atomic write. A refusal at any call of
+/// ending the devices, and the repeat that finishes it, leave exactly one entry and the device
+/// ended: never two entries (the entry was written first and a later step refused), never none.
+#[test]
+fn a_repeat_after_a_refusal_at_any_step_leaves_exactly_one_entry_per_device() {
+    let mut refused_runs = 0;
+    for skip in 0..20 {
+        let (r, flaky) = crate::admin_tests::flaky_rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        let app = sign_in(&r, "ada", "Phone");
+        let ch = "password_change";
+        flaky.refuse_call_after(skip);
+        let before = flaky.refused();
+        let mut tally = crate::account::DeviceTally::default();
+        let first = r.a.end_devices("ada", None, "root", ch, &mut tally);
+        flaky.refuse_call_after(-1);
+        if flaky.refused() > before {
+            refused_runs += 1;
+        }
+        if first.is_err() {
+            let mut again = crate::account::DeviceTally::default();
+            r.a.end_devices("ada", None, "root", ch, &mut again)
+                .unwrap();
+        }
+        assert!(ended(&r, &app), "refusal after {skip} calls: not ended");
+        assert_eq!(
+            device_events(&r, "ada").len(),
+            1,
+            "refusal after {skip} calls: {:?}",
+            device_events(&r, "ada")
+        );
+    }
+    assert!(
+        refused_runs > 3,
+        "the sweep met a refusal in {refused_runs} runs only"
+    );
+}

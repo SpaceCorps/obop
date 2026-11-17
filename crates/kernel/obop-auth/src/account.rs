@@ -8,12 +8,10 @@ use obop_commands::{ADMIN_GROUP, MfaError, Principal};
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
 
-/// What ending the devices of a person has done so far, kept across the tries of one request: the
-/// ones whose entry of the log is written (so a try does not write it again) and how many were
-/// ended.
+/// What ending the devices of a person has done so far, kept across the tries of one request: how
+/// many were ended.
 #[derive(Default)]
 pub(crate) struct DeviceTally {
-    pub logged: Vec<String>,
     pub ended: usize,
 }
 
@@ -130,14 +128,12 @@ impl Auth {
     }
 
     /// End the devices of `name` that are still in force (and, with `until`, were registered at
-    /// that time or before): one `device_revoked` entry of the security log (`actor`, `why`), then
-    /// the refresh-token family and the access token of the device, then the record. The entry
-    /// comes first because a device that is marked ended is never looked at again, so an entry
-    /// that failed after it could never be written; the other way round, an entry written and a
-    /// step then refused is written again by a repeat of the request (`tally.logged` keeps it
-    /// from being written twice by the tries of one request). Every step reads again what is
-    /// left, so a repeat finishes what a refused store left undone. `tally` counts the devices
-    /// ended, also by a call that fails part way.
+    /// that time or before): the refresh-token family and the access token of the device, then the
+    /// record together with its one `device_revoked` entry of the security log (`actor`, `why`) in
+    /// one atomic batch (`devices::end_with_entry`, L11), so the entry exists exactly when the
+    /// device was ended: a repeat writes no second one, and a refused batch loses none. Every step
+    /// reads again what is left, so a repeat finishes what a refused store left undone. `tally`
+    /// counts the devices ended, also by a call that fails part way.
     ///
     /// Only rows this crate's partner wrote (`devices::is_ours`) are touched: a table of the same
     /// name that somebody else once filled is not ours to end.
@@ -163,17 +159,6 @@ impl Auth {
                 continue;
             }
             let now = self.now();
-            if !tally.logged.contains(&id) {
-                obop_commands::audit::try_record_event(
-                    &*self.backend,
-                    now,
-                    name,
-                    dev::EVENT_REVOKED,
-                    actor,
-                    &format!("{}: ended by {why}", dev::describe(&d, &id)),
-                )?;
-                tally.logged.push(id.clone());
-            }
             if let Some(gid) = d.get("grant").and_then(J::as_str)
                 && let Some(g) = self.backend.get("oauth_grant", gid)?
             {
@@ -192,9 +177,18 @@ impl Auth {
                     self.backend.delete("oauth_refresh", &rid)?;
                 }
             }
-            self.backend
-                .update(dev::MODEL, &id, &dev::revoked_patch(now))?;
-            tally.ended += 1;
+            // The device and its entry of the log in one batch (L11): last, so a step above that
+            // the store refuses leaves the device in force for the repeat, with no entry yet.
+            if dev::end_with_entry(
+                &*self.backend,
+                &id,
+                now,
+                name,
+                actor,
+                &format!("{}: ended by {why}", dev::describe(&d, &id)),
+            )? {
+                tally.ended += 1;
+            }
         }
         Ok(())
     }
