@@ -7,6 +7,8 @@ mod app;
 #[cfg(test)]
 mod app_ids_tests;
 #[cfg(test)]
+mod appointments_capacity_tests;
+#[cfg(test)]
 mod assert_lang_tests;
 mod backup_cli;
 #[cfg(test)]

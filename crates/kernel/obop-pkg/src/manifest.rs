@@ -196,6 +196,9 @@ pub struct NoOverlapM {
     pub state_field: Option<String>,
     #[serde(default)]
     pub ignore_states: Vec<String>,
+    /// `<ref field of key>.<number field>`: how many records of one key may overlap at once
+    /// (`resource_id.capacity`); 1 when absent.
+    pub capacity: Option<String>,
     pub message: String,
 }
 
@@ -2539,17 +2542,26 @@ impl Manifest {
                     .map_err(|e| format!("{}: rule {:?}: {e}", m.name, r.key))?,
             );
         }
-        let overlap = m.no_overlap.as_ref().map(|n| {
-            no_overlap(
-                &n.rule,
-                &n.key,
-                &n.start,
-                &n.end,
-                n.state_field.as_deref(),
-                &n.ignore_states,
-                &n.message,
-            )
-        });
+        let overlap = m
+            .no_overlap
+            .as_ref()
+            .map(|n| {
+                no_overlap(
+                    &n.rule,
+                    &n.key,
+                    &n.start,
+                    &n.end,
+                    n.state_field.as_deref(),
+                    &n.ignore_states,
+                    &n.message,
+                )
+            })
+            .map(
+                |o| match m.no_overlap.as_ref().and_then(|n| n.capacity.as_deref()) {
+                    Some(c) => o.with_capacity(c),
+                    None => o,
+                },
+            );
         Ok((rules, overlap))
     }
 

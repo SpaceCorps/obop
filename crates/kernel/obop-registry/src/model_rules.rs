@@ -119,12 +119,23 @@ pub struct NoOverlap {
     /// The select field `ignore_states` names options of (`state` unless declared).
     pub state_field: &'static str,
     pub ignore_states: Vec<&'static str>,
+    /// `capacity = "<ref field of key>.<number field>"`: how many records of one key may overlap
+    /// at any moment, read from the record the key field points to (a room that seats eight).
+    /// Unset, or a value that is empty or below 1, means 1. Kept as (ref field, field).
+    pub capacity: Option<(&'static str, &'static str)>,
     pub message: String,
     /// The message per language (`attach_messages`).
     pub messages: BTreeMap<String, String>,
 }
 
 impl NoOverlap {
+    /// This rule with a capacity path `<ref field>.<number field>` (checked by the install gate).
+    pub fn with_capacity(mut self, path: &str) -> Self {
+        let (r, f) = path.split_once('.').unwrap_or((path, ""));
+        self.capacity = Some((intern(r), intern(f)));
+        self
+    }
+
     /// The own fields the rule reads. An update checks it again when it moves the key, the start
     /// or the end, or leaves an ignored state (`engine::model_rules::rechecks`).
     pub fn reads(&self) -> Vec<&str> {
@@ -206,6 +217,7 @@ pub fn no_overlap(
         end: intern(end),
         state_field: intern(state_field.unwrap_or("state")),
         ignore_states: ignore_states.iter().map(|s| intern(s)).collect(),
+        capacity: None,
         message: message.to_string(),
         messages: BTreeMap::new(),
     }
@@ -374,6 +386,26 @@ pub fn problems(m: &ModelDef, lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>) ->
                     "`ignore_states` needs a select field `{}` (set `state_field`)",
                     n.state_field
                 )),
+            }
+        }
+        if let Some((via, field)) = n.capacity {
+            let target = match kind_of(via) {
+                Some(FieldKind::Ref(t)) if n.key.contains(&via) => lookup(t),
+                _ => {
+                    p.push(format!(
+                        "`capacity` must be `<field>.<number field>` where the first is a reference field of `key`, not {via:?}"
+                    ));
+                    None
+                }
+            };
+            if let Some(t) = target {
+                match t.fields.iter().find(|f| f.name == field) {
+                    Some(f) if matches!(f.kind, FieldKind::Number) && f.computed.is_none() => {}
+                    _ => p.push(format!(
+                        "`capacity`: {} has no stored number field {field:?}",
+                        t.name
+                    )),
+                }
             }
         }
         out.extend(

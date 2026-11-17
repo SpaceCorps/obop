@@ -2,7 +2,7 @@
 id = "appointments"
 version = "0.3.2"
 name = "Appointments"
-description = "Bookable resources (people, rooms, equipment) and appointments with a date, start and end time and a status flow. A resource cannot be booked twice at overlapping times (cancelled and missed appointments excepted)."
+description = "Bookable resources (people, rooms, equipment) and appointments with a date, start and end time and a status flow. A resource cannot be booked twice at overlapping times, or more times at once than its capacity when it has one (cancelled and missed appointments excepted)."
 author = "SpaceCorps"
 summary = "Bookable people, rooms and equipment, and appointments with a start, an end and a status flow."
 license = "Apache-2.0"
@@ -107,6 +107,7 @@ write_group = "appointments.user"
   start = "start_minute"
   end = "end_minute"
   ignore_states = ["cancelled", "no_show"]
+  capacity = "resource_id.capacity"
   message = "The resource is already booked at that time: pick another time or another resource"
 
   [[model.field]]

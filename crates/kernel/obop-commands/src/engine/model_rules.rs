@@ -124,6 +124,9 @@ fn clashes(unit: &Unit<'_>, def: &ModelDef, n: &NoOverlap, id: &str, rec: &Field
     let (Some(start), Some(end)) = (present(rec.get(n.start)), present(rec.get(n.end))) else {
         return Ok(false);
     };
+    let capacity = capacity(unit, def, n, rec)?;
+    // The parts of the other records' times that fall inside this one's.
+    let mut inside: Vec<(J, J)> = Vec::new();
     for (other, o) in Reads::find(unit, def.name, n.key[0], key[0])? {
         if other == id || ignored(&o) {
             continue;
@@ -140,10 +143,49 @@ fn clashes(unit: &Unit<'_>, def: &ModelDef, n: &NoOverlap, id: &str, rec: &Field
             continue;
         };
         if order(start, oe) == Some(Ordering::Less) && order(os, end) == Some(Ordering::Less) {
-            return Ok(true);
+            if capacity <= 1 {
+                return Ok(true);
+            }
+            let later = |a: &J, b: &J| order(a, b) == Some(Ordering::Greater);
+            let from = if later(os, start) { os } else { start };
+            let to = if later(oe, end) { end } else { oe };
+            inside.push((from.clone(), to.clone()));
         }
     }
-    Ok(false)
+    Ok(most_at_once(&inside) + 1 > capacity)
+}
+
+/// How many records of one key may overlap: the number field `capacity` names on the record the
+/// key's reference field points to, 1 when the rule has none or the value is empty or below 1.
+fn capacity(unit: &Unit<'_>, def: &ModelDef, n: &NoOverlap, rec: &Fields) -> R<u64> {
+    let Some((via, field)) = n.capacity else {
+        return Ok(1);
+    };
+    let target = def
+        .fields
+        .iter()
+        .find(|f| f.name == via)
+        .and_then(|f| f.kind.target());
+    let (Some(target), Some(to)) = (target, rec.get(via).and_then(J::as_str)) else {
+        return Ok(1);
+    };
+    let n = Reads::get(unit, target, to)?
+        .and_then(|r| r.get(field).and_then(J::as_f64))
+        .unwrap_or(1.0);
+    Ok(if n >= 1.0 { n.floor() as u64 } else { 1 })
+}
+
+/// The largest number of the intervals `[from, to)` that hold one moment together.
+fn most_at_once(spans: &[(J, J)]) -> u64 {
+    // An end before a start at the same point: one booking may end when the next begins.
+    let mut points: Vec<(&J, i8)> = spans.iter().flat_map(|(a, b)| [(a, 1), (b, -1)]).collect();
+    points.sort_by(|(a, x), (b, y)| order(a, b).unwrap_or(Ordering::Equal).then(x.cmp(y)));
+    let (mut now, mut most) = (0i64, 0i64);
+    for (_, d) in points {
+        now += i64::from(d);
+        most = most.max(now);
+    }
+    most as u64
 }
 
 #[cfg(test)]

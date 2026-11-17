@@ -95,6 +95,11 @@ fn the_parser_and_the_gate_refuse_a_bad_rule() {
             OVERLAP.replace("[\"cancelled\"]", "[\"gone\"]"),
             "no option \"gone\"",
         ),
+        // `room` is text, not a reference to a record that holds a capacity.
+        (
+            OVERLAP.replace("message = ", "capacity = \"room.seats\"\nmessage = "),
+            "`capacity` must be",
+        ),
     ];
     for (extra, want) in cases {
         let p = problem(&extra).unwrap_or_default();

@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Tidsbokning"
-description = "Bokningsbara resurser (personer, rum, utrustning) och bokningar med datum, start- och sluttid och ett statusflöde. En resurs kan inte bokas två gånger på tider som överlappar (avbokade och uteblivna bokningar undantagna)."
+description = "Bokningsbara resurser (personer, rum, utrustning) och bokningar med datum, start- och sluttid och ett statusflöde. En resurs kan inte bokas två gånger på tider som överlappar, eller fler gånger samtidigt än dess kapacitet tillåter när den har en (avbokade och uteblivna bokningar undantagna)."
 summary = "Bokningsbara personer, rum och utrustning samt bokningar med start, slut och ett statusflöde."
 
 [labels.sv.model.appointments_resource]

@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Spotkania"
-description = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z datą, godziną rozpoczęcia i zakończenia oraz obiegiem statusów. Zasobu nie można zarezerwować dwa razy w nakładających się terminach (z wyjątkiem spotkań anulowanych i nieodbytych)."
+description = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z datą, godziną rozpoczęcia i zakończenia oraz obiegiem statusów. Zasobu nie można zarezerwować dwa razy w nakładających się terminach ani, jeśli ma pojemność, więcej razy naraz, niż ona pozwala (z wyjątkiem spotkań anulowanych i nieodbytych)."
 summary = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z początkiem, końcem i obiegiem statusów."
 
 [labels.pl.model.appointments_resource]
