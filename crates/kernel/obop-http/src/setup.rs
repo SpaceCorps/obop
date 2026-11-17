@@ -56,7 +56,12 @@ fn status_blocking(s: &HttpState, parts: &Parts) -> Response {
             "Wait a minute and load the page again.",
         );
     }
-    match api.status() {
+    status_answer(api.status())
+}
+
+/// The answer of the status route. A refusal of the store is a refusal (503), never "closed".
+fn status_answer(st: Result<obop_commands::SetupStatus, SetupError>) -> Response {
+    match st {
         Ok(st) if !st.open => axum::Json(json!({"open": false})).into_response(),
         Ok(st) => axum::Json(json!({
             "open": true,
@@ -140,5 +145,39 @@ fn refusal(e: SetupError) -> Response {
             "Choose another instance name, or leave it out and set it later under Customize, Identity.",
         ),
         SetupError::Unavailable(m) => super::unavailable(&m),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Rule 2: a store that refused is a 503 on both routes, whatever the store noted. Never a 200
+    /// `{"open": false}` and never a 409 "closed": both would say an account exists.
+    #[test]
+    fn a_refusal_of_the_store_is_503_on_both_routes() {
+        let refused = || SetupError::Unavailable("storage_busy: the pool is full".into());
+        assert_eq!(refusal(refused()).status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            status_answer(Err(refused())).status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
+
+    #[test]
+    fn each_refusal_has_its_status() {
+        for (e, want) in [
+            (SetupError::Closed, StatusCode::CONFLICT),
+            (SetupError::NeedsSecretKey, StatusCode::SERVICE_UNAVAILABLE),
+            (SetupError::RateLimited(5), StatusCode::TOO_MANY_REQUESTS),
+            (SetupError::CodeInvalid, StatusCode::FORBIDDEN),
+            (SetupError::Invalid("x".into()), StatusCode::BAD_REQUEST),
+            (
+                SetupError::InstanceNameRefused("name: x".into()),
+                StatusCode::BAD_REQUEST,
+            ),
+        ] {
+            assert_eq!(refusal(e.clone()).status(), want, "{e:?}");
+        }
     }
 }
