@@ -217,3 +217,21 @@ description = "Työntekijä, joka johtaa osastoa"
 [labels.fi.model.hr_employee.field.user]
 label = "obop-käyttäjä"
 description = "Henkilön obop-käyttäjänimi (kirjautumistunnus), jos hänellä on sellainen: tälle työntekijälle jätetyt poissaolot kuuluvat tälle käyttäjälle, ja tämän käyttäjän uusi poissaolopyyntö alkaa tästä työntekijästä"
+
+[labels.fi.model.hr_employee.filter.active]
+label = "Aktiiviset"
+
+[labels.fi.model.hr_employee.filter.onboarding]
+label = "Perehdytyksessä"
+
+[labels.fi.model.hr_leave_request.filter.to_approve]
+label = "Hyväksyttävät"
+
+[labels.fi.model.hr_leave_request.filter.away_today]
+label = "Poissa tänään"
+
+[labels.fi.model.hr_leave_request.filter.upcoming]
+label = "Tulevat"
+
+[labels.fi.model.hr_leave_request.filter.not_refused]
+label = "Ei hylätyt"

@@ -89,8 +89,11 @@ export type UiSection = {
   /** Shown only while the record's state is one of these. */
   show_in?: string[];
 };
-/** `[[model.ui.filter]]`: a saved filter offered by the control panel. */
-export type UiFilter = { label: string; where: string };
+/**
+ * `[[model.ui.filter]]`: a saved filter offered by the control panel; `labels` is its label per
+ * language from the package's label files (U10), absent when none translates it.
+ */
+export type UiFilter = { label: string; where: string; labels?: Record<string, string> };
 
 /** `[model.ui]`. */
 export type ModelUi = {

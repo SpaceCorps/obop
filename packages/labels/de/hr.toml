@@ -217,3 +217,21 @@ description = "Der Mitarbeiter, der die Abteilung leitet"
 [labels.de.model.hr_employee.field.user]
 label = "obop-Benutzer"
 description = "Der obop-Benutzername (Login) der Person, falls vorhanden: Abwesenheiten für diesen Mitarbeiter gehören diesem Benutzer, und ein neuer Abwesenheitsantrag dieses Benutzers beginnt mit diesem Mitarbeiter"
+
+[labels.de.model.hr_employee.filter.active]
+label = "Aktiv"
+
+[labels.de.model.hr_employee.filter.onboarding]
+label = "Im Onboarding"
+
+[labels.de.model.hr_leave_request.filter.to_approve]
+label = "Zu genehmigen"
+
+[labels.de.model.hr_leave_request.filter.away_today]
+label = "Heute abwesend"
+
+[labels.de.model.hr_leave_request.filter.upcoming]
+label = "Bevorstehend"
+
+[labels.de.model.hr_leave_request.filter.not_refused]
+label = "Nicht abgelehnt"

@@ -509,6 +509,8 @@ pub struct ModelInfo {
     pub guard: Option<obop_registry::Guard>,
     /// The message of the guard per language (D52), empty when untranslated.
     pub guard_messages: Texts,
+    /// The label of each filter the package declares, by its English label, per language (U10).
+    pub filter_labels: BTreeMap<String, Texts>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -738,6 +740,20 @@ impl Dispatcher {
                     plurals: mtr.map(|t| t.plurals.clone()).unwrap_or_default(),
                     guard: m.def.ext.guard.clone(),
                     guard_messages: mtr.map(|t| t.guard.clone()).unwrap_or_default(),
+                    filter_labels: m
+                        .def
+                        .ui()
+                        .map(|u| {
+                            u.filters
+                                .iter()
+                                .filter_map(|f| {
+                                    let key = obop_registry::labels::filter_key(&f.label);
+                                    let t = mtr.and_then(|t| t.filters.get(&key))?;
+                                    Some((f.label.clone(), t.clone()))
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     name: name.clone(),
                     description: m.description,
                     labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),

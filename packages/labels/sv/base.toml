@@ -29,3 +29,6 @@ description = "Anonymisera parten på plats och registrera raderingen"
 [labels.sv.model.party.field.photo]
 label = "Foto"
 description = "Foto eller logotyp för kontakten (PNG, JPEG, WebP eller GIF, upp till 2 MiB)"
+
+[labels.sv.model.party.filter.not_erased]
+label = "Inte raderade"

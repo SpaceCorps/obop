@@ -217,3 +217,21 @@ description = "El empleado que dirige el departamento"
 [labels.es.model.hr_employee.field.user]
 label = "Usuario de obop"
 description = "El nombre de usuario de obop (inicio de sesión) de la persona, si tiene uno: las ausencias presentadas para este empleado pertenecen a ese usuario, y una nueva solicitud de ausencia de ese usuario empieza en este empleado"
+
+[labels.es.model.hr_employee.filter.active]
+label = "Activos"
+
+[labels.es.model.hr_employee.filter.onboarding]
+label = "En incorporación"
+
+[labels.es.model.hr_leave_request.filter.to_approve]
+label = "Por aprobar"
+
+[labels.es.model.hr_leave_request.filter.away_today]
+label = "Ausentes hoy"
+
+[labels.es.model.hr_leave_request.filter.upcoming]
+label = "Próximas"
+
+[labels.es.model.hr_leave_request.filter.not_refused]
+label = "No rechazadas"

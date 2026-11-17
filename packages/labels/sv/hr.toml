@@ -217,3 +217,21 @@ description = "Den anställda som leder avdelningen"
 [labels.sv.model.hr_employee.field.user]
 label = "obop-användare"
 description = "Personens användarnamn (inloggning) i obop, om hen har ett: ledighet som lämnas in för den anställda tillhör den användaren, och en ny ledighetsansökan från den användaren börjar på den anställda"
+
+[labels.sv.model.hr_employee.filter.active]
+label = "Aktiva"
+
+[labels.sv.model.hr_employee.filter.onboarding]
+label = "Under introduktion"
+
+[labels.sv.model.hr_leave_request.filter.to_approve]
+label = "Att godkänna"
+
+[labels.sv.model.hr_leave_request.filter.away_today]
+label = "Borta i dag"
+
+[labels.sv.model.hr_leave_request.filter.upcoming]
+label = "Kommande"
+
+[labels.sv.model.hr_leave_request.filter.not_refused]
+label = "Inte avslagna"

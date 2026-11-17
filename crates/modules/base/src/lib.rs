@@ -1,6 +1,7 @@
 //! `base` implementation: the Contacts app foundation.
 
 use obop_commands::{Dispatcher, Store, Value};
+use obop_registry::ui::{Filter, UiFilter};
 use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, ModelUi, Module, ModuleMeta};
 use obop_types::DataClass::*;
 
@@ -70,6 +71,13 @@ pub fn module() -> Module {
                 quick_create: vec!["name".into(), "email".into()],
                 order: Some("name asc".into()),
                 default_view: Some("gallery".into()),
+                // U1: an erased contact keeps the placeholder name `[erased]`, which sorts before
+                // every letter; the list opens without them (the filter can be removed).
+                filters: vec![UiFilter {
+                    label: "Not erased".into(),
+                    filter: Filter::parse("name != \"[erased]\"").expect("a valid filter"),
+                }],
+                default_filter: Some("Not erased".into()),
                 ..Default::default()
             }),
         ],
@@ -319,6 +327,21 @@ mod tests {
             d.approve(&officer, &mut v, &plan_id),
             Err(CallError::UnknownPlan(_))
         ));
+    }
+
+    #[test]
+    fn the_contact_list_opens_without_erased_contacts() {
+        // U1: the placeholder name of an erased contact sorts first; the list leaves them out
+        // until the person removes the filter, in every language.
+        let m = module();
+        let ui = m.models[0].ui().unwrap();
+        assert_eq!(ui.default_filter.as_deref(), Some("Not erased"));
+        let f = &ui.filters[0];
+        assert_eq!(f.label, "Not erased");
+        assert_eq!(f.filter.source, "name != \"[erased]\"");
+        let t = &m.translations.models["party"].filters["not_erased"];
+        assert_eq!(t["de"], "Nicht gelöscht");
+        assert_eq!(t.len(), 6);
     }
 
     #[test]

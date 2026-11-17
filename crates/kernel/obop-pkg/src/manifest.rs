@@ -970,6 +970,12 @@ impl Manifest {
                                 .map(|r| r.key.clone())
                                 .chain(m.no_overlap.iter().map(|n| n.rule.clone()))
                                 .collect(),
+                            filters: m
+                                .ui
+                                .iter()
+                                .flat_map(|u| &u.filter)
+                                .map(|f| obop_registry::labels::filter_key(&f.label))
+                                .collect(),
                         },
                     )
                 })

@@ -537,3 +537,28 @@ fn leave_follows_when_the_employee_s_login_is_set_or_corrected() {
     );
     assert_eq!(owner(&app), "julia");
 }
+
+#[test]
+fn the_filters_hr_declares_carry_their_labels_in_each_language() {
+    // U10: `[labels.<lang>.model.<m>.filter.<key>]`, served beside the English label.
+    let app = app();
+    let hanna = Principal::user("hanna", &["hr.user", "hr.manager"]);
+    let meta = obop_mcp::meta_json(&app.dispatcher, obop_commands::Surface::Rest, &hanna);
+    let leave = meta["modules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|m| m["models"].as_array().unwrap())
+        .find(|m| m["name"] == "hr_leave_request")
+        .unwrap()
+        .clone();
+    let f = leave["ui"]["filter"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["label"] == "Not refused")
+        .unwrap()
+        .clone();
+    assert_eq!(f["labels"]["de"], "Nicht abgelehnt", "{f}");
+    assert_eq!(f["labels"]["sv"], "Inte avslagna", "{f}");
+}

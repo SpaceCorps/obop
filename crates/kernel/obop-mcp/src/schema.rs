@@ -565,6 +565,7 @@ mod tests {
             plurals: Default::default(),
             guard: None,
             guard_messages: Default::default(),
+            filter_labels: Default::default(),
         }
     }
 

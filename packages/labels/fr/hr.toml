@@ -217,3 +217,21 @@ description = "L’employé qui dirige le département"
 [labels.fr.model.hr_employee.field.user]
 label = "Utilisateur obop"
 description = "Le nom d’utilisateur obop (identifiant) de la personne, s’il existe : les congés déposés pour cet employé appartiennent à cet utilisateur, et une nouvelle demande de congé de cet utilisateur commence sur cet employé"
+
+[labels.fr.model.hr_employee.filter.active]
+label = "Actifs"
+
+[labels.fr.model.hr_employee.filter.onboarding]
+label = "En intégration"
+
+[labels.fr.model.hr_leave_request.filter.to_approve]
+label = "À approuver"
+
+[labels.fr.model.hr_leave_request.filter.away_today]
+label = "Absents aujourd’hui"
+
+[labels.fr.model.hr_leave_request.filter.upcoming]
+label = "À venir"
+
+[labels.fr.model.hr_leave_request.filter.not_refused]
+label = "Non refusées"
