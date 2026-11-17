@@ -37,6 +37,13 @@ export function lastMonth(today: Date): { from: string; to: string } {
   return { from: day(first), to: day(last) };
 }
 
+/** What to type for a rate, with the decimal mark of the person's language ("95,00" in German). */
+export function rateHint(currency: string): string {
+  return t("Enter the hourly rate as an amount, such as {example}", {
+    example: fmt.moneyInput(9500, currency),
+  });
+}
+
 /**
  * Whether the person may bill time: the server needs invoicing.user and timesheets.manager. The
  * first shows as a create of invoices, the second as the approve action of a time entry, which
@@ -108,7 +115,7 @@ function BillDialog({
       return;
     }
     if (!rate.trim() || minor === undefined) {
-      setError(t("Enter the hourly rate as an amount, such as 95.00"));
+      setError(rateHint(cur));
       return;
     }
     const day = /^\d{4}-\d{2}-\d{2}$/;
@@ -170,7 +177,7 @@ function BillDialog({
       }
     >
       <form
-        className="sup-form"
+        className="sup-form prj-bill-form"
         noValidate
         onSubmit={(e) => {
           e.preventDefault();

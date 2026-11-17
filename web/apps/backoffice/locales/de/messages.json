@@ -2841,7 +2841,7 @@
   "Bill time": "Zeit abrechnen",
   "Create draft invoice": "Rechnungsentwurf erstellen",
   "Draft invoice created": "Rechnungsentwurf erstellt",
-  "Enter the hourly rate as an amount, such as 95.00": "Geben Sie den Stundensatz als Betrag ein, zum Beispiel 95.00",
+  "Enter the hourly rate as an amount, such as {example}": "Geben Sie den Stundensatz als Betrag ein, zum Beispiel {example}",
   "Hourly rate ({currency})": "Stundensatz ({currency})",
   "Invoice lines": "Rechnungspositionen",
   "ISO week": "ISO-Woche",

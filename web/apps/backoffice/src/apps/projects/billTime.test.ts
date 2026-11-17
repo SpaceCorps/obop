@@ -1,7 +1,26 @@
-import { describe, expect, it } from "vite-plus/test";
-import { lastMonth, mayBillTime } from "./BillTime.tsx";
+import { readFileSync } from "node:fs";
+import { afterEach, describe, expect, it } from "vite-plus/test";
+import { provideCatalogue, setLanguage } from "@obop/ui";
+import { lastMonth, mayBillTime, rateHint } from "./BillTime.tsx";
 
 describe("Bill time", () => {
+  afterEach(async () => {
+    await setLanguage("en", false);
+  });
+
+  it("gives the example rate with the decimal mark of the language", async () => {
+    await setLanguage("en", false);
+    expect(rateHint("EUR")).toContain("95.00");
+    for (const lang of ["de", "fr", "pl", "fi", "sv", "es"] as const) {
+      const url = new URL(`../../../locales/${lang}/messages.json`, import.meta.url);
+      provideCatalogue(lang, JSON.parse(readFileSync(url, "utf8")));
+      await setLanguage(lang, false);
+      const hint = rateHint("EUR");
+      expect(hint, lang).toContain("95,00");
+      expect(hint, lang).not.toContain("95.00");
+    }
+  });
+
   const invoice = { model: { can_create: true, actions: [] } };
   const entry = (ids: string[]) => ({
     model: {

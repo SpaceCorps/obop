@@ -2841,7 +2841,7 @@
   "Bill time": "Fakturera tid",
   "Create draft invoice": "Skapa fakturautkast",
   "Draft invoice created": "Fakturautkast skapat",
-  "Enter the hourly rate as an amount, such as 95.00": "Ange timpriset som ett belopp, till exempel 95.00",
+  "Enter the hourly rate as an amount, such as {example}": "Ange timpriset som ett belopp, till exempel {example}",
   "Hourly rate ({currency})": "Timpris ({currency})",
   "Invoice lines": "Fakturarader",
   "ISO week": "ISO-vecka",

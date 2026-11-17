@@ -2841,7 +2841,7 @@
   "Bill time": "machine-drafted",
   "Create draft invoice": "machine-drafted",
   "Draft invoice created": "machine-drafted",
-  "Enter the hourly rate as an amount, such as 95.00": "machine-drafted",
+  "Enter the hourly rate as an amount, such as {example}": "machine-drafted",
   "Hourly rate ({currency})": "machine-drafted",
   "Invoice lines": "machine-drafted",
   "ISO week": "machine-drafted",

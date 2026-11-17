@@ -2841,7 +2841,7 @@
   "Bill time": "Laskuta aika",
   "Create draft invoice": "Luo laskuluonnos",
   "Draft invoice created": "Laskuluonnos luotu",
-  "Enter the hourly rate as an amount, such as 95.00": "Anna tuntihinta summana, esimerkiksi 95.00",
+  "Enter the hourly rate as an amount, such as {example}": "Anna tuntihinta summana, esimerkiksi {example}",
   "Hourly rate ({currency})": "Tuntihinta ({currency})",
   "Invoice lines": "Laskurivit",
   "ISO week": "ISO-viikko",

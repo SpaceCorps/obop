@@ -95,3 +95,30 @@ test("a project without a customer or a rate has them asked in words, not by fie
       if (!had.has(id)) await api.post("/api/module/uninstall", { id }, root);
   }
 });
+
+test.describe("on a touch screen", () => {
+  test.use({ hasTouch: true });
+
+  test("the choice of invoice lines is a 44 px target", async ({ page, signIn, api, uid }) => {
+    const root = await api.token("root");
+    const had = new Set(((await api.run("root", "module.list")) as any[]).map((m) => m.id));
+    for (const id of ["projects", "timesheets"])
+      if (!had.has(id)) await api.run("root", "marketplace_listing.install", { id });
+    try {
+      const project = await api.create("root", "projects_project", { name: uid("Touch") });
+      await signIn("root", `/projects/projects_project?id=${project.id}`);
+      expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
+      await page.getByRole("button", { name: "Bill time" }).click();
+      const dialog = page.getByRole("dialog", { name: "Bill time" });
+      for (const name of ["One per task", "One per time entry"]) {
+        // The layout height, not the box drawn while the dialog's opening scale runs.
+        const button = dialog.locator(".switcher button", { hasText: name });
+        const height = await button.evaluate((b) => (b as HTMLElement).offsetHeight);
+        expect(height, name).toBeGreaterThanOrEqual(44);
+      }
+    } finally {
+      for (const id of ["timesheets", "projects"])
+        if (!had.has(id)) await api.post("/api/module/uninstall", { id }, root);
+    }
+  });
+});

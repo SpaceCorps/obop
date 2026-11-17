@@ -2841,7 +2841,7 @@
   "Bill time": "Zafakturuj czas",
   "Create draft invoice": "Utwórz szkic faktury",
   "Draft invoice created": "Utworzono szkic faktury",
-  "Enter the hourly rate as an amount, such as 95.00": "Wpisz stawkę godzinową jako kwotę, na przykład 95.00",
+  "Enter the hourly rate as an amount, such as {example}": "Wpisz stawkę godzinową jako kwotę, na przykład {example}",
   "Hourly rate ({currency})": "Stawka godzinowa ({currency})",
   "Invoice lines": "Pozycje faktury",
   "ISO week": "Tydzień ISO",
