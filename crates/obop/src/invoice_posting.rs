@@ -14,10 +14,12 @@
 //! rounded half up once on the total, in integer minor units. The move stays a draft: posting it
 //! is `accounting_move.post`, which needs `accounting.approver` and a person's approval.
 //!
-//! Booking on post: `invoice.post` is wrapped. While `book_on_post` is on (the default) and the
-//! settings name a journal, a receivable account, a revenue account and a tax, the booking is
-//! planned before the invoice is posted (a booking that would be refused, such as one dated in a
-//! closed period, refuses the post and nothing changes) and written right after it. Without those
+//! Booking on post: while `book_on_post` is on (the default) and the settings name a journal, a
+//! receivable account, a revenue account and a tax, a guard of `invoice.post` (and of an
+//! `invoice.update` that posts) plans the booking before the invoice is posted (a booking that
+//! would be refused, such as one dated in a closed period, refuses the post and nothing changes)
+//! and an observer writes it right after the post, in the same call. The post is not wrapped, so
+//! an update may still post an invoice together with an edit (D48). Without those
 //! settings, or with `book_on_post` off, the invoice is posted and not booked, as before; it can
 //! be booked later with `create_move`, which also takes the settings as its defaults.
 //!
@@ -506,6 +508,8 @@ fn write(b: &dyn Backend, pl: &Planned) -> Result<String, String> {
         f.insert("label".into(), J::from(l.label.as_str()));
         f.insert("debit".into(), J::from(l.debit));
         f.insert("credit".into(), J::from(l.credit));
+        // Stated, so the filters "Open items" and "Overdue" (reconciled = false) find the item.
+        f.insert("reconciled".into(), J::Bool(false));
         if !pl.party_id.is_empty() {
             f.insert("partner_id".into(), J::from(pl.party_id.as_str()));
         }
@@ -754,50 +758,85 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             update_settings(&*st.backend(), x)
         }),
     );
-    // Booking on post (owner ruling of 2026-11-17). Planned before the post, so a booking that
-    // would be refused refuses the post; written right after it.
+    // Booking on post (owner ruling of 2026-11-17). Not a wrapper of `invoice.post`: an action
+    // with a wrapper cannot be moved by an `update` together with an edit (D48), which posting an
+    // invoice can. A guard plans the booking before the post (on the action and on an update
+    // that moves the state to posted), so a booking that would be refused refuses the post; an
+    // observer writes it after the post succeeded, in the same call.
     let st = store.clone();
-    d.around(
-        "invoice.post",
-        Box::new(move |_, input, inner| {
-            let b = st.backend();
-            let id = match input {
-                Value::Map(x) => match x.get("id") {
-                    Some(Value::Text(t)) => t.clone(),
-                    _ => String::new(),
-                },
-                _ => String::new(),
-            };
-            let booking = match on_post_input(&*b)? {
-                Some(i) if !id.is_empty() && b.list("accounting_move").is_ok() => Some(Input {
-                    invoice: id,
-                    ..i
-                }),
-                _ => None,
-            };
-            let Some(i) = booking else {
-                return inner(input);
-            };
-            // Only an invoice that has its post still ahead is planned here: anything else is
-            // refused by the post itself, in its own words.
-            let draft = invoice_of(&*b, &i.invoice)
+    let check = move |input: &Value| -> Result<obop_commands::Verdict, String> {
+        let b = st.backend();
+        if let Some(i) = booking_for(&*b, input)?
+            && invoice_of(&*b, &i.invoice)
                 .map(|(_, f)| text(&f, "state") == "draft")
-                .unwrap_or(false);
-            if draft && link_of(&*b, &i.invoice)?.is_none() {
-                plan_in(&*b, &i, "draft").map_err(|e| {
-                    format!("the invoice was not posted, because its journal entry cannot be booked: {e}. Fix the booking settings (invoice_posting_setting) or turn book_on_post off")
-                })?;
-            } else {
-                return inner(input);
-            }
-            let out = inner(input)?;
-            let pl = plan_in(&*b, &i, "posted").map_err(|e| {
-                format!("the invoice was posted but its journal entry could not be booked: {e}; book it with invoice_posting.create_move")
+                .unwrap_or(false)
+            && link_of(&*b, &i.invoice)?.is_none()
+        {
+            plan_in(&*b, &i, "draft").map_err(|e| {
+                format!("the invoice was not posted, because its journal entry cannot be booked: {e}. Fix the booking settings (invoice_posting_setting) or turn book_on_post off")
             })?;
-            write(&*b, &pl).map_err(|e| {
-                format!("the invoice was posted but its journal entry could not be booked: {e}; book it with invoice_posting.create_move")
-            })?;
-            Ok(out)
+        }
+        Ok(obop_commands::Verdict::default())
+    };
+    let check = Arc::new(check);
+    let c = check.clone();
+    d.add_guard(
+        "invoicing",
+        "invoice.post",
+        true,
+        Box::new(move |_, input| c(input)),
+    );
+    d.add_guard(
+        "invoicing",
+        "invoice.update",
+        true,
+        Box::new(move |_, input| match input {
+            Value::Map(x) if x.get("state") == Some(&Value::text("posted")) => check(input),
+            _ => Ok(obop_commands::Verdict::default()),
         }),
     );
+    let st = store.clone();
+    d.observe(
+        &m.id,
+        Box::new(move |id, _, input, _| {
+            if id != "invoice.post" && id != "invoice.update" {
+                return;
+            }
+            if let Err(e) = book_after_post(&*st.backend(), input) {
+                eprintln!(
+                    "the invoice was posted but its journal entry could not be booked: {e}; book it with invoice_posting.create_move"
+                );
+            }
+        }),
+    );
+}
+
+/// The booking of the invoice an input names, when booking on post is on and set up and the
+/// accounting package is installed.
+fn booking_for(b: &dyn Backend, input: &Value) -> Result<Option<Input>, String> {
+    let id = match input {
+        Value::Map(x) => match x.get("id") {
+            Some(Value::Text(t)) => t.to_string(),
+            _ => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    if b.list("accounting_move").is_err() {
+        return Ok(None);
+    }
+    Ok(on_post_input(b)?.map(|i| Input { invoice: id, ..i }))
+}
+
+/// After a post (or an update that posted): book the invoice if it is now posted and has no move.
+fn book_after_post(b: &dyn Backend, input: &Value) -> Result<(), String> {
+    let Some(i) = booking_for(b, input)? else {
+        return Ok(());
+    };
+    let posted = invoice_of(b, &i.invoice)
+        .map(|(_, f)| text(&f, "state") == "posted")
+        .unwrap_or(false);
+    if !posted || link_of(b, &i.invoice)?.is_some() {
+        return Ok(());
+    }
+    write(b, &plan_in(b, &i, "posted")?).map(|_| ())
 }
