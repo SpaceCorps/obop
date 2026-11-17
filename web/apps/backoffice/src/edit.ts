@@ -28,6 +28,27 @@ export function sameAsStored(f: FieldMeta, stored: unknown, e: Edit, currency?: 
 }
 
 /**
+ * A number typed under one language's separators, written again with another's (D11): `1,234.5`
+ * typed in English reads `1.234,5` once the form is in German, so Save reads what was meant. Only
+ * text made of digits, signs, spaces and the two old marks is rewritten; anything else is left as
+ * typed for the check at Save to name.
+ */
+export function relocaleNumber(
+  text: string,
+  from: { decimal: string; group: string },
+  to: { decimal: string; group: string },
+): string {
+  if (from.decimal === to.decimal && from.group === to.group) return text;
+  const marks = new Set([from.decimal, from.group]);
+  if (![...text].every((c) => /[\d\s+\-−  ]/.test(c) || marks.has(c))) return text;
+  const at = text.lastIndexOf(from.decimal);
+  const whole = at >= 0 ? text.slice(0, at) : text;
+  const frac = at >= 0 ? text.slice(at + 1) : null;
+  const ints = whole.split(from.group).join(to.group);
+  return frac === null ? ints : `${ints}${to.decimal}${frac}`;
+}
+
+/**
  * Turn what was typed into the wire value, or say why it cannot be one. `null` means empty. A value
  * the person did not change (`unchanged`) is not held to the length and range limits of the field,
  * as on the server (D90): a record stored above a limit that was lowered later can still be saved.

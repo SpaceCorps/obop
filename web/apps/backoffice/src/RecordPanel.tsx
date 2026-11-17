@@ -4,11 +4,11 @@
 // from presentation.ts, actions that save first and ask what they need, sections, the full page,
 // the pager and the trail, locks and read-only values.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getCurrency, inSentence, t, useFocusTrap } from "@obop/ui";
+import { fmt, getCurrency, inSentence, t, useFocusTrap, useI18n } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
 import { ActionDialog } from "./ActionDialog.tsx";
 import { useData } from "./data.tsx";
-import { fromEdit, sameAsStored, toEdit, validate, type Edit } from "./edit.ts";
+import { fromEdit, relocaleNumber, sameAsStored, toEdit, validate, type Edit } from "./edit.ts";
 import { recordExtensionOf, withoutOverridden } from "./extensions.ts";
 import { FormBody, flushLines, linesDirty, newLinesRegistry } from "./FormBody.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
@@ -115,6 +115,24 @@ export function RecordPanel({
   const d = useData();
   const creating = row === null;
   const [draft, setDraft] = useState<Record<string, Edit>>({});
+  // A number typed before a change of language or region is written again with the new
+  // separators, so Save reads what was typed and not another number (D11).
+  const { locale } = useI18n();
+  const marks = useRef(fmt.separators());
+  useEffect(() => {
+    const now = fmt.separators();
+    const was = marks.current;
+    marks.current = now;
+    if (was.decimal === now.decimal && was.group === now.group) return;
+    setDraft((x) => {
+      const out = { ...x };
+      for (const f of fields)
+        if ((f.kind === "decimal" || f.kind === "money") && typeof out[f.name] === "string")
+          out[f.name] = relocaleNumber(out[f.name] as string, was, now);
+      return out;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
   // What went wrong is kept as names and as the server's own words, and the sentence is written
   // when it is drawn: text kept finished would stay in the language it was written in after a
   // change of language (the panel keeps its state through one).
