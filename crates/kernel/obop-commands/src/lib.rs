@@ -423,6 +423,9 @@ pub struct FieldInfo {
     /// an exact decimal at the scale of the field.
     pub min: Option<Bound>,
     pub max: Option<Bound>,
+    /// `text` (K45, U3): the named format every written value has (`currency_code`, `iban`,
+    /// `vat_id`): the declared `pattern`, or `currency_code` for a text field named `currency`.
+    pub pattern: Option<&'static str>,
     /// The limits the field declares as a parenthesised sentence for a description (OpenAPI, MCP),
     /// `(at most 2000 characters)` or `(from 0 to 100)`; empty when it declares none (the default
     /// of its kind is in `max_length`, not in the description).
@@ -768,6 +771,7 @@ impl Dispatcher {
                                 min_length: f.effective_min_length(),
                                 min: f.lower_bound(),
                                 max: f.upper_bound(),
+                                pattern: f.effective_pattern().map(|p| p.name()),
                                 limits_note: f.limits_note(),
                                 hints: f.hints.clone(),
                             }

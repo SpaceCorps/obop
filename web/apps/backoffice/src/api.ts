@@ -225,6 +225,8 @@ export type FieldMeta = {
    */
   max_length?: number;
   min_length?: number;
+  /** Only for `text` (K45, U3): the named format a written value has. */
+  pattern?: "currency_code" | "iban" | "vat_id";
   /**
    * Only for `number`, `money` (minor units) and `decimal` (a canonical string at the scale of the
    * field) (D90): the inclusive bounds the package declares.
