@@ -1432,6 +1432,66 @@ async fn the_cli_and_the_mcp_server_list_rename_and_revoke_devices_like_rest() {
     );
 }
 
+/// L17: the catalogues (MCP `tools/list`, `GET /api/commands`, CLI help) show a token only the
+/// device commands it can use. They are in group `*`, so the group alone listed all five to every
+/// token; an agent could use one of them (a proposal to revoke) and a mobile app three.
+#[test]
+fn the_tool_list_shows_a_token_only_the_device_commands_it_can_use() {
+    use obop_commands::{Principal, Surface};
+    let rig = rig();
+    let d = &rig.app.dispatcher;
+    let devices = |p: &Principal| -> Vec<String> {
+        d.visible(Surface::Mcp, p)
+            .into_iter()
+            .filter(|id| id.starts_with("device."))
+            .collect()
+    };
+    let all = [
+        "device.get",
+        "device.list",
+        "device.revoke",
+        "device.search",
+        "device.update",
+    ];
+    let person = Principal::user("bob", &["base.user"]);
+    assert_eq!(devices(&person), all);
+    let agent = Principal::agent("bob/agent", &["base.user"], &["base.user"]);
+    assert_eq!(devices(&agent), ["device.revoke"]);
+    let admin_agent = Principal::agent(
+        "dana/agent",
+        &["base.user", "api.device_admin"],
+        &["base.user", "api.device_admin"],
+    );
+    assert_eq!(
+        devices(&admin_agent),
+        [
+            "device.get",
+            "device.list",
+            "device.revoke",
+            "device.search"
+        ]
+    );
+    let mut app = Principal::user("bob", &["base.user"]);
+    app.device = Some("dev_1".into());
+    app.scopes = Some(["base.user".to_string()].into_iter().collect());
+    assert_eq!(
+        devices(&app),
+        ["device.get", "device.revoke", "device.update"]
+    );
+    // The same list is what `tools/list` answers over MCP.
+    let mut session = obop_mcp::Session::new();
+    let line = json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}).to_string();
+    let out = obop_mcp::handle(d, &agent, &mut session, &line).unwrap();
+    let tools: Vec<String> = serde_json::from_str::<J>(&out).unwrap()["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|t| t["name"].as_str().map(String::from))
+        .filter(|n| n.starts_with("device__"))
+        .collect();
+    assert_eq!(tools, ["device__revoke"]);
+}
+
 async fn command_resp(r: &axum::Router, bearer: &str, cmd: &str, body: J) -> Resp {
     let (model, name) = cmd.split_once('.').unwrap();
     let auth = format!("Bearer {}", bearer.trim_start_matches("Bearer "));

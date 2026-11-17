@@ -300,6 +300,29 @@ pub fn may_list(p: &Principal) -> bool {
     p.is_person() || administers(p)
 }
 
+/// Whether the command `id` is one the principal can use at all, for the catalogues (MCP
+/// `tools/list`, `GET /api/commands`, the command-line help; L17). The device commands are in
+/// group `*`, so the group does not tell; this follows [`may_see`] and [`may_list`]: a mobile app's
+/// token cannot list or search (it reads, renames and revokes its own device), and an agent's
+/// token cannot rename and, without the device administration, cannot read, list or search (it
+/// can only propose the revoking of its owner's device). Every other command is usable as far as
+/// this says.
+pub fn usable(id: &str, p: &Principal) -> bool {
+    let Some(verb) = id
+        .strip_prefix(MODEL)
+        .and_then(|rest| rest.strip_prefix('.'))
+    else {
+        return true;
+    };
+    let agent = p.device.is_none() && p.kind == crate::PrincipalKind::Agent;
+    match verb {
+        "list" | "search" => may_list(p),
+        "get" => !agent || administers(p),
+        "update" => !agent,
+        _ => true,
+    }
+}
+
 /// Who may see, rename and revoke the device `id` (the record `rec`):
 ///
 /// - the holders of [`ADMIN_GROUP`] and the instance administrator, any device to read and to

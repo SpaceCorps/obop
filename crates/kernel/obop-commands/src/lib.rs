@@ -1281,11 +1281,16 @@ impl Dispatcher {
     }
 
     /// Command ids the principal may call on `surface`: what MCP `tools/list` and CLI help show.
+    /// A command of group `*` that the kind of token can never use is left out (L17).
     pub fn visible(&self, surface: Surface, p: &Principal) -> Vec<String> {
         let cmds = self.commands.read().unwrap();
         let mut v: Vec<_> = cmds
             .iter()
-            .filter(|(_, c)| on_surface(c.surfaces, surface) && p.allows(c.permission_group))
+            .filter(|(id, c)| {
+                on_surface(c.surfaces, surface)
+                    && p.allows(c.permission_group)
+                    && devices::usable(id, p)
+            })
             .map(|(id, _)| id.clone())
             .collect();
         v.sort();
