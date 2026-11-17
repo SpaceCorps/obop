@@ -2724,5 +2724,7 @@
   "At least 12 characters.": "Minst 12 tecken.",
   "Repeat the password": "Upprepa lösenordet",
   "Go to sign in": "Gå till inloggningen",
-  "Create the administrator": "Skapa administratören"
+  "Create the administrator": "Skapa administratören",
+  "This name of the instance cannot be used. Choose a plain name, or leave the field empty.": "Det här namnet på instansen kan inte användas. Välj ett enkelt namn eller lämna fältet tomt.",
+  "Check what you entered and try again.": "Kontrollera det du angav och försök igen."
 }

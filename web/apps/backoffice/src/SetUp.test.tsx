@@ -219,9 +219,9 @@ describe("the answers of the server", () => {
       "The server is busy. Try again in a moment.",
     ],
     [
-      "a name the server refuses",
-      () => json(400, { code: "invalid_input", error: "name: must not hold < or >, in any field" }),
-      "name: must not hold < or >, in any field",
+      "other input the server refuses",
+      () => json(400, { code: "invalid_input", error: "username must be letters" }),
+      "Check what you entered and try again.",
     ],
     ["no server", () => Promise.reject(new TypeError("offline")), "Could not reach the server."],
   ] as const)
@@ -235,6 +235,32 @@ describe("the answers of the server", () => {
       expect(input("username").value).toBe("Root");
       expect(onDone).not.toHaveBeenCalled();
     });
+
+  it("a name the server refuses: says so under the name, in the page's words, and moves there", async () => {
+    answer = () =>
+      json(400, {
+        code: "setup_instance_name_invalid",
+        error: "the instance name is refused: name: must not hold < or >, in any field",
+      });
+    const onDone = await show();
+    await fill();
+    const sentence =
+      "This name of the instance cannot be used. Choose a plain name, or leave the field empty.";
+    expect(text()).toContain(sentence);
+    expect(text()).not.toContain("must not hold");
+    expect(document.activeElement).toBe(input("instance_name"));
+    expect(input("instance_name").getAttribute("aria-invalid")).toBe("true");
+    expect(input("instance_name").value).toBe(" Acme Test ");
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it("never shows the server's own English sentence for a refused input", async () => {
+    answer = () => json(400, { code: "invalid_input", error: "name: must not hold < or >" });
+    await show();
+    await fill();
+    expect(text()).not.toContain("must not hold");
+    expect(text()).toContain("Check what you entered and try again.");
+  });
 
   it("an account made meanwhile: says so and goes to sign in", async () => {
     answer = () => json(409, { code: "setup_closed" });

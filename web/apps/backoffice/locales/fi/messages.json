@@ -2724,5 +2724,7 @@
   "At least 12 characters.": "Vähintään 12 merkkiä.",
   "Repeat the password": "Toista salasana",
   "Go to sign in": "Siirry kirjautumiseen",
-  "Create the administrator": "Luo ylläpitäjä"
+  "Create the administrator": "Luo ylläpitäjä",
+  "This name of the instance cannot be used. Choose a plain name, or leave the field empty.": "Tätä instanssin nimeä ei voi käyttää. Valitse yksinkertainen nimi tai jätä kenttä tyhjäksi.",
+  "Check what you entered and try again.": "Tarkista antamasi tiedot ja yritä uudelleen."
 }

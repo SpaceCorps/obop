@@ -8,10 +8,13 @@ import { Button, Input, Notice } from "./ui.tsx";
 const MIN_PASSWORD = 12;
 const USERNAME = /^[A-Za-z0-9._\-@]+$/;
 
-type Field = "username" | "password" | "repeat";
+type Field = "instance_name" | "username" | "password" | "repeat";
 
-/** What the person is told for a refusal of the server. */
-type Failure = { text: string; closed?: boolean; needsKey?: boolean };
+/**
+ * What the person is told for a refusal of the server. With `field`, the sentence belongs to that
+ * field: it is shown under it and the field takes the focus.
+ */
+type Failure = { text: string; closed?: boolean; needsKey?: boolean; field?: Field };
 
 export function setupFailure(r: Extract<LoginResult, { kind: "error" }>): Failure {
   if (r.status === 403 && r.code === "setup_code_invalid")
@@ -29,8 +32,17 @@ export function setupFailure(r: Extract<LoginResult, { kind: "error" }>): Failur
   if (r.code === "setup_needs_secret_key") return { text: needsKeyText(), needsKey: true };
   const busy = storageFaultMessage(r.status, r.code);
   if (busy) return { text: busy };
-  // A name, a username or a password the server refused: its own sentence, which says which.
-  if (r.status === 400 && r.message) return { text: r.message };
+  // The instance name is the one input the form cannot check itself (the brand's rules): the
+  // server gives it a code of its own. The server's own sentence is English and names a rule, so
+  // it is never shown.
+  if (r.status === 400 && r.code === "setup_instance_name_invalid")
+    return {
+      text: t(
+        "This name of the instance cannot be used. Choose a plain name, or leave the field empty.",
+      ),
+      field: "instance_name",
+    };
+  if (r.status === 400) return { text: t("Check what you entered and try again.") };
   return {
     text: twoFactorMessage({ status: r.status, code: r.status === 0 ? "network" : r.code }),
   };
@@ -105,7 +117,10 @@ export function SetUp({
     else if (r.kind === "error") {
       const why = setupFailure(r);
       if (why.needsKey) setNeedsKey(true);
-      setFailure(why);
+      if (why.field) {
+        setErrors({ [why.field]: why.text });
+        form.querySelector<HTMLInputElement>(`[name="${why.field}"]`)?.focus();
+      } else setFailure(why);
     } else setFailure({ text: twoFactorMessage({ status: 0, code: "" }) });
   }
 
@@ -145,6 +160,7 @@ export function SetUp({
         maxLength={120}
         disabled={off}
         autoFocus={!off}
+        error={errors.instance_name}
       />
       <Input
         label={t("Set-up code")}

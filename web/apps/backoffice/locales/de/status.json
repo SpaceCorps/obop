@@ -2724,5 +2724,7 @@
   "At least 12 characters.": "machine-drafted",
   "Repeat the password": "machine-drafted",
   "Go to sign in": "machine-drafted",
-  "Create the administrator": "machine-drafted"
+  "Create the administrator": "machine-drafted",
+  "This name of the instance cannot be used. Choose a plain name, or leave the field empty.": "machine-drafted",
+  "Check what you entered and try again.": "machine-drafted"
 }

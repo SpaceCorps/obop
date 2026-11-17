@@ -2724,5 +2724,7 @@
   "At least 12 characters.": "Co najmniej 12 znaków.",
   "Repeat the password": "Powtórz hasło",
   "Go to sign in": "Przejdź do logowania",
-  "Create the administrator": "Utwórz administratora"
+  "Create the administrator": "Utwórz administratora",
+  "This name of the instance cannot be used. Choose a plain name, or leave the field empty.": "Tej nazwy instancji nie można użyć. Wybierz prostą nazwę lub zostaw pole puste.",
+  "Check what you entered and try again.": "Sprawdź wprowadzone dane i spróbuj ponownie."
 }
