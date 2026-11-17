@@ -335,3 +335,32 @@ fn the_project_gives_the_customer_and_the_rate_and_lines_can_be_per_task() {
     ));
     assert!(m.contains("per must be entry or task"), "{m}");
 }
+
+#[test]
+fn the_project_rate_is_not_billed_in_another_currency() {
+    // The project's hourly rate is a money field of the instance currency (EUR here): a call that
+    // takes it and asks for SEK would bill the same number as crowns.
+    let f = fixture();
+    let project = rows(&f.app, "projects_project")[0].0.clone();
+    call(
+        &f.app,
+        &admin(),
+        "projects_project.update",
+        json!({"id": project, "hourly_rate": 60_000}),
+    )
+    .unwrap();
+    f.entry("2026-09-02", 60, true, true);
+    let base = json!({"project": "WEB", "customer": "Acme AB", "from": "2026-09-01",
+                      "to": "2026-09-30", "dry_run": true});
+    let mut sek = base.clone();
+    sek["currency"] = json!("SEK");
+    let m = refusal(f.run(sek.clone()));
+    assert!(m.contains("instance currency EUR"), "{m}");
+    assert!(m.contains("hourly_rate_minor"), "{m}");
+    // The instance currency named, or a rate in the call, is fine.
+    let mut eur = base.clone();
+    eur["currency"] = json!("EUR");
+    assert_eq!(f.run(eur).unwrap()["net"], json!(60_000));
+    sek["hourly_rate_minor"] = json!(70_000);
+    assert_eq!(f.run(sek).unwrap()["net"], json!(70_000));
+}

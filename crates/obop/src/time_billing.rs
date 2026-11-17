@@ -52,7 +52,7 @@ pub fn module() -> Module {
                 f("to", "Input: last day of the period, YYYY-MM-DD"),
                 f(
                     "hourly_rate_minor",
-                    "Input: the price of one hour in minor currency units; the project's hourly rate when left out",
+                    "Input: the price of one hour in minor currency units; the project's hourly rate (in the instance currency) when left out",
                 )
                 .kind(FieldKind::Number),
                 f(
@@ -203,6 +203,14 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
         .hourly_rate_minor
         .or_else(|| project.get("hourly_rate").and_then(J::as_i64))
         .ok_or("hourly_rate_minor is required (the price of one hour in minor currency units), or set the project's hourly rate")?;
+    // The project's rate is a money field of the instance currency: it is not billed as another.
+    let home = env.d.currency();
+    if i.hourly_rate_minor.is_none() && !i.currency.is_empty() && i.currency != home {
+        return Err(format!(
+            "the project's hourly rate is in the instance currency {home}; to bill in {} give hourly_rate_minor",
+            i.currency
+        ));
+    }
     if rate <= 0 {
         return Err("hourly_rate_minor must be greater than zero".into());
     }
