@@ -20,11 +20,22 @@ test.describe("employees", () => {
       const eve = await api.create("root", "hr_employee", { name: uid("Eve Day"), user: "eve" });
       await signIn("eve", "/hr/hr_leave_request?view=calendar");
       // R2: the new form opened from a day starts on that day and on her own employee record.
-      const day = page.getByRole("button", { name: /^New record on / }).nth(10);
+      // A day that is not today (the form's own default), so that the date can only come from the
+      // click.
+      const day = page
+        .getByRole("button", { name: /^New record on / })
+        .filter({ hasNotText: String(new Date().getDate()) })
+        .nth(3);
+      const label = (await day.getAttribute("aria-label"))!.replace("New record on ", "");
+      const d = new Date(label);
+      const shown = d.toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+      });
       await day.click();
-      const record = page.getByRole("dialog", { name: "Leave request record" });
-      await expect(record.getByRole("combobox", { name: "Employee" })).toHaveValue(eve.name);
-      await expect(record.getByLabel("First day")).not.toHaveValue("");
+      await expect(page.getByRole("combobox", { name: "Employee" })).toHaveValue(eve.name);
+      await expect(page.locator("input").and(page.getByLabel("First day"))).toHaveValue(shown);
     } finally {
       await api.post("/api/module/uninstall", { id: "hr" }, root);
     }
