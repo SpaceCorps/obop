@@ -103,6 +103,127 @@ async fn a_request_about_a_restricted_document_is_not_there_for_who_cannot_see_t
     assert_ne!(s, 200, "{v}");
 }
 
+/// An internal Document is open to every holder of `documents.user`, not to everyone: a request
+/// about it is not there for sam (sign.user) or noc (sign.manager), who hold no role in
+/// Documents, and neither are its id, its hash or its link (the review of 2026-11-17 found them
+/// listed, with the hash, and the link revocable).
+#[tokio::test]
+async fn a_request_about_an_internal_document_is_not_there_without_a_role_in_documents() {
+    let f = fixture().await;
+    let (s, v) = f
+        .api(
+            "ann",
+            "/api/documents_document/create",
+            json!({"title": "Internal memo (test)", "kind": "contract", "confidentiality": "internal",
+                   "state": "draft", "owner": "ann", "attachment": f.file}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let doc = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "Please sign the memo", "signer_name": "Jane Test", "document_id": doc}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let req = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api("mia", "/api/sign_request/send_document", json!({"id": req}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (link, _) = f.mint("mia", &req).await;
+    for who in ["sam", "noc"] {
+        let (s, v) = f
+            .api(who, "/api/sign_request/get", json!({"id": req}))
+            .await;
+        assert_eq!(s, 400, "{who}: {v}");
+        assert!(err(&v).contains("no sign_request"), "{who}: {v}");
+        let (s, v) = f.api(who, "/api/sign_request/list", json!({})).await;
+        assert_eq!(s, 200, "{who}: {v}");
+        assert!(!ids(&v).contains(&req), "{who}: {v}");
+        let (s, v) = f.api(who, "/api/sign_link/list", json!({})).await;
+        assert_eq!(s, 200, "{who}: {v}");
+        assert!(ids(&v).is_empty(), "{who}: {v}");
+        let (s, v) = f
+            .api(
+                who,
+                "/api/sign_link/update",
+                json!({"id": link, "revoked_at": "2026-11-17T10:00:00Z"}),
+            )
+            .await;
+        assert_ne!(s, 200, "{who}: {v}");
+        // Nor can they make a request about it.
+        let (s, v) = f
+            .api(
+                who,
+                "/api/sign_request/create",
+                json!({"title": "Probe", "signer_name": "Jane Test", "document_id": doc}),
+            )
+            .await;
+        assert_ne!(s, 200, "{who}: {v}");
+    }
+    // A holder of documents.user who is not its owner sees it: bob (internal is open to all of
+    // Documents).
+    let (s, v) = f
+        .api("bob", "/api/sign_request/get", json!({"id": req}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert!(
+        f.record("sign_link", &link)
+            .get("revoked_at")
+            .is_none_or(|v| v.is_null() || v == "")
+    );
+}
+
+// ---- O19: a request that was sent is a manager's to delete ------------------------------------
+
+#[tokio::test]
+async fn a_request_that_was_sent_is_deleted_by_a_manager_only() {
+    let f = fixture().await;
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_template/create",
+            json!({"name": "Open (test)", "body": "text"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let tpl = v["value"]["id"].as_str().unwrap().to_string();
+    let mut made = Vec::new();
+    for _ in 0..2 {
+        let (s, v) = f
+            .api(
+                "sam",
+                "/api/sign_request/create",
+                json!({"title": "By template", "template_id": tpl, "signer_name": "Jane Test", "signer_email": "jane@example.test"}),
+            )
+            .await;
+        assert_eq!(s, 200, "{v}");
+        made.push(v["value"]["id"].as_str().unwrap().to_string());
+    }
+    // A draft is still the maker's to delete.
+    let (s, v) = f
+        .api("sam", "/api/sign_request/delete", json!({"id": made[0]}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api("sam", "/api/sign_request/send", json!({"id": made[1]}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api("sam", "/api/sign_request/delete", json!({"id": made[1]}))
+        .await;
+    assert_eq!(s, 400, "{v}");
+    assert!(err(&v).contains("sign.manager"), "{v}");
+    assert_eq!(f.record("sign_request", &made[1])["state"], "sent");
+    let (s, v) = f
+        .api("noc", "/api/sign_request/delete", json!({"id": made[1]}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+}
+
 // ---- O24, O5: an approval is of the approver and of the bytes ----------------------------------
 
 async fn propose(f: &Fx) -> String {

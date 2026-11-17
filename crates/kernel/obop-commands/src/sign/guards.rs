@@ -11,8 +11,8 @@
 //! whatever the value, in `create`, `update`, the rows of a bulk create and a CSV column.
 //!
 //! A request that has left draft (sent, declined, expired) is changed by someone with
-//! `sign.manager` only: its title, message and requested name are what the signer reads
-//! (docs/ISSUES.md O19).
+//! `sign.manager` only, and deleted by them only: its title, message and requested name are what
+//! the signer reads (docs/ISSUES.md O19).
 
 use super::*;
 use crate::Value;
@@ -51,9 +51,13 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
             if !is_admin(p)
                 && let Ok(id) = id_of(input)
                 && let Some(cur) = s.visible_record(p, "sign_request", &id)?
-                && text(&cur, "state") == "signed"
             {
-                return Err(SIGNED.into());
+                match text(&cur, "state") {
+                    "signed" => return Err(SIGNED.into()),
+                    "" | "draft" => {}
+                    _ if !p.allows("sign.manager") => return Err(SENT_IS_A_MANAGERS_DELETE.into()),
+                    _ => {}
+                }
             }
             inner(input)
         }),
@@ -78,6 +82,9 @@ const SIGNED: &str =
     "sign_request: a signed request cannot be changed or deleted; ask an administrator";
 
 const SENT_IS_A_MANAGERS: &str = "sign_request: a request that was sent can be changed only by someone with sign.manager; the signer reads its title, message and name";
+
+const SENT_IS_A_MANAGERS_DELETE: &str =
+    "sign_request: a request that was sent can be deleted only by someone with sign.manager";
 
 fn history_message() -> String {
     format!(

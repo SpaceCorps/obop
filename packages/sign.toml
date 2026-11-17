@@ -13,7 +13,7 @@ categories = ["productivity"]
 maturity = "experimental"
 requires_core = "^0.2.2"
 home = "sign_request"
-changelog = "Safer requests: a request about a Document is visible only to those who can see that Document; recording a decline or an expiry and changing a request that was sent need the manager role, and an agent only proposes a decline or an expiry; the days a request was sent and signed are set by the system; an agent cannot switch the history on, and cannot revoke a link."
+changelog = "Safer requests: a request about a Document is visible only to those who can see that Document (with a role in Documents); recording a decline or an expiry, and changing or deleting a request that was sent, need the manager role, and an agent only proposes a decline or an expiry; the days a request was sent and signed are set by the system; an agent cannot switch the history on, and cannot revoke a link."
 
 [module.dependencies]
 documents = ">=0.3, <1"

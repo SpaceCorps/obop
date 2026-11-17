@@ -1158,7 +1158,12 @@ async fn an_agent_token_neither_revokes_a_link_nor_ends_a_request_without_a_pers
     agent_with(
         &mut f,
         "mia",
-        &["sign.user", "sign.manager", "documents.manager"],
+        &[
+            "sign.user",
+            "sign.manager",
+            "documents.user",
+            "documents.manager",
+        ],
         "manager_bot",
     )
     .await;
@@ -1195,7 +1200,12 @@ async fn an_agent_token_neither_revokes_a_link_nor_ends_a_request_without_a_pers
     agent_with(
         &mut f,
         "mia",
-        &["sign.user", "sign.manager", "documents.manager"],
+        &[
+            "sign.user",
+            "sign.manager",
+            "documents.user",
+            "documents.manager",
+        ],
         "manager_bot",
     )
     .await;
@@ -1328,14 +1338,19 @@ async fn a_guess_at_the_evidence_is_refused_the_same_whether_it_is_right_or_wron
     agent_with(
         &mut f,
         "mia",
-        &["sign.user", "sign.manager", "documents.manager"],
+        &[
+            "sign.user",
+            "sign.manager",
+            "documents.user",
+            "documents.manager",
+        ],
         "manager_bot",
     )
     .await;
     agent_with(
         &mut f,
         "mia",
-        &["sign.user", "documents.manager"],
+        &["sign.user", "documents.user", "documents.manager"],
         "narrowed_bot",
     )
     .await;
