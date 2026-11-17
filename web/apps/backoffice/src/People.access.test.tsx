@@ -165,7 +165,8 @@ const checked = (app: string) =>
     .map((b) => b.textContent);
 const saved = () =>
   calls.filter((c) => /\/users\/[^/]+\/groups$/.test(c.path)).map((c) => c.body!.groups);
-const save = () => [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Save access");
+const save = () =>
+  [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Save access");
 
 async function mount(me = "root") {
   await act(async () => {
@@ -290,7 +291,14 @@ describe("Access of NAME", () => {
     expect(saved()).toHaveLength(1);
     const sent = saved()[0] as string[];
     expect(sent.sort()).toEqual(
-      ["api.device_admin", "crm.manager", "crm.user", "gone.role", "sales.manager", "sales.user"].sort(),
+      [
+        "api.device_admin",
+        "crm.manager",
+        "crm.user",
+        "gone.role",
+        "sales.manager",
+        "sales.user",
+      ].sort(),
     );
     expect(notify).toHaveBeenCalledWith("Access of ada@example.test saved.");
   });
@@ -427,7 +435,9 @@ describe("Access of NAME", () => {
     )!;
     await click(tech);
     const codes = [...dialog()!.querySelectorAll("code")].map((c) => c.textContent);
-    expect(codes).toEqual(expect.arrayContaining(["sales.user", "sales.manager", "api.device_admin"]));
+    expect(codes).toEqual(
+      expect.arrayContaining(["sales.user", "sales.manager", "api.device_admin"]),
+    );
     expect(localStorage.getItem("obop-access-technical")).toBe("1");
   });
 
@@ -449,7 +459,9 @@ describe("Access of NAME", () => {
 describe("New person", () => {
   it("creates the person with the groups the picker built", async () => {
     await mount();
-    await press([...container.querySelectorAll("button")].find((b) => b.textContent === "New person"));
+    await press(
+      [...container.querySelectorAll("button")].find((b) => b.textContent === "New person"),
+    );
     await click(radio("CRM", "Manager")!);
     const name = dialog()!.querySelector<HTMLInputElement>('input[autocomplete="off"]')!;
     await act(async () => {
@@ -459,7 +471,9 @@ describe("New person", () => {
       );
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await click([...document.body.querySelectorAll("button")].find((b) => b.textContent === "Create person"));
+    await click(
+      [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Create person"),
+    );
     const created = calls.find((c) => c.method === "POST" && c.path === "/api/auth/users")!;
     expect((created.body!.groups as string[]).sort()).toEqual(["crm.manager", "crm.user"]);
   });
@@ -493,7 +507,9 @@ describe("Reset two-factor", () => {
     expect(d.textContent).toContain(
       "ada@example.test is signed out everywhere and loses their authenticator app, passkeys and recovery codes.",
     );
-    await click([...d.querySelectorAll("button")].find((b) => b.textContent === "Reset two-factor"));
+    await click(
+      [...d.querySelectorAll("button")].find((b) => b.textContent === "Reset two-factor"),
+    );
     const sent = calls.find((c) => c.path === "/api/auth/mfa/reset")!;
     expect(sent.body).toEqual({ user: "ada@example.test" });
     expect(notify).toHaveBeenCalledWith("Two-factor reset for ada@example.test");
