@@ -149,10 +149,10 @@ test.describe("kanban board (L3)", () => {
     });
     await signIn("root", `/${model}/${model}?view=kanban`);
 
-    await expect(column(page, "Matched").locator(".sum")).toHaveText("-€1,525.00");
+    await expect(column(page, "Matched").locator(".sum")).toHaveText("−€1,525.00");
     await expect(column(page, "Unmatched").locator(".sum")).toHaveText("€40.00");
     // The amount is on the card too, and the stage's badge keeps its whole word beside the count.
-    await expect(column(page, "Matched").locator(".kcard .kmoney").first()).toContainText("-€");
+    await expect(column(page, "Matched").locator(".kcard .kmoney").first()).toContainText("−€");
     await expect(column(page, "Matched").locator(".kname")).toHaveText("Matched");
   });
 });
