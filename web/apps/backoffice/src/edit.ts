@@ -19,6 +19,15 @@ export function toEdit(f: FieldMeta, v: unknown, currency?: string): Edit {
 }
 
 /**
+ * Whether an edit leaves the stored value as it is. A switch that was never set shows No, but No is
+ * still a change from "not set": saving it writes an explicit false.
+ */
+export function sameAsStored(f: FieldMeta, stored: unknown, e: Edit, currency?: string): boolean {
+  if (f.kind === "bool") return stored === e;
+  return toEdit(f, stored, currency) === e;
+}
+
+/**
  * Turn what was typed into the wire value, or say why it cannot be one. `null` means empty. A value
  * the person did not change (`unchanged`) is not held to the length and range limits of the field,
  * as on the server (D90): a record stored above a limit that was lowered later can still be saved.
