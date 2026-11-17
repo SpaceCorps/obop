@@ -146,6 +146,16 @@ test.describe("the Timesheets week grid", () => {
           return r.left >= s.left - 1 && r.right <= s.right + 1;
         });
         expect(inView).toBe(true);
+        // The strip's end fades, so a cut-off Sunday reads as "more to the right"; scrolled to the
+        // end, Sunday stands clear of the fade.
+        expect(await strip.evaluate((e) => getComputedStyle(e).maskImage)).toContain("gradient");
+        const clear = await strip.evaluate((e) => {
+          e.scrollLeft = e.scrollWidth;
+          const s = e.getBoundingClientRect();
+          const last = e.lastElementChild!.getBoundingClientRect();
+          return s.right - last.right;
+        });
+        expect(clear).toBeGreaterThanOrEqual(16);
       });
     });
   });
