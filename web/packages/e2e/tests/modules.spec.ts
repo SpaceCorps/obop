@@ -130,7 +130,7 @@ test.describe("Customize > Modules", () => {
         .locator(":scope > li");
       await expect(steps).toHaveCount(2);
       await expect(steps.nth(0)).toContainText("Projects");
-      await expect(steps.nth(0)).toContainText("0.5.0");
+      await expect(steps.nth(0)).toContainText("0.5.1");
       await expect(steps.nth(0)).toContainText("Apache-2.0");
       await expect(steps.nth(0)).toContainText("needed by timesheets");
       await expect(steps.nth(1)).toContainText("Timesheets");
@@ -204,7 +204,7 @@ test.describe("Customize > Modules", () => {
       expect(
         (await api.run("root", "module.list")).find((m: { id: string }) => m.id === "projects")
           .version,
-      ).toBe("0.5.0");
+      ).toBe("0.5.1");
     } finally {
       await clean(api, "timesheets", "projects");
     }
