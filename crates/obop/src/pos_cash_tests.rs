@@ -220,6 +220,50 @@ fn a_new_session_opens_with_the_cash_counted_when_the_till_last_closed() {
 }
 
 #[test]
+fn an_agent_is_not_given_the_closing_cash_through_the_proposal() {
+    let f = fixture();
+    let s = id(&f.session());
+    ok(
+        &f.a,
+        "pos_session.update",
+        json!({"id": s, "closing_cash": 25_900, "note": "Counted"}),
+    );
+    ok(&f.a, "pos_session.close", json!({"id": s}));
+    let agent = Principal::agent(
+        "bot",
+        &["pos.user", "pos.manager"],
+        &["pos.user", "pos.manager"],
+    );
+    let call = |cmd: &str, input: J| {
+        f.a.dispatcher
+            .call(
+                Surface::Mcp,
+                &agent,
+                &mut Vault::new(),
+                cmd,
+                &Value::from_json(&input),
+            )
+            .map(|r| (r.value.to_json(), r.denied.clone()))
+            .unwrap_or_else(|e| panic!("{cmd}: {e:?}"))
+    };
+    let (session, denied) = call("pos_session.get", json!({"id": s}));
+    assert!(session.get("closing_cash").is_none(), "{session}");
+    assert!(
+        denied.iter().any(|d| d == "pos_session.closing_cash"),
+        "{denied:?}"
+    );
+    let (p, denied) = call("pos_opening.propose", json!({"config": f.till}));
+    assert!(p.get("opening_cash").is_none(), "{p}");
+    assert!(
+        denied.iter().any(|d| d == "pos_opening.opening_cash"),
+        "{denied:?}"
+    );
+    // A person still gets the figure.
+    let p = ok(&f.a, "pos_opening.propose", json!({"config": f.till}));
+    assert_eq!(p["opening_cash"], json!(25_900));
+}
+
+#[test]
 fn a_refund_after_closing_does_not_change_the_closed_session() {
     let f = fixture();
     let s = id(&f.session());

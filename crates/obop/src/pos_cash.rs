@@ -36,9 +36,14 @@ pub fn module() -> Module {
             access: None,
             fields: vec![
                 f("config", "Input: the id of the till (pos_config)"),
-                f(
+                // Financial as pos_session.closing_cash is: the answer is often that figure, so a
+                // caller who is shown it masked there gets it masked here too.
+                FieldDef::new(
                     "opening_cash",
                     "Answer: the proposed opening cash in minor units",
+                    DataClass::Financial,
+                    false,
+                    GROUP,
                 )
                 .kind(FieldKind::Money),
                 f(
