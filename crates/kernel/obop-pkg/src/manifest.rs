@@ -1094,9 +1094,11 @@ impl Manifest {
                             st.model
                         ));
                     }
-                    if exists(&st.field).is_some() {
+                    // A field that became computed keeps no stored value of its own (the computed
+                    // value is read instead), so its old stored values may move to a new field.
+                    if exists(&st.field).is_some_and(|f| f.computed.is_none()) {
                         return Err(format!(
-                            "{at}: {} is still a field of {} in this version, so it is not renamed away",
+                            "{at}: {} is still a stored field of {} in this version, so it is not renamed away",
                             st.field, st.model
                         ));
                     }

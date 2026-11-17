@@ -235,6 +235,10 @@ message = "Betalningarna täcker inte försäljningens summa: lägg till en beta
 label = "Lagerplats"
 description = "Varifrån varorna som säljs i den här kassan lämnar lagret; dess pass och försäljningar tar den, och när en försäljning betalas skapas då lagerflyttarna"
 
+[labels.sv.model.pos_session.field.closed_expected_cash]
+label = "Förväntad kassa vid stängning"
+description = "Den förväntade kassan när passet stängdes, sparad av åtgärden Stäng; ett stängt pass förväntade kassa och kassadifferens läses från den"
+
 [labels.sv.model.pos_session.field.closed_at]
 label = "Stängd"
 description = "När passet stängdes (UTC); kassans senast stängda pass föreslår nästa öppningskassa"

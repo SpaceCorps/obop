@@ -1669,6 +1669,23 @@ mod tests {
         assert!(build_ops(&*b, &steps[1..]).unwrap().is_empty());
     }
 
+    /// A field that became computed keeps no stored value of its own, so its old values may
+    /// move to a new stored field; a field still stored may not be renamed away.
+    #[test]
+    fn the_stored_values_of_a_field_that_became_computed_can_be_renamed() {
+        let num = "kind = \"number\"";
+        let parse = |fields: String| {
+            Manifest::parse(&format!(
+                "[module]\nid = \"mig\"\nversion = \"0.2.0\"\nname = \"M\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\n[[model]]\nname = \"mig_item\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{fields}\n{}",
+                step_to("<0.2.0", "rename_field", "total", Some("kept"))
+            ))
+        };
+        let computed = format!("{num}\ncomputed = \"if(is_set(kept), kept, 1)\"");
+        assert!(parse(field("total", &computed) + &field("kept", num)).is_ok());
+        let e = parse(field("total", num) + &field("kept", num)).unwrap_err();
+        assert!(e.contains("still a stored field"), "{e}");
+    }
+
     #[test]
     fn a_record_edited_meanwhile_fails_the_batch_and_changes_nothing() {
         let b = obop_storage::open("memory:").unwrap();

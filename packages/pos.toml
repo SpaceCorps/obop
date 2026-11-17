@@ -12,7 +12,7 @@ keywords = ["pos", "retail", "till"]
 categories = ["sales"]
 maturity = "experimental"
 requires_core = "^0.2.2"
-changelog = "A till has a stock location, and its sessions and sales take it, so a paid sale moves stock. The expected cash of a session is computed on the server (opening cash plus the cash payments of its paid sales) and so is the cash difference once the closing cash is counted. A new session opens with the cash counted when its till last closed (the till's usual opening cash when it never closed), and closing stamps the closing instant. The app opens on Sessions; a till is called a till and sits under Configuration. A new session starts today, for you, with the till's opening cash; a new sale goes to the one open session, dated today; a line takes the product's name and price. Closing a session stamps the closing day. A paid, refunded or cancelled sale, its lines and its payments can no longer be changed, and neither can a closed session except its note. A session whose counted cash differs from the expected cash closes only with a note that explains the difference."
+changelog = "A till has a stock location, and its sessions and sales take it, so a paid sale moves stock. The expected cash of a session is computed on the server (opening cash plus the cash payments of its paid sales) and so is the cash difference once the closing cash is counted; closing keeps the expected cash, so refunding one of its sales later does not change a closed session (the expected cash entered by earlier versions is kept the same way). A new session opens with the cash counted when its till last closed (the till's usual opening cash when it never closed), and closing stamps the closing instant. The app opens on Sessions; a till is called a till and sits under Configuration. A new session starts today, for you, with the till's opening cash; a new sale goes to the one open session, dated today; a line takes the product's name and price. Closing a session stamps the closing day. A paid, refunded or cancelled sale, its lines and its payments can no longer be changed, and neither can a closed session except its note. A session whose counted cash differs from the expected cash closes only with a note that explains the difference."
 home = "pos_session"
 
 [module.dependencies]
@@ -163,10 +163,19 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "expected_cash"
-  description = "Cash the drawer should hold at closing: the opening cash plus the cash payments of the session's paid sales"
+  description = "Cash the drawer should hold at closing: the opening cash plus the cash payments of the session's paid sales; once the session is closed, the figure it closed with, so a later refund does not change it"
   class = "financial"
   kind = "money"
-  computed = 'opening_cash + sum(pos_order[session_id].cash_paid where state == "paid")'
+  computed = 'if(state == "closed" && is_set(closed_expected_cash), closed_expected_cash, opening_cash + sum(pos_order[session_id].cash_paid where state == "paid"))'
+  [model.field.ui]
+  aggregate = "none"
+
+  [[model.field]]
+  name = "closed_expected_cash"
+  description = "The expected cash as it was when the session closed, kept by the close action; the expected cash and the cash difference of a closed session are read from it"
+  class = "financial"
+  kind = "money"
+  readonly = true
   [model.field.ui]
   aggregate = "none"
 
@@ -238,6 +247,14 @@ write_group = "pos.user"
     [[model.action.effect]]
     kind = "set"
     set = { closed_at = "$now" }
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { closed_expected_cash = "$null" }
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { closed_expected_cash = "$self.expected_cash" }
 
 [[model]]
 name = "pos_order"
@@ -508,3 +525,11 @@ write_group = "pos.user"
   description = "Reference from the card terminal or payment provider; never a card number"
   class = "financial"
   personal_data = true
+
+[[migration]]
+from = "<0.6.0"
+op = "rename_field"
+model = "pos_session"
+field = "expected_cash"
+to = "closed_expected_cash"
+description = "The expected cash entered when a session closed is kept as the figure the closed session is read with; the expected cash is computed from now on"

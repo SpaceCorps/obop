@@ -235,6 +235,10 @@ message = "Die Zahlungen decken die Summe des Verkaufs nicht: Erfassen Sie eine 
 label = "Lagerort"
 description = "Woher die an dieser Kasse verkaufte Ware den Bestand verlässt; ihre Sitzungen und Verkäufe übernehmen ihn, und das Bezahlen erzeugt dann die Lagerbewegungen"
 
+[labels.de.model.pos_session.field.closed_expected_cash]
+label = "Kassensollbestand beim Schließen"
+description = "Der Kassensollbestand zum Zeitpunkt des Schließens, von der Aktion Schließen festgehalten; Sollbestand und Kassendifferenz einer geschlossenen Sitzung werden daraus gelesen"
+
 [labels.de.model.pos_session.field.closed_at]
 label = "Geschlossen um"
 description = "Wann die Sitzung geschlossen wurde (UTC); die zuletzt geschlossene Sitzung einer Kasse schlägt den nächsten Anfangsbestand vor"

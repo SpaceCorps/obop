@@ -235,6 +235,10 @@ message = "Płatności nie pokrywają sumy sprzedaży: dodaj płatność na pozo
 label = "Lokalizacja magazynowa"
 description = "Skąd towary sprzedane przy tej kasie schodzą ze stanu; przejmują ją jej sesje i sprzedaże, a opłacenie sprzedaży tworzy wtedy ruchy magazynowe"
 
+[labels.pl.model.pos_session.field.closed_expected_cash]
+label = "Oczekiwana gotówka przy zamknięciu"
+description = "Oczekiwana gotówka z chwili zamknięcia sesji, zapisana przez akcję zamknięcia; z niej odczytuje się oczekiwaną gotówkę i różnicę kasową zamkniętej sesji"
+
 [labels.pl.model.pos_session.field.closed_at]
 label = "Zamknięta o"
 description = "Kiedy sesja została zamknięta (UTC); ostatnio zamknięta sesja kasy proponuje następny stan początkowy"

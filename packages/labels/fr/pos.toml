@@ -235,6 +235,10 @@ message = "Les paiements ne couvrent pas le total de la vente : ajoutez un paiem
 label = "Emplacement de stock"
 description = "D'où sortent du stock les marchandises vendues à cette caisse ; ses sessions et ses ventes le reprennent, et le paiement d'une vente crée alors les mouvements de stock"
 
+[labels.fr.model.pos_session.field.closed_expected_cash]
+label = "Caisse théorique à la fermeture"
+description = "La caisse théorique au moment de la fermeture, conservée par l'action Fermer ; la caisse théorique et l'écart de caisse d'une session fermée en sont lus"
+
 [labels.fr.model.pos_session.field.closed_at]
 label = "Fermée le"
 description = "Moment de la fermeture de la session (UTC) ; la dernière session fermée d'une caisse propose le prochain fonds d'ouverture"

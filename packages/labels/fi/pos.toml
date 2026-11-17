@@ -235,6 +235,10 @@ message = "Maksut eivät kata myynnin summaa: lisää maksu loppusummalle"
 label = "Varastopaikka"
 description = "Mistä tällä kassalla myydyt tavarat lähtevät varastosta; sen istunnot ja myynnit ottavat sen, ja myynnin maksaminen luo silloin varastosiirrot"
 
+[labels.fi.model.pos_session.field.closed_expected_cash]
+label = "Odotettu kassa sulkemishetkellä"
+description = "Odotettu kassa sellaisena kuin se oli istunnon sulkemishetkellä, sulkemistoiminnon tallentama; suljetun istunnon odotettu kassa ja kassaero luetaan siitä"
+
 [labels.fi.model.pos_session.field.closed_at]
 label = "Suljettu"
 description = "Milloin istunto suljettiin (UTC); kassan viimeksi suljettu istunto ehdottaa seuraavaa alkukassaa"
