@@ -585,6 +585,39 @@ impl Dispatcher {
             .collect()
     }
 
+    /// The commands this principal may call on `surface` that [`Dispatcher::meta`] does not
+    /// describe: every command of a model without a visible `list` (the settings, the import map,
+    /// the instance update, a module plan ...), sorted by id. A command that a module refuses for
+    /// everyone (`refuse_always`) is left out. `obop openapi` and `GET /api/openapi.json` describe
+    /// these from here (K26), so the document names every command the token can run.
+    pub fn commands_outside_meta(&self, surface: Surface, p: &Principal) -> Vec<CommandInfo> {
+        self.sync();
+        let cmds = self.commands.read().unwrap();
+        let never = self.never.read().unwrap();
+        let visible =
+            |c: &Registered| on_surface(c.surfaces, surface) && p.allows(c.permission_group);
+        let listed = |model: &str| {
+            cmds.get(&format!("{model}.list"))
+                .is_some_and(|l| visible(l))
+        };
+        let mut out: Vec<CommandInfo> = cmds
+            .iter()
+            .filter(|(id, c)| visible(c) && !never.contains_key(*id) && !listed(c.model))
+            .map(|(id, c)| CommandInfo {
+                id: id.clone(),
+                description: c.description,
+                permission_group: c.permission_group,
+                needs_approval: c.needs_approval,
+                transition: c.transition,
+                labels: Texts::new(),
+                descriptions: Texts::new(),
+                ui: None,
+            })
+            .collect();
+        out.sort_by(|a, b| a.id.cmp(&b.id));
+        out
+    }
+
     /// What the UI renders from: the modules, models, readable fields and actions this principal
     /// can see. A model appears only if its `list` command is visible, and a field only if the
     /// principal may read it, so metadata never reveals what data would not.
