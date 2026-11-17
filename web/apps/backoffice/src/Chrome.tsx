@@ -28,6 +28,7 @@ import {
 import { call, search, type ModelMeta, type ModuleMeta, type Row, type Settings } from "./api.ts";
 import type { useData } from "./data.tsx";
 import { appColor } from "./theme.ts";
+import { seamedName } from "./brandName.ts";
 import { modulesHref } from "./modules/route.ts";
 import { href, nav, type Route } from "./route.ts";
 import { appHomeOf } from "./extensions.ts";
@@ -53,6 +54,22 @@ const NO_ESCAPE_QUERY = "(max-width: 40rem), (hover: none) and (pointer: coarse)
 /** Whether a media query matches as a dialog opens; false where it cannot be asked (tests). */
 function matchesNow(query: string): boolean {
   return typeof matchMedia === "function" && matchMedia(query).matches;
+}
+
+/** The width at which the top bar is a phone's (style.css): the app's name may take two lines. */
+const NARROW_BAR = "(max-width: 40rem)";
+
+/** Whether the top bar is a phone's, following a turn of the phone or a resized window. */
+function useNarrowBar(): boolean {
+  const [narrow, setNarrow] = useState(() => matchesNow(NARROW_BAR));
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return;
+    const mq = matchMedia(NARROW_BAR);
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
 }
 
 /** Apply the instance's launcher layout: order, hidden apps, renamed apps and chosen colours. */
@@ -141,6 +158,7 @@ export function TopBar(props: {
 }) {
   const { current } = props;
   const i18n = useI18n();
+  const narrow = useNarrowBar();
   const docs = productDocsVisible();
   const languages: MenuItem = {
     label: t("Language"),
@@ -178,7 +196,10 @@ export function TopBar(props: {
             <span className="brand-sep" aria-hidden="true">
               /
             </span>
-            <span className="brand-app">{current.name}</span>
+            <span className="brand-app">
+              {/* On a phone a long compound breaks at its seams instead of being cut (Q18). */}
+              {narrow ? seamedName(current.name) : current.name}
+            </span>
           </>
         ) : (
           <>

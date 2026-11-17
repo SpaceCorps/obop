@@ -1141,6 +1141,17 @@ a.kpi.ov-kpi:hover {
   .brand-sep {
     display: none;
   }
+  /* The app's name takes up to two lines rather than an ellipsis: at 320 px the bar has room for
+     about 11 letters, and "Rechnungsstellung" or "Human Resources" were cut (Q18). A long compound
+     breaks at its seams (brandName.ts), with a hyphen. */
+  .brand-app {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.15;
+    white-space: normal;
+    hyphens: manual;
+  }
   .systray {
     gap: 0;
   }
