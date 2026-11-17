@@ -534,6 +534,20 @@ impl Auth {
             .is_some();
         let ttl = bound.then_some(oidc::MICROSOFT_AGENT_TOKEN_SECS);
         let token = self.issue(&owner.id, "agent", scopes, label, ttl)?;
+        // The account is looked at again once the token is written (K19): a disable or an
+        // offboarding that listed the tokens of the account before this one was written did not
+        // end it, so it is ended here and nobody gets it. A read the store refuses is answered the
+        // same way: no token is handed out on a guess.
+        let still = matches!(
+            self.backend.get("auth_user", &owner.id),
+            Ok(Some(u)) if u.get("disabled").and_then(J::as_bool) != Some(true)
+        );
+        if !still {
+            self.revoke(&token);
+            return Err(
+                "the account changed while the token was being made; no token was issued".into(),
+            );
+        }
         // The log says what the token may do and how the right to give it was held; never the token.
         let mut detail = format!("label {label:?}; scopes {}", scopes.join(", "));
         if bound {

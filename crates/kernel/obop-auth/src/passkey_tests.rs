@@ -1319,3 +1319,40 @@ fn passkeys_work_on_postgres_when_available() {
     a.operator_reset_mfa(&user).unwrap();
     assert_eq!(a.passkey_count(&user), 0);
 }
+
+/// K19: a good passkey answer that meets a refused read of the store (the challenge, the passkey
+/// row, the person's handle) is the store's error, never a "denied" counted toward the lockout of a
+/// person who did nothing wrong.
+#[test]
+fn a_refused_read_never_turns_a_good_passkey_answer_into_a_counted_failure() {
+    use crate::admin_tests::flaky_rig;
+    let mut refused_runs = 0;
+    for skip in 0..30 {
+        let (r, flaky) = flaky_rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        let (mine, p) = session(&r.a, "ada");
+        let mut auth = SoftAuthenticator::es256();
+        add(&r, &mine, &p, &mut auth, "k").unwrap();
+        let opts = r.a.proof_options(&p, &ctx()).unwrap();
+        let answer = auth.get(&opts, ORIGIN);
+        flaky.refuse_call_after(skip);
+        let before = flaky.refused();
+        let got = r.a.proof(&p, &ctx(), &answer);
+        let hit = flaky.refused() > before;
+        flaky.refuse_call_after(-1);
+        flaky.allow_models();
+        if hit {
+            refused_runs += 1;
+        }
+        assert!(
+            !matches!(got, Err(MfaError::Denied(_))),
+            "refusal after {skip} calls: {got:?}"
+        );
+        let failures = r.b.counter_get(&Auth::failure_key("ada")).unwrap();
+        assert_eq!(failures, 0, "refusal after {skip} calls was counted");
+    }
+    assert!(
+        refused_runs > 3,
+        "the sweep met a refusal in {refused_runs} runs only"
+    );
+}
