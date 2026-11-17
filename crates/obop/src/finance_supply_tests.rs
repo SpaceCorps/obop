@@ -339,6 +339,45 @@ fn fiscal_years_and_periods_never_cover_the_same_day() {
 }
 
 #[test]
+fn bank_accounts_and_the_swedish_vat_number_must_have_their_format() {
+    // U4: the vendor's and the employee's IBAN, the company's VAT number.
+    let app = app_with(&["accounting", "accounting_se", "inventory", "purchase", "hr"]);
+    let root = admin();
+    let party = id(&ok(
+        &app,
+        &root,
+        "party.create",
+        json!({"name": "Bosch Werkzeug AG"}),
+    ));
+    for (cmd, body, field) in [
+        ("purchase_vendor.create", json!({"party_id": party}), "iban"),
+        (
+            "hr_employee.create",
+            json!({"name": "Ann Example"}),
+            "bank_iban",
+        ),
+        (
+            "accounting_se_company.create",
+            json!({"name": "Nordlicht Sverige AB", "vat_period": "quarterly"}),
+            "vat_number",
+        ),
+    ] {
+        let mut bad = body.clone();
+        bad[field] = json!("123123");
+        let e = refused(&app, &root, cmd, bad, "");
+        assert!(e.contains(&format!(".{field} must be a")), "{cmd}: {e}");
+        let good = if field == "vat_number" {
+            "SE559412783801"
+        } else {
+            "SE45 5000 0000 0583 9825 7466"
+        };
+        let mut b = body;
+        b[field] = json!(good);
+        ok(&app, &root, cmd, b);
+    }
+}
+
+#[test]
 fn an_expense_claim_defaults_to_me_today_and_freezes_once_approved() {
     let app = app_with(&["expenses"]);
     let ann = user("ann", &["expenses.user"]);

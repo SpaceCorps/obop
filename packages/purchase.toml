@@ -1,6 +1,6 @@
 [module]
 id = "purchase"
-version = "0.4.0"
+version = "0.4.1"
 name = "Purchase"
 description = "Vendors, purchase orders and order lines with a draft, sent, confirmed, received and cancelled flow. An order has a number from a series, its total is the sum of its lines, and receiving the goods creates a draft stock move per line at the receiving location (the warehouse validates them)."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["supply-chain"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "purchase_order"
-changelog = "0.4.0: goods can arrive short: give a line the units that arrived (received quantity) before receiving the order, and its stock move takes that quantity instead of the quantity ordered. The stock moves of a receipt carry the order number as their source document and are marked as receipts, so an order shows its receipts. 0.3.1: received and cancelled orders and their lines are frozen. The vendor reference of an order is optional; a new order is dated today in the instance currency, and a line takes the cost of its product as its unit price when none is given. New vendors start active, and inactive vendors and locations are no longer offered for new orders; vendors whose active flag was never set become active. English names, list, card and form hints."
+changelog = "0.4.1: a vendor’s bank account must be a valid IBAN (its country’s length and check digits); one stored before is kept until it is changed. 0.4.0: goods can arrive short: give a line the units that arrived (received quantity) before receiving the order, and its stock move takes that quantity instead of the quantity ordered. The stock moves of a receipt carry the order number as their source document and are marked as receipts, so an order shows its receipts. 0.3.1: received and cancelled orders and their lines are frozen. The vendor reference of an order is optional; a new order is dated today in the instance currency, and a line takes the cost of its product as its unit price when none is given. New vendors start active, and inactive vendors and locations are no longer offered for new orders; vendors whose active flag was never set become active. English names, list, card and form hints."
 
 [module.dependencies]
 base = "^0.2"
@@ -72,6 +72,7 @@ write_group = "purchase.manager"
   class = "financial"
   personal_data = true
   group = "purchase.manager"
+  pattern = "iban"
 
   [[model.field]]
   name = "active"
