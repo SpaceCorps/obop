@@ -1,7 +1,8 @@
 // Q1: the "On hand" smart button of a product leaves out stock in scrap locations.
 import { describe, expect, it } from "vite-plus/test";
 import type { FieldMeta, ModelMeta } from "./api.ts";
-import { notIn, scrapRef } from "./RelatedChips.tsx";
+import { notIn, scrapRef, smartFacets } from "./RelatedChips.tsx";
+import { toServer } from "./serverQuery.ts";
 
 const f = (name: string, kind: FieldMeta["kind"], more: Partial<FieldMeta> = {}): FieldMeta => ({
   name,
@@ -40,5 +41,16 @@ describe("the stock a smart button sums (Q1)", () => {
       { field: "location_id", op: "ne", value: "s1" },
       { field: "location_id", op: "ne", value: "s2" },
     ]);
+  });
+
+  it("opens a list that leaves out the same places, so the list totals what the button says", () => {
+    const facets = smartFacets("product_id", "p1", { f: "location_id", v: ["s1", "s2"] });
+    const plan = toServer({ facets, group: [] }, item.fields);
+    expect(plan.rest).toEqual([]);
+    expect(plan.filter).toEqual([
+      { field: "product_id", op: "eq", value: "p1" },
+      ...notIn("location_id", ["s1", "s2"]),
+    ]);
+    expect(smartFacets("product_id", "p1")).toEqual([{ op: "is", f: "product_id", v: ["p1"] }]);
   });
 });

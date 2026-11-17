@@ -57,6 +57,17 @@ export function scrapRef(
 export const notIn = (field: string, ids: readonly string[]): ServerFilter[] =>
   ids.slice(0, 49).map((value) => ({ field, op: "ne", value }));
 
+/**
+ * The list a smart button opens: the records of `field` = `id`, and, for a sum that leaves out the
+ * scrap places, the same places left out, so the list totals what the button says (Q1).
+ */
+export function smartFacets(field: string, id: string, skip?: { f: string; v: string[] }) {
+  return [
+    { op: "is" as const, f: field, v: [id] },
+    ...(skip && skip.v.length ? [{ op: "isnot" as const, f: skip.f, v: skip.v.slice(0, 49) }] : []),
+  ];
+}
+
 /** The plural a package gives a model (D95 `plural`), else its name. */
 function pluralTitle(m: ModelMeta, moduleId: string): string {
   const own = modelTitle(m, moduleId);
@@ -90,9 +101,10 @@ export function useRelated(model: ModelMeta) {
 }
 
 /** The number (or sum) of each relation for record `id`; a relation is absent until known. */
-function useCounts(rels: Rel[], id: string): Map<string, number> {
+type Count = { n: number; skip?: { f: string; v: string[] } };
+function useCounts(rels: Rel[], id: string): Map<string, Count> {
   const d = useData();
-  const [counts, setCounts] = useState<{ id: string; n: Map<string, number> }>({
+  const [counts, setCounts] = useState<{ id: string; n: Map<string, Count> }>({
     id,
     n: new Map(),
   });
@@ -132,8 +144,9 @@ function useCounts(rels: Rel[], id: string): Map<string, number> {
             : sum
               ? Number(res.groups[0]?.measures[`sum:${sum.name}`] ?? 0) || 0
               : res.total;
+        const skip = place && ids.length ? { f: place.name, v: ids } : undefined;
         setCounts((c) =>
-          c.id === id ? { id, n: new Map(c.n).set(`${r.model}.${r.field}`, n) } : c,
+          c.id === id ? { id, n: new Map(c.n).set(`${r.model}.${r.field}`, { n, skip }) } : c,
         );
       });
     }
@@ -146,9 +159,10 @@ function useCounts(rels: Rel[], id: string): Map<string, number> {
 }
 
 /** One smart button: a link to the related records, filtered to this record. */
-function SmartLink({ rel: r, id, n }: { rel: Rel; id: string; n: number | undefined }) {
+function SmartLink({ rel: r, id, count }: { rel: Rel; id: string; count: Count | undefined }) {
   const d = useData();
-  const st = encodeState({ facets: [{ op: "is", f: r.field, v: [id] }], group: [] });
+  const n = count?.n;
+  const st = encodeState({ facets: smartFacets(r.field, id, count?.skip), group: [] });
   const to = d.linkTo(r.model, { st });
   const sum = sumField(d.models.get(r.model)?.model);
   const body = (
@@ -194,7 +208,8 @@ export function RelatedChips({ model, id }: { model: ModelMeta; id: string }) {
   const [more, setMore] = useState(false);
   if (related.length === 0) return null;
   const known = related.every((r) => counts.has(`${r.model}.${r.field}`));
-  const n = (r: Rel) => counts.get(`${r.model}.${r.field}`);
+  const n = (r: Rel) => counts.get(`${r.model}.${r.field}`)?.n;
+  const count = (r: Rel) => counts.get(`${r.model}.${r.field}`);
   // Until every number is in, the order would jump: the buttons wait in declaration order.
   const sorted = known ? [...related].sort((a, b) => (n(b) ?? 0) - (n(a) ?? 0)) : related;
   const top = sorted.filter((r) => (known ? (n(r) ?? 0) > 0 : true)).slice(0, SHOWN);
@@ -202,10 +217,12 @@ export function RelatedChips({ model, id }: { model: ModelMeta; id: string }) {
   return (
     <div className="smart" role="group" aria-label={t("Related records")}>
       {top.map((r) => (
-        <SmartLink key={`${r.model}.${r.field}`} rel={r} id={id} n={n(r)} />
+        <SmartLink key={`${r.model}.${r.field}`} rel={r} id={id} count={count(r)} />
       ))}
       {more &&
-        rest.map((r) => <SmartLink key={`${r.model}.${r.field}`} rel={r} id={id} n={n(r)} />)}
+        rest.map((r) => (
+          <SmartLink key={`${r.model}.${r.field}`} rel={r} id={id} count={count(r)} />
+        ))}
       {known && rest.length > 0 && (
         <button
           type="button"
