@@ -20,7 +20,9 @@ test.describe("shared list and record fixes (stream ua)", () => {
     await page.getByText(/^\d+ records?$/).click();
     await expect(cell).toHaveText("After click away");
     await expect
-      .poll(async () => (await api.list("root", "lead")).find((l) => l.title === title)?.contact_name)
+      .poll(
+        async () => (await api.list("root", "lead")).find((l) => l.title === title)?.contact_name,
+      )
       .toBe("After click away");
 
     await cell.click();
@@ -46,7 +48,9 @@ test.describe("shared list and record fixes (stream ua)", () => {
     await expect(head).toBeVisible();
     await expect(head.getByRole("button")).toHaveCount(0);
     await expect(head).not.toHaveAttribute("aria-sort", /.*/);
-    await expect(page.getByRole("columnheader", { name: /Name/ }).getByRole("button")).toBeVisible();
+    await expect(
+      page.getByRole("columnheader", { name: /Name/ }).getByRole("button"),
+    ).toBeVisible();
     // A phone sorts from a menu: the picture is not in it.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "Sort by" }).click();
