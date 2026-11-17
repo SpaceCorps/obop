@@ -217,7 +217,7 @@ test.describe("access by app", () => {
     await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(more).toBeFocused();
 
-    const open = row.getByRole("button", { name: "Access of sam" });
+    const open = row.getByRole("button", { name: "Access of sam", exact: true });
     await open.focus();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Access of sam" });
@@ -266,7 +266,7 @@ test.describe("access by app", () => {
     await row.scrollIntoViewIfNeeded();
     await expect(row).toContainText("Sales · User");
     expect(await layoutProblems(page)).toEqual([]);
-    const open = row.getByRole("button", { name: `Access of ${name}` });
+    const open = row.getByRole("button", { name: `Access of ${name}`, exact: true });
     const more = row.getByRole("button", { name: `More actions for ${name}` });
     for (const b of [open, more])
       expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);

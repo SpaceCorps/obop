@@ -108,6 +108,10 @@
 .people-table td:last-child {
   white-space: nowrap;
 }
+/* A long user name breaks inside its cell instead of widening the table past its box. */
+.people-table td:first-child {
+  overflow-wrap: anywhere;
+}
 .group-picker {
   display: flex;
   flex-direction: column;

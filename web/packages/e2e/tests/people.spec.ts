@@ -60,7 +60,7 @@ test.describe("people administration", () => {
 
       // Access: give CRM and raise Inventory (an app with User and Manager) to Manager in the
       // dialog; her open session sees it at once. Manager holds both groups of Inventory.
-      await row.getByRole("button", { name: `Access of ${name}` }).click();
+      await row.getByRole("button", { name: `Access of ${name}`, exact: true }).click();
       const access = page.getByRole("dialog", { name: `Access of ${name}` });
       await expect(access.getByRole("switch", { name: "Can use Sales" })).toBeChecked();
       await access.getByRole("switch", { name: "Can use CRM" }).check();
@@ -85,14 +85,14 @@ test.describe("people administration", () => {
         "sales.user",
       ]);
       // The identifiers show only on request.
-      await row.getByRole("button", { name: `Access of ${name}` }).click();
+      await row.getByRole("button", { name: `Access of ${name}`, exact: true }).click();
       const again = page.getByRole("dialog", { name: `Access of ${name}` });
       await expect(again.locator("code")).toHaveCount(0);
       await again.getByRole("switch", { name: "Show technical names" }).check();
       await expect(again.locator("code", { hasText: "inventory.manager" })).toBeVisible();
       await again.getByRole("switch", { name: "Show technical names" }).uncheck();
       await again.getByRole("button", { name: "Cancel" }).click();
-      await expect(row.getByRole("button", { name: `Access of ${name}` })).toBeFocused();
+      await expect(row.getByRole("button", { name: `Access of ${name}`, exact: true })).toBeFocused();
 
       // Offboard: confirm in the dialog; every credential stops for good.
       const agent = (await api.post("/api/auth/agent-token", { scopes: ["sales.user"] }, nia)).json
@@ -147,7 +147,7 @@ test.describe("people administration", () => {
     const own = people
       .getByRole("row")
       .filter({ has: page.getByRole("cell", { name: "root", exact: true }) });
-    await own.getByRole("button", { name: "Access of root" }).click();
+    await own.getByRole("button", { name: "Access of root", exact: true }).click();
     const access = page.getByRole("dialog", { name: "Access of root" });
     // Your own administrator access cannot be turned off here, and the dialog says why.
     const admin = access.getByRole("switch", { name: "Administrator: can do everything" });
