@@ -456,6 +456,9 @@ pub struct AccessInfo {
     pub shared_with: Option<&'static str>,
     /// The holders of any of these groups see every record.
     pub see_all: Vec<&'static str>,
+    /// Whether this caller sees every record by `see_all` (or as the instance administrator), so a
+    /// screen offers "Everyone" only to the people for whom it shows more than their own.
+    pub sees_all: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -586,6 +589,7 @@ impl Dispatcher {
     /// can see. A model appears only if its `list` command is visible, and a field only if the
     /// principal may read it, so metadata never reveals what data would not.
     pub fn meta(&self, surface: Surface, p: &Principal) -> Vec<ModuleInfo> {
+        let actor = engine::Actor::of(p);
         self.sync();
         let cmds = self.commands.read().unwrap();
         let models = self.models.read().unwrap();
@@ -744,6 +748,7 @@ impl Dispatcher {
                             public_field: a.public_field,
                             shared_with: a.shared_with,
                             see_all: a.see_all.clone(),
+                            sees_all: a.see_all.iter().any(|g| actor.holds(g)) || actor.admin,
                         }),
                 });
             }

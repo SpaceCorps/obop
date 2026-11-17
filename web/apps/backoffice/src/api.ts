@@ -259,6 +259,8 @@ export type AccessMeta = {
   public_field?: string | null;
   shared_with?: string | null;
   see_all_group?: string[];
+  /** Whether this caller sees every record (holds a `see_all` group, or is the administrator). */
+  sees_all?: boolean;
 };
 export type ModelMeta = {
   name: string;

@@ -197,7 +197,7 @@ test("a second visit shows the normal sign-in form, and the set-up is closed for
   await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Set up this instance" })).toHaveCount(0);
   // The instance name chosen at set-up is the brand the sign-in page shows. A running server
-  // reads the brand at most once every two seconds (docs/ISSUES.md S5), and this test can start
+  // reads the brand at most once every two seconds (docs/ISSUES.md T5), and this test can start
   // within a second of the write: load the page again until the name is there.
   await expect(async () => {
     await page.reload();
