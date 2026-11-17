@@ -493,3 +493,30 @@ fn undoing_a_match_opens_the_item_again() {
     )
     .unwrap();
 }
+
+/// Q9: `obop call bank_matching book ... dry_run=true` sent the text "true" (the model has no
+/// `list`, so it is not in the metadata), and the handler read it as a real run. The command line
+/// now types the field by the module's own definition.
+#[test]
+fn the_command_line_types_dry_run_of_models_without_a_list_as_a_bool() {
+    let f = fixture();
+    let agent = Principal::agent("bot", &["accounting.user"], &["accounting.user"]);
+    let meta = f.app.dispatcher.meta(Surface::Cli, &agent);
+    assert!(
+        !meta
+            .iter()
+            .flat_map(|m| &m.models)
+            .any(|m| m.name == "bank_matching")
+    );
+    for model in ["bank_matching", "vat_computation", "invoice_posting"] {
+        assert_eq!(
+            crate::cli_kind(&f.app.dispatcher, &meta, model, "dry_run"),
+            "bool",
+            "{model}"
+        );
+    }
+    assert_eq!(
+        crate::cli_kind(&f.app.dispatcher, &meta, "bank_matching", "nope"),
+        "text"
+    );
+}
