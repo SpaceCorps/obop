@@ -95,7 +95,14 @@ test("a reviewer reads a trip's route and check, and rejects it with a reason", 
   expect(got.json.value.reject_reason).toBe("The trip was private");
 });
 
-test("an empty review queue says so and offers all trips (R10)", async ({ page, api, signIn }) => {
+test("an empty review queue says so and offers all trips (R10)", async ({
+  page,
+  api,
+  signIn,
+  uid,
+}) => {
+  // A trip of its own, so that "Show all trips" has a row whatever ran before (it is confirmed below).
+  const own = await submittedTrip(api, uid("queue"));
   // Empty the queue: every trip in review is confirmed by the administrator (no reviewer of their own).
   const root = await api.token("root");
   const waiting = await api.post(
@@ -108,6 +115,8 @@ test("an empty review queue says so and offers all trips (R10)", async ({ page, 
     const done = await api.post("/api/mileage_trip/confirm", { id: t.id }, root);
     expect(done.status, JSON.stringify(done.json)).toBe(200);
   }
+  const confirmed = await api.post("/api/mileage_trip/get", { id: own }, root);
+  expect(confirmed.json.value.state).toBe("confirmed");
 
   await signIn("mina", "/mileage");
   await expect(page).toHaveURL(/mileage_trip\?st=/);
