@@ -68,7 +68,8 @@ export type Wording = () => string;
 /**
  * A message kept as how to word it, not as a finished sentence (D9): a sentence made in the old
  * language stays in it after a switch, a wording is called again in the new one. Set it with a
- * function (`setError(() => t("Invalid username or password"))`) or null; read the sentence.
+ * function (`setError(() => t(message))`, with `message` the English text) or null; read the
+ * sentence.
  */
 export function useWorded(): [string | null, (w: Wording | string | null) => void] {
   useSyncExternalStore(subscribe, getVersion);
