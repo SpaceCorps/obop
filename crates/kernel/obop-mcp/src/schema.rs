@@ -390,7 +390,7 @@ pub fn tools(d: &Dispatcher, p: &Principal) -> Vec<J> {
 
 /// Whether an agent's token is denied a field of this class outright, and not given a mask token
 /// (D40: the sensitive classes and secrets).
-fn withheld_from_agents(class: &str) -> bool {
+pub(crate) fn withheld_from_agents(class: &str) -> bool {
     use obop_types::DataClass;
     DataClass::parse(class).is_some_and(|c| c.is_sensitive() || c == DataClass::Secret)
 }

@@ -196,6 +196,8 @@ export type FieldMeta = {
   option_labels?: Record<string, Translations>;
   class: string;
   personal_data: boolean;
+  /** This caller does not read the field in clear (an agent and personal data): no sort or filter by it. */
+  masked?: boolean;
   kind: Kind;
   required: boolean;
   /** Only for `select`: the allowed values, in their natural order (for example statuses). */
