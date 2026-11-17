@@ -2852,5 +2852,6 @@
   "Week {week}, {year}": "Viikko {week}, {year}",
   "Choose the customer to bill": "Valitse laskutettava asiakas",
   "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.": "Ajan laskuttaminen vaatii oikeuden laatia laskuja ja hyväksyä aikakirjauksia. Pyydä ylläpitäjää.",
-  "There is no approved, billable time to bill in this period.": "Tällä jaksolla ei ole hyväksyttyä, laskutettavaa aikaa laskutettavaksi."
+  "There is no approved, billable time to bill in this period.": "Tällä jaksolla ei ole hyväksyttyä, laskutettavaa aikaa laskutettavaksi.",
+  "Enter the first and the last day of the period as dates": "Anna jakson ensimmäinen ja viimeinen päivä päivämäärinä"
 }

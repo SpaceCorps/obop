@@ -2852,5 +2852,6 @@
   "Week {week}, {year}": "machine-drafted",
   "Choose the customer to bill": "machine-drafted",
   "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.": "machine-drafted",
-  "There is no approved, billable time to bill in this period.": "machine-drafted"
+  "There is no approved, billable time to bill in this period.": "machine-drafted",
+  "Enter the first and the last day of the period as dates": "machine-drafted"
 }

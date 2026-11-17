@@ -6,17 +6,20 @@
 // The customer and the rate are the project's unless changed here; the invoice stays a draft.
 import { useState } from "react";
 import { fmt, getCurrency, t } from "@obop/ui";
-import type { ModelMeta, Reply } from "../../api.ts";
+import type { FieldMeta, ModelMeta, Reply } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { Edit } from "../../edit.ts";
 import type { RecordExtProps } from "../../extensions.ts";
 import { RefPicker } from "../../fields.tsx";
+import { DateInput } from "../../inputs/DateInput.tsx";
 import { serverMessage } from "../../serverMessage.ts";
 import { Button, Dialog, Input, Segmented } from "../../ui.tsx";
 import "../supply.css";
 import "./projects.css";
 
 const INVOICE = "invoice";
+/** The period's days are typed as every date of the back office (DateInput reads no field key). */
+const DAY = { name: "day", kind: "date", description: "" } as unknown as FieldMeta;
 
 type Planned = {
   entries?: number;
@@ -108,6 +111,11 @@ function BillDialog({
       setError(t("Enter the hourly rate as an amount, such as 95.00"));
       return;
     }
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    if (!day.test(from) || !day.test(to)) {
+      setError(t("Enter the first and the last day of the period as dates"));
+      return;
+    }
     setWorking(true);
     setError("");
     const r = await d.run("time_billing.create_invoice", body(dry));
@@ -188,20 +196,24 @@ function BillDialog({
           onChange={(e) => edit(setRate)(e.currentTarget.value)}
         />
         <div className="prj-bill-period">
-          <Input
-            id="bill-from"
-            type="date"
-            label={t("From")}
-            value={from}
-            onChange={(e) => edit(setFrom)(e.currentTarget.value)}
-          />
-          <Input
-            id="bill-to"
-            type="date"
-            label={t("To")}
-            value={to}
-            onChange={(e) => edit(setTo)(e.currentTarget.value)}
-          />
+          <div className="field">
+            <label htmlFor="bill-from">{t("From")}</label>
+            <DateInput
+              field={DAY}
+              value={from}
+              common={{ id: "bill-from" }}
+              onChange={(v) => edit(setFrom)(String(v))}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="bill-to">{t("To")}</label>
+            <DateInput
+              field={DAY}
+              value={to}
+              common={{ id: "bill-to" }}
+              onChange={(v) => edit(setTo)(String(v))}
+            />
+          </div>
         </div>
         <Segmented
           label={t("Invoice lines")}

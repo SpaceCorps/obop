@@ -897,6 +897,7 @@
   "Enter a percentage from 0 to 100": "Enter a percentage from 0 to 100",
   "Enter a quantity above zero": "Enter a quantity above zero",
   "Enter an amount": "Enter an amount",
+  "Enter the first and the last day of the period as dates": "Enter the first and the last day of the period as dates",
   "Enter the hourly rate as an amount, such as 95.00": "Enter the hourly rate as an amount, such as 95.00",
   "Enter the number of units you counted": "Enter the number of units you counted",
   "Enter the units that arrived for every line (0 when none did)": "Enter the units that arrived for every line (0 when none did)",

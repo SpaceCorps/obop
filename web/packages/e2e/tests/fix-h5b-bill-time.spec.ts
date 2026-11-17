@@ -45,6 +45,12 @@ test("a project's approved time becomes a draft invoice from the project (K62)",
     const dialog = page.getByRole("dialog", { name: "Bill time" });
     await expect(dialog.getByRole("combobox", { name: "Customer" })).toHaveValue(customer.name);
     await expect(dialog.getByLabel(/Hourly rate/)).toHaveValue("95.00");
+    // The period is typed as every other date of the back office (the region's order, with its
+    // calendar), not in the browser's own date box.
+    await expect(dialog.locator('input[type="date"]')).toHaveCount(0);
+    const from = dialog.getByRole("textbox", { name: "From" });
+    await expect(from).not.toHaveValue(/^\d{4}-/);
+    await expect(from).toHaveValue(/\d{2}.\d{2}.\d{4}/);
     await dialog.getByRole("button", { name: "Preview" }).click();
     await expect(dialog.locator(".prj-bill-preview")).toContainText("1.50 h (1 entry)");
     await expect(dialog.locator(".prj-bill-total")).toContainText("142.50");

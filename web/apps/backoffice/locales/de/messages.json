@@ -2852,5 +2852,6 @@
   "Week {week}, {year}": "Woche {week}, {year}",
   "Choose the customer to bill": "Wählen Sie den Kunden, dem die Zeit berechnet wird",
   "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.": "Zum Abrechnen von Zeit brauchen Sie das Recht, Rechnungen zu erstellen und Zeiteinträge zu genehmigen. Wenden Sie sich an einen Administrator.",
-  "There is no approved, billable time to bill in this period.": "In diesem Zeitraum gibt es keine genehmigte, abrechenbare Zeit zum Abrechnen."
+  "There is no approved, billable time to bill in this period.": "In diesem Zeitraum gibt es keine genehmigte, abrechenbare Zeit zum Abrechnen.",
+  "Enter the first and the last day of the period as dates": "Geben Sie den ersten und den letzten Tag des Zeitraums als Datum ein"
 }
