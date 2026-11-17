@@ -15,6 +15,7 @@ use serde_json::{Map, Value as J};
 
 const MODEL: &str = "obop_setting";
 const ID: &str = "company";
+const LOCK: &str = "settings.company";
 
 fn read_all(b: &dyn Backend) -> Result<Map<String, J>, String> {
     let text = b
@@ -52,6 +53,12 @@ pub fn update(
     sec: &str,
     patch: &Map<String, J>,
 ) -> Result<Map<String, J>, String> {
+    // Two sections change the same row: without the lock, a change made between this read and
+    // this write would be written over (the cross-process lock also holds for several servers on
+    // one database).
+    let _held = b
+        .lock(LOCK)
+        .map_err(|e| format!("cannot change the settings now: {e}"))?;
     let mut all = read_all(b)?;
     let mut cur = match all.remove(sec) {
         Some(J::Object(m)) => m,
@@ -71,4 +78,34 @@ pub fn update(
         b.insert(MODEL, ID, &f).map_err(|e| e.to_string())?;
     }
     Ok(cur)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn changes_of_two_sections_at_once_are_both_kept() {
+        let b: Arc<dyn Backend> = obop_storage::open("memory:").unwrap();
+        let threads: Vec<_> = ["invoicing", "expenses", "pos", "sales"]
+            .into_iter()
+            .map(|sec| {
+                let b = b.clone();
+                std::thread::spawn(move || {
+                    for i in 0..200 {
+                        let mut p = Map::new();
+                        p.insert(format!("k{i}"), J::from(i));
+                        update(&*b, sec, &p).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        for sec in ["invoicing", "expenses", "pos", "sales"] {
+            assert_eq!(section(&*b, sec).unwrap().len(), 200, "{sec}");
+        }
+    }
 }
