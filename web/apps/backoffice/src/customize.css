@@ -300,6 +300,9 @@
   white-space: normal;
 }
 @media (max-width: 40rem) {
+  .sso-cell {
+    min-block-size: 2.75rem;
+  }
   /* One 16 px gutter on a phone, for every tab of Customize. */
   .sso-address-row {
     flex-direction: column;

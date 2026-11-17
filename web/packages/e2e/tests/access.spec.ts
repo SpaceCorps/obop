@@ -16,6 +16,9 @@ const SECURITY = "/customize/security?tab=security";
 
 type Meta = { modules: { id: string; name: string; launcher?: boolean }[] };
 
+/** Apps whose ladder is not <id>.user and <id>.manager: they are reported, not asserted. */
+const ODD_APPS = ["helpdesk", "mileage", "connectors"];
+
 /** Uninstall what was installed, dependents first: a module that others need is refused until they go. */
 async function uninstall(api: Api, ids: string[]) {
   let left = [...ids];
@@ -96,6 +99,17 @@ test.describe("access by app", () => {
         }
         expect(l.base, `${a.id} has a base`).toBeTruthy();
         expect(l.manage).not.toBe(l.base);
+        // The ladder is the one the id says, unless the app is on the list of odd ones (it is
+        // printed below): a module that names <id>.user has it as base, and <id>.manager as the
+        // manage rung when any model is written through it.
+        if (!ODD_APPS.includes(a.id)) {
+          const row = rows.find((r) => r.id === a.id)!;
+          const names = new Set(groupsOfModule(row));
+          const manager = `${a.id}.manager`;
+          if (names.has(`${a.id}.user`)) expect(l.base, `${a.id} base`).toBe(`${a.id}.user`);
+          if ((row.contents?.models ?? []).some((m) => m.write_group === manager))
+            expect(l.manage, `${a.id} manage`).toBe(manager);
+        }
       }
 
       // The modules whose ladder is not User and Manager, for the hand-over note.
@@ -121,10 +135,24 @@ test.describe("access by app", () => {
     }
   });
 
-  test("the People table fits its box at 1280 px with every column on", async ({
+  test("the People table fits its box at 1280 px with its widest access cell (the Microsoft column is measured in sso-admin.spec.ts)", async ({
     page,
+    api,
     signIn,
+    uid,
   }) => {
+    // A long name, and every app of the instance: three chips and "+N more" in one cell.
+    const root = await api.token("root");
+    const known = ((await api.get("/api/auth/groups", root)).json.groups ?? []) as string[];
+    const many = known.filter((g) => /\.(user|agent)$/.test(g));
+    expect(many.length).toBeGreaterThan(4);
+    const wide = `${uid("wide").replace(/ /g, "-")}.with.a.very.long.name.of.a.person@example.test`;
+    const made = await api.post(
+      "/api/auth/users",
+      { username: wide, password: "e2e wide person pw 7!", groups: many },
+      root,
+    );
+    expect(made.status).toBe(200);
     await page.setViewportSize({ width: 1280, height: 900 });
     await signIn("root", SECURITY);
     const people = page.getByRole("table", { name: "People" });
@@ -137,6 +165,10 @@ test.describe("access by app", () => {
       return { scrollWidth: box.scrollWidth, clientWidth: box.clientWidth };
     });
     expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth);
+    const widest = people
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name: wide, exact: true }) });
+    await expect(widest.getByRole("button", { name: /^\+\d+ more, Access of / })).toBeVisible();
     expect(await layoutProblems(page)).toEqual([]);
   });
 
@@ -238,10 +270,18 @@ test.describe("access by app", () => {
     const more = row.getByRole("button", { name: `More actions for ${name}` });
     for (const b of [open, more])
       expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    // The access has a line of its own (it spans the row), and the "+N more" chip is a 44 px target.
+    const cell = (await row.locator("td.access-cell").boundingBox())!;
+    const rowBox = (await row.boundingBox())!;
+    expect(cell.width).toBeGreaterThan(rowBox.width * 0.8);
+    const chip = row.getByRole("button", { name: /^\+\d+ more, Access of / });
+    expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 
     await more.click();
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
+    for (const item of await menu.getByRole("menuitem").all())
+      expect((await item.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     const box = (await menu.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(390);
@@ -254,6 +294,11 @@ test.describe("access by app", () => {
     const rungs = dialog.getByRole("radiogroup", { name: "Access to Connectors" });
     for (const r of await rungs.getByRole("radio").all())
       expect((await r.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    for (const b of [
+      dialog.getByRole("button", { name: "Save access" }),
+      dialog.getByRole("button", { name: "Cancel" }),
+    ])
+      expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await rungs.getByRole("radio", { name: "Admin", exact: true }).click();
     await dialog.getByRole("button", { name: "Save access" }).click();
     await expect(page.getByText(`Access of ${name} saved.`)).toBeVisible();

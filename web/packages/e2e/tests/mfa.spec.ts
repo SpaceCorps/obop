@@ -264,10 +264,17 @@ test.describe("two-factor authentication", () => {
       .getByRole("row")
       .filter({ has: page.getByRole("cell", { name: "quinn", exact: true }) });
     await expect(quinn).toContainText("On");
-    await quinn.getByRole("button", { name: "More actions for quinn" }).click();
+    const moreQuinn = quinn.getByRole("button", { name: "More actions for quinn" });
+    await moreQuinn.click();
     await page.getByRole("menuitem", { name: "Reset two-factor" }).click();
     const ask = page.getByRole("alertdialog", { name: "Reset two-factor for quinn?" });
     await expect(ask).toContainText("loses their authenticator app, passkeys and recovery codes");
+    // A dialog opened from the menu gives the focus back to the button of the menu.
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(ask).toHaveCount(0);
+    await expect(moreQuinn).toBeFocused();
+    await moreQuinn.click();
+    await page.getByRole("menuitem", { name: "Reset two-factor" }).click();
     await ask.getByRole("button", { name: "Reset two-factor" }).click();
     await expect(page.getByText("Two-factor reset for quinn", { exact: true })).toBeVisible();
     await expect(quinn).toContainText("Off");
