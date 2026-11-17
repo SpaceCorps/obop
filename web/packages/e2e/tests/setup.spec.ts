@@ -196,8 +196,16 @@ test("a second visit shows the normal sign-in form, and the set-up is closed for
   await page.goto(`${instance.origin}/`);
   await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Set up this instance" })).toHaveCount(0);
-  // The instance name chosen at set-up is the brand the sign-in page shows.
-  await expect(page.getByRole("heading", { name: NAME }).first()).toBeVisible();
+  // The instance name chosen at set-up is the brand the sign-in page shows. A running server
+  // reads the brand at most once every two seconds (docs/ISSUES.md S5), and this test can start
+  // within a second of the write: load the page again until the name is there.
+  await expect(async () => {
+    await page.reload();
+    await expect(page.getByRole("heading", { name: NAME }).first()).toBeVisible({
+      timeout: 1_000,
+    });
+  }).toPass({ timeout: 15_000, intervals: [500, 1_000] });
+  await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
   const status = await (await fetch(`${instance.origin}/api/auth/setup`)).json();
   expect(status).toEqual({ open: false });
   const again = await fetch(`${instance.origin}/api/auth/setup`, {
