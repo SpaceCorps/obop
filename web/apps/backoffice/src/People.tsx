@@ -539,6 +539,7 @@ export function PeopleSection({
                     <Menu
                       ariaLabel={t("More actions for {user}", { user: p.name })}
                       align="end"
+                      fixed
                       triggerClassName="btn small"
                       trigger={<>{tx("access", "More")}</>}
                       items={[

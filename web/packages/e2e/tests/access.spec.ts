@@ -64,6 +64,8 @@ test.describe("access by app", () => {
       // Every group any module names lands in exactly one place: base, manage, an extra, or other.
       const named = new Set(rows.flatMap((r) => groupsOfModule(r)));
       named.delete(ADMIN);
+      // The server lists a wildcard marker among the groups; it is not a group anyone holds.
+      named.delete("*");
       const placed = new Map<string, number>();
       const put = (g: string | null) => g && placed.set(g, (placed.get(g) ?? 0) + 1);
       for (const l of access.ladders) {
@@ -136,6 +138,30 @@ test.describe("access by app", () => {
     });
     expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth);
     expect(await layoutProblems(page)).toEqual([]);
+  });
+
+  test("the menu More of the last row opens whole, above the button, outside the table's box", async ({
+    page,
+    signIn,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signIn("root", SECURITY);
+    const people = page.getByRole("table", { name: "People" });
+    const last = people.getByRole("row").last();
+    await last.scrollIntoViewIfNeeded();
+    await last.getByRole("button", { name: /^More actions for / }).click();
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    await expect(menu).toBeInViewport({ ratio: 1 });
+    const items = menu.getByRole("menuitem");
+    for (const item of await items.all()) await expect(item).toBeInViewport({ ratio: 1 });
+    // Not cut by the box of the table: the element at the middle of the last item is the item.
+    const hit = await items.last().evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return top === el || el.contains(top);
+    });
+    expect(hit).toBe(true);
   });
 
   test("the menu More opens by keyboard and returns the focus; Access opens and returns the focus", async ({
