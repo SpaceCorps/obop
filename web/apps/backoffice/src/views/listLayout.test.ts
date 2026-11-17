@@ -245,7 +245,7 @@ describe("the widths of the columns", () => {
     const l = fitColumns(leave, 560, head, "state", leave[1]);
     expect(l.widths.reduce((a, b) => a + b, 52)).toBeLessThanOrEqual(560);
     // The title gets what the number and the badge do not need.
-    expect(l.widths[0]).toBeGreaterThanOrEqual(260);
+    expect(l.widths[0]).toBeGreaterThanOrEqual(240);
     expect(l.widths[2]).toBeLessThan(140);
     // Trips: a long title, the distance and five states; nothing more can be dropped.
     const trips = [

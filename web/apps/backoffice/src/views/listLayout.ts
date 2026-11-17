@@ -248,7 +248,7 @@ export function columnWidth(f: FieldMeta, head: string, first = false): number {
  */
 function badgeWidth(f: FieldMeta): number {
   const longest = Math.max(0, ...(f.options ?? []).map((o) => optionLabel(o, f).length));
-  return longest ? Math.min(140, Math.max(96, Math.round(longest * 7 + 44))) : 140;
+  return longest ? Math.min(140, Math.max(96, Math.round(longest * 7.5 + 64))) : 140;
 }
 
 /** The narrowest a first column is squeezed to so that the status and the amount stay in view. */
