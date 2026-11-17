@@ -291,6 +291,54 @@ fn a_posted_entry_its_lines_and_a_closed_period_are_frozen() {
 }
 
 #[test]
+fn fiscal_years_and_periods_never_cover_the_same_day() {
+    let app = app_with(&["accounting"]);
+    let ann = user("ann", ACCOUNTANT);
+    let year = |name: &str, from: &str, to: &str| {
+        run(
+            &app,
+            &ann,
+            "accounting_fiscal_year.create",
+            json!({"name": name, "start_on": from, "end_on": to}),
+        )
+    };
+    let fy = id(&year("FY2026", "2026-01-01", "2026-12-31").unwrap());
+    // The last day belongs to the year (U9): a year that starts on it overlaps.
+    for (from, to) in [
+        ("2026-12-31", "2027-12-30"),
+        ("2025-01-01", "2026-01-01"),
+        ("2026-03-01", "2026-03-31"),
+    ] {
+        let e = year("Other", from, to).unwrap_err();
+        assert!(
+            e.contains("rule no_overlapping_years failed"),
+            "{from}: {e}"
+        );
+    }
+    let next = id(&year("FY2027", "2027-01-01", "2027-12-31").unwrap());
+    let e = run(
+        &app,
+        &ann,
+        "accounting_fiscal_year.update",
+        json!({"id": next, "start_on": "2026-12-01"}),
+    )
+    .unwrap_err();
+    assert!(e.contains("Another fiscal year already covers"), "{e}");
+    let period = |name: &str, from: &str, to: &str| {
+        run(
+            &app,
+            &ann,
+            "accounting_period.create",
+            json!({"fiscal_year_id": fy, "name": name, "start_on": from, "end_on": to}),
+        )
+    };
+    period("2026-03", "2026-03-01", "2026-03-31").unwrap();
+    period("2026-04", "2026-04-01", "2026-04-30").unwrap();
+    let e = period("2026-03b", "2026-03-31", "2026-04-01").unwrap_err();
+    assert!(e.contains("rule no_overlapping_periods failed"), "{e}");
+}
+
+#[test]
 fn an_expense_claim_defaults_to_me_today_and_freezes_once_approved() {
     let app = app_with(&["expenses"]);
     let ann = user("ann", &["expenses.user"]);
