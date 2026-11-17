@@ -873,3 +873,27 @@ description = "Milloin tietue tuotiin"
 [labels.fi.model.import_map.field.imported_by]
 label = "Tuoja"
 description = "Kuka tuonnin teki"
+
+[labels.fi.model.plan]
+name = "Hyväksyntäpyyntö"
+description = "Agentin tekemä pyyntö, joka odottaa henkilöä tai joka on ratkaistu: kuka ehdotti mitä komentoa mihin tietueeseen, milloin ja mitä sille tapahtui. Henkilö näkee pyynnöt, jotka hän voisi ratkaista, ja omien agenttiensa pyynnöt; agentti näkee vain omansa, get-komennolla"
+
+[labels.fi.model.plan.field.seen_version]
+label = "Nähty versio"
+description = "approve-komennon syöte: tietueen versio, joka henkilölle näytettiin (seen_version get-komennon vastauksessa); jos tietue on sen jälkeen muuttunut, mitään ei suoriteta ja pyyntö jää odottamaan"
+
+[labels.fi.model.plan.field.reason]
+label = "Syy"
+description = "reject-komennon syöte: miksi, enintään 300 merkkiä, agentin luettavaksi; pidetään erillään kaikista ohjeista"
+
+[labels.fi.model.plan.action.count]
+label = "Laske"
+description = "Kuinka monta pyyntöä odottaa kysyjää (waiting), kuinka monta niistä hänen omat agenttinsa tekivät (mine_waiting) ja saako hän ratkaista niitä (can_decide). Vain henkilölle"
+
+[labels.fi.model.plan.action.approve]
+label = "Hyväksy"
+description = "Hyväksy odottava pyyntö: komento suoritetaan niin kuin agentti sen ehdotti. Anna id ja get-komennosta seen_version: jos tietue on sen jälkeen muuttunut, mitään ei suoriteta. Vain henkilölle"
+
+[labels.fi.model.plan.action.reject]
+label = "Hylkää"
+description = "Hylkää odottava pyyntö: mitään ei suoriteta ja agentille kerrotaan. Anna id ja halutessasi syy (enintään 300 merkkiä). Vain henkilölle"

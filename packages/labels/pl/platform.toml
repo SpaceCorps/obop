@@ -873,3 +873,27 @@ description = "Kiedy rekord został zaimportowany"
 [labels.pl.model.import_map.field.imported_by]
 label = "Zaimportował"
 description = "Kto go zaimportował"
+
+[labels.pl.model.plan]
+name = "Prośba o zatwierdzenie"
+description = "Prośba agenta, która czeka na osobę albo została rozstrzygnięta: kto zaproponował które polecenie dla którego rekordu, kiedy i co się z nią stało. Osoba widzi prośby, które mogłaby rozstrzygnąć, oraz prośby własnych agentów; agent widzi tylko swoje, przez get"
+
+[labels.pl.model.plan.field.seen_version]
+label = "Widziana wersja"
+description = "Dane wejściowe approve: wersja rekordu pokazana osobie (seen_version w odpowiedzi get); jeśli rekord od tego czasu się zmienił, nic nie zostaje wykonane, a prośba dalej czeka"
+
+[labels.pl.model.plan.field.reason]
+label = "Powód"
+description = "Dane wejściowe reject: dlaczego, najwyżej 300 znaków, do przeczytania przez agenta; trzymane osobno od wszelkich instrukcji"
+
+[labels.pl.model.plan.action.count]
+label = "Policz"
+description = "Ile próśb czeka na pytającą osobę (waiting), ile z nich złożyli jej własni agenci (mine_waiting) i czy może którąś rozstrzygnąć (can_decide). Tylko dla osoby"
+
+[labels.pl.model.plan.action.approve]
+label = "Zatwierdź"
+description = "Zatwierdź czekającą prośbę: polecenie zostaje wykonane tak, jak zaproponował je agent. Podaj id oraz, z get, seen_version: jeśli rekord od tego czasu się zmienił, nic nie zostaje wykonane. Tylko dla osoby"
+
+[labels.pl.model.plan.action.reject]
+label = "Odrzuć"
+description = "Odrzuć czekającą prośbę: nic nie zostaje wykonane, a agent się o tym dowiaduje. Podaj id i, jeśli chcesz, powód (najwyżej 300 znaków). Tylko dla osoby"

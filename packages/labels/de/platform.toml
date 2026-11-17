@@ -873,3 +873,27 @@ description = "Wann der Datensatz importiert wurde"
 [labels.de.model.import_map.field.imported_by]
 label = "Importiert von"
 description = "Wer ihn importiert hat"
+
+[labels.de.model.plan]
+name = "Freigabeanfrage"
+description = "Eine Anfrage eines Agenten, die auf eine Person wartet oder entschieden wurde: wer welchen Befehl für welchen Datensatz vorgeschlagen hat, wann und was daraus wurde. Eine Person sieht die Anfragen, die sie entscheiden könnte, und die ihrer eigenen Agenten; ein Agent sieht nur seine eigenen, mit get"
+
+[labels.de.model.plan.field.seen_version]
+label = "Gesehene Version"
+description = "Eingabe von approve: die Version des Datensatzes, die der Person gezeigt wurde (seen_version in der Antwort von get); hat sich der Datensatz seitdem geändert, läuft nichts und die Anfrage wartet weiter"
+
+[labels.de.model.plan.field.reason]
+label = "Grund"
+description = "Eingabe von reject: warum, in höchstens 300 Zeichen, für den Agenten zum Lesen; getrennt von jeder Anweisung gehalten"
+
+[labels.de.model.plan.action.count]
+label = "Zählen"
+description = "Wie viele Anfragen auf die fragende Person warten (waiting), wie viele davon ihre eigenen Agenten gestellt haben (mine_waiting) und ob sie welche entscheiden darf (can_decide). Nur für eine Person"
+
+[labels.de.model.plan.action.approve]
+label = "Freigeben"
+description = "Eine wartende Anfrage freigeben: Der Befehl läuft so, wie der Agent ihn vorgeschlagen hat. id und aus get seen_version angeben: Hat sich der Datensatz seitdem geändert, läuft nichts. Nur für eine Person"
+
+[labels.de.model.plan.action.reject]
+label = "Ablehnen"
+description = "Eine wartende Anfrage ablehnen: Nichts läuft, und der Agent erfährt es. id und auf Wunsch einen Grund (höchstens 300 Zeichen) angeben. Nur für eine Person"

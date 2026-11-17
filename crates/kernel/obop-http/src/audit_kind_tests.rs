@@ -84,7 +84,12 @@ const BUILT_FORMAT: &str = "{kind}_failed";
 
 /// Kinds that reach a writer through a constant, a `match` arm or a variable, with the file that
 /// holds the literal.
-const VIA: [(&str, &str); 14] = [
+const VIA: [(&str, &str); 19] = [
+    ("plan_proposed", "kernel/obop-commands/src/plans.rs"),
+    ("plan_approved", "kernel/obop-commands/src/plans.rs"),
+    ("plan_rejected", "kernel/obop-commands/src/plans.rs"),
+    ("plan_failed", "kernel/obop-commands/src/plans.rs"),
+    ("plan_expired", "kernel/obop-commands/src/plans.rs"),
     ("module_install", "kernel/obop-pkg/src/installer.rs"),
     ("module_update", "kernel/obop-pkg/src/installer.rs"),
     (
