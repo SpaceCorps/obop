@@ -8,6 +8,7 @@ import {
   isGone,
   movable,
   movePatch,
+  newOnDay,
   placeDay,
   visibleHours,
   weekSegments,
@@ -52,6 +53,8 @@ describe("which fields place a record", () => {
     expect(s.end?.name).toBe("end_on");
     expect(s.startMinute).toBeUndefined();
     expect(s.color?.name).toBe("state");
+    // A leave made from a day starts and ends that day (its end does not keep today).
+    expect(newOnDay(s, "2026-12-03")).toEqual({ start_on: "2026-12-03", end_on: "2026-12-03" });
   });
 
   it("a day with a start and an end time", () => {
@@ -67,6 +70,7 @@ describe("which fields place a record", () => {
       "end_minute",
     ]);
     expect(movable(s)).toBe(true);
+    expect(newOnDay(s, "2026-12-03")).toEqual({ day: "2026-12-03" });
   });
 
   it("a day with a start time and a duration; another date field has no times", () => {

@@ -19,6 +19,7 @@ import {
   isGone,
   movable,
   movePatch,
+  newOnDay,
   timed,
   weekSegments,
   type CalEvent,
@@ -194,7 +195,7 @@ export function CalendarView(p: ViewProps) {
         : addDays(cursor, 7 * dir),
     );
 
-  const create = (day: string) => p.canCreate && p.newWith({ [df.name]: day });
+  const create = (day: string) => p.canCreate && p.newWith(newOnDay(spec, day));
   const canMove = p.canUpdate && movable(spec);
   const chip = (e: CalEvent, extra = "", style?: Record<string, string | number>, head = true) => (
     <button

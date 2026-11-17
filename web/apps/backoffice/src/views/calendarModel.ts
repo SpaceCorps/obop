@@ -81,6 +81,14 @@ export function calendarSpec(
   };
 }
 
+/**
+ * The values of a record made from a day of the calendar: it starts that day, and a range ends
+ * that day too (else its end keeps its own default, today, and ends before it starts).
+ */
+export function newOnDay(spec: CalSpec, day: string): Record<string, string> {
+  return spec.end ? { [spec.start.name]: day, [spec.end.name]: day } : { [spec.start.name]: day };
+}
+
 /** Whether the spec has times of day: the week is then a time grid. */
 export const timed = (s: CalSpec | undefined): boolean => !!s?.startMinute;
 
