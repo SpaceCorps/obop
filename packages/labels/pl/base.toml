@@ -29,6 +29,3 @@ description = "Anonimizuje kontrahenta w miejscu i zapisuje informację o wymaza
 [labels.pl.model.party.field.photo]
 label = "Zdjęcie"
 description = "Zdjęcie lub logo kontaktu (PNG, JPEG, WebP lub GIF, do 2 MiB)"
-
-[labels.pl.model.party.filter.not_erased]
-label = "Nieusunięte"

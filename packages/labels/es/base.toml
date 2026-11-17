@@ -29,6 +29,3 @@ description = "Anonimizar el tercero en el propio registro y dejar constancia de
 [labels.es.model.party.field.photo]
 label = "Foto"
 description = "Foto o logotipo del contacto (PNG, JPEG, WebP o GIF, hasta 2 MiB)"
-
-[labels.es.model.party.filter.not_erased]
-label = "No borrados"
