@@ -32,7 +32,7 @@ fn module(p: &str) -> Module {
             f("start").kind(FieldKind::Number),
             f("end").kind(FieldKind::Number),
             f("note"),
-            f("state").select(&["open", "cancelled"]),
+            f("state").select(&["open", "done", "cancelled"]),
             f("iban").with_limits(Limits {
                 pattern: Some(Pattern::Iban),
                 ..Default::default()
@@ -44,11 +44,11 @@ fn module(p: &str) -> Module {
                 ..Default::default()
             }),
         ],
-        commands: vec![CommandDef::new("cancel", "Cancel", U).transition(
-            "state",
-            Some("open"),
-            "cancelled",
-        )],
+        commands: vec![
+            CommandDef::new("cancel", "Cancel", U).transition("state", Some("open"), "cancelled"),
+            CommandDef::new("complete", "Complete", U).transition("state", Some("open"), "done"),
+            CommandDef::new("reopen", "Reopen", U).transition("state", Some("cancelled"), "open"),
+        ],
         ext: Default::default(),
     }
     .rule("ends_after_start", "end >= start", EN)
@@ -312,6 +312,41 @@ fn two_bookings_of_one_resource_may_not_overlap() {
             booking("room", "2026-12-10", 630, 690),
         ]);
         let (msg, _) = r.refuse("booking.bulk_create", m(&[("rows", rows)]));
+        assert!(msg.contains("rule no_double_booking failed"), "{msg}");
+    });
+}
+
+#[test]
+fn bookings_that_overlapped_before_the_rule_can_still_be_completed() {
+    each(|r| {
+        let _s = locale::scope(None);
+        // Written straight to the store, as two bookings from before the rule was declared.
+        let raw = |start: i64, end: i64, state: &str| {
+            let mut x = BTreeMap::new();
+            for (k, v) in [
+                ("resource", Value::text("room")),
+                ("day", Value::text("2026-12-20")),
+                ("start", Value::Int(start)),
+                ("end", Value::Int(end)),
+                ("state", Value::text(state)),
+            ] {
+                x.insert(k.to_string(), v);
+            }
+            r.store.insert(&format!("{}_booking", r.p), x).unwrap()
+        };
+        let a = raw(780, 840, "open");
+        let b = raw(800, 860, "open");
+        let c = raw(790, 850, "cancelled");
+        // A move between two states that are not ignored adds no clash.
+        r.call("booking.complete", m(&[("id", Value::text(&a))]))
+            .expect("completing a booking that already overlapped");
+        // Moving its time, or taking up a cancelled one that clashes, is still refused.
+        let (msg, _) = r.refuse(
+            "booking.update",
+            m(&[("id", Value::text(&b)), ("end", Value::Int(870))]),
+        );
+        assert!(msg.contains("rule no_double_booking failed"), "{msg}");
+        let (msg, _) = r.refuse("booking.reopen", m(&[("id", Value::text(&c))]));
         assert!(msg.contains("rule no_double_booking failed"), "{msg}");
     });
 }

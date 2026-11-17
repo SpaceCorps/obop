@@ -125,7 +125,8 @@ pub struct NoOverlap {
 }
 
 impl NoOverlap {
-    /// The fields whose change makes an update check the rule again.
+    /// The own fields the rule reads. An update checks it again when it moves the key, the start
+    /// or the end, or leaves an ignored state (`engine::model_rules::rechecks`).
     pub fn reads(&self) -> Vec<&str> {
         let mut v: Vec<&str> = self.key.clone();
         v.extend([self.start, self.end]);

@@ -6,8 +6,8 @@
 //! A create evaluates every rule. An update evaluates a rule with `applies = "touched"` only when
 //! it changed a field the rule reads, so a record stored before the rule existed can still be
 //! changed in its other fields; `applies = "always"` runs on every effective update. The
-//! no-overlap rule is checked when a create or an update changes its key, its start, its end or
-//! the state it ignores.
+//! no-overlap rule is checked on a create, on an update that changes its key, its start or its
+//! end, and on a move out of a state it ignores (never on a move between two other states).
 //!
 //! A refusal is `<message> (rule <key> failed)` in the caller's language when the labels have
 //! one, noted for `errors::classify`, which answers `assertion_failed` with the key as
@@ -59,7 +59,7 @@ pub(crate) fn check(unit: &Unit<'_>, lookup: Lookup<'_>, keys: &[(String, String
             }
         }
         if let Some(n) = &def.ext.no_overlap
-            && (stored.is_none() || n.reads().into_iter().any(changed))
+            && rechecks(n, stored.as_ref(), &rec)
             && clashes(unit, &def, n, id, &rec)?
         {
             return Err(refusal(n.failure_in(locale::language()), &n.rule));
@@ -89,13 +89,28 @@ fn order(a: &J, b: &J) -> Option<Ordering> {
 
 /// Whether `rec` (record `id`) overlaps another record of the same key: `[start, end)` against
 /// `[other.start, other.end)`, so one booking may end when the next begins.
+/// Whether a write can add a clash: a create; an update that moves the key, the start or the
+/// end; or a state move out of an ignored state (a cancelled booking taken up again). A move
+/// between two states that are not ignored (confirmed to done) adds none, so a record that
+/// already overlapped before the rule existed can still be confirmed or completed.
+fn rechecks(n: &NoOverlap, stored: Option<&Fields>, rec: &Fields) -> bool {
+    let Some(s) = stored else { return true };
+    let moved = |f: &str| s.get(f) != rec.get(f);
+    n.key.iter().any(|k| moved(k))
+        || moved(n.start)
+        || moved(n.end)
+        || (ignored(n, s) && !ignored(n, rec))
+}
+
+fn ignored(n: &NoOverlap, r: &Fields) -> bool {
+    !n.ignore_states.is_empty()
+        && r.get(n.state_field)
+            .and_then(J::as_str)
+            .is_some_and(|s| n.ignore_states.contains(&s))
+}
+
 fn clashes(unit: &Unit<'_>, def: &ModelDef, n: &NoOverlap, id: &str, rec: &Fields) -> R<bool> {
-    let ignored = |r: &Fields| {
-        !n.ignore_states.is_empty()
-            && r.get(n.state_field)
-                .and_then(J::as_str)
-                .is_some_and(|s| n.ignore_states.contains(&s))
-    };
+    let ignored = |r: &Fields| ignored(n, r);
     if ignored(rec) {
         return Ok(false);
     }
