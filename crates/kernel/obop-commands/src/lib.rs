@@ -1315,6 +1315,9 @@ impl Dispatcher {
         if !p.allows(c.permission_group) {
             return Err(CallError::Forbidden(id.into()));
         }
+        // The fields an agent sent in clear although it is shown them masked count as changed in
+        // this call, whatever their value (K63; `engine::frozen::sent_clear`).
+        let _clear = engine::frozen::ClearScope::enter(self.sent_in_clear(&c, p, vault, input));
         let mut input = self.restore(p, vault, input)?;
         if let Value::Map(m) = &mut input {
             // The caller is set by the dispatcher and by guards, never by a client.
@@ -1639,6 +1642,37 @@ impl Dispatcher {
         let mut seen = HashSet::new();
         denied.retain(|d| seen.insert(d.clone()));
         Ok(Response { value, denied })
+    }
+
+    /// `model.field` for every field of the input of a writing command that the caller is shown
+    /// masked or not at all (D40) and sent as anything but a token of its vault: a value in clear,
+    /// which may be a guess of the stored one (K63). Empty for a person, who sees every value.
+    fn sent_in_clear(
+        &self,
+        c: &Registered,
+        p: &Principal,
+        vault: &Vault,
+        input: &Value,
+    ) -> Vec<String> {
+        let (true, PrincipalKind::Agent, Value::Map(m)) = (c.writes, p.kind, input) else {
+            return Vec::new();
+        };
+        let models = self.models.read().unwrap();
+        let Some(meta) = models.get(c.model) else {
+            return Vec::new();
+        };
+        m.iter()
+            .filter(|(k, v)| {
+                let Some(f) = meta.fields.iter().find(|f| f.name == k.as_str()) else {
+                    return false;
+                };
+                let class = f.class.unwrap_or(obop_types::DataClass::Secret);
+                let hidden = !matches!(mode_for(p.kind, class, f.personal_data), MaskMode::Allow);
+                let token = matches!(v, Value::Text(t) if vault.restore(t, |_| true).is_ok());
+                hidden && !token
+            })
+            .map(|(k, _)| format!("{}.{k}", c.model))
+            .collect()
     }
 
     /// Replace tokens in input text with the values they stand for, if the principal could read
@@ -2249,6 +2283,8 @@ mod keyexpr_parity;
 mod kinds_tests;
 #[cfg(test)]
 mod limits_tests;
+#[cfg(test)]
+mod masked_guess_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]

@@ -801,7 +801,7 @@ children_of = "move_id"                      # frozen while the move is
 
 A record is **frozen** when its state is in `immutable_when`, when its `lock_date` field falls on or before the date in the setting (or inside a period of the `closed_by` model whose select says `closed`), or when the parent named in `children_of` is frozen (up to four parents). Frozenness is decided by the record as it was stored when the call began, so an action that posts a record may still write what posting writes. On a frozen record:
 
-- `update` may change only `mutable_fields`; sending the record back unchanged is fine;
+- `update` may change only `mutable_fields`; sending the record back unchanged is fine (for an agent, a field it is shown masked is unchanged only when it sends back the token it was shown: a value in clear counts as a change whatever it is, so that the answer never tells whether a guess equals the stored value; the same holds for the rule that an action a module wraps is not mixed with an edit);
 - its state moves only along an `exit_to` edge, by that edge's action, which may also change its `may_change` fields (the fields it `needs` included);
 - `delete` is refused; so is deleting a record in a `no_delete_when` state;
 - its children cannot be added, changed, moved or deleted, and no record can be moved onto it;
