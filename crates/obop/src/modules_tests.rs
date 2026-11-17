@@ -486,7 +486,7 @@ fn the_tree_list_and_plan_commands_run() {
     let t = app.installer.tree(Some("timesheets")).unwrap();
     assert!(t.contains("timesheets 0.4.1"), "{t}");
     assert!(
-        t.contains("projects >=0.3, <1  [not installed, marketplace offers 0.5.1]"),
+        t.contains("projects >=0.3, <1  [not installed, marketplace offers 0.6.0]"),
         "{t}"
     );
     let t = app.installer.tree(Some("field_service")).unwrap();

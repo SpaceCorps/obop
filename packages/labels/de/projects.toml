@@ -32,6 +32,14 @@ description = "Datum, bis zu dem das Projekt fertig sein muss (YYYY-MM-DD)"
 label = "Budget"
 description = "Vereinbartes Budget für das Projekt (kleinste Währungseinheit, z. B. Cent)"
 
+[labels.de.model.projects_project.field.customer_id]
+label = "Kunde"
+description = "Der Kunde, dem die abrechenbare Zeit des Projekts in Rechnung gestellt wird"
+
+[labels.de.model.projects_project.field.hourly_rate]
+label = "Stundensatz"
+description = "Preis einer Stunde abrechenbarer Zeit, wenn die Zeit des Projekts abgerechnet wird (kleinste Währungseinheit, z. B. Cent)"
+
 [labels.de.model.projects_project.field.description]
 label = "Beschreibung"
 description = "Ziel und Umfang des Projekts"

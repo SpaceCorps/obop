@@ -32,6 +32,14 @@ description = "Datum då projektet måste vara klart (ÅÅÅÅ-MM-DD)"
 label = "Budget"
 description = "Överenskommen budget för projektet (valutans minsta enhet, till exempel ören)"
 
+[labels.sv.model.projects_project.field.customer_id]
+label = "Kund"
+description = "Kunden som projektets debiterbara tid faktureras"
+
+[labels.sv.model.projects_project.field.hourly_rate]
+label = "Timpris"
+description = "Priset för en timme debiterbar tid när projektets tid faktureras (minsta valutaenhet, t.ex. öre)"
+
 [labels.sv.model.projects_project.field.description]
 label = "Beskrivning"
 description = "Projektets mål och omfattning"
