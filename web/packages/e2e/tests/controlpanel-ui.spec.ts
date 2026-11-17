@@ -127,6 +127,11 @@ test.describe("control panel", () => {
     await panel.getByLabel(/^Title/).fill("First one");
     await panel.getByRole("button", { name: "Create" }).click();
     await expect.poll(async () => (await api.list("root", model)).length).toBe(1);
+    // The page has finished its create (it shows the saved record and has it in the list) before
+    // the address changes: a create still running when the search is opened would put its own
+    // address back after it, without the search (FLAKY2).
+    await expect(panel.getByRole("heading", { name: "First one" })).toBeVisible();
+    await expect(count(page)).toHaveText("1 record");
 
     await page.goto(
       `/#/${model}/${model}?view=list&st=${st([{ op: "search", v: "nothing like it" }])}`,
