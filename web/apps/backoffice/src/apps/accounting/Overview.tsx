@@ -78,7 +78,10 @@ export function AccountingOverview({ app }: { app: App }) {
         }),
         aggregate(d.token, LINE, {
           filter: [
-            { field: "reconciled", op: "eq", value: false },
+            // Not reconciled: an item whose flag was never set counts too (eq false misses it).
+            { field: "reconciled", op: "ne", value: true },
+            // An item a bank transaction pays is not overdue (accounting 0.5.0, computed).
+            { field: "settled", op: "eq", value: false },
             { field: "due_on", op: "lt", value: today() },
           ],
         }),
@@ -113,7 +116,8 @@ export function AccountingOverview({ app }: { app: App }) {
   const menu = useMemo(() => appMenu(app.module), [app.module]);
   const listOf = (name: string, facets: Cond[], extra: { id?: string } = {}) =>
     href({ app: app.id, model: name, st: encodeState({ facets, group: [] }), ...extra });
-  // The journal items' own "Overdue" filter (due_on < today && reconciled = false), as the count.
+  // The journal items' own "Overdue" filter (due_on < today && reconciled = false && settled =
+  // false), as the count.
   const lineModel = model(LINE);
   const overdueFilter =
     lineModel &&

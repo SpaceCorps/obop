@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Spotkania"
-description = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z datą, godziną rozpoczęcia i zakończenia oraz obiegiem statusów. Nakładanie się terminów nie jest blokowane automatycznie."
+description = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z datą, godziną rozpoczęcia i zakończenia oraz obiegiem statusów. Zasobu nie można zarezerwować dwa razy w nakładających się terminach ani, jeśli ma pojemność, więcej razy naraz, niż ona pozwala (z wyjątkiem spotkań anulowanych i nieodbytych)."
 summary = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z początkiem, końcem i obiegiem statusów."
 
 [labels.pl.model.appointments_resource]
@@ -102,3 +102,9 @@ description = "Rejestruje, że uczestnik nie przyszedł"
 
 [labels.pl.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Spotkanie kończy się, zanim się zacznie: ustaw godzinę zakończenia po rozpoczęciu"
+
+[labels.pl.model.appointments_appointment.rule.ends_after_start]
+message = "Spotkanie kończy się, zanim się zacznie: ustaw godzinę zakończenia po rozpoczęciu"
+
+[labels.pl.model.appointments_appointment.rule.no_double_booking]
+message = "Zasób jest już zarezerwowany w tym czasie: wybierz inną godzinę lub inny zasób"

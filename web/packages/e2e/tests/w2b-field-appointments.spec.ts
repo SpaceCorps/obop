@@ -66,9 +66,9 @@ test.describe("Appointments: book a free slot", () => {
         .click();
 
       const slots = page.getByRole("group", { name: "Free times" });
-      await expect(slots.getByRole("button", { name: "10:00 AM" })).toBeDisabled();
-      await expect(slots.getByRole("button", { name: "10:30 AM" })).toBeDisabled();
-      await expect(slots.getByRole("button", { name: "09:30 AM" })).toBeEnabled();
+      await expect(slots.getByRole("button", { name: "10:00", exact: true })).toBeDisabled();
+      await expect(slots.getByRole("button", { name: "10:30", exact: true })).toBeDisabled();
+      await expect(slots.getByRole("button", { name: "09:30", exact: true })).toBeEnabled();
 
       // A time that overlaps the booking is named before saving.
       await page.getByRole("textbox", { name: "Start", exact: true }).fill("10:15");
@@ -79,17 +79,25 @@ test.describe("Appointments: book a free slot", () => {
       // through like the booked 10:00.
       await page.getByRole("textbox", { name: "Start", exact: true }).fill("09:00");
       await page.getByRole("textbox", { name: "End", exact: true }).fill("10:00");
-      await expect(slots.getByRole("button", { name: "09:30 AM" })).toHaveClass(/is-short/);
-      await expect(slots.getByRole("button", { name: "10:00 AM" })).toHaveClass(/is-booked/);
+      await expect(slots.getByRole("button", { name: "09:30", exact: true })).toHaveClass(
+        /is-short/,
+      );
+      await expect(slots.getByRole("button", { name: "10:00", exact: true })).toHaveClass(
+        /is-booked/,
+      );
       await expect(page.getByText(/Dashed: free, but too short for 60 minutes/)).toBeVisible();
 
       // Later in the day the slots that have begun are past: not offered, and said so.
       await page.clock.setFixedTime(new Date(`${day}T10:40:00Z`));
       await page.getByRole("textbox", { name: "Start", exact: true }).fill("08:00");
-      await expect(slots.getByRole("button", { name: "08:00 AM" })).toHaveClass(/is-past/);
-      await expect(slots.getByRole("button", { name: "08:00 AM" })).toBeDisabled();
-      await expect(slots.getByRole("button", { name: "10:30 AM" })).toHaveClass(/is-past/);
-      await expect(slots.getByRole("button", { name: "11:00 AM" })).toBeEnabled();
+      await expect(slots.getByRole("button", { name: "08:00", exact: true })).toHaveClass(
+        /is-past/,
+      );
+      await expect(slots.getByRole("button", { name: "08:00", exact: true })).toBeDisabled();
+      await expect(slots.getByRole("button", { name: "10:30", exact: true })).toHaveClass(
+        /is-past/,
+      );
+      await expect(slots.getByRole("button", { name: "11:00", exact: true })).toBeEnabled();
       await expect(page.getByText("Earlier times today have passed.")).toBeVisible();
       // Late in the evening nothing is left today, and the line says so rather than "fully booked".
       await page.clock.setFixedTime(new Date(`${day}T23:00:00Z`));
@@ -100,7 +108,7 @@ test.describe("Appointments: book a free slot", () => {
       await page.getByRole("textbox", { name: "Start", exact: true }).fill("09:00");
 
       // A free slot fills Start and End and the clash is gone.
-      await slots.getByRole("button", { name: "11:00 AM" }).click();
+      await slots.getByRole("button", { name: "11:00", exact: true }).click();
       await expect(page.getByRole("textbox", { name: "Start", exact: true })).toHaveValue("11:00");
       await expect(page.getByRole("textbox", { name: "End", exact: true })).toHaveValue("12:00");
       await expect(page.getByRole("alert").filter({ hasText: "Clashes with" })).toHaveCount(0);

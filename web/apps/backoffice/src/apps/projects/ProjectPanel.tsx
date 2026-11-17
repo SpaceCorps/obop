@@ -230,7 +230,8 @@ export function ProjectPanel({ row, busy }: RecordExtProps) {
               )}
             </ul>
           )}
-          {task.can_create && (
+          {/* A done project takes no new task; the server refuses one too (ref_filter). */}
+          {task.can_create && row.state !== "done" && (
             <form className="prj-add" onSubmit={(e) => void add(e)}>
               <Icon name="plus" size={16} />
               <input

@@ -142,6 +142,17 @@ pub(crate) fn check_text_limits(
         .map_err(|b| breach(model, f, b, "", say_value))
 }
 
+/// A written day (`YYYY-MM-DD`) against `min` and `max` of its `date` field (K45).
+pub(crate) fn check_date_limits(
+    model: &str,
+    f: &FieldDef,
+    day: &str,
+    say_value: bool,
+) -> Result<(), String> {
+    f.check_date(day)
+        .map_err(|b| breach(model, f, b, day, say_value))
+}
+
 /// A written whole number (`number` or `money`) against `min` and `max` of its field (D90).
 pub(crate) fn check_int_limits(
     model: &str,

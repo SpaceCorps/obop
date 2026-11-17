@@ -62,11 +62,11 @@ description = "Tag, an dem die Sitzung abgeschlossen wurde (YYYY-MM-DD)"
 
 [labels.de.model.pos_session.field.opening_cash]
 label = "Kassenanfangsbestand"
-description = "Beim Öffnen gezähltes Bargeld in der Schublade (kleinste Währungseinheit)"
+description = "Beim Öffnen gezähltes Bargeld in der Schublade (kleinste Währungseinheit); ohne Angabe der beim letzten Schließen der Kasse gezählte Betrag, sonst der übliche Anfangsbestand der Kasse"
 
 [labels.de.model.pos_session.field.expected_cash]
 label = "Kassensollbestand"
-description = "Bargeld, das die Schublade beim Schließen enthalten sollte: Anfangsbestand plus Barzahlungen (erfasst, nicht berechnet)"
+description = "Bargeld, das die Schublade beim Schließen enthalten sollte: Anfangsbestand plus die Barzahlungen der bezahlten Verkäufe der Sitzung"
 
 [labels.de.model.pos_session.field.closing_cash]
 label = "Kassenendbestand"
@@ -74,7 +74,7 @@ description = "Beim Schließen tatsächlich gezähltes Bargeld in der Schublade"
 
 [labels.de.model.pos_session.field.cash_difference]
 label = "Kassendifferenz"
-description = "Endbestand minus Sollbestand; negativ bedeutet, es fehlt Geld"
+description = "Endbestand minus Sollbestand, sobald der Endbestand gezählt ist; negativ bedeutet, es fehlt Geld"
 
 [labels.de.model.pos_session.field.note]
 label = "Notiz"
@@ -226,7 +226,27 @@ description = "Referenz des Kartenterminals oder Zahlungsanbieters; nie eine Kar
 
 [labels.de.model.pos_order.field.stock_location_id]
 label = "Lagerort"
-description = "Woher die Ware den Bestand verlässt; das Bezahlen erzeugt die Lagerbewegungen von diesem Ort"
+description = "Woher die Ware den Bestand verlässt; das Bezahlen erzeugt die Lagerbewegungen von diesem Ort; ohne Angabe der Lagerort der Sitzung"
 
 [labels.de.model.pos_order.action.pay.assert.covered]
 message = "Die Zahlungen decken die Summe des Verkaufs nicht: Erfassen Sie eine Zahlung für den Rest"
+
+[labels.de.model.pos_config.field.stock_location_id]
+label = "Lagerort"
+description = "Woher die an dieser Kasse verkaufte Ware den Bestand verlässt; ihre Sitzungen und Verkäufe übernehmen ihn, und das Bezahlen erzeugt dann die Lagerbewegungen"
+
+[labels.de.model.pos_session.field.closed_expected_cash]
+label = "Kassensollbestand beim Schließen"
+description = "Der Kassensollbestand zum Zeitpunkt des Schließens, von der Aktion Schließen festgehalten; Sollbestand und Kassendifferenz einer geschlossenen Sitzung werden daraus gelesen"
+
+[labels.de.model.pos_session.field.closed_at]
+label = "Geschlossen um"
+description = "Wann die Sitzung geschlossen wurde (UTC); die zuletzt geschlossene Sitzung einer Kasse schlägt den nächsten Anfangsbestand vor"
+
+[labels.de.model.pos_session.field.stock_location_id]
+label = "Lagerort"
+description = "Woher die in dieser Sitzung verkaufte Ware den Bestand verlässt; ohne Angabe der Lagerort der Kasse"
+
+[labels.de.model.pos_order.field.cash_paid]
+label = "Bar bezahlt"
+description = "Der in bar bezahlte Teil der Zahlungen (kleinste Währungseinheit)"

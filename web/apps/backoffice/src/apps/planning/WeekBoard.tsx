@@ -26,18 +26,28 @@ import { addDays, mondayOf, weekDays } from "./week.ts";
 import "./planning.css";
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
+/** A real calendar day written `YYYY-MM-DD`. */
+const isDay = (v: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T12:00:00Z`));
 const OPEN_ROW = "";
 
 export function WeekBoard(p: ModelPageProps) {
   const d = useData();
   const narrow = useMedia(NARROW);
   const today = isoDate(new Date());
-  // The week the person was planning comes back after a shift is opened and closed.
-  const [monday, setMondayState] = useState(() => rememberedWeek() ?? mondayOf(today));
+  // The week is in the address (`&week=` and its Monday), so a reload or a shared link opens the
+  // same week; the week the person was planning also comes back after a shift is opened and closed.
+  const asked = isDay(p.route.week) ? mondayOf(p.route.week) : null;
+  const monday = asked ?? rememberedWeek() ?? mondayOf(today);
   const setMonday = (m: string) => {
     rememberWeek(m);
-    setMondayState(m);
+    p.go({ ...p.route, week: m }, { replace: true });
   };
+  useEffect(() => {
+    if (asked) rememberWeek(asked);
+    else p.go({ ...p.route, week: monday }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
   const [asking, setAsking] = useState(false);
   const days = useMemo(() => weekDays(monday), [monday]);
   const [shifts, setShifts] = useState<Row[] | null>(null);

@@ -7,6 +7,7 @@ use obop_commands::{CallError, Principal, Surface, Value, Vault};
 use obop_connectors::catalog::providers;
 use obop_connectors::webhook::{self, Scheme};
 use obop_connectors::{Config, SecretBox};
+use obop_registry::FieldKind as FieldKindForTest;
 use serde_json::{Value as J, json};
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -2488,7 +2489,18 @@ fn site_snapshot() -> String {
                 out.push_str(&format!("kind = {:?}\n", f.kind.name()));
             }
             if !f.kind.options().is_empty() {
-                out.push_str(&format!("options = {:?}\n", f.kind.options()));
+                // The website's formatter (`vp check` in web/apps/site) breaks a line longer than
+                // 100 characters into one option per line; the snapshot is written that way.
+                let line = format!("options = {:?}", f.kind.options());
+                if line.len() <= 100 {
+                    out.push_str(&format!("{line}\n"));
+                } else {
+                    out.push_str("options = [\n");
+                    for o in f.kind.options() {
+                        out.push_str(&format!("  {o:?},\n"));
+                    }
+                    out.push_str("]\n");
+                }
             }
             if let Some(to) = f.kind.target() {
                 out.push_str(&format!("to = {to:?}\n"));
@@ -3879,4 +3891,43 @@ fn a_name_that_fails_the_read_check_signs_a_slack_message_as_the_default() {
             "{what}: {text}"
         );
     }
+}
+
+/// GitHub issue 108: the provider of a connector setting and of a connection is picked from the
+/// catalogue (a select of the catalogue ids, so every surface lists them), and a refusal of an
+/// unknown provider names the ids that are accepted, with their names.
+#[test]
+fn the_provider_is_picked_from_the_catalogue_and_a_wrong_one_names_the_choices() {
+    let m = module();
+    let ids: Vec<&str> = providers().iter().map(|p| p.id).collect();
+    for model in ["provider_policy", "connection"] {
+        let f = m
+            .models
+            .iter()
+            .find(|x| x.name == model)
+            .and_then(|x| x.fields.iter().find(|f| f.name == "provider"))
+            .expect("declared");
+        match &f.kind {
+            FieldKindForTest::Select(o) => assert_eq!(o.to_vec(), ids, "{model}"),
+            other => panic!("{model}.provider is {other:?}, not a select of the catalogue"),
+        }
+    }
+    let e = env();
+    let refused = err(
+        &e,
+        &admin(),
+        "provider_policy.create",
+        json!({"provider": "Webhook (send)"}),
+    );
+    assert!(refused.contains("unknown provider"), "{refused}");
+    assert!(
+        refused.contains("webhook_out (Webhook (send))"),
+        "the choices are named: {refused}"
+    );
+    ok(
+        &e,
+        &admin(),
+        "provider_policy.create",
+        json!({"provider": "webhook_out"}),
+    );
 }

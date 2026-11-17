@@ -320,7 +320,7 @@ description = "Name von Zahler oder Empfänger, wie die Bank ihn meldet"
 
 [labels.de.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "IBAN Gegenpartei"
-description = "Bankkonto von Zahler oder Empfänger"
+description = "IBAN von Zahler oder Empfänger"
 
 [labels.de.model.accounting_bank_statement_line.field.move_line_id]
 label = "Buchungszeile"
@@ -367,3 +367,13 @@ message = "Die Buchung ist nicht ausgeglichen: Summe Soll und Summe Haben müsse
 
 [labels.de.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Wählen Sie die Buchungszeile, zu der diese Banktransaktion gehört"
+
+[labels.de.model.accounting_fiscal_year.rule.ends_after_start]
+message = "Das Geschäftsjahr endet, bevor es beginnt: Legen Sie einen letzten Tag am oder nach dem ersten Tag fest"
+
+[labels.de.model.accounting_period.rule.ends_after_start]
+message = "Die Periode endet, bevor sie beginnt: Legen Sie einen letzten Tag am oder nach dem ersten Tag fest"
+
+[labels.de.model.accounting_move_line.field.settled]
+label = "Beglichen"
+description = "Ob eine Banktransaktion diesen Forderungs- oder Verbindlichkeitsposten begleicht (ihr settles_line_id nennt ihn); berechnet, daher zeigt es auch eine gebuchte Zeile"

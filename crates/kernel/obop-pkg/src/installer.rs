@@ -661,19 +661,24 @@ impl Installer {
             return Err(owned_model_refusal(x.name, &owner));
         }
         // Registers the generated commands and, from the transitions declared in the registry
-        // metadata, the guards that govern state fields (D48).
-        d.register_crud(module, &self.store);
-        self.ours
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(module.id.clone());
-        for model in &m.model {
-            for a in &model.action {
-                d.register_transition(module, intern(&model.name), &a.name, &self.store);
+        // metadata, the guards that govern state fields (D48). The id is the package's from here
+        // on: a module of the program can no longer register under it (K57).
+        let public = d.as_package(&module.id, || {
+            d.register_crud(module, &self.store);
+            self.ours
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(module.id.clone());
+            for model in &m.model {
+                for a in &model.action {
+                    d.register_transition(module, intern(&model.name), &a.name, &self.store);
+                }
             }
-        }
-        // Public exposure (D50) takes effect only once the models exist; the gate runs again.
-        if let Err(e) = d.register_public(&m.module.id, m.public_specs()?) {
+            // Public exposure (D50) takes effect only once the models exist; the gate runs again.
+            m.public_specs()
+                .and_then(|specs| d.register_public(&m.module.id, specs))
+        });
+        if let Err(e) = public {
             self.unregister(&d, &m.module.id);
             return Err(e);
         }

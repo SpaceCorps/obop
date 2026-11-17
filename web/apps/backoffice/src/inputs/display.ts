@@ -66,10 +66,13 @@ export function clockText(minutes: unknown): string {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
-/** "14:30", "14.30", "1430" or "14" as minutes after midnight; `null` otherwise. */
+/**
+ * "14:30", "14.30", "14,30", "1430" or "14" as minutes after midnight; `null` otherwise. The comma
+ * is what a German phone's number keypad offers in place of the colon.
+ */
 export function parseClock(text: string): number | null {
   const s = text.trim();
-  const m = /^(\d{1,2})(?:[:.h]?(\d{2}))?$/.exec(s);
+  const m = /^(\d{1,2})(?:[:.,h]?(\d{2}))?$/.exec(s);
   if (!m) return null;
   const h = Number(m[1]);
   const mi = m[2] ? Number(m[2]) : 0;

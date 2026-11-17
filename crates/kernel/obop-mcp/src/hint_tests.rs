@@ -28,7 +28,11 @@ fn module() -> Module {
         models: vec![
             model(
                 "mh_product",
-                vec![f("name"), f("price").kind(FieldKind::Money)],
+                vec![
+                    f("name"),
+                    f("price").kind(FieldKind::Money),
+                    F::new("email", "d", DataClass::PublicDirectory, true, U),
+                ],
                 vec![],
             ),
             model(
@@ -170,4 +174,30 @@ fn the_metadata_carries_the_hints() {
     }
     assert_eq!(line["actions"][0]["ui"], json!({"primary": true}));
     assert!(line.get("ui").is_none() && line.get("children").is_none());
+}
+
+#[test]
+fn the_metadata_says_which_fields_an_agent_reads_masked() {
+    let (d, ann) = rig();
+    let field = |meta: &J, n: &str| {
+        meta["modules"][0]["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["name"] == "mh_product")
+            .unwrap()["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["name"] == n)
+            .unwrap()
+            .clone()
+    };
+    // A person reads personal data in clear and may sort by it (R13): no mark.
+    let person = meta_json(&d, Surface::Rest, &ann);
+    assert!(field(&person, "email").get("masked").is_none());
+    let bot = Principal::agent("bot", &[U], &[U]);
+    let agent = meta_json(&d, Surface::Rest, &bot);
+    assert_eq!(field(&agent, "email")["masked"], true);
+    assert!(field(&agent, "name").get("masked").is_none());
 }

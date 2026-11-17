@@ -1,13 +1,14 @@
 import { useRef, useState } from "react";
 import type { FieldMeta, Row } from "../api.ts";
-import { fromEdit, toEdit, type Edit } from "../edit.ts";
+import { fromEdit, sameAsStored, toEdit, type Edit } from "../edit.ts";
 import { FieldInput } from "../fields.tsx";
 import { rowCurrency } from "../format.ts";
 
 /**
  * A cell turned into an input: Enter saves, Escape cancels, a select or switch saves when changed.
  * Tab and Shift+Tab save and move to the next or previous editable cell of the row (`advance`), as
- * in a spreadsheet; leaving the cell any other way cancels.
+ * in a spreadsheet. Leaving the cell (a click elsewhere) saves what was changed too (#87); only
+ * Escape cancels. A value the server refuses keeps the cell open with the reason.
  */
 export function InlineEdit(props: {
   field: FieldMeta;
@@ -27,7 +28,8 @@ export function InlineEdit(props: {
   const finished = useRef(false);
 
   async function commit(v: Edit, then: () => void = props.done) {
-    const same = toEdit(f, row[f.name], currency) === v;
+    // An unset switch shown as No is a change when saved: it writes an explicit false (#98).
+    const same = sameAsStored(f, row[f.name], v, currency);
     const r = fromEdit(f, v, currency, same);
     if ("error" in r) return setError(r.error);
     const finish = () => {
@@ -48,7 +50,10 @@ export function InlineEdit(props: {
       onClick={(e) => e.stopPropagation()}
       onBlur={(e) => {
         if (finished.current || busy) return;
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) props.done();
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        // Only what was typed is saved on the way out: a look at an unset switch writes nothing.
+        if (value === toEdit(f, row[f.name], currency)) props.done();
+        else void commit(value);
       }}
     >
       <FieldInput
@@ -70,6 +75,7 @@ export function InlineEdit(props: {
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             e.stopPropagation();
+            finished.current = true;
             props.done();
           } else if (e.key === "Tab" && props.advance) {
             e.preventDefault();
