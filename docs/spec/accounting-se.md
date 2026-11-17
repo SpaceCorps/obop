@@ -24,7 +24,7 @@ Two rules shape every stage.
 | 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | `packages/accounting_se.toml` (bundled in the catalogue; labels in de, fr, pl, fi, sv and es are machine-drafted); the boxes are computed from the ledger by `vat_computation.compute` (section 3.2); UNVERIFIED, never compared with Skatteverket or run on PostgreSQL |
 | 3. SIE 4 | Import and export of SIE 4 files | Built: the crate `obop-sie` (file format) and the commands `obop sie export|import` and `sie_exchange.export|import` (section 4.1); tested on generated files only, NOT checked against the official SIE specification, never run against Fortnox, Visma or a real file |
 | 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Built for company, accounts, vouchers with entries, customers and receipts (`crates/obop/src/import_oas/`, section 5.3); invoices, payroll, bank, time are listed as skipped; tested against generated data only, never against real books |
-| 5. Invoices | Customer invoices with the ledger voucher | First slice: `invoice_posting.create_move` books a posted invoice as a draft move (section 6); UNVERIFIED against Swedish invoice and VAT rules; credit notes, EU and export cases, payment matching not built |
+| 5. Invoices | Customer invoices with the ledger voucher | First slice: `invoice_posting.create_move` books a posted invoice as a draft move (section 6); UNVERIFIED against Swedish invoice and VAT rules; `invoice_credit.create` credits a booked invoice with a draft credit invoice and a draft reversing move (section 6.2); EU and export cases, posting a credit invoice, payment matching not built |
 | 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Data model only, in `packages/contrib/payroll_se/payroll_se.toml` ([payroll-se.md](payroll-se.md); installable by upload, not bundled; every rate and rule UNVERIFIED, nothing seeded); no computation, no AGI XML |
 | 7. Receipts and bank | Receipt archive, bank lines, matching | First slice: `bank_matching.suggest` and `bank_matching.book` (section 7.1) match a bank line to a posted invoice by exact amount and book it as a draft move; UNVERIFIED; receipts matching, scoring, Swedish bank file import and reconciliation not built |
 | 8. Time tracking | Projects, time entries, billing | First slice built: `time_billing.create_invoice` bills approved time as a draft `invoice` (section 7.2); payroll-style extras, project rates and customers on the project, grouping and VAT are not built |
@@ -162,6 +162,18 @@ Built in `crates/obop/src/invoice_posting.rs` (typed command on REST and MCP, li
 - idempotent: a row of `invoice_posting` (invoice id, move id) is the link; a second run for the invoice is refused and writes nothing. The check and the link write are not one transaction: two simultaneous runs could both pass the check (a draft move would be doubled, never posted);
 - governed: the move is a draft and gapless numbering is untouched. Posting is `accounting_move.post` (`accounting.approver`, approval). An agent may only `dry_run`;
 - UNVERIFIED: nothing is checked against Swedish invoice requirements or the VAT act; the invoice currency is not compared with the ledger's; there is no customer snapshot, due date, payment term, OCR number or e-invoice. Gaps in the surfaces: docs/ISSUES.md K60.
+
+### 6.2 `invoice_credit.create`
+
+Built in `crates/obop/src/invoice_credit.rs` (typed command on REST and MCP, like `invoice_posting.create_move`; the idea comes from OAS `credit_invoice`, not its code). The caller names `invoice` (id or number) and optionally `date` (default: the date of the original move).
+
+- needs a **posted** invoice with an `invoice_posting` move that is not cancelled; a draft or cancelled invoice, an invoice without a move, a credit invoice (it is the `credit_invoice_id` of a link) and an invoice that already has a credit are refused in words, nothing is written;
+- creates a **draft** credit `invoice` (same party and currency) with the original lines: same description and quantity, **negative `unit_price_minor`**. `invoice_line.quantity` is a whole number and `total_minor` is the sum of line amounts, so a negative unit price is the simplest correct form; the credit total is negative. `invoice.post` asserts `total_minor > 0`, so the credit invoice cannot be posted yet (K64);
+- creates a **draft** `accounting_move` in the journal of the original move that swaps debit and credit of every line of the original move (account, label and `tax_id` kept, so a posted reversal nets the VAT base and VAT out of `vat_computation.compute`). It is not posted: posting is `accounting_move.post`;
+- idempotent: a row of `invoice_credit` (original id, credit invoice id, move id) is the link. The check and the link write are not one transaction (as K60);
+- when the original was built by `time_billing`, its link rows are deleted, so the entries are billed again by the next `time_billing.create_invoice`; the answer says how many (`freed_entries`). If the credit invoice is later cancelled the entries stay freed and the link stays, so the original cannot be credited a second time;
+- governed: needs `invoicing.user` and `accounting.user`; an agent may only `dry_run`. Integer minor units, no float;
+- UNVERIFIED: nothing is checked against Swedish credit note rules (required wording, reference to the original, VAT reporting period of the reversal) or the VAT act. Gaps: docs/ISSUES.md K64.
 
 ## 7. Stage 6 to 8: payroll, receipts and bank, time
 

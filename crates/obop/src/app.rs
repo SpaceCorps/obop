@@ -66,6 +66,7 @@ impl App {
         crate::sie::command::register(&d, &store);
         crate::vat::register(&d, &store);
         crate::invoice_posting::register(&d, &store);
+        crate::invoice_credit::register(&d, &store);
         crate::time_billing::register(&d, &store);
         crate::bank_matching::register(&d, &store);
         crate::stock_count::register(&d, &store);

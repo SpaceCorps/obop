@@ -29,6 +29,7 @@ const KNOWN_OMITTED: &[&str] = &[
     "instance_update.rollback",
     "instance_update.start",
     "instance_update.status",
+    "invoice_credit.create",
     "invoice_posting.create_move",
     "mileage_point.delete",
     "mileage_point.update",
