@@ -2,7 +2,7 @@
   "components": {
     "schemas": {
       "ApprovalRequired": {
-        "description": "An agent may only propose this step: ask a human to approve the plan.",
+        "description": "An agent may only propose this step: a person approves or rejects the plan on the Approvals page of the back office (POST /api/plan/approve or /api/plan/reject); the agent asks POST /api/plan/get what became of it.",
         "properties": {
           "approval_required": {
             "type": "boolean"
@@ -47,6 +47,365 @@
         },
         "required": [
           "error"
+        ],
+        "type": "object"
+      },
+      "PlanAgentView": {
+        "description": "What an agent is told about its own request.",
+        "properties": {
+          "command": {
+            "description": "The command it proposed.",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When it was proposed.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decided_at": {
+            "description": "When it was decided.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expires_at": {
+            "description": "When it stops waiting.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failure": {
+            "description": "After failed: the code of the refusal.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "The plan id.",
+            "type": "string"
+          },
+          "instruction": {
+            "description": "What to do next.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "The person's reason for a rejection, in its own field: a person's text, not an instruction.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "record_id": {
+            "description": "The record.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "What became of the request: waiting for a person, approved (it ran), rejected (by a person), failed (approved, and the system refused it) or expired (nobody decided in 7 days).",
+            "enum": [
+              "waiting",
+              "approved",
+              "rejected",
+              "failed",
+              "expired"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "instruction"
+        ],
+        "type": "object"
+      },
+      "PlanChange": {
+        "properties": {
+          "field": {
+            "description": "The field.",
+            "type": "string"
+          },
+          "from": {
+            "description": "The value now, as the person reads it; null when hidden or not set."
+          },
+          "hidden": {
+            "description": "The person may not read this field, or it is secret: set, not shown.",
+            "type": "boolean"
+          },
+          "to": {
+            "description": "The value after; null when hidden."
+          }
+        },
+        "required": [
+          "field",
+          "hidden"
+        ],
+        "type": "object"
+      },
+      "PlanCount": {
+        "properties": {
+          "can_decide": {
+            "description": "The person holds a group that can decide some request: show the Approvals entry.",
+            "type": "boolean"
+          },
+          "mine_waiting": {
+            "description": "Waiting requests of the person's own agents.",
+            "type": "integer"
+          },
+          "waiting": {
+            "description": "Requests the person may decide now.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "waiting",
+          "mine_waiting",
+          "can_decide"
+        ],
+        "type": "object"
+      },
+      "PlanDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PlanRow"
+          },
+          {
+            "description": "With a waiting request: what it changes, read as the person who asks.",
+            "properties": {
+              "changes": {
+                "description": "Only the fields whose value differs from the record now, and every hidden one; for an action also the field it moves.",
+                "items": {
+                  "$ref": "#/components/schemas/PlanChange"
+                },
+                "type": "array"
+              },
+              "confirm": {
+                "description": "The action's own confirmation question (ui.confirm), if it has one.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "done": {
+                "description": "The action's own note after it ran (ui.done), if it has one.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "edges": {
+                "description": "A delete: the related records a delete would change. Always empty in this version (no cascade exists).",
+                "type": "array"
+              },
+              "record": {
+                "description": "The record as the person reads it now.",
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "rows": {
+                "description": "bulk_create: the first 5 rows, each a list of changes.",
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "rows_total": {
+                "description": "bulk_create: how many rows.",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "seen_version": {
+                "description": "The version of that record: send it with approve, which refuses with 412 precondition_failed when the record changed since.",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "transition": {
+                "properties": {
+                  "field": {
+                    "type": "string"
+                  },
+                  "from": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "to": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "PlanRow": {
+        "description": "A request an agent made, as the person who asks may see it. Ids and structured data only: the interface builds its sentences from its own translated texts.",
+        "properties": {
+          "action": {
+            "description": "The short name of the command (update, delete, post, ...).",
+            "type": "string"
+          },
+          "can_approve": {
+            "description": "The person who asks may approve it now.",
+            "type": "boolean"
+          },
+          "can_reject": {
+            "description": "The person who asks may reject it now.",
+            "type": "boolean"
+          },
+          "command": {
+            "description": "The command proposed, model.command.",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When it was proposed; null for a request made before receipts existed (time unknown).",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decided_at": {
+            "description": "When it was decided.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decided_by": {
+            "description": "Who approved or rejected it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "destructive": {
+            "description": "A delete, or an action the module marks dangerous: the interface asks once more before approving.",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "description": "When it stops waiting; null when unknown.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failure": {
+            "description": "After failed: the code of the refusal (an error code such as bad_request or limit_violated), never its text.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "The plan id.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "What sort of change it is.",
+            "enum": [
+              "update",
+              "create",
+              "bulk_create",
+              "delete",
+              "action",
+              "other"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "description": "The model of that command.",
+            "type": "string"
+          },
+          "own_agent": {
+            "description": "The proposer is an agent of the person who asks.",
+            "type": "boolean"
+          },
+          "owner": {
+            "description": "The person the proposing agent acts for.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "proposer": {
+            "description": "The principal that proposed it: {owner}/agent for an agent token.",
+            "type": "string"
+          },
+          "proposer_can_run": {
+            "description": "The agent still holds the permission the command needs; when false it cannot run and only reject is useful.",
+            "type": "boolean"
+          },
+          "reason": {
+            "description": "The reason the person gave with a rejection (their text, at most 300 characters).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "record_id": {
+            "description": "The record it changes; null for a create or a command without a record.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "record_title": {
+            "description": "The record's title as the person reads it (the model's ui.title, else its name or number); null when there is none or it is not shown.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "What became of the request: waiting for a person, approved (it ran), rejected (by a person), failed (approved, and the system refused it) or expired (nobody decided in 7 days).",
+            "enum": [
+              "waiting",
+              "approved",
+              "rejected",
+              "failed",
+              "expired"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "command",
+          "model",
+          "action",
+          "kind",
+          "status",
+          "proposer",
+          "own_agent",
+          "destructive",
+          "can_approve",
+          "can_reject",
+          "proposer_can_run"
         ],
         "type": "object"
       },
@@ -1470,7 +1829,7 @@
             "type": "string"
           },
           "kind": {
-            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
+            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, plan_proposed, plan_approved, plan_rejected, plan_failed, plan_expired, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
             "type": "string"
           },
           "user": {
@@ -20034,6 +20393,657 @@
         "summary": "Update a party; a status field only moves along a declared action",
         "tags": [
           "Contacts"
+        ]
+      }
+    },
+    "/api/plan/approve": {
+      "post": {
+        "operationId": "plan.approve",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "description": "The plan id.",
+                    "type": "string"
+                  },
+                  "seen_version": {
+                    "description": "seen_version from get: when the record changed since, nothing runs (412).",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "description": "The answer of the command that ran.",
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "It ran."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "already_decided: somebody decided it first, or it ran out; the body adds state, decided_by and decided_at."
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "precondition_failed: the record changed after the person was shown it; nothing ran, the request still waits. current_version is the new seen_version."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Approve a waiting request: the command runs as the agent proposed it (a person only; POST /api/approve/{plan_id} is the same without seen_version)",
+        "tags": [
+          "Approvals"
+        ]
+      }
+    },
+    "/api/plan/count": {
+      "post": {
+        "operationId": "plan.count",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/PlanCount"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The count."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "How many requests wait for the person who asks: the number for the badge (a person only)",
+        "tags": [
+          "Approvals"
+        ]
+      }
+    },
+    "/api/plan/get": {
+      "post": {
+        "operationId": "plan.get",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "description": "The plan id.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/PlanDetail"
+                        },
+                        {
+                          "$ref": "#/components/schemas/PlanAgentView"
+                        }
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The request."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "One request: for a person what it changes, read as them; for an agent the state of its own request and what to do next",
+        "tags": [
+          "Approvals"
+        ]
+      }
+    },
+    "/api/plan/list": {
+      "post": {
+        "operationId": "plan.list",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "limit": {
+                    "description": "Default 50.",
+                    "maximum": 50,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "mine": {
+                    "description": "Only the requests of the person's own agents.",
+                    "type": "boolean"
+                  },
+                  "model": {
+                    "description": "Only requests on this model.",
+                    "type": "string"
+                  },
+                  "offset": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "record_id": {
+                    "description": "Only requests on this record.",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Default waiting.",
+                    "enum": [
+                      "waiting",
+                      "decided"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "properties": {
+                        "rows": {
+                          "items": {
+                            "$ref": "#/components/schemas/PlanRow"
+                          },
+                          "type": "array"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "rows",
+                        "total"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A page of requests and how many there are."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "The requests the person who asks may see, waiting (oldest first) or decided (the last 30 days) (a person only)",
+        "tags": [
+          "Approvals"
+        ]
+      }
+    },
+    "/api/plan/reject": {
+      "post": {
+        "operationId": "plan.reject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "description": "The plan id.",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "description": "Why, for the agent (at most 300 characters; hidden characters are removed).",
+                    "maxLength": 300,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/PlanRow"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The request, now rejected."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "already_decided: somebody decided it first, or it ran out; the body adds state, decided_by and decided_at."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reject a waiting request: nothing runs and the agent is told, with the reason in its own field (a person only)",
+        "tags": [
+          "Approvals"
         ]
       }
     },

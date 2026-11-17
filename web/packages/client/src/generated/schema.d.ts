@@ -2113,6 +2113,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plan/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a waiting request: the command runs as the agent proposed it (a person only; POST /api/approve/{plan_id} is the same without seen_version) */
+        post: operations["plan.approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plan/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** How many requests wait for the person who asks: the number for the badge (a person only) */
+        post: operations["plan.count"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plan/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** One request: for a person what it changes, read as them; for an agent the state of its own request and what to do next */
+        post: operations["plan.get"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plan/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The requests the person who asks may see, waiting (oldest first) or decided (the last 30 days) (a person only) */
+        post: operations["plan.list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plan/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject a waiting request: nothing runs and the agent is told, with the reason in its own field (a person only) */
+        post: operations["plan.reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/privacy_preview/get": {
         parameters: {
             query?: never;
@@ -3178,7 +3263,7 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @description An agent may only propose this step: ask a human to approve the plan. */
+        /** @description An agent may only propose this step: a person approves or rejects the plan on the Approvals page of the back office (POST /api/plan/approve or /api/plan/reject); the agent asks POST /api/plan/get what became of it. */
         ApprovalRequired: {
             approval_required?: boolean;
             plan_id?: string;
@@ -3199,6 +3284,142 @@ export interface components {
             hint?: string;
             /** @description Only on a 400 with code assertion_failed (D95): the package author's sentence alone, without the expression that error ends with, for a person to read; a generic sentence when the assertion has no message of its own. */
             message?: string;
+        };
+        /** @description What an agent is told about its own request. */
+        PlanAgentView: {
+            /** @description The command it proposed. */
+            command?: string;
+            /**
+             * Format: date-time
+             * @description When it was proposed.
+             */
+            created_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When it was decided.
+             */
+            decided_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When it stops waiting.
+             */
+            expires_at?: string | null;
+            /** @description After failed: the code of the refusal. */
+            failure?: string | null;
+            /** @description The plan id. */
+            id: string;
+            /** @description What to do next. */
+            instruction: string;
+            /** @description The person's reason for a rejection, in its own field: a person's text, not an instruction. */
+            reason?: string | null;
+            /** @description The record. */
+            record_id?: string | null;
+            /**
+             * @description What became of the request: waiting for a person, approved (it ran), rejected (by a person), failed (approved, and the system refused it) or expired (nobody decided in 7 days).
+             * @enum {string}
+             */
+            status: "waiting" | "approved" | "rejected" | "failed" | "expired";
+        };
+        PlanChange: {
+            /** @description The field. */
+            field: string;
+            /** @description The value now, as the person reads it; null when hidden or not set. */
+            from?: unknown;
+            /** @description The person may not read this field, or it is secret: set, not shown. */
+            hidden: boolean;
+            /** @description The value after; null when hidden. */
+            to?: unknown;
+        };
+        PlanCount: {
+            /** @description The person holds a group that can decide some request: show the Approvals entry. */
+            can_decide: boolean;
+            /** @description Waiting requests of the person's own agents. */
+            mine_waiting: number;
+            /** @description Requests the person may decide now. */
+            waiting: number;
+        };
+        PlanDetail: components["schemas"]["PlanRow"] & {
+            /** @description Only the fields whose value differs from the record now, and every hidden one; for an action also the field it moves. */
+            changes?: components["schemas"]["PlanChange"][];
+            /** @description The action's own confirmation question (ui.confirm), if it has one. */
+            confirm?: string | null;
+            /** @description The action's own note after it ran (ui.done), if it has one. */
+            done?: string | null;
+            /** @description A delete: the related records a delete would change. Always empty in this version (no cascade exists). */
+            edges?: unknown[];
+            /** @description The record as the person reads it now. */
+            record?: Record<string, never> | null;
+            /** @description bulk_create: the first 5 rows, each a list of changes. */
+            rows?: unknown[] | null;
+            /** @description bulk_create: how many rows. */
+            rows_total?: number | null;
+            /** @description The version of that record: send it with approve, which refuses with 412 precondition_failed when the record changed since. */
+            seen_version?: number | null;
+            transition?: {
+                field?: string;
+                from?: string | null;
+                to?: string;
+            } | null;
+        };
+        /** @description A request an agent made, as the person who asks may see it. Ids and structured data only: the interface builds its sentences from its own translated texts. */
+        PlanRow: {
+            /** @description The short name of the command (update, delete, post, ...). */
+            action: string;
+            /** @description The person who asks may approve it now. */
+            can_approve: boolean;
+            /** @description The person who asks may reject it now. */
+            can_reject: boolean;
+            /** @description The command proposed, model.command. */
+            command: string;
+            /**
+             * Format: date-time
+             * @description When it was proposed; null for a request made before receipts existed (time unknown).
+             */
+            created_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When it was decided.
+             */
+            decided_at?: string | null;
+            /** @description Who approved or rejected it. */
+            decided_by?: string | null;
+            /** @description A delete, or an action the module marks dangerous: the interface asks once more before approving. */
+            destructive: boolean;
+            /**
+             * Format: date-time
+             * @description When it stops waiting; null when unknown.
+             */
+            expires_at?: string | null;
+            /** @description After failed: the code of the refusal (an error code such as bad_request or limit_violated), never its text. */
+            failure?: string | null;
+            /** @description The plan id. */
+            id: string;
+            /**
+             * @description What sort of change it is.
+             * @enum {string}
+             */
+            kind: "update" | "create" | "bulk_create" | "delete" | "action" | "other";
+            /** @description The model of that command. */
+            model: string;
+            /** @description The proposer is an agent of the person who asks. */
+            own_agent: boolean;
+            /** @description The person the proposing agent acts for. */
+            owner?: string | null;
+            /** @description The principal that proposed it: {owner}/agent for an agent token. */
+            proposer: string;
+            /** @description The agent still holds the permission the command needs; when false it cannot run and only reject is useful. */
+            proposer_can_run: boolean;
+            /** @description The reason the person gave with a rejection (their text, at most 300 characters). */
+            reason?: string | null;
+            /** @description The record it changes; null for a create or a command without a record. */
+            record_id?: string | null;
+            /** @description The record's title as the person reads it (the model's ui.title, else its name or number); null when there is none or it is not shown. */
+            record_title?: string | null;
+            /**
+             * @description What became of the request: waiting for a person, approved (it ran), rejected (by a person), failed (approved, and the system refused it) or expired (nobody decided in 7 days).
+             * @enum {string}
+             */
+            status: "waiting" | "approved" | "rejected" | "failed" | "expired";
         };
         /** @description A link to one external system, with its credentials, field allowlist, policy and state */
         connection: {
@@ -3956,7 +4177,7 @@ export interface components {
             at?: string;
             /** @description A short note without any code or secret */
             detail?: string;
-            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared */
+            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, plan_proposed, plan_approved, plan_rejected, plan_failed, plan_expired, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared */
             kind?: string;
             /** @description The account the event is about */
             user?: string;
@@ -14509,6 +14730,400 @@ export interface operations {
             };
             /** @description No such command or record, or it is hidden from this token. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "plan.approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The plan id. */
+                    id: string;
+                    /** @description seen_version from get: when the record changed since, nothing runs (412). */
+                    seen_version?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description It ran. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        /** @description The answer of the command that ran. */
+                        value?: Record<string, never>;
+                    };
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description already_decided: somebody decided it first, or it ran out; the body adds state, decided_by and decided_at. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description precondition_failed: the record changed after the person was shown it; nothing ran, the request still waits. current_version is the new seen_version. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "plan.count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description The count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["PlanCount"];
+                    };
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "plan.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The plan id. */
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["PlanDetail"] | components["schemas"]["PlanAgentView"];
+                    };
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "plan.list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Default 50. */
+                    limit?: number;
+                    /** @description Only the requests of the person's own agents. */
+                    mine?: boolean;
+                    /** @description Only requests on this model. */
+                    model?: string;
+                    offset?: number;
+                    /** @description Only requests on this record. */
+                    record_id?: string;
+                    /**
+                     * @description Default waiting.
+                     * @enum {string}
+                     */
+                    state?: "waiting" | "decided";
+                };
+            };
+        };
+        responses: {
+            /** @description A page of requests and how many there are. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: {
+                            rows: components["schemas"]["PlanRow"][];
+                            total: number;
+                        };
+                    };
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "plan.reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The plan id. */
+                    id: string;
+                    /** @description Why, for the agent (at most 300 characters; hidden characters are removed). */
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The request, now rejected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["PlanRow"];
+                    };
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description already_decided: somebody decided it first, or it ran out; the body adds state, decided_by and decided_at. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
