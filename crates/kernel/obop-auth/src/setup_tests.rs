@@ -4,7 +4,7 @@
 use super::*;
 use crate::mfa::EVENT_TABLE;
 use crate::mfa_tests::{T0, enforcing};
-use crate::setup::{SetupOpened, code_key_for_test};
+use crate::setup::{SetupOpened, code_key_for_test, new_code_for_test};
 use obop_commands::brand;
 use obop_commands::{ADMIN_GROUP, MfaApi, SetupApi, SetupError, SetupRequest};
 use obop_storage::testing::{Flaky, Mode};
@@ -94,11 +94,56 @@ fn a_code_is_twenty_symbols_of_a_thirty_two_symbol_alphabet_in_groups_of_five() 
 fn only_the_hash_of_a_code_is_kept_and_only_in_the_expiring_store() {
     let (a, b) = empty();
     let c = open(&a);
+    let bare: String = c.chars().filter(|x| *x != '-').collect();
+    // The key is the SHA-256 of the code, worked out here and not by the code under test.
+    let want = format!(
+        "auth.setup.code:{}",
+        hex(&Sha256::digest(
+            format!("obop-setup-code\n{bare}").as_bytes()
+        ))
+    );
     let held = b.kv_scan("").unwrap();
     assert_eq!(held.len(), 1);
-    assert_eq!(held[0].0, code_key_for_test(&c));
-    assert!(!held[0].0.contains(&c) && !held[0].1.contains(&c));
+    assert_eq!(held[0].0, want);
+    // While the code is in force, no value and no row anywhere holds it, with or without hyphens.
+    for (k, v) in &held {
+        for secret in [c.as_str(), bare.as_str(), &bare.to_lowercase()] {
+            assert!(!k.contains(secret) && !v.contains(secret), "{k} = {v}");
+        }
+    }
+    let mut rows = Vec::new();
+    b.export(100, &mut |batch| {
+        rows.extend(batch.iter().map(|(m, i, f)| format!("{m} {i} {f:?}")));
+        Ok(())
+    })
+    .unwrap();
+    assert!(!rows.is_empty());
+    for row in &rows {
+        assert!(!row.contains(&c) && !row.contains(&bare), "{row}");
+    }
     assert_eq!(b.total().unwrap(), events(&b, "setup_open").len());
+}
+
+#[test]
+fn the_key_of_a_code_is_the_sha256_of_its_normal_form() {
+    // A fixed code and its digest, worked out once outside the program: a key that held the code
+    // itself, or another digest, is red here.
+    assert_eq!(
+        code_key_for_test(" abcde fghjk-LMNPQ-rstuv "),
+        "auth.setup.code:976f21c007b0abf07efe9311f3d9bbc70dd1595e17733969ecf102882f4374ef"
+    );
+}
+
+#[test]
+fn every_one_of_the_thirty_two_symbols_is_used_and_a_code_lives_sixty_minutes() {
+    // 20 symbols of 32, each from one random byte with no bias: every symbol turns up. A mask that
+    // used fewer symbols (fewer bits) is red here.
+    let mut seen = std::collections::BTreeSet::new();
+    for _ in 0..300 {
+        seen.extend(new_code_for_test().chars().filter(|x| *x != '-'));
+    }
+    assert_eq!(seen.len(), 32, "{seen:?}");
+    assert_eq!(CODE_TTL_MS, 3_600_000, "60 minutes (rule 1)");
 }
 
 #[test]
@@ -181,9 +226,18 @@ fn with_the_code_bad_input_is_refused_before_anything_is_written() {
     r.username = "root";
     r.password = "short";
     assert!(matches!(a.complete(&r), Err(SetupError::Invalid(m)) if m.contains("12")));
+    // A short password with a name the brand would take: the name is not written either.
+    r.instance_name = Some("Acme Test");
+    assert!(matches!(a.complete(&r), Err(SetupError::Invalid(m)) if m.contains("12")));
+    assert!(
+        !brand_row(&b),
+        "the password is checked before the name is written"
+    );
     r.password = PW;
     r.instance_name = Some("<b>bad</b>");
-    assert!(matches!(a.complete(&r), Err(SetupError::Invalid(m)) if m.starts_with("name")));
+    assert!(
+        matches!(a.complete(&r), Err(SetupError::InstanceNameRefused(m)) if m.starts_with("name"))
+    );
     assert_eq!(accounts(&b), 0);
     assert!(
         !brand_row(&b),
@@ -253,18 +307,36 @@ fn a_count_of_accounts_the_store_refuses_is_an_error_and_never_open() {
 
 #[test]
 fn the_eleventh_attempt_from_one_address_is_refused_with_the_wait_even_with_the_right_code() {
+    // The numbers of the rule, written out: 10 in 10 minutes per address.
+    // The tenth attempt is still allowed: nine wrong codes, then the right one.
+    let (a, _) = empty();
+    let c = open(&a);
+    for _ in 0..9 {
+        assert_eq!(
+            a.complete(&req("192.0.2.1", "AAAAA", "root")),
+            Err(SetupError::CodeInvalid)
+        );
+    }
+    a.complete(&req("192.0.2.1", &c, "root")).unwrap();
+
+    // The eleventh is not, with the right code either, and the wait is the rest of ten minutes.
     let (a, b) = empty();
     let c = open(&a);
-    for _ in 0..ADDR_MAX {
+    for _ in 0..10 {
         assert_eq!(
             a.complete(&req("192.0.2.1", "AAAAA", "root")),
             Err(SetupError::CodeInvalid)
         );
     }
     match a.complete(&req("192.0.2.1", &c, "root")) {
-        Err(SetupError::RateLimited(s)) => assert!((1..=600).contains(&s)),
+        Err(SetupError::RateLimited(s)) => assert!((590..=600).contains(&s), "{s}"),
         other => panic!("{other:?}"),
     }
+    let window = b
+        .counter_ttl_ms("rl:setup:addr:192.0.2.1")
+        .unwrap()
+        .unwrap();
+    assert!((590_000..=600_000).contains(&window), "{window}");
     assert_eq!(accounts(&b), 0);
     // Another address is not held back by it.
     a.complete(&req("192.0.2.2", &c, "root")).unwrap();
@@ -272,19 +344,65 @@ fn the_eleventh_attempt_from_one_address_is_refused_with_the_wait_even_with_the_
 
 #[test]
 fn the_sixty_first_attempt_in_an_hour_is_refused_for_every_address() {
-    let (a, b) = empty();
+    // The numbers of the rule, written out: 60 an hour for the whole instance.
+    // The sixtieth is still allowed: 59 wrong codes from as many addresses, then the right one.
+    let (a, _) = empty();
     let c = open(&a);
-    for i in 0..ALL_MAX {
-        let addr = format!("198.51.100.{i}");
+    for i in 0..59 {
         assert_eq!(
-            a.complete(&req(&addr, "AAAAA", "root")),
+            a.complete(&req(&format!("198.51.100.{i}"), "AAAAA", "root")),
             Err(SetupError::CodeInvalid)
         );
     }
-    assert!(matches!(
-        a.complete(&req("203.0.113.9", &c, "root")),
-        Err(SetupError::RateLimited(_))
-    ));
+    a.complete(&req("203.0.113.9", &c, "root")).unwrap();
+
+    // The sixty-first is not, from a fresh address and with the right code, for the rest of the
+    // hour.
+    let (a, b) = empty();
+    let c = open(&a);
+    for i in 0..60 {
+        assert_eq!(
+            a.complete(&req(&format!("198.51.100.{i}"), "AAAAA", "root")),
+            Err(SetupError::CodeInvalid)
+        );
+    }
+    match a.complete(&req("203.0.113.9", &c, "root")) {
+        Err(SetupError::RateLimited(s)) => assert!((3590..=3600).contains(&s), "{s}"),
+        other => panic!("{other:?}"),
+    }
+    let window = b.counter_ttl_ms("rl:setup:all").unwrap().unwrap();
+    assert!((3_590_000..=3_600_000).contains(&window), "{window}");
+    assert_eq!(accounts(&b), 0);
+}
+
+#[test]
+fn a_closed_or_keyless_instance_refuses_every_attempt_before_the_guess_limits_count_it() {
+    // Rule 3: closed, then the key, then the limits. Eleven attempts from one address are
+    // answered "closed" (or "no key") every time, and the guess counters never move.
+    let untouched = |b: &Arc<dyn obop_storage::Backend>| {
+        assert_eq!(b.counter_get("rl:setup:addr:192.0.2.1").unwrap(), 0);
+        assert_eq!(b.counter_get("rl:setup:all").unwrap(), 0);
+    };
+    let (a, b) = empty();
+    let c = open(&a);
+    a.create_user("op", PW, &[]).unwrap();
+    for _ in 0..11 {
+        assert_eq!(
+            a.complete(&req("192.0.2.1", &c, "root")),
+            Err(SetupError::Closed)
+        );
+    }
+    untouched(&b);
+
+    let b = obop_storage::open("memory:").unwrap();
+    let a = with_config(b.clone(), no_key());
+    for _ in 0..11 {
+        assert_eq!(
+            a.complete(&req("192.0.2.1", "AAAAA-AAAAA-AAAAA-AAAAA", "root")),
+            Err(SetupError::NeedsSecretKey)
+        );
+    }
+    untouched(&b);
     assert_eq!(accounts(&b), 0);
 }
 
@@ -442,6 +560,89 @@ fn the_command_line_takes_the_same_lock_and_writes_its_events() {
     );
 }
 
+#[test]
+fn two_stores_on_one_sqlite_file_racing_with_the_right_code_make_one_account() {
+    // Two processes, as far as one test can make them: two backends opened on one SQLite file,
+    // each with its own in-process locks, so only the lock file of `auth.setup` keeps them apart.
+    for _ in 0..5 {
+        let file = obop_storage::testing::TempPath::new("obop-auth-setup-race");
+        let b1 = obop_storage::open(&file.url()).unwrap();
+        let b2 = obop_storage::open(&file.url()).unwrap();
+        let one = Arc::new(with_config(b1.clone(), enforcing()));
+        let two = Arc::new(with_config(b2.clone(), enforcing()));
+        let c = open(&one);
+        let go = Arc::new(std::sync::Barrier::new(2));
+        let run = |a: Arc<Auth>, user: &'static str, c: String, go: Arc<std::sync::Barrier>| {
+            std::thread::spawn(move || {
+                go.wait();
+                a.complete(&req("192.0.2.1", &c, user)).map(|_| ())
+            })
+        };
+        let x = run(one, "ada", c.clone(), go.clone());
+        let y = run(two, "bob", c, go);
+        let results = [x.join().unwrap(), y.join().unwrap()];
+        assert_eq!(
+            results.iter().filter(|r| r.is_ok()).count(),
+            1,
+            "{results:?}"
+        );
+        assert!(
+            results
+                .iter()
+                .any(|r| matches!(r, Err(SetupError::Closed | SetupError::CodeInvalid)))
+        );
+        assert_eq!(accounts(&b1), 1);
+        assert_eq!(accounts(&b2), 1);
+        assert_eq!(events(&b1, "setup_complete").len(), 1);
+    }
+}
+
+#[test]
+fn the_command_line_and_the_page_on_two_stores_of_one_sqlite_file_make_one_first_account() {
+    // The command line's store holds the lock (a file); the page, on its own store of the same
+    // file, waits for it and then finds the account.
+    let file = obop_storage::testing::TempPath::new("obop-auth-setup-cli");
+    let server = obop_storage::open(&file.url()).unwrap();
+    let shell = obop_storage::open(&file.url()).unwrap();
+    let page = Arc::new(with_config(server.clone(), enforcing()));
+    let cli = with_config(shell.clone(), enforcing());
+    let c = open(&page);
+    let held = shell.lock(SETUP_LOCK).unwrap();
+    let waiting = {
+        let page = page.clone();
+        std::thread::spawn(move || page.complete(&req("192.0.2.1", &c, "root")).map(|_| ()))
+    };
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert_eq!(accounts(&server), 0, "the page waits for the lock file");
+    cli.create_user("op", PW, &[ADMIN_GROUP.into()]).unwrap();
+    drop(held);
+    assert_eq!(waiting.join().unwrap(), Err(SetupError::Closed));
+    assert_eq!(accounts(&server), 1);
+}
+
+#[test]
+fn the_command_line_refuses_when_the_count_of_accounts_cannot_be_read() {
+    // The first call of `create_user_from_cli` after the lock is the count; refused, nothing is
+    // made (a lenient count would make the account and call it the first).
+    let (flaky, b) = Flaky::memory();
+    let a = with_config(b.clone(), enforcing());
+    let _ = open(&a);
+    flaky.refuse_call_after(0);
+    assert!(
+        a.create_user_from_cli("op", PW, &[ADMIN_GROUP.into()])
+            .is_err()
+    );
+    assert_eq!(flaky.refused(), 1);
+    flaky.allow_models();
+    assert_eq!(accounts(&b), 0);
+    assert!(events(&b, "setup_complete").is_empty());
+    assert_eq!(
+        b.kv_scan("auth.setup.code:").unwrap().len(),
+        1,
+        "codes kept"
+    );
+}
+
 // ---- rules 7 and 8: the account, the name, the session --------------------------------------
 
 #[test]
@@ -476,6 +677,39 @@ fn the_first_administrator_gets_the_groups_of_all_groups_and_a_session_limited_t
             .unwrap()
             .starts_with("otpauth://totp/Acme%20Test:root?")
     );
+}
+
+#[test]
+fn a_store_fault_on_any_one_call_never_gives_the_first_administrator_a_full_session() {
+    // Rule 5's purpose: the first administrator proves a second factor before anything else. One
+    // call of the creation is refused at a time, at every position in turn. Whatever the outcome,
+    // a session is the one limited to enrolment: a refused read of the account must not turn
+    // into "no groups", and with it into a full session.
+    let mut skip = 0;
+    loop {
+        let (flaky, b) = Flaky::memory();
+        let a = with_config(b.clone(), enforcing());
+        let c = open(&a);
+        flaky.refuse_call_after(skip);
+        let out = a.complete(&req("192.0.2.1", &c, "root"));
+        let refused = flaky.refused() > 0;
+        flaky.allow_models();
+        if let Ok(LoginOutcome::Session {
+            token,
+            mfa_enrolment_required,
+            ..
+        }) = &out
+        {
+            assert!(*mfa_enrolment_required, "call {skip} refused: {out:?}");
+            assert!(a.resolve(token).unwrap().mfa_limited, "call {skip} refused");
+        }
+        if !refused {
+            assert!(out.is_ok(), "{out:?}");
+            break;
+        }
+        skip += 1;
+        assert!(skip < 400, "the creation makes fewer calls than this");
+    }
 }
 
 #[test]
