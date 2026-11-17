@@ -18,7 +18,9 @@ test("a long app name is whole in the top bar at 320 px (Q18)", async ({ page, s
   await page.setViewportSize({ width: 320, height: 700 });
   await signIn("root");
   await page.goto("/?lang=de#/invoicing/invoice");
-  await expect(page.locator(".brand-app")).toHaveText(`Rechnungs${String.fromCharCode(0xad)}stellung`);
+  await expect(page.locator(".brand-app")).toHaveText(
+    `Rechnungs${String.fromCharCode(0xad)}stellung`,
+  );
   const de = await nameFits(page);
   expect(de.wide && de.tall).toBe(true);
   expect(de.bar).toBeLessThanOrEqual(57);
