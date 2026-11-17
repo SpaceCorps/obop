@@ -3419,8 +3419,16 @@ mod tests {
         ));
         assert_eq!(
             d.visible(Surface::Rest, &user),
-            ["instance_brand.get", "setting.get"],
-            "only what everyone may read: the branding and the settings"
+            [
+                "instance_brand.get",
+                "plan.approve",
+                "plan.count",
+                "plan.get",
+                "plan.list",
+                "plan.reject",
+                "setting.get"
+            ],
+            "only what everyone may read: the branding, the settings and the approvals inbox              of D97 (which shows a person only the plans they could decide)"
         );
     }
 
