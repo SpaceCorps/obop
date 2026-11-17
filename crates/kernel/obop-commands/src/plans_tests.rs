@@ -29,6 +29,9 @@ fn doc_model() -> ModelDef {
         confirm: Some("Post it for good?".into()),
         ..ActionUi::default()
     }));
+    // A field declared without a class: it counts as secret.
+    let mut unclassified = f("legacy_code", DataClass::Internal, false, U);
+    unclassified.class = None;
     ModelDef {
         name: M,
         description: "d",
@@ -46,10 +49,16 @@ fn doc_model() -> ModelDef {
             f("private_cost", DataClass::Internal, false, BOSS).kind(FieldKind::Number),
             f("client", DataClass::Internal, true, U),
             f("state", DataClass::None, false, U).select(&["draft", "posted"]),
+            unclassified,
         ],
         // An action that needs approval and has no guard, as a generated delete or erase: nothing
-        // looks at its input before a person decides.
-        commands: vec![post, CommandDef::new("archive", "Archive it", U).approval()],
+        // looks at its input before a person decides. `seal` needs a group a reader of the record
+        // may not hold.
+        commands: vec![
+            post,
+            CommandDef::new("archive", "Archive it", U).approval(),
+            CommandDef::new("seal", "Seal it", BOSS).approval(),
+        ],
         ext: Default::default(),
     }
 }
@@ -82,6 +91,7 @@ fn rig_on(backend: Arc<dyn Backend>) -> Rig {
     d.register_crud(&docs, &store);
     d.register_transition(&docs, M, "post", &store);
     d.register(&docs, M, "archive", Box::new(|_| Ok(Value::Null)));
+    d.register(&docs, M, "seal", Box::new(|_| Ok(Value::Null)));
     d.register_plans(&module("ptp", vec![plans::model_def()]));
     let clock = Arc::new(AtomicI64::new(1_800_000_000));
     let c = clock.clone();
@@ -1071,4 +1081,127 @@ fn rule4_bulk_rows_and_inputs_that_are_no_field_are_set_not_shown() {
         assert!(!receipt.contains(SECRET), "{receipt}");
     }
     assert!(r.events().iter().all(|e| !e.3.contains(SECRET)));
+}
+
+// ---- after the revert proofs: what no test held ----------------------------------------------
+
+#[test]
+fn rule7_a_long_reason_is_refused_before_its_hidden_characters_are_removed() {
+    let r = rig();
+    let id = r.seed();
+    let plan = r.propose_post(&id);
+    // Hidden characters only: cleaned, it would be no reason at all, and the call would pass.
+    let hidden = "\u{200b}".repeat(plans::REASON_MAX_CHARS * 4 + 1);
+    let e = r
+        .call(
+            &ann(),
+            "plan.reject",
+            m(&[("id", t(&plan)), ("reason", t(&hidden))]),
+        )
+        .unwrap_err();
+    assert_eq!(errors::classify(&e).status, 400, "{e:?}");
+    assert_eq!(r.list(&ann(), m(&[])).len(), 1, "it still waits");
+}
+
+#[test]
+fn rule9_plans_past_their_end_do_not_count_even_before_anybody_settled_them() {
+    let r = rig();
+    let id = r.seed();
+    for _ in 0..MAX_WAITING_PER_AGENT {
+        r.propose_post(&id);
+    }
+    // Nobody has listed them since: their receipts still say pending.
+    r.clock.fetch_add(7 * 86_400 + 1, Ordering::SeqCst);
+    r.propose_post(&id);
+}
+
+#[test]
+fn rule9_two_processes_cannot_both_propose_the_100th_plan() {
+    for round in 0..2 {
+        let backend = obop_storage::open("memory:").unwrap();
+        let (a, b) = (rig_on(backend.clone()), rig_on(backend));
+        let id = a.seed();
+        // `archive` has no guard, so nothing else takes the lock for it.
+        let archive = |r: &Rig| r.call(&agent(), &format!("{M}.archive"), m(&[("id", t(&id))]));
+        for _ in 0..MAX_WAITING_PER_AGENT - 1 {
+            assert!(matches!(
+                archive(&a),
+                Err(CallError::ApprovalRequired { .. })
+            ));
+        }
+        let results: Vec<Result<Response, CallError>> = std::thread::scope(|s| {
+            let hs: Vec<_> = (0..4)
+                .map(|i| {
+                    let r = if i % 2 == 0 { &a } else { &b };
+                    s.spawn(move || archive(r))
+                })
+                .collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        let made = results
+            .iter()
+            .filter(|x| matches!(x, Err(CallError::ApprovalRequired { .. })))
+            .count();
+        assert_eq!(made, 1, "round {round}: {results:?}");
+    }
+}
+
+#[test]
+fn rule2_reading_the_record_without_the_commands_group_shows_nothing_waiting_or_decided() {
+    let r = rig();
+    let id = r.seed();
+    let seal = match r.call(&agent(), &format!("{M}.seal"), m(&[("id", t(&id))])) {
+        Err(CallError::ApprovalRequired { plan_id }) => plan_id,
+        other => panic!("expected a plan, got {other:?}"),
+    };
+    // ann owns and reads the record, and does not hold pt.boss, the group of `seal`.
+    assert!(r.list(&ann(), m(&[])).is_empty());
+    assert_eq!(r.ok(&ann(), "plan.count", m(&[]))["waiting"], 0);
+    for c in ["get", "approve", "reject"] {
+        let e = r
+            .call(&ann(), &format!("plan.{c}"), m(&[("id", t(&seal))]))
+            .unwrap_err();
+        assert_eq!(answer(&e), not_found(), "{c}");
+    }
+    // Decided by boss: still nothing for those who could never have decided it.
+    r.ok(&boss(), "plan.reject", m(&[("id", t(&seal))]));
+    for who in [ann(), eve(), outsider()] {
+        let e = r
+            .call(&who, "plan.get", m(&[("id", t(&seal))]))
+            .unwrap_err();
+        assert_eq!(answer(&e), not_found(), "{}", who.id);
+        assert!(r.list(&who, m(&[("state", t("decided"))])).is_empty());
+    }
+    // A person who holds no group of a command that needs approval may decide nothing.
+    assert_eq!(r.ok(&outsider(), "plan.count", m(&[]))["can_decide"], false);
+}
+
+#[test]
+fn rule4_a_field_declared_without_a_class_is_set_not_shown() {
+    let r = rig();
+    let id = r.seed();
+    let plan = match r.call(
+        &agent(),
+        &format!("{M}.update"),
+        m(&[
+            ("id", t(&id)),
+            ("state", t("posted")),
+            ("legacy_code", t(SECRET)),
+        ]),
+    ) {
+        Err(CallError::ApprovalRequired { plan_id }) => plan_id,
+        other => panic!("expected a plan, got {other:?}"),
+    };
+    for who in [ann(), boss()] {
+        let view = r.ok(&who, "plan.get", m(&[("id", t(&plan))]));
+        let c = view["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["field"] == "legacy_code")
+            .unwrap_or_else(|| panic!("{view}"))
+            .clone();
+        assert_eq!(c["hidden"], true, "{}", who.id);
+        assert!(!view.to_string().contains(SECRET), "{}", who.id);
+    }
 }
