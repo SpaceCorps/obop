@@ -367,3 +367,7 @@ message = "El asiento no cuadra: el total del debe y el total del haber deben se
 
 [labels.es.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Elige la línea de asiento a la que corresponde esta transacción bancaria"
+
+[labels.es.model.accounting_move_line.field.settled]
+label = "Liquidado"
+description = "Si una transacción bancaria liquida esta partida a cobrar o a pagar (su settles_line_id la indica); calculado, así que también una línea contabilizada lo muestra"

@@ -520,3 +520,61 @@ fn the_command_line_types_dry_run_of_models_without_a_list_as_a_bool() {
         "text"
     );
 }
+
+/// Q4: a receivable item a bank transaction pays is `settled`, and the filters "Open items",
+/// "Overdue" and "Due in 30 days" leave it out.
+#[test]
+fn a_paid_receivable_item_is_settled_and_not_overdue() {
+    let f = fixture();
+    let (_, number, item) = f.invoice_with_move(9_520);
+    let search = |filter: J| {
+        call(
+            &f.app,
+            &admin(),
+            "accounting_move_line.search",
+            json!({"filter": filter}),
+        )
+        .unwrap()["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    };
+    let open = json!([{"field": "reconciled", "op": "ne", "value": true},
+                      {"field": "settled", "op": "eq", "value": false}]);
+    assert!(search(open.clone()).contains(&item));
+    let got = call(
+        &f.app,
+        &admin(),
+        "accounting_move_line.get",
+        json!({"id": item}),
+    )
+    .unwrap();
+    assert_eq!(got["settled"], json!(false));
+    let l = f.line(9_520, &format!("Payment {number}"));
+    f.book(json!({"bank_line": l, "invoice": number, "counter_account": "1510"}))
+        .unwrap();
+    let got = call(
+        &f.app,
+        &admin(),
+        "accounting_move_line.get",
+        json!({"id": item}),
+    )
+    .unwrap();
+    assert_eq!(got["settled"], json!(true));
+    assert!(!search(open).contains(&item));
+    // The package's own filters say the same.
+    let def = f.app.dispatcher.model_def("accounting_move_line").unwrap();
+    let wheres: Vec<String> = def
+        .ext
+        .ui
+        .as_ref()
+        .map(|u| u.filters.iter().map(|x| x.filter.source.clone()).collect())
+        .unwrap_or_default();
+    assert_eq!(wheres.len(), 3, "{wheres:?}");
+    assert!(
+        wheres.iter().all(|w| w.ends_with("&& settled = false")),
+        "{wheres:?}"
+    );
+}

@@ -367,3 +367,7 @@ message = "Verifikationen balanserar inte: summan av debet och kredit måste var
 
 [labels.sv.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Välj verifikationsraden som den här banktransaktionen hör till"
+
+[labels.sv.model.accounting_move_line.field.settled]
+label = "Reglerad"
+description = "Om en banktransaktion reglerar den här kund- eller leverantörsposten (dess settles_line_id anger den); beräknad, så även en bokförd rad visar det"

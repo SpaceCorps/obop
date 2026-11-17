@@ -367,3 +367,7 @@ message = "Operacja się nie bilansuje: suma winien i suma ma muszą być równe
 
 [labels.pl.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Wybierz pozycję operacji, do której należy ta transakcja bankowa"
+
+[labels.pl.model.accounting_move_line.field.settled]
+label = "Rozliczona"
+description = "Czy transakcja bankowa rozlicza tę należność lub zobowiązanie (wskazuje ją jej settles_line_id); obliczane, więc pokazuje to także zaksięgowana pozycja"

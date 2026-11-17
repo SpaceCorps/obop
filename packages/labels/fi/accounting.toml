@@ -367,3 +367,7 @@ message = "Kirjaus ei täsmää: debetin ja kreditin summien on oltava yhtä suu
 
 [labels.fi.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Valitse kirjausrivi, johon tämä pankkitapahtuma kuuluu"
+
+[labels.fi.model.accounting_move_line.field.settled]
+label = "Suoritettu"
+description = "Kuittaako jokin pankkitapahtuma tämän saatava- tai velkaerän (sen settles_line_id nimeää sen); laskettu, joten myös kirjattu rivi näyttää sen"

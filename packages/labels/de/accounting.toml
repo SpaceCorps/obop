@@ -367,3 +367,7 @@ message = "Die Buchung ist nicht ausgeglichen: Summe Soll und Summe Haben müsse
 
 [labels.de.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Wählen Sie die Buchungszeile, zu der diese Banktransaktion gehört"
+
+[labels.de.model.accounting_move_line.field.settled]
+label = "Beglichen"
+description = "Ob eine Banktransaktion diesen Forderungs- oder Verbindlichkeitsposten begleicht (ihr settles_line_id nennt ihn); berechnet, daher zeigt es auch eine gebuchte Zeile"
