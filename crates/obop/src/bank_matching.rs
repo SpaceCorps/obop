@@ -80,6 +80,7 @@ pub fn module() -> Module {
                     "Link: the invoice id, empty when the line was booked without one",
                 ),
                 f("move_id", "Link and answer: the draft move id"),
+                f("booked", "Answer, get: whether the line has a booking").kind(FieldKind::Bool),
                 f("move_state", "Answer, get: the state of the move"),
                 f(
                     "move_cancelled",
@@ -116,7 +117,7 @@ pub fn module() -> Module {
                 ),
                 CommandDef::new(
                     "get",
-                    "The booking of a bank statement line (bank_line): bank_line_id, invoice_id, move_id and the move's state; refused in words when the line has none",
+                    "The booking of a bank statement line (bank_line): booked, and when it is booked invoice_id, move_id and the move's state",
                     GROUP,
                 ),
                 CommandDef::new(
@@ -824,7 +825,11 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             let b = st3.backend();
             let rows = b.list(MODEL).map_err(|e| e.to_string())?;
             let Some((_, f)) = rows.iter().find(|(_, f)| text(f, "bank_line_id") == lid) else {
-                return Err(format!("the bank line {lid:?} has no booking"));
+                return Ok(Value::map([
+                    ("id", Value::text(&lid)),
+                    ("bank_line_id", Value::text(&lid)),
+                    ("booked", Value::Bool(false)),
+                ]));
             };
             let mid = text(f, "move_id");
             let state = b
@@ -835,6 +840,7 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             Ok(Value::map([
                 ("id", Value::text(&lid)),
                 ("bank_line_id", Value::text(&lid)),
+                ("booked", Value::Bool(true)),
                 ("invoice_id", Value::text(&text(f, "invoice_id"))),
                 ("move_id", Value::text(&mid)),
                 ("move_state", Value::text(&state)),

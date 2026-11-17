@@ -30,11 +30,16 @@ export function ExpenseSettings() {
   }, [d.token]);
 
   const change = async (v: boolean) => {
+    // The switch moves at once; it goes back when the server does not take the change.
+    const was = allow;
+    setAllow(v);
     setBusy(true);
     const r = await call(d.token, "expenses_setting.update", { allow_self_approval: v });
     setBusy(false);
-    if (r.kind !== "ok")
+    if (r.kind !== "ok") {
+      setAllow(was);
       return d.notify(r.kind === "error" ? serverMessage(r.message) : t("Not saved"), "error");
+    }
     setAllow(!!(r.value as { allow_self_approval?: boolean }).allow_self_approval);
     d.notify(t("Expense settings saved"), "ok");
   };

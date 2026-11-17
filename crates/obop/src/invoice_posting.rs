@@ -96,6 +96,8 @@ pub fn module() -> Module {
                     f("dry_run", "Input: only show the lines, write nothing").kind(FieldKind::Bool),
                     f("invoice_id", "Link: the invoice id"),
                     f("move_id", "Link and answer: the draft move id"),
+                    f("booked", "Answer of get: whether the invoice has a journal entry")
+                        .kind(FieldKind::Bool),
                     f("move_state", "Answer of get: the state of the move"),
                     f("move_number", "Answer of get: the number of the move once it is posted"),
                     f("ok", "Answer: whether the move was built").kind(FieldKind::Bool),
@@ -117,7 +119,7 @@ pub fn module() -> Module {
                     ),
                     CommandDef::new(
                         "get",
-                        "The journal entry of an invoice (invoice: its id or number): invoice_id, move_id, move_state and move_number; refused in words when the invoice has none",
+                        "The journal entry of an invoice (invoice: its id or number): booked, and when it is booked move_id, move_state and move_number",
                         GROUP,
                     ),
                 ],
@@ -719,13 +721,13 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 _ => String::new(),
             };
             let b = st.backend();
-            let (iid, inv) = invoice_of(&*b, &key)?;
+            let (iid, _) = invoice_of(&*b, &key)?;
             let Some((_, link)) = link_of(&*b, &iid)? else {
-                let n = text(&inv, "number");
-                return Err(format!(
-                    "the invoice {} has no journal entry",
-                    if n.is_empty() { &iid } else { &n }
-                ));
+                return Ok(Value::map([
+                    ("id", Value::text(&iid)),
+                    ("invoice_id", Value::text(&iid)),
+                    ("booked", Value::Bool(false)),
+                ]));
             };
             let mid = text(&link, "move_id");
             let mv = b.get("accounting_move", &mid).map_err(|e| e.to_string())?;
@@ -733,6 +735,7 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             Ok(Value::map([
                 ("id", Value::text(&iid)),
                 ("invoice_id", Value::text(&iid)),
+                ("booked", Value::Bool(true)),
                 ("move_id", Value::text(&mid)),
                 ("move_state", Value::text(&field("state"))),
                 ("move_number", Value::text(&field("number"))),

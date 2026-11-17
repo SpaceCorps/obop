@@ -368,6 +368,7 @@ fn posting_an_invoice_books_its_draft_entry_from_the_company_settings() {
     )
     .unwrap();
     assert_eq!(link["move_state"], json!("draft"));
+    assert_eq!(link["booked"], json!(true));
     let mid = link["move_id"].as_str().unwrap().to_string();
     let mv = rows(&f.app, "accounting_move");
     assert_eq!(mv.len(), 1);
@@ -409,13 +410,14 @@ fn with_book_on_post_off_or_without_settings_the_invoice_is_posted_unbooked() {
     let a = invoice_with_dates(&f, &[10_000]);
     call(&f.app, &admin(), "invoice.post", json!({"id": a})).unwrap();
     assert!(rows(&f.app, "accounting_move").is_empty());
-    let m = refusal(call(
+    let got = call(
         &f.app,
         &admin(),
         "invoice_posting.get",
         json!({"invoice": a}),
-    ));
-    assert!(m.contains("has no journal entry"), "{m}");
+    )
+    .unwrap();
+    assert_eq!(got["booked"], json!(false));
     // Turned off: the same.
     configure(&f, json!({"book_on_post": false}));
     let s = call(&f.app, &admin(), "invoice_posting_setting.get", json!({})).unwrap();

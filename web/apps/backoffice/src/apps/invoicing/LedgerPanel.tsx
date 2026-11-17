@@ -9,10 +9,11 @@ import { call } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
 import { serverMessage } from "../../serverMessage.ts";
+import "./invoicing.css";
 
 const MOVE = "accounting_move";
 
-type Link = { move_id: string; move_state: string; move_number: string };
+type Link = { booked: boolean; move_id: string; move_state: string; move_number: string };
 
 export function LedgerPanel({ row, busy }: RecordExtProps) {
   const d = useData();
@@ -26,33 +27,38 @@ export function LedgerPanel({ row, busy }: RecordExtProps) {
     if (!ledger || !posted) return;
     void call(d.token, "invoice_posting.get", { invoice: row.id }).then((r) => {
       if (!live) return;
-      // Refused (no entry) and forbidden (no ledger group) look alike here: no entry to show.
-      setLink(r.kind === "ok" ? (r.value as Link) : null);
+      // Not booked, and forbidden (no ledger group), look alike here: no entry to show.
+      const v = r.kind === "ok" ? (r.value as Link) : null;
+      setLink(v?.booked ? v : null);
     });
     return () => {
       live = false;
     };
   }, [d.token, row.id, ledger, posted, d.mutations]);
-  if (!ledger || !posted || link === undefined) return null;
+  // Without the ledger group the person cannot book either: nothing to offer.
+  const canBook = d.models.get(MOVE)?.model.can_create ?? false;
+  if (!ledger || !posted || link === undefined || (!link && !canBook)) return null;
   const href = link ? d.linkTo(MOVE, { id: link.move_id }) : null;
   if (link)
     return (
-      <Notice
-        tone={link.move_state === "cancelled" ? "warning" : "success"}
-        action={
-          href ? (
-            <a className="btn small" href={href}>
-              {t("Open entry")}
-            </a>
-          ) : undefined
-        }
-      >
-        {link.move_state === "posted"
-          ? t("Booked to the ledger as entry {number}.", { number: link.move_number })
-          : link.move_state === "cancelled"
-            ? t("Its journal entry was cancelled.")
-            : t("Booked to the ledger as a draft entry. An approver posts it.")}
-      </Notice>
+      <div className="inv-ledger">
+        <Notice
+          tone={link.move_state === "cancelled" ? "warning" : "success"}
+          action={
+            href ? (
+              <a className="btn small" href={href}>
+                {t("Open entry")}
+              </a>
+            ) : undefined
+          }
+        >
+          {link.move_state === "posted"
+            ? t("Booked to the ledger as entry {number}.", { number: link.move_number })
+            : link.move_state === "cancelled"
+              ? t("Its journal entry was cancelled.")
+              : t("Booked to the ledger as a draft entry. An approver posts it.")}
+        </Notice>
+      </div>
     );
   const book = async () => {
     setRunning(true);
@@ -65,15 +71,17 @@ export function LedgerPanel({ row, busy }: RecordExtProps) {
     await d.changed(MOVE);
   };
   return (
-    <Notice
-      tone="info"
-      action={
-        <Button size="sm" loading={running} disabled={busy} onClick={() => void book()}>
-          {t("Book to ledger")}
-        </Button>
-      }
-    >
-      {t("Not booked to the ledger yet.")}
-    </Notice>
+    <div className="inv-ledger">
+      <Notice
+        tone="info"
+        action={
+          <Button size="sm" loading={running} disabled={busy} onClick={() => void book()}>
+            {t("Book to ledger")}
+          </Button>
+        }
+      >
+        {t("Not booked to the ledger yet.")}
+      </Notice>
+    </div>
   );
 }

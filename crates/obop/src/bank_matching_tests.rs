@@ -664,13 +664,14 @@ fn unbook_takes_a_booked_payment_back_so_the_invoice_can_be_paid_again() {
     );
     assert!(line.get("move_line_id").is_none_or(J::is_null), "{line:?}");
     assert!(rows(&f.app, "bank_matching").is_empty());
-    let m = refusal(call(
+    let got = call(
         &f.app,
         &admin(),
         "bank_matching.get",
         json!({"bank_line": l}),
-    ));
-    assert!(m.contains("no booking"), "{m}");
+    )
+    .unwrap();
+    assert_eq!(got["booked"], json!(false));
     // The invoice is offered and can be paid again, by the same line.
     let s = call(
         &f.app,

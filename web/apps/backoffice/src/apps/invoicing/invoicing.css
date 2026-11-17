@@ -228,3 +228,13 @@
     break-inside: avoid;
   }
 }
+
+/* The journal entry of a posted invoice (LedgerPanel.tsx), inset like the other record panels. */
+.inv-ledger {
+  margin: 0.85rem 1.25rem 0;
+}
+@media (max-width: 40rem) {
+  .inv-ledger {
+    margin-inline: var(--space-4);
+  }
+}
