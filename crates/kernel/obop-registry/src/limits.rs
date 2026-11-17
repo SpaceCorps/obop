@@ -146,9 +146,7 @@ impl Pattern {
     /// What a value must be, for a refusal and a description.
     pub fn requirement(self) -> &'static str {
         match self {
-            Self::CurrencyCode => {
-                "a currency code of ISO 4217, such as EUR"
-            }
+            Self::CurrencyCode => "a currency code of ISO 4217, such as EUR",
             Self::Iban => "a valid IBAN, such as DE89 3704 0044 0532 0130 00",
             Self::VatId => "a VAT number with its country prefix, such as DE123456789",
         }
