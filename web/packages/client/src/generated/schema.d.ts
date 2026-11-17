@@ -4182,7 +4182,7 @@ export interface components {
             ended_at?: string;
             /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
             expected_points?: number;
-            /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+            /** @description Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean */
             integrity?: string;
             /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
             last_seq?: number;
@@ -4197,7 +4197,7 @@ export interface components {
             purpose?: "business" | "private" | "commute";
             /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again (personal data: agents see it masked) */
             reject_reason?: string;
-            /** @description True while the trip is in review, confirmed or rejected: the states a reviewer reads (computed when read; read-only) */
+            /** @description True while the trip is in review, confirmed or rejected and its purpose is not private: the trips a reviewer reads (personal data: agents see it masked) (computed when read; read-only) */
             readonly reviewable?: boolean;
             /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
             reviewed_by?: string;
@@ -13960,7 +13960,7 @@ export interface operations {
                         ended_at?: string;
                         /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
                         expected_points?: number;
-                        /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+                        /** @description Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean */
                         integrity?: string;
                         /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
                         last_seq?: number;
@@ -14202,7 +14202,7 @@ export interface operations {
                     ended_at?: string;
                     /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
                     expected_points?: number;
-                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean */
                     integrity?: string;
                     /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
                     last_seq?: number;
@@ -15097,7 +15097,7 @@ export interface operations {
                     /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
                     expected_points?: number;
                     id: string;
-                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean */
                     integrity?: string;
                     /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
                     last_seq?: number;
