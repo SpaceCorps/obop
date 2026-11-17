@@ -465,3 +465,24 @@ describe("paying an invoice that is not in the ledger", () => {
       expect(out).not.toMatch(/[{}]/);
     });
 });
+
+describe("billing time without the groups it needs", () => {
+  const raw =
+    "billing time needs the invoicing.user and timesheets.manager groups (an agent needs them in its scopes)";
+  const en =
+    "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.";
+
+  it("says it in words, without group ids", async () => {
+    await setLanguage("en", false);
+    expect(serverMessage(raw)).toBe(en);
+  });
+
+  for (const lang of LANGS)
+    it(`${lang}: is translated`, async () => {
+      provideCatalogue(lang, read(lang));
+      await setLanguage(lang, false);
+      const out = serverMessage(raw);
+      expect(out).not.toBe(en);
+      expect(out).not.toContain("timesheets.manager");
+    });
+});

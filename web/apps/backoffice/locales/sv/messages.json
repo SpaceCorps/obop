@@ -2850,5 +2850,6 @@
   "This person has their own login, so the record would be theirs and you could not see it. Ask an administrator to file it. Nothing was saved.": "Den här personen har en egen inloggning, så posten skulle bli hens och du skulle inte kunna se den. Be en administratör att registrera den. Inget sparades.",
   "This person has their own login, so the record would be theirs and you could not see it. Ask someone with {groups} to file it. Nothing was saved.": "Den här personen har en egen inloggning, så posten skulle bli hens och du skulle inte kunna se den. Be någon med {groups} att registrera den. Inget sparades.",
   "Week {week}, {year}": "Vecka {week}, {year}",
-  "Choose the customer to bill": "Välj kunden som ska faktureras"
+  "Choose the customer to bill": "Välj kunden som ska faktureras",
+  "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.": "För att fakturera tid behövs rätten att skapa fakturor och att godkänna tidsposter. Fråga en administratör."
 }

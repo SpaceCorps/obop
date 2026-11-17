@@ -294,6 +294,14 @@ const GUARD_RULES: Rule[] = [
         { account: m[1]! },
       ),
   ],
+  // Bill time (time_billing.create_invoice) by a person without its groups: words, not group ids.
+  [
+    /^billing time needs the \S+ and \S+ groups/,
+    () =>
+      t(
+        "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.",
+      ),
+  ],
 ];
 
 const RULES: Rule[] = [

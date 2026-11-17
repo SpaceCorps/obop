@@ -6,7 +6,7 @@
 // The customer and the rate are the project's unless changed here; the invoice stays a draft.
 import { useState } from "react";
 import { fmt, getCurrency, t } from "@obop/ui";
-import type { Reply } from "../../api.ts";
+import type { ModelMeta, Reply } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { Edit } from "../../edit.ts";
 import type { RecordExtProps } from "../../extensions.ts";
@@ -34,12 +34,26 @@ export function lastMonth(today: Date): { from: string; to: string } {
   return { from: day(first), to: day(last) };
 }
 
+/**
+ * Whether the person may bill time: the server needs invoicing.user and timesheets.manager. The
+ * first shows as a create of invoices, the second as the approve action of a time entry, which
+ * `/api/meta` lists only for a principal that may run it.
+ */
+export function mayBillTime(
+  models: ReadonlyMap<string, { model: Pick<ModelMeta, "can_create" | "actions"> }>,
+): boolean {
+  const entry = models.get("timesheets_entry")?.model;
+  return (
+    !!models.get(INVOICE)?.model.can_create &&
+    !!entry?.actions.some((a) => a.id === "timesheets_entry.approve")
+  );
+}
+
 export function BillTimeAction({ row, fields, busy }: RecordExtProps) {
   const d = useData();
   const [open, setOpen] = useState(false);
-  // Only where there is time to bill (Timesheets) and the person may make invoices; the server
-  // says in words when a group is missing (timesheets.manager).
-  if (!d.models.get(INVOICE)?.model.can_create || !d.models.get("timesheets_entry")) return null;
+  // Only where there is time to bill (Timesheets) and the person may bill it.
+  if (!mayBillTime(d.models)) return null;
   return (
     <>
       <Button icon="invoicing" disabled={busy} onClick={() => setOpen(true)}>

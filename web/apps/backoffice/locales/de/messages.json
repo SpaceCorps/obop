@@ -2850,5 +2850,6 @@
   "This person has their own login, so the record would be theirs and you could not see it. Ask an administrator to file it. Nothing was saved.": "Diese Person hat ein eigenes Login, der Datensatz wäre also ihrer und Sie könnten ihn nicht sehen. Bitten Sie einen Administrator, ihn anzulegen. Es wurde nichts gespeichert.",
   "This person has their own login, so the record would be theirs and you could not see it. Ask someone with {groups} to file it. Nothing was saved.": "Diese Person hat ein eigenes Login, der Datensatz wäre also ihrer und Sie könnten ihn nicht sehen. Bitten Sie jemanden mit {groups}, ihn anzulegen. Es wurde nichts gespeichert.",
   "Week {week}, {year}": "Woche {week}, {year}",
-  "Choose the customer to bill": "Wählen Sie den Kunden, dem die Zeit berechnet wird"
+  "Choose the customer to bill": "Wählen Sie den Kunden, dem die Zeit berechnet wird",
+  "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.": "Zum Abrechnen von Zeit brauchen Sie das Recht, Rechnungen zu erstellen und Zeiteinträge zu genehmigen. Wenden Sie sich an einen Administrator."
 }
