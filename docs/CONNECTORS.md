@@ -30,8 +30,8 @@
 | Model | Purpose | Who |
 |---|---|---|
 | `connector_provider` | The catalogue shipped in the binary, with the administrator's enablement merged in (read only) | users see the providers enabled for them, administrators all |
-| `provider_policy` | Per provider: enabled, people may use it, legal basis and the text shown to people, agreement recorded and where, default policy, OAuth client id and secret | `connectors.admin` |
-| `connection` | A link to one external system: provider, owner scope (`instance` or `user`), `state` (draft, connected, paused, error, revoked; governed, D48), non-secret `config`, `credentials` and `oauth_tokens` (class `secret`), `field_allowlist`, `policy`, caps, `retention_days` | owner; administrators see all, never credentials |
+| `provider_policy` | Per provider (a choice of the catalogue's ids, named by the providers' names; an unknown id is refused with the list): enabled, people may use it, legal basis and the text shown to people, agreement recorded and where, default policy, OAuth client id and secret | `connectors.admin` |
+| `connection` | A link to one external system: provider (a choice of the catalogue's ids), owner scope (`instance` or `user`), `state` (draft, connected, paused, error, revoked; governed, D48), non-secret `config`, `credentials` and `oauth_tokens` (class `secret`), `field_allowlist`, `policy`, caps, `retention_days` | owner; administrators see all, never credentials |
 | `consent` | The recorded legal basis: subject kind, purpose, basis, note, the data classes and fields that may flow (computed by the server), `state` (active, withdrawn, superseded). Never edited or deleted | owner; administrators |
 | `sync_run` | One run: direction, kind, times, status, record counts, error summary. No payload | owner; administrators |
 | `data_flow_log` | Append-only: time, direction, model, record count, field names sent and denied, treatments, SHA-256 of the payload, outcome, reason. No payload | owner; administrators |

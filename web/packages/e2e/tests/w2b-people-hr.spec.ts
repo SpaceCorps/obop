@@ -67,6 +67,56 @@ test.describe("employees", () => {
     }
   });
 
+  test("the org chart is one Tab stop and walks with the arrow keys (R15)", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const root = await api.token("root");
+    await api.post("/api/marketplace_listing/install", { id: "hr" }, root);
+    try {
+      const boss = await api.create("root", "hr_employee", { name: uid("Kai Keys") });
+      const lead = await api.create("root", "hr_employee", {
+        name: uid("Lena Left"),
+        reports_to_id: boss.id,
+      });
+      const clerk = await api.create("root", "hr_employee", {
+        name: uid("Rui Right"),
+        reports_to_id: lead.id,
+      });
+
+      await signIn("root", "/hr/org_chart");
+      const tree = page.getByRole("tree", { name: "Org chart" });
+      await expect(tree.getByRole("treeitem", { name: boss.name })).toBeVisible();
+      // One Tab stop: a single person of the chart is in the tab order, the links and buttons not.
+      expect(await tree.locator('[tabindex="0"]').count()).toBe(1);
+      expect(
+        await tree.locator("a:not([tabindex='-1']), button:not([tabindex='-1'])").count(),
+      ).toBe(0);
+
+      const focused = () =>
+        page.evaluate(() => document.activeElement?.getAttribute("data-person"));
+      await tree.getByRole("treeitem", { name: boss.name }).focus();
+      await page.keyboard.press("ArrowDown");
+      expect(await focused()).toBe(lead.id);
+      await page.keyboard.press("ArrowDown");
+      expect(await focused()).toBe(clerk.id);
+      await page.keyboard.press("ArrowLeft");
+      expect(await focused()).toBe(lead.id);
+      // Left on an unfolded person folds them; Right unfolds again.
+      await page.keyboard.press("ArrowLeft");
+      await expect(tree.getByRole("treeitem", { name: clerk.name })).toHaveCount(0);
+      await page.keyboard.press("ArrowRight");
+      await expect(tree.getByRole("treeitem", { name: clerk.name })).toBeVisible();
+      // Enter opens the person.
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(new RegExp(`hr_employee\\?id=${lead.id}`));
+    } finally {
+      await api.post("/api/module/uninstall", { id: "hr" }, root);
+    }
+  });
+
   test("a deep reporting line keeps its names readable at 320 px", async ({
     page,
     signIn,

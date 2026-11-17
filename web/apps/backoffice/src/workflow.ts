@@ -3,6 +3,7 @@ import type { Command, FieldMeta, ModelMeta, Reply } from "./api.ts";
 import { isEmpty, optionLabel } from "./format.ts";
 import { actionTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
+import { JOB, needsSignature } from "./apps/field_service/job.ts";
 
 /**
  * Governed workflows (D48). A `select` field is governed when some action moves it. The server
@@ -126,6 +127,10 @@ export function notForRecord(
   action: Command,
   row: Record<string, unknown>,
 ): string {
+  // A job that needs the customer's signature is completed after the sign-off: the job page shows
+  // only "Customer signs" until then, and the kanban card offers no Complete job (S4).
+  if (model.name === JOB && action.id === `${JOB}.complete` && needsSignature(row))
+    return t("The customer has to sign off this job first.");
   if (model.name !== "sign_request") return "";
   if (hiddenForRecord(model, action, row))
     return t(

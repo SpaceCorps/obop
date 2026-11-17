@@ -777,3 +777,13 @@
     color: var(--text-muted);
   }
 }
+
+/* At 320 px a list name too long to sit beside the view picker (German "Ausgangsrechnungen")
+   takes the first row to itself instead of being cut to its first syllables; a short one keeps
+   the single row (docs/ISSUES.md Q18). */
+@media (max-width: 22.49rem) {
+  .cp-top:has(> :is(.cp-actions, .cp-phone)) {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+}

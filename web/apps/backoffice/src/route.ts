@@ -21,6 +21,8 @@ export type Route = {
   full: string;
   /** A field of the open record to bring into view and focus (`&field=tax_id`, Q19). */
   field: string;
+  /** The Monday of the week a week view shows (`&week=2026-11-23`); empty: the current week. */
+  week: string;
 };
 
 /** The route name of an app's generated overview page: `#/<app>/overview`. */
@@ -57,6 +59,7 @@ export function parse(hash: string): Route {
     section: q.get("section") ?? "",
     full: q.get("full") === "1" ? "1" : "",
     field: /^[a-z][a-z0-9_]*$/.test(q.get("field") ?? "") ? q.get("field")! : "",
+    week: q.get("week") ?? "",
   };
 }
 
@@ -77,6 +80,7 @@ export function href(r: Partial<Route>): string {
   if (r.section) q.set("section", r.section);
   if (r.full === "1") q.set("full", "1");
   if (r.field) q.set("field", r.field);
+  if (r.week) q.set("week", r.week);
   const qs = q.toString();
   return `#/${[r.app, r.model].filter(Boolean).join("/")}${qs ? `?${qs}` : ""}`;
 }

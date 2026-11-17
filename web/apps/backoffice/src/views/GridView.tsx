@@ -99,6 +99,14 @@ export function GridView(p: ViewProps) {
   const [adding, setAdding] = useState("");
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState<{ key: string; rows: Row[] } | null>(null);
+  // Below 360 px the strip of days scrolls inside itself: keep the chosen day in view.
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const s = strip.current;
+    const tab = s?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (s && tab && s.scrollWidth > s.clientWidth)
+      s.scrollLeft = tab.offsetLeft - (s.clientWidth - tab.offsetWidth) / 2;
+  }, [pickedDay, phone]);
 
   const mine = scope === "mine" && !!spec?.owner && !!user;
   const filter = useMemo<ServerFilter[] | null>(() => {
@@ -167,6 +175,16 @@ export function GridView(p: ViewProps) {
   }
 
   const lineTitle = (l: GridLine) => d.refText(spec.line.to ?? "", l.ref);
+  // What the line's record belongs to, under its name: the project of a task (its first ref).
+  const lineModel = spec.line.to ? d.models.get(spec.line.to)?.model : undefined;
+  const parent = lineModel?.fields.find((f) => f.kind === "ref" && f.to && f.to !== p.model.name);
+  const parentLine = (l: GridLine) => {
+    if (!parent?.to || !spec.line.to) return null;
+    const id = d.store.peek(spec.line.to)?.find((r) => r.id === l.ref)?.[parent.name];
+    return typeof id === "string" && id ? (
+      <span className="tsgrid-parent">{d.refText(parent.to, id)}</span>
+    ) : null;
+  };
 
   /** Type `text` into the cell of line `l` on `day`. */
   const commit = async (l: GridLine, day: string, text: string): Promise<Committed> => {
@@ -331,7 +349,7 @@ export function GridView(p: ViewProps) {
     return (
       <div className="tsgrid tsgrid-phone" aria-busy={!ready || busy || undefined}>
         {nav}
-        <div className="tsgrid-days" role="tablist" aria-label={t("Days of the week")}>
+        <div ref={strip} className="tsgrid-days" role="tablist" aria-label={t("Days of the week")}>
           {days.map((day) => (
             <button
               key={day}
@@ -356,6 +374,7 @@ export function GridView(p: ViewProps) {
             <li key={l.key} className="tsgrid-item">
               <div className="tsgrid-item-text">
                 <span className="tsgrid-task">{lineTitle(l)}</span>
+                {parentLine(l)}
                 {ownerLine(l)}
               </div>
               <Cell
@@ -411,6 +430,7 @@ export function GridView(p: ViewProps) {
               <tr key={l.key}>
                 <th scope="row" className="tsgrid-line">
                   <span className="tsgrid-task">{lineTitle(l)}</span>
+                  {parentLine(l)}
                   {ownerLine(l)}
                 </th>
                 {days.map((day, i) => (

@@ -107,6 +107,22 @@
           },
           "provider": {
             "description": "Id of the provider from the catalogue",
+            "enum": [
+              "webhook_out",
+              "webhook_in",
+              "rest_api_pull",
+              "csv_export",
+              "slack_webhook",
+              "stripe",
+              "docuseal",
+              "github_webhook",
+              "google_drive",
+              "google_oauth",
+              "microsoft_oauth",
+              "zapier",
+              "make",
+              "n8n"
+            ],
             "type": "string"
           },
           "rate_limit_per_hour": {
@@ -1365,6 +1381,22 @@
           },
           "provider": {
             "description": "Id of the provider this policy is for",
+            "enum": [
+              "webhook_out",
+              "webhook_in",
+              "rest_api_pull",
+              "csv_export",
+              "slack_webhook",
+              "stripe",
+              "docuseal",
+              "github_webhook",
+              "google_drive",
+              "google_oauth",
+              "microsoft_oauth",
+              "zapier",
+              "make",
+              "n8n"
+            ],
             "type": "string"
           },
           "users_may_use": {
@@ -2906,7 +2938,22 @@
                         },
                         "provider": {
                           "description": "Id of the provider from the catalogue",
-                          "maxLength": 2048,
+                          "enum": [
+                            "webhook_out",
+                            "webhook_in",
+                            "rest_api_pull",
+                            "csv_export",
+                            "slack_webhook",
+                            "stripe",
+                            "docuseal",
+                            "github_webhook",
+                            "google_drive",
+                            "google_oauth",
+                            "microsoft_oauth",
+                            "zapier",
+                            "make",
+                            "n8n"
+                          ],
                           "type": "string"
                         },
                         "rate_limit_per_hour": {
@@ -3303,7 +3350,22 @@
                   },
                   "provider": {
                     "description": "Id of the provider from the catalogue",
-                    "maxLength": 2048,
+                    "enum": [
+                      "webhook_out",
+                      "webhook_in",
+                      "rest_api_pull",
+                      "csv_export",
+                      "slack_webhook",
+                      "stripe",
+                      "docuseal",
+                      "github_webhook",
+                      "google_drive",
+                      "google_oauth",
+                      "microsoft_oauth",
+                      "zapier",
+                      "make",
+                      "n8n"
+                    ],
                     "type": "string"
                   },
                   "rate_limit_per_hour": {
@@ -5042,7 +5104,22 @@
                   },
                   "provider": {
                     "description": "Id of the provider from the catalogue",
-                    "maxLength": 2048,
+                    "enum": [
+                      "webhook_out",
+                      "webhook_in",
+                      "rest_api_pull",
+                      "csv_export",
+                      "slack_webhook",
+                      "stripe",
+                      "docuseal",
+                      "github_webhook",
+                      "google_drive",
+                      "google_oauth",
+                      "microsoft_oauth",
+                      "zapier",
+                      "make",
+                      "n8n"
+                    ],
                     "type": "string"
                   },
                   "rate_limit_per_hour": {
@@ -22574,7 +22651,22 @@
                         },
                         "provider": {
                           "description": "Id of the provider this policy is for",
-                          "maxLength": 2048,
+                          "enum": [
+                            "webhook_out",
+                            "webhook_in",
+                            "rest_api_pull",
+                            "csv_export",
+                            "slack_webhook",
+                            "stripe",
+                            "docuseal",
+                            "github_webhook",
+                            "google_drive",
+                            "google_oauth",
+                            "microsoft_oauth",
+                            "zapier",
+                            "make",
+                            "n8n"
+                          ],
                           "type": "string"
                         },
                         "users_may_use": {
@@ -22820,7 +22912,22 @@
                   },
                   "provider": {
                     "description": "Id of the provider this policy is for",
-                    "maxLength": 2048,
+                    "enum": [
+                      "webhook_out",
+                      "webhook_in",
+                      "rest_api_pull",
+                      "csv_export",
+                      "slack_webhook",
+                      "stripe",
+                      "docuseal",
+                      "github_webhook",
+                      "google_drive",
+                      "google_oauth",
+                      "microsoft_oauth",
+                      "zapier",
+                      "make",
+                      "n8n"
+                    ],
                     "type": "string"
                   },
                   "users_may_use": {
@@ -23660,7 +23767,22 @@
                   },
                   "provider": {
                     "description": "Id of the provider this policy is for",
-                    "maxLength": 2048,
+                    "enum": [
+                      "webhook_out",
+                      "webhook_in",
+                      "rest_api_pull",
+                      "csv_export",
+                      "slack_webhook",
+                      "stripe",
+                      "docuseal",
+                      "github_webhook",
+                      "google_drive",
+                      "google_oauth",
+                      "microsoft_oauth",
+                      "zapier",
+                      "make",
+                      "n8n"
+                    ],
                     "type": "string"
                   },
                   "users_may_use": {

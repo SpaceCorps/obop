@@ -1,6 +1,6 @@
 [module]
 id = "projects"
-version = "0.5.0"
+version = "0.5.1"
 name = "Projects"
 description = "Projects, milestones and tasks with assignees, deadlines and status flows. A project shows its progress, the share of its tasks that are done, and the time estimated for them."
 author = "SpaceCorps"
@@ -273,6 +273,7 @@ write_group = "projects.user"
   class = "none"
   kind = "ref"
   to = "projects_project"
+  ref_filter = "state != done"
 
   [[model.field]]
   name = "milestone_id"

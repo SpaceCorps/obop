@@ -1,7 +1,7 @@
 // The org chart of Employees (`#/hr/org_chart`): who reports to whom, as a tree on the employee's
 // manager (`reports_to_id`), with each person's photo or initials, job and department. It reads
 // with `hr_employee.search`, the call an agent makes; a person opens their employee record.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Avatar, Button, Icon, fmt, t } from "@obop/ui";
 import { LOAD_LIMIT, search } from "../../api.ts";
 import { blobUrl, thumbWidth } from "../../blobs.ts";
@@ -10,7 +10,15 @@ import { useData } from "../../data.tsx";
 import { href } from "../../route.ts";
 import { serverMessage } from "../../serverMessage.ts";
 import { EMPLOYEE } from "./links.ts";
-import { narrowed, openToDepth, orgTree, pathsTo, type OrgNode } from "./orgTree.ts";
+import {
+  narrowed,
+  openToDepth,
+  orgTree,
+  pathsTo,
+  treeStep,
+  visibleRows,
+  type OrgNode,
+} from "./orgTree.ts";
 import "./hr.css";
 
 const DEPARTMENT = "hr_department";
@@ -108,21 +116,55 @@ export function OrgChart({ app }: { app: App }) {
 
   const foldAll = () => setOpen(allOpen ? new Set() : new Set(branches));
 
+  // The keyboard (the tree pattern): one Tab stop for the chart, the person who has it moves with
+  // the arrow keys, Right and Left unfold and fold, Enter opens the person.
+  const [focusId, setFocusId] = useState("");
+  const treeRef = useRef<HTMLUListElement>(null);
+  const rows = visibleRows(roots, isOpen);
+  const current = rows.some((r) => r.id === focusId) ? focusId : (rows[0]?.id ?? "");
+  const personHref = (id: string) => href({ app: app.id, model: EMPLOYEE, id });
+  const onTreeKey = (e: KeyboardEvent<HTMLUListElement>) => {
+    if ((e.target as HTMLElement).getAttribute("role") !== "treeitem") return;
+    const step = treeStep(rows, current, e.key, isOpen);
+    if (!step) return;
+    e.preventDefault();
+    if (step.open && !searching) setOpen((was) => new Set(was).add(step.open!));
+    if (step.close && !searching)
+      setOpen((was) => {
+        const next = new Set(was);
+        next.delete(step.close!);
+        return next;
+      });
+    if (step.activate) location.hash = personHref(step.activate);
+    if (step.focus) {
+      setFocusId(step.focus);
+      treeRef.current
+        ?.querySelector<HTMLElement>(`[data-person="${CSS.escape(step.focus)}"]`)
+        ?.focus();
+    }
+  };
+
   const node = (n: OrgNode, level: number) => {
     const expanded = n.children.length > 0 && isOpen(n.id);
     return (
       <li
         key={n.id}
         role="treeitem"
+        data-person={n.id}
+        tabIndex={n.id === current ? 0 : -1}
+        aria-labelledby={`org-name-${n.id}`}
         aria-level={level}
         aria-expanded={n.children.length ? expanded : undefined}
         aria-selected={false}
+        onFocus={(e) => e.target === e.currentTarget && setFocusId(n.id)}
       >
         <div className={`org-node${found.hits.has(n.id) ? " hit" : ""}`}>
-          <a className="org-person" href={href({ app: app.id, model: EMPLOYEE, id: n.id })}>
+          <a className="org-person" tabIndex={-1} href={personHref(n.id)}>
             <Face name={n.name} photo={n.photo} size={44} />
             <span className="org-text">
-              <span className="org-name">{n.name}</span>
+              <span className="org-name" id={`org-name-${n.id}`}>
+                {n.name}
+              </span>
               {(n.job || n.department) && (
                 <span className="org-meta">
                   {[n.job, n.department].filter(Boolean).join(" · ")}
@@ -133,6 +175,7 @@ export function OrgChart({ app }: { app: App }) {
           {n.children.length > 0 && !searching && (
             <button
               type="button"
+              tabIndex={-1}
               className="org-toggle"
               aria-expanded={expanded}
               aria-label={
@@ -241,7 +284,13 @@ export function OrgChart({ app }: { app: App }) {
                       })}
             </p>
             {roots.length > 0 && (
-              <ul role="tree" className="org-tree" aria-label={t("Org chart")}>
+              <ul
+                ref={treeRef}
+                role="tree"
+                className="org-tree"
+                aria-label={t("Org chart")}
+                onKeyDown={onTreeKey}
+              >
                 {roots.map((r) => node(r, 1))}
               </ul>
             )}

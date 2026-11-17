@@ -704,3 +704,38 @@ description = "Jokainen kenttä luokkineen ja käsittelyineen JSON-muodossa; ei 
 [labels.fi.model.privacy_preview.action.render]
 label = "Muodosta"
 description = "Muodosta esimerkkitietue maskauksen ja pseudonymisoinnin jälkeen"
+
+# The providers of the catalogue, offered where a setting or a connection picks one (GitHub issue 108).
+# Machine-drafted; the native-speaker review is the gate.
+
+[labels.fi.model.provider_policy.field.provider.options]
+webhook_out = "Webhook (lähetys)"
+webhook_in = "Webhook (vastaanotto)"
+rest_api_pull = "REST-rajapinta (haku)"
+csv_export = "CSV-vienti"
+slack_webhook = "Slack (saapuva webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (sähköinen allekirjoitus)"
+github_webhook = "GitHub (saapuva webhook)"
+google_drive = "Google Drive (selaa ja lisää asiakirjoja)"
+google_oauth = "Google (kalenteri ja yhteystiedot, luku)"
+microsoft_oauth = "Microsoft (kalenteri ja yhteystiedot, luku)"
+zapier = "Zapier (automaatio)"
+make = "Make (automaatio)"
+n8n = "n8n (automaatio)"
+
+[labels.fi.model.connection.field.provider.options]
+webhook_out = "Webhook (lähetys)"
+webhook_in = "Webhook (vastaanotto)"
+rest_api_pull = "REST-rajapinta (haku)"
+csv_export = "CSV-vienti"
+slack_webhook = "Slack (saapuva webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (sähköinen allekirjoitus)"
+github_webhook = "GitHub (saapuva webhook)"
+google_drive = "Google Drive (selaa ja lisää asiakirjoja)"
+google_oauth = "Google (kalenteri ja yhteystiedot, luku)"
+microsoft_oauth = "Microsoft (kalenteri ja yhteystiedot, luku)"
+zapier = "Zapier (automaatio)"
+make = "Make (automaatio)"
+n8n = "n8n (automaatio)"

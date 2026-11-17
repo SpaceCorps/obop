@@ -3229,8 +3229,11 @@ export interface components {
             owner_user?: string;
             /** @description Treatment overrides by class or field and impact-assessment acknowledgements, as JSON */
             policy?: string;
-            /** @description Id of the provider from the catalogue */
-            provider?: string;
+            /**
+             * @description Id of the provider from the catalogue
+             * @enum {string}
+             */
+            provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
             /** @description Most flows per hour */
             rate_limit_per_hour?: number;
             /** @description Output of the last command (test, sync, authorisation link); never stored */
@@ -3904,8 +3907,11 @@ export interface components {
             oauth_client_id?: string;
             /** @description OAuth client secret; write-only, stored encrypted */
             oauth_client_secret?: string;
-            /** @description Id of the provider this policy is for */
-            provider?: string;
+            /**
+             * @description Id of the provider this policy is for
+             * @enum {string}
+             */
+            provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
             /** @description People with connectors.user may connect their own accounts */
             users_may_use?: boolean;
             /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
@@ -4823,8 +4829,11 @@ export interface operations {
                         owner_user?: string;
                         /** @description Treatment overrides by class or field and impact-assessment acknowledgements, as JSON */
                         policy?: string;
-                        /** @description Id of the provider from the catalogue */
-                        provider: string;
+                        /**
+                         * @description Id of the provider from the catalogue
+                         * @enum {string}
+                         */
+                        provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
                         /** @description Most flows per hour */
                         rate_limit_per_hour?: number;
                         /** @description Output of the last command (test, sync, authorisation link); never stored */
@@ -5036,8 +5045,11 @@ export interface operations {
                     owner_user?: string;
                     /** @description Treatment overrides by class or field and impact-assessment acknowledgements, as JSON */
                     policy?: string;
-                    /** @description Id of the provider from the catalogue */
-                    provider: string;
+                    /**
+                     * @description Id of the provider from the catalogue
+                     * @enum {string}
+                     */
+                    provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
                     /** @description Most flows per hour */
                     rate_limit_per_hour?: number;
                     /** @description Output of the last command (test, sync, authorisation link); never stored */
@@ -6055,8 +6067,11 @@ export interface operations {
                     owner_user?: string;
                     /** @description Treatment overrides by class or field and impact-assessment acknowledgements, as JSON */
                     policy?: string;
-                    /** @description Id of the provider from the catalogue */
-                    provider?: string;
+                    /**
+                     * @description Id of the provider from the catalogue
+                     * @enum {string}
+                     */
+                    provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
                     /** @description Most flows per hour */
                     rate_limit_per_hour?: number;
                     /** @description Output of the last command (test, sync, authorisation link); never stored */
@@ -15917,8 +15932,11 @@ export interface operations {
                         oauth_client_id?: string;
                         /** @description OAuth client secret; write-only, stored encrypted */
                         oauth_client_secret?: string;
-                        /** @description Id of the provider this policy is for */
-                        provider: string;
+                        /**
+                         * @description Id of the provider this policy is for
+                         * @enum {string}
+                         */
+                        provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
                         /** @description People with connectors.user may connect their own accounts */
                         users_may_use?: boolean;
                         /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
@@ -16041,8 +16059,11 @@ export interface operations {
                     oauth_client_id?: string;
                     /** @description OAuth client secret; write-only, stored encrypted */
                     oauth_client_secret?: string;
-                    /** @description Id of the provider this policy is for */
-                    provider: string;
+                    /**
+                     * @description Id of the provider this policy is for
+                     * @enum {string}
+                     */
+                    provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
                     /** @description People with connectors.user may connect their own accounts */
                     users_may_use?: boolean;
                     /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
@@ -16503,8 +16524,11 @@ export interface operations {
                     oauth_client_id?: string;
                     /** @description OAuth client secret; write-only, stored encrypted */
                     oauth_client_secret?: string;
-                    /** @description Id of the provider this policy is for */
-                    provider?: string;
+                    /**
+                     * @description Id of the provider this policy is for
+                     * @enum {string}
+                     */
+                    provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
                     /** @description People with connectors.user may connect their own accounts */
                     users_may_use?: boolean;
                     /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
