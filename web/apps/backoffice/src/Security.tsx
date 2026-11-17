@@ -2,7 +2,6 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   Button,
   InstanceLogo,
-  Input,
   Notice,
   Switch,
   Table,
@@ -10,7 +9,6 @@ import {
   createTwoFactorApi,
   fmt,
   t,
-  twoFactorMessage,
   type TwoFactorStatus,
 } from "@obop/ui";
 import { search, saveSettings, type Row, type Settings } from "./api.ts";
@@ -23,6 +21,7 @@ import {
   PasswordSection,
   SessionsSection,
 } from "./SecurityAccount.tsx";
+import type { App } from "./Chrome.tsx";
 import { PeopleSection } from "./People.tsx";
 import { MicrosoftSignInSection } from "./SsoAdmin.tsx";
 import { EVENT_KINDS } from "./securityEvents.ts";
@@ -31,13 +30,14 @@ type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
 
 /**
  * Customize > Security: your own two-factor authentication for everyone; for administrators the
- * sign-in policy, the reset of another person's second factor and the security log (D53).
+ * sign-in policy, the security log (a person's second factor is reset from their row in People) (D53).
  */
 export function SecurityTab({
   token,
   settings,
   isAdmin,
   me,
+  apps,
   onSettings,
   notify,
   onSignOut,
@@ -47,6 +47,8 @@ export function SecurityTab({
   isAdmin: boolean;
   /** Who is signed in (the name the sign-in gave), for what is shown as theirs. */
   me?: string;
+  /** The launcher apps in their order: People names its access rows after them. */
+  apps?: App[];
   onSettings: (s: Settings) => void;
   notify: Notify;
   onSignOut?: () => void;
@@ -91,7 +93,9 @@ export function SecurityTab({
             notify={notify}
             refreshKey={ssoKey}
             me={me}
+            apps={apps}
             onSignedOut={signedOut}
+            onTwoFactorReset={() => setRefreshKey((k) => k + 1)}
           />
           <MicrosoftSignInSection
             token={token}
@@ -106,7 +110,6 @@ export function SecurityTab({
             onSettings={onSettings}
             notify={notify}
           />
-          <ResetSection token={token} notify={notify} onReset={() => setRefreshKey((k) => k + 1)} />
           <EventLog token={token} refreshKey={refreshKey} />
         </>
       )}
@@ -173,71 +176,6 @@ function PolicySection({
           )}
         </Notice>
       )}
-    </section>
-  );
-}
-
-function ResetSection({
-  token,
-  notify,
-  onReset,
-}: {
-  token: string;
-  notify: Notify;
-  onReset: () => void;
-}) {
-  const id = useId();
-  const [user, setUser] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <section className="stack" aria-labelledby={`${id}-h`}>
-      <h3 id={`${id}-h`} className="overline">
-        {t("Reset someone's two-factor")}
-      </h3>
-      <form
-        className="stack"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          setError(null);
-          const res = await fetch("/api/auth/mfa/reset", {
-            method: "POST",
-            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-            body: JSON.stringify({ user }),
-          });
-          setBusy(false);
-          if (res.ok) {
-            notify(t("Two-factor reset for {user}", { user: user.trim().toLowerCase() }));
-            setUser("");
-            onReset();
-          } else {
-            const body = (await res.json().catch(() => ({}))) as { code?: string };
-            setError(
-              res.status === 400
-                ? t("There is no such person, or they have no two-factor to reset.")
-                : twoFactorMessage({ status: res.status, code: body.code ?? "" }),
-            );
-          }
-        }}
-      >
-        <Input
-          label={t("Username")}
-          hint={t(
-            "For someone who lost their phone and recovery codes. They are signed out and must set it up again. Recorded in the security log.",
-          )}
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-          autoComplete="off"
-          error={error ?? undefined}
-          required
-        />
-        <div className="actionrow">
-          <Button type="submit" loading={busy} disabled={!user.trim()}>
-            {t("Reset two-factor")}
-          </Button>
-        </div>
-      </form>
     </section>
   );
 }

@@ -5,12 +5,95 @@
   justify-content: space-between;
   gap: var(--space-3);
 }
-.people-table .group-cell {
-  max-width: 13rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-muted);
+/* The Access cell: chips that wrap inside a cell of a fixed width, so the table keeps its box. */
+.people-table .access-cell {
+  max-width: 22rem;
+}
+.access-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.access-chips .chip {
+  gap: 0.375rem;
+}
+.access-chips .chip > * {
+  flex: none;
+}
+.access-more-chip {
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+.access-more-chip:hover {
+  color: var(--text);
+}
+/* The picker of New person and Access of NAME. */
+.access-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.access-admin > .hint {
+  margin: var(--space-1) 0 0;
+}
+.access-apps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.access-app {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.access-app > legend {
+  display: contents;
+}
+.access-app-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-weight: var(--weight-medium);
+}
+.access-dim {
+  opacity: 0.55;
+}
+.access-app .switcher {
+  display: flex;
+  inline-size: 100%;
+}
+.access-app .switcher > button {
+  flex: 1 1 0;
+  justify-content: center;
+  min-block-size: 2.75rem;
+  text-align: center;
+}
+.access-app .hint {
+  margin: 0;
+}
+.access-more > summary,
+.access-other > summary {
+  min-block-size: 2.75rem;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: var(--weight-medium);
+}
+.access-more > .stack,
+.access-other > .stack {
+  padding-block-end: var(--space-2);
+}
+.access-tech code {
+  overflow-wrap: anywhere;
 }
 .people-table .actionrow {
   flex-wrap: nowrap;
@@ -76,23 +159,22 @@
     flex: 1 1 auto;
     font-weight: var(--weight-semibold);
   }
-  .table.people-table > tbody > tr > td:nth-child(6) {
+  .table.people-table > tbody > tr > td:nth-child(5) {
     order: -1;
     flex: none;
   }
-  /* The role has a line of its own, so it never rides beside the badge at a place that moves with
-     the length of the name. "Administrator" or "Member" needs no label: a quiet subtitle. */
-  .table.people-table > tbody > tr > td:nth-child(2) {
+  /* The access has a line of its own, so it never rides beside the badge at a place that moves
+     with the length of the name. The chips say what they are: no column name above them. */
+  .table.people-table > tbody > tr > td.access-cell {
     flex-basis: 100%;
-    color: var(--text-muted);
-    font-size: var(--text-sm);
+    max-width: none;
   }
-  .table.people-table > tbody > tr > td:nth-child(2)::before {
+  .table.people-table > tbody > tr > td.access-cell::before {
     content: none;
   }
-  /* The Groups button shows them. */
-  .table.people-table > tbody > tr > td.group-cell {
-    display: none;
+  .access-more-chip {
+    min-block-size: 2.75rem;
+    padding-inline: 0.75rem;
   }
   /* The actions are a two by two block of equal buttons, the same at every phone width, rather
      than lines that break at a different place for each width. */
@@ -102,13 +184,21 @@
     gap: var(--space-2);
   }
   /* A long translated label wraps inside its half instead of spilling over its neighbour. */
-  .people-table .actionrow > .btn {
+  .people-table .actionrow > .btn,
+  .people-table .actionrow > .dropdown > .btn {
     white-space: normal;
     text-align: center;
   }
-  /* Offboard keeps its cell: record.css (0,4,0) pushes a ghost danger button to the row's end. */
-  .people-table .actionrow .btn.ghost.danger-text {
-    margin-inline-start: 0;
+  /* The More menu fills its half and is as tall as a button next to it. */
+  .people-table .actionrow > .btn {
+    min-block-size: 2.75rem;
+  }
+  .people-table .actionrow > .dropdown {
+    display: block;
+  }
+  .people-table .actionrow > .dropdown > .btn {
+    inline-size: 100%;
+    min-block-size: 2.75rem;
   }
   .people-table .badge {
     white-space: normal;

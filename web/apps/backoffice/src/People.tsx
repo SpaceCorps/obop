@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Input, Notice, Table, t } from "@obop/ui";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  ConfirmDialog,
+  Dialog,
+  Input,
+  Menu,
+  Notice,
+  Table,
+  t,
+  twoFactorMessage,
+  tx,
+} from "@obop/ui";
+import { AccessPicker, useAccess, useAccessData, type AccessData } from "./AccessPicker.tsx";
+import { levelWord } from "./accessText.ts";
+import { summarise, type Access } from "./access.ts";
+import { AppIcon, type App } from "./Chrome.tsx";
 import { MIN_PASSWORD, account, reason, type Failure, type Notify } from "./SecurityAccount.tsx";
 import { MicrosoftDialog } from "./PeopleSso.tsx";
 import { readSso, type SsoState } from "./SsoAdmin.tsx";
 
-/* D69: the people of the instance, for administrators: create a person, choose their permission
-   groups, disable, enable, reset a password, and offboard (disable and end every session, agent
-   token and connected app for good). Everything goes through /api/auth/users. */
+/* D69: the people of the instance, for administrators: create a person, choose what they may use
+   (access by app, AccessPicker.tsx), disable, enable, reset a password or a second factor, and
+   offboard (disable and end every session, agent token and connected app for good). Everything
+   goes through /api/auth/users. */
 
 const ADMIN = "platform.admin";
 
@@ -24,18 +42,6 @@ type Person = {
   /** The object id at Microsoft the account is bound to; absent when it is not bound. */
   sso_oid?: string | null;
 };
-
-/** The groups an account can be given, sorted with the administrator group first. */
-function useGroups(token: string, open: boolean) {
-  const [groups, setGroups] = useState<string[]>([]);
-  useEffect(() => {
-    if (!open) return;
-    void account<{ groups: string[] }>(token, "GET", "/groups").then((r) => {
-      if (r.ok) setGroups(r.value.groups);
-    });
-  }, [token, open]);
-  return groups;
-}
 
 function sortGroups(all: string[]): string[] {
   return [...new Set(all)].sort((a, b) =>
@@ -89,21 +95,36 @@ export function GroupPicker({
   );
 }
 
+/** A refusal, announced as an alert; the focus goes to it so that the person reads it at once. */
+function Refusal({ message }: { message: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => ref.current?.focus(), [message]);
+  return (
+    <div ref={ref} tabIndex={-1} className="confirm-error" role="alert">
+      {message}
+    </div>
+  );
+}
+
 function NewPersonDialog({
   token,
+  data,
+  apps,
   onClose,
   onDone,
   failed,
 }: {
   token: string;
+  data: AccessData;
+  apps: App[];
   onClose: () => void;
   onDone: () => void;
   failed: (r: Failure) => string;
 }) {
-  const groups = useGroups(token, true);
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
+  const access = useAccess(data, apps, picked);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [temp, setTemp] = useState<string | null>(null);
@@ -199,32 +220,35 @@ function NewPersonDialog({
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <GroupPicker groups={groups} value={picked} onChange={setPicked} />
-        {error && (
-          <div className="confirm-error" role="alert">
-            {error}
-          </div>
-        )}
+        <AccessPicker access={access} value={picked} onChange={setPicked} apps={apps} />
+        {error && <Refusal message={error} />}
       </form>
     </Dialog>
   );
 }
 
-function GroupsDialog({
+function AccessDialog({
   token,
   person,
+  data,
+  apps,
+  self,
   onClose,
   onDone,
   failed,
 }: {
   token: string;
   person: Person;
+  data: AccessData;
+  apps: App[];
+  /** This is your own row. */
+  self: boolean;
   onClose: () => void;
   onDone: () => void;
   failed: (r: Failure) => string;
 }) {
-  const known = useGroups(token, true);
   const [picked, setPicked] = useState<string[]>(person.groups);
+  const access = useAccess(data, apps, person.groups);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const same = useMemo(
@@ -245,7 +269,7 @@ function GroupsDialog({
   }
   return (
     <Dialog
-      title={t("Groups of {user}", { user: person.name })}
+      title={t("Access of {user}", { user: person.name })}
       size="md"
       onClose={onClose}
       footer={
@@ -254,7 +278,7 @@ function GroupsDialog({
             {t("Cancel")}
           </Button>
           <Button variant="primary" loading={busy} disabled={same} onClick={() => void save()}>
-            {t("Save groups")}
+            {t("Save access")}
           </Button>
         </>
       }
@@ -265,14 +289,49 @@ function GroupsDialog({
             "Takes effect on their next request, in every session they have open. Recorded in the security log with the groups before and after.",
           )}
         </p>
-        <GroupPicker groups={known} value={picked} onChange={setPicked} />
-        {error && (
-          <div className="confirm-error" role="alert">
-            {error}
-          </div>
-        )}
+        <AccessPicker access={access} value={picked} onChange={setPicked} apps={apps} self={self} />
+        {error && <Refusal message={error} />}
       </div>
     </Dialog>
+  );
+}
+
+/** What the Access cell of a row says: chips, at most three apps, then "+N more". */
+function AccessCell({
+  person,
+  access,
+  apps,
+  onOpen,
+}: {
+  person: Person;
+  access: Access;
+  apps: App[];
+  onOpen: () => void;
+}) {
+  const s = summarise(person.groups, access);
+  if (s.admin) return <span className="chip accent">{t("Everything")}</span>;
+  const shown = s.apps.slice(0, 3);
+  const hidden = s.apps.length - shown.length + (s.other.length > 0 && s.apps.length > 0 ? 1 : 0);
+  if (s.apps.length === 0 && s.other.length === 0)
+    return <Badge tone="warning">{t("No apps yet")}</Badge>;
+  return (
+    <div className="access-chips">
+      {shown.map(({ ladder, level }) => {
+        const app = apps.find((a) => a.id === ladder.id);
+        return (
+          <span key={ladder.id} className="chip">
+            {app && <AppIcon app={app} size={16} />}
+            {t("{app} · {level}", { app: ladder.name, level: levelWord(ladder, level) })}
+          </span>
+        );
+      })}
+      {s.apps.length === 0 && <span className="chip">{t("Other access")}</span>}
+      {hidden > 0 && (
+        <button type="button" className="chip access-more-chip" onClick={onOpen}>
+          {t("+{count} more", { count: hidden })}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -283,9 +342,15 @@ export function PeopleSection({
   refreshKey = 0,
   me,
   onSignedOut,
+  apps = [],
+  onTwoFactorReset,
 }: {
   token: string;
   notify: Notify;
+  /** The launcher apps, in order: the names, icons and order of the access rows. */
+  apps?: App[];
+  /** A person's two-factor was reset: the security log has a new line. */
+  onTwoFactorReset?: () => void;
   /** Who is signed in: a change of their own Microsoft sign-in says so. */
   me?: string;
   /** Changes when Microsoft sign-in was set up, changed or removed: the column follows. */
@@ -304,6 +369,10 @@ export function PeopleSection({
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Person | null>(null);
   const [offboarding, setOffboarding] = useState<Person | null>(null);
+  const [mfaReset, setMfaReset] = useState<Person | null>(null);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+  const data = useAccessData(token);
+  const access = useAccess(data, apps);
   const [note, setNote] = useState("");
   const [offError, setOffError] = useState<string | null>(null);
   // Read at the moment of use: the parent may pass a new function at every render.
@@ -365,6 +434,24 @@ export function PeopleSection({
       void load();
     } else setOffError(failed(r));
   }
+  async function resetTwoFactor(p: Person) {
+    setBusy(true);
+    setMfaError(null);
+    const r = await account(token, "POST", "/mfa/reset", { user: p.name });
+    setBusy(false);
+    if (r.ok) {
+      notify(t("Two-factor reset for {user}", { user: p.name }));
+      setMfaReset(null);
+      void load();
+      onTwoFactorReset?.();
+    } else
+      setMfaError(
+        r.status === 400
+          ? t("There is no such person, or they have no two-factor to reset.")
+          : twoFactorMessage({ status: r.status, code: r.code }),
+      );
+  }
+  const mine = (me ?? "").toLowerCase();
   // An instance that does not use Microsoft sees no change: the column and the button need a
   // provider or at least one binding.
   const microsoftShown =
@@ -385,8 +472,7 @@ export function PeopleSection({
           <thead>
             <tr>
               <th scope="col">{t("Person")}</th>
-              <th scope="col">{t("Role")}</th>
-              <th scope="col">{t("Groups")}</th>
+              <th scope="col">{tx("access", "Access")}</th>
               <th scope="col">{t("Two-factor")}</th>
               <th scope="col">{t("Sessions")}</th>
               <th scope="col">{t("Status")}</th>
@@ -400,13 +486,12 @@ export function PeopleSection({
             {people.map((p) => (
               <tr key={p.name} data-person={p.name}>
                 <td>{p.name}</td>
-                <td data-label={t("Role")}>{p.admin ? t("Administrator") : t("Member")}</td>
-                <td className="group-cell" title={p.groups.join(", ")}>
-                  {p.groups.length === 0 ? (
-                    <span className="hint">{t("None")}</span>
-                  ) : (
-                    p.groups.join(", ")
-                  )}
+                <td
+                  className="access-cell"
+                  data-label={tx("access", "Access")}
+                  title={p.groups.join(", ")}
+                >
+                  <AccessCell person={p} access={access} apps={apps} onOpen={() => setEditing(p)} />
                 </td>
                 <td data-label={t("Two-factor")}>{p.mfa_enabled ? t("On") : t("Off")}</td>
                 <td data-label={t("Sessions")}>{p.sessions}</td>
@@ -444,37 +529,59 @@ export function PeopleSection({
                 )}
                 <td className="cell-actions">
                   <div className="actionrow">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
-                      {t("Groups")}
-                    </Button>
-                    <Button size="sm" disabled={busy} onClick={() => void toggle(p)}>
-                      {p.disabled ? t("Enable") : t("Disable")}
-                    </Button>
                     <Button
                       size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setResetting(resetting === p.name ? null : p.name);
-                        setTemp("");
-                        setError(null);
-                      }}
+                      aria-label={t("Access of {user}", { user: p.name })}
+                      onClick={() => setEditing(p)}
                     >
-                      {t("Reset password")}
+                      {tx("access", "Access")}
                     </Button>
-                    {!p.offboarded && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="danger-text"
-                        onClick={() => {
-                          setOffboarding(p);
-                          setNote("");
-                          setOffError(null);
-                        }}
-                      >
-                        {t("Offboard")}
-                      </Button>
-                    )}
+                    <Menu
+                      ariaLabel={t("More actions for {user}", { user: p.name })}
+                      align="end"
+                      triggerClassName="btn small"
+                      trigger={<>{tx("access", "More")}</>}
+                      items={[
+                        {
+                          label: t("Reset password"),
+                          onSelect: () => {
+                            setResetting(p.name);
+                            setTemp("");
+                            setError(null);
+                          },
+                        },
+                        ...(p.mfa_enabled && !p.offboarded && p.name.toLowerCase() !== mine
+                          ? [
+                              {
+                                label: t("Reset two-factor"),
+                                onSelect: () => {
+                                  setMfaReset(p);
+                                  setMfaError(null);
+                                },
+                              },
+                            ]
+                          : []),
+                        {
+                          label: p.disabled ? t("Enable") : t("Disable"),
+                          disabled: busy,
+                          onSelect: () => void toggle(p),
+                        },
+                        ...(p.offboarded
+                          ? []
+                          : [
+                              "separator" as const,
+                              {
+                                label: t("Offboard"),
+                                danger: true,
+                                onSelect: () => {
+                                  setOffboarding(p);
+                                  setNote("");
+                                  setOffError(null);
+                                },
+                              },
+                            ]),
+                      ]}
+                    />
                   </div>
                 </td>
               </tr>
@@ -546,6 +653,8 @@ export function PeopleSection({
       {creating && (
         <NewPersonDialog
           token={token}
+          data={data}
+          apps={apps}
           failed={failed}
           onClose={() => setCreating(false)}
           onDone={() => {
@@ -555,13 +664,16 @@ export function PeopleSection({
         />
       )}
       {editing && (
-        <GroupsDialog
+        <AccessDialog
           token={token}
           person={editing}
+          data={data}
+          apps={apps}
+          self={editing.name.toLowerCase() === mine}
           failed={failed}
           onClose={() => setEditing(null)}
           onDone={() => {
-            notify(t("Groups of {user} saved.", { user: editing.name }));
+            notify(t("Access of {user} saved.", { user: editing.name }));
             void load();
           }}
         />
@@ -577,6 +689,23 @@ export function PeopleSection({
           onDone={() => void load()}
           onSignedOut={onSignedOut}
         />
+      )}
+      {mfaReset && (
+        <ConfirmDialog
+          title={t("Reset two-factor for {user}?", { user: mfaReset.name })}
+          confirmLabel={t("Reset two-factor")}
+          busy={busy}
+          error={mfaError}
+          onConfirm={() => void resetTwoFactor(mfaReset)}
+          onClose={() => setMfaReset(null)}
+        >
+          <p>
+            {t(
+              "{user} is signed out everywhere and loses their authenticator app, passkeys and recovery codes. At the next sign-in they set up two-factor again. Use this when they lost their phone and their recovery codes. Recorded in the security log.",
+              { user: mfaReset.name },
+            )}
+          </p>
+        </ConfirmDialog>
       )}
       {offboarding && (
         <ConfirmDialog

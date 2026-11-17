@@ -34,6 +34,11 @@ export function ConfirmDialog({
   children?: ReactNode;
 }) {
   const bodyId = useId();
+  const errorRef = useRef<HTMLDivElement>(null);
+  // A refusal is announced (role alert) and takes the focus, so that it is read at once.
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
   return (
     <Dialog
       role="alertdialog"
@@ -58,7 +63,7 @@ export function ConfirmDialog({
       <div id={bodyId} className="confirm-body">
         {children}
         {error && (
-          <div className="confirm-error" role="alert">
+          <div ref={errorRef} tabIndex={-1} className="confirm-error" role="alert">
             {error}
           </div>
         )}

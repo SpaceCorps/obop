@@ -624,6 +624,9 @@ export function Segmented<T extends string>({
   iconOnlyNarrow?: boolean;
 }) {
   const radio = mode === "radio";
+  // A radio group with nothing chosen (a state the caller cannot describe by a choice) still has
+  // one stop on the Tab key: its first choice.
+  const chosen = options.some((o) => o.value === value);
   return (
     <div
       className="switcher"
@@ -631,7 +634,7 @@ export function Segmented<T extends string>({
       aria-label={label}
       onKeyDown={radio ? (e) => rovingKeys(e, '[role="radio"]') : undefined}
     >
-      {options.map((o) => (
+      {options.map((o, i) => (
         <button
           key={o.value}
           type="button"
@@ -639,7 +642,7 @@ export function Segmented<T extends string>({
           aria-checked={radio ? value === o.value : undefined}
           aria-pressed={radio ? undefined : value === o.value}
           aria-label={iconOnlyNarrow ? o.label : undefined}
-          tabIndex={radio ? (value === o.value ? 0 : -1) : undefined}
+          tabIndex={radio ? (value === o.value || (!chosen && i === 0) ? 0 : -1) : undefined}
           title={iconOnlyNarrow ? o.label : undefined}
           onClick={() => onChange(o.value)}
         >
