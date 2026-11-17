@@ -300,6 +300,18 @@ pub fn may_list(p: &Principal) -> bool {
     p.is_person() || administers(p)
 }
 
+/// Commands of group `*` that a mobile app's token is refused (L20). The instance's setting record
+/// holds the whole settings object (the theme, the app order, the security policy, the shop's
+/// payment instructions and whatever an administrator saves there), and an app needs none of it: a
+/// phone is lost more easily than a desk, and its token is the person narrowed to a few groups.
+pub const REFUSED_TO_AN_APP: &[&str] = &["setting.get", "setting.list", "setting.search"];
+
+/// Whether the command `id` is refused to the principal whatever its groups: a mobile app's token
+/// and [`REFUSED_TO_AN_APP`]. The dispatcher answers it like a group the token lacks.
+pub fn refused(id: &str, p: &Principal) -> bool {
+    p.device.is_some() && REFUSED_TO_AN_APP.contains(&id)
+}
+
 /// Whether the command `id` is one the principal can use at all, for the catalogues (MCP
 /// `tools/list`, `GET /api/commands`, the command-line help; L17). The device commands are in
 /// group `*`, so the group does not tell; this follows [`may_see`] and [`may_list`]: a mobile app's
@@ -308,6 +320,9 @@ pub fn may_list(p: &Principal) -> bool {
 /// can only propose the revoking of its owner's device). Every other command is usable as far as
 /// this says.
 pub fn usable(id: &str, p: &Principal) -> bool {
+    if refused(id, p) {
+        return false;
+    }
     let Some(verb) = id
         .strip_prefix(MODEL)
         .and_then(|rest| rest.strip_prefix('.'))

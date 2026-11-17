@@ -2726,7 +2726,7 @@ pub fn admin_module() -> Module {
             },
             ModelDef {
                 name: "setting",
-                description: "Instance-wide interface settings: theme and the app launcher layout",
+                description: "Instance-wide settings as one JSON object: the theme, the app launcher layout, the security policy and others. Every person reads them, administrators write them; the token of a mobile app cannot read them",
                 read_group: ANY_GROUP,
                 write_group: ADMIN_GROUP,
                 access: None,
@@ -3289,6 +3289,26 @@ mod tests {
         let bot = Principal::agent("bot", &["base.user"], &["base.user"]);
         assert!(read(&bot).is_ok());
         assert!(matches!(set(&bot, "{}"), Err(CallError::Forbidden(_))));
+        // The token of a mobile app reads nothing of them (L20): not by id, not by list or search.
+        let mut app = Principal::user("u", &["base.user"]);
+        app.device = Some("dev_1".into());
+        app.scopes = Some(["base.user".to_string()].into_iter().collect());
+        assert!(matches!(read(&app), Err(CallError::Forbidden(_))));
+        for id in ["setting.list", "setting.search"] {
+            let r = call(&d, &app, id, Value::map([]));
+            assert!(
+                matches!(
+                    r,
+                    Err(CallError::Forbidden(_) | CallError::UnknownCommand(_))
+                ),
+                "{id}: {r:?}"
+            );
+        }
+        assert!(
+            !d.visible(Surface::Mcp, &app)
+                .iter()
+                .any(|c| c.starts_with("setting."))
+        );
     }
 
     #[test]

@@ -1316,8 +1316,9 @@ impl Dispatcher {
         if !on_surface(c.surfaces, surface) {
             return Err(CallError::NotOnSurface(id.into()));
         }
-        // Same answer for "no such group" and "scope too narrow": do not leak which.
-        if !p.allows(c.permission_group) {
+        // Same answer for "no such group" and "scope too narrow": do not leak which. A command a
+        // mobile app's token is refused whatever its groups is answered the same (L20).
+        if !p.allows(c.permission_group) || devices::refused(id, p) {
             return Err(CallError::Forbidden(id.into()));
         }
         // The fields an agent sent in clear although it is shown them masked count as changed in
