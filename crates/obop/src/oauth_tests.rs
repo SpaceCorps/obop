@@ -1602,3 +1602,66 @@ async fn flow_pages(r: &axum::Router) -> Vec<(String, String)> {
     }
     out
 }
+
+/// L40: a client that asks the authorization endpoint for JSON learns whether the instance knows
+/// it, by a machine-readable error and not the status of an HTML page, and the question costs no
+/// flow and none of the address's sign-in pages (`authorize_per_ip`, 60 in ten minutes).
+#[tokio::test]
+async fn asked_for_json_the_authorization_endpoint_says_whether_it_knows_the_client_and_begins_nothing()
+ {
+    let rig = rig(false);
+    let r = &rig.r;
+    let c = client(r).await;
+    let ip = fresh_address();
+    let probe = |client: String| {
+        let ip = ip.clone();
+        async move {
+            call(
+                r,
+                "GET",
+                &authorize_url(&client, REDIRECT, &[]),
+                &[("accept", "application/json"), ("x-forwarded-for", &ip)],
+                None,
+            )
+            .await
+        }
+    };
+    let unknown = probe("oc_nobody".into()).await;
+    assert_eq!(unknown.status, 400);
+    assert_eq!(unknown.header("content-type"), "application/json");
+    assert_eq!(
+        unknown.json()["error"],
+        "invalid_client",
+        "{}",
+        unknown.text()
+    );
+    // More probes of a known client than the address may open sign-in pages: none is counted.
+    for _ in 0..70 {
+        let known = probe(c.clone()).await;
+        assert_eq!(known.status, 200, "{}", known.text());
+        assert_eq!(known.json()["status"], "ok");
+        assert!(known.header("set-cookie").is_empty(), "no flow began");
+    }
+    // A wrong redirect address is an error of the request, not an unknown client.
+    let wrong = call(
+        r,
+        "GET",
+        &authorize_url(&c, "http://127.0.0.1:9/elsewhere", &[]),
+        &[("accept", "application/json")],
+        None,
+    )
+    .await;
+    assert_eq!(wrong.status, 400);
+    assert_eq!(wrong.json()["error"], "invalid_request", "{}", wrong.text());
+    // A browser still gets the page and its flow, from the same address.
+    let page = call(
+        r,
+        "GET",
+        &authorize_url(&c, REDIRECT, &[]),
+        &[("x-forwarded-for", &ip)],
+        None,
+    )
+    .await;
+    assert_eq!(page.status, 200, "{}", page.text());
+    assert!(!page.header("set-cookie").is_empty());
+}
