@@ -123,9 +123,17 @@
 @media (hover: none) {
   .guide-anchor {
     margin-inline-start: 0;
-    margin-block: -0.5rem;
-    padding: 0.5rem;
+    margin-block: -0.9375rem;
+    padding: 0.9375rem;
     opacity: 1;
+  }
+}
+/* A link of the contents is a line a finger can hit. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .guide-toc a {
+    display: flex;
+    align-items: center;
+    min-block-size: 2.75rem;
   }
 }
 .guide-text p,

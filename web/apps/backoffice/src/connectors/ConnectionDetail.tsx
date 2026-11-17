@@ -288,7 +288,7 @@ export function ConnectionDetail({ id, onClose }: { id: string; onClose: () => v
           {myRuns.length === 0 ? (
             <p className="hint">{t("Nothing has run yet.")}</p>
           ) : (
-            <Table dense caption={t("Recent runs")}>
+            <Table dense stack caption={t("Recent runs")}>
               <thead>
                 <tr>
                   <th scope="col">{t("Started")}</th>
@@ -299,12 +299,12 @@ export function ConnectionDetail({ id, onClose }: { id: string; onClose: () => v
               <tbody>
                 {myRuns.map((r) => (
                   <tr key={r.id}>
-                    <td>{when(r.started_at)}</td>
-                    <td>
+                    <td className="cell-main">{when(r.started_at)}</td>
+                    <td data-label={t("Status")}>
                       {r.status}
                       {r.error_summary && <span className="hint block">{r.error_summary}</span>}
                     </td>
-                    <td>{fmt.integer(Number(r.records))}</td>
+                    <td data-label={t("Records")}>{fmt.integer(Number(r.records))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -317,7 +317,7 @@ export function ConnectionDetail({ id, onClose }: { id: string; onClose: () => v
           {myFlows.length === 0 ? (
             <p className="hint">{t("No data has flowed yet.")}</p>
           ) : (
-            <Table dense caption={t("Recent data flows")}>
+            <Table dense stack caption={t("Recent data flows")}>
               <thead>
                 <tr>
                   <th scope="col">{t("When")}</th>
@@ -328,12 +328,12 @@ export function ConnectionDetail({ id, onClose }: { id: string; onClose: () => v
               <tbody>
                 {myFlows.map((f) => (
                   <tr key={f.id}>
-                    <td>{when(f.at)}</td>
-                    <td>
+                    <td className="cell-main">{when(f.at)}</td>
+                    <td data-label={t("Outcome")}>
                       {f.outcome}
                       {f.reason && <span className="hint block">{f.reason}</span>}
                     </td>
-                    <td>{f.fields_sent || "—"}</td>
+                    <td data-label={t("Fields")}>{f.fields_sent || "—"}</td>
                   </tr>
                 ))}
               </tbody>

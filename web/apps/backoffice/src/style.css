@@ -483,7 +483,7 @@
 }
 /* 38 px with a mouse at either density, like before; 44 px where a finger needs it (--control-h). */
 .home-head .searchfield input {
-  min-block-size: max(2.25rem, calc(var(--control-h) - 2px));
+  min-block-size: max(2.25rem, var(--control-h));
 }
 .home-body {
   display: flex;
@@ -1152,17 +1152,10 @@ a.kpi.ov-kpi:hover {
     inline-size: 20px;
     block-size: 20px;
   }
-  /* The avatar stays 34 px to look at; a ring around it takes the tap to about 44 px. Its end
-     margin puts it on the page's 16 px gutter, level with the content below. */
+  /* Its end margin puts the avatar on the page's 16 px gutter, level with the content below (the
+     ring that takes its tap to 44 px is in the touch block at the end). */
   .avatar-btn {
-    position: relative;
     margin-inline: 0.3rem 0.75rem;
-  }
-  .avatar-btn::after {
-    content: "";
-    position: absolute;
-    inset: -0.3rem;
-    border-radius: 50%;
   }
   /* A phone shows search as an icon button beside the theme and account buttons, drawn like them. */
   .searchpill {
@@ -1335,17 +1328,8 @@ a.kpi.ov-kpi:hover {
   .app-row > input:not([type="checkbox"], [type="color"]) {
     flex: 1 1 calc(100% - 36px - var(--space-2));
   }
-  .app-row .btn.small {
-    min-inline-size: 2.75rem;
-    min-block-size: 2.75rem;
-    padding: 0;
-  }
   .app-row .check {
     padding-inline: var(--space-2);
-  }
-  .app-row > input[type="color"] {
-    inline-size: 2.75rem;
-    block-size: 2.75rem;
   }
   /* Theme colours: two even rows of four, each a finger wide. */
   .theme-tab .swatches {
@@ -1353,10 +1337,6 @@ a.kpi.ov-kpi:hover {
     grid-template-columns: repeat(4, 2.75rem);
     justify-content: space-between;
     row-gap: var(--space-3);
-  }
-  .theme-tab .swatch {
-    inline-size: 2.75rem;
-    block-size: 2.75rem;
   }
   /* The obop.toml preview wraps instead of being a second scroller inside the page. */
   .code {
@@ -1477,4 +1457,56 @@ a.kpi.ov-kpi:hover {
 
 .drive-page-body {
   padding: 0 1.25rem 1.25rem;
+}
+
+/* ---------- Touch targets of the shell and of Customize ---------- */
+/* A finger needs 44 px in both directions: a phone and a touch screen of any width (a tablet in
+   portrait is 768 px wide and wider than the phone rules). A mouse keeps the compact bar. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .brand {
+    min-block-size: 2.75rem;
+  }
+  .searchpill {
+    block-size: 2.75rem;
+  }
+  /* The avatar stays 34 px to look at; a ring around it takes the tap to about 45 px. */
+  .avatar-btn {
+    position: relative;
+  }
+  .avatar-btn::after {
+    content: "";
+    position: absolute;
+    inset: -0.35rem;
+    border-radius: 50%;
+  }
+  /* The strip of the app's pages at tablet widths, and the pages of the app on a phone. */
+  .sidebar a,
+  .side-toggle {
+    display: flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+  .linklike {
+    min-block-size: 2.75rem;
+    padding-inline: var(--space-2);
+  }
+  .theme-tab .swatch {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  .app-row .btn.small {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    padding: 0;
+  }
+  .app-row > input[type="color"] {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  /* "Open in Google Drive" beside a file's button. */
+  .drive-actions a {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
 }

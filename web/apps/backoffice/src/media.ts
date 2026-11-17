@@ -24,6 +24,8 @@ export function matches(query: string): boolean {
 export const SHEET_QUERY = "(max-width: 64rem)";
 /** Full-screen up to this width. */
 export const PHONE_QUERY = "(max-width: 40rem)";
+/** A finger is the pointer (a phone, or a tablet): what it hits is at least 44 px. */
+export const TOUCH_QUERY = "(pointer: coarse)";
 
 /**
  * Stops the page behind a sheet from scrolling, and puts the scroll position back when it closes.

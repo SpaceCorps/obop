@@ -555,11 +555,6 @@
     grid-template-columns: 1fr;
     gap: 0.15rem;
   }
-  /* A finger-sized link that does not make its row taller. */
-  .meta-row dd .ext-link {
-    padding-block: 0.65rem;
-    margin-block: -0.65rem;
-  }
   /* The selected tab already names the page; the heading stays for screen readers. clip-path
      hides it and its overflow stays visible, so the phone layout check does not report cut text. */
   .mods-head h2 {
@@ -570,18 +565,43 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  /* The dependency table stands in for the picture here (DependencyOverview): the module's link
-     fills its line, in the link colour so it reads as one. */
-  .dep-table-wrap th a {
-    display: block;
-    padding-block: 0.6rem;
-    margin-block: -0.6rem;
-    color: var(--accent-ink);
-  }
   /* Each status sits on its own line under its dependency, whether or not it would fit beside it. */
   .dep-table-wrap td .status-chip {
     display: flex;
     inline-size: fit-content;
     margin-block-start: 0.15rem;
+  }
+}
+
+/* ---------- A finger ---------- */
+/* On a phone or a touch screen (a tablet is 768 px wide and wider than the phone rules) every link
+   and control of the page is 44 px high. The links of a table or a line grow with padding that a
+   negative margin takes back, so the rows keep their height. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .mods-search input {
+    min-block-size: var(--control-h);
+  }
+  .meta-row dd .ext-link {
+    padding-block: 0.8rem;
+    margin-block: -0.8rem;
+  }
+  /* The dependency table stands in for the picture on a phone (DependencyOverview): the module's
+     link fills its line, in the link colour so it reads as one. */
+  .dep-table-wrap th a {
+    display: block;
+    padding-block: 0.8rem;
+    margin-block: -0.8rem;
+    color: var(--accent-ink);
+  }
+  .dep-table-wrap summary {
+    display: flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+  .dep-name a,
+  .dep-by a {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
   }
 }

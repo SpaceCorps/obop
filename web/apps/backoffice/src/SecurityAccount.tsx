@@ -510,7 +510,7 @@ export function DevicesSection({
       {rows !== null && rows.length === 0 && problem === null ? (
         <p className="hint">{t("No device is signed in.")}</p>
       ) : rows === null ? null : (
-        <Table caption={t("Devices")} dense stack>
+        <Table caption={t("Devices")} dense stack className="wrap-md">
           <thead>
             <tr>
               <th scope="col">{t("Device")}</th>

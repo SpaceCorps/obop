@@ -1,14 +1,14 @@
 import { useId } from "react";
 import { t } from "@obop/ui";
-import { PHONE_QUERY, useMedia } from "../media.ts";
+import { PHONE_QUERY, TOUCH_QUERY, useMedia } from "../media.ts";
 import { StatusChip } from "./badges.tsx";
 import { dependencyStatus, graphOf, prettyReq } from "./status.ts";
 import type { Row } from "./types.ts";
 
 const COL = 220;
-const ROW = 50;
 const W = 176;
-const H = 34;
+// A box of the picture is a link: a finger needs 44 px of it, a mouse the compact 34.
+const BOX = { mouse: { row: 50, h: 34 }, touch: { row: 56, h: 44 } };
 const PAD = 12;
 
 /**
@@ -29,6 +29,7 @@ export function DependencyOverview({
 }) {
   const id = useId();
   const phone = useMedia(PHONE_QUERY);
+  const { row: ROW, h: H } = useMedia(TOUCH_QUERY) ? BOX.touch : BOX.mouse;
   const g = graphOf(rows);
   const maxRow = Math.max(0, ...g.nodes.map((n) => n.row));
   const width = PAD * 2 + (g.layers - 1) * COL + W;

@@ -1028,20 +1028,13 @@
   .bb-lead {
     font-size: var(--text-base);
   }
-  /* Accents in one row, each theme switch a full-width row of equal buttons. On the narrowest
-     phones the swatches shrink rather than touch, so a tap never lands on the neighbour. */
+  /* Accents in rows of finger-sized swatches (they wrap on the narrowest phones), each theme
+     switch a full-width row of equal buttons. */
   .bb-strip .swatches {
     flex: 1 1 100%;
-    flex-wrap: nowrap;
-    justify-content: space-between;
-    column-gap: 0.25rem;
-  }
-  .bb-strip .swatch {
-    flex: 0 1 2.25rem;
-    inline-size: auto;
-    block-size: auto;
-    min-inline-size: 0;
-    aspect-ratio: 1;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.25rem;
   }
   .bb-strip .switcher {
     flex: 1 1 100%;
@@ -1140,4 +1133,16 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: var(--space-5);
+}
+
+/* The accents of the strip are a finger wide on a phone and on a tablet. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .bb-nav > ul > li > a {
+    min-block-size: 2.75rem;
+  }
+  .bb-strip .swatch {
+    flex: none;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
 }
