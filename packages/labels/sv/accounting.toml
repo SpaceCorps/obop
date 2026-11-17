@@ -320,7 +320,7 @@ description = "Betalarens eller mottagarens namn som banken anger det"
 
 [labels.sv.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "Motpartens IBAN"
-description = "Betalarens eller mottagarens bankkonto"
+description = "Betalarens eller mottagarens IBAN"
 
 [labels.sv.model.accounting_bank_statement_line.field.move_line_id]
 label = "Verifikationsrad"

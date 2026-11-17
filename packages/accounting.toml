@@ -710,7 +710,7 @@ write_group = "accounting.user"
 
   [[model.field]]
   name = "counterparty_iban"
-  description = "Bank account of the payer or payee"
+  description = "IBAN of the payer or payee"
   class = "financial"
   personal_data = true
   pattern = "iban"

@@ -320,7 +320,7 @@ description = "Nom du payeur ou du bénéficiaire tel que la banque le transmet"
 
 [labels.fr.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "IBAN de la contrepartie"
-description = "Compte bancaire du payeur ou du bénéficiaire"
+description = "IBAN du payeur ou du bénéficiaire"
 
 [labels.fr.model.accounting_bank_statement_line.field.move_line_id]
 label = "Ligne d’écriture"

@@ -2,7 +2,7 @@
 id = "appointments"
 version = "0.3.2"
 name = "Appointments"
-description = "Bookable resources (people, rooms, equipment) and appointments with a date, start and end time and a status flow. Overlaps are not prevented automatically."
+description = "Bookable resources (people, rooms, equipment) and appointments with a date, start and end time and a status flow. A resource cannot be booked twice at overlapping times (cancelled and missed appointments excepted)."
 author = "SpaceCorps"
 summary = "Bookable people, rooms and equipment, and appointments with a start, an end and a status flow."
 license = "Apache-2.0"

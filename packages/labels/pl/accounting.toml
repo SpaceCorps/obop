@@ -320,7 +320,7 @@ description = "Nazwa płatnika lub odbiorcy zgłoszona przez bank"
 
 [labels.pl.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "IBAN kontrahenta"
-description = "Rachunek bankowy płatnika lub odbiorcy"
+description = "IBAN płatnika lub odbiorcy"
 
 [labels.pl.model.accounting_bank_statement_line.field.move_line_id]
 label = "Pozycja operacji"

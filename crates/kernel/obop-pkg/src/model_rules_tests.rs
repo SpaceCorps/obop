@@ -155,6 +155,39 @@ fn the_bundled_packages_hold_their_times_with_rules() {
     }
 }
 
+/// The texts people and agents read say what the rules hold: the overlap is prevented, and the
+/// field that takes only an IBAN is described as one, in English and in every label file.
+#[test]
+fn the_descriptions_say_what_the_rules_hold() {
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../packages");
+    let read = |p: &str| std::fs::read_to_string(format!("{root}/{p}")).unwrap();
+    let appt = read("appointments.toml");
+    assert!(
+        !appt.contains("not prevented"),
+        "appointments says overlaps are allowed"
+    );
+    assert!(appt.contains("cannot be booked twice"));
+    let stale = [
+        ("de", "nicht automatisch verhindert", "Bankkonto von"),
+        ("es", "no se evitan", "Cuenta bancaria"),
+        ("fi", "ei estetä", "pankkitili"),
+        ("fr", "ne sont pas empêchés", "Compte bancaire"),
+        ("pl", "nie jest blokowane", "Rachunek bankowy"),
+        ("sv", "förhindras inte", "bankkonto"),
+    ];
+    for (lang, overlap, account) in stale {
+        let a = read(&format!("labels/{lang}/appointments.toml"));
+        assert!(!a.contains(overlap), "{lang}: appointments description");
+        let acc = read(&format!("labels/{lang}/accounting.toml"));
+        let at = acc
+            .find("field.counterparty_iban]")
+            .expect("counterparty_iban labels");
+        let block: String = acc[at..].lines().take(3).collect();
+        assert!(!block.contains(account), "{lang}: {block}");
+        assert!(block.contains("IBAN"), "{lang}: {block}");
+    }
+}
+
 #[test]
 fn accounting_holds_its_iban_and_its_fiscal_dates() {
     let text = Bundled.fetch("accounting").unwrap();
@@ -169,6 +202,7 @@ fn accounting_holds_its_iban_and_its_fiscal_dates() {
             .unwrap()
     };
     let iban = field("accounting_bank_statement_line", "counterparty_iban");
+    assert!(iban.description.contains("IBAN"), "{}", iban.description);
     assert!(iban.check_text("123123").is_err());
     assert!(iban.check_text("DE89370400440532013000").is_ok());
     let journal_currency = field("accounting_journal", "currency");

@@ -320,7 +320,7 @@ description = "Nombre del ordenante o del beneficiario tal como lo informa el ba
 
 [labels.es.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "IBAN de la contraparte"
-description = "Cuenta bancaria del ordenante o del beneficiario"
+description = "IBAN del ordenante o del beneficiario"
 
 [labels.es.model.accounting_bank_statement_line.field.move_line_id]
 label = "Línea de movimiento"

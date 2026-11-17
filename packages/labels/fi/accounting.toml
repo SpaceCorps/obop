@@ -320,7 +320,7 @@ description = "Maksajan tai saajan nimi sellaisena kuin pankki sen ilmoittaa"
 
 [labels.fi.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "Vastapuolen IBAN"
-description = "Maksajan tai saajan pankkitili"
+description = "Maksajan tai saajan IBAN"
 
 [labels.fi.model.accounting_bank_statement_line.field.move_line_id]
 label = "Kirjausrivi"

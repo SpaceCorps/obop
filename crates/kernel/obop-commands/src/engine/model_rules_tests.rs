@@ -371,6 +371,9 @@ fn formats_and_date_bounds_are_held_on_every_write() {
             let (msg, c) = r.refuse("booking.create", with(k, bad));
             assert!(msg.contains(want), "{k}: {msg}");
             assert_eq!(c.code, "limit_violated", "{k}");
+            // The hint tells an agent what to do with a format or a date, not only a length.
+            let hint = c.body["hint"].as_str().unwrap_or_default();
+            assert!(hint.contains("format the message names"), "{k}: {hint}");
         }
         let id = r.id(
             "booking.create",

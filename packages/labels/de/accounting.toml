@@ -320,7 +320,7 @@ description = "Name von Zahler oder Empfänger, wie die Bank ihn meldet"
 
 [labels.de.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "IBAN Gegenpartei"
-description = "Bankkonto von Zahler oder Empfänger"
+description = "IBAN von Zahler oder Empfänger"
 
 [labels.de.model.accounting_bank_statement_line.field.move_line_id]
 label = "Buchungszeile"
