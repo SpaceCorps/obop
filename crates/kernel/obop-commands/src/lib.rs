@@ -581,6 +581,16 @@ impl Dispatcher {
         shared::txn_lock(self.shared.get(), &self.txn).map_err(CallError::Handler)
     }
 
+    /// Run `f` under the transaction lock that every write of a locked model takes (one with a
+    /// unique field, a sequence or an effect), so that no such write of another call comes
+    /// between the steps of `f`; the calls `f` makes on this thread run under the same lock and
+    /// do not wait for it. A handler that reads, works out and writes in several commands uses it
+    /// (`stock_count.apply`, Q12). Across server processes the lock is the shared one.
+    pub fn serialized<T>(&self, f: impl FnOnce() -> T) -> Result<T, String> {
+        let _txn = shared::txn_lock(self.shared.get(), &self.txn)?;
+        Ok(f())
+    }
+
     /// What `tools/list`, `GET /api/commands` and CLI help show for this principal.
     pub fn catalog(&self, surface: Surface, p: &Principal) -> Vec<CommandInfo> {
         self.sync();

@@ -211,7 +211,12 @@ fn the_person_who_submitted_a_claim_for_a_colleague_cannot_approve_it() {
         .unwrap()
         .to_string();
     call(&a, &root, "expenses_expense.submit", json!({"id": id})).unwrap();
-    let stored = a.store.backend().get("expenses_expense", &id).unwrap().unwrap();
+    let stored = a
+        .store
+        .backend()
+        .get("expenses_expense", &id)
+        .unwrap()
+        .unwrap();
     assert_eq!(stored["submitted_by"], "root", "{stored:?}");
     let got = call(&a, &root, "expenses_expense.get", json!({"id": id})).unwrap();
     assert_eq!(got["submitted_by"], "root", "{got}");
