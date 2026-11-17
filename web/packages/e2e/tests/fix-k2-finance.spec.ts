@@ -184,6 +184,19 @@ test.describe("finance flows of stream k2", () => {
         await allow.check();
         await expect(page.getByText("Expense settings saved")).toBeVisible();
         expect((await api.run("root", "expenses_setting.get", {})).allow_self_approval).toBe(true);
+        // The switch keeps the keyboard focus through the save: Space turns it off again.
+        await expect(allow).toBeFocused();
+        await page.keyboard.press("Space");
+        await expect(allow).not.toBeChecked();
+        await expect
+          .poll(async () => (await api.run("root", "expenses_setting.get", {})).allow_self_approval)
+          .toBe(false);
+        await allow.focus();
+        await page.keyboard.press("Space");
+        await expect(allow).toBeChecked();
+        await expect
+          .poll(async () => (await api.run("root", "expenses_setting.get", {})).allow_self_approval)
+          .toBe(true);
         // A Customize save writes that older copy back whole: the company setting stays on.
         await api.run("root", "setting.update", { id: "instance", value: stale.value ?? "{}" });
         expect((await api.run("root", "expenses_setting.get", {})).allow_self_approval).toBe(true);

@@ -30,6 +30,8 @@ export function ExpenseSettings() {
   }, [d.token]);
 
   const change = async (v: boolean) => {
+    // One change at a time. The switch is not disabled meanwhile, so it keeps the keyboard focus.
+    if (busy) return;
     // The switch moves at once; it goes back when the server does not take the change.
     const was = allow;
     setAllow(v);
@@ -62,7 +64,8 @@ export function ExpenseSettings() {
             <Switch
               label={t("People may approve their own claims")}
               checked={allow}
-              disabled={!isAdmin || busy}
+              disabled={!isAdmin}
+              aria-busy={busy}
               onChange={(e) => void change(e.target.checked)}
             />
             <p className="hint">
