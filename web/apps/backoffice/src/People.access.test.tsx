@@ -683,6 +683,48 @@ describe("the folds of the picker", () => {
     expect(fold("access-more").open).toBe(true);
   });
 
+  it("a fold the hand closed stays closed after a filter removes its row and a cleared filter brings it back", async () => {
+    // More than eight apps: the picker offers a filter, and a filtered-out row unmounts.
+    const many = [
+      ...FOLD_MODULES.slice(1),
+      ...Array.from({ length: 8 }, (_, i) => ({
+        id: `filler${i}`,
+        name: `Filler ${i}`,
+        groups: [`filler${i}.user`],
+        contents: { models: [] },
+      })),
+    ] as unknown as ModuleLike[];
+    const manyApps = [...apps.slice(1), ...many.slice(1).map((m) => ({ id: m.id, name: m.name }))];
+    const value = ["crm.user", "crm.exporter"];
+    await draw(
+      <AccessPicker
+        access={buildAccess(many, manyApps, FOLD_KNOWN, value)}
+        value={value}
+        onChange={() => {}}
+      />,
+    );
+    const more = fold("access-more");
+    expect(more.open).toBe(true);
+    await act(async () => {
+      more.open = false;
+      more.dispatchEvent(new Event("toggle"));
+    });
+    await settle();
+    expect(fold("access-more").open).toBe(false);
+    const input = container.querySelector<HTMLInputElement>('input[autocomplete="off"]')!;
+    const type = async (v: string) => {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, v);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await settle();
+    };
+    await type("filler");
+    expect(document.body.querySelector("details.access-more")).toBeNull();
+    await type("");
+    expect(fold("access-more").open).toBe(false);
+  });
+
   it("a held extra does not flicker: the open section is rendered open and stays open", async () => {
     await draw(picker(["crm.user", "crm.exporter"]));
     for (let i = 0; i < 3; i++) {

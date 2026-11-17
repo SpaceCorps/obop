@@ -94,23 +94,38 @@ function modelsOf(ladder: Ladder, group: string, apps: App[]): string {
   return [...names].slice(0, 6).join(", ");
 }
 
+/** What the hand did to the folds of one picker: the fold's key to open or closed. */
+type Folds = Record<string, boolean>;
+
 /**
  * The open state of a fold ("More access", "Other access"). It starts open when the person holds
  * something in it and stays as the hand left it. `held` is derived from the lists, which arrive
- * after the first render, so the state keeps only what the hand did: null until it does something.
- * The `toggle` event also fires when React itself sets `open`; the handler writes the state only
- * when the element differs from what is rendered, so that echo changes nothing (no loop).
+ * after the first render, so the state keeps only what the hand did: nothing until it does
+ * something. The state lives in the picker, one entry per fold, so a row that the app filter
+ * removes and brings back keeps it. The `toggle` event also fires when React itself sets `open`;
+ * the handler writes the state only when the element differs from what is rendered, so that echo
+ * changes nothing (no loop).
  */
-function useFold(held: boolean) {
-  const [toggled, setToggled] = useState<boolean | null>(null);
-  const open = toggled ?? held;
+type Fold = {
+  open: boolean;
+  /** Called when a box inside is changed: the section stays open under the hand. */
+  pin: () => void;
+  onToggle: (e: SyntheticEvent<HTMLDetailsElement>) => void;
+};
+
+function foldOf(
+  folds: Folds,
+  set: (key: string, open: boolean) => void,
+  key: string,
+  held: boolean,
+): Fold {
+  const open = folds[key] ?? held;
   return {
     open,
-    /** Called when a box inside is changed: the section stays open under the hand. */
-    pin: () => setToggled(true),
-    onToggle: (e: SyntheticEvent<HTMLDetailsElement>) => {
+    pin: () => set(key, true),
+    onToggle: (e) => {
       const now = e.currentTarget.open;
-      if (now !== open) setToggled(now);
+      if (now !== open) set(key, now);
     },
   };
 }
@@ -131,6 +146,7 @@ function AppRow({
   apps,
   technical,
   disabled,
+  fold,
 }: {
   ladder: Ladder;
   value: string[];
@@ -139,11 +155,12 @@ function AppRow({
   technical: boolean;
   /** An administrator needs no app rows: they stay as stored and cannot be changed meanwhile. */
   disabled: boolean;
+  /** The fold of "More access", kept by the picker. */
+  fold: Fold;
 }) {
   const level = levelOf(value, ladder);
   const app = apps.find((a) => a.id === ladder.id);
   const held = value.filter((g) => ladder.groups.includes(g));
-  const fold = useFold(ladder.extras.some((g) => value.includes(g)));
   const options: { value: Level; label: string }[] = [
     { value: "none", label: t("No access") },
     { value: "user", label: levelWord(ladder, "user") },
@@ -249,7 +266,14 @@ export function AccessPicker({
   const filtering = access.ladders.length > FILTER_ABOVE;
   const wanted = filtering ? filter.trim().toLowerCase() : "";
   const shown = access.ladders.filter((l) => l.name.toLowerCase().includes(wanted));
-  const otherFold = useFold(access.other.some((g) => value.includes(g)));
+  const [folds, setFolds] = useState<Folds>({});
+  const setFold = (key: string, open: boolean) => setFolds((f) => ({ ...f, [key]: open }));
+  const otherFold = foldOf(
+    folds,
+    setFold,
+    "#other",
+    access.other.some((g) => value.includes(g)),
+  );
   return (
     <div className="access-picker">
       <div className="access-admin">
@@ -286,6 +310,12 @@ export function AccessPicker({
             apps={apps}
             technical={technical}
             disabled={admin}
+            fold={foldOf(
+              folds,
+              setFold,
+              l.id,
+              l.extras.some((g) => value.includes(g)),
+            )}
           />
         ))}
         {loadFailed && (
