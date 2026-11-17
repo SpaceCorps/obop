@@ -339,6 +339,19 @@ fn person_free(name: &'static str, desc: &'static str, g: &'static str) -> F {
     F::new(name, desc, Internal, false, g)
 }
 
+/// Let the provider fields offer the providers `providers` (the runtime's): the catalogue in a
+/// server, the catalogue and a stand-in in a test that runs one (GitHub issue 108).
+pub fn offer_providers(m: &mut Module, providers: &[obop_connectors::catalog::Provider]) {
+    let ids: Vec<&'static str> = providers.iter().map(|p| p.id).collect();
+    for model in m.models.iter_mut() {
+        if model.name == "provider_policy" || model.name == "connection" {
+            for f in model.fields.iter_mut().filter(|f| f.name == "provider") {
+                *f = f.clone().select(&ids);
+            }
+        }
+    }
+}
+
 pub fn module() -> Module {
     let m = Module {
         id: "connectors".into(),

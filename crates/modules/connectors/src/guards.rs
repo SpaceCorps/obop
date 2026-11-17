@@ -390,7 +390,7 @@ fn normalise(
     };
     let provider = rt
         .provider(&provider_id)
-        .ok_or_else(|| unknown_provider(&rt, &provider_id))?;
+        .ok_or_else(|| unknown_provider(rt, &provider_id))?;
     let me = owner_id(p);
 
     if creating {
