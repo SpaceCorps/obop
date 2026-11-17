@@ -32,13 +32,24 @@ const FOCUSABLE =
  */
 export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean) {
   const returnTo = useRef<Element | null>(null);
+  // The opener is read while the dialog renders: by the time the effect runs, a field of the dialog
+  // with `autoFocus` has already taken focus, and that field is not what focus goes back to (R16).
+  const opener = useRef<Element | null>(null);
+  const wasActive = useRef(false);
+  if (active && !wasActive.current && typeof document !== "undefined")
+    opener.current = document.activeElement;
+  wasActive.current = active;
   useEffect(() => {
     if (!active) return;
     const root = ref.current;
     if (!root) return;
-    returnTo.current = document.activeElement;
+    const now = document.activeElement;
+    const inside = !!now && root.contains(now);
+    returnTo.current = inside ? opener.current : now;
     const items = () => [...root.querySelectorAll<HTMLElement>(FOCUSABLE)];
-    (root.querySelector<HTMLElement>("[data-autofocus]") ?? items()[0] ?? root).focus();
+    // A field that took focus itself keeps it.
+    if (!inside)
+      (root.querySelector<HTMLElement>("[data-autofocus]") ?? items()[0] ?? root).focus();
     const key = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
       const list = items();
