@@ -2849,5 +2849,6 @@
   "One per time entry": "Une par saisie de temps",
   "This person has their own login, so the record would be theirs and you could not see it. Ask an administrator to file it. Nothing was saved.": "Cette personne a son propre identifiant : l’enregistrement serait le sien et vous ne pourriez pas le voir. Demandez à un administrateur de le saisir. Rien n’a été enregistré.",
   "This person has their own login, so the record would be theirs and you could not see it. Ask someone with {groups} to file it. Nothing was saved.": "Cette personne a son propre identifiant : l’enregistrement serait le sien et vous ne pourriez pas le voir. Demandez à une personne ayant {groups} de le saisir. Rien n’a été enregistré.",
-  "Week {week}, {year}": "Semaine {week}, {year}"
+  "Week {week}, {year}": "Semaine {week}, {year}",
+  "Choose the customer to bill": "Choisissez le client à facturer"
 }

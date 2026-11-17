@@ -84,7 +84,13 @@ function BillDialog({
     r.kind === "error" ? serverMessage(r.message) : t("Sent for approval");
 
   async function go(dry: boolean) {
-    if (rate.trim() && minor === undefined) {
+    // A project without a customer or a rate has them asked here; the server would answer with
+    // its own field names (customer, hourly_rate_minor).
+    if (!String(customer ?? "").trim()) {
+      setError(t("Choose the customer to bill"));
+      return;
+    }
+    if (!rate.trim() || minor === undefined) {
       setError(t("Enter the hourly rate as an amount, such as 95.00"));
       return;
     }

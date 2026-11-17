@@ -608,6 +608,7 @@
   "Choose file…": "Choose file…",
   "Choose image…": "Choose image…",
   "Choose some fields": "Choose some fields",
+  "Choose the customer to bill": "Choose the customer to bill",
   "Choose the fields that may leave. Only these are sent, and each is treated by its data class.": "Choose the fields that may leave. Only these are sent, and each is treated by its data class.",
   "Choose the fields this connection may write. A field that is not chosen is refused, not dropped.": "Choose the fields this connection may write. A field that is not chosen is refused, not dropped.",
   "Choose the tax of {code}": "Choose the tax of {code}",

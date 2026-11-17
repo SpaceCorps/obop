@@ -2849,5 +2849,6 @@
   "One per time entry": "machine-drafted",
   "This person has their own login, so the record would be theirs and you could not see it. Ask an administrator to file it. Nothing was saved.": "machine-drafted",
   "This person has their own login, so the record would be theirs and you could not see it. Ask someone with {groups} to file it. Nothing was saved.": "machine-drafted",
-  "Week {week}, {year}": "machine-drafted"
+  "Week {week}, {year}": "machine-drafted",
+  "Choose the customer to bill": "machine-drafted"
 }

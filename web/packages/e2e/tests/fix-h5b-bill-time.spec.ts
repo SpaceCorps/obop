@@ -60,3 +60,32 @@ test("a project's approved time becomes a draft invoice from the project (K62)",
       if (!had.has(id)) await api.post("/api/module/uninstall", { id }, root);
   }
 });
+
+test("a project without a customer or a rate has them asked in words, not by field id", async ({
+  page,
+  signIn,
+  api,
+  uid,
+}) => {
+  const root = await api.token("root");
+  const had = new Set(((await api.run("root", "module.list")) as any[]).map((m) => m.id));
+  for (const id of ["projects", "timesheets"])
+    if (!had.has(id)) await api.run("root", "marketplace_listing.install", { id });
+  try {
+    const project = await api.create("root", "projects_project", { name: uid("Bare") });
+    await signIn("root", `/projects/projects_project?id=${project.id}`);
+    await page.getByRole("button", { name: "Bill time" }).click();
+    const dialog = page.getByRole("dialog", { name: "Bill time" });
+    await dialog.getByRole("button", { name: "Preview" }).click();
+    await expect(dialog).toContainText("Choose the customer to bill");
+    const customer = await api.create("root", "party", { name: uid("Werft") });
+    await dialog.getByRole("combobox", { name: "Customer" }).fill(customer.name);
+    await page.getByRole("option", { name: customer.name }).first().click();
+    await dialog.getByRole("button", { name: "Preview" }).click();
+    await expect(dialog).toContainText("Enter the hourly rate as an amount, such as 95.00");
+    await expect(dialog).not.toContainText("hourly_rate_minor");
+  } finally {
+    for (const id of ["timesheets", "projects"])
+      if (!had.has(id)) await api.post("/api/module/uninstall", { id }, root);
+  }
+});

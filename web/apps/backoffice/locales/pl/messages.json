@@ -2849,5 +2849,6 @@
   "One per time entry": "Jedna na wpis czasu",
   "This person has their own login, so the record would be theirs and you could not see it. Ask an administrator to file it. Nothing was saved.": "Ta osoba ma własny login, więc rekord należałby do niej i nie mógłbyś go zobaczyć. Poproś administratora, aby go dodał. Nic nie zapisano.",
   "This person has their own login, so the record would be theirs and you could not see it. Ask someone with {groups} to file it. Nothing was saved.": "Ta osoba ma własny login, więc rekord należałby do niej i nie mógłbyś go zobaczyć. Poproś kogoś z {groups}, aby go dodał. Nic nie zapisano.",
-  "Week {week}, {year}": "Tydzień {week}, {year}"
+  "Week {week}, {year}": "Tydzień {week}, {year}",
+  "Choose the customer to bill": "Wybierz klienta, któremu wystawisz fakturę"
 }

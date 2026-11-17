@@ -2849,5 +2849,6 @@
   "One per time entry": "Yksi aikakirjausta kohden",
   "This person has their own login, so the record would be theirs and you could not see it. Ask an administrator to file it. Nothing was saved.": "Tällä henkilöllä on oma käyttäjätunnus, joten tietue olisi hänen eikä näkisit sitä. Pyydä ylläpitäjää kirjaamaan se. Mitään ei tallennettu.",
   "This person has their own login, so the record would be theirs and you could not see it. Ask someone with {groups} to file it. Nothing was saved.": "Tällä henkilöllä on oma käyttäjätunnus, joten tietue olisi hänen eikä näkisit sitä. Pyydä henkilöä, jolla on {groups}, kirjaamaan se. Mitään ei tallennettu.",
-  "Week {week}, {year}": "Viikko {week}, {year}"
+  "Week {week}, {year}": "Viikko {week}, {year}",
+  "Choose the customer to bill": "Valitse laskutettava asiakas"
 }
