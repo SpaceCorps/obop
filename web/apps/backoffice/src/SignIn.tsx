@@ -18,6 +18,7 @@ import {
   login,
   loginMfa,
   rememberPlace,
+  signedInLogin,
   ssoEnabled,
   ssoExchange,
   takeSsoReturn,
@@ -126,6 +127,11 @@ export function SignIn({
     });
   }, [onDone]);
 
+  /** Signed in: the login kept is the one the server names for the session (U11), else `fallback`. */
+  async function finish(token: string, fallback: string, enrolment: boolean) {
+    onDone(token, (await signedInLogin(token)) ?? fallback, enrolment);
+  }
+
   async function password(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -133,13 +139,16 @@ export function SignIn({
     setBusy(true);
     setError(null);
     const r = await login(typed, String(f.get("password")));
-    setBusy(false);
     // The login the server signed in (`$user` of a filter or a read-only hint compares with it,
     // U11): its answer's when it names one, else what was typed as the server reads a login,
-    // trimmed and in lower case (" Sam" is "sam").
+    // trimmed and in lower case (" Sam" is "sam"), until the session says (finish).
     const user = (r.kind !== "error" && r.user) || typed.trim().toLowerCase();
-    if (r.kind === "session") onDone(r.token, user, r.enrolment);
-    else if (r.kind === "mfa") setStep({ mfaToken: r.mfaToken, user, methods: r.methods });
+    if (r.kind === "session") {
+      await finish(r.token, user, r.enrolment);
+    }
+    setBusy(false);
+    if (r.kind === "session") return;
+    if (r.kind === "mfa") setStep({ mfaToken: r.mfaToken, user, methods: r.methods });
     else if (r.status === 429)
       setError(() => twoFactorMessage({ status: 429, code: "rate_limited" }));
     else if (r.status === 0) setError(() => twoFactorMessage({ status: 0, code: "network" }));
@@ -172,7 +181,7 @@ export function SignIn({
     if (!step) return null;
     const r = await signInWithPasskey(step.mfaToken);
     if (r.ok) {
-      onDone(r.value.token, step.user, !!r.value.mfa_enrolment_required);
+      await finish(r.value.token, step.user, !!r.value.mfa_enrolment_required);
       return null;
     }
     if (r.kind === "server" && r.code === "mfa_expired") {
@@ -191,7 +200,7 @@ export function SignIn({
     if (!step) return null;
     const r = await loginMfa(step.mfaToken, factor);
     if (r.kind === "session") {
-      onDone(r.token, step.user, r.enrolment);
+      await finish(r.token, step.user, r.enrolment);
       return null;
     }
     if (r.kind === "error" && r.code === "mfa_expired") {
