@@ -366,6 +366,23 @@ describe("server messages without engine text", () => {
     ).toBe("Payments do not cover the total");
   });
 
+  it("keeps every failing assertion of an action, each without its suffix (Q17)", async () => {
+    await setLanguage("en", false);
+    expect(
+      serverMessage(
+        "Choose the production location first (assertion is_set(location_id) failed); " +
+          "Add the components first (assertion count(lines) > 0 failed)",
+      ),
+    ).toBe("Choose the production location first; Add the components first");
+    // Through a failed step of an effect too.
+    expect(
+      serverMessage(
+        "manufacturing_order.confirm: effect 1 (run action) failed, nothing was changed: " +
+          "A (assertion is_set(a) failed); B (assertion count(lines) > 0 failed)",
+      ),
+    ).toBe("A; B");
+  });
+
   it("names the field by its label in English", async () => {
     await setLanguage("en", false);
     registerMeta([{ id: "sales", name: "Sales", models: [order] }]);

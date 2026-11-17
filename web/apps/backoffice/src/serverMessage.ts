@@ -491,11 +491,12 @@ const RULES: Rule[] = [
 
 /**
  * The refusal of an assertion without the engine's suffix: the server writes
- * `<message> (assertion <expression> failed)` (B12), and a person needs only the message.
+ * `<message> (assertion <expression> failed)` (B12), and a person needs only the message. When
+ * several assertions of an action fail, the server joins them with `; ` in declaration order
+ * (Q17): every one loses its suffix and all of them are kept.
  */
 export function withoutAssertion(raw: string): string {
-  const m = /^(.+?) \(assertion .+ failed\)$/s.exec(raw);
-  return m ? m[1]! : raw;
+  return raw.replace(/ \(assertion .+? failed\)(?=; |$)/gs, "");
 }
 
 /** Translate a server message when its pattern is known, else return it unchanged. */
