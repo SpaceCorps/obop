@@ -94,3 +94,28 @@ test("a reviewer reads a trip's route and check, and rejects it with a reason", 
   expect(got.json.value.state).toBe("rejected");
   expect(got.json.value.reject_reason).toBe("The trip was private");
 });
+
+test("an empty review queue says so and offers all trips (R10)", async ({ page, api, signIn }) => {
+  // Empty the queue: every trip in review is confirmed by the administrator (no reviewer of their own).
+  const root = await api.token("root");
+  const waiting = await api.post(
+    "/api/mileage_trip/search",
+    { filter: [{ field: "state", op: "eq", value: "in_review" }], limit: 1000 },
+    root,
+  );
+  expect(waiting.status, JSON.stringify(waiting.json)).toBe(200);
+  for (const t of waiting.json.value.rows as { id: string }[]) {
+    const done = await api.post("/api/mileage_trip/confirm", { id: t.id }, root);
+    expect(done.status, JSON.stringify(done.json)).toBe(200);
+  }
+
+  await signIn("mina", "/mileage");
+  await expect(page).toHaveURL(/mileage_trip\?st=/);
+  await expect(page.getByText("Nothing to review", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Every trip sent to review has been confirmed or rejected."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Show all trips" }).click();
+  await expect(page.getByText("Nothing to review", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("grid").getByRole("row", { name: /drew/ }).first()).toBeVisible();
+});
