@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Ajanvaraukset"
-description = "Varattavat resurssit (henkilöt, tilat, laitteet) ja ajanvaraukset, joissa on päivä, alkamis- ja päättymisaika sekä tilakulku. Päällekkäisyyksiä ei estetä automaattisesti."
+description = "Varattavat resurssit (henkilöt, tilat, laitteet) ja ajanvaraukset, joissa on päivä, alkamis- ja päättymisaika sekä tilakulku. Resurssia ei voi varata kahdesti päällekkäisiin aikoihin (peruttuja ja käyttämättä jääneitä varauksia lukuun ottamatta)."
 summary = "Varattavat henkilöt, tilat ja laitteet sekä ajanvaraukset, joilla on alku, loppu ja tilakulku."
 
 [labels.fi.model.appointments_resource]
@@ -102,3 +102,9 @@ description = "Kirjaa, ettei osallistuja saapunut"
 
 [labels.fi.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Ajanvaraus päättyy ennen kuin se alkaa: aseta päättymisaika alkamisen jälkeen"
+
+[labels.fi.model.appointments_appointment.rule.ends_after_start]
+message = "Ajanvaraus päättyy ennen kuin se alkaa: aseta päättymisaika alkamisen jälkeen"
+
+[labels.fi.model.appointments_appointment.rule.no_double_booking]
+message = "Resurssi on jo varattu tuohon aikaan: valitse toinen aika tai toinen resurssi"

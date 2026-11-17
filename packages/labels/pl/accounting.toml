@@ -320,7 +320,7 @@ description = "Nazwa płatnika lub odbiorcy zgłoszona przez bank"
 
 [labels.pl.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "IBAN kontrahenta"
-description = "Rachunek bankowy płatnika lub odbiorcy"
+description = "IBAN płatnika lub odbiorcy"
 
 [labels.pl.model.accounting_bank_statement_line.field.move_line_id]
 label = "Pozycja operacji"
@@ -367,3 +367,9 @@ message = "Operacja się nie bilansuje: suma winien i suma ma muszą być równe
 
 [labels.pl.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Wybierz pozycję operacji, do której należy ta transakcja bankowa"
+
+[labels.pl.model.accounting_fiscal_year.rule.ends_after_start]
+message = "Rok obrotowy kończy się, zanim się zacznie: ustaw ostatni dzień w dniu pierwszym lub później"
+
+[labels.pl.model.accounting_period.rule.ends_after_start]
+message = "Okres kończy się, zanim się zacznie: ustaw ostatni dzień w dniu pierwszym lub później"

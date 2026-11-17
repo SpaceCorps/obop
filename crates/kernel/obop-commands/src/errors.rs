@@ -239,14 +239,14 @@ pub const TABLE: &[Row] = &[
         status: 400,
         retry_after: None,
         origin: "D56",
-        hint: "A condition of the action does not hold. Change the record as the message says, then retry.",
+        hint: "A condition declared by the package does not hold: an assertion of an action or a rule of the model. Change the record as the message says, then retry.",
     },
     Row {
         code: code::LIMIT_VIOLATED,
         status: 400,
         retry_after: None,
         origin: "D90",
-        hint: "A value is outside the limits of its field (max_length, min_length, min and max in GET /api/meta; a text field with no max_length has the default of its kind). Nothing was changed. Shorten the text or change the number so that it fits, then retry.",
+        hint: "A value is outside the limits of its field (max_length, min_length, min and max in GET /api/meta; a text field with no max_length has the default of its kind). A date outside its bounds or a value in the wrong format (an IBAN, a VAT number, a currency code) is refused with the same code. Nothing was changed. Shorten the text, change the number or date, or write the value in the format the message names, then retry.",
     },
     Row {
         code: code::READONLY_FIELD,

@@ -159,6 +159,39 @@ pub struct ModelM {
     /// `[model.guard]` (D77, command-layer check): when records are frozen and what may still
     /// change.
     pub guard: Option<GuardM>,
+    /// `[[model.rule]]` (D88, own fields): conditions every write keeps true.
+    #[serde(default)]
+    pub rule: Vec<RuleM>,
+    /// `[model.no_overlap]` (D88 amendment): no two records of one key with overlapping times.
+    pub no_overlap: Option<NoOverlapM>,
+}
+
+/// `[[model.rule]]` (D88).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuleM {
+    pub key: String,
+    pub expr: String,
+    pub message: String,
+    /// `touched` (the default) or `always`.
+    pub applies: Option<String>,
+}
+
+/// `[model.no_overlap]` (D88 amendment of 2026-11-17).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NoOverlapM {
+    /// The rule key: `assert_key` of a refusal and the label slot `rule.<key>`.
+    pub rule: String,
+    /// The fields two records share to clash, such as `["resource_id", "day"]`.
+    pub key: Vec<String>,
+    pub start: String,
+    pub end: String,
+    /// The select field `ignore_states` names options of; `state` when absent.
+    pub state_field: Option<String>,
+    #[serde(default)]
+    pub ignore_states: Vec<String>,
+    pub message: String,
 }
 
 /// `[model.guard]` (D77).
@@ -483,6 +516,9 @@ pub struct FieldM {
     pub ref_filter: Option<String>,
     /// `[model.field.ui]` (D95).
     pub ui: Option<FieldUiM>,
+    /// `kind = "text"` (K45): a named format every written value must have:
+    /// `"currency_code"`, `"iban"` or `"vat_id"`.
+    pub pattern: Option<String>,
 }
 
 /// The registry kind of a manifest field (`sequence` is a text field that is numbered).
@@ -553,11 +589,38 @@ fn bound_of(key: &str, v: &toml::Value, f: &FieldM) -> Result<Bound, String> {
         ("decimal", _) => Err(format!(
             "`{key}` of a decimal field must be a string such as \"0.10\""
         )),
+        // A day, as a string or a TOML local date (`min = 1900-01-01`).
+        ("date", T::String(_) | T::Datetime(_)) => {
+            let text = match v {
+                T::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            Bound::date(&text).ok_or_else(|| {
+                format!("`{key}` {text:?} of a date field must be a real day written as YYYY-MM-DD")
+            })
+        }
+        ("date", _) => Err(format!(
+            "`{key}` of a date field must be a day such as \"1900-01-01\""
+        )),
         _ => Err(format!(
-            "`min` and `max` are only valid for kind \"number\", \"money\" or \"decimal\", not {:?}",
+            "`min` and `max` are only valid for kind \"number\", \"money\", \"decimal\" or \"date\", not {:?}",
             f.kind
         )),
     }
+}
+
+/// The named format of a text field (K45), parsed; whether the kind takes one is the gate's.
+fn pattern_of(f: &FieldM) -> Result<Option<obop_registry::Pattern>, String> {
+    f.pattern
+        .as_deref()
+        .map(|p| {
+            obop_registry::Pattern::parse(p).ok_or_else(|| {
+                format!(
+                    "`pattern` {p:?} is not a known format; use \"currency_code\", \"iban\" or \"vat_id\""
+                )
+            })
+        })
+        .transpose()
 }
 
 /// The limits a field declares (D90), parsed; their meaning (which kind they fit, `min` above
@@ -568,6 +631,7 @@ fn limits_of(f: &FieldM) -> Result<Limits, String> {
         max_length: f.max_length,
         min: f.min.as_ref().map(|v| bound_of("min", v, f)).transpose()?,
         max: f.max.as_ref().map(|v| bound_of("max", v, f)).transpose()?,
+        pattern: pattern_of(f)?,
     })
 }
 
@@ -886,6 +950,12 @@ impl Manifest {
                                 })
                                 .collect(),
                             guard_message: m.guard.as_ref().is_some_and(|g| g.message.is_some()),
+                            rules: m
+                                .rule
+                                .iter()
+                                .map(|r| r.key.clone())
+                                .chain(m.no_overlap.iter().map(|n| n.rule.clone()))
+                                .collect(),
                         },
                     )
                 })
@@ -2323,6 +2393,7 @@ impl Manifest {
                     .collect(),
             });
             let guard = Self::model_guard(m, &commands)?;
+            let (rules, no_overlap) = Self::model_rules(m)?;
             out.push(ModelDef {
                 name: intern(&m.name),
                 description: intern(&m.description),
@@ -2341,11 +2412,63 @@ impl Manifest {
                     },
                     ui: Self::model_ui(m)?,
                     guard,
+                    rules,
+                    no_overlap,
                     ..ModelExt::default()
                 },
             });
         }
         Ok(out)
+    }
+
+    /// `[[model.rule]]` and `[model.no_overlap]` of `m` (D88), parsed; their meaning is checked by
+    /// the install gate (`obop_registry::model_rules::problems`).
+    fn model_rules(
+        m: &ModelM,
+    ) -> Result<
+        (
+            Vec<obop_registry::ModelRule>,
+            Option<obop_registry::NoOverlap>,
+        ),
+        String,
+    > {
+        use obop_registry::model_rules::{Applies, ModelRule, no_overlap};
+        if m.public.as_ref().is_some_and(|p| p.submit)
+            && (!m.rule.is_empty() || m.no_overlap.is_some())
+        {
+            return Err(format!(
+                "{}: a model that takes public submissions cannot declare rules yet",
+                m.name
+            ));
+        }
+        let mut rules = Vec::new();
+        for r in &m.rule {
+            let applies = match r.applies.as_deref() {
+                None => Applies::Touched,
+                Some(a) => Applies::parse(a).ok_or_else(|| {
+                    format!(
+                        "{}: rule {:?}: applies must be \"touched\" or \"always\", not {a:?}",
+                        m.name, r.key
+                    )
+                })?,
+            };
+            rules.push(
+                ModelRule::parse(&r.key, &r.expr, &r.message, applies)
+                    .map_err(|e| format!("{}: rule {:?}: {e}", m.name, r.key))?,
+            );
+        }
+        let overlap = m.no_overlap.as_ref().map(|n| {
+            no_overlap(
+                &n.rule,
+                &n.key,
+                &n.start,
+                &n.end,
+                n.state_field.as_deref(),
+                &n.ignore_states,
+                &n.message,
+            )
+        });
+        Ok((rules, overlap))
     }
 
     /// Build registry metadata and run the D41 install gate over it.
@@ -2363,14 +2486,16 @@ impl Manifest {
     }
 
     fn build_module(&self, reserved: bool) -> Result<Module, String> {
-        let models = self.build_models()?;
+        let mut models = self.build_models()?;
+        let translations = Translations::from_labels(&self.labels);
+        obop_registry::model_rules::attach_messages(&mut models, &translations);
         let module = Module {
             id: self.module.id.clone(),
             name: self.module.name.clone(),
             description: self.module.description.clone(),
             models,
             network_destinations: vec![],
-            translations: std::sync::Arc::new(Translations::from_labels(&self.labels)),
+            translations: std::sync::Arc::new(translations),
             meta: self.module_meta(),
         };
         let mut public_problems = Vec::new();

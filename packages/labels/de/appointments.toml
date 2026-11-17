@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Termine"
-description = "Buchbare Ressourcen (Personen, Räume, Ausstattung) und Termine mit Datum, Start- und Endzeit sowie einem Statusablauf. Überschneidungen werden nicht automatisch verhindert."
+description = "Buchbare Ressourcen (Personen, Räume, Ausstattung) und Termine mit Datum, Start- und Endzeit sowie einem Statusablauf. Eine Ressource kann nicht zweimal zu überlappenden Zeiten gebucht werden (stornierte und nicht wahrgenommene Termine ausgenommen)."
 summary = "Buchbare Personen, Räume und Ausstattung sowie Termine mit Start, Ende und Statusablauf."
 
 [labels.de.model.appointments_resource]
@@ -102,3 +102,9 @@ description = "Festhalten, dass die teilnehmende Person nicht gekommen ist"
 
 [labels.de.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Der Termin endet, bevor er beginnt: Legen Sie ein Ende nach dem Beginn fest"
+
+[labels.de.model.appointments_appointment.rule.ends_after_start]
+message = "Der Termin endet, bevor er beginnt: Legen Sie ein Ende nach dem Beginn fest"
+
+[labels.de.model.appointments_appointment.rule.no_double_booking]
+message = "Die Ressource ist zu dieser Zeit bereits gebucht: Wählen Sie eine andere Zeit oder eine andere Ressource"

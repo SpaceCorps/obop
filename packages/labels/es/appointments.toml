@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Citas"
-description = "Recursos reservables (personas, salas, equipos) y citas con fecha, hora de inicio y de fin y un flujo de estados. Los solapamientos no se evitan automáticamente."
+description = "Recursos reservables (personas, salas, equipos) y citas con fecha, hora de inicio y de fin y un flujo de estados. Un recurso no se puede reservar dos veces en horarios que se solapan (salvo las citas canceladas y las no presentadas)."
 summary = "Recursos reservables (personas, salas y equipos) y citas con inicio, fin y un flujo de estados."
 
 [labels.es.model.appointments_resource]
@@ -102,3 +102,9 @@ description = "Registrar que el asistente no se presentó"
 
 [labels.es.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "La cita termina antes de empezar: indique una hora de fin posterior al inicio"
+
+[labels.es.model.appointments_appointment.rule.ends_after_start]
+message = "La cita termina antes de empezar: indique una hora de fin posterior al inicio"
+
+[labels.es.model.appointments_appointment.rule.no_double_booking]
+message = "El recurso ya está reservado a esa hora: elija otra hora u otro recurso"

@@ -4,7 +4,7 @@
 // code with its messages, replace the patterns by that code.
 import { getLang, t, tx } from "@obop/ui";
 import type { FieldMeta, ModuleMeta } from "./api.ts";
-import { label, optionLabel } from "./format.ts";
+import { formatDate, label, optionLabel } from "./format.ts";
 import { appTitle, fieldTitle, modelTitle } from "./labels.ts";
 import { showNumber, tooBig, tooLong, tooShort, tooSmall } from "./limits.ts";
 
@@ -151,6 +151,37 @@ const FIELD_RULES: Rule[] = [
         show(m[5]!),
       );
     },
+  ],
+  // The bounds of a date field and the named formats of a text field (K45).
+  [
+    /^(\w+)\.(\w+) must be at (most|least) (\d{4}-\d{2}-\d{2}); this is (\d{4}-\d{2}-\d{2})$/,
+    (m) =>
+      (m[3] === "most" ? tooBig : tooSmall)(
+        fieldName(m[1]!, m[2]!),
+        formatDate(m[4]!),
+        formatDate(m[5]!),
+      ),
+  ],
+  [
+    /^(\w+)\.(\w+) must be a currency code of three capital letters \(ISO 4217\), such as EUR$/,
+    (m) =>
+      t("{field} must be a currency code of three capital letters, such as EUR", {
+        field: fieldName(m[1]!, m[2]!),
+      }),
+  ],
+  [
+    /^(\w+)\.(\w+) must be a valid IBAN, such as [A-Z0-9 ]+$/,
+    (m) =>
+      t("{field} must be a valid IBAN, such as DE89 3704 0044 0532 0130 00", {
+        field: fieldName(m[1]!, m[2]!),
+      }),
+  ],
+  [
+    /^(\w+)\.(\w+) must be a VAT number with its country prefix, such as [A-Z0-9]+$/,
+    (m) =>
+      t("{field} must be a VAT number with its country prefix, such as DE123456789", {
+        field: fieldName(m[1]!, m[2]!),
+      }),
   ],
   [
     /^(\w+)\.(\w+) must be a string$/,
@@ -491,10 +522,11 @@ const RULES: Rule[] = [
 
 /**
  * The refusal of an assertion without the engine's suffix: the server writes
- * `<message> (assertion <expression> failed)` (B12), and a person needs only the message.
+ * `<message> (assertion <expression> failed)` (B12), or `<message> (rule <key> failed)` for a
+ * rule of the model (D88), and a person needs only the message.
  */
 export function withoutAssertion(raw: string): string {
-  const m = /^(.+?) \(assertion .+ failed\)$/s.exec(raw);
+  const m = /^(.+?) \((?:assertion .+|rule [a-z_]+) failed\)$/s.exec(raw);
   return m ? m[1]! : raw;
 }
 

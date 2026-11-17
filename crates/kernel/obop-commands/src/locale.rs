@@ -123,7 +123,11 @@ pub(crate) fn assertion_message_behind(message: &str) -> Option<String> {
     CURRENT.with(|c| {
         c.borrow().as_ref().and_then(|s| {
             let n = s.noted.iter().rev().find(|n| message.contains(&n.text))?;
-            let cut = n.text.rfind(" (assertion ")?;
+            // An assertion of an action, or a model rule (D88).
+            let cut = n
+                .text
+                .rfind(" (assertion ")
+                .or_else(|| n.text.rfind(" (rule "))?;
             n.text
                 .ends_with(" failed)")
                 .then(|| n.text[..cut].to_string())

@@ -364,6 +364,11 @@ describe("server messages without engine text", () => {
     expect(
       serverMessage("Payments do not cover the total (assertion sum(x) >= total failed)"),
     ).toBe("Payments do not cover the total");
+    expect(
+      serverMessage(
+        "The resource is already booked at that time: pick another time or another resource (rule no_double_booking failed)",
+      ),
+    ).toBe("The resource is already booked at that time: pick another time or another resource");
   });
 
   it("names the field by its label in English", async () => {
@@ -371,6 +376,28 @@ describe("server messages without engine text", () => {
     registerMeta([{ id: "sales", name: "Sales", models: [order] }]);
     expect(serverMessage("sale_order.customer_id is required")).toBe("Customer is required");
     expect(serverMessage("sale_order.note is required")).toBe("Note is required");
+  });
+
+  it("says what format or which days a field takes (K45)", async () => {
+    await setLanguage("en", false);
+    registerMeta([{ id: "sales", name: "Sales", models: [order] }]);
+    expect(
+      serverMessage(
+        "sale_order.currency must be a currency code of three capital letters (ISO 4217), such as EUR",
+      ),
+    ).toBe("Currency must be a currency code of three capital letters, such as EUR");
+    expect(
+      serverMessage("sale_order.iban must be a valid IBAN, such as DE89 3704 0044 0532 0130 00"),
+    ).toBe("IBAN must be a valid IBAN, such as DE89 3704 0044 0532 0130 00");
+    expect(
+      serverMessage(
+        "sale_order.vat must be a VAT number with its country prefix, such as DE123456789",
+      ),
+    ).toBe("VAT must be a VAT number with its country prefix, such as DE123456789");
+    const below = serverMessage(
+      "sale_order.ordered_on must be at least 1900-01-01; this is 0313-12-13",
+    );
+    expect(below).toMatch(/^Ordered on must be at least .+1900; this is .+313$/);
   });
 
   it("says what was wrong inside a failed step of an action", async () => {

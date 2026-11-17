@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Tidsbokning"
-description = "Bokningsbara resurser (personer, rum, utrustning) och bokningar med datum, start- och sluttid och ett statusflöde. Överlappningar förhindras inte automatiskt."
+description = "Bokningsbara resurser (personer, rum, utrustning) och bokningar med datum, start- och sluttid och ett statusflöde. En resurs kan inte bokas två gånger på tider som överlappar (avbokade och uteblivna bokningar undantagna)."
 summary = "Bokningsbara personer, rum och utrustning samt bokningar med start, slut och ett statusflöde."
 
 [labels.sv.model.appointments_resource]
@@ -102,3 +102,9 @@ description = "Registrera att deltagaren inte kom"
 
 [labels.sv.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Bokningen slutar innan den börjar: ange en sluttid efter starten"
+
+[labels.sv.model.appointments_appointment.rule.ends_after_start]
+message = "Bokningen slutar innan den börjar: ange en sluttid efter starten"
+
+[labels.sv.model.appointments_appointment.rule.no_double_booking]
+message = "Resursen är redan bokad vid den tiden: välj en annan tid eller en annan resurs"

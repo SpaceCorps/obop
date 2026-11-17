@@ -1,6 +1,6 @@
 [module]
 id = "planning"
-version = "0.3.0"
+version = "0.3.1"
 name = "Planning"
 description = "Shifts for employees, with roles and shift templates. A template only records a name, a role and times: no action creates a shift from it. A shift has a day and a start and end in minutes since midnight (0 to 1439; 540 is 09:00). A shift with no employee is an open shift. Workflow: open, published, confirmed by the employee. Needs the Human Resources package."
 author = "SpaceCorps"
@@ -124,6 +124,18 @@ write_group = "planning.manager"
   [[model.ui.filter]]
   label = "Coming up"
   where = "work_date >= today"
+
+  [[model.rule]]
+  key = "ends_after_start"
+  expr = "end_minute >= start_minute"
+  message = "The shift ends before it starts: set an end time after the start"
+
+  [model.no_overlap]
+  rule = "no_double_shift"
+  key = ["employee_id", "work_date"]
+  start = "start_minute"
+  end = "end_minute"
+  message = "The employee already has a shift at that time: pick another time or another employee"
 
   [[model.field]]
   name = "name"
