@@ -8,7 +8,7 @@ import { getCurrency, inSentence, t, useFocusTrap } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
 import { ActionDialog } from "./ActionDialog.tsx";
 import { useData } from "./data.tsx";
-import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
+import { fromEdit, sameAsStored, toEdit, validate, type Edit } from "./edit.ts";
 import { recordExtensionOf, withoutOverridden } from "./extensions.ts";
 import { FormBody, flushLines, linesDirty, newLinesRegistry } from "./FormBody.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
@@ -33,6 +33,7 @@ import {
   copyValues,
   createdRefs,
   deleteBlocked,
+  keepShown,
   keyFigures,
   lockOf,
   sectionsOf,
@@ -176,7 +177,11 @@ export function RecordPanel({
       : toEdit(f, row ? row[f.name] : defaults[f.name], currency);
   const value = (f: FieldMeta): Edit => (f.name in draft ? draft[f.name]! : baseline(f));
   const masked = (f: FieldMeta) => !!row && isMasked(row[f.name]) && !(f.name in draft);
-  const changed = (f: FieldMeta) => f.name in draft && draft[f.name] !== baseline(f);
+  // An unset switch shows No: choosing No for it is a change that writes an explicit false.
+  const changed = (f: FieldMeta) =>
+    f.name in draft &&
+    (draft[f.name] !== baseline(f) ||
+      (!!row && f.kind === "bool" && !sameAsStored(f, row[f.name], draft[f.name]!)));
   const dirty = fields.some(changed);
   // Unsaved line edits count as unsaved changes: leaving asks first, and Save saves them too.
   const lines = useRef(newLinesRegistry()).current;
@@ -198,15 +203,19 @@ export function RecordPanel({
   const bodyFields = fields.filter(
     (f) => f !== statusField && !(creating && serverSet(f)) && !shownInHeader.has(f.name),
   );
-  const sections = sectionsOf(model, bodyFields, {
-    creating,
-    row,
-    state: statusField ? String(value(statusField)) : undefined,
-    filled: (f) => {
-      const v = value(f);
-      return v !== "" && v !== false;
-    },
-  });
+  const shownSections = useRef(new Set<string>()).current;
+  const sections = keepShown(
+    sectionsOf(model, bodyFields, {
+      creating,
+      row,
+      state: statusField ? String(value(statusField)) : undefined,
+      filled: (f) => {
+        const v = value(f);
+        return v !== "" && v !== false;
+      },
+    }),
+    shownSections,
+  );
   const chips = row ? subtitleOf(model, row, ctx).split(" · ").filter(Boolean).slice(0, 3) : [];
   const actions = row ? withoutOverridden(nextActions(model, row), ext.overrides) : NO_ACTIONS;
   const mayDelete = !!row && model.can_delete && !deleteBlocked(model, row);

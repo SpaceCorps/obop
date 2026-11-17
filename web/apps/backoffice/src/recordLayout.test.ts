@@ -256,3 +256,20 @@ describe("pages and actions", () => {
     expect(createdRefs(m, before, null)).toEqual([]);
   });
 });
+
+describe("keepShown (#105)", () => {
+  it("keeps a section open once drawn open, though its last filled field is emptied", async () => {
+    const { keepShown } = await import("./recordLayout.ts");
+    const seen = new Set<string>();
+    const s = (collapsed: boolean) => [
+      { key: "main", label: "", fields: [], collapsed: false, personal: false },
+      { key: "details", label: "Details", fields: [], collapsed, personal: false },
+      { key: "system", label: "System", fields: [], collapsed: true, personal: false },
+    ];
+    expect(keepShown(s(false), seen).map((x) => x.collapsed)).toEqual([false, false, true]);
+    // Active turned off: the group is empty now, but it stays open.
+    expect(keepShown(s(true), seen).map((x) => x.collapsed)).toEqual([false, false, true]);
+    // A record never drawn with it open folds it as before.
+    expect(keepShown(s(true), new Set()).map((x) => x.collapsed)).toEqual([false, true, true]);
+  });
+});
