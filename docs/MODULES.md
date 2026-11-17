@@ -959,7 +959,7 @@ The code `rate_limited` (HTTP 429, `Retry-After: 60`, body `{"error": "...", "co
 ```toml
 [[migration]]
 from = "<0.2.0"            # the installed versions this step applies to (a range, required)
-op = "rename_field"        # rename_field | set_default | drop_field | reformat_field
+op = "rename_field"        # rename_field | set_default | drop_field | reformat_field | fill_from | link_by_name
 model = "assets_asset"
 field = "plate"            # old name (rename), the field filled (set_default), the field dropped
 to = "registration"        # rename_field only: a field of this version
@@ -984,7 +984,23 @@ from = "<0.2.0"
 op = "reformat_field"      # rewrites the stored values of a decimal or datetime field
 model = "ledger_entry"
 field = "amount"           # a decimal whose scale or precision changed in this version
+
+[[migration]]
+from = "<0.3.1"
+op = "fill_from"           # copies a value through a ref into the records where the field is empty
+model = "manufacturing_order"
+field = "product_id"
+source = "bom_id.product_id"   # a ref of this model and a field of the record it points at
+
+[[migration]]
+from = "<0.4.1"
+op = "link_by_name"        # sets an empty ref from a text field that names its record
+model = "hr_department"
+field = "head_id"          # a ref field of this version
+source = "head"            # a text field of this model, matched against the target's `name`
 ```
+
+`fill_from` gives the records made before a field had its `fill_from` the value a new record gets: for each record whose field is empty and whose ref is set, the field of the record the ref points at, when that is not empty; a value already there is kept. The kinds must be the same (a ref to the same model). `link_by_name` sets an empty ref to the one record of the target model whose `name` equals the text field (both trimmed, exact); a name that no record has, or that several records have, links nothing, so nothing is guessed, and the text stays. Both only fill what is empty, so they need no undo and a rollback leaves the values. They need a core that knows them (obop after 0.2.2 of 2026-11-17); an older core refuses the package as having an unknown op.
 
 `reformat_field` rewrites each stored value of the field in the form of its **current** shape, so that a value has one spelling again after `scale` or `precision` of a `decimal` changed (a unique field, a filter on the exact text and the sums all rely on that). A wider scale pads (`12.50` becomes `12.5000`). Digits that a smaller scale would cut are rounded with the field's `round` mode; without one the update stops and names the record, because the package did not say how to round. A value that no longer fits a smaller precision stops it too. Without the step such a change is a breaking one and the update is refused with a message that gives the step to declare. The step cannot be rolled back (restore the backup). A `rename_field` into a `decimal` or `datetime` field writes the value in that field's canonical text and refuses, naming the record, one that is not a decimal or an instant. Either step refuses the update, naming both records, when two records would end up with one value in a `unique` field (a rounding `reformat_field`, or a rename that writes canonical text, can do that). A `computed` decimal stores nothing, so changing its `scale` or `precision` needs no step and `reformat_field` refuses a computed field. Installing a package again after an uninstall (the data stays) over records that are not in the form of the new `decimal` or `datetime` shape is refused, naming the record: install the version that wrote them, then update with a `reformat_field` step.
 
