@@ -229,3 +229,37 @@ fn a_dry_run_writes_nothing_and_an_agent_may_only_dry_run() {
         Err(CallError::Forbidden(_))
     ));
 }
+
+/// K62: one link per entry, keyed by the entry (a second link for an entry is refused by the
+/// store, so two runs cannot bill it twice), and `get` says whether an entry is billed.
+#[test]
+fn an_entry_is_linked_once_under_its_own_id_and_get_reads_it() {
+    let f = fixture();
+    let billed = f.entry("2026-09-02", 90, true, true);
+    let open = f.entry("2026-10-02", 30, true, true);
+    let r = f.run(f.input(false)).unwrap();
+    let links = rows(&f.app, "time_billing");
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].0, billed, "the link's id is the entry's id");
+    let got = call(
+        &f.app,
+        &admin(),
+        "time_billing.get",
+        json!({"entry": billed}),
+    )
+    .unwrap();
+    assert_eq!(got["billed"], json!(true));
+    assert_eq!(got["invoice_id"], r["invoice_id"]);
+    let got = call(&f.app, &admin(), "time_billing.get", json!({"entry": open})).unwrap();
+    assert_eq!(got["billed"], json!(false));
+    // The store refuses a second link of the entry.
+    let mut f2 = obop_storage::Fields::new();
+    f2.insert("entry_id".into(), json!(billed));
+    assert!(
+        f.app
+            .store
+            .backend()
+            .insert("time_billing", &billed, &f2)
+            .is_err()
+    );
+}

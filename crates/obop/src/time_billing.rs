@@ -60,6 +60,7 @@ pub fn module() -> Module {
                 f("dry_run", "Input: only show the lines, write nothing").kind(FieldKind::Bool),
                 f("entry_id", "Link: the time entry id"),
                 f("invoice_id", "Link and answer: the draft invoice id"),
+                f("billed", "Answer of get: whether the entry is billed").kind(FieldKind::Bool),
                 f("ok", "Answer: whether the invoice was built").kind(FieldKind::Bool),
                 f("written", "Answer: whether the invoice was created").kind(FieldKind::Bool),
                 f("entries", "Answer: how many entries are billed").kind(FieldKind::Number),
@@ -75,11 +76,18 @@ pub fn module() -> Module {
                 ),
                 f("notes", "Answer: remarks (a list)"),
             ],
-            commands: vec![CommandDef::new(
-                "create_invoice",
-                "Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer at hourly_rate_minor; one line per entry. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post",
-                GROUP,
-            )],
+            commands: vec![
+                CommandDef::new(
+                    "get",
+                    "Whether a time entry (entry: its id) is billed, and on which invoice: billed and invoice_id",
+                    GROUP,
+                ),
+                CommandDef::new(
+                    "create_invoice",
+                    "Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer at hourly_rate_minor; one line per entry. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post",
+                    GROUP,
+                ),
+            ],
             ext: Default::default(),
         }],
         ..Module::default()
@@ -312,21 +320,64 @@ pub fn create_invoice(
             "the invoice lines were refused, the draft invoice {iid} was cancelled: {e}"
         ));
     }
-    for l in &pl.lines {
-        env.store.insert(
-            MODEL,
-            [
-                ("entry_id".to_string(), Value::text(&l.entry_id)),
-                ("invoice_id".to_string(), Value::text(&iid)),
-            ]
-            .into(),
-        )?;
+    // One link per entry, keyed by the entry and written in one batch: an entry that another run
+    // billed in the meantime refuses the whole batch, and this run's draft invoice is cancelled.
+    let ops: Vec<obop_storage::Op> = pl
+        .lines
+        .iter()
+        .map(|l| {
+            let mut f = obop_storage::Fields::new();
+            f.insert("entry_id".into(), J::from(l.entry_id.as_str()));
+            f.insert("invoice_id".into(), J::from(iid.as_str()));
+            obop_storage::Op::Insert {
+                model: MODEL.into(),
+                id: l.entry_id.clone(),
+                fields: f,
+            }
+        })
+        .collect();
+    if let Err(e) = env.store.backend().apply(&ops) {
+        let _ = call(env, p, "invoice.cancel", json!({"id": iid}));
+        return Err(format!(
+            "an entry was billed by another run meanwhile, so the draft invoice {iid} was cancelled and nothing is billed twice: {e}"
+        ));
     }
     Ok((pl, Some(iid)))
 }
 
 pub fn register(d: &Arc<Dispatcher>, store: &Store) {
     let m = module();
+    let st = store.clone();
+    d.register(
+        &m,
+        MODEL,
+        "get",
+        Box::new(move |input| {
+            let entry = match input {
+                Value::Map(x) => match x.get("entry").or_else(|| x.get("id")) {
+                    Some(Value::Text(t)) => t.to_string(),
+                    _ => String::new(),
+                },
+                _ => String::new(),
+            };
+            if entry.is_empty() {
+                return Err("entry is required: the id of the time entry".into());
+            }
+            let rows = st.backend().list(MODEL).map_err(|e| e.to_string())?;
+            let invoice = rows
+                .iter()
+                .find(|(_, f)| f.get("entry_id").and_then(J::as_str) == Some(entry.as_str()))
+                .and_then(|(_, f)| f.get("invoice_id").and_then(J::as_str))
+                .unwrap_or_default()
+                .to_string();
+            Ok(Value::map([
+                ("id", Value::text(&entry)),
+                ("entry_id", Value::text(&entry)),
+                ("billed", Value::Bool(!invoice.is_empty())),
+                ("invoice_id", Value::text(&invoice)),
+            ]))
+        }),
+    );
     let (weak, st): (Weak<Dispatcher>, Store) = (Arc::downgrade(d), store.clone());
     d.register_with_actor(
         &m,
