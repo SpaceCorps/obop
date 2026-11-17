@@ -269,6 +269,26 @@ describe("deadlines", () => {
     expect(dueLevel(inv, due, row({ due_on: "2026-01-01", state: "cancelled" }), today)).toBeNull();
   });
 
+  it("keep warning on a record in force when the field asks for it (an expiring permit)", () => {
+    const today = "2026-11-15";
+    const permit = f("work_permit_expiry", "date", { ui: { warn_before_days: 60 } });
+    const emp = model("hr_employee", [
+      permit,
+      f("state", "select", { options: ["onboarding", "active", "offboarded"], governed: true }),
+    ]);
+    const at = (d: string, s: string) => row({ work_permit_expiry: d, state: s });
+    expect(dueLevel(emp, permit, at("2026-12-20", "active"), today)).toBe("soon");
+    expect(dueLevel(emp, permit, at("2026-11-01", "active"), today)).toBe("past");
+    expect(dueLevel(emp, permit, at("2026-11-01", "offboarded"), today)).toBeNull();
+    // A finished record (done, paid) still ends the warning, hint or not.
+    const hinted = f("due_on", "date", { ui: { warn_before_days: 7 } });
+    const task = model("task", [
+      hinted,
+      f("state", "select", { options: ["todo", "done"], governed: true }),
+    ]);
+    expect(dueLevel(task, hinted, row({ due_on: "2026-11-01", state: "done" }), today)).toBeNull();
+  });
+
   it("compare an instant with now", () => {
     const exp = f("expires_at", "datetime");
     const m = model("sign_link", [exp]);

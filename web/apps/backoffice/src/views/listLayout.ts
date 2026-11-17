@@ -295,11 +295,18 @@ export const isMaskedValue = (v: unknown) =>
 
 /** States after which a deadline no longer matters. */
 const SETTLED = new Set(["archived", "superseded", "discarded", "reversed"]);
+/**
+ * Ok states that mean "in force", not "finished": a date the field marks with
+ * `ui.warn_before_days` (an expiring permit of an active employee, a published document's end)
+ * keeps its warning in them.
+ */
+const IN_FORCE = new Set(["active", "running", "published", "available", "connected"]);
 
 /**
  * Whether a due-like date is past (`past`), close (`soon`: within `ui.warn_before_days`, default
  * 7 days), or neither. A record whose status is settled (done, paid, cancelled, expired, archived)
- * has no deadline left. `today` is `YYYY-MM-DD` in the instance's zone; `now` an instant.
+ * has no deadline left; a record in force (active, published) keeps it when the field declares
+ * `ui.warn_before_days`. `today` is `YYYY-MM-DD` in the instance's zone; `now` an instant.
  */
 export function dueLevel(
   model: ModelMeta,
@@ -315,7 +322,8 @@ export function dueLevel(
   if (state) {
     const s = String(row[state.name] ?? "");
     const tone = toneOf(state, s, model);
-    if (tone === "ok" || tone === "bad" || SETTLED.has(s)) return null;
+    const inForce = tone === "ok" && IN_FORCE.has(s) && f.ui?.warn_before_days != null;
+    if ((tone === "ok" && !inForce) || tone === "bad" || SETTLED.has(s)) return null;
   }
   const days = f.ui?.warn_before_days ?? 7;
   if (f.kind === "datetime") {
