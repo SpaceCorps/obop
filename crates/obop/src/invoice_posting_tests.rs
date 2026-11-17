@@ -556,6 +556,56 @@ fn an_invoice_without_an_issue_date_is_booked_on_today() {
 }
 
 #[test]
+fn a_price_included_tax_takes_the_vat_out_of_the_total_and_a_purchase_tax_is_refused() {
+    let f = fixture(2500);
+    create(
+        &f.app,
+        "accounting_tax",
+        json!({"name": "Counter tax", "rate_bp": 1900, "scope": "sales", "price_included": true,
+               "tax_account_id": f.vat_acc}),
+    );
+    // 28,850 gross at 19 %: VAT 4,606.3... rounds to 4,606, net 24,244.
+    let inv = f.invoice(&[20_000, 8_850], true);
+    let mut i = f.input(&inv, false);
+    i["tax"] = json!("Counter tax");
+    let r = call(&f.app, &admin(), "invoice_posting.create_move", i).unwrap();
+    assert_eq!(
+        (r["net"].clone(), r["vat"].clone(), r["gross"].clone()),
+        (json!(24_244), json!(4_606), json!(28_850))
+    );
+    let lines: Vec<_> = rows(&f.app, "accounting_move_line")
+        .into_iter()
+        .filter(|(_, l)| l["move_id"] == r["move_id"])
+        .map(|(_, l)| l)
+        .collect();
+    let sum = |k: &str| lines.iter().map(|l| l[k].as_i64().unwrap()).sum::<i64>();
+    assert_eq!((sum("debit"), sum("credit")), (28_850, 28_850), "balanced");
+    assert!(
+        lines.iter().any(|l| l["debit"] == json!(28_850)),
+        "receivable is the total"
+    );
+
+    // A purchase tax is no default for customer invoices, and is refused when given.
+    create(
+        &f.app,
+        "accounting_tax",
+        json!({"name": "Input tax", "rate_bp": 2500, "scope": "purchases", "tax_account_id": f.vat_acc}),
+    );
+    let m = refusal(call(
+        &f.app,
+        &admin(),
+        "invoice_posting_setting.update",
+        json!({"tax": "Input tax"}),
+    ));
+    assert!(m.contains("sales tax"), "{m}");
+    let other = f.invoice(&[1_000], true);
+    let mut i = f.input(&other, true);
+    i["tax"] = json!("Input tax");
+    let m = refusal(call(&f.app, &admin(), "invoice_posting.create_move", i));
+    assert!(m.contains("purchase tax"), "{m}");
+}
+
+#[test]
 fn create_move_books_an_invoice_without_an_issue_date_on_today_when_no_date_is_given() {
     // Posted before the booking settings existed, so it was not booked on post (the seed).
     let f = fixture(2500);

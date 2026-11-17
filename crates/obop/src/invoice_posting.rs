@@ -10,8 +10,12 @@
 //! The move has: one receivable debit for net plus VAT (with the invoice's party and due date);
 //! one revenue credit per invoice line on `revenue_account`, carrying the `tax` as `tax_id` (so
 //! `vat_computation.compute` finds the base); one VAT credit on the tax's `tax_account_id` (or
-//! `vat_account`), carrying the same `tax_id`. VAT is the net total times the tax's `rate_bp`,
-//! rounded half up once on the total, in integer minor units. The move stays a draft: posting it
+//! `vat_account`), carrying the same `tax_id`. The invoice total (the sum of its lines, which
+//! carry no tax) is the net, and VAT is the net times the tax's `rate_bp`, rounded half up once
+//! on the total, in integer minor units. With a tax whose `price_included` is set the total is
+//! the gross instead: the receivable is the total, the VAT is total x rate / (10000 + rate),
+//! rounded half up, and the revenue credits share the rest in proportion to the lines. Only a
+//! sales tax may be the default of the settings, and a purchase tax is refused. The move stays a draft: posting it
 //! is `accounting_move.post`, which needs `accounting.approver` and a person's approval.
 //!
 //! Booking on post: while `book_on_post` is on (the default) and the settings name a journal, a
@@ -151,7 +155,7 @@ pub fn module() -> Module {
                     f("journal", "The journal (id, code or name) invoices are booked in"),
                     f("receivable_account", "The receivable account (id or code), debited with the total"),
                     f("revenue_account", "The revenue account (id or code), credited with the net of each line"),
-                    f("tax", "The tax (id or name) of the invoice lines"),
+                    f("tax", "The sales tax (id or name) of the invoice lines; with price_included the invoice total is taken as the gross"),
                     f("vat_account", "Optional: the VAT account (id or code); default is the tax's tax_account_id"),
                     f("ready", "Answer: whether posting an invoice books it now").kind(FieldKind::Bool),
                     f("missing", "Answer: the settings that are still needed (a list)"),
@@ -270,6 +274,37 @@ pub fn vat_of(net: i64, rate_bp: i64) -> Result<i64, String> {
     i64::try_from(v).map_err(|_| "the VAT amount overflows".to_string())
 }
 
+/// The VAT inside a price-included `gross` at `rate_bp`: gross x rate / (10000 + rate), rounded
+/// half up, in integer minor units.
+pub fn vat_within(gross: i64, rate_bp: i64) -> Result<i64, String> {
+    let den = 2 * (10_000 + rate_bp as i128);
+    let v = (2 * gross as i128 * rate_bp as i128 + den / 2).div_euclid(den);
+    i64::try_from(v).map_err(|_| "the VAT amount overflows".to_string())
+}
+
+/// The revenue credit of each line: its amount, or with a price-included tax its part of `net`
+/// in proportion to its amount (the last line with an amount takes the rounding).
+fn share(lines: &[(String, i64)], total: i64, net: i64) -> Vec<i64> {
+    if net == total {
+        return lines.iter().map(|(_, v)| *v).collect();
+    }
+    let last = lines.iter().rposition(|(_, v)| *v != 0);
+    let mut left = net;
+    lines
+        .iter()
+        .enumerate()
+        .map(|(n, (_, v))| {
+            let part = if Some(n) == last {
+                left
+            } else {
+                (*v as i128 * net as i128 / total as i128) as i64
+            };
+            left -= part;
+            part
+        })
+        .collect()
+}
+
 fn list(b: &dyn Backend, m: &str) -> Result<Vec<(String, Fields)>, String> {
     b.list(m).map_err(|e| {
         format!(
@@ -343,6 +378,13 @@ fn plan_in(b: &dyn Backend, i: &Input, state_needed: &str) -> Result<Planned, St
     if rate < 0 {
         return Err("the tax has a negative rate_bp".into());
     }
+    if text(&tax, "scope") == "purchases" {
+        return Err(format!(
+            "the tax {} is a purchase tax; a customer invoice is booked with a sales tax",
+            text(&tax, "name")
+        ));
+    }
+    let included = tax.get("price_included") == Some(&J::Bool(true));
     let vat_key = if i.vat_account.is_empty() {
         text(&tax, "tax_account_id")
     } else {
@@ -393,15 +435,27 @@ fn plan_in(b: &dyn Backend, i: &Input, state_needed: &str) -> Result<Planned, St
             "an invoice line has a negative amount; credit notes are not booked here".into(),
         );
     }
-    let net = lines_in
+    let total = lines_in
         .iter()
         .try_fold(0i64, |a, (_, v)| a.checked_add(*v))
         .ok_or("the net total overflows")?;
-    if net <= 0 {
+    if total <= 0 {
         return Err("the invoice has no positive amount; nothing to book".into());
     }
-    let vat = vat_of(net, rate)?;
-    let gross = net.checked_add(vat).ok_or("the total overflows")?;
+    // A price-included tax: the invoice total is the gross amount and the VAT is taken out of it;
+    // otherwise the total is net and the VAT comes on top.
+    let (net, vat, gross) = if included {
+        let vat = vat_within(total, rate)?;
+        (total - vat, vat, total)
+    } else {
+        let vat = vat_of(total, rate)?;
+        (
+            total,
+            vat,
+            total.checked_add(vat).ok_or("the total overflows")?,
+        )
+    };
+    let credits = share(&lines_in, total, net);
     let number = text(&inv, "number");
     let reference = if number.is_empty() {
         iid.clone()
@@ -418,7 +472,7 @@ fn plan_in(b: &dyn Backend, i: &Input, state_needed: &str) -> Result<Planned, St
         tax_id: None,
         due_on: (!due.is_empty()).then_some(due),
     }];
-    for (d, v) in lines_in.iter().filter(|(_, v)| *v != 0) {
+    for ((d, _), v) in lines_in.iter().zip(credits).filter(|(_, v)| *v != 0) {
         lines.push(Line {
             account_id: rev_id.clone(),
             account: text(&rev, "code"),
@@ -428,7 +482,7 @@ fn plan_in(b: &dyn Backend, i: &Input, state_needed: &str) -> Result<Planned, St
                 d.clone()
             },
             debit: 0,
-            credit: *v,
+            credit: v,
             tax_id: Some(tax_id.clone()),
             due_on: None,
         });
@@ -721,7 +775,13 @@ fn update_settings(
             }
             Some(Value::Text(t)) => {
                 // Stored as the id, so a renamed code does not break the booking.
-                let (id, _) = pick(&list(b, model)?, k, t, keys)?;
+                let (id, rec) = pick(&list(b, model)?, k, t, keys)?;
+                if k == "tax" && text(&rec, "scope") != "sales" {
+                    return Err(format!(
+                        "the tax {t:?} is not a sales tax (its scope is {:?}); customer invoices are booked with a sales tax",
+                        text(&rec, "scope")
+                    ));
+                }
                 patch.insert(k.into(), J::from(id));
             }
             Some(Value::Null) | None => {}

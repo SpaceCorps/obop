@@ -144,7 +144,7 @@ export function BookingSettings() {
             {pick(
               "tax",
               t("Tax"),
-              taxes.filter((x) => x.scope !== "purchase"),
+              taxes.filter((x) => x.scope === "sales"),
               t("Its rate gives the VAT of the invoice."),
             )}
             {pick(
