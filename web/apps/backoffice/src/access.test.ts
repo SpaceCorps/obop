@@ -266,10 +266,39 @@ describe("stale groups", () => {
     expect(a.other).not.toContain("*");
   });
 
+  it("calls nothing stale when the server's group list could not be loaded", () => {
+    const a = buildAccess(ROWS, APPS, [], ["api.device_admin"]);
+    expect(a.stale.size).toBe(0);
+    expect(a.other).toContain("api.device_admin");
+  });
+
   it("calls nothing stale while nothing is loaded", () => {
     const a = buildAccess([], [], [], ["accounting.user"]);
     expect(a.stale.size).toBe(0);
     expect(a.other).toEqual(["accounting.user"]);
+  });
+});
+
+describe("a module that writes through another role", () => {
+  // Two models are written by `odd.approver`, one by `odd.manager`: Manager still means the group
+  // the module calls its manager, so choosing it gives the person `odd.manager`.
+  const odd: ModuleLike = {
+    id: "odd",
+    name: "Odd",
+    groups: ["odd.user", "odd.manager", "odd.approver"],
+    contents: {
+      models: [
+        model("a", "odd.user", "odd.approver"),
+        model("b", "odd.user", "odd.approver"),
+        model("c", "odd.user", "odd.manager"),
+      ],
+    },
+  };
+  it("prefers <id>.manager as the manage rung when anything is written through it", () => {
+    const a = buildAccess([odd], [{ id: "odd", name: "Odd" }]);
+    const l = a.ladders[0]!;
+    expect([l.base, l.manage, l.extras]).toEqual(["odd.user", "odd.manager", ["odd.approver"]]);
+    expect(withLevel([], l, "manager").sort()).toEqual(["odd.manager", "odd.user"]);
   });
 });
 

@@ -109,13 +109,13 @@ export function buildAccess(
     }
   for (const g of known) if (g) universe.add(g);
   // A held group the server does not list and no module names is no longer registered. With
-  // nothing known at all (the lists could not be loaded) nothing is called stale.
+  // no group list from the server (it could not be loaded) nothing is called stale.
   // The server lists a wildcard marker among the known groups; it is not a group anyone is given.
   universe.delete("*");
   const stale = new Set<string>();
   for (const g of held)
     if (g && g !== ADMIN && !universe.has(g)) {
-      if (universe.size > 0) stale.add(g);
+      if (known.length > 0) stale.add(g);
       else universe.add(g);
     }
   universe.delete(ADMIN);
@@ -179,8 +179,10 @@ export function buildAccess(
     base ??= groups.includes(`${app.id}.user`)
       ? `${app.id}.user`
       : (groups.find((g) => g !== manager) ?? groups[0]!);
-    let manage: string | null =
-      groups.filter((g) => g !== base && count(writes, g) > 0).sort(cmp(writes))[0] ?? null;
+    const written = groups.filter((g) => g !== base && count(writes, g) > 0).sort(cmp(writes));
+    // The group the module calls its manager wins when anything is written through it, so that
+    // choosing Manager gives the person `<id>.manager` and not another, busier role.
+    let manage: string | null = (written.includes(manager) ? manager : written[0]) ?? null;
     if (manage === null && groups.includes(manager) && manager !== base) manage = manager;
     const extras = groups.filter((g) => g !== base && g !== manage);
     const used: Record<string, [string, string][]> = {};
