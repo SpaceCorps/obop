@@ -20,6 +20,8 @@ use tower::ServiceExt;
 const KNOWN_OMITTED: &[&str] = &[
     "bank_matching.book",
     "bank_matching.suggest",
+    "expenses_setting.get",
+    "expenses_setting.update",
     "import_map.get",
     "import_map.search",
     "instance_brand.clear",
@@ -31,6 +33,9 @@ const KNOWN_OMITTED: &[&str] = &[
     "instance_update.status",
     "invoice_credit.create",
     "invoice_posting.create_move",
+    "invoice_posting.get",
+    "invoice_posting_setting.get",
+    "invoice_posting_setting.update",
     "mileage_point.delete",
     "mileage_point.update",
     "mileage_trip.delete",

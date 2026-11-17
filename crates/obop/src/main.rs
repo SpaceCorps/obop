@@ -34,6 +34,7 @@ mod build_commit;
 mod build_commit_tests;
 #[cfg(test)]
 mod bulk_tests;
+mod company_settings;
 #[cfg(test)]
 mod connectors_tests;
 #[cfg(test)]
@@ -45,6 +46,9 @@ mod drive_source;
 mod drive_tests;
 #[cfg(test)]
 mod error_seam_tests;
+mod expense_policy;
+#[cfg(test)]
+mod expense_policy_tests;
 #[cfg(test)]
 mod finance_supply_tests;
 #[cfg(test)]

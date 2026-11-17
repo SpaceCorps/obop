@@ -325,3 +325,197 @@ fn a_posted_move_is_counted_by_the_vat_computation() {
         .unwrap();
     assert_eq!(base["amount"], json!(12_001));
 }
+
+// Booking on post (owner ruling 2026-11-17): the company's booking settings.
+
+fn configure(f: &Fx, extra: J) {
+    let mut s = json!({"journal": "S", "receivable_account": "1510", "revenue_account": "3001", "tax": "Test tax"});
+    for (k, v) in extra.as_object().unwrap() {
+        s[k] = v.clone();
+    }
+    call(&f.app, &admin(), "invoice_posting_setting.update", s).unwrap();
+}
+
+fn invoice_with_dates(f: &Fx, amounts: &[i64]) -> String {
+    let party = create(&f.app, "party", json!({"name": "Kunde AB"}));
+    let inv = create(
+        &f.app,
+        "invoice",
+        json!({"state": "draft", "currency": "SEK", "party_id": party,
+               "issue_date": "2026-09-10", "due_date": "2026-10-10"}),
+    );
+    for a in amounts {
+        create(
+            &f.app,
+            "invoice_line",
+            json!({"invoice_id": inv, "description": "Item", "quantity": 1, "unit_price_minor": a}),
+        );
+    }
+    inv
+}
+
+#[test]
+fn posting_an_invoice_books_its_draft_entry_from_the_company_settings() {
+    let f = fixture(2500);
+    configure(&f, json!({}));
+    let inv = invoice_with_dates(&f, &[10_000]);
+    call(&f.app, &admin(), "invoice.post", json!({"id": inv})).unwrap();
+    let link = call(
+        &f.app,
+        &admin(),
+        "invoice_posting.get",
+        json!({"invoice": inv}),
+    )
+    .unwrap();
+    assert_eq!(link["move_state"], json!("draft"));
+    let mid = link["move_id"].as_str().unwrap().to_string();
+    let mv = rows(&f.app, "accounting_move");
+    assert_eq!(mv.len(), 1);
+    assert_eq!(mv[0].0, mid);
+    assert_eq!(mv[0].1["date"], json!("2026-09-10"), "the issue date");
+    assert!(mv[0].1["reference"].as_str().unwrap().starts_with("INV-"));
+    let lines: Vec<_> = rows(&f.app, "accounting_move_line")
+        .into_iter()
+        .map(|(_, l)| l)
+        .collect();
+    assert_eq!(lines.len(), 3);
+    let dr: i64 = lines.iter().map(|l| l["debit"].as_i64().unwrap()).sum();
+    let cr: i64 = lines.iter().map(|l| l["credit"].as_i64().unwrap()).sum();
+    assert_eq!((dr, cr), (12_500, 12_500));
+    let rec = lines.iter().find(|l| l["debit"] == json!(12_500)).unwrap();
+    assert_eq!(
+        rec["due_on"],
+        json!("2026-10-10"),
+        "the receivable item is due"
+    );
+    assert!(rec["partner_id"].is_string());
+    // The entry reads like one made by hand: the generated get shows its totals.
+    let got = call(&f.app, &admin(), "accounting_move.get", json!({"id": mid})).unwrap();
+    assert_eq!(got["total_debit"], json!(12_500), "{got}");
+    // The explicit command now finds the move.
+    let m = refusal(f.run(&inv, false));
+    assert!(m.contains("already has a move"), "{m}");
+    assert_eq!(rows(&f.app, "accounting_move").len(), 1);
+}
+
+#[test]
+fn with_book_on_post_off_or_without_settings_the_invoice_is_posted_unbooked() {
+    let f = fixture(2500);
+    // Not set up: posting works as before and nothing is booked.
+    let s = call(&f.app, &admin(), "invoice_posting_setting.get", json!({})).unwrap();
+    assert_eq!(s["book_on_post"], json!(true));
+    assert_eq!(s["ready"], json!(false));
+    assert_eq!(s["missing"].as_array().unwrap().len(), 4);
+    let a = invoice_with_dates(&f, &[10_000]);
+    call(&f.app, &admin(), "invoice.post", json!({"id": a})).unwrap();
+    assert!(rows(&f.app, "accounting_move").is_empty());
+    let m = refusal(call(
+        &f.app,
+        &admin(),
+        "invoice_posting.get",
+        json!({"invoice": a}),
+    ));
+    assert!(m.contains("has no journal entry"), "{m}");
+    // Turned off: the same.
+    configure(&f, json!({"book_on_post": false}));
+    let s = call(&f.app, &admin(), "invoice_posting_setting.get", json!({})).unwrap();
+    assert_eq!(
+        (s["book_on_post"].clone(), s["ready"].clone()),
+        (json!(false), json!(false))
+    );
+    let b = invoice_with_dates(&f, &[20_000]);
+    call(&f.app, &admin(), "invoice.post", json!({"id": b})).unwrap();
+    assert!(rows(&f.app, "accounting_move").is_empty());
+    // Booked by hand later, the settings are the defaults and the issue date the date.
+    let r = call(
+        &f.app,
+        &admin(),
+        "invoice_posting.create_move",
+        json!({"invoice": b}),
+    )
+    .unwrap();
+    assert_eq!(r["gross"], json!(25_000));
+    assert_eq!(
+        rows(&f.app, "accounting_move")[0].1["date"],
+        json!("2026-09-10")
+    );
+}
+
+#[test]
+fn a_booking_that_would_be_refused_refuses_the_post_and_changes_nothing() {
+    let f = fixture(2500);
+    configure(&f, json!({}));
+    let fy = create(
+        &f.app,
+        "accounting_fiscal_year",
+        json!({"name": "FY 2026", "start_on": "2026-01-01", "end_on": "2026-12-31"}),
+    );
+    let period = create(
+        &f.app,
+        "accounting_period",
+        json!({"fiscal_year_id": fy, "name": "September", "start_on": "2026-09-01", "end_on": "2026-09-30"}),
+    );
+    call(
+        &f.app,
+        &admin(),
+        "accounting_period.close",
+        json!({"id": period}),
+    )
+    .unwrap();
+    let inv = invoice_with_dates(&f, &[10_000]);
+    let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": inv})));
+    assert!(
+        m.contains("not posted") && m.contains("closed period"),
+        "{m}"
+    );
+    let stored = rows(&f.app, "invoice")
+        .into_iter()
+        .find(|(id, _)| *id == inv)
+        .unwrap()
+        .1;
+    assert_eq!(stored["state"], json!("draft"));
+    assert!(
+        stored.get("number").is_none_or(|n| n.is_null()),
+        "{stored:?}"
+    );
+    assert!(rows(&f.app, "accounting_move").is_empty());
+}
+
+#[test]
+fn the_booking_settings_are_checked_and_changed_by_an_accounting_manager() {
+    let f = fixture(2500);
+    let clerk = Principal::user("clerk", &["accounting.user"]);
+    assert!(matches!(
+        call(
+            &f.app,
+            &clerk,
+            "invoice_posting_setting.update",
+            json!({"book_on_post": false})
+        ),
+        Err(CallError::Forbidden(_))
+    ));
+    let m = refusal(call(
+        &f.app,
+        &admin(),
+        "invoice_posting_setting.update",
+        json!({"revenue_account": "9999"}),
+    ));
+    assert!(m.contains("9999"), "{m}");
+    configure(&f, json!({}));
+    let s = call(&f.app, &clerk, "invoice_posting_setting.get", json!({})).unwrap();
+    assert_eq!(s["ready"], json!(true));
+    assert_eq!(s["tax"], json!(f.tax), "stored as the id");
+    // Kept with the instance settings.
+    let stored: J = serde_json::from_str(&f.app.installer.try_settings().unwrap()).unwrap();
+    assert_eq!(stored["invoicing"]["tax"], json!(f.tax));
+    // An empty text clears one.
+    call(
+        &f.app,
+        &admin(),
+        "invoice_posting_setting.update",
+        json!({"tax": ""}),
+    )
+    .unwrap();
+    let s = call(&f.app, &admin(), "invoice_posting_setting.get", json!({})).unwrap();
+    assert_eq!(s["missing"], json!(["tax"]));
+}
