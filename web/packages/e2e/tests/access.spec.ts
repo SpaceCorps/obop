@@ -281,7 +281,10 @@ test.describe("access by app", () => {
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     for (const item of await menu.getByRole("menuitem").all())
-      expect((await item.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      // The layout height: the menu scales in as it opens, which would shave a bounding box.
+      expect(await item.evaluate((el) => (el as HTMLElement).offsetHeight)).toBeGreaterThanOrEqual(
+        44,
+      );
     const box = (await menu.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(390);

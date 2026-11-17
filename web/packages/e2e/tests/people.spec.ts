@@ -92,7 +92,9 @@ test.describe("people administration", () => {
       await expect(again.locator("code", { hasText: "inventory.manager" })).toBeVisible();
       await again.getByRole("switch", { name: "Show technical names" }).uncheck();
       await again.getByRole("button", { name: "Cancel" }).click();
-      await expect(row.getByRole("button", { name: `Access of ${name}`, exact: true })).toBeFocused();
+      await expect(
+        row.getByRole("button", { name: `Access of ${name}`, exact: true }),
+      ).toBeFocused();
 
       // Offboard: confirm in the dialog; every credential stops for good.
       const agent = (await api.post("/api/auth/agent-token", { scopes: ["sales.user"] }, nia)).json
