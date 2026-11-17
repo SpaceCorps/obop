@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fmt, inSentence, t } from "@obop/ui";
-import { LOAD_LIMIT, search, type Row, type ServerFilter } from "../api.ts";
+import { LOAD_LIMIT, getTime, search, type Row, type ServerFilter } from "../api.ts";
+import { fromZonedInput } from "../instants.ts";
 import { matches, PHONE_QUERY, useMedia } from "../media.ts";
 import { useData } from "../data.tsx";
 import { isoDate } from "../format.ts";
@@ -11,6 +12,7 @@ import { EmptyState, Icon } from "../ui.tsx";
 import { cardTitle, usePresentCtx } from "./BoardCard.tsx";
 import { boardLayout } from "./board.ts";
 import {
+  addDaysIso,
   calendarSpec,
   dateFields,
   defaultStart,
@@ -74,13 +76,21 @@ function useVisibleRecords(
     if (!server) return;
     let live = true;
     const base = server.filter;
+    // An instant is compared with the instants that begin the first day and end the last one on
+    // the instance's clock.
+    const instant = spec.start.kind === "datetime";
+    const at = (day: string) => {
+      const r = fromZonedInput(`${day} 00:00`, getTime().zone);
+      return "value" in r ? r.value : day;
+    };
+    const low = instant ? at(from) : from;
     const starting: ServerFilter[] = [
       ...base,
-      { field, op: "gte", value: from },
-      { field, op: "lte", value: to },
+      { field, op: "gte", value: low },
+      instant ? { field, op: "lt", value: at(addDaysIso(to, 1)) } : { field, op: "lte", value: to },
     ];
     const spanning: ServerFilter[] | null = end
-      ? [...base, { field, op: "lt", value: from }, { field: end, op: "gte", value: from }]
+      ? [...base, { field, op: "lt", value: low }, { field: end, op: "gte", value: low }]
       : null;
     void Promise.all([
       search(d.token, p.model.name, {
@@ -163,7 +173,7 @@ export function CalendarView(p: ViewProps) {
   );
 
   const events = useMemo(
-    () => rows.map((r) => eventOf(spec, r)).filter((e): e is CalEvent => !!e),
+    () => rows.map((r) => eventOf(spec, r, getTime().zone)).filter((e): e is CalEvent => !!e),
     // spec is rebuilt each render from stable inputs
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, df.name, spec.end?.name, spec.startMinute?.name, spec.endMinute?.name],
@@ -195,7 +205,7 @@ export function CalendarView(p: ViewProps) {
         : addDays(cursor, 7 * dir),
     );
 
-  const create = (day: string) => p.canCreate && p.newWith(newOnDay(spec, day));
+  const create = (day: string) => p.canCreate && p.newWith(newOnDay(spec, day, getTime().zone));
   const canMove = p.canUpdate && movable(spec);
   const chip = (e: CalEvent, extra = "", style?: Record<string, string | number>, head = true) => (
     <button

@@ -3,6 +3,7 @@ import type { Command, FieldMeta, ModelMeta, Row } from "../api.ts";
 import {
   calendarSpec,
   clockOf,
+  dateFields,
   eventOf,
   hhmm,
   isGone,
@@ -10,6 +11,7 @@ import {
   movePatch,
   newOnDay,
   placeDay,
+  timed,
   visibleHours,
   weekSegments,
   type CalEvent,
@@ -87,6 +89,32 @@ describe("which fields place a record", () => {
     const other = calendarSpec(model(fields), fields, "signed_on")!;
     expect(other.start.name).toBe("signed_on");
     expect(other.startMinute).toBeUndefined();
+  });
+
+  it("instants: a trip on the day and at the time of the instance's clock (K1)", () => {
+    const fields = [
+      f("driver"),
+      f("started_at", { kind: "datetime", required: true }),
+      f("ended_at", { kind: "datetime" }),
+    ];
+    expect(dateFields(fields).map((x) => x.name)).toEqual(["started_at", "ended_at"]);
+    const s = calendarSpec(model(fields), fields)!;
+    expect([s.start.name, s.end?.name]).toEqual(["started_at", "ended_at"]);
+    expect(timed(s)).toBe(true);
+    expect(movable(s)).toBe(false);
+    // 23:30 UTC on 31 October is 00:30 on 1 November in Berlin.
+    const row = { id: "t", started_at: "2026-10-31T23:30:00Z", ended_at: "2026-11-01T01:00:00Z" };
+    expect(eventOf(s, row, "Europe/Berlin")).toMatchObject({
+      start: "2026-11-01",
+      end: "2026-11-01",
+      startMin: 30,
+      endMin: 120,
+    });
+    expect(eventOf(s, row, "UTC")).toMatchObject({ start: "2026-10-31", end: "2026-11-01" });
+    // A new one made from a day starts at nine on that day.
+    expect(newOnDay(s, "2026-12-03", "Europe/Berlin")).toEqual({
+      started_at: "2026-12-03T08:00:00.000000Z",
+    });
   });
 
   it("the package's ui.calendar wins", () => {
