@@ -1157,10 +1157,10 @@ impl Dispatcher {
         self.zones.read().unwrap().clone()
     }
 
-    /// Set the instance currency (D95): three capital letters (ISO 4217). The server sets it from
-    /// `OBOP_CURRENCY` at start.
+    /// Set the instance currency (D95): a code of the ISO 4217 list, the one a field that holds a
+    /// currency checks too (U5). The server sets it from `OBOP_CURRENCY` at start.
     pub fn set_currency(&self, code: &str) -> Result<(), String> {
-        if code.len() != 3 || !code.bytes().all(|b| b.is_ascii_uppercase()) {
+        if !obop_registry::limits::is_currency_code(code) {
             return Err(format!(
                 "the currency {code:?} must be three capital letters (ISO 4217), such as EUR or SEK"
             ));
