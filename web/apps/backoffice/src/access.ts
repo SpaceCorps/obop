@@ -110,6 +110,8 @@ export function buildAccess(
   for (const g of known) if (g) universe.add(g);
   // A held group the server does not list and no module names is no longer registered. With
   // nothing known at all (the lists could not be loaded) nothing is called stale.
+  // The server lists a wildcard marker among the known groups; it is not a group anyone is given.
+  universe.delete("*");
   const stale = new Set<string>();
   for (const g of held)
     if (g && g !== ADMIN && !universe.has(g)) {

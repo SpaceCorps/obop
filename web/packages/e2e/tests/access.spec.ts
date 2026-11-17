@@ -165,11 +165,16 @@ test.describe("access by app", () => {
     const dialog = page.getByRole("dialog", { name: "Access of sam" });
     await expect(dialog).toBeVisible();
     // The choices of an app are a radio group: arrow keys move and choose, Tab leaves the group.
-    const sales = dialog.getByRole("radiogroup", { name: "Access to Sales" });
-    await expect(sales.getByRole("radio", { name: "User", exact: true })).toBeChecked();
-    await sales.getByRole("radio", { name: "User", exact: true }).focus();
+    // (Connectors has a User and an Admin rung; sam holds neither.)
+    const rungs = dialog.getByRole("radiogroup", { name: "Access to Connectors" });
+    await expect(rungs.getByRole("radio", { name: "No access", exact: true })).toBeChecked();
+    await rungs.getByRole("radio", { name: "No access", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
-    await expect(sales.getByRole("radio", { name: "Manager", exact: true })).toBeChecked();
+    await expect(rungs.getByRole("radio", { name: "User", exact: true })).toBeChecked();
+    await page.keyboard.press("ArrowRight");
+    await expect(rungs.getByRole("radio", { name: "Admin", exact: true })).toBeChecked();
+    await expect(dialog.getByRole("button", { name: "Save access" })).toBeEnabled();
+    await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowLeft");
     await expect(dialog.getByRole("button", { name: "Save access" })).toBeDisabled();
     await page.keyboard.press("Escape");
@@ -220,19 +225,24 @@ test.describe("access by app", () => {
     const dialog = page.getByRole("dialog", { name: `Access of ${name}` });
     await expect(dialog).toBeVisible();
     expect(await layoutProblems(page)).toEqual([]);
-    const sales = dialog.getByRole("radiogroup", { name: "Access to Sales" });
-    for (const r of await sales.getByRole("radio").all())
+    const rungs = dialog.getByRole("radiogroup", { name: "Access to Connectors" });
+    for (const r of await rungs.getByRole("radio").all())
       expect((await r.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    await sales.getByRole("radio", { name: "Manager", exact: true }).click();
+    await rungs.getByRole("radio", { name: "Admin", exact: true }).click();
     await dialog.getByRole("button", { name: "Save access" }).click();
     await expect(page.getByText(`Access of ${name} saved.`)).toBeVisible();
-    await expect(row).toContainText("Sales · Manager");
+    await expect(row).toContainText("Connectors · Admin");
     // The group of no app was carried over: the server still has it.
     const stored = await api.get("/api/auth/users", await api.token("root"));
     const groups = (stored.json.users as { name: string; groups: string[] }[]).find(
       (u) => u.name === name,
     )!.groups;
-    expect(groups.sort()).toEqual(["api.device_admin", "sales.manager", "sales.user"]);
+    expect(groups.sort()).toEqual([
+      "api.device_admin",
+      "connectors.admin",
+      "connectors.user",
+      "sales.user",
+    ]);
     expect(await layoutProblems(page)).toEqual([]);
     await expect(open).toBeFocused();
   });

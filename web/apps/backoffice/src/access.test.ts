@@ -261,6 +261,11 @@ describe("stale groups", () => {
     expect(a.stale.has("api.device_admin")).toBe(false);
   });
 
+  it("does not offer the wildcard marker the server lists among the known groups", () => {
+    const a = buildAccess(ROWS, APPS, [...KNOWN, "*"]);
+    expect(a.other).not.toContain("*");
+  });
+
   it("calls nothing stale while nothing is loaded", () => {
     const a = buildAccess([], [], [], ["accounting.user"]);
     expect(a.stale.size).toBe(0);
