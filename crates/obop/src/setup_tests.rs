@@ -8,6 +8,7 @@ use crate::mfa_tests::send;
 use axum::{body::Body, http::Request};
 use http_body_util::BodyExt;
 use obop_auth::{Auth, AuthConfig, SetupOpened};
+use obop_storage::testing::{Flaky, Mode};
 use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -201,6 +202,20 @@ async fn bad_input_with_the_code_is_400_and_a_body_that_is_not_json_is_a_wrong_c
     let c = code(&rig.auth);
     let (s, _, b) = raw(&rig.r, "POST", "/api/auth/setup", body(&c, "a b")).await;
     assert_eq!(s, 400, "{b}");
+    assert_eq!(
+        serde_json::from_str::<J>(&b).unwrap()["code"],
+        "invalid_input"
+    );
+    // A name the brand refuses has a code of its own, so the page can say it in the person's
+    // language and point at the field.
+    let mut named = body(&c, "root");
+    named["instance_name"] = json!("<b>Acme</b>");
+    let (s, _, b) = raw(&rig.r, "POST", "/api/auth/setup", named).await;
+    assert_eq!(s, 400, "{b}");
+    assert_eq!(
+        serde_json::from_str::<J>(&b).unwrap()["code"],
+        "setup_instance_name_invalid"
+    );
     let resp = rig
         .r
         .clone()
@@ -240,4 +255,38 @@ async fn an_authenticator_whose_set_up_is_off_has_no_routes() {
     );
     let (s, _, _) = raw(&r, "GET", "/api/auth/setup", J::Null).await;
     assert_eq!(s, 404);
+}
+
+#[tokio::test]
+async fn a_store_that_cannot_count_the_accounts_is_503_on_both_routes_and_never_open_or_closed() {
+    // Rule 2 over HTTP: the store refuses the count of accounts. The status is not "closed"
+    // (200 {"open": false}) and the creation is not "closed" (409): both are 503.
+    let app = App::new();
+    let flaky = Flaky::new(app.store.backend());
+    let backend = obop_storage::guarded(flaky.clone());
+    let auth = Arc::new(Auth::with_test_config(
+        backend,
+        AuthConfig {
+            default_require_admins: true,
+            ..AuthConfig::insecure_dev()
+        },
+    ));
+    auth.enable_setup(app.all_groups()).unwrap();
+    let c = code(&auth);
+    let r = obop_http::router(
+        obop_http::HttpState::new(app.dispatcher.clone(), auth.clone()),
+        None,
+    );
+    flaky.refuse_model("auth_user", Mode::Reads);
+    let (s, h, b) = raw(&r, "GET", "/api/auth/setup", J::Null).await;
+    assert_eq!(s, 503, "{b}");
+    assert!(h.contains("no-store"), "{h}");
+    assert!(!b.contains("\"open\""), "{b}");
+    let (s, _, b) = raw(&r, "POST", "/api/auth/setup", body(&c, "root")).await;
+    assert_eq!(s, 503, "{b}");
+    flaky.allow_models();
+    assert_eq!(app.store.backend().count("auth_user").unwrap(), 0);
+    // The store answers again: the page is open and the code still works.
+    let (s, _, b) = raw(&r, "POST", "/api/auth/setup", body(&c, "root")).await;
+    assert_eq!(s, 200, "{b}");
 }

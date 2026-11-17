@@ -158,6 +158,55 @@ fn keyed() -> Vec<(&'static str, &'static str)> {
     vec![("OBOP_SECRET_KEY", KEY)]
 }
 
+/// The key the code is kept under: its SHA-256, worked out here, not by the program.
+fn code_key(code: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let bare: String = code.chars().filter(|c| *c != '-').collect();
+    let digest = Sha256::digest(format!("obop-setup-code\n{bare}").as_bytes());
+    let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+    format!("auth.setup.code:{hex}")
+}
+
+/// The codes kept in the expiring store, with the milliseconds each has left.
+fn kept_codes(dir: &Dir) -> Vec<(String, i64)> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let c = rusqlite::Connection::open(dir.file()).unwrap();
+    let mut st = c
+        .prepare("SELECT key, expires_ms FROM obop_kv WHERE key LIKE 'auth.setup.code:%'")
+        .unwrap();
+    st.query_map([], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? - now))
+    })
+    .unwrap()
+    .map(Result::unwrap)
+    .collect()
+}
+
+/// The accounts in the database.
+fn accounts(dir: &Dir) -> i64 {
+    let c = rusqlite::Connection::open(dir.file()).unwrap();
+    c.query_row(
+        "SELECT count(*) FROM obop_record WHERE model = 'auth_user'",
+        [],
+        |r| r.get(0),
+    )
+    .unwrap()
+}
+
+/// The `setup_complete` lines of the security log.
+fn setup_completes(dir: &Dir) -> i64 {
+    let c = rusqlite::Connection::open(dir.file()).unwrap();
+    c.query_row(
+        "SELECT count(*) FROM obop_record WHERE model = 'security_event' AND json_extract(data, '$.kind') = 'setup_complete'",
+        [],
+        |r| r.get(0),
+    )
+    .unwrap()
+}
+
 /// Every row of the database as text, for the search for the code.
 fn database_text(dir: &Dir) -> String {
     let mut out = String::new();
@@ -205,6 +254,27 @@ fn two_processes_on_one_empty_database_each_print_a_code_that_works_against_the_
         assert_eq!(json_of(&raw)["open"], true);
         assert_eq!(json_of(&raw)["code_active"], true);
         assert!(!raw.contains(&code_a[..5]) && !raw.contains(&code_b[..5]));
+    }
+    // While both codes are in force: each is kept as its SHA-256 only, for 60 minutes, and no row
+    // of the database holds the code itself, with or without its hyphens.
+    let mut kept = kept_codes(&dir);
+    kept.sort();
+    let mut want = vec![code_key(&code_a), code_key(&code_b)];
+    want.sort();
+    assert_eq!(
+        kept.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>(),
+        want
+    );
+    for (k, left) in &kept {
+        assert!(
+            (3_500_000..=3_600_000).contains(left),
+            "{k} has {left} ms left, not 60 minutes"
+        );
+    }
+    let live = database_text(&dir);
+    for c in [&code_a, &code_b] {
+        assert!(!live.contains(c.as_str()));
+        assert!(!live.contains(&c.replace('-', "")));
     }
     // The code process A printed, sent to process B.
     let (st, raw) = post(
@@ -321,4 +391,43 @@ fn under_dev_auth_there_is_no_code_and_no_route() {
     }
     assert!(!s.log().contains("Set-up code:"));
     assert_eq!(get(port, "/api/auth/setup").0, 404);
+}
+
+#[test]
+fn two_processes_sent_the_right_code_at_the_same_moment_make_one_account() {
+    // Rule 6 across processes: the lock of the creation is a lock file of the SQLite database,
+    // which two processes share; two requests, one to each process, are let go together.
+    for round in 0..3 {
+        let dir = Dir::new(&format!("race{round}"));
+        let a = serve(&dir, "a", &keyed());
+        let b = serve(&dir, "b", &keyed());
+        let code = a.code();
+        let go = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let send = |port: u16, user: &'static str, go: std::sync::Arc<std::sync::Barrier>| {
+            let code = code.clone();
+            std::thread::spawn(move || {
+                go.wait();
+                post(
+                    port,
+                    "/api/auth/setup",
+                    &json!({"code": code, "username": user, "password": PW}),
+                )
+            })
+        };
+        let x = send(a.port, "ada", go.clone());
+        let y = send(b.port, "bob", go);
+        let answers = [x.join().unwrap(), y.join().unwrap()];
+        let statuses: Vec<u16> = answers.iter().map(|(s, _)| *s).collect();
+        assert_eq!(
+            statuses.iter().filter(|s| **s == 200).count(),
+            1,
+            "{answers:?}"
+        );
+        assert!(
+            statuses.iter().any(|s| *s == 409 || *s == 403),
+            "{answers:?}"
+        );
+        assert_eq!(accounts(&dir), 1);
+        assert_eq!(setup_completes(&dir), 1);
+    }
 }
