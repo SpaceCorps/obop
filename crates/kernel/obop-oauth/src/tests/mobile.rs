@@ -1487,3 +1487,27 @@ fn the_page_texts_of_the_mobile_class_exist_in_every_language() {
 fn rand_byte() -> u32 {
     u32::from_str_radix(&crate::util::rand_hex::<1>(), 16).unwrap()
 }
+
+/// L10: an operator who lists the redirect schemes of the mobile apps it accepts
+/// (`OBOP_OAUTH_MOBILE_SCHEMES`) refuses the registration of any other mobile client; MCP clients
+/// are not affected, and without a list every app that follows RFC 8252 registers as before.
+#[test]
+fn an_operator_list_of_mobile_apps_refuses_the_others() {
+    let r = rig_with(OAuthConfig {
+        mobile_schemes: crate::parse_schemes(" Org.Obop.Mileage , http "),
+        ..OAuthConfig::default()
+    });
+    r.mobile_with(&[APP, LOOP4]).unwrap();
+    let e = r.mobile_with(&["com.example.other:/oauth"]).unwrap_err();
+    assert_eq!(e.error, "invalid_redirect_uri", "{e:?}");
+    assert!(
+        e.description.contains("OBOP_OAUTH_MOBILE_SCHEMES"),
+        "{}",
+        e.description
+    );
+    // One redirect outside the list refuses the whole registration.
+    assert!(r.mobile_with(&[APP, "com.example.other:/oauth"]).is_err());
+    let open = rig_with(OAuthConfig::default());
+    open.mobile_with(&["com.example.other:/oauth"]).unwrap();
+    assert_eq!(crate::parse_schemes(" , "), None);
+}

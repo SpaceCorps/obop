@@ -88,7 +88,12 @@ pub struct HttpState {
 
 impl HttpState {
     pub fn new(dispatcher: Arc<Dispatcher>, auth: Arc<dyn Authenticator>) -> Arc<Self> {
-        Self::with_mcp(dispatcher, auth, mcp::McpConfig::from_env())
+        Self::with_configs(
+            dispatcher,
+            auth,
+            mcp::McpConfig::from_env(),
+            obop_oauth::OAuthConfig::from_env(),
+        )
     }
 
     /// As `new`, with explicit limits and origin allow-list for `/mcp` (tests, embedding).
@@ -97,12 +102,19 @@ impl HttpState {
         auth: Arc<dyn Authenticator>,
         mcp: mcp::McpConfig,
     ) -> Arc<Self> {
+        Self::with_configs(dispatcher, auth, mcp, obop_oauth::OAuthConfig::default())
+    }
+
+    /// As `with_mcp`, with the configuration of the authorization server too (L10: the operator's
+    /// list of mobile apps, `OBOP_OAUTH_MOBILE_SCHEMES`, read by `new`).
+    pub fn with_configs(
+        dispatcher: Arc<Dispatcher>,
+        auth: Arc<dyn Authenticator>,
+        mcp: mcp::McpConfig,
+        oauth_config: obop_oauth::OAuthConfig,
+    ) -> Arc<Self> {
         let shared = shared::SharedState::for_dispatcher(&dispatcher);
-        let oauth = obop_oauth::OAuth::new(
-            shared.backend.clone(),
-            auth.clone(),
-            obop_oauth::OAuthConfig::default(),
-        );
+        let oauth = obop_oauth::OAuth::new(shared.backend.clone(), auth.clone(), oauth_config);
         Arc::new(Self {
             dispatcher,
             auth,
