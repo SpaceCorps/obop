@@ -233,6 +233,33 @@ describe("the widths of the columns", () => {
     // The person's own columns are never dropped (the table scrolls instead).
     expect(fitColumns(ranked, Infinity, head, "state").cols).toHaveLength(ranked.length);
   });
+
+  it("beside a record panel, give the title the room and keep the status in view (R7)", () => {
+    const states = { governed: true } as const;
+    // Time off: the employee and the dates are the title, then the working days and the status.
+    const leave = [
+      f("employee_id", "ref", { to: "hr_employee" }),
+      f("working_days", "number"),
+      f("state", "select", { options: ["draft", "requested", "approved", "refused"], ...states }),
+    ];
+    const l = fitColumns(leave, 560, head, "state", leave[1]);
+    expect(l.widths.reduce((a, b) => a + b, 52)).toBeLessThanOrEqual(560);
+    // The title gets what the number and the badge do not need.
+    expect(l.widths[0]).toBeGreaterThanOrEqual(260);
+    expect(l.widths[2]).toBeLessThan(140);
+    // Trips: a long title, the distance and five states; nothing more can be dropped.
+    const trips = [
+      f("driver", "text"),
+      f("distance_m", "decimal"),
+      f("state", "select", {
+        options: ["recording", "ended", "in_review", "confirmed", "discarded"],
+        ...states,
+      }),
+    ];
+    const t = fitColumns(trips, 560, head, "state", trips[1]);
+    expect(names(t.cols)).toEqual(["driver", "distance_m", "state"]);
+    expect(t.widths.reduce((a, b) => a + b, 52)).toBeLessThanOrEqual(560);
+  });
 });
 
 describe("cells that edit in place", () => {
