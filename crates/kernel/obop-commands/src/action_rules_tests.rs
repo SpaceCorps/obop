@@ -152,7 +152,10 @@ fn an_action_started_by_an_effect_is_held_to_its_from_state() {
     r.act("ar_doc.release", &doc).unwrap();
     let batch = r.make(
         "ar_batch",
-        &[("doc_id", Value::text(&doc)), ("state", Value::text("open"))],
+        &[
+            ("doc_id", Value::text(&doc)),
+            ("state", Value::text("open")),
+        ],
     );
     let (m, c) = r.refusal("ar_batch.close", &batch);
     assert!(m.contains("state must be draft to do this"), "{m}");
@@ -164,7 +167,10 @@ fn an_action_started_by_an_effect_is_held_to_its_from_state() {
     let draft = r.make("ar_doc", &[("title", Value::text("t"))]);
     let batch = r.make(
         "ar_batch",
-        &[("doc_id", Value::text(&draft)), ("state", Value::text("open"))],
+        &[
+            ("doc_id", Value::text(&draft)),
+            ("state", Value::text("open")),
+        ],
     );
     r.act("ar_batch.close", &batch).unwrap();
     assert_eq!(r.state("ar_doc", &draft), "released");
@@ -177,7 +183,10 @@ fn an_action_started_by_an_effect_is_held_to_the_fields_it_needs() {
     let doc = r.make("ar_doc", &[("title", Value::text("t"))]);
     let batch = r.make(
         "ar_batch",
-        &[("doc_id", Value::text(&doc)), ("state", Value::text("open"))],
+        &[
+            ("doc_id", Value::text(&doc)),
+            ("state", Value::text("open")),
+        ],
     );
     let (m, _) = r.refusal("ar_batch.pause", &batch);
     assert!(m.contains("ar_doc.hold needs reason"), "{m}");
