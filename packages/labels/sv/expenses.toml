@@ -19,6 +19,10 @@ description = "Vad pengarna användes till"
 label = "Anställd"
 description = "Användarnamn för personen som begär ersättning; den som skapar utlägget om inget annat anges"
 
+[labels.sv.model.expenses_expense.field.submitted_by]
+label = "Inskickat av"
+description = "Användarnamnet på den som skickade in utlägget, registrerat av åtgärden Skicka in; den personen får inte heller godkänna det, om inte självgodkännande är tillåtet"
+
 [labels.sv.model.expenses_expense.field.spent_on]
 label = "Utfört den"
 description = "Inköpsdatum (ÅÅÅÅ-MM-DD)"

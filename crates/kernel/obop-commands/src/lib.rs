@@ -298,6 +298,8 @@ pub struct Dispatcher {
     brand: std::sync::OnceLock<Arc<brand::Reader>>,
     /// Wrappers around a command's handler, by command id (see `around`).
     around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
+    /// Checks of the person approving a plan, by command id (see `before_approve`).
+    before_approve: std::sync::RwLock<HashMap<String, Arc<BeforeApprove>>>,
     /// Models whose writes run under the transaction lock because a rule needs it: a unique
     /// field, a sequence, an effect, or being the target of one (D56, D57).
     lock_models: std::sync::RwLock<HashSet<String>>,
@@ -342,6 +344,10 @@ impl Default for SharedClock {
 pub type Around = dyn Fn(&Principal, &Value, &dyn Fn(&Value) -> Result<Value, String>) -> Result<Value, String>
     + Send
     + Sync;
+
+/// A check of the person who approves a plan of a command (`Dispatcher::before_approve`): it sees
+/// the approver and the plan's input, and its refusal leaves the plan as it is.
+pub type BeforeApprove = dyn Fn(&Principal, &Value) -> Result<(), String> + Send + Sync;
 
 /// What an observer sees of a command that succeeded: its id, who ran it, the input the handler
 /// received and the raw output, before it was shaped for the caller.
@@ -1055,6 +1061,17 @@ impl Dispatcher {
         );
     }
 
+    /// Check the person who approves a plan of command `id` before the plan is spent (U7): a rule
+    /// about the approver (a claimant may not approve their own claim) refuses there, so the plan
+    /// stays for someone else to approve. Like a wrapper it survives the command being registered
+    /// again; the wrapper should still hold the rule for a direct call.
+    pub fn before_approve(&self, id: &str, check: Box<BeforeApprove>) {
+        self.before_approve
+            .write()
+            .unwrap()
+            .insert(id.to_string(), Arc::from(check));
+    }
+
     /// Wrap the handler of command `id` (`model.command`). The wrapper survives the command being
     /// registered again, which happens when a package is reinstalled. Used where a command has
     /// to do something outside the store that must succeed or fail with it, such as returning
@@ -1412,6 +1429,10 @@ impl Dispatcher {
             if let Some(i) = v.input {
                 input = i;
             }
+        }
+        let check = self.before_approve.read().unwrap().get(&plan.id).cloned();
+        if let Some(check) = check {
+            check(approver, &input).map_err(|m| refusal(m, &input))?;
         }
         // Taken out first, so it runs once; if it is still there the plan would run again.
         self.plans
