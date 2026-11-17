@@ -43,15 +43,18 @@ pub fn module() -> Module {
 
 // What the back office shows read-only on a saved trip (`ui.readonly_when`, R6), so that a person
 // sees the rule the guards hold (`policy::writable_fields`): the server answers as it always did,
-// and the phone app, which sends these fields on create, is not touched by a hint.
+// and the phone app, which sends these fields on create, is not touched by a hint. `$user` is the
+// person viewing the trip (M2), so an administrator or a reviewer is not offered the driver's inputs.
 
 /// The fields the server takes only when the trip is created.
 const FIXED: &str = "true";
-/// The driver's fields: written while the trip is recording, ended or rejected.
+/// The driver's fields: written by the driver alone while the trip is recording, ended or rejected.
 const DRIVER_LOCKED: &str =
-    "state == \"in_review\" || state == \"confirmed\" || state == \"discarded\"";
-/// The reviewer's field: written while the trip is in review.
-const REVIEW_LOCKED: &str = "state != \"in_review\"";
+    "driver != $user || state == \"in_review\" || state == \"confirmed\" || state == \"discarded\"";
+/// The reviewer's field: written while the trip is in review, by a reviewer who is not its driver.
+/// (The browser does not know the viewer's groups: an administrator who is no reviewer still sees
+/// it as an input on a trip in review, and the server refuses the save.)
+const REVIEW_LOCKED: &str = "state != \"in_review\" || driver == $user";
 
 fn trip() -> ModelDef {
     ModelDef {

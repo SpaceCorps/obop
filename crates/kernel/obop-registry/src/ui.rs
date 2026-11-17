@@ -1402,7 +1402,7 @@ fn check_readonly_when(
         g.bad(fp, "readonly_when must be 1 to 400 characters".into());
         return;
     }
-    let e = match crate::expr::Expr::parse(src) {
+    let e = match crate::expr::Expr::parse_viewer(src) {
         Ok(e) => e,
         Err(e) => return g.bad(fp, format!("readonly_when `{src}`: {e}")),
     };

@@ -540,17 +540,23 @@ mod tests {
         );
     }
 
-    /// R6: the form's `readonly_when` hints say what `writable_fields` holds. A field is shown
-    /// editable in a state exactly when someone (the driver or a reviewer) may write it there, and
-    /// the fields taken only at creation are never editable on a saved trip.
+    /// R6, M2: the form's `readonly_when` hints say what `writable_fields` holds for the person
+    /// viewing the trip (`$user`). A field is shown editable to a viewer in a state exactly when
+    /// that viewer may write it there, and the fields taken only at creation are never editable on
+    /// a saved trip. The one difference: the browser does not know the viewer's groups, so an
+    /// administrator who is no reviewer is shown `reject_reason` as an input on a trip in review.
     #[test]
     fn the_readonly_hints_of_the_trip_follow_the_writable_fields() {
         use obop_registry::expr::{self, AggFn, Env, Expr, V};
-        struct State<'a>(&'a str);
-        impl Env for State<'_> {
+        struct Seen<'a> {
+            state: &'a str,
+            user: &'a str,
+        }
+        impl Env for Seen<'_> {
             fn field(&self, name: &str) -> Result<V, String> {
                 Ok(match name {
-                    "state" => V::Text(self.0.into()),
+                    "state" => V::Text(self.state.into()),
+                    "driver" => V::Text("ann".into()),
                     _ => V::Null,
                 })
             }
@@ -564,6 +570,9 @@ mod tests {
             ) -> Result<V, String> {
                 Err("none".into())
             }
+            fn user(&self) -> Result<V, String> {
+                Ok(V::Text(self.user.into()))
+            }
         }
         let module = crate::model::module();
         let def = module.models.iter().find(|m| m.name == TRIP).unwrap();
@@ -574,26 +583,35 @@ mod tests {
                 .and_then(|x| x.hints.as_ref())
                 .and_then(|h| h.ui.readonly_when.clone())
         };
-        let driver = who("ann", false, false);
-        let reviewer = who("rob", true, false);
+        let viewers = [
+            who("ann", false, false), // the driver
+            who("ann", true, true),   // the driver, a reviewer and an administrator too
+            who("rob", true, false),  // a reviewer
+            who("ada", true, true),   // an administrator who reviews
+            who("adm", false, true),  // an administrator who does not
+        ];
         for st in STATES {
             let t = trip(st, "ann");
-            let mut writable: Vec<&str> = Vec::new();
-            for w in [&driver, &reviewer] {
-                writable.extend(
-                    writable_fields(w, &t)
-                        .map(|f| f.to_vec())
-                        .unwrap_or_default(),
-                );
-            }
-            for f in DRIVER_FIELDS.iter().chain(&REVIEWER_FIELDS) {
-                let src = hint(f).unwrap_or_else(|| panic!("{f} has no readonly_when"));
-                let held = expr::eval(&Expr::parse(&src).unwrap(), &State(st)).unwrap();
-                assert_eq!(
-                    held == V::Bool(true),
-                    !writable.contains(f),
-                    "{f} in {st}: `{src}`"
-                );
+            for w in viewers.iter().filter(|w| may_see_trip(w, &t)) {
+                let writable = writable_fields(w, &t)
+                    .map(|f| f.to_vec())
+                    .unwrap_or_default();
+                for f in DRIVER_FIELDS.iter().chain(&REVIEWER_FIELDS) {
+                    let src = hint(f).unwrap_or_else(|| panic!("{f} has no readonly_when"));
+                    let seen = Seen {
+                        state: st,
+                        user: &w.id,
+                    };
+                    let held = expr::eval(&Expr::parse_viewer(&src).unwrap(), &seen).unwrap();
+                    let known_gap =
+                        !w.reviewer && !owns(w, &t) && st == IN_REVIEW && *f == "reject_reason";
+                    assert_eq!(
+                        held == V::Bool(true),
+                        !writable.contains(f) && !known_gap,
+                        "{f} in {st} seen by {}: `{src}`",
+                        w.id
+                    );
+                }
             }
         }
         for f in CREATE_FIELDS.iter().filter(|f| !DRIVER_FIELDS.contains(f)) {
