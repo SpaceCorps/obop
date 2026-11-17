@@ -1,4 +1,9 @@
-/* The record floats beside the list instead of replacing it. */
+/* The record floats beside the list instead of replacing it. Its slide in starts 14px further out:
+   what passes the window's edge meanwhile is clipped, so the page never scrolls sideways (#86).
+   Clip, not hidden: the workspace does not become a scroll container. */
+.workspace {
+  overflow-x: clip;
+}
 .record {
   display: flex;
   flex: none;
