@@ -157,21 +157,24 @@ describe("the calls of the outbox", () => {
     ["end", "ended"],
     ["submit", "in_review"],
     ["discard", "discarded"],
-  ] as const)("%s takes the trip the server answers with and reads nothing more", async (command, state) => {
-    const { api, sent } = instance({
-      [`/api/mileage_trip/${command}`]: { ...TRIP, state },
-    });
-    const call = {
-      end: (id: string) => api.endTrip(id),
-      submit: (id: string) => api.submitTrip(id),
-      discard: (id: string) => api.discardTrip(id),
-    }[command];
-    const trip = await call("t-1");
-    expect(trip).toMatchObject({ id: "t-1", clientTripId: "c1", state });
-    expect(sent.map((s) => [s.path, s.body])).toEqual([
-      [`/api/mileage_trip/${command}`, { id: "t-1" }],
-    ]);
-  });
+  ] as const)(
+    "%s takes the trip the server answers with and reads nothing more",
+    async (command, state) => {
+      const { api, sent } = instance({
+        [`/api/mileage_trip/${command}`]: { ...TRIP, state },
+      });
+      const call = {
+        end: (id: string) => api.endTrip(id),
+        submit: (id: string) => api.submitTrip(id),
+        discard: (id: string) => api.discardTrip(id),
+      }[command];
+      const trip = await call("t-1");
+      expect(trip).toMatchObject({ id: "t-1", clientTripId: "c1", state });
+      expect(sent.map((s) => [s.path, s.body])).toEqual([
+        [`/api/mileage_trip/${command}`, { id: "t-1" }],
+      ]);
+    },
+  );
 
   // An instance from before L21 answers an action with the fields it changed and the id, not
   // with the trip (the answer of `end` has no `client_trip_id`): the api reads the trip after it.

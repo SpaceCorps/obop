@@ -66,7 +66,9 @@ const farFirst = (later: number): Fix[] => {
  */
 const scattered = (later: number): Fix[] => [
   fix(1, 0, 0, 6),
-  ...Array.from({ length: later }, (_, i) => fix(i + 2, 5 + i * 5, i % 2 === 0 ? FAR_M : -FAR_M, 6)),
+  ...Array.from({ length: later }, (_, i) =>
+    fix(i + 2, 5 + i * 5, i % 2 === 0 ? FAR_M : -FAR_M, 6),
+  ),
 ];
 
 /** A real drive: 12 m/s northwards, one fix every 2 s, a good radius. */
