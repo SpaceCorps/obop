@@ -733,6 +733,24 @@ fn a_reviewer_confirms_or_rejects_and_the_driver_corrects_and_submits_again() {
 }
 
 #[test]
+fn a_reason_typed_for_a_reject_that_was_cancelled_does_not_stand_on_a_confirmed_trip() {
+    each_rig(|r| {
+        let (ann, rev) = (driver("ann"), reviewer("rita"));
+        let id = r.in_review(&ann);
+        // The reviewer typed a reason (the form saved it) and then cancelled the reject.
+        r.ok(
+            &rev,
+            "mileage_trip.update",
+            json!({"id": id, "reject_reason": "Private detour"}),
+        );
+        r.ok(&rev, "mileage_trip.confirm", json!({"id": id}));
+        let row = r.trip_row(&id);
+        assert_eq!(row["state"], "confirmed");
+        assert_eq!(row["reject_reason"], J::Null, "{row:?}");
+    });
+}
+
+#[test]
 fn nobody_decides_their_own_trip() {
     each_rig(|r| {
         let (rita, rex) = (reviewer("rita"), reviewer("rex"));
