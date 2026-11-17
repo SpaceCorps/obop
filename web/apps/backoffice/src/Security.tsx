@@ -63,6 +63,8 @@ export function SecurityTab({
       live = false;
     };
   }, [api, refreshKey]);
+  // "Sign out everywhere" and the end of an own session by the server leave by the same door.
+  const signedOut = onSignOut ?? (() => location.reload());
   return (
     <div className="stack gap-lg security-tab">
       <TwoFactorPanel api={api} notify={notify} onChanged={() => setRefreshKey((k) => k + 1)} />
@@ -78,17 +80,19 @@ export function SecurityTab({
         authenticatorApp={!!policy?.enabled}
         notify={notify}
       />
-      <SessionsSection
-        token={token}
-        notify={notify}
-        onSignOut={onSignOut ?? (() => location.reload())}
-      />
+      <SessionsSection token={token} notify={notify} onSignOut={signedOut} />
       <ConnectedAppsSection token={token} notify={notify} />
       <AgentTokensSection token={token} notify={notify} />
       <DevicesSection token={token} notify={notify} isAdmin={isAdmin} me={me} />
       {isAdmin && (
         <>
-          <PeopleSection token={token} notify={notify} refreshKey={ssoKey} me={me} />
+          <PeopleSection
+            token={token}
+            notify={notify}
+            refreshKey={ssoKey}
+            me={me}
+            onSignedOut={signedOut}
+          />
           <MicrosoftSignInSection
             token={token}
             notify={notify}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type FocusEvent } from "react";
-import { Badge, Button, ConfirmDialog, Dialog, Input, Notice, Switch, t } from "@obop/ui";
+import { Badge, Button, ConfirmDialog, Dialog, Input, Notice, Switch, Textarea, t } from "@obop/ui";
 import { call } from "./api.ts";
 import { account, type Notify } from "./SecurityAccount.tsx";
 import { copyText } from "./signLinks.ts";
@@ -100,7 +100,8 @@ function SsoFormDialog({
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const address = useRef<HTMLInputElement>(null);
+  const address = useRef<HTMLTextAreaElement>(null);
+  const addressHint = useId();
   const form = useRef<HTMLFormElement>(null);
   // A second Enter in the same moment must not send a second request.
   const inflight = useRef(false);
@@ -108,9 +109,13 @@ function SsoFormDialog({
   const stored = provider?.secret_set === true;
 
   const tenantError =
-    (asked || left.tenant) && !isGuid(tenant) ? t("The tenant ID is a GUID.") : undefined;
+    (asked || left.tenant) && !isGuid(tenant)
+      ? t("This is not a tenant ID: it has 32 letters and digits in five groups.")
+      : undefined;
   const clientError =
-    (asked || left.client) && !isGuid(clientId) ? t("The application ID is a GUID.") : undefined;
+    (asked || left.client) && !isGuid(clientId)
+      ? t("This is not an application ID: it has 32 letters and digits in five groups.")
+      : undefined;
   const secretError =
     asked && !stored && secret.trim() === "" ? t("Enter the client secret.") : undefined;
   // After a refused Save the keyboard goes to the first field that is wrong, and the reader hears it.
@@ -184,23 +189,29 @@ function SsoFormDialog({
           void save();
         }}
       >
-        <Input
-          ref={address}
-          label={t("Redirect address")}
-          hint={`${t(
-            "Register this as a Web redirect address in the app registration at Microsoft. It must be the address people type to reach this instance.",
-          )} ${t(
-            "This is the address of the page you are on. If sign-in later fails with a redirect address mismatch, ask whoever runs the server to set its public address.",
-          )}`}
-          value={redirectAddress()}
-          readOnly
-          spellCheck={false}
-          className="sso-address"
-        />
-        <div className="actionrow">
-          <Button aria-label={t("Copy redirect address")} onClick={() => void copy()}>
-            {t("Copy")}
-          </Button>
+        <div className="sso-address">
+          {/* The address is a text area so that a long one wraps and is read in full on a phone. */}
+          <div className="sso-address-row">
+            <Textarea
+              ref={address}
+              label={t("Redirect address")}
+              aria-describedby={addressHint}
+              value={redirectAddress()}
+              readOnly
+              rows={2}
+              spellCheck={false}
+            />
+            <Button aria-label={t("Copy redirect address")} onClick={() => void copy()}>
+              {t("Copy")}
+            </Button>
+          </div>
+          <p className="hint" id={addressHint}>
+            {`${t(
+              "Register this as a Web redirect address in the app registration at Microsoft. It must be the address people type to reach this instance.",
+            )} ${t(
+              "This is the address of the page you are on. If sign-in later fails with a redirect address mismatch, ask whoever runs the server to set its public address.",
+            )}`}
+          </p>
           {/* Always in the page and filled afterwards, so that a reader announces the change. */}
           <span className="hint" role="status">
             {copied === "ok"
@@ -212,7 +223,9 @@ function SsoFormDialog({
         </div>
         <Input
           label={t("Tenant ID")}
-          hint={t("The directory (tenant) ID of your organisation at Microsoft, a GUID.")}
+          hint={t(
+            "Copy it from the Overview page of the app registration at Microsoft (Directory (tenant) ID). It looks like 00000000-0000-0000-0000-000000000000.",
+          )}
           value={tenant}
           onChange={(e) => setTenant(e.target.value)}
           onBlur={leave("tenant", tenant)}
@@ -223,7 +236,9 @@ function SsoFormDialog({
         />
         <Input
           label={t("Application (client) ID")}
-          hint={t("The ID of the app registration, a GUID.")}
+          hint={t(
+            "Copy it from the same Overview page (Application (client) ID). It looks like 00000000-0000-0000-0000-000000000000.",
+          )}
           value={clientId}
           onChange={(e) => setClientId(e.target.value)}
           onBlur={leave("client", clientId)}
@@ -238,7 +253,7 @@ function SsoFormDialog({
             stored
               ? t("Leave empty to keep the stored secret.")
               : t(
-                  "The secret's Value, not its Secret ID. It is stored sealed and never shown again.",
+                  "The secret's Value, not its Secret ID. It is stored encrypted and never shown again.",
                 )
           }
           type="password"
@@ -411,7 +426,7 @@ export function MicrosoftSignInSection({
             onChange={(e) => void show(e.target.checked)}
           />
           {onlyCount !== null && onlyCount > 0 && <p className="hint">{onlyPeople(onlyCount)}</p>}
-          <div className="actionrow">
+          <div className="actionrow sso-actions">
             <Button variant="ghost" onClick={() => setEditing(true)}>
               {t("Change settings")}
             </Button>
@@ -426,19 +441,13 @@ export function MicrosoftSignInSection({
               {t("Remove")}
             </Button>
           </div>
-          {provider.break_glass_enough ? (
+          {provider.break_glass !== "" && (
             <p className="hint">
               {t(
                 "Administrators who can still sign in with a password and a second step: {names}.",
                 { names: provider.break_glass },
               )}
             </p>
-          ) : (
-            <Notice tone="warning" title={t("Sign in with Microsoft")}>
-              {t(
-                "At least two other administrators with a password and a second step are needed before an account can be made Microsoft only.",
-              )}
-            </Notice>
           )}
         </>
       )}
@@ -448,7 +457,12 @@ export function MicrosoftSignInSection({
           provider={provider}
           onClose={() => setEditing(false)}
           onSaved={() => {
-            notify(t("Microsoft sign-in saved."));
+            // The first set-up switches the button on for everyone at once, with nobody bound yet.
+            notify(
+              provider === null
+                ? t("Microsoft sign-in saved. The button is on: now bind each person under People.")
+                : t("Microsoft sign-in saved."),
+            );
             // After a first set-up the button that opened the form is replaced: the heading takes the focus.
             void load().then(() => provider === null && setFocusHeading((k) => k + 1));
             onChanged?.();

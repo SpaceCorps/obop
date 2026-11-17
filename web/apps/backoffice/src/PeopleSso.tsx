@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FocusEvent } from "react";
+import { useEffect, useId, useRef, useState, type FocusEvent } from "react";
 import { Button, Checkbox, ConfirmDialog, Dialog, Input, t } from "@obop/ui";
 import { call } from "./api.ts";
 import type { Notify } from "./SecurityAccount.tsx";
@@ -25,6 +25,7 @@ export function MicrosoftDialog({
   notify,
   onClose,
   onDone,
+  onSignedOut,
 }: {
   token: string;
   person: PersonSso;
@@ -35,6 +36,8 @@ export function MicrosoftDialog({
   onClose: () => void;
   /** After a change: People reloads. */
   onDone: () => void;
+  /** After a change that ends the signed-in administrator's own sessions: the app's own sign-out. */
+  onSignedOut?: () => void;
 }) {
   const [oid, setOid] = useState("");
   const [asked, setAsked] = useState(false);
@@ -45,6 +48,7 @@ export function MicrosoftDialog({
   // The question before a change that ends the person's sessions.
   const [confirm, setConfirm] = useState<"only" | "unbind" | null>(null);
   const form = useRef<HTMLFormElement>(null);
+  const reasonId = useId();
   const inflight = useRef(false);
   const own = !!me && me.trim().toLowerCase() === person.name.trim().toLowerCase();
   const bound = typeof person.sso_oid === "string" && person.sso_oid !== "";
@@ -52,10 +56,21 @@ export function MicrosoftDialog({
   const set = sso.kind === "set";
   const oidError =
     (asked || left) && !isGuid(oid)
-      ? t("The object ID is a GUID, not an e-mail address.")
+      ? oid.includes("@")
+        ? t("This is an e-mail address, not an object ID.")
+        : t("This is not an object ID: it has 32 letters and digits in five groups.")
       : undefined;
   // Turning Microsoft only on needs a provider that is on; the server refuses it otherwise.
   const providerOff = sso.kind === "none" || (sso.kind === "set" && !sso.provider.enabled);
+  // ...and two OTHER administrators with a password and a second step (the server counts others).
+  const others =
+    sso.kind === "set"
+      ? sso.provider.break_glass
+          .split(",")
+          .map((n) => n.trim().toLowerCase())
+          .filter((n) => n !== "" && n !== person.name.trim().toLowerCase()).length
+      : 0;
+  const tooFew = sso.kind === "set" && others < 2;
   useEffect(() => {
     if (attempt > 0) form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
   }, [attempt]);
@@ -69,6 +84,7 @@ export function MicrosoftDialog({
     body: object,
     done: string,
     failed: string,
+    endsOwnSessions = false,
   ): Promise<boolean> {
     // A second Enter in the same moment must not send a second request.
     if (inflight.current) return false;
@@ -80,7 +96,10 @@ export function MicrosoftDialog({
     setBusy(false);
     if (r.kind === "ok") {
       notify(done);
-      onDone();
+      // The server ended this administrator's own sessions: the next request would answer 401.
+      // Leave the way "Sign out everywhere" does, and do not reload a list nobody may read now.
+      if (own && endsOwnSessions && onSignedOut) onSignedOut();
+      else onDone();
       return true;
     }
     setError(refusal(r, failed));
@@ -108,6 +127,7 @@ export function MicrosoftDialog({
       {},
       t("The Microsoft binding of {user} was removed.", { user: person.name }),
       t("Could not remove the binding."),
+      true,
     );
     if (ok) onClose();
   }
@@ -122,6 +142,7 @@ export function MicrosoftDialog({
             user: person.name,
           }),
       t("Could not save."),
+      on,
     );
     setConfirm(null);
     if (ok) onClose();
@@ -177,7 +198,7 @@ export function MicrosoftDialog({
           <Input
             label={t("Object ID")}
             hint={t(
-              "The person's Object ID in the Microsoft Entra admin centre (Users, the person, Object ID). A GUID, not an e-mail address.",
+              "Copy it from the person's page in the Microsoft Entra admin centre (Users, the person, Object ID). It looks like 00000000-0000-0000-0000-000000000000.",
             )}
             value={oid}
             onChange={(e) => setOid(e.target.value)}
@@ -214,9 +235,9 @@ export function MicrosoftDialog({
             label={t("Microsoft only")}
             hint={`${t(
               "The account then refuses its password and its passkeys. The person must have signed in with the Microsoft button once, and two other administrators must keep a password and a second step. Ends the person's sessions.",
-            )}${providerOff && !only ? ` ${t("Turn Microsoft sign-in on first (Customize, Security).")}` : ""}`}
+            )}${providerOff && !only ? ` ${t("Turn Microsoft sign-in on first (Customize, Security).")}` : ""}${tooFew && !only ? ` ${t("At least two other administrators with a password and a second step are needed before an account can be made Microsoft only.")}` : ""}`}
             checked={only}
-            disabled={busy || (providerOff && !only)}
+            disabled={busy || ((providerOff || tooFew) && !only)}
             onChange={(e) => (e.target.checked ? setConfirm("only") : void setOnly(false))}
           />
           {error && confirm !== "unbind" && (
@@ -228,6 +249,7 @@ export function MicrosoftDialog({
             <div className="actionrow">
               <Button
                 disabled={busy || only}
+                aria-describedby={only ? reasonId : undefined}
                 onClick={() => {
                   setError(null);
                   setConfirm("unbind");
@@ -237,7 +259,9 @@ export function MicrosoftDialog({
               </Button>
             </div>
             {only && (
-              <p className="hint">{t("Turn off Microsoft only before removing the binding.")}</p>
+              <p className="hint" id={reasonId}>
+                {t("Turn off Microsoft only before removing the binding.")}
+              </p>
             )}
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Input, Notice, Table, t } from "@obop/ui";
 import { MIN_PASSWORD, account, reason, type Failure, type Notify } from "./SecurityAccount.tsx";
 import { MicrosoftDialog } from "./PeopleSso.tsx";
@@ -282,6 +282,7 @@ export function PeopleSection({
   notify,
   refreshKey = 0,
   me,
+  onSignedOut,
 }: {
   token: string;
   notify: Notify;
@@ -289,6 +290,8 @@ export function PeopleSection({
   me?: string;
   /** Changes when Microsoft sign-in was set up, changed or removed: the column follows. */
   refreshKey?: number;
+  /** The server no longer knows this session (401), or an own change ended it: go to sign-in. */
+  onSignedOut?: () => void;
 }) {
   const id = useId();
   const [sso, setSso] = useState<SsoState>({ kind: "loading" });
@@ -303,8 +306,13 @@ export function PeopleSection({
   const [offboarding, setOffboarding] = useState<Person | null>(null);
   const [note, setNote] = useState("");
   const [offError, setOffError] = useState<string | null>(null);
+  // Read at the moment of use: the parent may pass a new function at every render.
+  const signedOut = useRef(onSignedOut);
+  signedOut.current = onSignedOut;
   const load = useCallback(async () => {
     const r = await account<{ users: Person[] }>(token, "GET", "/users");
+    // A 401 is a signed-out session, not an empty list: never draw it as a table with no one in it.
+    if (!r.ok && r.status === 401 && signedOut.current) return signedOut.current();
     setPeople(r.ok ? r.value.users : []);
   }, [token]);
   useEffect(() => void load(), [load]);
@@ -416,14 +424,22 @@ export function PeopleSection({
                 </td>
                 {microsoftShown && (
                   <td data-label={t("Microsoft")}>
-                    {p.sso_oid || p.sso_only ? (
-                      <span className="sso-badges">
-                        {p.sso_oid && <Badge tone="info">{t("Bound")}</Badge>}
-                        {p.sso_only && <Badge tone="accent">{t("Microsoft only")}</Badge>}
-                      </span>
-                    ) : (
-                      <span className="hint">{t("Not bound")}</span>
-                    )}
+                    {/* The cell is the control: its words are the state, its name has the person. */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="sso-cell"
+                      aria-label={
+                        p.sso_only
+                          ? t("Microsoft sign-in for {user}: Microsoft only", { user: p.name })
+                          : p.sso_oid
+                            ? t("Microsoft sign-in for {user}: bound", { user: p.name })
+                            : t("Microsoft sign-in for {user}: not bound", { user: p.name })
+                      }
+                      onClick={() => setMicrosoft(p.name)}
+                    >
+                      {p.sso_only ? t("Microsoft only") : p.sso_oid ? t("Bound") : t("Not bound")}
+                    </Button>
                   </td>
                 )}
                 <td className="cell-actions">
@@ -431,16 +447,6 @@ export function PeopleSection({
                     <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
                       {t("Groups")}
                     </Button>
-                    {microsoftShown && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        aria-label={t("Microsoft sign-in for {user}", { user: p.name })}
-                        onClick={() => setMicrosoft(p.name)}
-                      >
-                        {t("Microsoft")}
-                      </Button>
-                    )}
                     <Button size="sm" disabled={busy} onClick={() => void toggle(p)}>
                       {p.disabled ? t("Enable") : t("Disable")}
                     </Button>
@@ -569,6 +575,7 @@ export function PeopleSection({
           notify={notify}
           onClose={() => setMicrosoft(null)}
           onDone={() => void load()}
+          onSignedOut={onSignedOut}
         />
       )}
       {offboarding && (

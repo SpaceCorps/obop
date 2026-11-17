@@ -261,8 +261,53 @@
 .sso-bound {
   overflow-wrap: anywhere;
 }
+/* Change settings and Remove sit side by side at the start, Remove the quiet destructive one. */
+.customize .sso-actions .btn.ghost.danger-text {
+  margin-inline-start: 0;
+}
+/* The redirect address: the field and its Copy button in one row; on a phone the button is under
+   the field, flush left, and the address wraps so that it is read in full. */
+.sso-address {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.sso-address-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+.sso-address-row > .field {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+.sso-address-row > .btn {
+  flex: none;
+}
+.sso-address textarea {
+  min-block-size: var(--control-h);
+  padding-block: 0.55rem;
+  resize: none;
+  field-sizing: content;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.sso-address .hint {
+  margin: 0;
+}
+.sso-cell {
+  white-space: normal;
+}
 @media (max-width: 40rem) {
   /* One 16 px gutter on a phone, for every tab of Customize. */
+  .sso-address-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .sso-address-row > .field {
+    inline-size: 100%;
+  }
   .customize .content.pad {
     padding: var(--space-4);
   }
