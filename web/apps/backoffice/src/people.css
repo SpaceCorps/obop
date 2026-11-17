@@ -56,7 +56,12 @@
   background: var(--surface-2);
 }
 .access-app > legend {
-  display: contents;
+  float: left;
+  inline-size: 100%;
+  padding: 0;
+}
+.access-app > legend + * {
+  clear: both;
 }
 .access-app-name {
   display: flex;

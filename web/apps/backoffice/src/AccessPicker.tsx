@@ -22,7 +22,7 @@ import { groupWord, levelWord, otherLabel } from "./accessText.ts";
    access.ts from `module.list`. The agent-token dialog keeps the raw GroupPicker of People.tsx:
    a token scope is an exact set of groups. */
 
-const TECHNICAL = "obop-access-technical";
+const TECHNICAL = "people-technical-names";
 /** More apps than this and a filter is offered. */
 const FILTER_ABOVE = 8;
 

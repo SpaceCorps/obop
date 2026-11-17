@@ -910,13 +910,11 @@ describe("People: Microsoft, the questions and the rules", () => {
       bea: ["Bound", "Microsoft sign-in for bea: bound"],
       cy: ["Microsoft only", "Microsoft sign-in for cy: Microsoft only"],
     });
-    // One control, not two: the row's action buttons are the old ones only.
+    // One control, not two: the row's action buttons are Access and More only.
     const row = container.querySelector('tr[data-person="ada"]')!;
     expect([...row.querySelectorAll("td.cell-actions button")].map((b) => b.textContent)).toEqual([
-      "Groups",
-      "Disable",
-      "Reset password",
-      "Offboard",
+      "Access",
+      "More",
     ]);
     await click(microsoftButton("ada"));
     expect(dialog()?.textContent).toContain("Microsoft sign-in for ada");

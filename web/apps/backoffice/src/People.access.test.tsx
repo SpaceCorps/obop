@@ -438,7 +438,7 @@ describe("Access of NAME", () => {
     expect(codes).toEqual(
       expect.arrayContaining(["sales.user", "sales.manager", "api.device_admin"]),
     );
-    expect(localStorage.getItem("obop-access-technical")).toBe("1");
+    expect(localStorage.getItem("people-technical-names")).toBe("1");
   });
 
   it("with no module list every group is still listed, under Other access", async () => {
