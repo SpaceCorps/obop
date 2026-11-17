@@ -143,6 +143,7 @@ async fn a_csv_import_cannot_start_a_request_that_signs_without_the_door() {
         .iter()
         .map(|k| match *k {
             "signed_at" => "2026-11-03T10:00:00.000000Z".to_string(),
+            "sent_on" | "signed_on" => "2026-11-03".to_string(),
             "document_hash" => f.file.clone(),
             "signer_ip" => "198.51.100.7".to_string(),
             _ => "forged".to_string(),
@@ -933,7 +934,7 @@ async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
     );
     // A plain user reads none, on get, list and search, and cannot filter on them.
     let (s, v) = f
-        .api("sam", "/api/sign_request/get", json!({"id": f.req}))
+        .api("dan", "/api/sign_request/get", json!({"id": f.req}))
         .await;
     assert_eq!(s, 200, "{v}");
     for k in keys {
@@ -944,7 +945,7 @@ async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
     }
     for cmd in ["list", "search"] {
         let (s, v) = f
-            .api("sam", &format!("/api/sign_request/{cmd}"), json!({}))
+            .api("dan", &format!("/api/sign_request/{cmd}"), json!({}))
             .await;
         assert_eq!(s, 200, "{cmd}: {v}");
         let rows = v["value"]
@@ -986,7 +987,7 @@ async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
         ];
         for (cmd, probe) in probes {
             let path = format!("/api/sign_request/{cmd}");
-            let (s, v) = f.api("sam", &path, probe.clone()).await;
+            let (s, v) = f.api("dan", &path, probe.clone()).await;
             assert_eq!(s, 400, "{key} {probe}: {v}");
             assert!(err(&v).contains("unknown field"), "{key} {probe}: {v}");
             let (s, v) = f.api("mia", &path, probe.clone()).await;

@@ -41,6 +41,10 @@ description = "Die Dokumentvorlage zum Senden; leer bei einer Anfrage zu einem D
 label = "Dokument"
 description = "Das PDF in Dokumente, das die unterzeichnende Person liest und unterzeichnet; beim Senden der Anfrage wird sein SHA-256 genommen und eine exakte Kopie festgehalten"
 
+[labels.de.model.sign_request.field.no_document]
+label = "Ohne Dokument"
+description = "Ob die Anfrage nicht auf ein Dokument in Dokumente zeigt; eine solche Anfrage sehen alle, die Anfragen lesen dürfen, eine Anfrage zu einem Dokument nur diejenigen, die dieses Dokument sehen dürfen"
+
 [labels.de.model.sign_request.field.title]
 label = "Titel"
 description = "Betreff, der dem Unterzeichner angezeigt wird"

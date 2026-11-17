@@ -221,6 +221,10 @@ pub struct Pre {
 /// have changed since.
 pub type Guard = Box<dyn Fn(&Principal, &Value) -> Result<Verdict, String> + Send + Sync>;
 
+/// A check on one command that, unlike a [`Guard`], survives the command being registered again
+/// (see [`Dispatcher::screen`]). It may refuse, or hand back the input to use instead.
+pub type Screen = dyn Fn(&Principal, &Value) -> Result<Option<Value>, String> + Send + Sync;
+
 struct Guarded {
     module: String,
     /// Mutating guards run under the dispatcher's transaction lock, so the check and the write
@@ -298,6 +302,8 @@ pub struct Dispatcher {
     brand: std::sync::OnceLock<Arc<brand::Reader>>,
     /// Wrappers around a command's handler, by command id (see `around`).
     around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
+    /// Screens by command id (see `screen`).
+    screens: std::sync::RwLock<HashMap<String, Arc<Screen>>>,
     /// Models whose writes run under the transaction lock because a rule needs it: a unique
     /// field, a sequence, an effect, or being the target of one (D56, D57).
     lock_models: std::sync::RwLock<HashSet<String>>,
@@ -1070,6 +1076,28 @@ impl Dispatcher {
             .insert(id.to_string(), Arc::from(wrapper));
     }
 
+    /// Check command `id` after its guard, in `call` and, for an agent's proposal, in `approve`
+    /// **before the plan is spent**: a screen that refuses at approval leaves the plan in place for
+    /// another approver. The input carries the approver's stamp there (`stamp_approver`), and what
+    /// a screen hands back at the call is what a proposal stores. Like `around`, it survives the
+    /// command being registered again; a second screen for the same id replaces the first.
+    pub fn screen(&self, id: &str, screen: Box<Screen>) {
+        self.screens
+            .write()
+            .unwrap()
+            .insert(id.to_string(), Arc::from(screen));
+    }
+
+    fn run_screen(&self, id: &str, p: &Principal, input: &mut Value) -> Result<(), CallError> {
+        let screen = self.screens.read().unwrap().get(id).cloned();
+        if let Some(s) = screen
+            && let Some(i) = s(p, input).map_err(|m| refusal(m, input))?
+        {
+            *input = i;
+        }
+        Ok(())
+    }
+
     /// Be told about every command that succeeds, with the module that owns the observer (removed
     /// with it). Observers run inside the call, under the dispatcher's locks: they must be quick
     /// and must not call the dispatcher; hand the work to another thread.
@@ -1354,6 +1382,7 @@ impl Dispatcher {
                 input = i;
             }
         }
+        self.run_screen(id, p, &mut input)?;
         if (c.needs_approval || guard_approval) && p.kind == PrincipalKind::Agent {
             // A call that mixes what cannot be stored as a whole gets no plan: the plan would
             // be refused when a person approves it, and spent by that. The agent hears it now.
@@ -1422,6 +1451,7 @@ impl Dispatcher {
                 input = i;
             }
         }
+        self.run_screen(&plan.id, &plan.principal, &mut input)?;
         // Taken out first, so it runs once; if it is still there the plan would run again.
         self.plans
             .remove(self.shared.get(), plan_id)
