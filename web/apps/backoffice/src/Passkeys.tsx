@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
-import { Badge, Button, Checkbox, Input, Notice, Switch, fmt, t, twoFactorMessage } from "@obop/ui";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Input,
+  Notice,
+  Switch,
+  fmt,
+  t,
+  twoFactorMessage,
+  useWorded,
+} from "@obop/ui";
 import { Icon } from "./ui.tsx";
 import {
   listPasskeys,
@@ -74,7 +85,7 @@ export function ReauthForm({
   const [proved, setProved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [proving, setProving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
 
   async function prove() {
     setProving(true);
@@ -82,7 +93,7 @@ export function ReauthForm({
     const r = await proveWithPasskey(token);
     setProving(false);
     if (r.ok) setProved(true);
-    else setError(passkeyMessage(r));
+    else setError(() => passkeyMessage(r));
   }
 
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -100,7 +111,7 @@ export function ReauthForm({
     setBusy(false);
     // The proof is spent whether or not the action went through.
     setProved(false);
-    if (err) setError(err);
+    if (err) setError(() => err);
   }
 
   const needsCode = secondFactor && !proved && mode !== "passkey";

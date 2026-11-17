@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type DragEvent } from "react";
-import { t } from "@obop/ui";
+import { t, useWorded } from "@obop/ui";
 import type { FieldMeta } from "./api.ts";
 import {
   FILE_ACCEPT,
@@ -224,7 +224,8 @@ export function BlobInput(p: BlobInputProps) {
   const input = useRef<HTMLInputElement>(null);
   const job = useRef<Upload | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
-  const [error, setError] = useState("");
+  const [errorWorded, setError] = useWorded();
+  const error = errorWorded ?? "";
   const [over, setOver] = useState(false);
   const hintId = useId();
 
@@ -234,12 +235,12 @@ export function BlobInput(p: BlobInputProps) {
     if (!file || readOnly) return;
     setError("");
     if (isImage && !IMAGE_TYPES.includes(file.type)) {
-      return setError(t("Use a PNG, JPEG, WebP or GIF image. SVG files are not accepted."));
+      return setError(() => t("Use a PNG, JPEG, WebP or GIF image. SVG files are not accepted."));
     }
     if (file.size > max) {
-      return setError(t("This file is larger than {size}.", { size: formatBytes(max) }));
+      return setError(() => t("This file is larger than {size}.", { size: formatBytes(max) }));
     }
-    if (!f.model) return setError(t("This field cannot take uploads."));
+    if (!f.model) return setError(() => t("This field cannot take uploads."));
     setProgress(0);
     const up = uploadBlob(d.token, `${f.model}.${f.name}`, file, setProgress);
     job.current = up;
@@ -253,13 +254,13 @@ export function BlobInput(p: BlobInputProps) {
     } else if (r.status === -1) {
       // cancelled
     } else if (r.status === 413) {
-      setError(t("This file is larger than {size}.", { size: formatBytes(max) }));
+      setError(() => t("This file is larger than {size}.", { size: formatBytes(max) }));
     } else if (r.status === 429) {
-      setError(t("Too many uploads. Please wait a few minutes."));
+      setError(() => t("Too many uploads. Please wait a few minutes."));
     } else if (r.status === 0) {
-      setError(t("The upload did not go through. Check your connection and try again."));
+      setError(() => t("The upload did not go through. Check your connection and try again."));
     } else {
-      setError(r.error || t("The upload was refused."));
+      setError(() => r.error || t("The upload was refused."));
     }
   }
 

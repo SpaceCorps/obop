@@ -672,6 +672,22 @@ export function login(username: string, password: string): Promise<LoginResult> 
 }
 
 /**
+ * The login the server signed in with `token`, from the two-factor status (`user`), or null when
+ * it cannot be read. A password sign-in's answer does not name the login, and `$user` of a filter
+ * or a read-only hint compares with the server's (docs/ISSUES.md U11).
+ */
+export async function signedInLogin(token: string): Promise<string | null> {
+  try {
+    const res = await fetch("/api/auth/mfa", { headers: { authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { user?: unknown };
+    return typeof json.user === "string" && json.user ? json.user : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * What the address says after the browser came back from Microsoft (D91): `#oidc=<one-time code>`
  * or `#oidc_error=<word>`. The server sends the browser to these two fragments and nothing else;
  * a fragment is not sent to any server, and it is cleared from the address as soon as it is read.
