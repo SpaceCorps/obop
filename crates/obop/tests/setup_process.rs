@@ -431,3 +431,30 @@ fn two_processes_sent_the_right_code_at_the_same_moment_make_one_account() {
         assert_eq!(setup_completes(&dir), 1);
     }
 }
+
+#[test]
+fn the_server_waits_for_the_set_up_lock_that_another_process_holds() {
+    // The lock of the creation as another process holds it (the command line): its own store,
+    // opened here on the same file. The server, a separate process, must wait for the lock file
+    // and only then make the account; nothing in-process links the two.
+    let dir = Dir::new("held");
+    let s = serve(&dir, "a", &keyed());
+    let code = s.code();
+    let other = obop_storage::open(&dir.url()).unwrap();
+    let held = other.lock(obop_auth::SETUP_LOCK).unwrap();
+    let port = s.port;
+    let waiting = std::thread::spawn(move || {
+        post(
+            port,
+            "/api/auth/setup",
+            &json!({"code": code, "username": "root", "password": PW}),
+        )
+    });
+    std::thread::sleep(Duration::from_millis(1500));
+    assert!(!waiting.is_finished(), "the server waits for the lock file");
+    assert_eq!(accounts(&dir), 0);
+    drop(held);
+    let (st, raw) = waiting.join().unwrap();
+    assert_eq!(st, 200, "{raw}");
+    assert_eq!(accounts(&dir), 1);
+}
