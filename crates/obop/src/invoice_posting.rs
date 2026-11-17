@@ -3,8 +3,8 @@
 //! by the typed command `invoice_posting.create_move`.
 //!
 //! The `invoicing` module has no account, tax or VAT on its lines, so everything the voucher needs
-//! comes from the company's booking settings (`invoice_posting_setting`, kept in the instance
-//! settings under `invoicing`) or from the caller; no BAS account, rate or code is built in (D34)
+//! comes from the company's booking settings (`invoice_posting_setting`, kept in the company
+//! settings row under `invoicing`) or from the caller; no BAS account, rate or code is built in (D34)
 //! and nothing is checked against Swedish invoice rules or the VAT act.
 //!
 //! The move has: one receivable debit for net plus VAT (with the invoice's party and due date);
@@ -23,9 +23,20 @@
 //! settings, or with `book_on_post` off, the invoice is posted and not booked, as before; it can
 //! be booked later with `create_move`, which also takes the settings as its defaults.
 //!
+//! The post is planned with the issue date the call gives (an `update` that posts and changes
+//! the date is checked on the new date). Only a call that moves the invoice from draft to posted
+//! books it: an `update` that repeats `state = posted` on an invoice posted earlier books nothing.
+//!
 //! The move, its lines and the link row (`invoice_posting`, id = the invoice id) are written in
 //! one batch of the store, so an invoice gets one move even when two runs race. `get` reads the
 //! link of an invoice. An agent may only dry-run `create_move`.
+//!
+//! That batch is written straight to the store, not through `accounting_move.create`: the move's
+//! own checks are made here instead (the journal exists and is active, every account exists and
+//! is not deprecated, the date is not in a closed period, the move balances). What the generated
+//! commands would add and this does not: the move's `required` and reference checks beyond those,
+//! its guard, and an audit row of `accounting_move.create` (the call that posted the invoice is
+//! the record of it).
 
 use crate::company_settings;
 use crate::sie::Env;
@@ -127,7 +138,7 @@ pub fn module() -> Module {
             },
             ModelDef {
                 name: SETTINGS,
-                description: "The company's booking settings of customer invoices: whether a posted invoice is booked automatically (book_on_post, on by default) and the journal, receivable account, revenue account, tax and optional VAT account it is booked with. Kept with the instance settings under `invoicing`. One record, `company`; `update` needs accounting.manager",
+                description: "The company's booking settings of customer invoices: whether a posted invoice is booked automatically (book_on_post, on by default) and the journal, receivable account, revenue account, tax and optional VAT account it is booked with. Kept in the company settings row under `invoicing`. One record, `company`; `update` needs accounting.manager",
                 read_group: GROUP,
                 write_group: MANAGER,
                 access: None,
@@ -355,16 +366,9 @@ fn plan_in(b: &dyn Backend, i: &Input, state_needed: &str) -> Result<Planned, St
         }
     }
     // An entry dated in a closed period cannot be made (the lock date of accounting_move).
-    if let Ok(periods) = b.list("accounting_period")
-        && let Some((_, p)) = periods.iter().find(|(_, p)| {
-            text(p, "state") == "closed"
-                && text(p, "start_on").as_str() <= date.as_str()
-                && date.as_str() <= text(p, "end_on").as_str()
-        })
-    {
+    if let Some(name) = closed_period(b, &date) {
         return Err(format!(
-            "the date {date} is in the closed period {}; an entry cannot be made there",
-            text(p, "name")
+            "the date {date} is in the closed period {name}; an entry cannot be made there"
         ));
     }
 
@@ -462,6 +466,73 @@ fn plan_in(b: &dyn Backend, i: &Input, state_needed: &str) -> Result<Planned, St
         lines,
         notes,
     })
+}
+
+/// The name of the closed accounting period that holds `date`, if any.
+fn closed_period(b: &dyn Backend, date: &str) -> Option<String> {
+    let periods = b.list("accounting_period").ok()?;
+    periods
+        .iter()
+        .find(|(_, p)| {
+            text(p, "state") == "closed"
+                && text(p, "start_on").as_str() <= date
+                && date <= text(p, "end_on").as_str()
+        })
+        .map(|(_, p)| text(p, "name"))
+}
+
+/// The refusal of a post whose journal entry cannot be booked, in the language of the request
+/// (machine-drafted translations). A closed period is named with its fix (another issue date);
+/// any other cause keeps its English detail and points to the booking settings.
+pub fn post_refusal(lang: Option<&str>, closed: Option<(&str, &str)>, why: &str) -> String {
+    if let Some((date, period)) = closed {
+        return match lang {
+            Some("de") => format!(
+                "Die Rechnung wurde nicht gebucht: ihr Rechnungsdatum {date} liegt in der abgeschlossenen Periode {period}. Wählen Sie ein Rechnungsdatum in einer offenen Periode."
+            ),
+            Some("fr") => format!(
+                "La facture n'a pas été validée : sa date {date} se trouve dans la période clôturée {period}. Choisissez une date de facture dans une période ouverte."
+            ),
+            Some("pl") => format!(
+                "Faktura nie została zatwierdzona: jej data {date} przypada w zamkniętym okresie {period}. Wybierz datę wystawienia w otwartym okresie."
+            ),
+            Some("fi") => format!(
+                "Laskua ei kirjattu: sen päivä {date} on suljetulla kaudella {period}. Valitse laskun päiväksi avoimen kauden päivä."
+            ),
+            Some("sv") => format!(
+                "Fakturan bokfördes inte: dess fakturadatum {date} ligger i den stängda perioden {period}. Välj ett fakturadatum i en öppen period."
+            ),
+            Some("es") => format!(
+                "La factura no se ha contabilizado: su fecha {date} está en el período cerrado {period}. Elija una fecha de factura en un período abierto."
+            ),
+            _ => format!(
+                "The invoice was not posted: its issue date {date} is in the closed period {period}. Choose an issue date in an open period."
+            ),
+        };
+    }
+    match lang {
+        Some("de") => format!(
+            "Die Rechnung wurde nicht gebucht, weil ihr Buchungssatz nicht erstellt werden kann: {why}. Korrigieren Sie die Buchungseinstellungen der Rechnungen oder schalten Sie die automatische Buchung aus."
+        ),
+        Some("fr") => format!(
+            "La facture n'a pas été validée, car son écriture ne peut pas être passée : {why}. Corrigez les paramètres de comptabilisation des factures ou désactivez la comptabilisation automatique."
+        ),
+        Some("pl") => format!(
+            "Faktura nie została zatwierdzona, ponieważ nie można zaksięgować jej zapisu: {why}. Popraw ustawienia księgowania faktur albo wyłącz automatyczne księgowanie."
+        ),
+        Some("fi") => format!(
+            "Laskua ei kirjattu, koska sen vientiä ei voi tehdä: {why}. Korjaa laskujen kirjausasetukset tai poista automaattinen kirjaus käytöstä."
+        ),
+        Some("sv") => format!(
+            "Fakturan bokfördes inte, eftersom dess verifikation inte kan skapas: {why}. Rätta bokföringsinställningarna för fakturor eller stäng av den automatiska bokföringen."
+        ),
+        Some("es") => format!(
+            "La factura no se ha contabilizado porque no se puede crear su asiento: {why}. Corrija los ajustes de contabilización de facturas o desactive la contabilización automática."
+        ),
+        _ => format!(
+            "The invoice was not posted, because its journal entry cannot be booked: {why}. Fix the booking settings (invoice_posting_setting) or turn book_on_post off."
+        ),
+    }
 }
 
 /// The plan of `create_move` for a caller: needs the group; defaults from the booking settings.
@@ -766,12 +837,29 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
     // invoice can. A guard plans the booking before the post (on the action and on an update
     // that moves the state to posted), so a booking that would be refused refuses the post; an
     // observer writes it after the post succeeded, in the same call.
-    let (st, dw) = (store.clone(), Arc::downgrade(d));
+    // The invoices a call is moving from draft to posted, marked by the guard and taken by the
+    // observer: an update that repeats `state = posted` on a posted invoice books nothing.
+    let posting: Arc<std::sync::Mutex<std::collections::HashSet<String>>> = Arc::default();
+    let (st, dw, marks) = (store.clone(), Arc::downgrade(d), posting.clone());
     let check = move |input: &Value| -> Result<obop_commands::Verdict, String> {
         let b = st.backend();
         let Some(d) = dw.upgrade() else {
             return Ok(obop_commands::Verdict::default());
         };
+        if let Value::Map(x) = input
+            && let Some(Value::Text(id)) = x.get("id")
+        {
+            let draft = b
+                .get("invoice", id)
+                .map_err(|e| e.to_string())?
+                .is_some_and(|f| text(&f, "state") == "draft");
+            let mut m = marks.lock().unwrap_or_else(|e| e.into_inner());
+            if draft {
+                m.insert(id.to_string());
+            } else {
+                m.remove(id.as_str());
+            }
+        }
         if let Some(i) = booking_for(&d, &*b, input)?
             && invoice_of(&*b, &i.invoice)
                 .map(|(_, f)| text(&f, "state") == "draft")
@@ -779,7 +867,11 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             && link_of(&*b, &i.invoice)?.is_none()
         {
             plan_in(&*b, &i, "draft").map_err(|e| {
-                format!("the invoice was not posted, because its journal entry cannot be booked: {e}. Fix the booking settings (invoice_posting_setting) or turn book_on_post off")
+                let lang = obop_commands::locale::language();
+                match closed_period(&*b, &i.date) {
+                    Some(name) => post_refusal(lang, Some((&i.date, &name)), &e),
+                    None => post_refusal(lang, None, &e),
+                }
             })?;
         }
         Ok(obop_commands::Verdict::default())
@@ -808,6 +900,20 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             if id != "invoice.post" && id != "invoice.update" {
                 return;
             }
+            // Only a call the guard saw take a draft invoice to posted.
+            let Value::Map(x) = input else { return };
+            let Some(Value::Text(iid)) = x.get("id") else {
+                return;
+            };
+            let moved = posting
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(iid.as_str());
+            // (A stale mark of a call that failed is harmless: the invoice is then still a draft
+            // and `book_after_post` books only a posted one.)
+            if !moved {
+                return;
+            }
             let Some(d) = dw.upgrade() else { return };
             if let Err(e) = book_after_post(&d, &*st.backend(), input) {
                 eprintln!(
@@ -819,8 +925,9 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
 }
 
 /// The booking of the invoice an input names, when booking on post is on and set up and the
-/// accounting package is installed. It is dated on the invoice's issue date, else today in the
-/// platform zone (`OBOP_ZONE`).
+/// accounting package is installed. It is dated on the issue date the input gives (an update that
+/// posts and changes the date), else the stored issue date, else today in the platform zone
+/// (`OBOP_ZONE`).
 fn booking_for(d: &Dispatcher, b: &dyn Backend, input: &Value) -> Result<Option<Input>, String> {
     let id = match input {
         Value::Map(x) => match x.get("id") {
@@ -835,11 +942,22 @@ fn booking_for(d: &Dispatcher, b: &dyn Backend, input: &Value) -> Result<Option<
     let Some(i) = on_post_input(b)? else {
         return Ok(None);
     };
-    let issued = b
-        .get("invoice", &id)
-        .map_err(|e| e.to_string())?
-        .map(|f| text(&f, "issue_date"))
-        .unwrap_or_default();
+    let given = match input {
+        Value::Map(x) => match x.get("issue_date") {
+            Some(Value::Text(t)) => Some(t.to_string()),
+            Some(Value::Null) => Some(String::new()),
+            _ => None,
+        },
+        _ => None,
+    };
+    let issued = match given {
+        Some(t) => t,
+        None => b
+            .get("invoice", &id)
+            .map_err(|e| e.to_string())?
+            .map(|f| text(&f, "issue_date"))
+            .unwrap_or_default(),
+    };
     let date = if issued.is_empty() { today(d) } else { issued };
     Ok(Some(Input {
         invoice: id,

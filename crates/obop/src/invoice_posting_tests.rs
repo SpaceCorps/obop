@@ -467,7 +467,7 @@ fn a_booking_that_would_be_refused_refuses_the_post_and_changes_nothing() {
     let inv = invoice_with_dates(&f, &[10_000]);
     let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": inv})));
     assert!(
-        m.contains("not posted") && m.contains("closed period"),
+        m.contains("not posted") && m.contains("closed period") && m.contains("issue date"),
         "{m}"
     );
     let stored = rows(&f.app, "invoice")
@@ -507,8 +507,19 @@ fn the_booking_settings_are_checked_and_changed_by_an_accounting_manager() {
     let s = call(&f.app, &clerk, "invoice_posting_setting.get", json!({})).unwrap();
     assert_eq!(s["ready"], json!(true));
     assert_eq!(s["tax"], json!(f.tax), "stored as the id");
-    // Kept with the instance settings.
-    let stored: J = serde_json::from_str(&f.app.installer.try_settings().unwrap()).unwrap();
+    // Kept in the company row: a whole save of the instance settings from an older copy (the
+    // back office's Customize) leaves them as they are.
+    f.app.installer.set_settings("{}").unwrap();
+    let s = call(&f.app, &clerk, "invoice_posting_setting.get", json!({})).unwrap();
+    assert_eq!(s["ready"], json!(true));
+    let row = f
+        .app
+        .store
+        .backend()
+        .get("obop_setting", "company")
+        .unwrap()
+        .unwrap();
+    let stored: J = serde_json::from_str(row["value"].as_str().unwrap()).unwrap();
     assert_eq!(stored["invoicing"]["tax"], json!(f.tax));
     // An empty text clears one.
     call(
@@ -541,4 +552,130 @@ fn an_invoice_without_an_issue_date_is_booked_on_today() {
         .1;
     let today = crate::sie::iso(crate::sie::today());
     assert_eq!(mv["date"], json!(today));
+}
+
+/// A closed period "September" (2026-09-01 to 2026-09-30).
+fn close_september(f: &Fx) {
+    let fy = create(
+        &f.app,
+        "accounting_fiscal_year",
+        json!({"name": "FY 2026", "start_on": "2026-01-01", "end_on": "2026-12-31"}),
+    );
+    let period = create(
+        &f.app,
+        "accounting_period",
+        json!({"fiscal_year_id": fy, "name": "September", "start_on": "2026-09-01", "end_on": "2026-09-30"}),
+    );
+    call(
+        &f.app,
+        &admin(),
+        "accounting_period.close",
+        json!({"id": period}),
+    )
+    .unwrap();
+}
+
+fn booked(f: &Fx, inv: &str) -> J {
+    call(
+        &f.app,
+        &admin(),
+        "invoice_posting.get",
+        json!({"invoice": inv}),
+    )
+    .unwrap()
+}
+
+#[test]
+fn an_update_that_posts_with_a_new_issue_date_is_checked_and_booked_on_that_date() {
+    let f = fixture(2500);
+    configure(&f, json!({}));
+    close_september(&f);
+    // Stored in the closed period, posted with a date in an open one: allowed and booked so.
+    let inv = invoice_with_dates(&f, &[10_000]);
+    call(
+        &f.app,
+        &admin(),
+        "invoice.update",
+        json!({"id": inv, "state": "posted", "issue_date": "2026-10-01", "due_date": "2026-10-31"}),
+    )
+    .unwrap();
+    let link = booked(&f, &inv);
+    assert_eq!(link["booked"], json!(true), "{link}");
+    let mv = rows(&f.app, "accounting_move");
+    assert_eq!(mv[0].1["date"], json!("2026-10-01"));
+    // No date stored, posted with a date in the closed period: refused, nothing changes.
+    let bare = f.invoice(&[5_000], false);
+    let m = refusal(call(
+        &f.app,
+        &admin(),
+        "invoice.update",
+        json!({"id": bare, "state": "posted", "issue_date": "2026-09-15"}),
+    ));
+    assert!(m.contains("2026-09-15") && m.contains("September"), "{m}");
+    assert!(m.contains("issue date"), "the fix is the date: {m}");
+    let stored = rows(&f.app, "invoice")
+        .into_iter()
+        .find(|(id, _)| *id == bare)
+        .unwrap()
+        .1;
+    assert_eq!(stored["state"], json!("draft"));
+    assert_eq!(booked(&f, &bare)["booked"], json!(false));
+    assert_eq!(rows(&f.app, "accounting_move").len(), 1);
+}
+
+#[test]
+fn repeating_posted_on_an_invoice_posted_before_books_nothing() {
+    let f = fixture(2500);
+    // Posted while booking was not set up: no entry.
+    let inv = invoice_with_dates(&f, &[10_000]);
+    call(&f.app, &admin(), "invoice.post", json!({"id": inv})).unwrap();
+    configure(&f, json!({}));
+    call(
+        &f.app,
+        &admin(),
+        "invoice.update",
+        json!({"id": inv, "state": "posted"}),
+    )
+    .unwrap();
+    assert_eq!(booked(&f, &inv)["booked"], json!(false));
+    assert!(rows(&f.app, "accounting_move").is_empty());
+    // It is still booked by hand.
+    call(
+        &f.app,
+        &admin(),
+        "invoice_posting.create_move",
+        json!({"invoice": inv}),
+    )
+    .unwrap();
+    assert_eq!(booked(&f, &inv)["booked"], json!(true));
+}
+
+#[test]
+fn the_refusal_of_a_post_in_a_closed_period_is_in_the_language_of_the_request() {
+    for lang in obop_commands::locale::LANGUAGES {
+        let t = crate::invoice_posting::post_refusal(
+            Some(lang),
+            Some(("2026-09-10", "September")),
+            "x",
+        );
+        assert!(
+            t.contains("2026-09-10") && t.contains("September"),
+            "{lang}: {t}"
+        );
+        let g = crate::invoice_posting::post_refusal(Some(lang), None, "the cause");
+        assert!(g.contains("the cause"), "{lang}: {g}");
+        if lang != "en" {
+            assert_ne!(
+                t,
+                crate::invoice_posting::post_refusal(None, Some(("2026-09-10", "September")), "x")
+            );
+        }
+    }
+    let f = fixture(2500);
+    configure(&f, json!({}));
+    close_september(&f);
+    let inv = invoice_with_dates(&f, &[10_000]);
+    let _s = obop_commands::locale::scope(Some("de"));
+    let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": inv})));
+    assert!(m.contains("abgeschlossenen Periode September"), "{m}");
 }
