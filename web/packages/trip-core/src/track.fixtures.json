@@ -1,5 +1,5 @@
 {
-  "about": "Test vectors for the track rules of docs/spec/mobile.md 5.4: the fix filter, the speed cap and the distance sum. They are read by two tests so that the device and the server agree: web/packages/trip-core/src/track.test.ts runs every case through analyseTrack, and crates/modules/mileage/src/track.rs runs the same cases through the Rust function the server uses. `t` is milliseconds since the Unix epoch; `accuracyM` is optional. `expect.distance_m` is the summed distance rounded to two decimals, the way the server stores it; `expect.integrity` is the flag text the server stores. All positions are synthetic. To change a case, change it here and run both tests.",
+  "about": "Test vectors for the track rules of docs/spec/mobile.md 5.4: the fix filter, the speed cap and the distance sum. They are read by two tests so that the device and the server agree: web/packages/trip-core/src/track.test.ts runs every case through analyseTrack, and crates/modules/mileage/src/track.rs runs the same cases through the Rust function the server uses. `t` is milliseconds since the Unix epoch; `accuracyM` is optional; `options.startedAt` is the start of the trip in the same unit. `expect.distance_m` is the summed distance rounded to two decimals, the way the server stores it; `expect.integrity` is the flag text the server stores. All positions are synthetic. To change a case, change it here and run both tests.",
   "defaults": {
     "maxSpeedMps": 70,
     "maxAccuracyM": 100
@@ -84,6 +84,8 @@
         "accepted": 10,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
@@ -98,6 +100,8 @@
         "accepted": 0,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": null,
@@ -120,6 +124,8 @@
         "accepted": 1,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
@@ -170,6 +176,8 @@
         "accepted": 5,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
@@ -197,6 +205,8 @@
         "accepted": 2,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
@@ -247,6 +257,8 @@
         "accepted": 4,
         "skipped_accuracy": 0,
         "skipped_speed": 1,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "speed_jump:1",
         "first_seq": 1,
@@ -283,6 +295,8 @@
         "accepted": 3,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
@@ -315,6 +329,8 @@
         "accepted": 2,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
@@ -364,6 +380,8 @@
         "accepted": 3,
         "skipped_accuracy": 2,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "low_accuracy:2",
         "first_seq": 1,
@@ -407,6 +425,8 @@
         "accepted": 4,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 2,
         "integrity": "seq_gap:2",
         "first_seq": 1,
@@ -457,6 +477,8 @@
         "accepted": 5,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
@@ -500,6 +522,8 @@
         "accepted": 3,
         "skipped_accuracy": 0,
         "skipped_speed": 1,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "speed_jump:1",
         "first_seq": 1,
@@ -529,10 +553,220 @@
         "accepted": 2,
         "skipped_accuracy": 0,
         "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 0,
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
         "last_seq": 2
+      }
+    },
+    {
+      "name": "a far-off start re-anchors on the run of fixes that agree with each other",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 37.4219983,
+          "lon": -122.084,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 37.4219983,
+          "lon": -122.084,
+          "accuracyM": 5
+        },
+        {
+          "seq": 3,
+          "t": 1790000010000,
+          "lat": 37.4219983,
+          "lon": -122.084,
+          "accuracyM": 5
+        },
+        {
+          "seq": 4,
+          "t": 1790000015000,
+          "lat": 37.4219983,
+          "lon": -122.084,
+          "accuracyM": 5
+        },
+        {
+          "seq": 5,
+          "t": 1790000020000,
+          "lat": 60.1699,
+          "lon": 24.9384,
+          "accuracyM": 5
+        },
+        {
+          "seq": 6,
+          "t": 1790000025000,
+          "lat": 60.16995,
+          "lon": 24.9384,
+          "accuracyM": 5
+        },
+        {
+          "seq": 7,
+          "t": 1790000030000,
+          "lat": 60.17,
+          "lon": 24.9384,
+          "accuracyM": 5
+        },
+        {
+          "seq": 8,
+          "t": 1790000035000,
+          "lat": 60.170049999999996,
+          "lon": 24.9384,
+          "accuracyM": 5
+        },
+        {
+          "seq": 9,
+          "t": 1790000040000,
+          "lat": 60.1701,
+          "lon": 24.9384,
+          "accuracyM": 5
+        },
+        {
+          "seq": 10,
+          "t": 1790000045000,
+          "lat": 60.17015,
+          "lon": 24.9384,
+          "accuracyM": 5
+        },
+        {
+          "seq": 11,
+          "t": 1790000050000,
+          "lat": 60.1702,
+          "lon": 24.9384,
+          "accuracyM": 5
+        },
+        {
+          "seq": 12,
+          "t": 1790000055000,
+          "lat": 60.170249999999996,
+          "lon": 24.9384,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "38.92",
+        "accepted": 12,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "skipped_early": 0,
+        "reanchors": 1,
+        "seq_gaps": 0,
+        "integrity": "reanchor:1",
+        "first_seq": 1,
+        "last_seq": 12
+      }
+    },
+    {
+      "name": "two far fixes in a row are skipped and do not move the track",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.00003,
+          "lon": 10.00002,
+          "accuracyM": 5
+        },
+        {
+          "seq": 3,
+          "t": 1790000010000,
+          "lat": 50.09,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 4,
+          "t": 1790000015000,
+          "lat": 50.09003,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 5,
+          "t": 1790000020000,
+          "lat": 50.00006,
+          "lon": 10.00004,
+          "accuracyM": 5
+        },
+        {
+          "seq": 6,
+          "t": 1790000025000,
+          "lat": 50.00009,
+          "lon": 10.00006,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "10.89",
+        "accepted": 4,
+        "skipped_accuracy": 0,
+        "skipped_speed": 2,
+        "skipped_early": 0,
+        "reanchors": 0,
+        "seq_gaps": 0,
+        "integrity": "speed_jump:2",
+        "first_seq": 1,
+        "last_seq": 6
+      }
+    },
+    {
+      "name": "a fix from before the start of the trip is dropped, one just before the tap counts",
+      "options": {
+        "startedAt": 1790000000000
+      },
+      "points": [
+        {
+          "seq": 1,
+          "t": 1789999640000,
+          "lat": 50.008,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1789999995000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 3,
+          "t": 1790000005000,
+          "lat": 50.00003,
+          "lon": 10.00002,
+          "accuracyM": 5
+        },
+        {
+          "seq": 4,
+          "t": 1790000010000,
+          "lat": 50.00006,
+          "lon": 10.00004,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "7.26",
+        "accepted": 3,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "skipped_early": 1,
+        "reanchors": 0,
+        "seq_gaps": 0,
+        "integrity": "before_start:1",
+        "first_seq": 2,
+        "last_seq": 4
       }
     }
   ]

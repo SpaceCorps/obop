@@ -175,7 +175,7 @@ fn trip() -> ModelDef {
             .computed("max(mileage_point.seq)"),
             F::new(
                 "integrity",
-                "Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean",
+                "Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean",
                 Internal,
                 false,
                 DRIVER,
@@ -254,13 +254,13 @@ fn trip() -> ModelDef {
             .readonly(),
             F::new(
                 "reviewable",
-                "True while the trip is in review, confirmed or rejected: the states a reviewer reads",
+                "True while the trip is in review, confirmed or rejected and its purpose is not private: the trips a reviewer reads",
                 Internal,
-                false,
+                true,
                 DRIVER,
             )
             .kind(FieldKind::Bool)
-            .computed("state == \"in_review\" || state == \"confirmed\" || state == \"rejected\""),
+            .computed("(state == \"in_review\" || state == \"confirmed\" || state == \"rejected\") && purpose != \"private\""),
             F::new(
                 "state",
                 "Lifecycle: recording, ended, in_review, confirmed, rejected or discarded; it moves only through the actions",

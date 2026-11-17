@@ -12,6 +12,15 @@ pub const MAX_SPEED_MPS: f64 = 70.0;
 /// spec leaves it open until the field test.
 pub const MAX_ACCURACY_M: f64 = 100.0;
 
+/// A fix may be older than the start of the trip by this many milliseconds and still belong to it
+/// (a fix made just before the tap); an older one is a position from before the trip and is dropped.
+pub const EARLY_FIX_MS: f64 = 10_000.0;
+
+/// This many fixes in a row that agree with each other (each step within the speed cap) and not
+/// with the last accepted fix move the track to them (5.4): one far-off fix, the first one
+/// included, cannot ruin the distance of a whole trip.
+pub const REANCHOR_RUN: usize = 3;
+
 /// One recorded position. `t_ms` is milliseconds since the Unix epoch.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fix {
@@ -26,6 +35,9 @@ pub struct Fix {
 pub struct Options {
     pub max_speed_mps: f64,
     pub max_accuracy_m: f64,
+    /// The start of the trip in milliseconds since the Unix epoch: a fix more than
+    /// [`EARLY_FIX_MS`] older is dropped.
+    pub started_at_ms: Option<f64>,
 }
 
 impl Default for Options {
@@ -33,6 +45,7 @@ impl Default for Options {
         Self {
             max_speed_mps: MAX_SPEED_MPS,
             max_accuracy_m: MAX_ACCURACY_M,
+            started_at_ms: None,
         }
     }
 }
@@ -44,6 +57,10 @@ pub struct Analysis {
     pub accepted: usize,
     pub skipped_accuracy: usize,
     pub skipped_speed: usize,
+    /// Fixes recorded more than [`EARLY_FIX_MS`] before the start of the trip.
+    pub skipped_early: usize,
+    /// How many times a run of fixes moved the track away from the last accepted fix.
+    pub reanchors: usize,
     /// Sequence numbers missing between the first and the last stored fix.
     pub seq_gaps: i64,
     pub first: Option<Fix>,
@@ -66,9 +83,13 @@ pub fn distance_m(a: &Fix, b: &Fix) -> f64 {
     2.0 * EARTH_MEAN_RADIUS_M * h.sqrt().min(1.0).asin()
 }
 
-/// The rules: fixes in order of `seq`; drop a fix whose accuracy radius is above the limit; compare
-/// each further fix with the last accepted one and drop it if the step needs a speed above the cap
-/// (or goes back in time by any distance); a step of zero metres is accepted at any speed.
+/// The rules: fixes in order of `seq`; drop a fix recorded more than [`EARLY_FIX_MS`] before the
+/// start and a fix whose accuracy radius is above the limit; compare each further fix with the
+/// last accepted one and hold it back if the step needs a speed above the cap (or goes back in
+/// time by any distance); a step of zero metres is accepted at any speed. Held-back fixes in a row
+/// that agree with each other form a run, and a run of [`REANCHOR_RUN`] re-anchors the track: the
+/// run is accepted, its own steps count and the jump to it does not. A held-back fix that never
+/// joins such a run is skipped for its speed. The same rules as `analyseTrack` of `trip-core`.
 pub fn analyse(fixes: &[Fix], options: &Options) -> Analysis {
     let mut sorted: Vec<Fix> = fixes.to_vec();
     sorted.sort_by_key(|f| f.seq);
@@ -79,16 +100,36 @@ pub fn analyse(fixes: &[Fix], options: &Options) -> Analysis {
             seq_gaps += gap;
         }
     }
+    let not_before = options
+        .started_at_ms
+        .map_or(f64::NEG_INFINITY, |s| s - EARLY_FIX_MS);
+    let plausible = |a: &Fix, b: &Fix, d: f64| {
+        let dt = (b.t_ms - a.t_ms) / 1000.0;
+        if dt > 0.0 {
+            d / dt <= options.max_speed_mps
+        } else {
+            d == 0.0
+        }
+    };
     let mut out = Analysis {
         distance_m: 0.0,
         accepted: 0,
         skipped_accuracy: 0,
         skipped_speed: 0,
+        skipped_early: 0,
+        reanchors: 0,
         seq_gaps,
         first: None,
         last: None,
     };
+    // The run of held-back fixes and the sum of its own steps.
+    let mut run: Vec<Fix> = Vec::new();
+    let mut run_m = 0.0;
     for p in sorted {
+        if p.t_ms < not_before {
+            out.skipped_early += 1;
+            continue;
+        }
         if p.accuracy_m.is_some_and(|a| a > options.max_accuracy_m) {
             out.skipped_accuracy += 1;
             continue;
@@ -96,16 +137,32 @@ pub fn analyse(fixes: &[Fix], options: &Options) -> Analysis {
         match out.last {
             Some(last) => {
                 let d = distance_m(&last, &p);
-                let dt = (p.t_ms - last.t_ms) / 1000.0;
-                let plausible = if dt > 0.0 {
-                    d / dt <= options.max_speed_mps
-                } else {
-                    d == 0.0
-                };
-                if !plausible {
-                    out.skipped_speed += 1;
+                if !plausible(&last, &p, d) {
+                    let joins = run.last().map(|tail| (tail, distance_m(tail, &p)));
+                    match joins {
+                        Some((tail, step)) if plausible(tail, &p, step) => {
+                            run.push(p);
+                            run_m += step;
+                        }
+                        _ => {
+                            out.skipped_speed += run.len();
+                            run = vec![p];
+                            run_m = 0.0;
+                        }
+                    }
+                    if run.len() >= REANCHOR_RUN {
+                        out.reanchors += 1;
+                        out.accepted += run.len();
+                        out.distance_m += run_m;
+                        out.last = run.last().copied();
+                        run.clear();
+                        run_m = 0.0;
+                    }
                     continue;
                 }
+                out.skipped_speed += run.len();
+                run.clear();
+                run_m = 0.0;
                 out.distance_m += d;
             }
             None => out.first = Some(p),
@@ -113,6 +170,7 @@ pub fn analyse(fixes: &[Fix], options: &Options) -> Analysis {
         out.accepted += 1;
         out.last = Some(p);
     }
+    out.skipped_speed += run.len();
     out
 }
 
@@ -123,7 +181,8 @@ impl Analysis {
         format!("{:.2}", self.distance_m)
     }
 
-    /// The integrity flags: `seq_gap:N speed_jump:N low_accuracy:N`, in that order, a count of
+    /// The integrity flags: `seq_gap:N speed_jump:N low_accuracy:N before_start:N reanchor:N`, in
+    /// that order, a count of
     /// zero leaves its flag out, a clean track has the empty string.
     pub fn integrity(&self) -> String {
         let mut flags = Vec::new();
@@ -135,6 +194,12 @@ impl Analysis {
         }
         if self.skipped_accuracy > 0 {
             flags.push(format!("low_accuracy:{}", self.skipped_accuracy));
+        }
+        if self.skipped_early > 0 {
+            flags.push(format!("before_start:{}", self.skipped_early));
+        }
+        if self.reanchors > 0 {
+            flags.push(format!("reanchor:{}", self.reanchors));
         }
         flags.join(" ")
     }
@@ -184,6 +249,7 @@ mod tests {
                 if let Some(v) = o.get("maxAccuracyM").and_then(J::as_f64) {
                     options.max_accuracy_m = v;
                 }
+                options.started_at_ms = o.get("startedAt").and_then(J::as_f64);
             }
             let fixes: Vec<Fix> = c["points"].as_array().unwrap().iter().map(fix).collect();
             let a = analyse(&fixes, &options);
@@ -207,6 +273,16 @@ mod tests {
             assert_eq!(
                 a.skipped_speed as i64,
                 want["skipped_speed"].as_i64().unwrap(),
+                "{name}"
+            );
+            assert_eq!(
+                a.skipped_early as i64,
+                want["skipped_early"].as_i64().unwrap(),
+                "{name}"
+            );
+            assert_eq!(
+                a.reanchors as i64,
+                want["reanchors"].as_i64().unwrap(),
                 "{name}"
             );
             assert_eq!(a.seq_gaps, want["seq_gaps"].as_i64().unwrap(), "{name}");

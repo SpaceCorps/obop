@@ -31,7 +31,7 @@ const indoor = (n: number): Fix[] =>
   sequence(Array.from({ length: n }, (_, i) => fix(0, 0, (i % 3) * 4, 150)));
 
 /**
- * A good first position, then `jumps` positions far away and `bad` positions with a radius of 150 m.
+ * A good first position, then `jumps` positions far away (and from each other) and `bad` positions with a radius of 150 m.
  * `newest` says which of the two kinds comes last: the dropped positions are all of one kind at the
  * end, so the newest stored position is imprecise (the default) or a good one that does not fit.
  */
@@ -40,7 +40,9 @@ const anchored = (
   jumps: number,
   newest: "imprecise" | "jump" = "imprecise",
 ): Fix[] => {
-  const far = Array.from({ length: jumps }, () => fix(0, 0, FAR_M, 5));
+  // Far away and far from each other too (north, then south), so that no run of them agrees and
+  // the track does not re-anchor on them (docs/spec/mobile.md 5.4).
+  const far = Array.from({ length: jumps }, (_, i) => fix(0, 0, i % 2 === 0 ? FAR_M : -FAR_M, 5));
   const imprecise = Array.from({ length: bad }, () => fix(0, 0, 0, 150));
   return sequence([
     fix(0, 0, 0, 5),
@@ -48,12 +50,24 @@ const anchored = (
   ]);
 };
 
-/** A trip whose first position is far from all the others (L37), the others 5 s apart. */
+/**
+ * A trip whose first position is far from all the others (L37), the others 5 s apart and in
+ * agreement with each other: since the re-anchoring of 5.4 the third of them moves the track.
+ */
 const farFirst = (later: number): Fix[] => {
   const first: Fix = { seq: 1, t: T0, lat: 40, lon: -3, accuracyM: 20 };
   const rest = Array.from({ length: later }, (_, i) => fix(i + 2, 5 + i * 5, i * 10, 6));
   return [first, ...rest];
 };
+
+/**
+ * A good first position, then `later` positions 5 s apart that fit nothing: each is far from it
+ * and from the one before (north, then south), so the track never re-anchors on them.
+ */
+const scattered = (later: number): Fix[] => [
+  fix(1, 0, 0, 6),
+  ...Array.from({ length: later }, (_, i) => fix(i + 2, 5 + i * 5, i % 2 === 0 ? FAR_M : -FAR_M, 6)),
+];
 
 /** A real drive: 12 m/s northwards, one fix every 2 s, a good radius. */
 const drive = (n: number): Fix[] =>
@@ -140,7 +154,8 @@ describe("the lists behind the tests are what they claim to be", () => {
       return { accepted, skippedAccuracy, skippedSpeed };
     };
     expect(counters(indoor(7))).toEqual({ accepted: 0, skippedAccuracy: 7, skippedSpeed: 0 });
-    expect(counters(farFirst(8))).toEqual({ accepted: 1, skippedAccuracy: 0, skippedSpeed: 8 });
+    expect(counters(farFirst(8))).toEqual({ accepted: 9, skippedAccuracy: 0, skippedSpeed: 0 });
+    expect(counters(scattered(8))).toEqual({ accepted: 1, skippedAccuracy: 0, skippedSpeed: 8 });
     expect(counters(drive(20))).toEqual({ accepted: 20, skippedAccuracy: 0, skippedSpeed: 0 });
     expect(counters(standing(2))).toEqual({ accepted: 2, skippedAccuracy: 0, skippedSpeed: 0 });
     expect(counters(anchored(2, 3))).toEqual({ accepted: 1, skippedAccuracy: 2, skippedSpeed: 3 });
@@ -149,11 +164,17 @@ describe("the lists behind the tests are what they claim to be", () => {
       skippedAccuracy: 2,
       skippedSpeed: 3,
     });
-    // A cold start with a wrong first position: every good position is too far from it.
-    expect(counters(coldStart(12, 8, true))).toEqual({
+    // A cold start with a wrong first position: the good positions are too far from it, until
+    // three of them agree and the track re-anchors on them.
+    expect(counters(coldStart(12, 2, true))).toEqual({
       accepted: 1,
       skippedAccuracy: 12,
-      skippedSpeed: 8,
+      skippedSpeed: 2,
+    });
+    expect(counters(coldStart(12, 8, true))).toEqual({
+      accepted: 9,
+      skippedAccuracy: 12,
+      skippedSpeed: 0,
     });
     // A cold start at the right place: the first good position is the first that counts.
     expect(counters(coldStart(12, 1, false))).toEqual({
@@ -183,10 +204,16 @@ describe("the four trips of the field", () => {
     expect(noteFor(indoor(7))).toEqual({ kind: "weak", dropped: 7, stored: 7, accuracyM: 150 });
   });
 
-  test("a far-off first position makes every later one unfit (L37): jumpy", () => {
+  test("a far-off first position is left behind once three positions agree (L37): no note", () => {
     const analysis = analyseTrack(farFirst(8));
-    expect(analysis.distanceM).toBe(0);
-    expect(noteFor(farFirst(8))).toEqual({ kind: "jumpy", dropped: 8, stored: 9 });
+    expect(analysis.reanchors).toBe(1);
+    expect(analysis.distanceM).toBeGreaterThan(0);
+    expect(noteFor(farFirst(8))).toBeNull();
+  });
+
+  test("positions that fit nothing: jumpy", () => {
+    expect(analyseTrack(scattered(8)).distanceM).toBe(0);
+    expect(noteFor(scattered(8))).toEqual({ kind: "jumpy", dropped: 8, stored: 9 });
   });
 
   test("a good drive has no note", () => {
@@ -293,9 +320,9 @@ describe("how long the stored positions span (the first seconds of an ordinary t
     expect(noteFor(fives(8))).toMatchObject({ kind: "weak" });
   });
 
-  test("the same for a far-off first position (L37)", () => {
-    expect(noteFor(farFirst(5))).toBeNull(); // 25 s
-    expect(noteFor(farFirst(6))).toEqual({ kind: "jumpy", dropped: 6, stored: 7 }); // 30 s
+  test("the same for positions that fit nothing", () => {
+    expect(noteFor(scattered(5))).toBeNull(); // 25 s
+    expect(noteFor(scattered(6))).toEqual({ kind: "jumpy", dropped: 6, stored: 7 }); // 30 s
   });
 });
 
@@ -410,23 +437,25 @@ describe("weak or jumpy: the kind follows the newest stored position", () => {
 });
 
 describe("a phone that starts indoors or with a wrong first position, position by position", () => {
-  test("a wrong first position (L37), then imprecise positions, then good ones: weak, then jumpy at once", () => {
+  test("a wrong first position (L37), then imprecise positions, then good ones: weak, jumpy, then nothing", () => {
     const fixes = coldStart(12, 8, true);
     // 7 stored and 30 s at t = 30 s: weak. The first good position (t = 65 s) is rejected for its
-    // place, and from then on the note is the other one.
+    // place, and the note is the other one; the third (t = 75 s) agrees with the two before it,
+    // the track re-anchors on them (5.4), and they count.
     expect(transitions(fixes)).toEqual([
       [30, "weak"],
       [65, "jumpy"],
+      [75, "none"],
     ]);
   });
 
   test("the counters are still in favour of weak when it is already jumpy", () => {
-    // At t = 95 s: 12 positions rejected for their accuracy, 6 for their place. The old rule (the
-    // larger counter) said weak here, for another 30 s, to a phone that was outside.
-    const fixes = coldStart(12, 6, true);
+    // At t = 70 s: 12 positions rejected for their accuracy, 2 for their place. The old rule (the
+    // larger counter) said weak here, to a phone that was outside.
+    const fixes = coldStart(12, 2, true);
     const analysis = analyseTrack(fixes);
     expect(analysis.skippedAccuracy).toBeGreaterThan(analysis.skippedSpeed);
-    expect(noteFor(fixes)).toEqual({ kind: "jumpy", dropped: 18, stored: 19 });
+    expect(noteFor(fixes)).toEqual({ kind: "jumpy", dropped: 14, stored: 15 });
   });
 
   test("imprecise positions, then good ones at the right place: weak, then nothing at the first good one", () => {
@@ -438,12 +467,13 @@ describe("a phone that starts indoors or with a wrong first position, position b
   });
 
   test("a good run, then positions that do not fit, then indoors, then outside again: both ways", () => {
-    // A good first position; a far-off position (20 s), another (40 s): jumpy; an imprecise one
-    // (60 s): weak; a far-off one again (80 s): jumpy; an imprecise one again (100 s): weak.
+    // A good first position; a far-off position (20 s), another far from it too (40 s): jumpy;
+    // an imprecise one (60 s): weak; a far-off one again (80 s): jumpy; an imprecise one again
+    // (100 s): weak. The far-off ones do not agree with each other, so nothing re-anchors.
     const fixes = sequence([
       fix(0, 0, 0, 5),
       fix(0, 0, FAR_M, 5),
-      fix(0, 0, FAR_M, 5),
+      fix(0, 0, -FAR_M, 5),
       fix(0, 0, 0, 150),
       fix(0, 0, FAR_M, 5),
       fix(0, 0, 0, 150),
@@ -529,7 +559,7 @@ describe("the accuracy of the newest position", () => {
 
   test("a jumpy note carries no radius", () => {
     const jumpy = signalNote({
-      analysis: analyseTrack(farFirst(5)),
+      analysis: analyseTrack(scattered(5)),
       stored: 6,
       spanMs: MIN_SPAN_MS,
       newestAccuracyM: 6,
@@ -573,7 +603,10 @@ describe("a trip of the largest size", () => {
 
   test("20,000 positions, one that counts and all the others not fitting it", () => {
     const first: Fix = { seq: 1, t: T0, lat: 40, lon: -3, accuracyM: 20 };
-    const rest = Array.from({ length: MAX_POINTS_PER_TRIP - 1 }, (_, i) => fix(i + 2, 5 + i, 0, 6));
+    // 1 s apart, every other one 500 km further north: they do not agree with each other either.
+    const rest = Array.from({ length: MAX_POINTS_PER_TRIP - 1 }, (_, i) =>
+      fix(i + 2, 5 + i, i % 2 === 0 ? 0 : FAR_M, 6),
+    );
     const fixes = [first, ...rest];
     // 1,800 km in 19,999 s would be 90 m/s: still too fast for every one of them.
     expect(analyseTrack(fixes).skippedSpeed).toBe(MAX_POINTS_PER_TRIP - 1);
