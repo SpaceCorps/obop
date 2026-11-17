@@ -1341,7 +1341,10 @@ async fn a_second_factor_is_asked_for_in_the_flow() {
         .post(
             r,
             "/oauth/authorize/mfa",
-            &[("mfa_token", &tok), ("code", "000000")],
+            &[
+                ("mfa_token", &tok),
+                ("code", &crate::mfa_tests::wrong_code(&secret, T0 + 30)),
+            ],
         )
         .await;
     assert!(wrong.text().contains("name=\"mfa_token\"") && wrong.text().contains("not right"));
