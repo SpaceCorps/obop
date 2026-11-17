@@ -283,3 +283,182 @@ async fn rest_another_person_who_may_decide_sees_the_plan_and_it_is_not_his_agen
     assert_eq!(s, 200);
     assert_eq!(b["value"]["total"], 0, "not his agent");
 }
+
+#[tokio::test]
+async fn rest_an_agents_plan_runs_as_its_owner_is_now_demoted_or_offboarded() {
+    let w = world();
+    let r = &w.r;
+    // Another administrator, so that ada can lose hers.
+    w.auth
+        .create_user("root", PW, &["platform.admin".to_string()])
+        .unwrap();
+    let ada = token(r, "ada").await;
+    let bob = token(r, "bob").await;
+    let agent = agent_token(r, &ada).await;
+    let plan = propose(r, &agent).await;
+    let rights = |b: &J| {
+        (
+            b["value"]["can_approve"].clone(),
+            b["value"]["proposer_can_run"].clone(),
+            b["value"]["can_reject"].clone(),
+        )
+    };
+    let (s, b) = post(r, Some(&bob), "/api/plan/get", json!({"id": plan})).await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(rights(&b), (json!(true), json!(true), json!(true)));
+    let all: Vec<String> = w
+        .app
+        .all_groups()
+        .into_iter()
+        .filter(|g| g != obop_commands::ANY_GROUP)
+        .collect();
+    for step in ["demoted", "offboarded"] {
+        if step == "demoted" {
+            // ada keeps base.user and loses privacy.officer, the group of party.erase.
+            w.auth
+                .operator_set_groups("ada", &["base.user".to_string()], &all)
+                .unwrap();
+        } else {
+            w.auth.operator_set_groups("ada", &all, &all).unwrap();
+            let (_, b) = post(r, Some(&bob), "/api/plan/get", json!({"id": plan})).await;
+            assert_eq!(rights(&b).0, json!(true), "given the group back");
+            w.auth.operator_offboard("ada", "left").unwrap();
+        }
+        let (s, b) = post(r, Some(&bob), "/api/plan/get", json!({"id": plan})).await;
+        assert_eq!(s, 200, "{step}: {b}");
+        assert_eq!(
+            rights(&b),
+            (json!(false), json!(false), json!(true)),
+            "{step}"
+        );
+        let (s, b) = post(r, Some(&bob), "/api/plan/approve", json!({"id": plan})).await;
+        assert_eq!((s, b), (404, json!({"error": "not found"})), "{step}");
+        let (s, _) = post(r, Some(&bob), &format!("/api/approve/{plan}"), json!({})).await;
+        assert_eq!(s, 404, "{step}: the alias refuses it too");
+        let (_, b) = post(r, Some(&bob), "/api/plan/list", json!({})).await;
+        assert_eq!(b["value"]["total"], 1, "{step}: it still waits");
+    }
+    // Reject is still offered, and works.
+    let (_, b) = post(r, Some(&bob), "/api/plan/reject", json!({"id": plan})).await;
+    assert_eq!(b["value"]["status"], "rejected", "{b}");
+}
+
+/// A JSON-RPC message to `/mcp` in the session `sid`, as an MCP client sends it.
+async fn mcp(r: &axum::Router, token: &str, sid: &str, msg: J) -> J {
+    use axum::{body::Body, http::Request};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+    let req = Request::post("/mcp")
+        .header("host", "inst.test")
+        .header("content-type", "application/json")
+        .header("accept", "application/json, text/event-stream")
+        .header("authorization", format!("Bearer {token}"))
+        .header("mcp-session-id", sid)
+        .body(Body::from(msg.to_string()))
+        .unwrap();
+    let resp = r.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+#[tokio::test]
+async fn rule1_a_phone_token_over_rest_and_an_oauth_token_over_mcp_are_no_person() {
+    use obop_commands::OAuthTokens;
+    let w = world();
+    let r = &w.r;
+    let ada = token(r, "ada").await;
+    let agent = agent_token(r, &ada).await;
+    let plan = propose(r, &agent).await;
+
+    // The access token of ada's phone: ada herself, narrowed to some groups, on /api.
+    let device = "phone-1";
+    let mut rec = obop_storage::Fields::new();
+    rec.insert("state".into(), json!("active"));
+    rec.insert("grant".into(), json!("grant-phone"));
+    rec.insert("registered_at".into(), json!("2026-11-17T10:00:00Z"));
+    w.app
+        .store
+        .backend()
+        .insert("device", device, &rec)
+        .unwrap();
+    let (phone, _) = w
+        .auth
+        .issue_mobile_access(
+            "ada",
+            &["base.user".to_string()],
+            "phone",
+            3600,
+            &obop_oauth::api_resource("http://localhost"),
+            "grant-phone",
+            device,
+        )
+        .unwrap();
+    let (s, _) = post(r, Some(&phone), "/api/party/list", json!({})).await;
+    assert_eq!(s, 200, "the phone token works on /api");
+    let (_, nothing) = post(r, Some(&phone), "/api/nothing/list", json!({})).await;
+    for c in ["count", "list", "approve", "reject", "get"] {
+        let (s, b) = post(
+            r,
+            Some(&phone),
+            &format!("/api/plan/{c}"),
+            json!({"id": plan}),
+        )
+        .await;
+        if c == "get" {
+            // plan.get exists for it, as for an agent: not its plan.
+            assert_eq!((s, b), (404, json!({"error": "not found"})), "{c}");
+        } else {
+            assert_eq!((s, &b), (404, &nothing), "{c}");
+        }
+    }
+
+    // The access token of a connected MCP client (OAuth): an agent of ada, on /mcp.
+    let (client, _) = w
+        .auth
+        .issue_oauth_access(
+            "ada",
+            &["base.user".to_string(), "privacy.officer".to_string()],
+            "client",
+            3600,
+            &obop_oauth::mcp_resource("http://inst.test"),
+            "grant-mcp",
+        )
+        .unwrap();
+    let (sid, _) = crate::mcp_tests::initialize(r, &client, "2025-11-25").await;
+    let list = mcp(
+        r,
+        &client,
+        &sid,
+        json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
+    )
+    .await;
+    let names: Vec<&str> = list["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .filter(|n| n.starts_with("plan__"))
+        .collect();
+    assert_eq!(names, ["plan__get"]);
+    for c in ["count", "list", "approve", "reject"] {
+        let name = format!("plan__{c}");
+        let reply = mcp(
+            r,
+            &client,
+            &sid,
+            json!({"jsonrpc":"2.0","id":3,"method":"tools/call",
+                   "params":{"name": name, "arguments": {"id": plan}}}),
+        )
+        .await;
+        assert_eq!(reply["error"]["code"], -32602, "{reply}");
+        assert_eq!(
+            reply["error"]["message"],
+            format!("unknown tool: {name}"),
+            "{reply}"
+        );
+    }
+    // Nothing ran: the plan still waits for ada.
+    let (_, b) = post(r, Some(&ada), "/api/plan/list", json!({})).await;
+    assert_eq!(b["value"]["total"], 1);
+}
