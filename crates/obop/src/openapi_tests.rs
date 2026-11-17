@@ -40,6 +40,7 @@ const KNOWN_OMITTED: &[&str] = &[
     "mileage_point.update",
     "mileage_trip.delete",
     "module_plan.preview",
+    "pos_opening.propose",
     "setting.get",
     "setting.update",
     "sie_exchange.export",

@@ -62,11 +62,11 @@ description = "Dzień zamknięcia sesji (YYYY-MM-DD)"
 
 [labels.pl.model.pos_session.field.opening_cash]
 label = "Gotówka początkowa"
-description = "Gotówka policzona w szufladzie przy otwarciu (w jednostkach podrzędnych waluty)"
+description = "Gotówka policzona w szufladzie przy otwarciu (najmniejsza jednostka waluty); jeśli nie podano, kwota policzona przy ostatnim zamknięciu kasy, a w przeciwnym razie zwykły stan początkowy kasy"
 
 [labels.pl.model.pos_session.field.expected_cash]
 label = "Oczekiwana gotówka"
-description = "Gotówka, która powinna być w szufladzie przy zamknięciu: gotówka początkowa plus płatności gotówką (wpisywana, nie wyliczana)"
+description = "Gotówka, którą szuflada powinna zawierać przy zamknięciu: stan początkowy plus płatności gotówkowe opłaconych sprzedaży sesji"
 
 [labels.pl.model.pos_session.field.closing_cash]
 label = "Gotówka przy zamknięciu"
@@ -74,7 +74,7 @@ description = "Gotówka faktycznie policzona w szufladzie przy zamknięciu"
 
 [labels.pl.model.pos_session.field.cash_difference]
 label = "Różnica kasowa"
-description = "Gotówka przy zamknięciu minus oczekiwana gotówka; wartość ujemna oznacza brak pieniędzy"
+description = "Gotówka przy zamknięciu minus gotówka oczekiwana, po policzeniu gotówki przy zamknięciu; wartość ujemna oznacza brak pieniędzy"
 
 [labels.pl.model.pos_session.field.note]
 label = "Notatka"
@@ -226,7 +226,23 @@ description = "Referencja z terminala płatniczego lub operatora płatności; ni
 
 [labels.pl.model.pos_order.field.stock_location_id]
 label = "Lokalizacja magazynowa"
-description = "Skąd towar opuszcza magazyn; płatność tworzy operacje magazynowe z tej lokalizacji"
+description = "Skąd towary schodzą ze stanu; opłacenie tworzy ruchy magazynowe z tej lokalizacji; jeśli nie podano, lokalizacja sesji"
 
 [labels.pl.model.pos_order.action.pay.assert.covered]
 message = "Płatności nie pokrywają sumy sprzedaży: dodaj płatność na pozostałą kwotę"
+
+[labels.pl.model.pos_config.field.stock_location_id]
+label = "Lokalizacja magazynowa"
+description = "Skąd towary sprzedane przy tej kasie schodzą ze stanu; przejmują ją jej sesje i sprzedaże, a opłacenie sprzedaży tworzy wtedy ruchy magazynowe"
+
+[labels.pl.model.pos_session.field.closed_at]
+label = "Zamknięta o"
+description = "Kiedy sesja została zamknięta (UTC); ostatnio zamknięta sesja kasy proponuje następny stan początkowy"
+
+[labels.pl.model.pos_session.field.stock_location_id]
+label = "Lokalizacja magazynowa"
+description = "Skąd towary sprzedane w tej sesji schodzą ze stanu; jeśli nie podano, lokalizacja kasy"
+
+[labels.pl.model.pos_order.field.cash_paid]
+label = "Zapłacono gotówką"
+description = "Część płatności dokonana gotówką (najmniejsza jednostka waluty)"

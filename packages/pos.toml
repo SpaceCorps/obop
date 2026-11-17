@@ -1,8 +1,8 @@
 [module]
 id = "pos"
-version = "0.5.0"
+version = "0.6.0"
 name = "Point of Sale"
-description = "Shop tills: a point-of-sale configuration, sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change and cash differences are still entered, and the cash control and refund settings of a point of sale are only recorded: nothing checks them. Paying also creates a draft stock move per line from the order's stock location, for the warehouse to validate. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
+description = "Shop tills: a point-of-sale configuration, sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change is still entered; the expected cash and the cash difference of a session are computed from its paid sales, and the cash control and refund settings of a point of sale are only recorded: nothing checks them. Paying also creates a draft stock move per line from the stock location of the till, for the warehouse to validate. A new session proposes the cash counted when the till last closed. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
 author = "SpaceCorps"
 summary = "Shop tills: sessions, orders with lines and payments. Refunds and closing need approval."
 license = "Apache-2.0"
@@ -12,7 +12,7 @@ keywords = ["pos", "retail", "till"]
 categories = ["sales"]
 maturity = "experimental"
 requires_core = "^0.2.2"
-changelog = "The app opens on Sessions; a till is called a till and sits under Configuration. A new session starts today, for you, with the till's opening cash; a new sale goes to the one open session, dated today; a line takes the product's name and price. Closing a session stamps the closing day. A paid, refunded or cancelled sale, its lines and its payments can no longer be changed, and neither can a closed session except its note. A session whose counted cash differs from the expected cash closes only with a note that explains the difference."
+changelog = "A till has a stock location, and its sessions and sales take it, so a paid sale moves stock. The expected cash of a session is computed on the server (opening cash plus the cash payments of its paid sales) and so is the cash difference once the closing cash is counted. A new session opens with the cash counted when its till last closed (the till's usual opening cash when it never closed), and closing stamps the closing instant. The app opens on Sessions; a till is called a till and sits under Configuration. A new session starts today, for you, with the till's opening cash; a new sale goes to the one open session, dated today; a line takes the product's name and price. Closing a session stamps the closing day. A paid, refunded or cancelled sale, its lines and its payments can no longer be changed, and neither can a closed session except its note. A session whose counted cash differs from the expected cash closes only with a note that explains the difference."
 home = "pos_session"
 
 [module.dependencies]
@@ -64,6 +64,13 @@ write_group = "pos.manager"
   kind = "money"
   [model.field.ui]
   aggregate = "none"
+
+  [[model.field]]
+  name = "stock_location_id"
+  description = "Where the goods sold at this till leave stock; its sessions and sales take it, and paying a sale then creates the stock moves"
+  class = "none"
+  kind = "ref"
+  to = "inventory_location"
 
   [[model.field]]
   name = "allow_refunds"
@@ -146,7 +153,7 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "opening_cash"
-  description = "Cash counted in the drawer at opening (minor currency units); the till's usual opening cash unless given"
+  description = "Cash counted in the drawer at opening (minor currency units); unless given, the cash counted when the till last closed, else the till's usual opening cash"
   class = "financial"
   kind = "money"
   required = true
@@ -156,9 +163,10 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "expected_cash"
-  description = "Cash the drawer should hold at closing: opening cash plus cash payments (entered, not computed)"
+  description = "Cash the drawer should hold at closing: the opening cash plus the cash payments of the session's paid sales"
   class = "financial"
   kind = "money"
+  computed = 'opening_cash + sum(pos_order[session_id].cash_paid where state == "paid")'
   [model.field.ui]
   aggregate = "none"
 
@@ -172,9 +180,25 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "cash_difference"
-  description = "Closing cash minus expected cash; negative means money is missing"
+  description = "Closing cash minus expected cash once the closing cash is counted; negative means money is missing"
   class = "financial"
   kind = "money"
+  computed = "if(is_set(closing_cash), closing_cash - expected_cash, 0)"
+
+  [[model.field]]
+  name = "closed_at"
+  description = "When the session was closed (UTC); the latest closed session of a till proposes the next opening cash"
+  class = "none"
+  kind = "datetime"
+  readonly = true
+
+  [[model.field]]
+  name = "stock_location_id"
+  description = "Where the goods sold in this session leave stock; the till's stock location unless given"
+  class = "none"
+  kind = "ref"
+  to = "inventory_location"
+  fill_from = "config_id.stock_location_id"
 
   [[model.field]]
   name = "note"
@@ -210,6 +234,10 @@ write_group = "pos.user"
     kind = "set"
     set = { closed_on = "$today" }
     when = "!is_set(closed_on)"
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { closed_at = "$now" }
 
 [[model]]
 name = "pos_order"
@@ -261,10 +289,11 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "stock_location_id"
-  description = "Where the goods leave stock; paying creates the stock moves from this location"
+  description = "Where the goods leave stock; paying creates the stock moves from this location; the session's stock location unless given"
   class = "none"
   kind = "ref"
   to = "inventory_location"
+  fill_from = "session_id.stock_location_id"
 
   [[model.field]]
   name = "ordered_on"
@@ -292,6 +321,13 @@ write_group = "pos.user"
   class = "none"
   kind = "money"
   computed = "sum(lines.subtotal)"
+
+  [[model.field]]
+  name = "cash_paid"
+  description = "The part of the payments made in cash (minor currency units)"
+  class = "financial"
+  kind = "money"
+  computed = 'sum(pos_payment.amount where method == "cash")'
 
   [[model.field]]
   name = "note"

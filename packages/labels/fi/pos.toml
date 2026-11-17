@@ -62,11 +62,11 @@ description = "Päivä, jona kassavuoro suljettiin (YYYY-MM-DD)"
 
 [labels.fi.model.pos_session.field.opening_cash]
 label = "Alkukassa"
-description = "Laatikosta avattaessa laskettu käteinen (valuutan pienin yksikkö)"
+description = "Avattaessa laatikosta laskettu käteinen (valuutan pienin yksikkö); ellei annettu, kassan edellisellä sulkemisella laskettu summa, muuten kassan tavallinen alkukassa"
 
 [labels.fi.model.pos_session.field.expected_cash]
 label = "Odotettu kassa"
-description = "Käteinen, joka laatikossa pitäisi olla suljettaessa: alkukassa lisättynä käteismaksuilla (syötetty, ei laskettu)"
+description = "Käteinen, joka laatikossa pitäisi olla sulkemishetkellä: alkukassa plus istunnon maksettujen myyntien käteismaksut"
 
 [labels.fi.model.pos_session.field.closing_cash]
 label = "Loppukassa"
@@ -74,7 +74,7 @@ description = "Laatikosta suljettaessa todella laskettu käteinen"
 
 [labels.fi.model.pos_session.field.cash_difference]
 label = "Kassaero"
-description = "Loppukassa vähennettynä odotetulla kassalla; negatiivinen tarkoittaa rahan puuttuvan"
+description = "Loppukassa miinus odotettu käteinen, kun loppukassa on laskettu; negatiivinen tarkoittaa, että rahaa puuttuu"
 
 [labels.fi.model.pos_session.field.note]
 label = "Huomautus"
@@ -226,7 +226,23 @@ description = "Korttipäätteen tai maksupalvelun viite; ei koskaan korttinumero
 
 [labels.fi.model.pos_order.field.stock_location_id]
 label = "Varastopaikka"
-description = "Mistä tavarat poistuvat varastosta; maksu luo varastosiirrot tästä paikasta"
+description = "Mistä tavarat lähtevät varastosta; maksaminen luo varastosiirrot tästä paikasta; ellei annettu, istunnon varastopaikka"
 
 [labels.fi.model.pos_order.action.pay.assert.covered]
 message = "Maksut eivät kata myynnin summaa: lisää maksu loppusummalle"
+
+[labels.fi.model.pos_config.field.stock_location_id]
+label = "Varastopaikka"
+description = "Mistä tällä kassalla myydyt tavarat lähtevät varastosta; sen istunnot ja myynnit ottavat sen, ja myynnin maksaminen luo silloin varastosiirrot"
+
+[labels.fi.model.pos_session.field.closed_at]
+label = "Suljettu"
+description = "Milloin istunto suljettiin (UTC); kassan viimeksi suljettu istunto ehdottaa seuraavaa alkukassaa"
+
+[labels.fi.model.pos_session.field.stock_location_id]
+label = "Varastopaikka"
+description = "Mistä tässä istunnossa myydyt tavarat lähtevät varastosta; ellei annettu, kassan varastopaikka"
+
+[labels.fi.model.pos_order.field.cash_paid]
+label = "Maksettu käteisellä"
+description = "Käteisellä maksettu osuus maksuista (valuutan pienin yksikkö)"
