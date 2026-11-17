@@ -33,9 +33,9 @@ async function adminPage(page: Page, request: import("@playwright/test").APIRequ
 }
 
 const section = (page: Page, name = "Sign in with Microsoft") => page.getByRole("region", { name });
-/** The "Microsoft" button of one person's row; its name carries the person. */
+/** The "Microsoft" cell of one person's row is the button; its name has the person and the state. */
 const microsoft = (page: Page, person: string) =>
-  row(page, person).getByRole("button", { name: `Microsoft sign-in for ${person}`, exact: true });
+  row(page, person).getByRole("button", { name: new RegExp(`^Microsoft sign-in for ${person}: `) });
 const row = (page: Page, name: string) =>
   page
     .getByRole("table", { name: "People" })
@@ -74,6 +74,7 @@ test.describe("administering Sign in with Microsoft", () => {
     request,
     browser,
   }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
     await adminPage(page, request);
     const setUp = section(page).getByRole("button", { name: "Set up Microsoft sign-in" });
     await setUp.click();
@@ -86,6 +87,12 @@ test.describe("administering Sign in with Microsoft", () => {
     await expect(form.getByLabel("Redirect address", { exact: true })).toHaveValue(
       `${ssoAdminUrl()}/api/auth/oidc/callback`,
     );
+    // On a laptop the Copy button is beside the address, on the same row.
+    const address = await form.getByLabel("Redirect address", { exact: true }).boundingBox();
+    const copy = await form.getByRole("button", { name: "Copy redirect address" }).boundingBox();
+    expect(copy!.x).toBeGreaterThanOrEqual(address!.x + address!.width - 1);
+    expect(copy!.y + copy!.height).toBeGreaterThan(address!.y);
+    expect(copy!.y).toBeLessThan(address!.y + address!.height);
     await expect(form.getByLabel("Client secret")).toHaveAttribute("type", "password");
     // A password manager must not take the field for a login: "off" is ignored, "new-password" is not.
     await expect(form.getByLabel("Client secret")).toHaveAttribute("autocomplete", "new-password");
@@ -94,13 +101,17 @@ test.describe("administering Sign in with Microsoft", () => {
     await form.getByLabel("Tenant ID").fill("common");
     await form.getByLabel("Application (client) ID").fill("nope");
     await form.getByRole("button", { name: "Save" }).click();
-    await expect(form.getByText("The tenant ID is a GUID.")).toBeVisible();
-    await expect(form.getByText("The application ID is a GUID.")).toBeVisible();
+    await expect(
+      form.getByText("This is not a tenant ID: it has 32 letters and digits in five groups."),
+    ).toBeVisible();
+    await expect(
+      form.getByText("This is not an application ID: it has 32 letters and digits in five groups."),
+    ).toBeVisible();
     await expect(form.getByText("Enter the client secret.")).toBeVisible();
     // The keyboard goes to the first wrong field, which names its error.
     await expect(form.getByLabel("Tenant ID")).toBeFocused();
     await expect(form.getByLabel("Tenant ID")).toHaveAccessibleDescription(
-      /The tenant ID is a GUID\./,
+      /This is not a tenant ID: it has 32 letters and digits in five groups\./,
     );
 
     await form.getByLabel("Tenant ID").fill(sso.tenant);
@@ -118,7 +129,27 @@ test.describe("administering Sign in with Microsoft", () => {
     await expect(s.getByRole("heading", { name: "Sign in with Microsoft" })).toBeFocused();
     // The column and the button of People are there at once, with no reload.
     await expect(page.getByRole("columnheader", { name: "Microsoft" })).toBeVisible();
-    await expect(row(page, "bea").getByText("Not bound")).toBeVisible();
+    await expect(microsoft(page, "bea")).toHaveText("Not bound");
+    // On a laptop the People table fits its box (the cell is the control: no second button).
+    const widths = await page.getByRole("table", { name: "People" }).evaluate((table) => {
+      const box = table.closest<HTMLElement>(".table-wrap") ?? table.parentElement!;
+      return {
+        table: table.getBoundingClientRect().width,
+        scrollWidth: box.scrollWidth,
+        clientWidth: box.clientWidth,
+      };
+    });
+    console.log(
+      `People table at 1280 px: table ${widths.table}, box scrollWidth ${widths.scrollWidth}, clientWidth ${widths.clientWidth}`,
+    );
+    expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth);
+    // Change settings and Remove are side by side at the start of the line.
+    const change = await s
+      .getByRole("button", { name: "Change settings", exact: true })
+      .boundingBox();
+    const removeBox = await s.getByRole("button", { name: "Remove", exact: true }).boundingBox();
+    expect(removeBox!.x - (change!.x + change!.width)).toBeLessThan(40);
+    expect(removeBox!.x).toBeGreaterThan(change!.x);
     // The secret is nowhere on the page, also not after a reload.
     await page.reload();
     await expect(s.getByText(sso.tenant)).toBeVisible();
@@ -142,7 +173,7 @@ test.describe("administering Sign in with Microsoft", () => {
         .getByRole("row")
         .filter({ has: page.getByRole("cell", { name: "bea", exact: true }) })
         .getByRole("button", {
-          name: tr("de", "Microsoft sign-in for {user}").replace("{user}", "bea"),
+          name: tr("de", "Microsoft sign-in for {user}: not bound").replace("{user}", "bea"),
           exact: true,
         }),
     ).toBeVisible();
@@ -167,6 +198,24 @@ test.describe("administering Sign in with Microsoft", () => {
     const form = page.getByRole("dialog", { name: "Change Microsoft sign-in" });
     await expect(form.getByText("Leave empty to keep the stored secret.")).toBeVisible();
     expect(await layoutProblems(page)).toEqual([]);
+    // The address is read in full (it wraps), and Copy is under it, flush left, before the hint.
+    const field = form.getByLabel("Redirect address", { exact: true });
+    const fieldBox = (await field.boundingBox())!;
+    const copyBox = (await form
+      .getByRole("button", { name: "Copy redirect address" })
+      .boundingBox())!;
+    expect(copyBox.y).toBeGreaterThanOrEqual(fieldBox.y + fieldBox.height - 1);
+    expect(Math.abs(copyBox.x - fieldBox.x)).toBeLessThan(2);
+    expect(copyBox.height).toBeGreaterThanOrEqual(44);
+    const hintBox = (await form
+      .getByText("Register this as a Web redirect address")
+      .boundingBox())!;
+    expect(hintBox.y).toBeGreaterThanOrEqual(copyBox.y + copyBox.height - 1);
+    expect(
+      await field.evaluate(
+        (el) => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1,
+      ),
+    ).toBe(true);
     await form.getByRole("button", { name: "Cancel" }).click();
     await expect(change).toBeFocused();
     const button = microsoft(page, "bea");
@@ -194,11 +243,11 @@ test.describe("administering Sign in with Microsoft", () => {
     // An e-mail address is refused before anything is sent.
     await dialog.getByLabel("Object ID").fill("bea@example.test");
     await dialog.getByRole("button", { name: "Bind" }).click();
-    await expect(dialog.getByText("The object ID is a GUID, not an e-mail address.")).toBeVisible();
+    await expect(dialog.getByText("This is an e-mail address, not an object ID.")).toBeVisible();
     await dialog.getByLabel("Object ID").fill(BEA);
     await dialog.getByRole("button", { name: "Bind" }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(row(page, "bea").getByText("Bound", { exact: true })).toBeVisible();
+    await expect(microsoft(page, "bea")).toHaveText("Bound");
 
     // The same object id for a second person is refused with the server's own sentence.
     await microsoft(page, "ada").click();
@@ -220,30 +269,20 @@ test.describe("administering Sign in with Microsoft", () => {
     await ctx.close();
   });
 
-  test("Microsoft only: the server's rule is shown, and the binding stays while it is on or refused", async ({
+  test("Microsoft only: when the rule is not met the checkbox is off limits and says why", async ({
     page,
     request,
-    allowHttpErrors,
   }) => {
-    allowHttpErrors(400);
     await adminPage(page, request);
     await microsoft(page, "bea").click();
     const dialog = page.getByRole("dialog", { name: "Microsoft sign-in for bea" });
     await expect(dialog.getByText(`Bound to ${BEA}`)).toBeVisible();
     expect(await unnamedControls(page), "People Microsoft dialog").toEqual([]);
-    // The question comes first, and Cancel sends nothing.
-    await dialog.getByRole("checkbox", { name: /Microsoft only/ }).click({ force: true });
-    const ask = page.getByRole("alertdialog", { name: "Make bea sign in with Microsoft only?" });
-    await expect(ask).toContainText("Their sessions and phone sign-ins end.");
-    expect(await unnamedControls(page), "Microsoft only question").toEqual([]);
-    await ask.getByRole("button", { name: "Cancel" }).click();
-    await expect(ask).toHaveCount(0);
-    await expect(dialog.getByRole("alert")).toHaveCount(0);
-    // Nobody here keeps a password and a second step, so the server refuses, and says why.
-    await dialog.getByRole("checkbox", { name: /Microsoft only/ }).click({ force: true });
-    await ask.getByRole("button", { name: "Make Microsoft only" }).click();
-    await expect(dialog.getByRole("alert")).toContainText("other enabled administrators");
-    await expect(dialog.getByRole("checkbox", { name: /Microsoft only/ })).not.toBeChecked();
+    // Nobody here keeps a password and a second step, so the page says so instead of letting the
+    // person press a box the server will refuse.
+    const box = dialog.getByRole("checkbox", { name: /Microsoft only/ });
+    await expect(box).toBeDisabled();
+    await expect(box).toHaveAccessibleName(/At least two other administrators with a password/);
     // The keyboard goes back to the row's button when the dialog is closed.
     await dialog.locator("button.btn", { hasText: "Close" }).click();
     await expect(microsoft(page, "bea")).toBeFocused();
@@ -278,7 +317,30 @@ test.describe("administering Sign in with Microsoft", () => {
     await dialog.getByRole("button", { name: "Remove binding" }).click();
     await ask.getByRole("button", { name: "Remove binding" }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(row(page, "bea").getByText("Not bound")).toBeVisible();
+    await expect(microsoft(page, "bea")).toHaveText("Not bound");
+  });
+
+  test("you bind yourself, remove your own binding through the question, and land on the sign-in page", async ({
+    page,
+    request,
+  }) => {
+    await adminPage(page, request);
+    await microsoft(page, "root1").click();
+    const dialog = page.getByRole("dialog", { name: "Microsoft sign-in for root1" });
+    await dialog.getByLabel("Object ID").fill("0e0e0e0e-0005-4000-8000-000000000005");
+    await dialog.getByRole("button", { name: "Bind" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(microsoft(page, "root1")).toHaveText("Bound");
+
+    await microsoft(page, "root1").click();
+    await dialog.getByRole("button", { name: "Remove binding" }).click();
+    const ask = page.getByRole("alertdialog", { name: "Remove the Microsoft binding of root1?" });
+    await expect(ask).toContainText("This is your own account: you are signed out at once.");
+    await ask.getByRole("button", { name: "Remove binding" }).click();
+    // The server ended this session: the page is the sign-in page, not a table with nobody in it.
+    await expect(page.getByLabel("Username")).toBeVisible();
+    await expect(page.getByRole("table", { name: "People" })).toHaveCount(0);
+    expect(await page.evaluate(() => sessionStorage.getItem("obop-token") ?? "")).toBe("");
   });
 
   test("Remove asks first, then the configuration, the column and the button are gone", async ({
