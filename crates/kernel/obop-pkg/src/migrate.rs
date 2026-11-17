@@ -1920,10 +1920,8 @@ mod tests {
             .contains("takes only `source`")
         );
         assert!(
-            bad(&format!(
-                "[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"mig_item\"\nfield = \"head\"\nvalue = \"x\"\nsource = \"head\"\n"
-            ))
-            .contains("`source` belongs to")
+            bad("[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"mig_item\"\nfield = \"head\"\nvalue = \"x\"\nsource = \"head\"\n")
+                .contains("`source` belongs to")
         );
     }
 }
