@@ -161,9 +161,9 @@ export function FormBody(p: FormBodyProps) {
       (input as HTMLElement | null)?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
-    // Once, when the record opens.
+    // When the record opens, and again when a link names another field of it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [p.focusField]);
   // A record the person may not change at all reads as a description list.
   const asList = !p.editable;
 

@@ -49,6 +49,24 @@ test("an address that names a field opens the record with that field in view and
   const email = panel.getByLabel("Email", { exact: true });
   await expect(email).toBeFocused();
   await expect(email).toBeInViewport();
+  // A later link to another field of the record that is already open moves there too.
+  for (const field of ["tax_id", "notes"]) {
+    await page.evaluate(
+      ([id, f]) => {
+        location.hash = `#/base/party?view=list&id=${id}&field=${f}`;
+      },
+      [party.id, field],
+    );
+    await expect
+      .poll(() =>
+        page.evaluate((f) => {
+          const box = document.getElementById(`f-party-${f}`);
+          const a = document.activeElement;
+          return !!box && !!a && (box === a || box.contains(a));
+        }, field),
+      )
+      .toBe(true);
+  }
 });
 
 test("after Create, Back does not open an empty new form again (R16)", async ({

@@ -41,7 +41,7 @@ import {
 } from "./recordLayout.ts";
 import { RecordHeader } from "./RecordHeader.tsx";
 import { RelatedChips } from "./RelatedChips.tsx";
-import { nav, parse } from "./route.ts";
+import { nav, useRoute } from "./route.ts";
 import "./registrations.ts";
 import { canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
 
@@ -222,12 +222,13 @@ export function RecordPanel({
     (f) => f !== statusField && !(creating && serverSet(f)) && !shownInHeader.has(f.name),
   );
   const shownSections = useRef(new Set<string>()).current;
-  // The field the address names (`&field=`), read once when this record opens (Q19).
-  const focusField = useMemo(() => {
-    const r = parse(location.hash);
-    return row && r.id === row.id && fields.some((f) => f.name === r.field) ? r.field : undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // The field the address names (`&field=`, Q19): also a later link to another field of the
+  // record that is already open.
+  const [route] = useRoute();
+  const focusField =
+    row && route.id === row.id && fields.some((f) => f.name === route.field)
+      ? route.field
+      : undefined;
   const sections = keepShown(
     sectionsOf(model, bodyFields, {
       creating,
