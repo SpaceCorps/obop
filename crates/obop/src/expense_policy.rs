@@ -171,7 +171,13 @@ fn refuse_own(b: &dyn obop_storage::Backend, input: &Value, who: &str) -> Result
         return Ok(());
     };
     let who = norm(who.strip_suffix("/agent").unwrap_or(who));
-    let named = |k: &str| claim.get(k).and_then(J::as_str).map(norm);
+    // A name stored by an agent ("ann/agent") is the person behind it.
+    let named = |k: &str| {
+        claim
+            .get(k)
+            .and_then(J::as_str)
+            .map(|s| norm(s.strip_suffix("/agent").unwrap_or(s)))
+    };
     if !who.is_empty()
         && [named("employee"), named("submitted_by")]
             .into_iter()
