@@ -486,3 +486,22 @@ describe("billing time without the groups it needs", () => {
       expect(out).not.toContain("timesheets.manager");
     });
 });
+
+describe("billing a period without time to bill", () => {
+  const raw = "no approved, billable, unbilled time entries of this project in the period";
+  const en = "There is no approved, billable time to bill in this period.";
+
+  it("says it as a sentence", async () => {
+    await setLanguage("en", false);
+    expect(serverMessage(raw)).toBe(en);
+  });
+
+  for (const lang of LANGS)
+    it(`${lang}: is translated`, async () => {
+      provideCatalogue(lang, read(lang));
+      await setLanguage(lang, false);
+      const out = serverMessage(raw);
+      expect(out).not.toBe(en);
+      expect(out).not.toBe(raw);
+    });
+});

@@ -2851,5 +2851,6 @@
   "This person has their own login, so the record would be theirs and you could not see it. Ask someone with {groups} to file it. Nothing was saved.": "Tällä henkilöllä on oma käyttäjätunnus, joten tietue olisi hänen eikä näkisit sitä. Pyydä henkilöä, jolla on {groups}, kirjaamaan se. Mitään ei tallennettu.",
   "Week {week}, {year}": "Viikko {week}, {year}",
   "Choose the customer to bill": "Valitse laskutettava asiakas",
-  "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.": "Ajan laskuttaminen vaatii oikeuden laatia laskuja ja hyväksyä aikakirjauksia. Pyydä ylläpitäjää."
+  "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.": "Ajan laskuttaminen vaatii oikeuden laatia laskuja ja hyväksyä aikakirjauksia. Pyydä ylläpitäjää.",
+  "There is no approved, billable time to bill in this period.": "Tällä jaksolla ei ole hyväksyttyä, laskutettavaa aikaa laskutettavaksi."
 }

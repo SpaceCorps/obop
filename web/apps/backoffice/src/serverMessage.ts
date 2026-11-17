@@ -302,6 +302,10 @@ const GUARD_RULES: Rule[] = [
         "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.",
       ),
   ],
+  [
+    /^no approved, billable, unbilled time entries of this project in the period$/,
+    () => t("There is no approved, billable time to bill in this period."),
+  ],
 ];
 
 const RULES: Rule[] = [

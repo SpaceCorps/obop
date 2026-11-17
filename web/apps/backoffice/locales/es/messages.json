@@ -2851,5 +2851,6 @@
   "This person has their own login, so the record would be theirs and you could not see it. Ask someone with {groups} to file it. Nothing was saved.": "Esta persona tiene su propio inicio de sesión, así que el registro sería suyo y no podrías verlo. Pide a alguien con {groups} que lo registre. No se guardó nada.",
   "Week {week}, {year}": "Semana {week}, {year}",
   "Choose the customer to bill": "Elige el cliente al que facturar",
-  "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.": "Para facturar tiempo hace falta el permiso de crear facturas y de aprobar registros de tiempo. Pídeselo a un administrador."
+  "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.": "Para facturar tiempo hace falta el permiso de crear facturas y de aprobar registros de tiempo. Pídeselo a un administrador.",
+  "There is no approved, billable time to bill in this period.": "No hay tiempo aprobado y facturable que facturar en este periodo."
 }
