@@ -1234,10 +1234,11 @@ async fn a_device_read_the_store_refuses_is_a_503_and_never_a_200_or_a_401() {
     let eve = session(r, "eve").await;
     let (_, v) = command(r, &eve, "device.list", json!({})).await;
     let id = rows(&v)[0]["id"].as_str().unwrap().to_string();
-    flaky.refuse_model("device", Mode::Updates);
+    // The record is marked in an atomic batch with its entry of the log (L11).
+    flaky.refuse_applies(100);
     let (s, v) = command(r, &eve, "device.revoke", json!({"id": id})).await;
     assert_eq!(s, 503, "{v}");
-    flaky.allow_models();
+    flaky.refuse_applies(0);
     let (s, v) = command(r, &eve, "device.revoke", json!({"id": id})).await;
     assert_eq!(s, 200, "{v}");
     assert_eq!(command(r, &bearer, "party.list", json!({})).await.0, 401);
