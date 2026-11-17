@@ -754,3 +754,23 @@ fn the_refusal_of_a_post_in_a_closed_period_is_in_the_language_of_the_request() 
     let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": inv})));
     assert!(m.contains("abgeschlossenen Periode September"), "{m}");
 }
+
+/// The receivable is the invoice total plus VAT (the invoice shows no VAT, docs/ISSUES.md U14):
+/// what the settings say about it must not claim it is the invoice total.
+#[test]
+fn the_settings_say_the_receivable_is_the_total_plus_vat() {
+    let m = crate::invoice_posting::module();
+    let d = m.models[1]
+        .fields
+        .iter()
+        .find(|f| f.name == "receivable_account")
+        .unwrap()
+        .description;
+    assert!(d.contains("plus VAT"), "{d}");
+    let page = include_str!("../../../web/apps/backoffice/src/apps/accounting/BookingSettings.tsx");
+    assert!(
+        !page.contains("Debited with the invoice total.\""),
+        "the hint"
+    );
+    assert!(page.contains("invoice total plus VAT"), "the hint");
+}

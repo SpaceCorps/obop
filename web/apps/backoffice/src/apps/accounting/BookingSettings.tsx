@@ -133,7 +133,9 @@ export function BookingSettings() {
               "receivable_account",
               t("Receivable account"),
               accounts.filter((a) => a.account_type === "asset_receivable"),
-              t("Debited with the invoice total."),
+              t(
+                "Debited with the invoice total plus VAT, or the total itself when the tax includes VAT in the price.",
+              ),
             )}
             {pick(
               "revenue_account",

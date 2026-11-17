@@ -2766,7 +2766,7 @@
   "Customer signs": "Signature du client",
   "Days of the week": "Jours de la semaine",
   "Deadline": "Échéance",
-  "Debited with the invoice total.": "Débité du total de la facture.",
+  "Debited with the invoice total plus VAT, or the total itself when the tax includes VAT in the price.": "Débité du total de la facture plus la TVA, ou du total lui-même lorsque la taxe est comprise dans le prix.",
   "Employee": "Employé",
   "Estimated": "Estimé",
   "Every task is done.": "Toutes les tâches sont terminées.",

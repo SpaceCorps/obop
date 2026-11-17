@@ -2766,7 +2766,7 @@
   "Customer signs": "Kunden skriver under",
   "Days of the week": "Veckans dagar",
   "Deadline": "Deadline",
-  "Debited with the invoice total.": "Debiteras med fakturans totalbelopp.",
+  "Debited with the invoice total plus VAT, or the total itself when the tax includes VAT in the price.": "Debiteras med fakturans totalbelopp plus moms, eller med totalbeloppet självt när skatten ingår i priset.",
   "Employee": "Anställd",
   "Estimated": "Uppskattat",
   "Every task is done.": "Alla uppgifter är klara.",

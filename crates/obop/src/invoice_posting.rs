@@ -153,7 +153,7 @@ pub fn module() -> Module {
                     )
                     .kind(FieldKind::Bool),
                     f("journal", "The journal (id, code or name) invoices are booked in"),
-                    f("receivable_account", "The receivable account (id or code), debited with the total"),
+                    f("receivable_account", "The receivable account (id or code), debited with the invoice total plus VAT, or the total itself with a price-included tax"),
                     f("revenue_account", "The revenue account (id or code), credited with the net of each line"),
                     f("tax", "The sales tax (id or name) of the invoice lines; with price_included the invoice total is taken as the gross"),
                     f("vat_account", "Optional: the VAT account (id or code); default is the tax's tax_account_id"),

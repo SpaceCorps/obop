@@ -2766,7 +2766,7 @@
   "Customer signs": "Kunde unterschreibt",
   "Days of the week": "Wochentage",
   "Deadline": "Frist",
-  "Debited with the invoice total.": "Wird im Soll mit dem Rechnungsbetrag gebucht.",
+  "Debited with the invoice total plus VAT, or the total itself when the tax includes VAT in the price.": "Wird im Soll mit dem Rechnungsbetrag zuzüglich MwSt. gebucht, oder mit dem Rechnungsbetrag selbst, wenn die Steuer im Preis enthalten ist.",
   "Employee": "Mitarbeiter",
   "Estimated": "Geschätzt",
   "Every task is done.": "Alle Aufgaben sind erledigt.",

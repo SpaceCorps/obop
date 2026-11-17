@@ -2766,7 +2766,7 @@
   "Customer signs": "machine-drafted",
   "Days of the week": "machine-drafted",
   "Deadline": "machine-drafted",
-  "Debited with the invoice total.": "machine-drafted",
+  "Debited with the invoice total plus VAT, or the total itself when the tax includes VAT in the price.": "machine-drafted",
   "Employee": "machine-drafted",
   "Estimated": "machine-drafted",
   "Every task is done.": "machine-drafted",

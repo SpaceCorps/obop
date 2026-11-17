@@ -2766,7 +2766,7 @@
   "Customer signs": "Asiakas allekirjoittaa",
   "Days of the week": "Viikonpäivät",
   "Deadline": "Määräaika",
-  "Debited with the invoice total.": "Veloitetaan laskun loppusummalla.",
+  "Debited with the invoice total plus VAT, or the total itself when the tax includes VAT in the price.": "Veloitetaan laskun loppusummalla lisättynä arvonlisäverolla, tai pelkällä loppusummalla, kun vero sisältyy hintaan.",
   "Employee": "Työntekijä",
   "Estimated": "Arvioitu",
   "Every task is done.": "Kaikki tehtävät on tehty.",
