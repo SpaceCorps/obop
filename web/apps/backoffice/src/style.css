@@ -1152,6 +1152,13 @@ a.kpi.ov-kpi:hover {
     white-space: normal;
     hyphens: manual;
   }
+  /* A name that two lines still cut (Chrome.tsx useWholeName): smaller, on up to three lines,
+     within the bar's 3.5rem. */
+  .brand-app.tight {
+    -webkit-line-clamp: 3;
+    font-size: var(--text-sm);
+    line-height: 1.1;
+  }
   .systray {
     gap: 0;
   }
