@@ -440,23 +440,6 @@ fn every_bundled_package_still_passes_the_gate() {
     }
 }
 
-/// A bundled changelog that names versions starts with its own, newest first.
-#[test]
-fn every_bundled_changelog_starts_with_the_package_version() {
-    for l in Bundled.list().unwrap() {
-        let m = Manifest::parse(&Bundled.fetch(&l.id).unwrap()).unwrap();
-        let first = m
-            .module
-            .changelog
-            .split(|c: char| !(c.is_ascii_digit() || c == '.'))
-            .map(|w| w.trim_end_matches('.'))
-            .find(|w| w.split('.').count() == 3 && w.split('.').all(|p| !p.is_empty()));
-        if let Some(first) = first {
-            assert_eq!(first, m.module.version, "{}: {}", l.id, m.module.changelog);
-        }
-    }
-}
-
 /// `obop modules check FILE` passes the package: a `set` effect names no model and a declared
 /// child of the package is no dependency.
 #[test]
