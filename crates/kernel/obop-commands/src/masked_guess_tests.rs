@@ -24,14 +24,19 @@ fn module() -> Module {
             f("holder", true),
             f("state", false).select(&["draft", "posted"]),
         ],
-        commands: vec![CommandDef::new("post", "Post", U).transition(
-            "state",
-            Some("draft"),
-            "posted",
-        )],
+        commands: vec![
+            CommandDef::new("post", "Post", U).transition("state", Some("draft"), "posted"),
+            CommandDef::new("reopen", "Reopen", U)
+                .transition("state", Some("posted"), "draft")
+                .approval(),
+        ],
         ext: Default::default(),
     }
-    .with_guard(Guard::frozen_in("state", &["posted"]).mutable(&["title"]));
+    .with_guard(
+        Guard::frozen_in("state", &["posted"])
+            .mutable(&["title"])
+            .exit("draft", "reopen", &[]),
+    );
     Module {
         id: "mg".into(),
         name: "Guess".into(),
@@ -55,6 +60,7 @@ impl Rig {
         let d = Dispatcher::new();
         d.register_crud(&module, &store);
         d.register_transition(&module, "mg_doc", "post", &store);
+        d.register_transition(&module, "mg_doc", "reopen", &store);
         Self {
             d,
             person: Principal::user("ann", &[U]),
@@ -158,4 +164,52 @@ fn a_guess_of_a_masked_value_of_a_frozen_record_is_refused_right_or_wrong() {
         update(&id, "holder", "Alice"),
     )
     .unwrap();
+}
+
+#[test]
+fn a_plan_an_agent_proposed_keeps_what_it_sent_in_clear_until_a_person_approves_it() {
+    // K63, the rest: an update that reopens a posted record needs a person's approval, and the
+    // agent puts a guess of the masked holder in it. Approving the plan answers the same for a
+    // right and a wrong guess.
+    let r = Rig::new();
+    let mut none = Vault::new();
+    let mut answers = Vec::new();
+    for guess in ["Alice", "Bob"] {
+        let doc = r
+            .call(
+                &r.person,
+                &mut none,
+                "mg_doc.create",
+                Value::map([
+                    ("title", Value::text("T")),
+                    ("holder", Value::text("Alice")),
+                ]),
+            )
+            .unwrap();
+        let id = Rig::text(&doc, "id");
+        r.call(
+            &r.person,
+            &mut none,
+            "mg_doc.post",
+            Value::map([("id", Value::text(&id))]),
+        )
+        .unwrap();
+        let mut vault = Vault::new();
+        let input = Value::map([
+            ("id", Value::text(&id)),
+            ("state", Value::text("draft")),
+            ("holder", Value::text(guess)),
+        ]);
+        let plan = match r.call(&r.agent, &mut vault, "mg_doc.update", input) {
+            Err(CallError::ApprovalRequired { plan_id }) => plan_id,
+            other => panic!("{guess}: expected a plan, got {other:?}"),
+        };
+        let e =
+            r.d.approve(&r.person, &mut Vault::new(), &plan)
+                .map(|_| ())
+                .unwrap_err();
+        answers.push(errors::classify(&e).code);
+    }
+    assert_eq!(answers[0], answers[1], "{answers:?}");
+    assert_eq!(answers[0], "immutable_record");
 }

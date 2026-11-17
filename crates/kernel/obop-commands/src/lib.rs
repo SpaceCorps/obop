@@ -1348,7 +1348,8 @@ impl Dispatcher {
         }
         // The fields an agent sent in clear although it is shown them masked count as changed in
         // this call, whatever their value (K63; `engine::frozen::sent_clear`).
-        let _clear = engine::frozen::ClearScope::enter(self.sent_in_clear(&c, p, vault, input));
+        let clear = self.sent_in_clear(&c, p, vault, input);
+        let _clear = engine::frozen::ClearScope::enter(clear.clone());
         let mut input = self.restore(p, vault, input)?;
         if let Value::Map(m) = &mut input {
             // The caller is set by the dispatcher and by guards, never by a client.
@@ -1388,6 +1389,7 @@ impl Dispatcher {
                         principal: p.clone(),
                         id: id.into(),
                         input,
+                        clear,
                     },
                 )
                 .map_err(CallError::Handler)?;
@@ -1426,6 +1428,8 @@ impl Dispatcher {
         // The record may have changed since the proposal, so the guard runs again, and the
         // approver must hold the groups of any transition the call implicitly runs (D48).
         let mut input = plan.input.clone();
+        // What the agent sent in clear for a field it is shown masked counts as changed now too.
+        let _clear = engine::frozen::ClearScope::enter(plan.clear.clone());
         // The guard sees who is approving, so that it can refuse before the plan is spent.
         stamp_approver(&mut input, approver);
         let mut pre = Vec::new();

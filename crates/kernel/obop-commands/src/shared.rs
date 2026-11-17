@@ -37,6 +37,9 @@ pub(crate) struct Pending {
     pub principal: Principal,
     pub id: String,
     pub input: Value,
+    /// The fields (`model.field`) the agent sent in clear although it is shown them masked: they
+    /// count as changed when a person approves the plan, as in the call itself (K63).
+    pub clear: Vec<String>,
 }
 
 impl Pending {
@@ -59,6 +62,7 @@ impl Pending {
             },
             "command": self.id,
             "input": self.input.to_json(),
+            "clear": self.clear,
         })
     }
 
@@ -97,6 +101,14 @@ impl Pending {
             },
             id: j["command"].as_str()?.to_string(),
             input: Value::from_json(&j["input"]),
+            clear: j["clear"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default(),
         })
     }
 }
@@ -217,6 +229,7 @@ mod tests {
                 ("n", Value::Int(3)),
                 ("tags", Value::List(vec![Value::text("a"), Value::Null])),
             ]),
+            clear: vec!["sales_order.note".into()],
         }
     }
 
@@ -225,6 +238,7 @@ mod tests {
         let p = pending();
         let back = Pending::from_json(&p.to_json()).unwrap();
         assert_eq!(back.id, p.id);
+        assert_eq!(back.clear, p.clear);
         assert_eq!(back.input, p.input);
         assert_eq!(back.principal.id, p.principal.id);
         assert_eq!(back.principal.kind, PrincipalKind::Agent);
