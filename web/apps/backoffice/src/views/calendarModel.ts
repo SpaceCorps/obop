@@ -178,19 +178,11 @@ export function hhmm(min: number): string {
 }
 
 /**
- * A time of day the way the region writes it ("14:30", "2:30 PM"); `hhmm` where the browser has no
- * such format. Midnight at the end of a day is "24:00" in either case.
+ * A time of day on the calendar: the 24-hour clock ("14:30") that the time boxes, the lists, My day
+ * and the week plan write, whatever the browser's language (one rule for times of day, S5).
+ * Midnight at the end of a day is "24:00".
  */
-export function clockOf(min: number, locale: string): string {
-  if (min >= 1440) return hhmm(1440);
-  try {
-    return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(
-      new Date(2000, 0, 1, Math.floor(min / 60), Math.round(min % 60)),
-    );
-  } catch {
-    return hhmm(min);
-  }
-}
+export const clockOf = (min: number): string => hhmm(min);
 
 // ---- the month: bars in lanes ------------------------------------------------------------------
 

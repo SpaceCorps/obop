@@ -179,7 +179,7 @@ export function CalendarView(p: ViewProps) {
   const tone = (e: CalEvent) =>
     spec.color ? toneClassOf(spec.color, String(e.row[spec.color.name] ?? ""), model) : "t-accent";
   const text = (e: CalEvent, head = true) =>
-    e.startMin !== undefined && head ? `${clockOf(e.startMin, fmt.locale)} ${label(e)}` : label(e);
+    e.startMin !== undefined && head ? `${clockOf(e.startMin)} ${label(e)}` : label(e);
 
   const heading =
     mode === "month"
