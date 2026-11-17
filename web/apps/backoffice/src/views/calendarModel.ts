@@ -220,9 +220,11 @@ export function hhmm(min: number): string {
 }
 
 /**
- * A time of day on the calendar: the 24-hour clock ("14:30") that the time boxes, the lists, My day
- * and the week plan write, whatever the browser's language (one rule for times of day, S5).
- * Midnight at the end of a day is "24:00".
+ * A time of day on the calendar: the 24-hour clock ("14:30") that the time boxes and the date
+ * popover use and a time-of-day field shows in a list, My day and the week plan, whatever the
+ * browser's language (one rule for times of day, S5). Midnight at the end of a day is "24:00".
+ * A date and time (an instant) in a title or a list is not a time of day: it keeps the browser's
+ * own format ("Aug 18, 2026, 8:10 AM"), so a calendar block of an instant may show both.
  */
 export const clockOf = (min: number): string => hhmm(min);
 
@@ -360,7 +362,25 @@ export function movePatch(
   day: string,
   startMin: number,
   endMin: number,
+  zone = "UTC",
 ): Record<string, unknown> {
+  if (spec.start.kind === "datetime") {
+    // An instant keeps the slot's time of day on the instance's clock (a new record made from a
+    // slot of the week grid), as newOnDay does for a day of the month.
+    const at = (min: number) => {
+      const r = fromZonedInput(
+        `${addDaysIso(day, Math.floor(min / 1440))} ${hhmm(min % 1440)}`,
+        zone,
+      );
+      return "value" in r ? r.value : undefined;
+    };
+    const patch: Record<string, unknown> = {};
+    const start = at(startMin);
+    if (start) patch[spec.start.name] = start;
+    const end = spec.end?.kind === "datetime" ? at(endMin) : undefined;
+    if (end && spec.end) patch[spec.end.name] = end;
+    return patch;
+  }
   const patch: Record<string, unknown> = { [spec.start.name]: day };
   if (spec.startMinute) patch[spec.startMinute.name] = startMin;
   if (spec.endMinute) patch[spec.endMinute.name] = endMin;

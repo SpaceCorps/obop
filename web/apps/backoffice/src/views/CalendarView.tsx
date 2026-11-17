@@ -368,7 +368,11 @@ export function CalendarView(p: ViewProps) {
             }
           : undefined
       }
-      onCreate={p.canCreate ? (day, s, end) => p.newWith(movePatch(spec, day, s, end)) : undefined}
+      onCreate={
+        p.canCreate
+          ? (day, s, end) => p.newWith(movePatch(spec, day, s, end, getTime().zone))
+          : undefined
+      }
     />
   );
 

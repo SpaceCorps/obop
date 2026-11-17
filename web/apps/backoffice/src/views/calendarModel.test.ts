@@ -115,6 +115,16 @@ describe("which fields place a record", () => {
     expect(newOnDay(s, "2026-12-03", "Europe/Berlin")).toEqual({
       started_at: "2026-12-03T08:00:00.000000Z",
     });
+    // One made from a slot of the week grid keeps the slot's time, not only its day.
+    expect(movePatch(s, "2026-11-18", 600, 630, "Europe/Berlin")).toEqual({
+      started_at: "2026-11-18T09:00:00.000000Z",
+      ended_at: "2026-11-18T09:30:00.000000Z",
+    });
+    // A slot that ends at midnight ends at the start of the next day.
+    expect(movePatch(s, "2026-11-18", 1410, 1440, "UTC")).toEqual({
+      started_at: "2026-11-18T23:30:00.000000Z",
+      ended_at: "2026-11-19T00:00:00.000000Z",
+    });
   });
 
   it("the package's ui.calendar wins", () => {
