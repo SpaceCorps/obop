@@ -44,6 +44,15 @@ pub fn value() -> J {
     let caller = Principal::user("openapi-export", &groups);
     let modules = app.dispatcher.meta(Surface::Rest, &caller);
     let mut doc = obop_http::openapi::instance(BASE_URL, &modules);
+    // The approvals inbox (D97): its five commands, as the caller's catalogue holds them.
+    let plans: Vec<String> = app
+        .dispatcher
+        .visible(Surface::Rest, &caller)
+        .into_iter()
+        .filter_map(|id| id.strip_prefix("plan.").map(String::from))
+        .collect();
+    let plans: Vec<&str> = plans.iter().map(String::as_str).collect();
+    obop_http::openapi::describe_plans(&mut doc, &plans);
     obop_http::openapi::describe_oauth(&mut doc, BASE_URL);
     doc
 }

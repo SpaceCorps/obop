@@ -37,7 +37,7 @@ Every tool is named <model>__<command>: list, search, get, create, update, delet
 Money is an integer in minor units (cents); dates are YYYY-MM-DD; a ref field takes the id of the target record. \
 Personal data comes back as mask tokens such as NAME_1; send the token back unchanged where you need that person or value, it is the same token for the whole session. \
 A result may list denied fields: you are not allowed to read them. \
-Irreversible or money-moving steps, and every delete, do not run for an agent: the result has status approval_required and a plan_id. Tell a human to approve that plan in the back office and do not retry the call. An agent can never approve its own plan.";
+Irreversible or money-moving steps, and every delete, do not run for an agent: the result has status approval_required and a plan_id. A person approves or rejects it in the back office, on the Approvals page: do not retry the call, and ask plan__get with that id what became of it. An agent can never approve its own plan.";
 
 /// What `initialize` tells a client about the server, for the brand it is given (the one reader
 /// read once for the request): with no brand set, the text this server has always sent, byte for
@@ -401,7 +401,7 @@ fn error_reply(name: &str, e: &CallError, seen: &errors::Outcome) -> Result<J, R
             json!({
                 "status": "approval_required",
                 "plan_id": plan_id,
-                "instruction": "Nothing has run. This step needs a human: ask a person with the right permissions to approve this plan in the back office (or POST /api/approve/<plan_id>), then check the record. Do not call this tool again for the same step.",
+                "instruction": obop_commands::plans::proposal_instruction(&plan_id),
             }),
             false,
         )),
@@ -874,6 +874,15 @@ mod tests {
         assert_eq!(is_error(&r), json!(false));
         assert_eq!(body(&r)["status"], "approval_required");
         assert_eq!(body(&r)["plan_id"], "plan-1");
+        // D97: where a person decides and how the agent learns the outcome; no route an agent
+        // cannot use.
+        let instruction = body(&r)["instruction"].as_str().unwrap().to_string();
+        assert_eq!(
+            instruction,
+            obop_commands::plans::proposal_instruction("plan-1")
+        );
+        assert!(instruction.contains("Approvals page") && instruction.contains("plan__get"));
+        assert!(!instruction.contains("/api/approve"));
         for e in [
             CallError::Forbidden("a.b".into()),
             CallError::UnknownCommand("a.b".into()),

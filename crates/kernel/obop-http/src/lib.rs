@@ -487,11 +487,20 @@ fn instance_openapi_blocking(
     brand: obop_brand::Brand,
 ) -> Response {
     let base = s.mcp.base_url(&h);
-    let modules = match s.auth_api(&h) {
-        Ok((p, _)) => s.dispatcher.meta(Surface::Rest, &p),
-        Err(_) => Vec::new(),
+    let (modules, plans) = match s.auth_api(&h) {
+        Ok((p, _)) => (
+            s.dispatcher.meta(Surface::Rest, &p),
+            s.dispatcher
+                .visible(Surface::Rest, &p)
+                .into_iter()
+                .filter_map(|id| id.strip_prefix("plan.").map(String::from))
+                .collect(),
+        ),
+        Err(_) => (Vec::new(), Vec::<String>::new()),
     };
     let mut doc = openapi::instance(&base, &modules);
+    let plans: Vec<&str> = plans.iter().map(String::as_str).collect();
+    openapi::describe_plans(&mut doc, &plans);
     if s.oauth.is_some() {
         openapi::describe_oauth(&mut doc, &base);
     }
