@@ -12,7 +12,7 @@ keywords = ["projects", "tasks", "milestones"]
 categories = ["services", "productivity"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "The app opens on Projects, which show their progress as a percentage and their estimate as a duration, with their milestones and tasks inside. A task picks only milestones of its own project, can be completed straight from To do, and a done or cancelled task can be reopened; a reached or missed milestone can be set back to pending."
+changelog = "Refused since 0.5.1: a task added to a project that is done (pick an open project). The app opens on Projects, which show their progress as a percentage and their estimate as a duration, with their milestones and tasks inside. A task picks only milestones of its own project, can be completed straight from To do, and a done or cancelled task can be reopened; a reached or missed milestone can be set back to pending."
 home = "projects_project"
 
 [[model]]

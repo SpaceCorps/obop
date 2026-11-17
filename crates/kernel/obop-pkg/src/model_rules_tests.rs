@@ -233,3 +233,17 @@ fn a_date_bound_is_a_day_as_text_or_as_a_toml_date() {
     let p = problem(&date("\"1900-02-30\"")).unwrap_or_default();
     assert!(p.contains("a real day"), "{p}");
 }
+
+/// The upgrade plan shows the changelog: a version that starts refusing writes says so first.
+#[test]
+fn the_changelogs_name_the_refusals_the_versions_bring() {
+    for (id, since) in [
+        ("projects", "Refused since 0.5.1"),
+        ("planning", "Refused since 0.3.1"),
+        ("appointments", "Refused since 0.3.2"),
+    ] {
+        let text = Bundled.fetch(id).unwrap();
+        let m = Manifest::parse(&text).unwrap();
+        assert!(m.module.changelog.starts_with(since), "{id}");
+    }
+}
