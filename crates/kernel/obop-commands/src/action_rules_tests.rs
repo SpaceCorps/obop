@@ -51,6 +51,7 @@ fn module() -> Module {
         "ar_batch",
         vec![
             f("doc_id").reference("ar_doc"),
+            f("card_id").reference("ar_card"),
             f("state").select(&["open", "closed"]),
         ],
         vec![
@@ -60,18 +61,30 @@ fn module() -> Module {
             CommandDef::new("pause", "Pause", U)
                 .transition("state", Some("open"), "closed")
                 .effect(Effect::set_state_ref("ar_doc", "doc_id", "hold")),
+            CommandDef::new("seal_card", "Seal the card", U)
+                .transition("state", Some("open"), "closed")
+                .effect(Effect::set_state_ref("ar_card", "card_id", "seal")),
         ],
+    );
+    let card = model(
+        "ar_card",
+        vec![
+            f("label").required(),
+            f("state").select(&["draft", "sealed"]),
+        ],
+        vec![CommandDef::new("seal", "Seal", U).transition("state", None, "sealed")],
     );
     Module {
         id: "ar".into(),
         name: "Rules".into(),
-        models: vec![doc, batch],
+        models: vec![doc, batch, card],
         ..Module::default()
     }
 }
 
 struct Rig {
     d: Dispatcher,
+    store: Store,
 }
 
 impl Rig {
@@ -87,7 +100,7 @@ impl Rig {
                 d.register_transition(&module, mo.name, c.name, &store);
             }
         }
-        Self { d }
+        Self { d, store }
     }
 
     fn call(&self, c: &str, input: Value) -> Result<Value, CallError> {
@@ -192,6 +205,43 @@ fn an_action_started_by_an_effect_is_held_to_the_fields_it_needs() {
     assert!(m.contains("ar_doc.hold needs reason"), "{m}");
     assert_eq!(r.state("ar_doc", &doc), "draft");
     assert_eq!(r.state("ar_batch", &batch), "open");
+}
+
+/// K56: the effect starts `seal` on a card whose required label is empty (a record stored before
+/// the field was required): the action is refused as the same action called by name would be.
+#[test]
+fn an_action_started_by_an_effect_is_held_to_the_required_fields() {
+    let r = Rig::new();
+    let empty = [("state".to_string(), Value::text("draft"))];
+    let card = r
+        .store
+        .insert("ar_card", empty.into_iter().collect())
+        .unwrap();
+    let batch = r.make(
+        "ar_batch",
+        &[
+            ("card_id", Value::text(&card)),
+            ("state", Value::text("open")),
+        ],
+    );
+    let (m, _) = r.refusal("ar_batch.seal_card", &batch);
+    assert!(
+        m.contains("ar_card.label is required and must be set before state can change"),
+        "{m}"
+    );
+    assert_eq!(r.state("ar_card", &card), "draft");
+    assert_eq!(r.state("ar_batch", &batch), "open");
+    // With its label the same effect seals the card.
+    let card = r.make("ar_card", &[("label", Value::text("C1"))]);
+    let batch = r.make(
+        "ar_batch",
+        &[
+            ("card_id", Value::text(&card)),
+            ("state", Value::text("open")),
+        ],
+    );
+    r.act("ar_batch.seal_card", &batch).unwrap();
+    assert_eq!(r.state("ar_card", &card), "sealed");
 }
 
 /// Q17: every assertion that fails is named, in the order they are declared.
