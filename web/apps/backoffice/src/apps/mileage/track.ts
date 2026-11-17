@@ -1,6 +1,6 @@
 // The trip review of Mileage: the route of a trip drawn from its points, and what the server's
 // check of the track found, in words. Pure, so it is tested without a browser.
-import { t } from "@obop/ui";
+import { fmt, t } from "@obop/ui";
 import type { Row } from "../../api.ts";
 
 /** The server drops a fix whose accuracy radius is above this (mileage `track.rs` MAX_ACCURACY_M). */
@@ -119,4 +119,71 @@ export function reviewRefusal(message: string): string | null {
   return message.startsWith("state must be in_review to do this, it is ")
     ? t("This trip was already reviewed.")
     : null;
+}
+
+export type Note = { tone: "ok" | "warn"; text: string };
+
+/**
+ * What the server's check of the track found (`integrity`), as sentences. "Clean" is said only
+ * when the server set no flag at all, so a flag this screen has no sentence for never reads as a
+ * clean track.
+ */
+export function checkNotes(integrity: unknown, total: number, ended: boolean): Note[] {
+  const flags = flagsOf(integrity);
+  const notes: Note[] = [];
+  const n = (k: string) => fmt.integer(flags[k] ?? 0);
+  if (flags.low_accuracy)
+    notes.push({
+      tone: "warn",
+      text: t("{n} of {total} points had poor GPS accuracy and were left out of the distance.", {
+        n: n("low_accuracy"),
+        total: fmt.integer(total),
+      }),
+    });
+  if (flags.speed_jump)
+    notes.push({
+      tone: "warn",
+      text: t("{n} points jumped further than a car can drive and were left out.", {
+        n: n("speed_jump"),
+      }),
+    });
+  if (flags.seq_gap)
+    notes.push({
+      tone: "warn",
+      text: t("{n} gaps in the recording: the phone sent fewer points than it counted.", {
+        n: n("seq_gap"),
+      }),
+    });
+  if (flags.before_start)
+    notes.push({
+      tone: "warn",
+      text:
+        flags.before_start === 1
+          ? t("1 point was recorded before the trip started and was left out.")
+          : t("{n} points were recorded before the trip started and were left out.", {
+              n: n("before_start"),
+            }),
+    });
+  if (flags.reanchor)
+    notes.push({
+      tone: "warn",
+      text:
+        flags.reanchor === 1
+          ? t("The track jumped to a new place and went on from there; the jump was not counted.")
+          : t(
+              "The track jumped to a new place {n} times and went on from there; the jumps were not counted.",
+              { n: n("reanchor") },
+            ),
+    });
+  const flagged = Object.keys(flags).length > 0;
+  if (!notes.length && flagged)
+    notes.push({ tone: "warn", text: t("The check of the track found something to look at.") });
+  if (!flagged && ended)
+    notes.push({
+      tone: "ok",
+      text: t("The track is clean: all {total} points were used for the distance.", {
+        total: fmt.integer(total),
+      }),
+    });
+  return notes;
 }

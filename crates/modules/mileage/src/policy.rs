@@ -283,7 +283,24 @@ pub fn owns(who: &Who, trip: &Fields) -> bool {
 /// group see a reviewable trip (its `public_field`), so the narrowing for a plain driver is made
 /// here, in every guard that reads a trip.
 pub fn may_see_trip(who: &Who, trip: &Fields) -> bool {
-    who.admin || owns(who, trip) || (who.reviewer && reviewable(state(trip)))
+    who.admin || owns(who, trip) || (who.reviewer && reviewable_trip(trip))
+}
+
+/// Whether a reviewer reads this trip: it is in a state a reviewer reads and its purpose is not
+/// private (M6: a private trip stays out of a reviewer's view; its driver and an administrator
+/// read it). The same rule as the computed field `reviewable`, the row rule of the model.
+pub fn reviewable_trip(trip: &Fields) -> bool {
+    reviewable(state(trip)) && text(trip, "purpose") != PRIVATE
+}
+
+/// The purpose of a trip that a reviewer does not read.
+pub const PRIVATE: &str = "private";
+
+/// Whether `who` reads the start and the end of this trip in the clear: its driver and an
+/// administrator do (an administrator's read is logged, `audit.rs`); a reviewer, who needs only
+/// the distance, does not (M6).
+pub fn reads_positions(who: &Who, trip_driver: &str) -> bool {
+    who.admin || (!who.id.is_empty() && trip_driver == who.id)
 }
 
 /// The refusal for a record the caller may not see: the words of a record that does not exist.

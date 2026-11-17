@@ -1095,7 +1095,7 @@ fn a_driver_edits_a_trip_only_while_it_is_theirs_to_edit() {
         r.ok(
             &ann,
             "mileage_trip.update",
-            json!({"id": ended, "purpose": "private"}),
+            json!({"id": ended, "purpose": "commute"}),
         );
         // After the submit the trip is the reviewer's to read; the driver cannot change it.
         r.ok(&ann, "mileage_trip.submit", json!({"id": ended}));
@@ -1105,7 +1105,7 @@ fn a_driver_edits_a_trip_only_while_it_is_theirs_to_edit() {
             json!({"id": ended, "purpose": "business"}),
         );
         assert!(e.contains("cannot be edited"), "{e}");
-        assert_eq!(r.trip_row(&ended)["purpose"], "private");
+        assert_eq!(r.trip_row(&ended)["purpose"], "commute");
         // The reviewer writes the reason, and nothing else of the trip.
         r.ok(
             &rev,
@@ -2912,4 +2912,188 @@ fn meta_says_what_the_server_does_with_a_trip() {
             .as_ref()
             .is_some_and(|h| h.readonly)
     );
+}
+
+// ---- the answer of an action, early fixes, re-anchoring, the start and end (L21, L22, L37, M6) --
+
+#[test]
+fn an_action_answers_with_the_whole_trip_as_get_gives_it() {
+    each_rig(|r| {
+        let ann = driver("ann");
+        let id = r.recording(&ann);
+        r.walk(&ann, &id, 1, 10);
+        let ended = r.ok(
+            &ann,
+            "mileage_trip.end",
+            json!({"id": id, "expected_points": 10, "last_seq": 10}),
+        );
+        let got = r.ok(&ann, "mileage_trip.get", json!({"id": id}));
+        assert_eq!(ended, got, "the answer of end is the trip");
+        assert_eq!(ended["point_count"], 10);
+        assert_eq!(ended["max_seq"], 10);
+        assert_eq!(ended["purpose"], "business");
+        let submitted = r.ok(&ann, "mileage_trip.submit", json!({"id": id}));
+        assert_eq!(submitted, r.ok(&ann, "mileage_trip.get", json!({"id": id})));
+        assert_eq!(submitted["reviewable"], true);
+    });
+}
+
+#[test]
+fn a_fix_from_before_the_start_is_flagged_and_left_out_of_the_distance() {
+    each_rig(|r| {
+        let ann = driver("ann");
+        let id = r.recording(&ann);
+        // A cached position six minutes before Start, 900 m away: point 1.
+        let mut cached = walk_row(&id, 1);
+        cached["recorded_at"] = J::from(stamp(start() - 360_000_000));
+        cached["lat"] = J::from("51.9920000");
+        r.ok(&ann, "mileage_point.create", cached);
+        r.walk(&ann, &id, 2, 10);
+        r.ok(
+            &ann,
+            "mileage_trip.end",
+            json!({"id": id, "expected_points": 10, "last_seq": 10}),
+        );
+        let row = r.trip_row(&id);
+        assert_eq!(row["integrity"], "before_start:1", "{row:?}");
+        // Eight steps of 22.24 m between points 2 and 10; nothing to or from the cached one.
+        assert_eq!(row["distance_m"], "177.91", "{row:?}");
+        assert_eq!(row["start_lat"], "52.0004000");
+    });
+}
+
+#[test]
+fn a_far_off_first_fix_no_longer_ruins_the_distance_of_the_trip() {
+    each_rig(|r| {
+        let ann = driver("ann");
+        let id = r.recording(&ann);
+        // The emulator's default place for the first fix, then the route about 8,600 km away.
+        let mut far = walk_row(&id, 1);
+        far["lat"] = J::from("37.4219983");
+        far["lon"] = J::from("-122.0840000");
+        r.ok(&ann, "mileage_point.create", far);
+        r.walk(&ann, &id, 2, 10);
+        let ended = r.ok(
+            &ann,
+            "mileage_trip.end",
+            json!({"id": id, "expected_points": 10, "last_seq": 10}),
+        );
+        assert_eq!(ended["state"], "ended");
+        assert_eq!(ended["integrity"], "reanchor:1", "{ended:?}");
+        assert_eq!(ended["distance_m"], "177.91", "{ended:?}");
+        // Nothing was driven at the far-off place, so the trip starts where the route does.
+        assert_eq!(ended["start_lat"], walk_row(&id, 2)["lat"], "{ended:?}");
+        assert_eq!(ended["start_lon"], "13.0000000", "{ended:?}");
+    });
+}
+
+#[test]
+fn a_reviewer_reads_the_distance_not_the_start_and_end_and_an_admin_read_is_logged() {
+    each_rig(|r| {
+        let (ann, rev, boss) = (driver("ann"), reviewer("rita"), admin("bo"));
+        let id = r.in_review(&ann);
+        let positions = ["start_lat", "start_lon", "end_lat", "end_lon"];
+        // The driver reads them.
+        let own = r.ok(&ann, "mileage_trip.get", json!({"id": id}));
+        assert_eq!(own["start_lat"], "52.0002000");
+        // A reviewer does not: not by get, list, search or the answer of an action.
+        let seen = r.ok(&rev, "mileage_trip.get", json!({"id": id}));
+        assert_eq!(seen["distance_m"], "200.15");
+        let listed = r.ok(&rev, "mileage_trip.list", json!({}));
+        let searched = r.ok(&rev, "mileage_trip.search", json!({}));
+        // The answer of an update the reviewer may make (the reason of a rejection) neither.
+        let updated = r.ok(
+            &rev,
+            "mileage_trip.update",
+            json!({"id": id, "reject_reason": "probe"}),
+        );
+        r.at(start() + 3_600_000_000);
+        let confirmed = r.ok(&rev, "mileage_trip.confirm", json!({"id": id}));
+        assert_eq!(confirmed["state"], "confirmed");
+        for answer in [&seen, &listed, &searched, &updated, &confirmed] {
+            let text = answer.to_string();
+            for f in positions {
+                assert!(!text.contains(f), "{f} reached the reviewer: {text}");
+            }
+        }
+        assert!(
+            listed.to_string().contains(&id),
+            "the trip is listed: {listed}"
+        );
+        let refused = r.refused(
+            &rev,
+            "mileage_trip.search",
+            json!({"filter": [{"field": "start_lat", "op": "gt", "value": "52"}]}),
+        );
+        assert!(refused.contains("start or end position"), "{refused}");
+        assert!(
+            r.events(audit::KIND).is_empty(),
+            "nothing was read in the clear"
+        );
+        // An administrator reads them, and the read is logged for the driver.
+        let admin_get = r.ok(&boss, "mileage_trip.get", json!({"id": id}));
+        assert_eq!(admin_get["end_lat"], "52.0020000");
+        let events = r.events(audit::KIND);
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert_eq!(events[0].0, "ann");
+        assert_eq!(events[0].1, "bo");
+        assert!(events[0].2.contains("start and end of trip"), "{events:?}");
+        // A bisection by an administrator is logged too, though it answers with a count alone.
+        r.ok(
+            &boss,
+            "mileage_trip.search",
+            json!({
+                "filter": [{"field": "start_lat", "op": "gt", "value": "60"}],
+                "aggregate": {"measures": [{"op": "count"}]},
+            }),
+        );
+        let events = r.events(audit::KIND);
+        assert_eq!(events.len(), 2, "{events:?}");
+        assert!(events.iter().any(|e| e.0 == audit::ALL_DRIVERS));
+        // An administrator's update answers with them too (here one that changes nothing), and
+        // that read is logged as well.
+        let admin_update = r.ok(
+            &boss,
+            "mileage_trip.update",
+            json!({"id": id, "reject_reason": "probe"}),
+        );
+        assert_eq!(admin_update["end_lat"], "52.0020000");
+        let events = r.events(audit::KIND);
+        assert_eq!(events.len(), 3, "{events:?}");
+        assert!(
+            events
+                .iter()
+                .any(|e| e.2.contains("mileage_trip.update returned")),
+            "{events:?}"
+        );
+    });
+}
+
+#[test]
+fn a_private_trip_stays_out_of_a_reviewers_view() {
+    each_rig(|r| {
+        let (ann, rev, boss) = (driver("ann"), reviewer("rita"), admin("bo"));
+        let id = r.ended(&ann);
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "private"}),
+        );
+        r.ok(&ann, "mileage_trip.submit", json!({"id": id}));
+        let missing = r.refused(&rev, "mileage_trip.get", json!({"id": id}));
+        assert_eq!(missing, format!("no mileage_trip {id}"));
+        let listed = r.ok(&rev, "mileage_trip.list", json!({}));
+        assert!(!listed.to_string().contains(&id), "{listed}");
+        let refused = r.refused(&rev, "mileage_trip.confirm", json!({"id": id}));
+        assert_eq!(refused, format!("no mileage_trip {id}"));
+        // Its driver and an administrator still read it.
+        assert_eq!(
+            r.ok(&ann, "mileage_trip.get", json!({"id": id}))["state"],
+            "in_review"
+        );
+        assert_eq!(
+            r.ok(&boss, "mileage_trip.get", json!({"id": id}))["purpose"],
+            "private"
+        );
+    });
 }
