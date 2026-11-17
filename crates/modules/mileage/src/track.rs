@@ -151,6 +151,11 @@ pub fn analyse(fixes: &[Fix], options: &Options) -> Analysis {
                         }
                     }
                     if run.len() >= REANCHOR_RUN {
+                        // Nothing was driven before the jump (a phone that stood at a far-off
+                        // place, the emulator's default one): the trip starts where the run does.
+                        if out.distance_m == 0.0 {
+                            out.first = run.first().copied();
+                        }
                         out.reanchors += 1;
                         out.accepted += run.len();
                         out.distance_m += run_m;

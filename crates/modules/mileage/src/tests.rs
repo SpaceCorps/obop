@@ -2981,6 +2981,9 @@ fn a_far_off_first_fix_no_longer_ruins_the_distance_of_the_trip() {
         assert_eq!(ended["state"], "ended");
         assert_eq!(ended["integrity"], "reanchor:1", "{ended:?}");
         assert_eq!(ended["distance_m"], "177.91", "{ended:?}");
+        // Nothing was driven at the far-off place, so the trip starts where the route does.
+        assert_eq!(ended["start_lat"], walk_row(&id, 2)["lat"], "{ended:?}");
+        assert_eq!(ended["start_lon"], "13.0000000", "{ended:?}");
     });
 }
 
@@ -2998,10 +3001,16 @@ fn a_reviewer_reads_the_distance_not_the_start_and_end_and_an_admin_read_is_logg
         assert_eq!(seen["distance_m"], "200.15");
         let listed = r.ok(&rev, "mileage_trip.list", json!({}));
         let searched = r.ok(&rev, "mileage_trip.search", json!({}));
+        // The answer of an update the reviewer may make (the reason of a rejection) neither.
+        let updated = r.ok(
+            &rev,
+            "mileage_trip.update",
+            json!({"id": id, "reject_reason": "probe"}),
+        );
         r.at(start() + 3_600_000_000);
         let confirmed = r.ok(&rev, "mileage_trip.confirm", json!({"id": id}));
         assert_eq!(confirmed["state"], "confirmed");
-        for answer in [&seen, &listed, &searched, &confirmed] {
+        for answer in [&seen, &listed, &searched, &updated, &confirmed] {
             let text = answer.to_string();
             for f in positions {
                 assert!(!text.contains(f), "{f} reached the reviewer: {text}");
@@ -3041,6 +3050,22 @@ fn a_reviewer_reads_the_distance_not_the_start_and_end_and_an_admin_read_is_logg
         let events = r.events(audit::KIND);
         assert_eq!(events.len(), 2, "{events:?}");
         assert!(events.iter().any(|e| e.0 == audit::ALL_DRIVERS));
+        // An administrator's update answers with them too (here one that changes nothing), and
+        // that read is logged as well.
+        let admin_update = r.ok(
+            &boss,
+            "mileage_trip.update",
+            json!({"id": id, "reject_reason": "probe"}),
+        );
+        assert_eq!(admin_update["end_lat"], "52.0020000");
+        let events = r.events(audit::KIND);
+        assert_eq!(events.len(), 3, "{events:?}");
+        assert!(
+            events
+                .iter()
+                .any(|e| e.2.contains("mileage_trip.update returned")),
+            "{events:?}"
+        );
     });
 }
 

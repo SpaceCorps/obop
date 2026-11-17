@@ -13,10 +13,13 @@
 //!
 //! The start and the end of a trip (`start_lat`, `start_lon`, `end_lat`, `end_lon`) are read in the
 //! clear by the driver and by an administrator only (M6): a reviewer needs the distance, and the
-//! rows of another driver's trips reach a reviewer without them. An administrator's `get`, `list`
-//! or `search` that returns the start or end of another driver's trip writes the same entry, kind
-//! `mileage_route_read`, for that driver, and so does one that filters by a position (a bisection
-//! answers with a count); the guard refuses such a filter to a reviewer.
+//! rows of another driver's trips reach a reviewer without them, also in the answer of `update`.
+//! An administrator's `get`, `list`, `search` or `update` that returns the start or end of another
+//! driver's trip writes the same entry, kind `mileage_route_read`, for that driver, and so does one
+//! that filters by a position (a bisection answers with a count); the guard refuses such a filter
+//! to a reviewer. The points of a trip are another matter: a reviewer checks the route, so the
+//! points stay readable to a reviewer, the first and last among them, and each such read is
+//! logged as above.
 
 use crate::Clock;
 use crate::policy;
@@ -188,7 +191,8 @@ pub(crate) fn filters_by_position(input: &Value) -> bool {
 /// The start and end of another driver's trip: left out for a reviewer, logged for an
 /// administrator.
 fn trip_reads(d: &Dispatcher, db: Arc<dyn Backend>, clock: Clock) {
-    for command in ["get", "list", "search"] {
+    // `update` answers with the record it wrote, so its answer is shaped like a read.
+    for command in ["get", "list", "search", "update"] {
         let id = format!("{}.{command}", policy::TRIP);
         let (db, clock, shown) = (db.clone(), clock.clone(), id.clone());
         d.around(

@@ -123,6 +123,9 @@ export function analyseTrack(fixes: readonly Fix[], options: TrackOptions = {}):
           runM = 0;
         }
         if (run.length >= REANCHOR_RUN) {
+          // Nothing was driven before the jump (a phone that stood at a far-off place, the
+          // emulator's default one): the trip starts where the run does.
+          if (distanceM === 0) first = run[0]!;
           reanchors++;
           accepted += run.length;
           distanceM += runM;
