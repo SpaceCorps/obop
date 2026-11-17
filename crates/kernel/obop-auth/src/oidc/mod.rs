@@ -56,6 +56,10 @@ const THROTTLE_MS: u64 = 10 * 60 * 1000;
 /// and the rest are counted.
 pub const ANON_LINES_PER_HOUR: u64 = 60;
 
+/// How long an agent token of an account bound to a Microsoft identity lives (N18; the owner's
+/// choice, ratified with D91 by OR-38: 90 days).
+pub const MICROSOFT_AGENT_TOKEN_SECS: u64 = 90 * 86_400;
+
 /// How long the `oidc_*` lines of the security log are kept, in days (N12; the owner's default of
 /// 2026-11-17: twelve months). They name Microsoft object ids, which are personal data. A whole
 /// number of days in `OBOP_OIDC_LOG_RETENTION_DAYS` changes it.
@@ -286,7 +290,7 @@ impl Auth {
     }
 
     /// The binding of an account as `(link id, record)`, with a lookup that reports a refusal.
-    fn link_of(&self, user: &str) -> Result<Option<(String, J)>, SsoError> {
+    pub(crate) fn link_of(&self, user: &str) -> Result<Option<(String, J)>, SsoError> {
         Ok(self
             .backend
             .find(LINK_TABLE, "user", &J::from(user))
@@ -726,7 +730,12 @@ impl Auth {
         }
         let ch = Change::new(&user, "oidc_unbind", actor, "unbound from Microsoft");
         let Some((id, link)) = self.link_of(&user)? else {
-            // The repeat of an unbinding that could not end the sessions finishes that (D74).
+            // The repeat of an unbinding that could not end the sessions finishes that (D74), and
+            // the agent tokens and MCP apps made before it (N18).
+            if let Some(owed) = crate::account::owed_notes(&u).get("sso_unbind") {
+                self.end_delegations(&user, owed["at"].as_u64(), &ch)
+                    .map_err(|e| unavailable(format!("{e:?}")))?;
+            }
             if let Some(n) = self
                 .finish_owed(&user, "sso_unbind", &ch)
                 .map_err(|e| unavailable(format!("{e:?}")))?
@@ -760,17 +769,22 @@ impl Auth {
         let n = self
             .revoke_user_sessions(&user, None, &ch)
             .map_err(|e| unavailable(format!("{e:?}")))?;
+        let (agents, apps) = self
+            .end_delegations(&user, None, &ch)
+            .map_err(|e| unavailable(format!("{e:?}")))?;
         self.clear_owed(&user, "sso_unbind");
         self.sso_event(
             &user,
             "oidc_unbind",
             actor,
             &format!(
-                "unbound from object id {}; {n} session(s) signed out, and the phone apps of the account with them; agent tokens made in those sessions and apps connected through the OAuth sign-in for MCP clients (D64: their grants and refresh tokens) keep working until the account is offboarded",
+                "unbound from object id {}; {n} session(s) signed out, and the phone apps of the account with them; {agents} agent token(s) and {apps} app(s) connected through the OAuth sign-in for MCP clients ended",
                 link["oid"].as_str().unwrap_or("?")
             ),
         );
-        Ok(json!({"user": user, "oid": link["oid"], "changed": true, "sessions_ended": n}))
+        Ok(
+            json!({"user": user, "oid": link["oid"], "changed": true, "sessions_ended": n, "agent_tokens_ended": agents, "apps_ended": apps}),
+        )
     }
 
     fn sso_only_as(&self, actor: &str, user: &str, on: bool) -> Result<J, SsoError> {
@@ -792,6 +806,10 @@ impl Auth {
         if was == on {
             // The repeat of a request that changed the flag and could not end the sessions
             // finishes that (D74).
+            if on && let Some(owed) = crate::account::owed_notes(&u).get("sso_only") {
+                self.end_delegations(&user, owed["at"].as_u64(), &ch)
+                    .map_err(|e| unavailable(format!("{e:?}")))?;
+            }
             if on
                 && let Some(n) = self
                     .finish_owed(&user, "sso_only", &ch)
@@ -889,17 +907,22 @@ impl Auth {
         let n = self
             .revoke_user_sessions(&user, None, &ch)
             .map_err(|e| unavailable(format!("{e:?}")))?;
+        let (agents, apps) = self
+            .end_delegations(&user, None, &ch)
+            .map_err(|e| unavailable(format!("{e:?}")))?;
         self.clear_owed(&user, "sso_only");
         self.sso_event(
             &user,
             "oidc_sso_only",
             actor,
             &format!(
-                "signs in with Microsoft only; {n} session(s) signed out, and the phone apps of the account with them; agent tokens and apps connected through the OAuth sign-in for MCP clients keep working until the account is offboarded; {} break-glass administrator(s) remain",
+                "signs in with Microsoft only; {n} session(s) signed out, and the phone apps of the account with them; {agents} agent token(s) and {apps} app(s) connected through the OAuth sign-in for MCP clients ended; {} break-glass administrator(s) remain",
                 rest.len()
             ),
         );
-        Ok(json!({"user": user, "sso_only": true, "changed": true, "break_glass": rest}))
+        Ok(
+            json!({"user": user, "sso_only": true, "changed": true, "break_glass": rest, "agent_tokens_ended": agents, "apps_ended": apps}),
+        )
     }
 
     fn bindings_impl(&self) -> Result<J, SsoError> {

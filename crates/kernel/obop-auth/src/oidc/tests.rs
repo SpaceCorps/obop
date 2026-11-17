@@ -866,13 +866,18 @@ fn an_sso_only_account_takes_microsofts_second_factor_as_its_own() {
 fn an_sso_only_account_refuses_its_password_and_ends_its_sessions() {
     let r = world();
     signed_in_once(&r, ADA_OID);
-    let (old, _) = session(&r.a, "ada");
+    let (old, p) = session(&r.a, "ada");
     assert!(r.a.resolve(&old).is_some());
+    let agent =
+        r.a.issue_agent_token(&p, &["base.user".to_string()], "bot")
+            .unwrap();
     let on = sso_only(&r, "ada", true).unwrap();
     assert_eq!(on["changed"], true);
     assert_eq!(on["break_glass"], json!(["root1", "root2", "root3"]));
-    // Signed out at once.
+    assert_eq!(on["agent_tokens_ended"], 1);
+    // Signed out at once, and the agent token made in the session ended with it (N18).
     assert!(r.a.resolve(&old).is_none());
+    assert!(r.a.resolve(&agent).is_none());
     // The password, right or wrong, gets the answer of a wrong password.
     let right = r.a.login_step("ada", PW).unwrap_err();
     let wrong = r.a.login_step("ada", "not the password").unwrap_err();
@@ -1609,7 +1614,7 @@ fn a_binding_of_another_tenant_than_the_providers_is_not_made_microsoft_only() {
 /// them the phone apps (a device is a sign-in like a session); not the agent tokens the account
 /// made, and not an application connected through the OAuth sign-in for MCP clients.
 #[test]
-fn an_unbind_ends_the_sessions_and_the_phone_apps_but_not_agent_tokens_or_mcp_apps() {
+fn an_unbind_ends_the_sessions_the_phone_apps_the_agent_tokens_and_the_mcp_apps() {
     use obop_commands::OAuthTokens;
     let r = world();
     signed_in_once(&r, ADA_OID);
@@ -1669,23 +1674,53 @@ fn an_unbind_ends_the_sessions_and_the_phone_apps_but_not_agent_tokens_or_mcp_ap
             .unwrap()
             .is_none()
     );
-    // Not ended: the agent token and the MCP application, which the line of the log says.
-    assert!(r.a.resolve(&agent).is_some(), "the agent token works");
-    assert!(!revoked("oauth_grant", "grant-mcp"));
-    assert!(!revoked("auth_token", &token_hash(&mcp)));
+    // Ended too (N18): the agent token and the MCP application, which the line of the log counts.
+    assert!(r.a.resolve(&agent).is_none(), "the agent token ended");
+    assert!(revoked("oauth_grant", "grant-mcp"));
+    assert!(revoked("auth_token", &token_hash(&mcp)));
     assert!(
         r.b.get("oauth_refresh", "refresh-grant-mcp")
             .unwrap()
-            .is_some()
+            .is_none()
     );
     let line = events(&r, "oidc_unbind").pop().unwrap();
     assert!(
         line.contains("the phone apps of the account with them")
-            && line.contains("agent tokens")
-            && line.contains("for MCP clients")
-            && line.contains("keep working"),
+            && line.contains("1 agent token(s) and 1 app(s) connected through the OAuth sign-in for MCP clients ended"),
         "{line}"
     );
+}
+
+/// N18 (ratified with D91 by OR-38): an agent token of an account bound to a Microsoft identity
+/// ends after 90 days; one of an account that is not bound does not end by itself.
+#[test]
+fn an_agent_token_of_a_microsoft_bound_account_ends_after_ninety_days() {
+    let r = world();
+    let scopes = vec!["base.user".to_string()];
+    let expiry = |token: &str| {
+        r.b.get("auth_token", &token_hash(token)).unwrap().unwrap()["expires_at"].clone()
+    };
+    crate::mfa_tests::user_with(&r.a, "eve", &["base.user"]);
+    let (_, p) = session(&r.a, "eve");
+    let unbound = r.a.issue_agent_token(&p, &scopes, "bot").unwrap();
+    assert_eq!(expiry(&unbound), J::Null, "not bound: no end");
+    signed_in_once(&r, ADA_OID);
+    let (_, p) = session(&r.a, "ada");
+    let bound = r.a.issue_agent_token(&p, &scopes, "bot").unwrap();
+    assert_eq!(
+        expiry(&bound),
+        json!(r.a.now() + super::MICROSOFT_AGENT_TOKEN_SECS)
+    );
+    assert_eq!(super::MICROSOFT_AGENT_TOKEN_SECS, 90 * 86_400);
+    assert!(
+        events(&r, "agent_token_issued")
+            .last()
+            .unwrap()
+            .contains("ends in 90 days")
+    );
+    assert!(r.a.resolve(&bound).is_some());
+    r.a.set_clock_for_test(r.a.now() + super::MICROSOFT_AGENT_TOKEN_SECS + 1);
+    assert!(r.a.resolve(&bound).is_none(), "ended after 90 days");
 }
 
 #[test]
@@ -1707,7 +1742,7 @@ fn unbinding_ends_the_sessions_and_a_code_in_the_air_and_says_how_many() {
         Err(MfaError::Expired)
     ));
     let line = events(&r, "oidc_unbind");
-    assert!(line[0].contains("session(s) signed out") && line[0].contains("agent tokens"));
+    assert!(line[0].contains("session(s) signed out") && line[0].contains("agent token(s)"));
     // The account is still there with its password, and the binding is gone.
     assert!(r.a.login_step("ada", PW).is_ok());
     assert!(invalid(sso(&r).unbind(&admin("root1"), "ada")).contains("not bound"));

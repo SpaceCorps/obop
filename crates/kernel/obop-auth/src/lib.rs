@@ -522,9 +522,23 @@ impl Auth {
             }
             through_admin.push(s.as_str());
         }
-        let token = self.issue(&owner.id, "agent", scopes, label, None)?;
+        // An account bound to a Microsoft identity hands on tokens that end by themselves (N18,
+        // ratified with D91 by OR-38): the person's access is decided in the tenant, and a token
+        // that outlived a change there would not hear of it.
+        let bound = self
+            .link_of(&owner.id)
+            .map_err(|e| format!("{e:?}"))?
+            .is_some();
+        let ttl = bound.then_some(oidc::MICROSOFT_AGENT_TOKEN_SECS);
+        let token = self.issue(&owner.id, "agent", scopes, label, ttl)?;
         // The log says what the token may do and how the right to give it was held; never the token.
         let mut detail = format!("label {label:?}; scopes {}", scopes.join(", "));
+        if bound {
+            detail.push_str(&format!(
+                "; ends in {} days (the account signs in with Microsoft)",
+                oidc::MICROSOFT_AGENT_TOKEN_SECS / 86_400
+            ));
+        }
         if !through_admin.is_empty() {
             detail.push_str(&format!(
                 "; held through {}: {}",
