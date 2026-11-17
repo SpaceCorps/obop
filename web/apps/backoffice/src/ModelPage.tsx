@@ -703,9 +703,11 @@ export function ModelPage({
           onDuplicate={(values) => openNew(values)}
           onSaved={(id) =>
             // A list in its default order shows the newest first: a new record is on the first page.
+            // The new form's address is replaced by the record's: Back leaves it and does not open
+            // an empty new form again (R16).
             route.id === "new" && paging && !state.sort && listDefault[0]?.dir === "desc"
-              ? put({ id, page: "" })
-              : put({ id })
+              ? put({ id, page: "" }, true)
+              : put({ id }, route.id === "new")
           }
         />
       )}

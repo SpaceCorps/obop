@@ -56,9 +56,38 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean
     root.addEventListener("keydown", key);
     return () => {
       root.removeEventListener("keydown", key);
-      (returnTo.current as HTMLElement | null)?.focus?.();
+      giveFocusBack(returnTo.current as HTMLElement | null);
     };
   }, [ref, active]);
+}
+
+/**
+ * Focus goes back to what opened a dialog. The opener may be disabled while the dialog's work runs,
+ * or drawn again as a new element (R16): then it is tried again once the page has drawn, and an
+ * element of the same kind with the same name stands in for one that is gone.
+ */
+export function giveFocusBack(opener: HTMLElement | null) {
+  if (!opener) return;
+  const name = (e: Element) => e.getAttribute("aria-label") ?? e.textContent?.trim() ?? "";
+  const tag = opener.tagName;
+  const label = name(opener);
+  const back = () => {
+    const el = opener.isConnected
+      ? opener
+      : [...document.querySelectorAll<HTMLElement>(tag)].find(
+          (e) => name(e) === label && !e.closest("[hidden], [inert]"),
+        );
+    el?.focus?.({ preventScroll: true });
+    return !!el && document.activeElement === el;
+  };
+  if (back()) return;
+  // Only when nothing else took the focus meanwhile (another dialog, a field the work opened).
+  const later = () => {
+    const a = document.activeElement;
+    if (!a || a === document.body) back();
+  };
+  requestAnimationFrame(later);
+  setTimeout(later, 300);
 }
 
 /** Arrow-key roving between the enabled buttons of a group (tabs, radio groups, menus). */
