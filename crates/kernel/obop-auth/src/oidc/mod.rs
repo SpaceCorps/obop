@@ -55,6 +55,35 @@ const THROTTLE_MS: u64 = 10 * 60 * 1000;
 /// three groups of [`AnonLine::group`] (`audit_throttled`). Past it one summary line is written
 /// and the rest are counted.
 pub const ANON_LINES_PER_HOUR: u64 = 60;
+
+/// How long the `oidc_*` lines of the security log are kept, in days (N12; the owner's default of
+/// 2026-11-17: twelve months). They name Microsoft object ids, which are personal data. A whole
+/// number of days in `OBOP_OIDC_LOG_RETENTION_DAYS` changes it.
+pub const OIDC_LOG_RETENTION_DAYS: u64 = 365;
+
+/// The kinds of line that Microsoft sign-in writes: what the retention of N12 removes.
+pub const OIDC_KINDS: &[&str] = &[
+    "oidc_provider_configured",
+    "oidc_provider_cleared",
+    "oidc_bind",
+    "oidc_unbind",
+    "oidc_sso_only",
+    "oidc_start",
+    "oidc_login",
+    "oidc_refused",
+    "oidc_cancelled",
+    "oidc_error",
+];
+
+/// The retention of the `oidc_*` lines: `OBOP_OIDC_LOG_RETENTION_DAYS` when it is a whole number
+/// of days of at least one, else [`OIDC_LOG_RETENTION_DAYS`].
+pub fn oidc_log_retention_days() -> u64 {
+    std::env::var("OBOP_OIDC_LOG_RETENTION_DAYS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|d| *d >= 1)
+        .unwrap_or(OIDC_LOG_RETENTION_DAYS)
+}
 const ANON_WINDOW_MS: u64 = 60 * 60 * 1000;
 /// How long the number of lines that were left out is kept to be reported by the first line of
 /// the next hour.
@@ -212,6 +241,46 @@ impl Auth {
     }
 
     /// Whether the account signs in with Microsoft only.
+    /// Remove the `oidc_*` lines of the security log that are older than the retention (N12). Runs
+    /// at most once a day across all server processes (with the purge of ended tokens); a read or
+    /// a delete the store refuses leaves the line for the next day. Returns how many went.
+    pub(crate) fn purge_old_sso_lines(&self) -> usize {
+        let first = self
+            .backend
+            .counter_add("auth.oidc_retention", 86_400_000, false)
+            .is_ok_and(|n| n == 1);
+        if !first {
+            return 0;
+        }
+        self.purge_sso_lines_before(
+            self.now()
+                .saturating_sub(oidc_log_retention_days().saturating_mul(86_400)),
+        )
+    }
+
+    /// The work of [`Auth::purge_old_sso_lines`]: the lines written before `cutoff` (seconds).
+    /// The id of a line begins with the second it was written (`audit::event_record`).
+    pub(crate) fn purge_sso_lines_before(&self, cutoff: u64) -> usize {
+        let table = obop_commands::audit::EVENT_TABLE;
+        let mut n = 0;
+        for kind in OIDC_KINDS {
+            for (id, _) in self
+                .backend
+                .find(table, "kind", &J::from(*kind))
+                .unwrap_or_default()
+            {
+                let at = id.get(..12).and_then(|s| s.parse::<u64>().ok());
+                if at.is_some_and(|at| at < cutoff) && self.backend.delete(table, &id).is_ok() {
+                    n += 1;
+                }
+            }
+        }
+        if n > 0 {
+            eprintln!("security log: removed {n} Microsoft sign-in lines past their retention");
+        }
+        n
+    }
+
     pub(crate) fn is_sso_only(&self, name: &str) -> Result<bool, String> {
         self.account_flag(name, "sso_only")
     }

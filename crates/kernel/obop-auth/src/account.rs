@@ -330,6 +330,7 @@ impl Auth {
     /// Remove tokens that ended a day ago or more, and spent second-step tokens. Runs at most
     /// once every ten minutes across all server processes.
     pub(crate) fn purge_tokens(&self) {
+        self.purge_old_sso_lines();
         let first = self
             .backend
             .counter_add("auth.purge", 600_000, false)

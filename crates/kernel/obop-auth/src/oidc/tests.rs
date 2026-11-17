@@ -2703,3 +2703,49 @@ fn a_reloaded_second_step_is_refused_once_the_provider_is_cleared() {
         "no token for a provider that is gone"
     );
 }
+
+/// N12 (the owner's default of 2026-11-17): the `oidc_*` lines of the security log, which name
+/// Microsoft object ids, are removed after twelve months; other lines are kept, and the purge
+/// runs with the purge of ended tokens, at most once a day.
+#[test]
+fn microsoft_sign_in_lines_older_than_twelve_months_are_removed_and_nothing_else() {
+    let r = crate::mfa_tests::rig();
+    crate::mfa_tests::user_with(&r.a, "ada", &["base.user"]);
+    let now = r.a.now();
+    let day = 86_400;
+    let old = now - (super::OIDC_LOG_RETENTION_DAYS + 1) * day;
+    let recent = now - (super::OIDC_LOG_RETENTION_DAYS - 1) * day;
+    let write = |at: u64, kind: &str| {
+        obop_commands::audit::record_event(&*r.b, at, "-", kind, "-", "oid 0000-1111")
+    };
+    write(old, "oidc_refused");
+    write(old, "oidc_login");
+    write(recent, "oidc_refused");
+    write(old, "login_refused");
+    let kinds = || -> Vec<String> {
+        let mut v: Vec<String> =
+            r.b.list(EVENT_TABLE)
+                .unwrap()
+                .into_iter()
+                .filter(|(_, f)| f["detail"] == "oid 0000-1111")
+                .map(|(id, f)| format!("{}:{}", &id[..12], f["kind"].as_str().unwrap()))
+                .collect();
+        v.sort();
+        v
+    };
+    assert_eq!(kinds().len(), 4);
+    // A sign-in runs the purge (with that of ended tokens).
+    let _ = r.a.login_step("ada", crate::mfa_tests::PW).unwrap();
+    assert_eq!(
+        kinds(),
+        [
+            format!("{old:012}:login_refused"),
+            format!("{recent:012}:oidc_refused"),
+        ]
+    );
+    // Once a day: a second sign-in the same day removes nothing more, even an old line.
+    write(old, "oidc_error");
+    assert_eq!(r.a.purge_old_sso_lines(), 0);
+    assert_eq!(kinds().len(), 3);
+    assert_eq!(r.a.purge_sso_lines_before(now - 365 * day), 1);
+}
