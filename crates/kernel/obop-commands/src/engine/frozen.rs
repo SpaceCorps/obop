@@ -23,7 +23,7 @@
 //! row, the parent, the lock date) are done by the small functions around them.
 
 use super::unit::{R, Reads, Unit};
-use crate::errors::{code, coded};
+use crate::errors::{self, code, coded};
 use obop_registry::guard::{CLOSED_OPTION, MAX_GUARD_DEPTH, closed_field};
 use obop_registry::{Guard, LockDate, ModelDef, is_valid_date};
 use obop_storage::Fields;
@@ -214,7 +214,7 @@ fn frozen_sentence(def: &ModelDef, id: &str, why: &Frozen) -> String {
         Frozen::State(Some(s)) => format!("{} {id} is {s}", def.name),
         Frozen::State(None) => format!("{} {id} is in a state that is final", def.name),
         Frozen::Locked => format!("{} {id} is dated in a locked period", def.name),
-        Frozen::Created => format!("{} {id} keeps what it was created with", def.name),
+        Frozen::Created => format!("{} {id} {}", def.name, errors::FIXED_ONCE_CREATED),
         Frozen::Parent(pm, pid) => {
             format!("{} {id} belongs to {pm} {pid}, which is locked", def.name)
         }

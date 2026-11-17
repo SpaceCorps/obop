@@ -2135,6 +2135,8 @@ pub mod names {
 }
 
 #[cfg(test)]
+mod action_rules_tests;
+#[cfg(test)]
 mod assert_lang_tests;
 #[cfg(test)]
 mod engine_tests;

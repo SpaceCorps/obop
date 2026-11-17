@@ -572,7 +572,7 @@ obop modules install assets.toml                          # installs the manifes
 
 **Computed fields** (`computed = "sum(lines.amount)"`) are evaluated when a record is read, from the current children, and are in `get`, `list`, `search` and every write response. They can be filtered and sorted on, may read other computed fields, are not stored, cannot be written (sending the current value back in an update is accepted, anything else is refused: `order.total is computed and read-only`), and are marked `computed: true` in `/api/meta`. Computing on read instead of keeping a cached value costs a look at the children per read (one indexed lookup for a record, one grouped scan for a list) and cannot drift. They are as protected as their inputs (3.5). Date arithmetic does not exist; `inventory_item.quantity` stays a stored number kept by `adjust` effects.
 
-**Assertions** are checked on the record as it is, before anything is written; the failure is the message followed by `(assertion <expression> failed)`, or `assertion failed: <expression>` when there is no message, and the call answers 400 and changes nothing. Example, on a journal entry: `assert = [{ expr = "total_debit == total_credit", message = "The entry does not balance" }]`.
+**Assertions** are checked on the record as it is, before anything is written; the failure is the message followed by `(assertion <expression> failed)`, or `assertion failed: <expression>` when there is no message, and the call answers 400 and changes nothing. Every assertion of the action is checked, and when several fail the refusal names each of them in declaration order, their texts joined by `; ` (the `message` of the body joins the authors' messages as sentences, and `assert_key` is the key of the first that has one); an assertion that cannot be evaluated after another one failed is left out, because it most often reads what that one asks for. Example, on a journal entry: `assert = [{ expr = "total_debit == total_credit", message = "The entry does not balance" }]`.
 
 **The message in the language of the request (D52).** An assertion may carry a short `key` (`[a-z_]{1,40}`, unique within its action), which is the slot a label table translates the message in and the name a client can match instead of the English text:
 
@@ -807,7 +807,7 @@ A record is **frozen** when its state is in `immutable_when`, when its `lock_dat
 
 `append_only = true` stands alone: records are created and read, never changed or deleted.
 
-A guard of `mutable_fields` alone (no `immutable_when`, `lock_date`, `children_of` or `append_only`) freezes every saved record: once created, only those fields change, and the record is not deleted. A stock item keeps its product, location and lot, while its quantity and reorder level move (`inventory`).
+A guard of `mutable_fields` alone (no `immutable_when`, `lock_date`, `children_of` or `append_only`) freezes every saved record: once created, only those fields change, and the record is not deleted. A stock item keeps its product, location and lot, while its quantity and reorder level move (`inventory`). Its refusal says the record keeps what it was created with and names the fields that still change, and its `hint` says so too: no action reopens such a record, so it does not get the hint of a frozen state ("Use the action that reopens it").
 
 | Key | Rules (the gate refuses with `<module>.<model>.guard.<key>`) |
 |---|---|
