@@ -198,16 +198,12 @@
     white-space: normal;
     text-align: center;
   }
-  /* The More menu fills its half and is as tall as a button next to it. */
-  .people-table .actionrow > .btn {
-    min-block-size: 2.75rem;
-  }
+  /* The More menu fills its half. */
   .people-table .actionrow > .dropdown {
     display: block;
   }
   .people-table .actionrow > .dropdown > .btn {
     inline-size: 100%;
-    min-block-size: 2.75rem;
   }
   .people-table .badge {
     white-space: normal;
