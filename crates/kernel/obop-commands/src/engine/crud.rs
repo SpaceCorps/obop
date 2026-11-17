@@ -507,7 +507,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
             actor: &actor,
             today: &today,
         };
-        if let Some((k, v)) = hints::refill_owner(&cx, def, &patch, &changed, &after)?
+        if let Some((k, v)) = hints::refill_owner(&cx, def, &changed, &after)?
             && cur.get(&k) != Some(&v)
         {
             after.insert(k.clone(), v.clone());

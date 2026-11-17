@@ -196,7 +196,7 @@ description = "Foto der Person (PNG, JPEG, WebP oder GIF; Metadaten wie der Stan
 
 [labels.de.model.hr_leave_request.field.requested_by]
 label = "Beantragt von"
-description = "Benutzername, dem der Antrag gehört, vom Server gesetzt, wenn leer gelassen (und erneut, wenn eine Änderung den Antrag einem anderen Mitarbeiter zuordnet): der obop-Benutzer des Mitarbeiters, falls vorhanden, sonst die Person, die den Antrag stellt. Nur sie und hr.manager sehen den Antrag"
+description = "Benutzername, dem der Antrag gehört, nur vom Server gesetzt (ein gesendeter Wert wird abgelehnt): der obop-Benutzer des Mitarbeiters, falls vorhanden, sonst die Person, die den Antrag stellt, und erneut, wenn eine Änderung den Antrag einem anderen Mitarbeiter zuordnet. Nur sie und hr.manager sehen den Antrag"
 
 [labels.de.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Der letzte Tag der Abwesenheit liegt vor ihrem ersten Tag"

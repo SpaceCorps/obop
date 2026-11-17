@@ -196,7 +196,7 @@ description = "Zdjęcie osoby (PNG, JPEG, WebP lub GIF; metadane, takie jak loka
 
 [labels.pl.model.hr_leave_request.field.requested_by]
 label = "Wnioskujący"
-description = "Nazwa użytkownika, do którego należy wniosek, ustawiana przez serwer, gdy pozostawiona pusta (i ponownie, gdy zmiana przenosi wniosek na innego pracownika): użytkownik obop pracownika, jeśli go ma, w przeciwnym razie osoba składająca wniosek. Widzą go tylko ona i hr.manager"
+description = "Nazwa użytkownika, do którego należy wniosek, ustawiana wyłącznie przez serwer (wysłana wartość jest odrzucana): użytkownik obop pracownika, jeśli go ma, w przeciwnym razie osoba składająca wniosek, i ponownie, gdy zmiana przenosi wniosek na innego pracownika. Widzą go tylko ona i hr.manager"
 
 [labels.pl.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Ostatni dzień urlopu przypada przed jego pierwszym dniem"

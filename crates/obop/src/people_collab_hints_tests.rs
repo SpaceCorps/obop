@@ -253,14 +253,76 @@ fn leave_follows_the_employee_when_hr_moves_it_to_another_one() {
         json!({"id": id(&leave), "employee_id": none}),
     );
     assert_eq!(r["requested_by"], "hanna");
-    // An owner the call names itself is the caller's.
+    // R1: the owner is the server's to set. A form that sends the stored owner back still moves
+    // the request to the new employee.
     let r = ok(
         &app,
         &hanna,
         "hr_leave_request.update",
         json!({"id": id(&leave), "employee_id": ju, "requested_by": "hanna"}),
     );
-    assert_eq!(r["requested_by"], "hanna");
+    assert_eq!(r["requested_by"], "julia");
+    let e = run(
+        &app,
+        &hanna,
+        "hr_leave_request.update",
+        json!({"id": id(&leave), "requested_by": "hanna"}),
+    )
+    .unwrap_err();
+    assert!(e.contains("is set by the server"), "{e}");
+}
+
+#[test]
+fn nobody_names_the_owner_of_leave_and_a_colleague_s_leave_is_refused_plainly() {
+    let app = app();
+    let hanna = Principal::user("hanna", &["hr.user", "hr.manager"]);
+    let ann = Principal::user("ann", &["hr.user"]);
+    let emp = |name: &str, user: &str| {
+        id(&ok(
+            &app,
+            &hanna,
+            "hr_employee.create",
+            json!({"name": name, "user": user}),
+        ))
+    };
+    let (ju, an) = (emp("Julia Brandt", "julia"), emp("Ann Example", "ann"));
+    let body = |e: &str, by: &str| {
+        let mut b =
+            json!({"employee_id": e, "start_on": "2026-10-05", "end_on": "2026-10-06", "days": 2});
+        if !by.is_empty() {
+            b["requested_by"] = json!(by);
+        }
+        b
+    };
+    // Not even hr.manager may file leave in another login's name.
+    for who in [&hanna, &ann] {
+        let e = run(
+            &app,
+            who,
+            "hr_leave_request.create",
+            body(&an, "somebody-else"),
+        )
+        .unwrap_err();
+        assert!(
+            e.contains("hr_leave_request.requested_by is set by the server"),
+            "{e}"
+        );
+    }
+    // hr.user filing for a colleague who has a login: a message of its own, no field named.
+    let e = run(&app, &ann, "hr_leave_request.create", body(&ju, "")).unwrap_err();
+    assert_eq!(
+        e,
+        "This employee has their own login, so the record would be theirs and out of your sight: ask someone with hr.manager to file it. Nothing was saved"
+    );
+    // Their own leave and leave filed by hr.manager are the employee's.
+    assert_eq!(
+        ok(&app, &ann, "hr_leave_request.create", body(&an, ""))["requested_by"],
+        "ann"
+    );
+    assert_eq!(
+        ok(&app, &hanna, "hr_leave_request.create", body(&ju, ""))["requested_by"],
+        "julia"
+    );
 }
 
 #[test]

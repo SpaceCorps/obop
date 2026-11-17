@@ -196,7 +196,7 @@ description = "Foto av personen (PNG, JPEG, WebP eller GIF; metadata som plats t
 
 [labels.sv.model.hr_leave_request.field.requested_by]
 label = "Begärd av"
-description = "Användarnamnet som ansökan tillhör, satt av servern när det lämnas tomt (och på nytt när en ändring flyttar ansökan till en annan anställd): den anställdas obop-användare om hen har en, annars personen som lämnar in ansökan. Bara den personen och hr.manager ser ansökan"
+description = "Användarnamnet som ansökan tillhör, satt endast av servern (ett skickat värde avvisas): den anställdas obop-användare om hen har en, annars personen som lämnar in ansökan, och på nytt när en ändring flyttar ansökan till en annan anställd. Bara den personen och hr.manager ser ansökan"
 
 [labels.sv.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Ledighetens sista dag ligger före dess första dag"

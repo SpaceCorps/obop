@@ -112,13 +112,13 @@ pub(crate) fn fill_in(cx: &FillCtx<'_>, def: &ModelDef, f: &mut Fields) -> R<()>
 }
 
 /// The owner (the model's `access.own` field) that its `fill_from` gives again when an update
-/// moves the record to another source (the `via` ref changes) and does not name the owner itself:
-/// leave moved to another employee becomes that employee's. When nothing can be copied the
-/// caller owns it, as on create (`own_default`).
+/// moves the record to another source (the `via` ref changes) and does not change the owner
+/// itself (a form that sends the stored owner back still moves it): leave moved to another
+/// employee becomes that employee's. When nothing can be copied the caller owns it, as on create
+/// (`own_default`).
 pub(crate) fn refill_owner(
     cx: &FillCtx<'_>,
     def: &ModelDef,
-    patch: &Fields,
     changed: &Fields,
     after: &Fields,
 ) -> R<Option<(String, J)>> {
@@ -137,7 +137,7 @@ pub(crate) fn refill_owner(
     let Some(via) = &p.via else {
         return Ok(None);
     };
-    if patch.contains_key(own) || !changed.contains_key(via.as_str()) {
+    if changed.contains_key(own) || !changed.contains_key(via.as_str()) {
         return Ok(None);
     }
     let copied = if is_unset(after.get(via.as_str())) {
