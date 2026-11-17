@@ -2884,11 +2884,11 @@
   "No apps to give access to yet.": "Ei vielä sovelluksia, joihin voisi antaa käyttöoikeuden.",
   "No apps yet": "Ei vielä sovelluksia",
   "No longer installed: {group}": "Ei enää asennettuna: {group}",
-  "Not needed: administrators can use every app.": "Ei tarpeen: ylläpitäjät voivat käyttää kaikkia sovelluksia.",
   "Other access": "Muut käyttöoikeudet",
   "Other access ({count})": "Muut käyttöoikeudet ({count})",
   "Reset two-factor for {user}?": "Nollataanko käyttäjän {user} kaksivaiheinen tunnistautuminen?",
   "Save access": "Tallenna käyttöoikeudet",
   "Show technical names": "Näytä tekniset nimet",
-  "You cannot take administrator access from yourself; ask another administrator.": "Et voi poistaa omaa ylläpitäjän oikeuttasi; pyydä toista ylläpitäjää."
+  "You cannot take administrator access from yourself; ask another administrator.": "Et voi poistaa omaa ylläpitäjän oikeuttasi; pyydä toista ylläpitäjää.",
+  "Could not load the apps.": "Sovelluksia ei voitu ladata."
 }

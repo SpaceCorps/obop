@@ -2884,11 +2884,11 @@
   "No apps to give access to yet.": "Noch keine Apps, auf die Zugriff vergeben werden kann.",
   "No apps yet": "Noch keine Apps",
   "No longer installed: {group}": "Nicht mehr installiert: {group}",
-  "Not needed: administrators can use every app.": "Nicht nötig: Administratoren dürfen jede App nutzen.",
   "Other access": "Sonstiger Zugriff",
   "Other access ({count})": "Sonstiger Zugriff ({count})",
   "Reset two-factor for {user}?": "Zwei-Faktor-Authentifizierung für {user} zurücksetzen?",
   "Save access": "Zugriff speichern",
   "Show technical names": "Technische Namen anzeigen",
-  "You cannot take administrator access from yourself; ask another administrator.": "Der eigene Administratorzugriff kann nicht selbst entzogen werden; bitte eine andere Administratorin oder einen anderen Administrator darum."
+  "You cannot take administrator access from yourself; ask another administrator.": "Du kannst dir den Administratorzugriff nicht selbst entziehen; bitte eine andere Person mit Administratorzugriff darum.",
+  "Could not load the apps.": "Die Apps konnten nicht geladen werden."
 }

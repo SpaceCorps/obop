@@ -2868,7 +2868,7 @@
   "access\u0004Custom": "Anpassad",
   "access\u0004Driver": "Förare",
   "access\u0004Finance": "Ekonomi",
-  "access\u0004Manager": "Chef",
+  "access\u0004Manager": "Ansvarig",
   "access\u0004More": "Mer",
   "access\u0004Reviewer": "Granskare",
   "access\u0004User": "Användare",
@@ -2884,11 +2884,11 @@
   "No apps to give access to yet.": "Det finns inga appar att ge åtkomst till än.",
   "No apps yet": "Inga appar än",
   "No longer installed: {group}": "Inte längre installerad: {group}",
-  "Not needed: administrators can use every app.": "Behövs inte: administratörer kan använda alla appar.",
   "Other access": "Övrig åtkomst",
   "Other access ({count})": "Övrig åtkomst ({count})",
   "Reset two-factor for {user}?": "Återställa tvåfaktorsautentiseringen för {user}?",
   "Save access": "Spara åtkomst",
   "Show technical names": "Visa tekniska namn",
-  "You cannot take administrator access from yourself; ask another administrator.": "Du kan inte ta bort din egen administratörsåtkomst; be en annan administratör."
+  "You cannot take administrator access from yourself; ask another administrator.": "Du kan inte ta bort din egen administratörsåtkomst; be en annan administratör.",
+  "Could not load the apps.": "Det gick inte att läsa in apparna."
 }

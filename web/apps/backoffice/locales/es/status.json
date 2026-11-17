@@ -2884,11 +2884,11 @@
   "No apps to give access to yet.": "machine-drafted",
   "No apps yet": "machine-drafted",
   "No longer installed: {group}": "machine-drafted",
-  "Not needed: administrators can use every app.": "machine-drafted",
   "Other access": "machine-drafted",
   "Other access ({count})": "machine-drafted",
   "Reset two-factor for {user}?": "machine-drafted",
   "Save access": "machine-drafted",
   "Show technical names": "machine-drafted",
-  "You cannot take administrator access from yourself; ask another administrator.": "machine-drafted"
+  "You cannot take administrator access from yourself; ask another administrator.": "machine-drafted",
+  "Could not load the apps.": "machine-drafted"
 }

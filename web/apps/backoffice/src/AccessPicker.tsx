@@ -27,7 +27,12 @@ const TECHNICAL = "people-technical-names";
 const FILTER_ABOVE = 8;
 
 /** What the picker needs from the server, loaded once: the module list and the known groups. */
-export type AccessData = { rows: ModuleLike[]; known: string[] };
+export type AccessData = {
+  rows: ModuleLike[];
+  known: string[];
+  /** A list could not be loaded: an empty list then means "unknown", not "none". */
+  failed?: boolean;
+};
 
 export function useAccessData(token: string): AccessData {
   const [data, setData] = useState<AccessData>({ rows: [], known: [] });
@@ -44,6 +49,7 @@ export function useAccessData(token: string): AccessData {
             ? (modules.value as ModuleLike[])
             : [],
         known: groups.ok ? groups.value.groups : [],
+        failed: modules.kind !== "ok" || !Array.isArray(modules.value) || !groups.ok,
       });
     });
     return () => {
@@ -198,6 +204,7 @@ export function AccessPicker({
   onChange,
   apps = [],
   self = false,
+  loadFailed = false,
 }: {
   access: Access;
   value: string[];
@@ -205,6 +212,8 @@ export function AccessPicker({
   apps?: App[];
   /** Your own row: the administrator switch cannot be turned off here. */
   self?: boolean;
+  /** The module or group list could not be loaded: say so instead of "no apps yet". */
+  loadFailed?: boolean;
 }) {
   const id = useId();
   const [technical, setTechnical] = useState(readTechnical);
@@ -238,9 +247,6 @@ export function AccessPicker({
           autoComplete="off"
         />
       )}
-      {admin && access.ladders.length > 0 && (
-        <p className="hint">{t("Not needed: administrators can use every app.")}</p>
-      )}
       {/* A disabled fieldset dims and locks its rows; the choices stay as stored, so turning the
           switch off brings them back. */}
       <div className="access-apps">
@@ -255,7 +261,12 @@ export function AccessPicker({
             disabled={admin}
           />
         ))}
-        {shown.length === 0 && (
+        {loadFailed && (
+          <p className="hint" role="note">
+            {t("Could not load the apps.")}
+          </p>
+        )}
+        {!loadFailed && shown.length === 0 && (
           <p className="hint">
             {filtering && wanted ? t("No app matches.") : t("No apps to give access to yet.")}
           </p>

@@ -2884,11 +2884,11 @@
   "No apps to give access to yet.": "Aucune application à laquelle donner accès pour l’instant.",
   "No apps yet": "Aucune application pour l’instant",
   "No longer installed: {group}": "Plus installé : {group}",
-  "Not needed: administrators can use every app.": "Inutile : les administrateurs peuvent utiliser toutes les applications.",
   "Other access": "Autres accès",
   "Other access ({count})": "Autres accès ({count})",
   "Reset two-factor for {user}?": "Réinitialiser l’authentification à deux facteurs de {user} ?",
   "Save access": "Enregistrer l’accès",
   "Show technical names": "Afficher les noms techniques",
-  "You cannot take administrator access from yourself; ask another administrator.": "Vous ne pouvez pas retirer votre propre accès d’administrateur ; demandez à un autre administrateur."
+  "You cannot take administrator access from yourself; ask another administrator.": "Vous ne pouvez pas retirer votre propre accès d’administrateur ; demandez à un autre administrateur.",
+  "Could not load the apps.": "Impossible de charger les applications."
 }

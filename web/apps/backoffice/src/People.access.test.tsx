@@ -73,6 +73,8 @@ let server: {
   refuseGroups: string;
   /** A status makes the second-factor reset answer with it. */
   mfaStatus: number;
+  /** The module list and the group list both fail. */
+  failLists: boolean;
 };
 
 const person = (name: string, extra: Partial<User> = {}): User => ({
@@ -102,6 +104,8 @@ function fakeServer() {
       calls.push({ method, path, body });
       if (path === "/api/auth/users" && method === "GET") return json({ users: server.users });
       if (path === "/api/auth/users" && method === "POST") return json({ user: body?.username });
+      if (server.failLists && (path === "/api/auth/groups" || path === "/api/module/list"))
+        return json({ error: "down" }, 500);
       if (path === "/api/auth/groups") return json({ groups: KNOWN });
       if (path === "/api/module/list") return json({ value: server.modules });
       const groups = /^\/api\/auth\/users\/([^/]+)\/groups$/.exec(path);
@@ -197,6 +201,7 @@ beforeEach(async () => {
     modules: MODULES,
     refuseGroups: "",
     mfaStatus: 0,
+    failLists: false,
   };
   fakeServer();
   container = document.createElement("div");
@@ -243,7 +248,10 @@ describe("the People table", () => {
     expect(cell.textContent).toContain("Notes · User");
     // Three apps and one group of no app: the fourth item is folded.
     expect(cell.textContent).toContain("+1 more");
-    await press(cell.querySelector(".access-more-chip"));
+    // The chip names the person, so the same chip on two rows is not the same control.
+    const chip = cell.querySelector(".access-more-chip")!;
+    expect(chip.getAttribute("aria-label")).toBe("+1 more, Access of dee@example.test");
+    await press(chip);
     expect(dialog()?.textContent).toContain("Access of dee@example.test");
   });
 
@@ -355,7 +363,8 @@ describe("Access of NAME", () => {
     )!;
     expect(admin.checked).toBe(false);
     await click(admin);
-    expect(dialog()?.textContent).toContain("Not needed: administrators can use every app.");
+    // Said once, by the dimmed rows: no second sentence about it.
+    expect(dialog()?.textContent).not.toContain("Not needed");
     expect(radios("Sales")!.closest("fieldset")!.disabled).toBe(true);
     expect(checked("Sales")).toEqual(["Manager"]);
     await click(admin);
@@ -363,6 +372,49 @@ describe("Access of NAME", () => {
     expect(checked("Sales")).toEqual(["Manager"]);
     // Nothing changed overall: nothing to save.
     expect(save()!.disabled).toBe(true);
+  });
+
+  it("sends the old list plus platform.admin when the switch goes on, and the stored list unchanged when it goes off", async () => {
+    await mount();
+    await press(rowButton("ada@example.test", "Access"));
+    const admin = () =>
+      document.body.querySelector<HTMLInputElement>('input[role="switch"][aria-describedby]')!;
+    await click(admin());
+    await click(save()!);
+    const stored = ["sales.user", "sales.manager", "crm.user", "api.device_admin", "gone.role"];
+    expect(saved()).toHaveLength(1);
+    expect((saved()[0] as string[]).sort()).toEqual([...stored, "platform.admin"].sort());
+    // Open the same person again (now an administrator) and turn the switch off.
+    await press(rowButton("ada@example.test", "Access"));
+    expect(admin().checked).toBe(true);
+    await click(admin());
+    await click(save()!);
+    expect(saved()).toHaveLength(2);
+    expect((saved()[1] as string[]).sort()).toEqual([...stored].sort());
+  });
+
+  it("opens each person with their own groups: A, close, then B saves B's list", async () => {
+    await mount();
+    await press(rowButton("ada@example.test", "Access"));
+    await click(radio("CRM", "Manager")!);
+    await click(
+      [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Cancel")!,
+    );
+    await press(rowButton("cy@example.test", "Access"));
+    expect(dialog()?.textContent).toContain("Access of cy@example.test");
+    expect(save()!.disabled).toBe(true);
+    await click(radio("CRM", "User")!);
+    await click(save()!);
+    expect(saved()).toEqual([["sales.manager", "crm.user"]]);
+  });
+
+  it("says the lists could not be loaded, and does not call held groups no longer installed", async () => {
+    server.failLists = true;
+    await mount();
+    await press(rowButton("ada@example.test", "Access"));
+    expect(dialog()?.textContent).toContain("Could not load the apps.");
+    expect(dialog()?.textContent).not.toContain("No apps to give access to yet.");
+    expect(dialog()?.textContent).not.toContain("No longer installed");
   });
 
   it("on your own row the administrator switch cannot be turned off, and says why", async () => {

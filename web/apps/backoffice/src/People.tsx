@@ -220,7 +220,13 @@ function NewPersonDialog({
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <AccessPicker access={access} value={picked} onChange={setPicked} apps={apps} />
+        <AccessPicker
+          access={access}
+          value={picked}
+          onChange={setPicked}
+          apps={apps}
+          loadFailed={data.failed}
+        />
         {error && <Refusal message={error} />}
       </form>
     </Dialog>
@@ -289,7 +295,14 @@ function AccessDialog({
             "Takes effect on their next request, in every session they have open. Recorded in the security log with the groups before and after.",
           )}
         </p>
-        <AccessPicker access={access} value={picked} onChange={setPicked} apps={apps} self={self} />
+        <AccessPicker
+          access={access}
+          value={picked}
+          onChange={setPicked}
+          apps={apps}
+          self={self}
+          loadFailed={data.failed}
+        />
         {error && <Refusal message={error} />}
       </div>
     </Dialog>
@@ -327,7 +340,12 @@ function AccessCell({
       })}
       {s.apps.length === 0 && <span className="chip">{t("Other access")}</span>}
       {hidden > 0 && (
-        <button type="button" className="chip access-more-chip" onClick={onOpen}>
+        <button
+          type="button"
+          className="chip access-more-chip"
+          aria-label={`${t("+{count} more", { count: hidden })}, ${t("Access of {user}", { user: person.name })}`}
+          onClick={onOpen}
+        >
           {t("+{count} more", { count: hidden })}
         </button>
       )}
@@ -666,6 +684,7 @@ export function PeopleSection({
       )}
       {editing && (
         <AccessDialog
+          key={editing.name}
           token={token}
           person={editing}
           data={data}
