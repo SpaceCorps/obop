@@ -17,12 +17,23 @@ const model = (name: string): ModelMeta => ({
   can_update: true,
   can_delete: true,
   fields: [
-    { name: "name", kind: "text", description: "", class: "none", personal_data: false, required: false },
+    {
+      name: "name",
+      kind: "text",
+      description: "",
+      class: "none",
+      personal_data: false,
+      required: false,
+    },
   ],
   actions: [],
 });
 const modules: ModuleMeta[] = [
-  { id: "connectors", name: "Connectors", models: [model("provider_policy"), model("connector_provider")] },
+  {
+    id: "connectors",
+    name: "Connectors",
+    models: [model("provider_policy"), model("connector_provider")],
+  },
 ];
 
 let root: Root;
