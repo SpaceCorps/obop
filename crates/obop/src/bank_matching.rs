@@ -14,7 +14,14 @@
 //! invoice id) so a line is booked once and an invoice is matched once. Posting stays
 //! `accounting_move.post` (`accounting.approver` and a person's approval); an agent may only
 //! dry-run. No account is built in (D34), nothing is checked against Swedish bookkeeping rules,
-//! and the bank line's own `state` is not changed.
+//! and the bank line's own `state` is not changed. The link row's id is the bank line's id, so a
+//! line gets one booking even when two runs race; `get` reads it.
+//!
+//! `unbook` takes a booking back in one batch of the store (docs/ISSUES.md Q11): the draft move is
+//! cancelled, the bank line is unmatched (its `settles_line_id`, and its `move_line_id` when that
+//! is a line of the move, are emptied) and the link row is deleted, so the invoice can be paid
+//! again. A posted move is refused (reverse it instead), and so is a reconciled bank line and a
+//! move dated in a closed period.
 
 use crate::sie::{Env, call};
 use obop_commands::{Actor, Dispatcher, Principal, Store, Value};
@@ -73,6 +80,21 @@ pub fn module() -> Module {
                     "Link: the invoice id, empty when the line was booked without one",
                 ),
                 f("move_id", "Link and answer: the draft move id"),
+                f("move_state", "Answer, get: the state of the move"),
+                f(
+                    "move_cancelled",
+                    "Answer, unbook: whether the draft move was cancelled",
+                )
+                .kind(FieldKind::Bool),
+                f(
+                    "unmatched",
+                    "Answer, unbook: whether the bank line went back to unmatched",
+                )
+                .kind(FieldKind::Bool),
+                f(
+                    "freed_item",
+                    "Answer, unbook: the journal item the line no longer settles",
+                ),
                 f("ok", "Answer: whether the command worked").kind(FieldKind::Bool),
                 f("written", "Answer: whether the move was created").kind(FieldKind::Bool),
                 fin("amount", "Answer: the line amount in minor units").kind(FieldKind::Number),
@@ -90,6 +112,16 @@ pub fn module() -> Module {
                 CommandDef::new(
                     "suggest",
                     "Read only: for each unmatched bank statement line that is not yet booked (or for bank_line), list the posted invoices whose amount equals the line exactly and say whether the invoice number appears in the bank's label. Money in only. Writes nothing. UNVERIFIED",
+                    GROUP,
+                ),
+                CommandDef::new(
+                    "get",
+                    "The booking of a bank statement line (bank_line): bank_line_id, invoice_id, move_id and the move's state; refused in words when the line has none",
+                    GROUP,
+                ),
+                CommandDef::new(
+                    "unbook",
+                    "Take back the booking of a bank statement line (bank_line) in one step: the draft move is cancelled, the line is unmatched and no longer settles an item, and the link is deleted, so the invoice can be paid again. Refused when the move is posted (reverse it), the line is reconciled or the move is in a closed period. dry_run writes nothing; an agent may only dry-run",
                     GROUP,
                 ),
                 CommandDef::new(
@@ -598,16 +630,132 @@ pub fn book(
             "the move lines were refused, the draft move {mid} was cancelled: {e}"
         ));
     }
-    env.store.insert(
-        MODEL,
-        [
-            ("bank_line_id".to_string(), Value::text(&pl.bank_line_id)),
-            ("invoice_id".to_string(), Value::text(&pl.invoice_id)),
-            ("move_id".to_string(), Value::text(&mid)),
-        ]
-        .into(),
-    )?;
+    // Keyed by the bank line: a second booking of the line (a race) is refused by the store, and
+    // what this run made is taken back.
+    let mut link = Fields::new();
+    link.insert("bank_line_id".into(), J::from(pl.bank_line_id.as_str()));
+    link.insert("invoice_id".into(), J::from(pl.invoice_id.as_str()));
+    link.insert("move_id".into(), J::from(mid.as_str()));
+    if let Err(e) = env.store.backend().insert(MODEL, &pl.bank_line_id, &link) {
+        let _ = call(env, p, "accounting_move.cancel", json!({"id": mid}));
+        undo(env);
+        return Err(format!(
+            "this bank line already has a move; one line gets one (the draft move {mid} was cancelled): {e}"
+        ));
+    }
     Ok((pl, Some(mid)))
+}
+
+/// The link row of a bank line.
+fn link_of(env: Env<'_>, bank_line: &str) -> Result<Option<(String, Fields)>, String> {
+    Ok(list(env, MODEL)?
+        .into_iter()
+        .find(|(_, f)| text(f, "bank_line_id") == bank_line))
+}
+
+/// What `unbook` does, as planned.
+pub struct Unbooked {
+    pub move_id: String,
+    pub cancelled: bool,
+    pub unmatched: bool,
+    pub settled_item: String,
+}
+
+/// Take back the booking of a bank line in one batch of the store; with `dry_run` only say what
+/// would be done.
+pub fn unbook(
+    env: Env<'_>,
+    p: &Principal,
+    bank_line: &str,
+    dry_run: bool,
+) -> Result<Unbooked, String> {
+    need(p)?;
+    if bank_line.is_empty() {
+        return Err("bank_line is required: the id of the bank statement line".into());
+    }
+    let b = env.store.backend();
+    let line = b
+        .get("accounting_bank_statement_line", bank_line)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("no bank statement line {bank_line:?}"))?;
+    let Some((link_id, link)) = link_of(env, bank_line)? else {
+        return Err("the bank line has no booking to take back (nothing was written)".into());
+    };
+    let state = text(&line, "state");
+    if state == "reconciled" {
+        return Err(
+            "the bank line is reconciled and cannot be changed; nothing was written".into(),
+        );
+    }
+    let mid = text(&link, "move_id");
+    let mv = b.get("accounting_move", &mid).map_err(|e| e.to_string())?;
+    let move_state = mv.as_ref().map(|f| text(f, "state")).unwrap_or_default();
+    if move_state == "posted" || move_state == "reversed" {
+        return Err(format!(
+            "the entry of this booking is {move_state}; reverse it (accounting_move.reverse) and book the opposite entry instead (nothing was written)"
+        ));
+    }
+    let date = mv.as_ref().map(|f| text(f, "date")).unwrap_or_default();
+    if let Ok(periods) = b.list("accounting_period")
+        && periods.iter().any(|(_, f)| {
+            text(f, "state") == "closed" && text(f, "start_on") <= date && date <= text(f, "end_on")
+        })
+    {
+        return Err(format!(
+            "the entry is dated {date}, in a closed period, and cannot be cancelled (nothing was written)"
+        ));
+    }
+    let move_lines: Vec<String> = list(env, "accounting_move_line")?
+        .into_iter()
+        .filter(|(_, f)| text(f, "move_id") == mid)
+        .map(|(id, _)| id)
+        .collect();
+    let cancel = move_state == "draft";
+    let unmatch = state == "matched";
+    let settled_item = text(&line, "settles_line_id");
+    let out = Unbooked {
+        move_id: mid.clone(),
+        cancelled: cancel,
+        unmatched: unmatch,
+        settled_item: settled_item.clone(),
+    };
+    if dry_run {
+        return Ok(out);
+    }
+    let mut ops = Vec::new();
+    if cancel {
+        let mut f = Fields::new();
+        f.insert("state".into(), J::from("cancelled"));
+        ops.push(obop_storage::Op::Merge {
+            model: "accounting_move".into(),
+            id: mid.clone(),
+            patch: f,
+        });
+    }
+    let mut patch = Fields::new();
+    if !settled_item.is_empty() {
+        patch.insert("settles_line_id".into(), J::Null);
+    }
+    if move_lines.contains(&text(&line, "move_line_id")) {
+        patch.insert("move_line_id".into(), J::Null);
+    }
+    if unmatch {
+        patch.insert("state".into(), J::from("unmatched"));
+    }
+    if !patch.is_empty() {
+        ops.push(obop_storage::Op::Merge {
+            model: "accounting_bank_statement_line".into(),
+            id: bank_line.to_string(),
+            patch,
+        });
+    }
+    ops.push(obop_storage::Op::Delete {
+        model: MODEL.into(),
+        id: link_id,
+    });
+    b.apply(&ops)
+        .map_err(|e| format!("the booking could not be taken back (nothing was written): {e}"))?;
+    Ok(out)
 }
 
 fn s(input: &Value, k: &str) -> String {
@@ -662,6 +810,59 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             Ok(Value::map([
                 ("ok", Value::Bool(true)),
                 ("suggestions", Value::List(items)),
+            ]))
+        }),
+    );
+    let st3 = st.clone();
+    d.register(
+        &m,
+        MODEL,
+        "get",
+        Box::new(move |input| {
+            let lid = s(input, "bank_line");
+            let lid = if lid.is_empty() { s(input, "id") } else { lid };
+            let b = st3.backend();
+            let rows = b.list(MODEL).map_err(|e| e.to_string())?;
+            let Some((_, f)) = rows.iter().find(|(_, f)| text(f, "bank_line_id") == lid) else {
+                return Err(format!("the bank line {lid:?} has no booking"));
+            };
+            let mid = text(f, "move_id");
+            let state = b
+                .get("accounting_move", &mid)
+                .map_err(|e| e.to_string())?
+                .map(|m| text(&m, "state"))
+                .unwrap_or_default();
+            Ok(Value::map([
+                ("id", Value::text(&lid)),
+                ("bank_line_id", Value::text(&lid)),
+                ("invoice_id", Value::text(&text(f, "invoice_id"))),
+                ("move_id", Value::text(&mid)),
+                ("move_state", Value::text(&state)),
+            ]))
+        }),
+    );
+    let (weak3, st4) = (weak.clone(), st.clone());
+    d.register_with_actor(
+        &m,
+        MODEL,
+        "unbook",
+        Box::new(move |input| {
+            let dry = matches!(input, Value::Map(m) if matches!(m.get("dry_run"), Some(Value::Bool(true))));
+            let a = Actor::from_input(input);
+            if a.agent && !dry {
+                return Err("an agent may only dry-run taking back a bank booking (dry_run=true); ask the person to run it".into());
+            }
+            let groups: Vec<&str> = a.groups.iter().map(String::as_str).collect();
+            let p = Principal::user(&a.caller, &groups);
+            let d = weak3.upgrade().ok_or("the dispatcher is gone")?;
+            let u = unbook(Env { d: &d, store: &st4 }, &p, &s(input, "bank_line"), dry)?;
+            Ok(Value::map([
+                ("ok", Value::Bool(true)),
+                ("written", Value::Bool(!dry)),
+                ("move_id", Value::text(&u.move_id)),
+                ("move_cancelled", Value::Bool(u.cancelled)),
+                ("unmatched", Value::Bool(u.unmatched)),
+                ("freed_item", Value::text(&u.settled_item)),
             ]))
         }),
     );

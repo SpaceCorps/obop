@@ -578,3 +578,134 @@ fn a_paid_receivable_item_is_settled_and_not_overdue() {
         "{wheres:?}"
     );
 }
+
+/// Q11: taking back a booked invoice payment cancels the draft entry, frees the item and the
+/// invoice and deletes the link, in one call; a posted entry is refused.
+#[test]
+fn unbook_takes_a_booked_payment_back_so_the_invoice_can_be_paid_again() {
+    let f = fixture();
+    let (inv, number, item) = f.invoice_with_move(7_000);
+    let l = f.line(7_000, &format!("Payment {number}"));
+    let r = f
+        .book(json!({"bank_line": l, "invoice": number, "counter_account": "1510"}))
+        .unwrap();
+    let mid = r["move_id"].as_str().unwrap().to_string();
+    let link = call(
+        &f.app,
+        &admin(),
+        "bank_matching.get",
+        json!({"bank_line": l}),
+    )
+    .unwrap();
+    assert_eq!(link["invoice_id"], json!(inv));
+    assert_eq!(link["move_state"], json!("draft"));
+    // Matched to the bank side of the draft entry, as the screen does.
+    let bank_side = rows(&f.app, "accounting_move_line")
+        .into_iter()
+        .find(|(_, x)| x["move_id"] == json!(mid) && x["debit"].as_i64().unwrap_or(0) > 0)
+        .unwrap()
+        .0;
+    call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.update",
+        json!({"id": l, "move_line_id": bank_side}),
+    )
+    .unwrap();
+    call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.match",
+        json!({"id": l}),
+    )
+    .unwrap();
+    // An agent may only look.
+    let agent = Principal::agent("bot", &["accounting.user"], &["accounting.user"]);
+    let m = refusal(call(
+        &f.app,
+        &agent,
+        "bank_matching.unbook",
+        json!({"bank_line": l}),
+    ));
+    assert!(m.contains("dry-run"), "{m}");
+    let dry = call(
+        &f.app,
+        &agent,
+        "bank_matching.unbook",
+        json!({"bank_line": l, "dry_run": true}),
+    )
+    .unwrap();
+    assert_eq!(dry["written"], json!(false));
+    assert_eq!(dry["move_cancelled"], json!(true));
+    assert_eq!(f.settles(&l), json!(item));
+    let done = call(
+        &f.app,
+        &admin(),
+        "bank_matching.unbook",
+        json!({"bank_line": l}),
+    )
+    .unwrap();
+    assert_eq!(done["unmatched"], json!(true));
+    let mv = rows(&f.app, "accounting_move")
+        .into_iter()
+        .find(|(id, _)| *id == mid)
+        .unwrap()
+        .1;
+    assert_eq!(mv["state"], json!("cancelled"));
+    let line = rows(&f.app, "accounting_bank_statement_line")
+        .into_iter()
+        .find(|(id, _)| *id == l)
+        .unwrap()
+        .1;
+    assert_eq!(line["state"], json!("unmatched"));
+    assert!(
+        line.get("settles_line_id").is_none_or(J::is_null),
+        "{line:?}"
+    );
+    assert!(line.get("move_line_id").is_none_or(J::is_null), "{line:?}");
+    assert!(rows(&f.app, "bank_matching").is_empty());
+    let m = refusal(call(
+        &f.app,
+        &admin(),
+        "bank_matching.get",
+        json!({"bank_line": l}),
+    ));
+    assert!(m.contains("no booking"), "{m}");
+    // The invoice is offered and can be paid again, by the same line.
+    let s = call(
+        &f.app,
+        &admin(),
+        "bank_matching.suggest",
+        json!({"bank_line": l}),
+    )
+    .unwrap();
+    assert!(
+        s["suggestions"][0]["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["invoice_id"] == json!(inv)),
+        "{s}"
+    );
+    let again = f
+        .book(json!({"bank_line": l, "invoice": number, "counter_account": "1510"}))
+        .unwrap();
+    let again = again["move_id"].as_str().unwrap().to_string();
+    assert_eq!(f.settles(&l), json!(item));
+    // A posted entry is not taken back here.
+    call(
+        &f.app,
+        &admin(),
+        "accounting_move.post",
+        json!({"id": again}),
+    )
+    .unwrap();
+    let m = refusal(call(
+        &f.app,
+        &admin(),
+        "bank_matching.unbook",
+        json!({"bank_line": l}),
+    ));
+    assert!(m.contains("posted") && m.contains("reverse"), "{m}");
+    assert_eq!(rows(&f.app, "bank_matching").len(), 1);
+}

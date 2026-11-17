@@ -19,7 +19,9 @@ use tower::ServiceExt;
 /// on REST, absent from the document.
 const KNOWN_OMITTED: &[&str] = &[
     "bank_matching.book",
+    "bank_matching.get",
     "bank_matching.suggest",
+    "bank_matching.unbook",
     "expenses_setting.get",
     "expenses_setting.update",
     "import_map.get",
