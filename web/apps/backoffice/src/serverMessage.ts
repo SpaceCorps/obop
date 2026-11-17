@@ -152,6 +152,19 @@ const FIELD_RULES: Rule[] = [
       );
     },
   ],
+  // R1: a record that would belong to someone with their own login (leave filed for a colleague).
+  [
+    /^This [\w ]+ has their own login, so the record would be theirs and out of your sight: ask (?:an administrator|someone with ([\w.]+(?: or [\w.]+)*)) to file it\. Nothing was saved$/,
+    (m) =>
+      m[1]
+        ? t(
+            "This person has their own login, so the record would be theirs and you could not see it. Ask someone with {groups} to file it. Nothing was saved.",
+            { groups: m[1] },
+          )
+        : t(
+            "This person has their own login, so the record would be theirs and you could not see it. Ask an administrator to file it. Nothing was saved.",
+          ),
+  ],
   // The bounds of a date field and the named formats of a text field (K45).
   [
     /^(\w+)\.(\w+) must be at (most|least) (\d{4}-\d{2}-\d{2}); this is (\d{4}-\d{2}-\d{2})$/,
@@ -163,9 +176,9 @@ const FIELD_RULES: Rule[] = [
       ),
   ],
   [
-    /^(\w+)\.(\w+) must be a currency code of three capital letters \(ISO 4217\), such as EUR$/,
+    /^(\w+)\.(\w+) must be a currency code of ISO 4217, such as EUR$/,
     (m) =>
-      t("{field} must be a currency code of three capital letters, such as EUR", {
+      t("{field} must be a currency code of ISO 4217, such as EUR", {
         field: fieldName(m[1]!, m[2]!),
       }),
   ],

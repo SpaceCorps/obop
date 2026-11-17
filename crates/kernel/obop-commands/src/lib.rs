@@ -1209,7 +1209,7 @@ impl Dispatcher {
     pub fn set_currency(&self, code: &str) -> Result<(), String> {
         if !obop_registry::limits::is_currency_code(code) {
             return Err(format!(
-                "the currency {code:?} must be three capital letters (ISO 4217), such as EUR or SEK"
+                "the currency {code:?} is not a currency code of ISO 4217, such as EUR or SEK"
             ));
         }
         *self.currency.write().unwrap() = code.to_string();

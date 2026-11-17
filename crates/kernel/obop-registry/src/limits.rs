@@ -147,7 +147,7 @@ impl Pattern {
     pub fn requirement(self) -> &'static str {
         match self {
             Self::CurrencyCode => {
-                "a currency code of three capital letters (ISO 4217), such as EUR"
+                "a currency code of ISO 4217, such as EUR"
             }
             Self::Iban => "a valid IBAN, such as DE89 3704 0044 0532 0130 00",
             Self::VatId => "a VAT number with its country prefix, such as DE123456789",

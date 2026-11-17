@@ -683,7 +683,7 @@ fn a_currency_code_is_three_capital_letters() {
     }
     assert_eq!(
         Breach::Format(Pattern::CurrencyCode).message("m", "currency", "12y12"),
-        "m.currency must be a currency code of three capital letters (ISO 4217), such as EUR"
+        "m.currency must be a currency code of ISO 4217, such as EUR"
     );
 }
 
