@@ -28,7 +28,7 @@
 //! books it: an `update` that repeats `state = posted` on an invoice posted earlier books nothing.
 //!
 //! The move, its lines and the link row (`invoice_posting`, id = the invoice id) are written in
-//! one batch of the store, so an invoice gets one move even when two runs race. `get` reads the
+//! one batch of the store (with the entry's date as the invoice's issue date when it had none), so an invoice gets one move even when two runs race. `get` reads the
 //! link of an invoice. An agent may only dry-run `create_move`.
 //!
 //! That batch is written straight to the store, not through `accounting_move.create`: the move's
@@ -194,6 +194,9 @@ pub struct Planned {
     pub party_id: String,
     pub journal_id: String,
     pub date: String,
+    /// The invoice has no issue date: the booking writes `date` as its issue date, so the
+    /// invoice and its entry carry one date.
+    pub stamp_issue_date: bool,
     pub net: i64,
     pub vat: i64,
     pub lines: Vec<Line>,
@@ -460,6 +463,7 @@ fn plan_in(b: &dyn Backend, i: &Input, state_needed: &str) -> Result<Planned, St
         reference,
         party_id: text(&inv, "party_id"),
         journal_id: jid,
+        stamp_issue_date: text(&inv, "issue_date").is_empty(),
         date,
         net,
         vat,
@@ -612,6 +616,15 @@ fn write(b: &dyn Backend, pl: &Planned) -> Result<String, String> {
         id: pl.invoice_id.clone(),
         fields: link,
     });
+    if pl.stamp_issue_date {
+        let mut f = Fields::new();
+        f.insert("issue_date".into(), J::from(pl.date.as_str()));
+        ops.push(Op::Merge {
+            model: "invoice".into(),
+            id: pl.invoice_id.clone(),
+            patch: f,
+        });
+    }
     b.apply(&ops).map_err(|e| {
         if link_of(b, &pl.invoice_id).ok().flatten().is_some() {
             "this invoice already has a move; one invoice gets one (nothing was written)".into()

@@ -550,6 +550,9 @@ fn an_invoice_without_an_issue_date_is_booked_on_today() {
         .1;
     let today = crate::sie::iso(crate::sie::today());
     assert_eq!(mv["date"], json!(today));
+    // The invoice carries the same date as its entry.
+    let got = call(&f.app, &admin(), "invoice.get", json!({"id": inv})).unwrap();
+    assert_eq!(got["issue_date"], json!(today));
 }
 
 #[test]
@@ -572,6 +575,8 @@ fn create_move_books_an_invoice_without_an_issue_date_on_today_when_no_date_is_g
         .unwrap()
         .1;
     assert_eq!(mv["date"], json!(crate::sie::iso(crate::sie::today())));
+    let got = call(&f.app, &admin(), "invoice.get", json!({"id": inv})).unwrap();
+    assert_eq!(got["issue_date"], mv["date"]);
 }
 
 /// A closed period "September" (2026-09-01 to 2026-09-30).
