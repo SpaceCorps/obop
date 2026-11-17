@@ -4,7 +4,7 @@
 // no button.
 import { useEffect, useMemo, useState } from "react";
 import { fmt, getLang, labelFor, t } from "@obop/ui";
-import { aggregate, type FieldMeta, type ModelMeta } from "./api.ts";
+import { aggregate, search, type FieldMeta, type ModelMeta, type ServerFilter } from "./api.ts";
 import { useData } from "./data.tsx";
 import { appTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { childrenOf, indexModels } from "./presentation.ts";
@@ -34,6 +34,28 @@ function sumField(model: ModelMeta | undefined): FieldMeta | undefined {
       /^(quantity|qty|quantity_on_hand|on_hand)$/.test(f.name),
   );
 }
+
+/**
+ * A ref of a quantity model to a place whose `kind` can be `scrap` (stock in a scrap location): what
+ * lies there is written off, not on hand, so a sum leaves it out, as Stock by location does (Q1).
+ */
+export function scrapRef(
+  model: ModelMeta | undefined,
+  modelOf: (name: string) => ModelMeta | undefined,
+): FieldMeta | undefined {
+  return model?.fields.find(
+    (f) =>
+      f.kind === "ref" &&
+      !!f.to &&
+      !!modelOf(f.to)?.fields.some(
+        (k) => k.name === "kind" && k.kind === "select" && !!k.options?.includes("scrap"),
+      ),
+  );
+}
+
+/** The filter that leaves out the records held in the places `ids` (at most 49 of them). */
+export const notIn = (field: string, ids: readonly string[]): ServerFilter[] =>
+  ids.slice(0, 49).map((value) => ({ field, op: "ne", value }));
 
 /** The plural a package gives a model (D95 `plural`), else its name. */
 function pluralTitle(m: ModelMeta, moduleId: string): string {
@@ -78,12 +100,31 @@ function useCounts(rels: Rel[], id: string): Map<string, number> {
   useEffect(() => {
     let live = true;
     setCounts({ id, n: new Map() });
+    const modelOf = (m: string) => d.models.get(m)?.model;
+    // The ids of the scrap places of a model, asked once per run.
+    const scrapIds = new Map<string, Promise<string[]>>();
+    const scrapOf = (m: string) => {
+      if (!scrapIds.has(m))
+        scrapIds.set(
+          m,
+          search(d.token, m, { filter: [{ field: "kind", op: "eq", value: "scrap" }] }).then((r) =>
+            "error" in r ? [] : r.rows.map((x) => x.id),
+          ),
+        );
+      return scrapIds.get(m)!;
+    };
     for (const r of rels) {
-      const sum = sumField(d.models.get(r.model)?.model);
-      void aggregate(d.token, r.model, {
-        filter: [{ field: r.field, op: "eq", value: id }],
-        measures: sum ? [{ op: "count" }, { op: "sum", field: sum.name }] : [{ op: "count" }],
-      }).then((res) => {
+      const sum = sumField(modelOf(r.model));
+      const place = sum ? scrapRef(modelOf(r.model), modelOf) : undefined;
+      const scrap = place?.to ? scrapOf(place.to) : Promise.resolve<string[]>([]);
+      void scrap.then(async (ids) => {
+        const res = await aggregate(d.token, r.model, {
+          filter: [
+            { field: r.field, op: "eq", value: id },
+            ...(place ? notIn(place.name, ids) : []),
+          ],
+          measures: sum ? [{ op: "count" }, { op: "sum", field: sum.name }] : [{ op: "count" }],
+        });
         if (!live) return;
         const n =
           "error" in res
