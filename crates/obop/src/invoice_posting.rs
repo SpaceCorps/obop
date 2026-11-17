@@ -102,7 +102,7 @@ pub fn module() -> Module {
                     ),
                     f(
                         "date",
-                        "Input: the accounting date, YYYY-MM-DD; default is the invoice's issue date",
+                        "Input: the accounting date, YYYY-MM-DD; default is the invoice's issue date, else today in the platform zone",
                     ),
                     f("dry_run", "Input: only show the lines, write nothing").kind(FieldKind::Bool),
                     f("invoice_id", "Link: the invoice id"),
@@ -125,7 +125,7 @@ pub fn module() -> Module {
                 commands: vec![
                     CommandDef::new(
                         "create_move",
-                        "Book a posted invoice (invoice) as a draft accounting move using the journal, receivable_account, revenue_account, tax and date you give, or the booking settings and the invoice's issue date where you give none; refused in words when one is missing, when the invoice is not posted, has no amount or already has a move. dry_run shows the lines and writes nothing. An agent may only dry-run. The move stays a draft: posting needs accounting.approver and approval. UNVERIFIED against Swedish rules",
+                        "Book a posted invoice (invoice) as a draft accounting move using the journal, receivable_account, revenue_account, tax and date you give, or the booking settings and the invoice's issue date (else today) where you give none; refused in words when one is missing, when the invoice is not posted, has no amount or already has a move. dry_run shows the lines and writes nothing. An agent may only dry-run. The move stays a draft: posting needs accounting.approver and approval. UNVERIFIED against Swedish rules",
                         GROUP,
                     ),
                     CommandDef::new(
@@ -543,9 +543,15 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
         ));
     }
     let b = env.store.backend();
-    let i = i
+    let mut i = i
         .clone()
         .with_defaults(&company_settings::section(&*b, SECTION)?);
+    // No date given and none on the invoice: today in the platform zone, as booking on post does.
+    if i.date.is_empty()
+        && invoice_of(&*b, &i.invoice).is_ok_and(|(_, f)| text(&f, "issue_date").is_empty())
+    {
+        i.date = today(env.d);
+    }
     plan_in(&*b, &i, "posted")
 }
 

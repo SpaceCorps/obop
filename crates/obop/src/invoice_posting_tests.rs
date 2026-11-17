@@ -237,18 +237,16 @@ fn missing_configuration_and_bad_invoices_are_refused_in_words() {
     let m = refusal(f.run(&draft, false));
     assert!(m.contains("draft") && m.contains("posted"), "{m}");
     let posted = f.invoice(&[10_000], true);
-    for key in [
-        "journal",
-        "receivable_account",
-        "revenue_account",
-        "tax",
-        "date",
-    ] {
+    for key in ["journal", "receivable_account", "revenue_account", "tax"] {
         let mut i = f.input(&posted, true);
         i.as_object_mut().unwrap().remove(key);
         let m = refusal(call(&f.app, &admin(), "invoice_posting.create_move", i));
         assert!(m.contains(key), "{key}: {m}");
     }
+    let mut i = f.input(&posted, true);
+    i["date"] = json!("14.09.2026");
+    let m = refusal(call(&f.app, &admin(), "invoice_posting.create_move", i));
+    assert!(m.contains("YYYY-MM-DD"), "{m}");
     let mut bad = f.input(&posted, true);
     bad["revenue_account"] = json!("9999");
     assert!(refusal(call(&f.app, &admin(), "invoice_posting.create_move", bad)).contains("9999"));
@@ -552,6 +550,28 @@ fn an_invoice_without_an_issue_date_is_booked_on_today() {
         .1;
     let today = crate::sie::iso(crate::sie::today());
     assert_eq!(mv["date"], json!(today));
+}
+
+#[test]
+fn create_move_books_an_invoice_without_an_issue_date_on_today_when_no_date_is_given() {
+    // Posted before the booking settings existed, so it was not booked on post (the seed).
+    let f = fixture(2500);
+    let inv = f.invoice(&[4_000], true);
+    configure(&f, json!({}));
+    let r = call(
+        &f.app,
+        &admin(),
+        "invoice_posting.create_move",
+        json!({"invoice": inv}),
+    )
+    .unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(r["written"], json!(true));
+    let mv = rows(&f.app, "accounting_move")
+        .into_iter()
+        .find(|(id, _)| json!(id) == r["move_id"])
+        .unwrap()
+        .1;
+    assert_eq!(mv["date"], json!(crate::sie::iso(crate::sie::today())));
 }
 
 /// A closed period "September" (2026-09-01 to 2026-09-30).
