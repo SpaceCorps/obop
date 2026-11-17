@@ -1,0 +1,53 @@
+import { expect, test, type Api } from "../support/fixtures.ts";
+
+// A purchase order line (docs/ISSUES.md Q13, purchase 0.4.1): a new line takes its description from
+// the product, as a sale order line does, and its received quantity is not typed on the line (Receive
+// goods gives it), so a draft order cannot be told that goods arrived.
+
+async function withPurchase(api: Api, run: () => Promise<void>) {
+  const root = await api.token("root");
+  await api.post("/api/marketplace_listing/install", { id: "inventory" }, root);
+  await api.post("/api/marketplace_listing/install", { id: "purchase" }, root);
+  try {
+    await run();
+  } finally {
+    await api.post("/api/module/uninstall", { id: "purchase" }, root);
+    await api.post("/api/module/uninstall", { id: "inventory" }, root);
+  }
+}
+
+test("a new purchase line is described by its product and has no Received box (Q13)", async ({
+  page,
+  signIn,
+  api,
+  uid,
+}) => {
+  test.setTimeout(90_000);
+  await withPurchase(api, async () => {
+    const gloves = await api.create("root", "product", { name: uid("Gloves"), cost_minor: 300 });
+    const party = await api.create("root", "party", { name: uid("PSA GmbH") });
+    const vendor = await api.create("root", "purchase_vendor", { party_id: party.id });
+    const po = await api.create("root", "purchase_order", { vendor_id: vendor.id });
+
+    await signIn("root", `/purchase/purchase_order?id=${po.id}`);
+    const panel = page.getByRole("complementary", { name: "Purchase order record" });
+    const lines = panel.getByRole("region", { name: "Order lines" });
+    await lines.getByRole("button", { name: "Add a line" }).click();
+    const product = page.getByRole("combobox", { name: /^Product/ }).and(page.locator(":focus"));
+    await expect(product).toBeVisible();
+    await page.keyboard.type(gloves.name);
+    await expect(page.getByRole("option", { name: gloves.name })).toBeVisible();
+    await page.keyboard.press("Enter");
+    // What was received is not typed on a line.
+    await expect(page.getByRole("textbox", { name: /^Received/ })).toHaveCount(0);
+    await expect(page.getByRole("spinbutton", { name: /^Received/ })).toHaveCount(0);
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(async () =>
+        (await api.list("root", "purchase_order_line"))
+          .filter((l) => l.order_id === po.id)
+          .map((l) => l.description),
+      )
+      .toEqual([gloves.name]);
+  });
+});
