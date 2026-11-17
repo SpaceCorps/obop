@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Table, fmt, t } from "@obop/ui";
+import { Badge, Table, fmt, t, useWorded } from "@obop/ui";
 import { call } from "../api.ts";
 import { useData, useRows } from "../data.tsx";
 import { modelTitle } from "../labels.ts";
@@ -43,7 +43,8 @@ const statusLabel = (s: string) =>
 /** The checklist an administrator reads: configuration the instance can see, never a verdict. */
 export function useChecklist(enabled: boolean) {
   const d = useData();
-  const [state, setState] = useState<{ list?: Checklist; error?: string }>({});
+  // The error is kept as how to word it and worded when it is read (D9).
+  const [state, setState] = useState<{ list?: Checklist; word?: () => string }>({});
   useEffect(() => {
     if (!enabled) return;
     let live = true;
@@ -53,13 +54,16 @@ export function useChecklist(enabled: boolean) {
         setState({
           list: parseJson<Checklist>((r.value as { result: string }).result, undefined as never),
         });
-      else setState({ error: r.kind === "error" ? serverMessage(r.message) : t("Needs approval") });
+      else
+        setState({
+          word: () => (r.kind === "error" ? serverMessage(r.message) : t("Needs approval")),
+        });
     });
     return () => {
       live = false;
     };
   }, [d.token, enabled, d.mutations]);
-  return state;
+  return { list: state.list, error: state.word?.() };
 }
 
 export function Compliance() {
@@ -98,14 +102,14 @@ export function Register() {
   const d = useData();
   const rows = useRows("processing_register");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   async function exportCsv() {
     setBusy(true);
     setError(null);
     const r = await call(d.token, "processing_register.export_csv", {});
     setBusy(false);
     if (r.kind === "ok") downloadText("processing-register.csv", (r.value as { csv: string }).csv);
-    else setError(r.kind === "error" ? serverMessage(r.message) : t("Needs approval"));
+    else setError(() => (r.kind === "error" ? serverMessage(r.message) : t("Needs approval")));
   }
   return (
     <div className="cx-page">
