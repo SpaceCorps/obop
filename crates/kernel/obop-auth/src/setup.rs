@@ -10,7 +10,9 @@
 //!   made. The count of accounts is read strictly: a store that cannot count is an error, never
 //!   "no accounts" (`Auth::user_count` answers 0 then, and is not used here).
 //! - **Order of checks.** Closed, server key, limits, code, input; then the lock, closed again, code
-//!   again, the writes. Nothing is hashed and nothing is written for a caller without the code.
+//!   again, the writes. For a caller without the code no password is hashed and no account, brand
+//!   or session is written. What such a caller does cause: the typed code is hashed to be compared,
+//!   the guess counters are counted, and a throttled `setup_refused` line is written.
 //! - **Fail closed.** The guess limits (10 in 10 minutes per address, 60 an hour in all) refuse
 //!   when the counter cannot be kept (`obop_storage::limit::hit` lets a hit through then, which is
 //!   right for a public page and wrong for this door). One answer for a wrong, expired, burnt,
@@ -357,7 +359,9 @@ impl Auth {
             let checked = brand::apply(&*self.backend, None, "setup", &name_action(n), true)
                 .map_err(brand_failure)?;
             if !checked.refusals.is_empty() {
-                return Err(SetupError::Invalid(refusals_text(&checked.refusals)));
+                return Err(SetupError::InstanceNameRefused(refusals_text(
+                    &checked.refusals,
+                )));
             }
         }
         Ok((name, instance))
@@ -377,7 +381,7 @@ fn refusals_text(list: &[brand::Refused]) -> String {
 
 fn brand_failure(f: Failure) -> SetupError {
     match f {
-        Failure::Refused(list) => SetupError::Invalid(refusals_text(&list)),
+        Failure::Refused(list) => SetupError::InstanceNameRefused(refusals_text(&list)),
         Failure::Storage(e) => SetupError::Unavailable(e),
     }
 }
@@ -469,13 +473,37 @@ impl SetupApi for Auth {
             ),
         );
         drop(lock);
-        // The answer of a password sign-in: limited to enrolment where the policy says so.
-        self.after_first_factor(&name, &None)
-            .map_err(SetupError::Unavailable)
+        // The answer of a password sign-in: limited to enrolment where the policy says so. The
+        // policy is applied to the groups just written, not to a read of the account: a read the
+        // store refused would give no groups, and with them a full session that never proved a
+        // second factor (`after_first_factor` reads them leniently). A new account has no second
+        // factor yet, so there is no second step to ask for.
+        let limited = self.enrolment_required_for(groups);
+        if limited {
+            self.event(
+                &name,
+                "limited_session",
+                &name,
+                "signed in without two-factor; only enrolment is allowed",
+            );
+        }
+        self.session_outcome(&name, limited, &None)
+            .map_err(|e| match e {
+                crate::mfa::SessionError::Store(m) => SetupError::Unavailable(m),
+                crate::mfa::SessionError::Refused => SetupError::Unavailable(
+                    "the new account changed while the set-up was finishing; sign in instead"
+                        .into(),
+                ),
+            })
     }
 }
 
 #[cfg(test)]
 pub(crate) fn code_key_for_test(code: &str) -> String {
     code_key(code)
+}
+
+#[cfg(test)]
+pub(crate) fn new_code_for_test() -> String {
+    new_code()
 }

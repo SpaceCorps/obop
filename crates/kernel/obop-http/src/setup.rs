@@ -7,7 +7,8 @@
 //! - `POST /api/auth/setup` `{"code", "username", "password", "instance_name"?}`: the answer of a
 //!   password sign-in (`mfa::outcome`), or a refusal: 409 `setup_closed`, 503
 //!   `setup_needs_secret_key`, 429 `rate_limited` with `Retry-After`, 403 `setup_code_invalid` (one
-//!   answer for every code that is not in force), 400 `invalid_input`, 503 when the store refused.
+//!   answer for every code that is not in force), 400 `setup_instance_name_invalid` for a name the
+//!   brand refuses, 400 `invalid_input` for the rest, 503 when the store refused.
 //!
 //! Both answer 404 when the authenticator has no set-up (`--dev-auth`, the control plane). The
 //! rules and their order are in `obop-auth` (`setup.rs`); this file only carries the request. No
@@ -131,6 +132,12 @@ fn refusal(e: SetupError) -> Response {
             &m,
             "invalid_input",
             "Fix the input described in the error and retry.",
+        ),
+        SetupError::InstanceNameRefused(m) => api_error(
+            StatusCode::BAD_REQUEST,
+            &format!("the instance name is refused: {m}"),
+            "setup_instance_name_invalid",
+            "Choose another instance name, or leave it out and set it later under Customize, Identity.",
         ),
         SetupError::Unavailable(m) => super::unavailable(&m),
     }

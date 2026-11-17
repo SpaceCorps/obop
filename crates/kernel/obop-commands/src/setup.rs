@@ -48,8 +48,12 @@ pub enum SetupError {
     /// The code is wrong, expired, burnt, missing, or no code is in force: one answer for all of
     /// them (403 `setup_code_invalid`).
     CodeInvalid,
-    /// The username, the password or the instance name is refused, with the sentence (400).
+    /// The username or the password is refused, with the sentence (400 `invalid_input`).
     Invalid(String),
+    /// The brand refused the instance name, with its rules (400 `setup_instance_name_invalid`):
+    /// a code of its own, so that the page can say it in the person's language and point at the
+    /// field (the name is the one input the page cannot check itself).
+    InstanceNameRefused(String),
     /// The store refused a read or a write, a counter could not be kept, or the lock was not
     /// granted: nothing is decided on a guess (503).
     Unavailable(String),
