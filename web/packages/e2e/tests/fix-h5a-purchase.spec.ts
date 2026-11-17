@@ -1,8 +1,8 @@
 import { expect, test, type Api } from "../support/fixtures.ts";
 
 // A purchase order line (docs/ISSUES.md Q13, purchase 0.4.1): a new line takes its description from
-// the product, as a sale order line does, and its received quantity is not typed on the line (Receive
-// goods gives it), so a draft order cannot be told that goods arrived.
+// the product, as a sale order line does. Its received quantity stays an input of the line: Receive
+// goods takes no quantities, so the line is the one place a person records a short delivery.
 
 async function withPurchase(api: Api, run: () => Promise<void>) {
   const root = await api.token("root");
@@ -16,7 +16,7 @@ async function withPurchase(api: Api, run: () => Promise<void>) {
   }
 }
 
-test("a new purchase line is described by its product and has no Received box (Q13)", async ({
+test("a new purchase line is described by its product and keeps its Received box (Q13)", async ({
   page,
   signIn,
   api,
@@ -38,9 +38,12 @@ test("a new purchase line is described by its product and has no Received box (Q
     await page.keyboard.type(gloves.name);
     await expect(page.getByRole("option", { name: gloves.name })).toBeVisible();
     await page.keyboard.press("Enter");
-    // What was received is not typed on a line.
-    await expect(page.getByRole("textbox", { name: /^Received/ })).toHaveCount(0);
-    await expect(page.getByRole("spinbutton", { name: /^Received/ })).toHaveCount(0);
+    // A short delivery is still recorded on the line, before Receive goods.
+    await expect(
+      page
+        .getByRole("textbox", { name: /^Received/ })
+        .or(page.getByRole("spinbutton", { name: /^Received/ })),
+    ).toHaveCount(1);
     await page.keyboard.press("Enter");
     await expect
       .poll(async () =>
