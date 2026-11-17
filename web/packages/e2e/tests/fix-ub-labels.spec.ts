@@ -37,14 +37,17 @@ test("Accounting Sweden has its card summary in the six languages (G9)", async (
 });
 
 test.describe("the German invoices list at 320 px (Q18)", () => {
-  test.use({ language: "de", viewport: { width: 320, height: 700 }, hasTouch: true, isMobile: true });
+  test.use({
+    language: "de",
+    viewport: { width: 320, height: 700 },
+    hasTouch: true,
+    isMobile: true,
+  });
 
   test("the list title is not cut", async ({ page, signIn, api }) => {
     const root = await api.token("root");
     const meta = (await api.get("/api/meta", root)).json.modules;
-    const invoice = meta
-      .flatMap((m: any) => m.models ?? [])
-      .find((m: any) => m.name === "invoice");
+    const invoice = meta.flatMap((m: any) => m.models ?? []).find((m: any) => m.name === "invoice");
     const plural: string = invoice.plural_labels?.de;
     expect(plural, "the German plural of invoice").toBeTruthy();
     await signIn("root", "/invoicing/invoice");
