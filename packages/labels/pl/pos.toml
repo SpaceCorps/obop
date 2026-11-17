@@ -66,7 +66,7 @@ description = "Gotówka policzona w szufladzie przy otwarciu (najmniejsza jednos
 
 [labels.pl.model.pos_session.field.expected_cash]
 label = "Oczekiwana gotówka"
-description = "Gotówka, którą szuflada powinna zawierać przy zamknięciu: stan początkowy plus płatności gotówkowe opłaconych sprzedaży sesji"
+description = "Gotówka, którą szuflada powinna mieć przy zamknięciu: kwota otwarcia plus płatności gotówką opłaconych sprzedaży sesji, minus gotówka sprzedaży zamkniętych sesji zwróconych w niej; po zamknięciu sesji kwota, z którą została zamknięta"
 
 [labels.pl.model.pos_session.field.closing_cash]
 label = "Gotówka przy zamknięciu"
@@ -250,3 +250,7 @@ description = "Skąd towary sprzedane w tej sesji schodzą ze stanu; jeśli nie 
 [labels.pl.model.pos_order.field.cash_paid]
 label = "Zapłacono gotówką"
 description = "Część płatności dokonana gotówką (najmniejsza jednostka waluty)"
+
+[labels.pl.model.pos_order.field.refund_session_id]
+label = "Zwrócono w sesji"
+description = "Sesja, z której szuflady wypłacono gotówkę zwrotu, ustawiana przez serwer, gdy zwracana jest sprzedaż zamkniętej sesji: sesja otwarta wtedy na kasie tej sprzedaży; pusta, gdy własna sesja sprzedaży była jeszcze otwarta"
