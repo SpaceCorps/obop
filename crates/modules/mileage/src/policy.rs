@@ -364,6 +364,11 @@ pub fn check_action(
         ));
     }
     match action {
+        // A reviewer does not read a private trip (M6), so one in review would wait for a
+        // reviewer who is also an administrator: it is kept out of review instead.
+        "submit" if text(trip, "purpose") == PRIVATE => {
+            Err("a private trip is not reviewed: change its purpose to submit it for review".into())
+        }
         "reject" if text(trip, "reject_reason").trim().is_empty() => {
             Err("reject needs a reason: write reject_reason with update first".into())
         }

@@ -3073,27 +3073,65 @@ fn a_reviewer_reads_the_distance_not_the_start_and_end_and_an_admin_read_is_logg
 fn a_private_trip_stays_out_of_a_reviewers_view() {
     each_rig(|r| {
         let (ann, rev, boss) = (driver("ann"), reviewer("rita"), admin("bo"));
+        // A private trip is not submitted (below), so the way one reaches a reviewable state is
+        // a business trip that was rejected and then made private by its driver.
+        let id = r.in_review(&ann);
+        r.ok(
+            &rev,
+            "mileage_trip.update",
+            json!({"id": id, "reject_reason": "which customer?"}),
+        );
+        r.ok(&rev, "mileage_trip.reject", json!({"id": id}));
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "private"}),
+        );
+        let missing = r.refused(&rev, "mileage_trip.get", json!({"id": id}));
+        assert_eq!(missing, format!("no mileage_trip {id}"));
+        let listed = r.ok(&rev, "mileage_trip.list", json!({}));
+        assert!(!listed.to_string().contains(&id), "{listed}");
+        let refused = r.refused(&rev, "mileage_trip.reopen", json!({"id": id}));
+        assert_eq!(refused, format!("no mileage_trip {id}"));
+        // Its driver and an administrator still read it.
+        assert_eq!(
+            r.ok(&ann, "mileage_trip.get", json!({"id": id}))["state"],
+            "rejected"
+        );
+        assert_eq!(
+            r.ok(&boss, "mileage_trip.get", json!({"id": id}))["purpose"],
+            "private"
+        );
+    });
+}
+
+#[test]
+fn a_private_trip_is_not_submitted_to_a_review_no_reviewer_could_see() {
+    each_rig(|r| {
+        let (ann, rev) = (driver("ann"), reviewer("rita"));
         let id = r.ended(&ann);
         r.ok(
             &ann,
             "mileage_trip.update",
             json!({"id": id, "purpose": "private"}),
         );
+        let refused = r.refused(&ann, "mileage_trip.submit", json!({"id": id}));
+        assert!(
+            refused.contains("a private trip is not reviewed"),
+            "{refused}"
+        );
+        assert_eq!(r.state(&id), "ended");
+        // With another purpose it goes to review, where a plain reviewer reads and decides it.
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "business"}),
+        );
         r.ok(&ann, "mileage_trip.submit", json!({"id": id}));
-        let missing = r.refused(&rev, "mileage_trip.get", json!({"id": id}));
-        assert_eq!(missing, format!("no mileage_trip {id}"));
-        let listed = r.ok(&rev, "mileage_trip.list", json!({}));
-        assert!(!listed.to_string().contains(&id), "{listed}");
-        let refused = r.refused(&rev, "mileage_trip.confirm", json!({"id": id}));
-        assert_eq!(refused, format!("no mileage_trip {id}"));
-        // Its driver and an administrator still read it.
         assert_eq!(
-            r.ok(&ann, "mileage_trip.get", json!({"id": id}))["state"],
+            r.ok(&rev, "mileage_trip.get", json!({"id": id}))["state"],
             "in_review"
         );
-        assert_eq!(
-            r.ok(&boss, "mileage_trip.get", json!({"id": id}))["purpose"],
-            "private"
-        );
+        r.ok(&rev, "mileage_trip.confirm", json!({"id": id}));
     });
 }
