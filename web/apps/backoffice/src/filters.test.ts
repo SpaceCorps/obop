@@ -164,6 +164,20 @@ describe("quick filters", () => {
     });
     expect(q.some((x) => x.label === "Odd")).toBe(false);
   });
+  it("a saved filter shows the label the package translated it with (U10)", async () => {
+    const m = {
+      ...ticket,
+      ui: {
+        filter: [
+          { label: "Not done", where: 'state != "closed"', labels: { de: "Nicht erledigt" } },
+        ],
+      },
+    };
+    expect(quickFilters(m, m.fields, ctx)[0]!.label).toBe("Not done");
+    provideCatalogue("de", {});
+    await setLanguage("de");
+    expect(quickFilters(m, m.fields, ctx)[0]!.label).toBe("Nicht erledigt");
+  });
 });
 
 describe("toggling", () => {

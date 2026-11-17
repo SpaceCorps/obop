@@ -2996,6 +2996,39 @@ mod tests {
         (d, inst)
     }
 
+    /// `setup` with a stand-in for the built-in Contacts module (`base`, the model `party`), for a
+    /// package that depends on it (projects 0.6.0 names a customer).
+    fn setup_with_base(store: &Store) -> (Arc<Dispatcher>, Arc<Installer>) {
+        let d = Arc::new(Dispatcher::new());
+        let base = Module {
+            id: "base".into(),
+            name: "Contacts".into(),
+            models: vec![ModelDef {
+                name: "party",
+                description: "p",
+                read_group: "base.user",
+                write_group: "base.user",
+                access: None,
+                fields: vec![],
+                commands: vec![],
+                ext: Default::default(),
+            }],
+            network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
+            meta: ModuleMeta::first_party("Contacts", &["sales"], &["contacts"], "contacts", &[]),
+        };
+        d.register_crud(&base, store);
+        let inst = Installer::new(
+            store.clone(),
+            &d,
+            vec![admin_module(), base],
+            Arc::new(Bundled),
+        );
+        register_admin(&d, &inst);
+        (d, inst)
+    }
+
     fn admin() -> Principal {
         Principal::user("root", &[ADMIN_GROUP])
     }
@@ -3345,7 +3378,7 @@ mod tests {
     #[test]
     fn meta_keeps_the_declared_order_of_models_and_actions() {
         let store = Store::new();
-        let (d, inst) = setup(&store);
+        let (d, inst) = setup_with_base(&store);
         inst.install(
             include_str!("../../../../packages/projects.toml"),
             "marketplace",
@@ -3955,7 +3988,7 @@ write_group = "gadget.manager"
     #[test]
     fn installed_models_validate_field_kinds_and_actions_keep_working() {
         let store = Store::new();
-        let (d, _) = setup(&store);
+        let (d, _) = setup_with_base(&store);
         call(
             &d,
             &admin(),

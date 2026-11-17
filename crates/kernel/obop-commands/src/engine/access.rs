@@ -179,6 +179,9 @@ pub(crate) fn creator_blocked(gate: &Gate<'_>, def: &ModelDef, rec: &Fields) -> 
         return None;
     }
     let a = def.access.as_ref()?;
+    if let Some(msg) = owner_from_link(def, a, rec) {
+        return Some(msg);
+    }
     let how = match (a.own, a.via) {
         (Some(o), _) => format!("set {o} to yourself"),
         (None, Some(v)) => format!("set {v} to a record you can see"),
@@ -187,6 +190,25 @@ pub(crate) fn creator_blocked(gate: &Gate<'_>, def: &ModelDef, rec: &Fields) -> 
     Some(format!(
         "{} would not be visible to you ({how}), so it was not saved",
         def.name
+    ))
+}
+
+/// R1: the owner is a `readonly` field the server fills from a linked record (leave is the
+/// employee's login), so the caller could not have chosen it: the refusal says whose the record
+/// would be and who may file it, instead of naming a field the caller cannot write.
+fn owner_from_link(def: &ModelDef, a: &Access, rec: &Fields) -> Option<String> {
+    let own = def.fields.iter().find(|f| Some(f.name) == a.own)?;
+    let hints = own.hints.as_ref().filter(|h| h.readonly)?;
+    let via = hints.fill_from.as_ref()?.via.as_deref()?;
+    text(rec, via)?;
+    let who = via.strip_suffix("_id").unwrap_or(via).replace('_', " ");
+    let by = if a.see_all.is_empty() {
+        "an administrator".to_string()
+    } else {
+        format!("someone with {}", a.see_all.join(" or "))
+    };
+    Some(format!(
+        "This {who} has their own login, so the record would be theirs and out of your sight: ask {by} to file it. Nothing was saved"
     ))
 }
 

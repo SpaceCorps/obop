@@ -196,7 +196,7 @@ description = "Henkilön valokuva (PNG, JPEG, WebP tai GIF; metatiedot, kuten si
 
 [labels.fi.model.hr_leave_request.field.requested_by]
 label = "Pyytäjä"
-description = "Käyttäjänimi, jolle pyyntö kuuluu, palvelimen asettama, kun se jätetään tyhjäksi (ja uudelleen, kun muutos siirtää pyynnön toiselle työntekijälle): työntekijän obop-käyttäjä, jos hänellä on sellainen, muuten pyynnön jättävä henkilö. Vain hän ja hr.manager näkevät pyynnön"
+description = "Käyttäjänimi, jolle pyyntö kuuluu, vain palvelimen asettama (lähetetty arvo hylätään): työntekijän obop-käyttäjä, jos hänellä on sellainen, muuten pyynnön jättävä henkilö, ja uudelleen, kun muutos siirtää pyynnön toiselle työntekijälle. Vain hän ja hr.manager näkevät pyynnön"
 
 [labels.fi.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Poissaolon viimeinen päivä on ennen sen ensimmäistä päivää"
@@ -217,3 +217,21 @@ description = "Työntekijä, joka johtaa osastoa"
 [labels.fi.model.hr_employee.field.user]
 label = "obop-käyttäjä"
 description = "Henkilön obop-käyttäjänimi (kirjautumistunnus), jos hänellä on sellainen: tälle työntekijälle jätetyt poissaolot kuuluvat tälle käyttäjälle, ja tämän käyttäjän uusi poissaolopyyntö alkaa tästä työntekijästä"
+
+[labels.fi.model.hr_employee.filter.active]
+label = "Aktiiviset"
+
+[labels.fi.model.hr_employee.filter.onboarding]
+label = "Perehdytyksessä"
+
+[labels.fi.model.hr_leave_request.filter.to_approve]
+label = "Hyväksyttävät"
+
+[labels.fi.model.hr_leave_request.filter.away_today]
+label = "Poissa tänään"
+
+[labels.fi.model.hr_leave_request.filter.upcoming]
+label = "Tulevat"
+
+[labels.fi.model.hr_leave_request.filter.not_refused]
+label = "Ei hylätyt"

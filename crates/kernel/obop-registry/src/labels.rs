@@ -53,6 +53,25 @@ pub struct ModelTr {
     /// Rule key -> language -> the message of the refusal of a model rule (D88),
     /// `[labels.<lang>.model.<m>.rule.<key>] message`.
     pub rules: BTreeMap<String, Texts>,
+    /// Filter key (`filter_key` of its English label) -> language -> the label of a filter the
+    /// package declares (`[[model.ui.filter]]`), `[labels.<lang>.model.<m>.filter.<key>] label`
+    /// (U10).
+    pub filters: BTreeMap<String, Texts>,
+}
+
+/// The key a filter of `[[model.ui.filter]]` is translated under: its English label in lower
+/// case, every run of other characters than ASCII letters and digits one `_` ("Not refused" is
+/// `not_refused`, "Away today" `away_today`).
+pub fn filter_key(label: &str) -> String {
+    let mut k = String::new();
+    for c in label.chars() {
+        if c.is_ascii_alphanumeric() {
+            k.push(c.to_ascii_lowercase());
+        } else if !k.is_empty() && !k.ends_with('_') {
+            k.push('_');
+        }
+    }
+    k.trim_end_matches('_').to_string()
 }
 
 /// All translations of one module.
@@ -100,6 +119,16 @@ pub struct ModelLabels {
     /// Rule key -> its table: `[labels.<lang>.model.<m>.rule.<key>]` (D88).
     #[serde(default)]
     pub rule: BTreeMap<String, AssertLabels>,
+    /// Filter key (`filter_key`) -> its table: `[labels.<lang>.model.<m>.filter.<key>]` (U10).
+    #[serde(default)]
+    pub filter: BTreeMap<String, FilterLabels>,
+}
+
+/// `label`: what a filter the package declares is called in the language.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct FilterLabels {
+    pub label: Option<String>,
 }
 
 /// `message`: what an interface says about a record the model's guard (D77) freezes.
@@ -191,6 +220,8 @@ pub struct ModelShape {
     pub guard_message: bool,
     /// The keys of the model's rules (D88), each with a message to translate.
     pub rules: BTreeSet<String>,
+    /// The keys (`filter_key`) of the filters the model declares (U10).
+    pub filters: BTreeSet<String>,
 }
 
 impl Shape {
@@ -235,6 +266,10 @@ impl Shape {
                                 .as_ref()
                                 .is_some_and(|g| g.message.is_some()),
                             rules: m.rule_keys().into_iter().map(String::from).collect(),
+                            filters: m
+                                .ui()
+                                .map(|u| u.filters.iter().map(|f| filter_key(&f.label)).collect())
+                                .unwrap_or_default(),
                         },
                     )
                 })
@@ -308,6 +343,15 @@ pub fn check_labels(labels: &BTreeMap<String, LangLabels>, shape: &Shape) -> Res
                     &rl.message,
                     MAX_ASSERT_MESSAGE_CHARS,
                 )?;
+            }
+            for (key, fl) in &ml.filter {
+                let at = format!("{at}.filter.{key}");
+                if !ms.filters.contains(key) {
+                    return Err(format!(
+                        "labels.{at}: {model} declares no filter whose key is {key:?} (the key is the English label in lower case with _ between the words)"
+                    ));
+                }
+                val(format!("{at}.label"), &fl.label, MAX_LABEL_CHARS)?;
             }
             for (field, fl) in &ml.field {
                 let at = format!("{at}.field.{field}");
@@ -393,6 +437,9 @@ impl Translations {
                 }
                 for (key, rl) in &ml.rule {
                     put(mt.rules.entry(key.clone()).or_default(), lang, &rl.message);
+                }
+                for (key, fl) in &ml.filter {
+                    put(mt.filters.entry(key.clone()).or_default(), lang, &fl.label);
                 }
                 for (field, fl) in &ml.field {
                     let ft = mt.fields.entry(field.clone()).or_default();
@@ -542,6 +589,41 @@ mod tests {
     }
 
     #[test]
+    fn a_declared_filter_is_translated_under_the_key_of_its_english_label() {
+        // U10.
+        assert_eq!(filter_key("Not refused"), "not_refused");
+        assert_eq!(filter_key("Due in 30 days"), "due_in_30_days");
+        assert_eq!(filter_key("  To pay!  "), "to_pay");
+        let mut shape = Shape::default();
+        shape.models.insert(
+            "m".into(),
+            ModelShape {
+                filters: BTreeSet::from(["not_refused".to_string()]),
+                ..ModelShape::default()
+            },
+        );
+        let doc = |key: &str| {
+            format!(
+                "[labels.de.model.m.filter.{key}]
+label = \"Nicht abgelehnt\""
+            )
+        };
+        let check = |s: String| check_labels(&Translations::parse_labels(&s).unwrap(), &shape);
+        assert!(check(doc("not_refused")).is_ok());
+        let t =
+            Translations::from_labels(&Translations::parse_labels(&doc("not_refused")).unwrap());
+        assert_eq!(
+            t.models["m"].filters["not_refused"]["de"],
+            "Nicht abgelehnt"
+        );
+        let e = check(doc("refused")).unwrap_err();
+        assert!(
+            e.contains("declares no filter whose key is \"refused\""),
+            "{e}"
+        );
+    }
+
+    #[test]
     fn a_guard_message_is_translated_only_where_the_model_has_one() {
         let mut shape = Shape::default();
         for (m, has) in [("locked", true), ("plain", false)] {
@@ -613,6 +695,7 @@ mod tests {
                 ]),
                 guard_message: false,
                 rules: BTreeSet::new(),
+                filters: BTreeSet::new(),
             },
         );
         let doc = |at: &str, msg: &str| format!("[labels.sv.model.m.action.{at}]\nmessage = {msg}");

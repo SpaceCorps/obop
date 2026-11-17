@@ -394,6 +394,9 @@ async fn meta_says_the_limit_of_every_field_that_has_one() {
     let p = field("lim_note", "plain");
     assert_eq!(p["max_length"], 2048);
     assert!(p.get("min_length").is_none(), "{p}");
+    // U3: the named format of a field is stated too; a field without one has none.
+    assert!(p.get("pattern").is_none(), "{p}");
+    assert_eq!(field("sale_order", "currency")["pattern"], "currency_code");
     assert_eq!(field("lim_note", "body")["max_length"], 100_000);
     let q = field("lim_note", "qty");
     assert_eq!((q["min"].clone(), q["max"].clone()), (json!(0), json!(100)));

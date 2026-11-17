@@ -37,6 +37,9 @@ pub(crate) struct Pending {
     pub principal: Principal,
     pub id: String,
     pub input: Value,
+    /// The fields (`model.field`) the agent sent in clear although it is shown them masked: they
+    /// count as changed when a person approves the plan, as in the call itself (K63).
+    pub clear: Vec<String>,
 }
 
 impl Pending {
@@ -59,6 +62,7 @@ impl Pending {
             },
             "command": self.id,
             "input": self.input.to_json(),
+            "clear": self.clear,
         })
     }
 
@@ -97,15 +101,40 @@ impl Pending {
             },
             id: j["command"].as_str()?.to_string(),
             input: Value::from_json(&j["input"]),
+            clear: j["clear"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default(),
         })
     }
 }
 
-/// Held for the duration of one guarded write.
+/// Held for the duration of one guarded write. A call made on the thread that already holds the
+/// lock of the same dispatcher (a command that runs others under `Dispatcher::serialized`, Q12)
+/// gets an empty guard instead of waiting for itself.
 #[allow(dead_code)]
 pub(crate) enum TxnGuard<'a> {
-    Local(MutexGuard<'a, ()>),
-    Shared(LockGuard),
+    Local(MutexGuard<'a, ()>, Holder),
+    Shared(LockGuard, Holder),
+    Nested,
+}
+
+thread_local! {
+    /// The lock (by the address of the dispatcher's mutex) this thread holds, 0 for none.
+    static HELD: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Marks the thread as the holder of the lock until it is released.
+pub(crate) struct Holder;
+
+impl Drop for Holder {
+    fn drop(&mut self) {
+        HELD.with(|h| h.set(0));
+    }
 }
 
 /// Pending plans, in memory or in the shared backend.
@@ -175,12 +204,16 @@ pub(crate) fn txn_lock<'a>(
     shared: Option<&Shared>,
     local: &'a Mutex<()>,
 ) -> Result<TxnGuard<'a>, String> {
-    match shared {
-        Some(s) => Ok(TxnGuard::Shared(s.backend.lock(TXN_KEY)?)),
-        None => Ok(TxnGuard::Local(
-            local.lock().unwrap_or_else(|e| e.into_inner()),
-        )),
+    let key = local as *const Mutex<()> as usize;
+    if HELD.with(|h| h.get()) == key {
+        return Ok(TxnGuard::Nested);
     }
+    let g = match shared {
+        Some(s) => TxnGuard::Shared(s.backend.lock(TXN_KEY)?, Holder),
+        None => TxnGuard::Local(local.lock().unwrap_or_else(|e| e.into_inner()), Holder),
+    };
+    HELD.with(|h| h.set(key));
+    Ok(g)
 }
 
 #[cfg(test)]
@@ -196,6 +229,7 @@ mod tests {
                 ("n", Value::Int(3)),
                 ("tags", Value::List(vec![Value::text("a"), Value::Null])),
             ]),
+            clear: vec!["sales_order.note".into()],
         }
     }
 
@@ -204,6 +238,7 @@ mod tests {
         let p = pending();
         let back = Pending::from_json(&p.to_json()).unwrap();
         assert_eq!(back.id, p.id);
+        assert_eq!(back.clear, p.clear);
         assert_eq!(back.input, p.input);
         assert_eq!(back.principal.id, p.principal.id);
         assert_eq!(back.principal.kind, PrincipalKind::Agent);

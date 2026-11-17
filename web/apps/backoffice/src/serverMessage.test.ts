@@ -395,14 +395,30 @@ describe("server messages without engine text", () => {
     expect(serverMessage("sale_order.note is required")).toBe("Note is required");
   });
 
+  it("says plainly who files a record for someone with their own login (R1)", async () => {
+    await setLanguage("en", false);
+    expect(
+      serverMessage(
+        "This employee has their own login, so the record would be theirs and out of your sight: ask someone with hr.manager to file it. Nothing was saved",
+      ),
+    ).toBe(
+      "This person has their own login, so the record would be theirs and you could not see it. Ask someone with hr.manager to file it. Nothing was saved.",
+    );
+    expect(
+      serverMessage(
+        "This employee has their own login, so the record would be theirs and out of your sight: ask an administrator to file it. Nothing was saved",
+      ),
+    ).toBe(
+      "This person has their own login, so the record would be theirs and you could not see it. Ask an administrator to file it. Nothing was saved.",
+    );
+  });
+
   it("says what format or which days a field takes (K45)", async () => {
     await setLanguage("en", false);
     registerMeta([{ id: "sales", name: "Sales", models: [order] }]);
     expect(
-      serverMessage(
-        "sale_order.currency must be a currency code of three capital letters (ISO 4217), such as EUR",
-      ),
-    ).toBe("Currency must be a currency code of three capital letters, such as EUR");
+      serverMessage("sale_order.currency must be a currency code of ISO 4217, such as EUR"),
+    ).toBe("Currency must be a currency code of ISO 4217, such as EUR");
     expect(
       serverMessage("sale_order.iban must be a valid IBAN, such as DE89 3704 0044 0532 0130 00"),
     ).toBe("IBAN must be a valid IBAN, such as DE89 3704 0044 0532 0130 00");
