@@ -165,7 +165,9 @@ fn check_value(
         (FieldKind::Image(_) | FieldKind::File(_), Value::Text(id)) => {
             crate::blobs::check_field_value(store, model, name, kind, id)
         }
-        (FieldKind::Date, Value::Text(t)) if is_valid_date(t) => Ok(()),
+        (FieldKind::Date, Value::Text(t)) if is_valid_date(t) => {
+            crate::kinds::check_date_limits(model, f, t, true)
+        }
         (FieldKind::Decimal { .. } | FieldKind::Datetime, Value::Text(t)) => {
             crate::kinds::check_canonical(model, name, kind, t)?;
             if matches!(kind, FieldKind::Decimal { .. }) {

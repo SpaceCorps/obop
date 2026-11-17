@@ -367,3 +367,9 @@ message = "Die Buchung ist nicht ausgeglichen: Summe Soll und Summe Haben müsse
 
 [labels.de.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Wählen Sie die Buchungszeile, zu der diese Banktransaktion gehört"
+
+[labels.de.model.accounting_fiscal_year.rule.ends_after_start]
+message = "Das Geschäftsjahr endet, bevor es beginnt: Legen Sie einen letzten Tag am oder nach dem ersten Tag fest"
+
+[labels.de.model.accounting_period.rule.ends_after_start]
+message = "Die Periode endet, bevor sie beginnt: Legen Sie einen letzten Tag am oder nach dem ersten Tag fest"

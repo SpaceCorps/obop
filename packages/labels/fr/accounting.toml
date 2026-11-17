@@ -367,3 +367,9 @@ message = "L’écriture n’est pas équilibrée : le total du débit et le tot
 
 [labels.fr.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Choisissez la ligne d’écriture à laquelle correspond cette transaction bancaire"
+
+[labels.fr.model.accounting_fiscal_year.rule.ends_after_start]
+message = "L'exercice se termine avant de commencer : choisissez un dernier jour égal ou postérieur au premier jour"
+
+[labels.fr.model.accounting_period.rule.ends_after_start]
+message = "La période se termine avant de commencer : choisissez un dernier jour égal ou postérieur au premier jour"

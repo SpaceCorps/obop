@@ -102,3 +102,9 @@ description = "Registrera att deltagaren inte kom"
 
 [labels.sv.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Bokningen slutar innan den börjar: ange en sluttid efter starten"
+
+[labels.sv.model.appointments_appointment.rule.ends_after_start]
+message = "Bokningen slutar innan den börjar: ange en sluttid efter starten"
+
+[labels.sv.model.appointments_appointment.rule.no_double_booking]
+message = "Resursen är redan bokad vid den tiden: välj en annan tid eller en annan resurs"

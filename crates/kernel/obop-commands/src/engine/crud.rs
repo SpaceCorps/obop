@@ -119,7 +119,10 @@ fn check_json(
                 wrong()
             }
         }
-        (FieldKind::Date, J::String(t)) if is_valid_date(t) => Ok(()),
+        (FieldKind::Date, J::String(t)) if is_valid_date(t) => match unchanged {
+            true => Ok(()),
+            false => kinds::check_date_limits(model, f, t, say_value),
+        },
         // Decimals and instants are stored as canonical text (D72); every write path
         // canonicalises first, so anything else here is refused.
         (FieldKind::Decimal { .. } | FieldKind::Datetime, J::String(t)) => {

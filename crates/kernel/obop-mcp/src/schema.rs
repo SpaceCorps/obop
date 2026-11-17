@@ -84,6 +84,7 @@ pub fn bound_json(b: Bound) -> J {
     match b {
         Bound::Int(n) => json!(n),
         Bound::Dec(d) => json!(d.to_string()),
+        Bound::Date(_) => json!(b.to_string()),
     }
 }
 
@@ -102,7 +103,7 @@ fn limit_keywords(s: &mut J, f: &FieldInfo) {
     if let Some(n) = f.min_length {
         s["minLength"] = json!(n);
     }
-    let (lo, hi) = if f.kind == "decimal" {
+    let (lo, hi) = if f.kind == "decimal" || f.kind == "date" {
         ("x-obop-minimum", "x-obop-maximum")
     } else {
         ("minimum", "maximum")

@@ -53,12 +53,15 @@ fn uses_hints_or_guards(m: &Manifest) -> bool {
 /// Every model that exists today, built in or parsed from a bundled package, carries the default
 /// per-model extensions: no history setting, no declared index. The record history and index
 /// features read `ModelDef::ext`; until each lands, nothing may set it. The UI hints (D95) and the
-/// command-layer guard (D77) have landed, so a model may declare those.
+/// command-layer guard (D77) have landed, and so have the model rules (D88, own fields, and the
+/// no-overlap rule), so a model may declare those.
 #[test]
 fn every_existing_model_has_the_default_extensions() {
     let bare = |ext: &ModelExt| ModelExt {
         ui: None,
         guard: None,
+        rules: Vec::new(),
+        no_overlap: None,
         ..ext.clone()
     };
     let mut seen = 0;

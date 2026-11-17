@@ -102,3 +102,9 @@ description = "Festhalten, dass die teilnehmende Person nicht gekommen ist"
 
 [labels.de.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Der Termin endet, bevor er beginnt: Legen Sie ein Ende nach dem Beginn fest"
+
+[labels.de.model.appointments_appointment.rule.ends_after_start]
+message = "Der Termin endet, bevor er beginnt: Legen Sie ein Ende nach dem Beginn fest"
+
+[labels.de.model.appointments_appointment.rule.no_double_booking]
+message = "Die Ressource ist zu dieser Zeit bereits gebucht: Wählen Sie eine andere Zeit oder eine andere Ressource"

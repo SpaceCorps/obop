@@ -239,7 +239,7 @@ pub const TABLE: &[Row] = &[
         status: 400,
         retry_after: None,
         origin: "D56",
-        hint: "A condition of the action does not hold. Change the record as the message says, then retry.",
+        hint: "A condition declared by the package does not hold: an assertion of an action or a rule of the model. Change the record as the message says, then retry.",
     },
     Row {
         code: code::LIMIT_VIOLATED,

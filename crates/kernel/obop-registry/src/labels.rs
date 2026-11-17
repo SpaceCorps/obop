@@ -50,6 +50,9 @@ pub struct ModelTr {
     /// The message of the model's guard (D77) per language: what the lock banner says,
     /// `[labels.<lang>.model.<m>.guard] message`.
     pub guard: Texts,
+    /// Rule key -> language -> the message of the refusal of a model rule (D88),
+    /// `[labels.<lang>.model.<m>.rule.<key>] message`.
+    pub rules: BTreeMap<String, Texts>,
 }
 
 /// All translations of one module.
@@ -94,6 +97,9 @@ pub struct ModelLabels {
     pub action: BTreeMap<String, ActionLabels>,
     /// `[labels.<lang>.model.<m>.guard]`: the message of the model's guard.
     pub guard: Option<GuardLabels>,
+    /// Rule key -> its table: `[labels.<lang>.model.<m>.rule.<key>]` (D88).
+    #[serde(default)]
+    pub rule: BTreeMap<String, AssertLabels>,
 }
 
 /// `message`: what an interface says about a record the model's guard (D77) freezes.
@@ -183,6 +189,8 @@ pub struct ModelShape {
     pub actions: BTreeMap<String, BTreeSet<String>>,
     /// The model has a guard with a message to translate.
     pub guard_message: bool,
+    /// The keys of the model's rules (D88), each with a message to translate.
+    pub rules: BTreeSet<String>,
 }
 
 impl Shape {
@@ -226,6 +234,7 @@ impl Shape {
                                 .guard
                                 .as_ref()
                                 .is_some_and(|g| g.message.is_some()),
+                            rules: m.rule_keys().into_iter().map(String::from).collect(),
                         },
                     )
                 })
@@ -285,6 +294,19 @@ pub fn check_labels(labels: &BTreeMap<String, LangLabels>, shape: &Shape) -> Res
                     format!("{at}.guard.message"),
                     &g.message,
                     MAX_DESCRIPTION_CHARS,
+                )?;
+            }
+            for (key, rl) in &ml.rule {
+                let at = format!("{at}.rule.{key}");
+                if !ms.rules.contains(key) {
+                    return Err(format!(
+                        "labels.{at}: {model} has no rule with the key {key:?}"
+                    ));
+                }
+                val(
+                    format!("{at}.message"),
+                    &rl.message,
+                    MAX_ASSERT_MESSAGE_CHARS,
                 )?;
             }
             for (field, fl) in &ml.field {
@@ -369,6 +391,9 @@ impl Translations {
                 if let Some(g) = &ml.guard {
                     put(&mut mt.guard, lang, &g.message);
                 }
+                for (key, rl) in &ml.rule {
+                    put(mt.rules.entry(key.clone()).or_default(), lang, &rl.message);
+                }
                 for (field, fl) in &ml.field {
                     let ft = mt.fields.entry(field.clone()).or_default();
                     put(&mut ft.entry.labels, lang, &fl.label);
@@ -416,6 +441,16 @@ impl Translations {
         self.models.get(model)?.guard.get(lang).map(String::as_str)
     }
 
+    /// The message of the rule `key` of `model` (D88) in `lang`, if the tables have one.
+    pub fn rule_message(&self, model: &str, key: &str, lang: &str) -> Option<&str> {
+        self.models
+            .get(model)?
+            .rules
+            .get(key)?
+            .get(lang)
+            .map(String::as_str)
+    }
+
     /// The message of the assertion `key` of `model.action` in `lang`, if the tables have one.
     pub fn assertion_message(
         &self,
@@ -451,7 +486,9 @@ impl Module {
         if let Err(e) = check_labels(&all, &Shape::of(&self)) {
             panic!("labels of {}: {e}", self.id);
         }
-        self.translations = std::sync::Arc::new(Translations::from_labels(&all));
+        let t = Translations::from_labels(&all);
+        crate::model_rules::attach_messages(&mut self.models, &t);
+        self.translations = std::sync::Arc::new(t);
         self
     }
 }
@@ -539,6 +576,31 @@ mod tests {
     }
 
     #[test]
+    fn rule_messages_are_checked_against_the_rules_of_the_model() {
+        let mut shape = Shape::default();
+        shape.models.insert(
+            "m".into(),
+            ModelShape {
+                rules: BTreeSet::from(["ends_after_start".to_string()]),
+                ..Default::default()
+            },
+        );
+        let doc = |key: &str, msg: &str| format!("[labels.sv.model.m.rule.{key}]\nmessage = {msg}");
+        let parsed = |s: String| Translations::parse_labels(&s).unwrap();
+        let ok = parsed(doc("ends_after_start", "\"Slutar före start\""));
+        assert!(check_labels(&ok, &shape).is_ok());
+        let t = Translations::from_labels(&ok);
+        assert_eq!(
+            t.rule_message("m", "ends_after_start", "sv"),
+            Some("Slutar före start")
+        );
+        assert_eq!(t.rule_message("m", "ends_after_start", "de"), None);
+        let e = check_labels(&parsed(doc("ghost", "\"x\"")), &shape).unwrap_err();
+        assert!(e.contains("no rule with the key \"ghost\""), "{e}");
+        assert!(check_labels(&parsed(doc("ends_after_start", "\"<b>\"")), &shape).is_err());
+    }
+
+    #[test]
     fn assertion_messages_are_checked_against_the_keys_of_the_action() {
         let mut shape = Shape::default();
         shape.models.insert(
@@ -550,6 +612,7 @@ mod tests {
                     ("stop".to_string(), BTreeSet::new()),
                 ]),
                 guard_message: false,
+                rules: BTreeSet::new(),
             },
         );
         let doc = |at: &str, msg: &str| format!("[labels.sv.model.m.action.{at}]\nmessage = {msg}");

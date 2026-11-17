@@ -3598,6 +3598,10 @@ mod bundled_packages {
                             _ => Value::Text(s),
                         }
                     }
+                    // A field with a format (K45): a currency field holds a currency code and an
+                    // IBAN field an IBAN.
+                    "text" if f.name == "currency" => Value::text("EUR"),
+                    "text" if f.name.ends_with("iban") => Value::text("DE89370400440532013000"),
                     "text" => {
                         let max = f.max_length.map_or(usize::MAX, |m| m as usize);
                         Value::Text("sample".chars().take(max).collect())

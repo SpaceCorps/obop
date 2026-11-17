@@ -18,7 +18,7 @@ fn limit_keywords(f: &obop_commands::FieldInfo) -> serde_json::Map<String, J> {
     if let Some(n) = f.min_length {
         kw.insert("minLength".into(), json!(n));
     }
-    let (lo, hi) = if f.kind == "decimal" {
+    let (lo, hi) = if f.kind == "decimal" || f.kind == "date" {
         ("x-obop-minimum", "x-obop-maximum")
     } else {
         ("minimum", "maximum")

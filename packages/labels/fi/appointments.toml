@@ -102,3 +102,9 @@ description = "Kirjaa, ettei osallistuja saapunut"
 
 [labels.fi.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Ajanvaraus päättyy ennen kuin se alkaa: aseta päättymisaika alkamisen jälkeen"
+
+[labels.fi.model.appointments_appointment.rule.ends_after_start]
+message = "Ajanvaraus päättyy ennen kuin se alkaa: aseta päättymisaika alkamisen jälkeen"
+
+[labels.fi.model.appointments_appointment.rule.no_double_booking]
+message = "Resurssi on jo varattu tuohon aikaan: valitse toinen aika tai toinen resurssi"

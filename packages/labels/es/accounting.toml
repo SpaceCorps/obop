@@ -367,3 +367,9 @@ message = "El asiento no cuadra: el total del debe y el total del haber deben se
 
 [labels.es.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Elige la línea de asiento a la que corresponde esta transacción bancaria"
+
+[labels.es.model.accounting_fiscal_year.rule.ends_after_start]
+message = "El ejercicio termina antes de empezar: indique un último día igual o posterior al primer día"
+
+[labels.es.model.accounting_period.rule.ends_after_start]
+message = "El período termina antes de empezar: indique un último día igual o posterior al primer día"

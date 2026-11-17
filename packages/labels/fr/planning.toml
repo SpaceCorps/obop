@@ -90,3 +90,9 @@ description = "Remet un créneau publié à l’état ouvert"
 [labels.fr.model.planning_shift.action.confirm]
 label = "Confirmer"
 description = "L’employé confirme qu’il assurera le créneau"
+
+[labels.fr.model.planning_shift.rule.ends_after_start]
+message = "Le créneau se termine avant de commencer : choisissez une heure de fin après le début"
+
+[labels.fr.model.planning_shift.rule.no_double_shift]
+message = "L'employé a déjà un créneau à ce moment : choisissez une autre heure ou un autre employé"

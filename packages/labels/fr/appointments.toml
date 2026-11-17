@@ -102,3 +102,9 @@ description = "Enregistre que le participant ne s’est pas présenté"
 
 [labels.fr.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Le rendez-vous se termine avant de commencer : choisissez une heure de fin après le début"
+
+[labels.fr.model.appointments_appointment.rule.ends_after_start]
+message = "Le rendez-vous se termine avant de commencer : choisissez une heure de fin après le début"
+
+[labels.fr.model.appointments_appointment.rule.no_double_booking]
+message = "La ressource est déjà réservée à ce moment : choisissez une autre heure ou une autre ressource"

@@ -36,6 +36,8 @@ mod ledger_tests;
 #[cfg(test)]
 mod limits_tests;
 #[cfg(test)]
+mod model_rules_tests;
+#[cfg(test)]
 mod public_tests;
 #[cfg(test)]
 mod ui_tests;

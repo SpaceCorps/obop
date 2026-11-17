@@ -102,3 +102,9 @@ description = "Registrar que el asistente no se presentó"
 
 [labels.es.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "La cita termina antes de empezar: indique una hora de fin posterior al inicio"
+
+[labels.es.model.appointments_appointment.rule.ends_after_start]
+message = "La cita termina antes de empezar: indique una hora de fin posterior al inicio"
+
+[labels.es.model.appointments_appointment.rule.no_double_booking]
+message = "El recurso ya está reservado a esa hora: elija otra hora u otro recurso"
