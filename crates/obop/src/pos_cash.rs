@@ -14,8 +14,8 @@
 //!
 //! A cash refund of a sale whose session is already closed (U8, pos 0.7.0) is paid out of the
 //! drawer of the session open at the sale's till at that moment: the refund records that session
-//! in `refund_session_id` before the action runs, and its expected cash subtracts the cash of such
-//! refunds. With no session open at the till such a refund is refused: its cash would leave no
+//! in `refund_session_id` once the refund has happened (chosen while the sale is still paid), and
+//! its expected cash subtracts the cash of such refunds. With no session open at the till such a refund is refused: its cash would leave no
 //! session's drawer. A sale refunded while its own session is open needs nothing: it simply stops
 //! counting as paid there.
 
@@ -200,14 +200,24 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
         "pos_order.refund",
         Box::new(move |_, input, inner| {
             let id = input_text(input, "id");
-            if !id.is_empty()
-                && let Some(session) = refund_session(&*b, &id)?
+            // Which drawer pays out is decided while the sale is still paid; it is written only
+            // once the refund happened, so a refused refund leaves no session on the sale.
+            let session = if id.is_empty() {
+                None
+            } else {
+                refund_session(&*b, &id)?
+            };
+            let out = inner(input)?;
+            if let Some(session) = session
+                && b.get("pos_order", &id)
+                    .map_err(|e| e.to_string())?
+                    .is_some_and(|o| text(&o, "state") == "refunded")
             {
                 let mut f = Fields::new();
                 f.insert("refund_session_id".into(), J::from(session));
                 b.update("pos_order", &id, &f).map_err(|e| e.to_string())?;
             }
-            inner(input)
+            Ok(out)
         }),
     );
     let b = store.backend();
