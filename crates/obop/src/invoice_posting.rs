@@ -763,10 +763,13 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
     // invoice can. A guard plans the booking before the post (on the action and on an update
     // that moves the state to posted), so a booking that would be refused refuses the post; an
     // observer writes it after the post succeeded, in the same call.
-    let st = store.clone();
+    let (st, dw) = (store.clone(), Arc::downgrade(d));
     let check = move |input: &Value| -> Result<obop_commands::Verdict, String> {
         let b = st.backend();
-        if let Some(i) = booking_for(&*b, input)?
+        let Some(d) = dw.upgrade() else {
+            return Ok(obop_commands::Verdict::default());
+        };
+        if let Some(i) = booking_for(&d, &*b, input)?
             && invoice_of(&*b, &i.invoice)
                 .map(|(_, f)| text(&f, "state") == "draft")
                 .unwrap_or(false)
@@ -795,14 +798,15 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             _ => Ok(obop_commands::Verdict::default()),
         }),
     );
-    let st = store.clone();
+    let (st, dw) = (store.clone(), Arc::downgrade(d));
     d.observe(
         &m.id,
         Box::new(move |id, _, input, _| {
             if id != "invoice.post" && id != "invoice.update" {
                 return;
             }
-            if let Err(e) = book_after_post(&*st.backend(), input) {
+            let Some(d) = dw.upgrade() else { return };
+            if let Err(e) = book_after_post(&d, &*st.backend(), input) {
                 eprintln!(
                     "the invoice was posted but its journal entry could not be booked: {e}; book it with invoice_posting.create_move"
                 );
@@ -812,8 +816,9 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
 }
 
 /// The booking of the invoice an input names, when booking on post is on and set up and the
-/// accounting package is installed.
-fn booking_for(b: &dyn Backend, input: &Value) -> Result<Option<Input>, String> {
+/// accounting package is installed. It is dated on the invoice's issue date, else today in the
+/// platform zone (`OBOP_ZONE`).
+fn booking_for(d: &Dispatcher, b: &dyn Backend, input: &Value) -> Result<Option<Input>, String> {
     let id = match input {
         Value::Map(x) => match x.get("id") {
             Some(Value::Text(t)) => t.to_string(),
@@ -821,15 +826,38 @@ fn booking_for(b: &dyn Backend, input: &Value) -> Result<Option<Input>, String> 
         },
         _ => return Ok(None),
     };
-    if b.list("accounting_move").is_err() {
+    if !d.has_model("accounting_move") {
         return Ok(None);
     }
-    Ok(on_post_input(b)?.map(|i| Input { invoice: id, ..i }))
+    let Some(i) = on_post_input(b)? else {
+        return Ok(None);
+    };
+    let issued = b
+        .get("invoice", &id)
+        .map_err(|e| e.to_string())?
+        .map(|f| text(&f, "issue_date"))
+        .unwrap_or_default();
+    let date = if issued.is_empty() { today(d) } else { issued };
+    Ok(Some(Input {
+        invoice: id,
+        date,
+        ..i
+    }))
+}
+
+/// Today in the platform zone, `YYYY-MM-DD`.
+fn today(d: &Dispatcher) -> String {
+    let micros = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |t| t.as_micros() as i64);
+    obop_values::Instant::from_micros(micros)
+        .map(|at| d.zones().today(at))
+        .unwrap_or_else(|| crate::sie::iso(crate::sie::today()))
 }
 
 /// After a post (or an update that posted): book the invoice if it is now posted and has no move.
-fn book_after_post(b: &dyn Backend, input: &Value) -> Result<(), String> {
-    let Some(i) = booking_for(b, input)? else {
+fn book_after_post(d: &Dispatcher, b: &dyn Backend, input: &Value) -> Result<(), String> {
+    let Some(i) = booking_for(d, b, input)? else {
         return Ok(());
     };
     let posted = invoice_of(b, &i.invoice)

@@ -1,7 +1,9 @@
 // Invoicing: a "Print" button on an invoice, which opens the invoice as a printable page
-// (apps/invoicing/InvoicePrint.tsx, `#/invoicing/print?id=…`).
+// (apps/invoicing/InvoicePrint.tsx, `#/invoicing/print?id=…`), and on a posted invoice its journal
+// entry or a "Book to ledger" button (apps/invoicing/LedgerPanel.tsx).
 import { lazy } from "react";
 import { Button, t } from "@obop/ui";
+import { LedgerPanel } from "../apps/invoicing/LedgerPanel.tsx";
 import { registerAppPages, registerRecordExtension, type RecordExtProps } from "../extensions.ts";
 import { href } from "../route.ts";
 
@@ -24,7 +26,7 @@ function PrintButton({ row, busy }: RecordExtProps) {
   );
 }
 
-registerRecordExtension("invoice", { actions: [PrintButton] });
+registerRecordExtension("invoice", { actions: [PrintButton], panels: [LedgerPanel] });
 
 registerAppPages("invoicing", {
   use: (ctx) => {

@@ -519,3 +519,24 @@ fn the_booking_settings_are_checked_and_changed_by_an_accounting_manager() {
     let s = call(&f.app, &admin(), "invoice_posting_setting.get", json!({})).unwrap();
     assert_eq!(s["missing"], json!(["tax"]));
 }
+
+#[test]
+fn an_invoice_without_an_issue_date_is_booked_on_today() {
+    let f = fixture(2500);
+    configure(&f, json!({}));
+    let inv = f.invoice(&[4_000], true);
+    let link = call(
+        &f.app,
+        &admin(),
+        "invoice_posting.get",
+        json!({"invoice": inv}),
+    )
+    .unwrap();
+    let mv = rows(&f.app, "accounting_move")
+        .into_iter()
+        .find(|(id, _)| json!(id) == link["move_id"])
+        .unwrap()
+        .1;
+    let today = crate::sie::iso(crate::sie::today());
+    assert_eq!(mv["date"], json!(today));
+}
