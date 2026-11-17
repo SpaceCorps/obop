@@ -320,4 +320,70 @@ test.describe("access by app", () => {
     expect(await layoutProblems(page)).toEqual([]);
     await expect(open).toBeFocused();
   });
+
+  test("the folded lines show that they open, and a section starts open when the person holds something in it", async ({
+    page,
+    api,
+    signIn,
+    uid,
+  }) => {
+    // Mileage is built in: its driver group is the base, its reviewer group is an extra.
+    const holder = uid("holder").replace(/ /g, "-");
+    const plain = uid("plain").replace(/ /g, "-");
+    for (const [username, groups] of [
+      [holder, ["mileage.driver", "mileage.reviewer", "api.device_admin"]],
+      [plain, ["mileage.driver"]],
+    ] as const) {
+      const made = await api.post(
+        "/api/auth/users",
+        { username, password: "e2e fold person pw 7!", groups },
+        await api.token("root"),
+      );
+      expect(made.status).toBe(200);
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signIn("root", SECURITY);
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [name, opens] of [
+        [holder, true],
+        [plain, false],
+      ] as const) {
+        const row = page
+          .getByRole("table", { name: "People" })
+          .getByRole("row")
+          .filter({ has: page.getByRole("cell", { name, exact: true }) });
+        await row.scrollIntoViewIfNeeded();
+        await row.getByRole("button", { name: `Access of ${name}`, exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: `Access of ${name}` });
+        await expect(dialog).toBeVisible();
+        const more = dialog.locator("details.access-more").filter({
+          has: page.getByText("More access in Mileage"),
+        });
+        await expect(more).toHaveCount(1);
+        // Held: open. Not held: closed.
+        expect(await more.evaluate((el) => (el as HTMLDetailsElement).open)).toBe(opens);
+        // The browser's own triangle is the sign that the line opens: a list item, 44 px high.
+        const summary = more.locator("summary");
+        expect(await summary.evaluate((el) => getComputedStyle(el).display)).toBe("list-item");
+        expect(
+          await summary.evaluate((el) => (el as HTMLElement).offsetHeight),
+        ).toBeGreaterThanOrEqual(44);
+        const other = dialog.locator("details.access-other");
+        if (opens) {
+          await expect(other).toHaveCount(1);
+          expect(await other.evaluate((el) => (el as HTMLDetailsElement).open)).toBe(true);
+          const so = other.locator("summary");
+          expect(await so.evaluate((el) => getComputedStyle(el).display)).toBe("list-item");
+          expect(
+            await so.evaluate((el) => (el as HTMLElement).offsetHeight),
+          ).toBeGreaterThanOrEqual(44);
+          // The held reviewer box is visible without a click.
+          await expect(more.getByRole("checkbox", { name: /Reviewer/ })).toBeChecked();
+        }
+        await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
+      }
+    }
+  });
 });

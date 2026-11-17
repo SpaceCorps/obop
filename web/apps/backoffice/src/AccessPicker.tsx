@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState, type SyntheticEvent } from "react";
 import { Checkbox, Input, Segmented, Switch, t } from "@obop/ui";
 import { call } from "./api.ts";
 import { AppIcon, type App } from "./Chrome.tsx";
@@ -8,6 +8,7 @@ import {
   ADMIN,
   buildAccess,
   levelOf,
+  prefixOf,
   withGroup,
   withLevel,
   type Access,
@@ -93,6 +94,27 @@ function modelsOf(ladder: Ladder, group: string, apps: App[]): string {
   return [...names].slice(0, 6).join(", ");
 }
 
+/**
+ * The open state of a fold ("More access", "Other access"). It starts open when the person holds
+ * something in it and stays as the hand left it. `held` is derived from the lists, which arrive
+ * after the first render, so the state keeps only what the hand did: null until it does something.
+ * The `toggle` event also fires when React itself sets `open`; the handler writes the state only
+ * when the element differs from what is rendered, so that echo changes nothing (no loop).
+ */
+function useFold(held: boolean) {
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  const open = toggled ?? held;
+  return {
+    open,
+    /** Called when a box inside is changed: the section stays open under the hand. */
+    pin: () => setToggled(true),
+    onToggle: (e: SyntheticEvent<HTMLDetailsElement>) => {
+      const now = e.currentTarget.open;
+      if (now !== open) setToggled(now);
+    },
+  };
+}
+
 function Technical({ show, group }: { show: boolean; group: string }) {
   return show ? (
     <>
@@ -121,6 +143,7 @@ function AppRow({
   const level = levelOf(value, ladder);
   const app = apps.find((a) => a.id === ladder.id);
   const held = value.filter((g) => ladder.groups.includes(g));
+  const fold = useFold(ladder.extras.some((g) => value.includes(g)));
   const options: { value: Level; label: string }[] = [
     { value: "none", label: t("No access") },
     { value: "user", label: levelWord(ladder, "user") },
@@ -162,7 +185,7 @@ function AppRow({
         </p>
       )}
       {ladder.extras.length > 0 && level !== "none" && (
-        <details className="access-more">
+        <details className="access-more" open={fold.open} onToggle={fold.onToggle}>
           <summary>{t("More access in {app}", { app: ladder.name })}</summary>
           <div className="stack">
             {ladder.extras.map((g) => {
@@ -172,7 +195,7 @@ function AppRow({
                   key={g}
                   label={
                     <>
-                      {groupWord(g)}
+                      {prefixOf(g) === ladder.id ? groupWord(g) : otherLabel(g)}
                       <Technical show={technical} group={g} />
                     </>
                   }
@@ -182,7 +205,10 @@ function AppRow({
                       : t("Needed for some actions and fields")
                   }
                   checked={value.includes(g)}
-                  onChange={(e) => onChange(withGroup(value, g, e.target.checked))}
+                  onChange={(e) => {
+                    fold.pin();
+                    onChange(withGroup(value, g, e.target.checked));
+                  }}
                 />
               );
             })}
@@ -223,6 +249,7 @@ export function AccessPicker({
   const filtering = access.ladders.length > FILTER_ABOVE;
   const wanted = filtering ? filter.trim().toLowerCase() : "";
   const shown = access.ladders.filter((l) => l.name.toLowerCase().includes(wanted));
+  const otherFold = useFold(access.other.some((g) => value.includes(g)));
   return (
     <div className="access-picker">
       <div className="access-admin">
@@ -273,7 +300,7 @@ export function AccessPicker({
         )}
       </div>
       {access.other.length > 0 && (
-        <details className="access-other">
+        <details className="access-other" open={otherFold.open} onToggle={otherFold.onToggle}>
           <summary>{t("Other access ({count})", { count: access.other.length })}</summary>
           <div className="stack">
             {access.other.map((g) => (
@@ -288,7 +315,10 @@ export function AccessPicker({
                   </>
                 }
                 checked={value.includes(g)}
-                onChange={(e) => onChange(withGroup(value, g, e.target.checked))}
+                onChange={(e) => {
+                  otherFold.pin();
+                  onChange(withGroup(value, g, e.target.checked));
+                }}
               />
             ))}
           </div>

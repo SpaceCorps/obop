@@ -87,9 +87,9 @@
 }
 .access-more > summary,
 .access-other > summary {
-  min-block-size: 2.75rem;
-  display: flex;
-  align-items: center;
+  /* A list item, so the browser's own triangle shows that the line opens; the 44 px target is
+     padding, as for the languages fold in customize.css. */
+  padding-block: 0.7rem;
   cursor: pointer;
   font-weight: var(--weight-medium);
 }

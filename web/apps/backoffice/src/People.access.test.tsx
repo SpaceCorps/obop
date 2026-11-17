@@ -7,6 +7,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { provideCatalogue, setLanguage } from "@obop/ui";
 import { PeopleSection } from "./People.tsx";
+import { AccessPicker } from "./AccessPicker.tsx";
+import { buildAccess, type ModuleLike } from "./access.ts";
 import type { Notify } from "./SecurityAccount.tsx";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -587,5 +589,133 @@ describe("the section Reset someone's two-factor", () => {
   it("is gone from Security: nothing in People asks for a typed user name to reset", async () => {
     await mount();
     expect(text()).not.toContain("Reset someone's two-factor");
+  });
+});
+
+describe("the folds of the picker", () => {
+  // The picker mounted on its own, so that the lists and the held groups can arrive AFTER the
+  // first render, as they do from `useAccessData` and the person's row.
+  const FOLD_MODULES = MODULES.slice(0, 2).map((m) =>
+    m.id === "crm"
+      ? {
+          ...m,
+          groups: [...m.groups, "privacy.officer"],
+          contents: { ...m.contents, groups: ["crm.exporter", "privacy.officer"] },
+        }
+      : m,
+  ) as unknown as ModuleLike[];
+  const FOLD_KNOWN = [...KNOWN, "privacy.officer"];
+  const apps = [
+    { id: "sales", name: "Sales" },
+    { id: "crm", name: "CRM" },
+  ];
+  const picker = (value: string[], known = FOLD_KNOWN, rows = FOLD_MODULES) => {
+    const access = buildAccess(rows, apps, known, value);
+    return (
+      <AccessPicker access={access} value={value} onChange={() => {}} apps={[]} key="picker" />
+    );
+  };
+  const draw = async (node: React.ReactElement) => {
+    await act(async () => root.render(node));
+    await settle();
+  };
+  const fold = (cls: "access-more" | "access-other") =>
+    document.body.querySelector<HTMLDetailsElement>(`details.${cls}`)!;
+  const tick = async (label: string) => {
+    const box = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(
+      (i) => i.closest("label")?.textContent?.startsWith(label),
+    );
+    await click(box);
+  };
+
+  it("More access starts open when the person holds an extra of the app, and closed when none", async () => {
+    await draw(picker(["crm.user", "crm.exporter"]));
+    expect(fold("access-more").open).toBe(true);
+  });
+
+  it("More access starts closed when the person holds no extra", async () => {
+    await draw(picker(["crm.user"]));
+    expect(fold("access-more").open).toBe(false);
+  });
+
+  it("opens when the held groups arrive after the first render, and not before", async () => {
+    await draw(picker(["crm.user"]));
+    expect(fold("access-more").open).toBe(false);
+    await draw(picker(["crm.user", "crm.exporter"]));
+    expect(fold("access-more").open).toBe(true);
+  });
+
+  it("opens when the module list arrives after the first render", async () => {
+    await draw(picker(["crm.user", "crm.exporter"], [], []));
+    await draw(picker(["crm.user", "crm.exporter"]));
+    expect(fold("access-more").open).toBe(true);
+  });
+
+  it("stays open when its last box is unticked, and the hand can still close and open it", async () => {
+    let value = ["crm.user", "crm.exporter"];
+    const again = () =>
+      draw(
+        <AccessPicker
+          access={buildAccess(FOLD_MODULES, apps, FOLD_KNOWN, value)}
+          value={value}
+          onChange={(next) => {
+            value = next;
+          }}
+        />,
+      );
+    await again();
+    await tick("Exporter");
+    await again();
+    expect(value).toEqual(["crm.user"]);
+    expect(fold("access-more").open).toBe(true);
+    const more = fold("access-more");
+    await act(async () => {
+      more.open = false;
+      more.dispatchEvent(new Event("toggle"));
+    });
+    await settle();
+    expect(fold("access-more").open).toBe(false);
+    await act(async () => {
+      more.open = true;
+      more.dispatchEvent(new Event("toggle"));
+    });
+    await settle();
+    expect(fold("access-more").open).toBe(true);
+  });
+
+  it("a held extra does not flicker: the open section is rendered open and stays open", async () => {
+    await draw(picker(["crm.user", "crm.exporter"]));
+    for (let i = 0; i < 3; i++) {
+      await settle();
+      expect(fold("access-more").open).toBe(true);
+    }
+  });
+
+  it("Other access starts open for a held group listed there, and closed for none", async () => {
+    await draw(picker(["sales.user", "api.device_admin"]));
+    expect(fold("access-other").open).toBe(true);
+    await draw(picker(["sales.user"]));
+    expect(fold("access-other").open).toBe(false);
+  });
+
+  it("Other access starts open for a held group that is no longer installed", async () => {
+    await draw(picker(["sales.user", "gone.role"]));
+    expect(container.textContent).toContain("No longer installed: gone.role");
+    expect(fold("access-other").open).toBe(true);
+  });
+
+  it("Other access opens when the held groups arrive after the first render", async () => {
+    await draw(picker(["sales.user"]));
+    expect(fold("access-other").open).toBe(false);
+    await draw(picker(["sales.user", "api.device_admin"]));
+    expect(fold("access-other").open).toBe(true);
+  });
+
+  it("an extra of another prefix keeps its first part; an extra of the app's own prefix is its role word", async () => {
+    await draw(picker(["crm.user"]));
+    const more = fold("access-more").textContent ?? "";
+    expect(more).toContain("Privacy: Officer");
+    expect(more).toContain("Exporter");
+    expect(more).not.toContain("CRM: Exporter");
   });
 });
