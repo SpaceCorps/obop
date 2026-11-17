@@ -126,11 +126,15 @@ export function SignIn({
   async function password(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
-    const user = String(f.get("username"));
+    const typed = String(f.get("username"));
     setBusy(true);
     setError(null);
-    const r = await login(user, String(f.get("password")));
+    const r = await login(typed, String(f.get("password")));
     setBusy(false);
+    // The login the server signed in (`$user` of a filter or a read-only hint compares with it,
+    // U11): its answer's when it names one, else what was typed as the server reads a login,
+    // trimmed and in lower case (" Sam" is "sam").
+    const user = (r.kind !== "error" && r.user) || typed.trim().toLowerCase();
     if (r.kind === "session") onDone(r.token, user, r.enrolment);
     else if (r.kind === "mfa") setStep({ mfaToken: r.mfaToken, user, methods: r.methods });
     else if (r.status === 429) setError(twoFactorMessage({ status: 429, code: "rate_limited" }));
