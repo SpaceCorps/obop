@@ -190,13 +190,15 @@
 }
 
 /* Only the sheet goes to paper: everything that is neither on the way to it nor inside it is
-   left out, and the way to it is plain blocks that do not clip. */
+   left out, and the way to it is plain blocks that do not clip. Only while an invoice sheet is on
+   the page: this file stays loaded after Invoicing was opened, and another app's print sheet
+   (sales/print.css) must not be hidden by it. */
 @media print {
   @page {
     size: A4;
     margin: 14mm;
   }
-  body *:not(:has(.inv-sheet)):not(.inv-sheet):not(.inv-sheet *) {
+  body:has(.inv-sheet) *:not(:has(.inv-sheet)):not(.inv-sheet):not(.inv-sheet *) {
     display: none !important;
   }
   body *:has(.inv-sheet) {
