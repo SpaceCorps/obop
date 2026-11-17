@@ -83,9 +83,9 @@ fn obop_call_plan_lists_rejects_and_the_agent_reads_what_became_of_its_request()
     assert!(unknown.0.contains("UnknownCommand"));
     assert!(crate::call_json(&agent, "plan", "list", &[]).is_err());
     // `obop call --token <person> plan reject id=<plan> reason=...`
-    let reason = format!("reason=Keep this contact, it has open invoices");
+    let reason = "reason=Keep this contact, it has open invoices";
     let (row, _) =
-        crate::call_json(&person, "plan", "reject", &[&format!("id={plan}"), &reason]).unwrap();
+        crate::call_json(&person, "plan", "reject", &[&format!("id={plan}"), reason]).unwrap();
     assert_eq!(row["status"], json!("rejected"), "{row}");
     // `obop call --token <agent> plan get id=<plan>`: the agent hears it, the reason in its own
     // field.
