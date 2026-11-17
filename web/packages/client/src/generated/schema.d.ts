@@ -1517,7 +1517,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Book a posted invoice (invoice) as a draft accounting move using the journal, receivable_account, revenue_account, tax and date you give, or the booking settings and the invoice's issue date where you give none; refused in words when one is missing, when the invoice is not posted, has no amount or already has a move. dry_run shows the lines and writes nothing. An agent may only dry-run. The move stays a draft: posting needs accounting.approver and approval. UNVERIFIED against Swedish rules */
+        /** Book a posted invoice (invoice) as a draft accounting move using the journal, receivable_account, revenue_account, tax and date you give, or the booking settings and the invoice's issue date (else today) where you give none; refused in words when one is missing, when the invoice is not posted, has no amount or already has a move. dry_run shows the lines and writes nothing. An agent may only dry-run. The move stays a draft: posting needs accounting.approver and approval. UNVERIFIED against Swedish rules */
         post: operations["invoice_posting.create_move"];
         delete?: never;
         options?: never;
