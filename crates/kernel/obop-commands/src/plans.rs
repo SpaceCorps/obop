@@ -231,7 +231,27 @@ fn owner_of(proposer: &str) -> Option<&str> {
     proposer.strip_suffix("/agent").filter(|o| !o.is_empty())
 }
 
-/// The record a call names: its `id`, as text.
+/// Who a person is now, by account name: their current principal, `None` when the account is
+/// disabled or does not exist. Installed by the composition that knows the identity provider
+/// ([`Dispatcher::set_proposer_source`]).
+pub type ProposerSource = Box<dyn Fn(&str) -> Option<Principal> + Send + Sync>;
+
+/// The longest record id kept from an agent's input without asking the store (see
+/// [`Dispatcher::target_for`]).
+const TARGET_MAX: usize = 64;
+
+/// Whether `id` looks like the id of a record: at most [`TARGET_MAX`] characters of letters,
+/// digits and `.`, `_`, `:`, `-`, `@`. A sentence, a line break or a long text does not.
+fn record_shaped(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= TARGET_MAX
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._:-@".contains(c))
+}
+
+/// The record a call names: its `id`, as text, exactly as the agent sent it. Only for reading the
+/// record as a person; what is kept or shown goes through [`Dispatcher::target_for`].
 fn target_of(input: &Value) -> Option<String> {
     match input {
         Value::Map(m) => match m.get("id") {
@@ -317,6 +337,8 @@ fn canon(v: &J, out: &mut String) {
 struct Item {
     id: String,
     pending: Option<Pending>,
+    /// The record the waiting plan names, as [`Dispatcher::target_for`] keeps it.
+    pending_target: Option<String>,
     receipt: Option<Receipt>,
 }
 
@@ -337,7 +359,7 @@ impl Item {
     }
     fn target(&self) -> Option<String> {
         match (&self.pending, &self.receipt) {
-            (Some(p), _) => target_of(&p.input),
+            (Some(_), _) => self.pending_target.clone(),
             (None, Some(r)) => r.target.clone(),
             (None, None) => None,
         }
@@ -380,6 +402,8 @@ struct Look<'a> {
     d: &'a Dispatcher,
     p: &'a Principal,
     cache: HashMap<(String, String), Option<Value>>,
+    /// The owners of agents as their accounts are now, by name, asked once per request.
+    owners: HashMap<String, Option<Principal>>,
 }
 
 impl<'a> Look<'a> {
@@ -388,7 +412,22 @@ impl<'a> Look<'a> {
             d,
             p,
             cache: HashMap::new(),
+            owners: HashMap::new(),
         }
+    }
+
+    /// Whether the proposer of a plan can still run `group`: [`Dispatcher::proposer_now`], with
+    /// the owner's account read once per request.
+    fn proposer_runs(&mut self, stored: &Principal, group: &str) -> bool {
+        let d = self.d;
+        let (Some(source), Some(owner)) = (d.proposer_source.get(), owner_of(&stored.id)) else {
+            return stored.allows(group);
+        };
+        self.owners
+            .entry(owner.to_string())
+            .or_insert_with(|| source(owner))
+            .as_ref()
+            .is_some_and(|now| narrowed(stored, now).allows(group))
     }
 
     /// The record `model:id` as this person reads it, through the generated `get` and so through
@@ -450,6 +489,15 @@ impl<'a> Look<'a> {
     }
 }
 
+/// The stored proposer with the groups its owner holds now; its own scopes (the token's) stay, so
+/// it keeps only what is both still held and was handed to it.
+fn narrowed(stored: &Principal, now: &Principal) -> Principal {
+    let mut p = stored.clone();
+    p.groups = now.groups.clone();
+    p.mfa_limited = stored.mfa_limited || now.mfa_limited;
+    p
+}
+
 /// What the person who asks may do with a waiting plan.
 struct Rights {
     /// They could decide it: they may reject it, and see what it changes.
@@ -484,6 +532,37 @@ impl Dispatcher {
 
     pub(crate) fn registered(&self, id: &str) -> Option<std::sync::Arc<Registered>> {
         self.commands.read().unwrap().get(id).cloned()
+    }
+
+    /// Install who the owner of an agent is now (once; later calls are ignored). Without it an
+    /// approved plan runs as the copy of the agent taken when it proposed.
+    pub fn set_proposer_source(&self, source: ProposerSource) {
+        let _ = self.proposer_source.set(source);
+    }
+
+    /// The principal an approved plan of `stored` runs as now. For an agent of a person
+    /// (`{owner}/agent`): the stored agent with the groups its owner's account holds now, so a
+    /// group taken from the owner is gone from the agent too; `None` when the account is disabled
+    /// or gone. Any other proposer (a connector), and every proposer without a source: the copy.
+    pub(crate) fn proposer_now(&self, stored: &Principal) -> Option<Principal> {
+        match (self.proposer_source.get(), owner_of(&stored.id)) {
+            (Some(source), Some(owner)) => source(owner).map(|now| narrowed(stored, &now)),
+            _ => Some(stored.clone()),
+        }
+    }
+
+    /// The record id of a call that is kept in a receipt, written in the security log and shown
+    /// on a row (D97 rule 4: no input value there). The agent's `id` when it names a record the
+    /// store holds or has the shape of a record id ([`record_shaped`]); otherwise none. A
+    /// sentence or a long text an agent sends as `id` is no record, and is neither kept nor shown.
+    pub(crate) fn target_for(&self, command: &str, input: &Value) -> Option<String> {
+        let id = target_of(input)?;
+        if record_shaped(&id) {
+            return Some(id);
+        }
+        let model = self.registered(command)?.model;
+        (id.len() <= 4 * TARGET_MAX && self.shared.get().is_some() && self.stored(model, &id))
+            .then_some(id)
     }
 
     /// Bind the five commands of the model `plan` of `module` (which must declare
@@ -583,7 +662,7 @@ impl Dispatcher {
 
     // ---- storage ---------------------------------------------------------------------------
 
-    fn receipt(&self, plan_id: &str) -> Option<Receipt> {
+    pub(crate) fn receipt(&self, plan_id: &str) -> Option<Receipt> {
         let text = self.receipts.get(self.shared.get(), plan_id)?;
         Receipt::from_json(&serde_json::from_str(&text).ok()?)
     }
@@ -639,7 +718,7 @@ impl Dispatcher {
                 .registered(&p.id)
                 .map(|c| c.model.to_string())
                 .unwrap_or_default(),
-            target: target_of(&p.input),
+            target: self.target_for(&p.id, &p.input),
             created_at: None,
             expires_at: None,
             state: state::PENDING.into(),
@@ -689,22 +768,42 @@ impl Dispatcher {
     }
 
     /// A plan past its end: taken out, its receipt marked, `plan_expired` written once in all
-    /// processes.
-    fn settle_expired(&self, plan_id: &str, r: &Receipt) {
-        if !self.receipts.first_to_expire(self.shared.get(), plan_id) {
+    /// processes. `seen` is the receipt as the caller read it, maybe a while ago: the step takes
+    /// the transaction lock that approve and reject hold, reads the receipt again and does nothing
+    /// unless it still waits, so a decision that ran in the meantime is never relabelled expired.
+    pub(crate) fn settle_expired(&self, plan_id: &str, seen: &Receipt) {
+        if !seen.ran_out(self.now()) {
+            return;
+        }
+        let Ok(_txn) = self.txn_guard() else {
+            return;
+        };
+        self.settle_expired_locked(plan_id);
+    }
+
+    /// [`Dispatcher::settle_expired`] for a caller that holds the transaction lock.
+    fn settle_expired_locked(&self, plan_id: &str) {
+        let Some(r) = self.receipt(plan_id) else {
+            return;
+        };
+        if !r.ran_out(self.now()) || !self.receipts.first_to_expire(self.shared.get(), plan_id) {
             return;
         }
         let _ = obop_storage::fault::bookkeeping(|| self.plans.remove(self.shared.get(), plan_id));
         let mut done = r.clone();
         done.state = state::EXPIRED.into();
         self.put_receipt_after(plan_id, &done);
-        self.log(event::EXPIRED, &r.proposer, "system", plan_id, r);
+        self.log(event::EXPIRED, &r.proposer, "system", plan_id, &r);
     }
 
     fn item(&self, plan_id: &str) -> Item {
+        let pending = self.plans.get(self.shared.get(), plan_id);
         Item {
             id: plan_id.to_string(),
-            pending: self.plans.get(self.shared.get(), plan_id),
+            pending_target: pending
+                .as_ref()
+                .and_then(|p| self.target_for(&p.id, &p.input)),
+            pending,
             receipt: self.receipt(plan_id),
         }
     }
@@ -728,6 +827,7 @@ impl Dispatcher {
                     Item {
                         id,
                         pending: None,
+                        pending_target: None,
                         receipt: Some(r),
                     },
                 );
@@ -738,13 +838,14 @@ impl Dispatcher {
             .all(self.shared.get())
             .map_err(CallError::Handler)?
         {
-            by.entry(id.clone())
-                .or_insert_with(|| Item {
-                    id,
-                    pending: None,
-                    receipt: None,
-                })
-                .pending = Some(p);
+            let it = by.entry(id.clone()).or_insert_with(|| Item {
+                id,
+                pending: None,
+                pending_target: None,
+                receipt: None,
+            });
+            it.pending_target = self.target_for(&p.id, &p.input);
+            it.pending = Some(p);
         }
         for it in by.values() {
             if let Some(r) = &it.receipt
@@ -761,7 +862,7 @@ impl Dispatcher {
         let target = it.target();
         let decider = look.could_decide(&command, target.as_deref());
         let runs = match (&it.pending, self.registered(&command)) {
-            (Some(p), Some(c)) => p.principal.allows(c.permission_group),
+            (Some(p), Some(c)) => look.proposer_runs(&p.principal, c.permission_group),
             _ => false,
         };
         Rights {
@@ -1271,12 +1372,22 @@ impl Dispatcher {
         let Some(plan) = self.plans.get(self.shared.get(), plan_id) else {
             return Err(self.gone(&mut look, plan_id, legacy, true));
         };
+        // It may have run out while this call waited for the lock.
+        if self.receipt(plan_id).is_some_and(|r| r.ran_out(self.now())) {
+            self.settle_expired_locked(plan_id);
+            return Err(self.gone(&mut look, plan_id, legacy, true));
+        }
         let c = self
             .registered(&plan.id)
             .ok_or_else(|| CallError::UnknownCommand(plan.id.clone()))?;
-        if !approver.allows(c.permission_group) || !plan.principal.allows(c.permission_group) {
+        // The agent runs as its owner's account is now: not at all when it is disabled or gone,
+        // and without a group the owner has lost since the proposal.
+        let proposer = self
+            .proposer_now(&plan.principal)
+            .filter(|q| q.allows(c.permission_group));
+        let Some(proposer) = proposer.filter(|_| approver.allows(c.permission_group)) else {
             return Err(CallError::Forbidden(plan.id.clone()));
-        }
+        };
         // They approve what they saw: the record is read again, as the person, under the lock.
         // (The generated `get` takes no lock of its own.)
         if let (Some(want), Some(id)) = (seen_version, target_of(&plan.input)) {
@@ -1299,7 +1410,7 @@ impl Dispatcher {
         let mut pre = Vec::new();
         let guard = self.guards.read().unwrap().get(&plan.id).cloned();
         if let Some(g) = guard {
-            let v = (g.guard)(&plan.principal, &input).map_err(|m| crate::refusal(m, &input))?;
+            let v = (g.guard)(&proposer, &input).map_err(|m| crate::refusal(m, &input))?;
             if v.requires.iter().any(|r| !approver.allows(r)) {
                 return Err(CallError::Forbidden(plan.id.clone()));
             }
@@ -1316,7 +1427,7 @@ impl Dispatcher {
         // that proposed it as the caller. Stamped again after the guard, which may have rewritten
         // the input.
         crate::stamp_approver(&mut input, approver);
-        let result = self.run(&c, &plan.principal, vault, input, pre);
+        let result = self.run(&c, &proposer, vault, input, pre);
         // The store refused before the call changed anything: the plan goes back (D74; see
         // `put_plan_back`) and the receipt still says it waits.
         let st = obop_storage::fault::state();
@@ -1372,6 +1483,11 @@ impl Dispatcher {
             let Some(plan) = self.plans.get(self.shared.get(), plan_id) else {
                 return Err(self.gone(&mut look, plan_id, false, true));
             };
+            // It may have run out while this call waited for the lock.
+            if self.receipt(plan_id).is_some_and(|r| r.ran_out(self.now())) {
+                self.settle_expired_locked(plan_id);
+                return Err(self.gone(&mut look, plan_id, false, true));
+            }
             self.plans
                 .remove(self.shared.get(), plan_id)
                 .map_err(CallError::Handler)?;
@@ -1390,6 +1506,7 @@ impl Dispatcher {
         let it = Item {
             id: plan_id.to_string(),
             pending: None,
+            pending_target: None,
             receipt: Some(decided),
         };
         Ok(self.row(&mut look, &it, state::REJECTED, None))

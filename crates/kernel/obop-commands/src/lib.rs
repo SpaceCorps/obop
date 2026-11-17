@@ -285,6 +285,10 @@ pub struct Dispatcher {
     plans: Plans,
     /// Their receipts (D97).
     receipts: Receipts,
+    /// The owner of an agent as the stored account says now (D97, after the review): an approved
+    /// plan runs with the groups the owner still holds, and not at all when the account is
+    /// disabled or gone. Unset (tests, embedding, `--dev-auth`): the plan's own copy.
+    proposer_source: std::sync::OnceLock<plans::ProposerSource>,
     /// Run before commands, the catalogue and the metadata are looked up: lets the installer
     /// bring this process's modules in line with what another process installed (B1).
     sync_hook: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>>,

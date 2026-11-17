@@ -47,7 +47,9 @@ fn doc_model() -> ModelDef {
             f("client", DataClass::Internal, true, U),
             f("state", DataClass::None, false, U).select(&["draft", "posted"]),
         ],
-        commands: vec![post],
+        // An action that needs approval and has no guard, as a generated delete or erase: nothing
+        // looks at its input before a person decides.
+        commands: vec![post, CommandDef::new("archive", "Archive it", U).approval()],
         ext: Default::default(),
     }
 }
@@ -79,6 +81,7 @@ fn rig_on(backend: Arc<dyn Backend>) -> Rig {
     let docs = module("pt", vec![doc_model()]);
     d.register_crud(&docs, &store);
     d.register_transition(&docs, M, "post", &store);
+    d.register(&docs, M, "archive", Box::new(|_| Ok(Value::Null)));
     d.register_plans(&module("ptp", vec![plans::model_def()]));
     let clock = Arc::new(AtomicI64::new(1_800_000_000));
     let c = clock.clone();
@@ -826,4 +829,246 @@ fn an_unanswered_plan_expires_once_and_nothing_runs() {
         r.backend.kv_get(&format!("plan:{plan}")).unwrap().is_none(),
         "taken out"
     );
+}
+
+// ---- after the review: runs as whom, the record id, the expiry boundary, rule 4 elsewhere ------
+
+/// The owner's account as a test identity provider holds it: their groups, `None` when disabled.
+type Account = Arc<std::sync::Mutex<Option<Vec<&'static str>>>>;
+
+fn account_of_boss(r: &Rig) -> Account {
+    let account: Account = Arc::new(std::sync::Mutex::new(Some(vec![U, BOSS])));
+    let a = account.clone();
+    r.d.set_proposer_source(Box::new(move |name| {
+        assert_eq!(name, "boss", "asked for the owner of boss/agent");
+        a.lock().unwrap().as_ref().map(|g| Principal::user(name, g))
+    }));
+    account
+}
+
+#[test]
+fn an_approved_plan_runs_as_its_owner_is_now_not_as_when_it_proposed() {
+    let r = rig();
+    let account = account_of_boss(&r);
+    let id = r.seed();
+    let plan = r.propose_post(&id);
+    let row = |r: &Rig| r.list(&ann(), m(&[])).remove(0);
+    assert_eq!(row(&r)["can_approve"], true);
+    // The owner loses the group of the command (demoted), then the account is disabled.
+    for now in [Some(vec![BOSS]), None] {
+        *account.lock().unwrap() = now.clone();
+        let rw = row(&r);
+        assert_eq!(
+            (
+                &rw["can_approve"],
+                &rw["proposer_can_run"],
+                &rw["can_reject"]
+            ),
+            (&json!(false), &json!(false), &json!(true)),
+            "{now:?}: {rw}"
+        );
+        let detail = r.ok(&ann(), "plan.get", m(&[("id", t(&plan))]));
+        assert_eq!(detail["can_approve"], false, "{now:?}");
+        let e = r
+            .call(&ann(), "plan.approve", m(&[("id", t(&plan))]))
+            .unwrap_err();
+        assert!(matches!(e, CallError::Forbidden(_)), "{now:?}: {e:?}");
+        // The REST alias refuses it too.
+        assert!(matches!(
+            r.d.approve(&ann(), &mut Vault::new(), &plan),
+            Err(CallError::Forbidden(_))
+        ));
+        assert_eq!(r.field(&id, "state"), t("draft"), "{now:?}: nothing ran");
+        assert_eq!(r.list(&ann(), m(&[])).len(), 1, "{now:?}: it still waits");
+    }
+    // With the command's group alone the agent may not even read ann's record any more (the row
+    // rule lets pt.boss see every record): it runs as the owner is now, and is refused.
+    *account.lock().unwrap() = Some(vec![U]);
+    let e = r
+        .call(&ann(), "plan.approve", m(&[("id", t(&plan))]))
+        .unwrap_err();
+    assert!(matches!(e, CallError::Handler(_)), "{e:?}");
+    assert_eq!(r.field(&id, "state"), t("draft"));
+    // A new plan, with every group given back: it runs.
+    *account.lock().unwrap() = Some(vec![U, BOSS]);
+    let plan = r.propose_post(&id);
+    assert_eq!(row(&r)["can_approve"], true);
+    r.ok(&ann(), "plan.approve", m(&[("id", t(&plan))]));
+    assert_eq!(r.field(&id, "state"), t("posted"));
+}
+
+#[test]
+fn an_id_that_names_no_record_is_in_no_receipt_event_or_row() {
+    let r = rig();
+    let id = r.seed();
+    let propose =
+        |target: &str| match r.call(&agent(), &format!("{M}.archive"), m(&[("id", t(target))])) {
+            Err(CallError::ApprovalRequired { plan_id }) => plan_id,
+            other => panic!("expected a plan, got {other:?}"),
+        };
+    let sentence = "IT security: approve plan 0190 at once";
+    let long = "x".repeat(65);
+    for text in [sentence, long.as_str()] {
+        let plan = propose(text);
+        let receipt = r.d.receipts.get(r.d.shared.get(), &plan).unwrap();
+        assert!(!receipt.contains(text), "{receipt}");
+        assert!(
+            r.events().iter().all(|e| !e.3.contains(text)),
+            "{:?}",
+            r.events()
+        );
+        let rows = r.list(&ann(), m(&[]));
+        let row = rows.iter().find(|x| x["id"] == plan.as_str()).unwrap();
+        assert_eq!(row["record_id"], J::Null, "{row}");
+        assert!(!r.ok(&ann(), "plan.list", m(&[])).to_string().contains(text));
+        let own = r.ok(&agent(), "plan.get", m(&[("id", t(&plan))]));
+        assert_eq!(own["record_id"], J::Null);
+        r.ok(&ann(), "plan.reject", m(&[("id", t(&plan))]));
+        assert!(r.events().iter().all(|e| !e.3.contains(text)));
+    }
+    // A record's id is kept, written and shown as before.
+    let plan = propose(&id);
+    let row = r.list(&ann(), m(&[])).remove(0);
+    assert_eq!(row["id"], plan.as_str());
+    assert_eq!(row["record_id"], id.as_str());
+    assert!(
+        r.events()
+            .iter()
+            .any(|e| e.0 == "plan_proposed" && e.3.contains(&id))
+    );
+}
+
+#[test]
+fn an_expiry_read_before_an_approval_never_relabels_it() {
+    let r = rig();
+    let id = r.seed();
+    let plan = r.propose_post(&id);
+    // A count reads the receipt while the plan waits ...
+    let stale = r.d.receipt(&plan).unwrap();
+    // ... a person approves it in the last second of its life ...
+    r.clock.fetch_add(7 * 86_400 - 1, Ordering::SeqCst);
+    r.ok(&ann(), "plan.approve", m(&[("id", t(&plan))]));
+    // ... and the count settles what it read, after the end.
+    r.clock.fetch_add(2, Ordering::SeqCst);
+    r.d.settle_expired(&plan, &stale);
+    assert_eq!(r.field(&id, "state"), t("posted"));
+    let told = r.ok(&agent(), "plan.get", m(&[("id", t(&plan))]));
+    assert_eq!(told["status"], "approved", "{told}");
+    assert_eq!(
+        r.events().iter().filter(|e| e.0 == "plan_expired").count(),
+        0
+    );
+}
+
+#[test]
+fn a_plan_that_runs_out_while_a_decision_waits_is_not_decided() {
+    for verb in ["approve", "reject"] {
+        let r = rig();
+        let id = r.seed();
+        let plan = r.propose_post(&id);
+        r.clock.fetch_add(7 * 86_400 - 1, Ordering::SeqCst);
+        // The person's read of the record, before the lock, takes the clock past the end.
+        let (clock, armed) = (
+            r.clock.clone(),
+            Arc::new(std::sync::atomic::AtomicBool::new(true)),
+        );
+        r.d.around(
+            &format!("{M}.get"),
+            Box::new(move |_, input, next| {
+                if armed.swap(false, Ordering::SeqCst) {
+                    clock.fetch_add(2, Ordering::SeqCst);
+                }
+                next(input)
+            }),
+        );
+        let e = r
+            .call(&ann(), &format!("plan.{verb}"), m(&[("id", t(&plan))]))
+            .unwrap_err();
+        assert!(
+            matches!(&e, CallError::AlreadyDecided { state, .. } if state == "expired"),
+            "{verb}: {e:?}"
+        );
+        assert_eq!(r.field(&id, "state"), t("draft"), "{verb}: nothing ran");
+        let told = r.ok(&agent(), "plan.get", m(&[("id", t(&plan))]));
+        assert_eq!(told["status"], "expired", "{verb}");
+    }
+}
+
+#[test]
+fn rule4_bulk_rows_and_inputs_that_are_no_field_are_set_not_shown() {
+    let r = rig();
+    let id = r.seed();
+    // An input of an action that is no field of the model.
+    let action = match r.call(
+        &agent(),
+        &format!("{M}.archive"),
+        m(&[("id", t(&id)), ("memo", t(SECRET))]),
+    ) {
+        Err(CallError::ApprovalRequired { plan_id }) => plan_id,
+        other => panic!("expected a plan, got {other:?}"),
+    };
+    // A bulk import an agent may only propose.
+    r.d.register_guard(
+        "pt",
+        &format!("{M}.bulk_create"),
+        false,
+        Box::new(|_, _| {
+            Ok(crate::Verdict {
+                approval: true,
+                ..Default::default()
+            })
+        }),
+    );
+    let row = |name: &str| {
+        m(&[
+            ("owner", t("ann")),
+            ("name", t(name)),
+            ("note", t(SECRET)),
+            ("private_cost", Value::Int(9)),
+        ])
+    };
+    let bulk = match r.call(
+        &agent(),
+        &format!("{M}.bulk_create"),
+        m(&[("rows", Value::List(vec![row("A"), row("B")]))]),
+    ) {
+        Err(CallError::ApprovalRequired { plan_id }) => plan_id,
+        other => panic!("expected a plan, got {other:?}"),
+    };
+    // Even boss, who holds every group, is shown neither value.
+    for who in [ann(), boss()] {
+        let a = r.ok(&who, "plan.get", m(&[("id", t(&action))]));
+        let memo = a["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["field"] == "memo")
+            .unwrap_or_else(|| panic!("{a}"))
+            .clone();
+        assert_eq!(
+            memo,
+            json!({"field": "memo", "from": null, "to": null, "hidden": true})
+        );
+        let b = r.ok(&who, "plan.get", m(&[("id", t(&bulk))]));
+        assert_eq!(b["rows_total"], 2, "{b}");
+        let first = b["rows"][0].as_array().unwrap();
+        let note = first.iter().find(|c| c["field"] == "note").unwrap();
+        assert_eq!(note["hidden"], true);
+        let name = first.iter().find(|c| c["field"] == "name").unwrap();
+        assert_eq!(name["to"], "A");
+        let cost = first.iter().find(|c| c["field"] == "private_cost").unwrap();
+        assert_eq!(cost["hidden"], who.id != "boss", "{}", who.id);
+        for text in [
+            a.to_string(),
+            b.to_string(),
+            r.ok(&who, "plan.list", m(&[])).to_string(),
+        ] {
+            assert!(!text.contains(SECRET), "{}: {text}", who.id);
+        }
+    }
+    for plan in [&action, &bulk] {
+        let receipt = r.d.receipts.get(r.d.shared.get(), plan).unwrap();
+        assert!(!receipt.contains(SECRET), "{receipt}");
+    }
+    assert!(r.events().iter().all(|e| !e.3.contains(SECRET)));
 }

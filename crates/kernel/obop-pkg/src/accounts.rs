@@ -219,6 +219,14 @@ type AccountHandler =
 /// Bind the handlers. `auth` is the identity provider the instance serves with; `d` supplies the
 /// registered permission groups. Call once at start-up, after the dispatcher has its modules.
 pub fn register_accounts(d: &Arc<Dispatcher>, auth: Arc<dyn Authenticator>) {
+    // An approved proposal of an agent runs as its owner's account is now (D97): read from the
+    // store at the approval, so a disabled or offboarded owner, or a group taken away, stops it.
+    if auth.oauth().is_some() {
+        let a = auth.clone();
+        d.set_proposer_source(Box::new(move |owner| {
+            a.oauth().and_then(|o| o.principal_of(owner))
+        }));
+    }
     let m: Module = crate::installer::admin_module();
     let reg = |cmd: &str, h: AccountHandler| {
         let (a, w): (Arc<dyn Authenticator>, Weak<Dispatcher>) = (auth.clone(), Arc::downgrade(d));
