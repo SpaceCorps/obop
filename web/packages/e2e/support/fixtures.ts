@@ -172,11 +172,17 @@ export const test = base.extend<Fixtures & Options>({
     async ({ page }, use, info) => {
       const problems: string[] = [];
       const failedLoads: { status: number; text: string }[] = [];
+      const badResponses: string[] = [];
       allowed.length = 0;
       allowedConsole.length = 0;
       page.on("pageerror", (e) => {
         if (!allowedConsole.some((p) => p.test(e.message)))
           problems.push(`page error: ${e.message}`);
+      });
+      // Chrome's console line names no address; the response event does, so a failure can say which one.
+      page.on("response", (r) => {
+        if (r.status() >= 400)
+          badResponses.push(`${r.status()} ${r.request().method()} ${r.url()}`);
       });
       page.on("console", (m: ConsoleMessage) => {
         if (m.type() !== "error") return;
@@ -192,6 +198,10 @@ export const test = base.extend<Fixtures & Options>({
       if (info.status !== info.expectedStatus) return; // the test already failed for its own reason
       for (const f of failedLoads)
         if (!allowed.includes(f.status)) problems.push(`unexpected ${f.text}`);
+      if (problems.some((p) => p.startsWith("unexpected ")))
+        problems.push(
+          `responses with a status of 400 or more: ${badResponses.join("; ") || "none seen"}`,
+        );
       expect(problems, "console errors and page errors").toEqual([]);
     },
     { auto: true },
