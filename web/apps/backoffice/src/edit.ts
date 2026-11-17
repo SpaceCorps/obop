@@ -5,6 +5,7 @@ import { isEmpty, majorString, optionLabel, parseMoney, validDate } from "./form
 import { fromZonedInput, toZonedInput } from "./instants.ts";
 import { fieldTitle } from "./labels.ts";
 import { rangeError, textLimitError } from "./limits.ts";
+import { displayOf } from "./presentation.ts";
 
 /** What a form control holds: text for everything, a boolean for checkboxes. */
 export type Edit = string | boolean;
@@ -37,7 +38,13 @@ export function fromEdit(
   }
   switch (f.kind) {
     case "number": {
-      if (!/^-?\d+$/.test(s)) return { error: t("{field} must be a whole number", { field }) };
+      if (!/^-?\d+$/.test(s))
+        return {
+          error:
+            displayOf(f) === "time_of_day"
+              ? t("{field} must be a time like 14:30", { field })
+              : t("{field} must be a whole number", { field }),
+        };
       const n = parseInt(s, 10);
       const out = unchanged ? null : rangeError(field, f, n);
       return out ? { error: out } : { value: n };

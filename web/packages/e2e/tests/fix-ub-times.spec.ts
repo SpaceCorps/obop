@@ -47,7 +47,8 @@ test("a shift's time boxes read and take the 24-hour clock (S5)", async ({
     await start.fill("1430");
     await start.blur();
     await expect(start).toHaveValue("14:30");
-    await end.fill("17.15");
+    // A comma, as a German phone's number keypad offers in place of the colon.
+    await end.fill("17,15");
     await end.blur();
     await record.getByRole("button", { name: "Save" }).click();
     await expect
