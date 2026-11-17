@@ -4693,6 +4693,8 @@ export interface operations {
                         tokens?: {
                             /** @description Unix seconds. */
                             created_at?: number;
+                            /** @description Unix seconds when the token ends by itself (90 days after it was made by an account bound to a Microsoft identity); null when it has no end of its own. */
+                            expires_at?: number | null;
                             id?: string;
                             label?: string;
                             scopes?: string[];

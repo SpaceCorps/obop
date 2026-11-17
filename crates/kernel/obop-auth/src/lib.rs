@@ -530,7 +530,11 @@ impl Auth {
         // that outlived a change there would not hear of it.
         let bound = self
             .link_of(&owner.id)
-            .map_err(|e| format!("{e:?}"))?
+            .map_err(|e| match e {
+                // The store's own text, so the route answers a refusal with the 503 of D74.
+                obop_commands::SsoError::Unavailable(m) => m,
+                other => format!("{other:?}"),
+            })?
             .is_some();
         let ttl = bound.then_some(oidc::MICROSOFT_AGENT_TOKEN_SECS);
         let token = self.issue(&owner.id, "agent", scopes, label, ttl)?;
@@ -538,12 +542,15 @@ impl Auth {
         // offboarding that listed the tokens of the account before this one was written did not
         // end it, so it is ended here and nobody gets it. A read the store refuses is answered the
         // same way: no token is handed out on a guess.
+        let reread = self.backend.get("auth_user", &owner.id);
         let still = matches!(
-            self.backend.get("auth_user", &owner.id),
+            &reread,
             Ok(Some(u)) if u.get("disabled").and_then(J::as_bool) != Some(true)
         );
         if !still {
             self.revoke(&token);
+            // A refused read is the store's own text, which the route answers with a 503.
+            reread?;
             return Err(
                 "the account changed while the token was being made; no token was issued".into(),
             );
@@ -680,6 +687,7 @@ impl Authenticator for Auth {
                         .to_string(),
                     scopes,
                     created_at: t.get("created_at").and_then(J::as_u64).unwrap_or(0),
+                    expires_at: t.get("expires_at").and_then(J::as_u64),
                 }
             })
             .collect();

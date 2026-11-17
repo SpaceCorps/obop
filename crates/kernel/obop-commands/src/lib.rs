@@ -604,13 +604,17 @@ impl Dispatcher {
         let never = self.never.read().unwrap();
         let visible =
             |c: &Registered| on_surface(c.surfaces, surface) && p.allows(c.permission_group);
+        // A command of group `*` that the kind of token can never use is left out, as from the
+        // catalogues (L17).
         let listed = |model: &str| {
-            cmds.get(&format!("{model}.list"))
-                .is_some_and(|l| visible(l))
+            let id = format!("{model}.list");
+            devices::usable(&id, p) && cmds.get(&id).is_some_and(|l| visible(l))
         };
         let mut out: Vec<CommandInfo> = cmds
             .iter()
-            .filter(|(id, c)| visible(c) && !never.contains_key(*id) && !listed(c.model))
+            .filter(|(id, c)| {
+                visible(c) && devices::usable(id, p) && !never.contains_key(*id) && !listed(c.model)
+            })
             .map(|(id, c)| CommandInfo {
                 id: id.clone(),
                 description: c.description,
@@ -652,13 +656,15 @@ impl Dispatcher {
                 let Some(list) = cmds.get(&format!("{name}.list")) else {
                     continue;
                 };
-                if !visible(list) {
+                if !visible(list) || !devices::usable(&format!("{name}.list"), p) {
                     continue;
                 }
                 let never = self.never.read().unwrap();
                 let can = |c: &str| {
                     let id = format!("{name}.{c}");
-                    !never.contains_key(&id) && cmds.get(&id).is_some_and(|r| visible(r))
+                    !never.contains_key(&id)
+                        && devices::usable(&id, p)
+                        && cmds.get(&id).is_some_and(|r| visible(r))
                 };
                 let mut actions: Vec<CommandInfo> = cmds
                     .iter()
@@ -667,6 +673,7 @@ impl Dispatcher {
                             && id.starts_with(&format!("{name}."))
                             && !m.def.is_generated_command(&id[name.len() + 1..])
                             && visible(c)
+                            && devices::usable(id, p)
                     })
                     .map(|(id, c)| {
                         let tr = m
@@ -1901,6 +1908,9 @@ pub struct AgentTokenInfo {
     pub scopes: Vec<String>,
     /// Unix seconds.
     pub created_at: u64,
+    /// Unix seconds; `None` when the token has no end of its own (one made by an account bound to
+    /// a Microsoft identity ends after 90 days, N18).
+    pub expires_at: Option<u64>,
 }
 
 /// The few identity operations the OAuth authorization server (D64) needs. Tokens it issues are

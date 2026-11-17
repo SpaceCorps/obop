@@ -514,65 +514,6 @@ impl Auth {
         Ok(t)
     }
 
-    /// End the agent tokens of an account and the applications connected to it through the OAuth
-    /// sign-in for MCP clients (their grants, access tokens and refresh tokens), those made at
-    /// `until` or before (every one with `None`): what the account handed on while it signed in
-    /// with Microsoft (N18, ratified with D91 by OR-38). Unbinding the account and making it
-    /// Microsoft-only end them; its sessions and phone apps are ended by `revoke_user_sessions`.
-    /// Safe to repeat; a refusal of the store is tried again and then fails as a partial request.
-    /// Returns how many agent tokens and how many applications it ended.
-    pub(crate) fn end_delegations(
-        &self,
-        tid: &str,
-        until: Option<u64>,
-        ch: &Change,
-    ) -> Result<(usize, usize), MfaError> {
-        let made_by = |rec: &Fields| {
-            until.is_none_or(|u| rec.get("created_at").and_then(J::as_u64).unwrap_or(0) <= u)
-        };
-        let mut ended = (0, 0);
-        self.needed(ch, "ending the agent tokens and connected apps", || {
-            let mut revoked = Fields::new();
-            revoked.insert("revoked".into(), J::Bool(true));
-            for (id, tok) in self.backend.find("auth_token", "owner", &J::from(tid))? {
-                let agent = tok.get("kind").and_then(J::as_str) == Some("agent")
-                    && tok.get("oauth_grant").is_none()
-                    && tok.get("mobile").and_then(J::as_bool) != Some(true);
-                if agent
-                    && tok.get("revoked").and_then(J::as_bool) != Some(true)
-                    && made_by(&tok)
-                    && self.backend.update("auth_token", &id, &revoked)?
-                {
-                    ended.0 += 1;
-                }
-            }
-            for (gid, g) in self.backend.find("oauth_grant", "owner", &J::from(tid))? {
-                // A phone app is a device, ended with the sessions.
-                if g.get("class").and_then(J::as_str) == Some("mobile") || !made_by(&g) {
-                    continue;
-                }
-                if g.get("revoked").and_then(J::as_bool) != Some(true) {
-                    let mut p = revoked.clone();
-                    p.insert("revoked_at".into(), J::from(self.now()));
-                    if self.backend.update("oauth_grant", &gid, &p)? {
-                        ended.1 += 1;
-                    }
-                }
-                if let Some(a) = g.get("access_id").and_then(J::as_str) {
-                    self.backend.update("auth_token", a, &revoked)?;
-                }
-                for (rid, _) in
-                    self.backend
-                        .find("oauth_refresh", "grant", &J::from(gid.as_str()))?
-                {
-                    self.backend.delete("oauth_refresh", &rid)?;
-                }
-            }
-            Ok(())
-        })?;
-        Ok(ended)
-    }
-
     /// Before an account is enabled: finish what a disable or an offboarding of it left undone
     /// because the store refused (a note on the account says so). Otherwise enabling would bring
     /// back the sessions, agent tokens and connected apps that were meant to end. A refusal here

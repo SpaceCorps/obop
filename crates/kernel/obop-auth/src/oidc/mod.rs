@@ -730,12 +730,7 @@ impl Auth {
         }
         let ch = Change::new(&user, "oidc_unbind", actor, "unbound from Microsoft");
         let Some((id, link)) = self.link_of(&user)? else {
-            // The repeat of an unbinding that could not end the sessions finishes that (D74), and
-            // the agent tokens and MCP apps made before it (N18).
-            if let Some(owed) = crate::account::owed_notes(&u).get("sso_unbind") {
-                self.end_delegations(&user, owed["at"].as_u64(), &ch)
-                    .map_err(|e| unavailable(format!("{e:?}")))?;
-            }
+            // The repeat of an unbinding that could not end the sessions finishes that (D74).
             if let Some(n) = self
                 .finish_owed(&user, "sso_unbind", &ch)
                 .map_err(|e| unavailable(format!("{e:?}")))?
@@ -769,22 +764,17 @@ impl Auth {
         let n = self
             .revoke_user_sessions(&user, None, &ch)
             .map_err(|e| unavailable(format!("{e:?}")))?;
-        let (agents, apps) = self
-            .end_delegations(&user, None, &ch)
-            .map_err(|e| unavailable(format!("{e:?}")))?;
         self.clear_owed(&user, "sso_unbind");
         self.sso_event(
             &user,
             "oidc_unbind",
             actor,
             &format!(
-                "unbound from object id {}; {n} session(s) signed out, and the phone apps of the account with them; {agents} agent token(s) and {apps} app(s) connected through the OAuth sign-in for MCP clients ended",
+                "unbound from object id {}; {n} session(s) signed out, and the phone apps of the account with them; agent tokens made in those sessions and apps connected through the OAuth sign-in for MCP clients (D64: their grants and refresh tokens) keep working until the account is offboarded",
                 link["oid"].as_str().unwrap_or("?")
             ),
         );
-        Ok(
-            json!({"user": user, "oid": link["oid"], "changed": true, "sessions_ended": n, "agent_tokens_ended": agents, "apps_ended": apps}),
-        )
+        Ok(json!({"user": user, "oid": link["oid"], "changed": true, "sessions_ended": n}))
     }
 
     fn sso_only_as(&self, actor: &str, user: &str, on: bool) -> Result<J, SsoError> {
@@ -806,10 +796,6 @@ impl Auth {
         if was == on {
             // The repeat of a request that changed the flag and could not end the sessions
             // finishes that (D74).
-            if on && let Some(owed) = crate::account::owed_notes(&u).get("sso_only") {
-                self.end_delegations(&user, owed["at"].as_u64(), &ch)
-                    .map_err(|e| unavailable(format!("{e:?}")))?;
-            }
             if on
                 && let Some(n) = self
                     .finish_owed(&user, "sso_only", &ch)
@@ -907,22 +893,17 @@ impl Auth {
         let n = self
             .revoke_user_sessions(&user, None, &ch)
             .map_err(|e| unavailable(format!("{e:?}")))?;
-        let (agents, apps) = self
-            .end_delegations(&user, None, &ch)
-            .map_err(|e| unavailable(format!("{e:?}")))?;
         self.clear_owed(&user, "sso_only");
         self.sso_event(
             &user,
             "oidc_sso_only",
             actor,
             &format!(
-                "signs in with Microsoft only; {n} session(s) signed out, and the phone apps of the account with them; {agents} agent token(s) and {apps} app(s) connected through the OAuth sign-in for MCP clients ended; {} break-glass administrator(s) remain",
+                "signs in with Microsoft only; {n} session(s) signed out, and the phone apps of the account with them; agent tokens and apps connected through the OAuth sign-in for MCP clients keep working until the account is offboarded; {} break-glass administrator(s) remain",
                 rest.len()
             ),
         );
-        Ok(
-            json!({"user": user, "sso_only": true, "changed": true, "break_glass": rest, "agent_tokens_ended": agents, "apps_ended": apps}),
-        )
+        Ok(json!({"user": user, "sso_only": true, "changed": true, "break_glass": rest}))
     }
 
     fn bindings_impl(&self) -> Result<J, SsoError> {

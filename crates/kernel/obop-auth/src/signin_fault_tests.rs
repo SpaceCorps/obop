@@ -108,3 +108,33 @@ fn a_refused_read_never_frees_a_session_that_owes_a_password_change() {
     );
     assert!(n > 3, "the sweep met a refusal in {n} runs only");
 }
+
+/// A refused call of the store while an agent token is made is answered with the store's own text
+/// (the route makes it the 503 of D74), never as a bad request: before, the read of the Microsoft
+/// binding came back as `Unavailable("storage_...")` and the re-read of the account as "the
+/// account changed", both answered 400.
+#[test]
+fn a_refused_call_while_an_agent_token_is_made_is_a_store_fault_and_never_a_bad_request() {
+    let mut refused_runs = 0;
+    for skip in 0..CALLS {
+        let (a, flaky, _) = rig();
+        user_with(&a, "ada", &["base.user"]);
+        let p = Principal::user("ada", &["base.user"]);
+        flaky.refuse_call_after(skip);
+        let before = flaky.refused();
+        let r = a.issue_agent_token(&p, &["base.user".to_string()], "bot");
+        if flaky.refused() > before {
+            refused_runs += 1;
+            if let Err(e) = &r {
+                assert!(
+                    obop_storage::fault::Fault::is_transient(e),
+                    "refusal after {skip} calls: {e}"
+                );
+            }
+        }
+    }
+    assert!(
+        refused_runs > 1,
+        "the sweep met a refusal in {refused_runs} runs only"
+    );
+}

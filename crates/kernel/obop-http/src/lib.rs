@@ -602,6 +602,8 @@ fn agent_token_blocking(s: Arc<HttpState>, h: HeaderMap, body: J) -> Response {
         &s.dispatcher.known_groups(),
     ) {
         Ok(token) => Json(json!({"token": token})).into_response(),
+        // A refused read of the store is no bad request: the client may ask again (D74).
+        Err(e) if obop_storage::fault::Fault::is_transient(&e) => unavailable(&e),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
     }
 }
@@ -637,6 +639,7 @@ fn agent_tokens_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
         .map(|t| {
             json!({
                 "id": t.id, "label": t.label, "scopes": t.scopes, "created_at": t.created_at,
+                "expires_at": t.expires_at,
             })
         })
         .collect();

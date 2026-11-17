@@ -1881,6 +1881,13 @@
                             "description": "Unix seconds.",
                             "type": "integer"
                           },
+                          "expires_at": {
+                            "description": "Unix seconds when the token ends by itself (90 days after it was made by an account bound to a Microsoft identity); null when it has no end of its own.",
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
                           "id": {
                             "type": "string"
                           },

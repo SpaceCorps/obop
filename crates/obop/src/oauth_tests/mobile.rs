@@ -1493,6 +1493,59 @@ fn the_tool_list_shows_a_token_only_the_device_commands_it_can_use() {
     assert_eq!(tools, ["device__revoke"]);
 }
 
+/// The OpenAPI document (`GET /api/openapi.json`, built from `meta` and `commands_outside_meta`)
+/// names the same device commands as the catalogues, and no setting command for a mobile app's
+/// token (K26, L17, L20): it listed `device.list`, `device.search` and `setting.get` to a token
+/// that is refused all three.
+#[test]
+fn the_openapi_document_of_a_token_names_only_the_commands_it_can_use() {
+    use obop_commands::{Principal, Surface};
+    let rig = rig();
+    let d = &rig.app.dispatcher;
+    let names = |p: &Principal| -> Vec<String> {
+        let mut ids: Vec<String> = d
+            .commands_outside_meta(Surface::Rest, p)
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        for m in d.meta(Surface::Rest, p) {
+            for model in m.models {
+                ids.push(format!("{}.list", model.name));
+                if model.can_update {
+                    ids.push(format!("{}.update", model.name));
+                }
+                ids.extend(model.actions.into_iter().map(|a| a.id));
+            }
+        }
+        ids.sort();
+        ids
+    };
+    let devices = |p: &Principal| -> Vec<String> {
+        names(p)
+            .into_iter()
+            .filter(|id| id.starts_with("device."))
+            .collect()
+    };
+    let mut app = Principal::user("bob", &["base.user"]);
+    app.device = Some("dev_1".into());
+    app.scopes = Some(["base.user".to_string()].into_iter().collect());
+    assert_eq!(
+        devices(&app),
+        ["device.get", "device.revoke", "device.update"]
+    );
+    assert!(
+        !names(&app).iter().any(|id| id.starts_with("setting.")),
+        "{:?}",
+        names(&app)
+    );
+    let agent = Principal::agent("bob/agent", &["base.user"], &["base.user"]);
+    assert_eq!(devices(&agent), ["device.revoke"]);
+    // A person keeps the device model in the metadata the back office renders from.
+    let person = Principal::user("bob", &["base.user"]);
+    assert!(devices(&person).contains(&"device.list".to_string()));
+    assert!(devices(&person).contains(&"device.update".to_string()));
+}
+
 async fn command_resp(r: &axum::Router, bearer: &str, cmd: &str, body: J) -> Resp {
     let (model, name) = cmd.split_once('.').unwrap();
     let auth = format!("Bearer {}", bearer.trim_start_matches("Bearer "));
