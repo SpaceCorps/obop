@@ -196,8 +196,13 @@ test.describe("Customize > Modules", () => {
       );
       await expect(check.getByText("Conflict", { exact: true })).toBeVisible();
       await expect(check.getByRole("button", { name: "Install" })).toBeDisabled();
-      // A newer version inside the range is an upgrade and can go ahead.
-      await page.getByLabel("Text of the obop.toml").fill(pkg("projects", "0.9.0"));
+      // A newer version inside the range is an upgrade and can go ahead. It is the bundled
+      // package itself at 0.9.0: a stand-in that drops its models would be refused as soon as
+      // an earlier spec left a project or a task in the database.
+      const bundled = readFileSync(resolve(repoRoot, "packages/projects.toml"), "utf8");
+      await page
+        .getByLabel("Text of the obop.toml")
+        .fill(bundled.replace(/^version = "[^"]+"$/m, 'version = "0.9.0"'));
       await expect(check.getByText("This is a valid package")).toBeVisible();
       await expect(check.getByText("Upgrade", { exact: true })).toBeVisible();
       await expect(check.getByRole("button", { name: "Install" })).toBeEnabled();
