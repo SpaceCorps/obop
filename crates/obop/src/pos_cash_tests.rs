@@ -218,3 +218,49 @@ fn a_new_session_opens_with_the_cash_counted_when_the_till_last_closed() {
     );
     assert_eq!(given["opening_cash"], json!(9_000));
 }
+
+#[test]
+fn a_refund_after_closing_does_not_change_the_closed_session() {
+    let f = fixture();
+    let s = id(&f.session());
+    let kept = f.sale(&s, 1, &[("cash", 2_500)], true);
+    // A refund while the session is open pays the cash out of this drawer.
+    let back = f.sale(&s, 1, &[("cash", 2_500)], true);
+    ok(&f.a, "pos_order.refund", json!({"id": back}));
+    let got = ok(&f.a, "pos_session.get", json!({"id": s}));
+    assert_eq!(got["expected_cash"], json!(12_500));
+    // A client cannot write the kept figure.
+    assert!(
+        run(
+            &f.a,
+            "pos_session.update",
+            json!({"id": s, "closed_expected_cash": 1}),
+        )
+        .is_err()
+    );
+    ok(
+        &f.a,
+        "pos_session.update",
+        json!({"id": s, "closing_cash": 12_500}),
+    );
+    ok(&f.a, "pos_session.close", json!({"id": s}));
+    let closed = ok(&f.a, "pos_session.get", json!({"id": s}));
+    assert_eq!(
+        (
+            closed["expected_cash"].clone(),
+            closed["cash_difference"].clone()
+        ),
+        (json!(12_500), json!(0))
+    );
+    // Refunded after closing (from another drawer): the closed session stays as it closed.
+    ok(&f.a, "pos_order.refund", json!({"id": kept}));
+    let after = ok(&f.a, "pos_session.get", json!({"id": s}));
+    assert_eq!(
+        (
+            after["expected_cash"].clone(),
+            after["cash_difference"].clone()
+        ),
+        (json!(12_500), json!(0)),
+        "{after}"
+    );
+}
