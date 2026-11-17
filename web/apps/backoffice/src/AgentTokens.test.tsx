@@ -157,7 +157,7 @@ afterEach(async () => {
 });
 
 describe("the list of agent tokens", () => {
-  it("shows when a token ends by itself, and nothing for one that does not (N18)", async () => {
+  it("shows when a token ends by itself, and Until revoked for one that does not (N18)", async () => {
     const ENDS = CREATED + 90 * 86_400;
     server.tokens = [
       { ...server.tokens[0], expires_at: ENDS },
@@ -167,7 +167,7 @@ describe("the list of agent tokens", () => {
     const cells = [...container.querySelectorAll('tbody td[data-label="Ends"]')].map(
       (td) => td.textContent,
     );
-    expect(cells).toEqual([fmt.dateTime(ENDS * 1000), ""]);
+    expect(cells).toEqual([fmt.dateTime(ENDS * 1000), "Until revoked"]);
   });
 
   it("shows each token with its label, its groups and when it was made", async () => {

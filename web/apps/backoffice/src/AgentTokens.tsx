@@ -174,7 +174,7 @@ export function AgentTokensSection({ token, notify }: { token: string; notify: N
                   {row.created_at ? fmt.dateTime(row.created_at * 1000) : ""}
                 </td>
                 <td data-label={t("Ends")}>
-                  {row.expires_at ? fmt.dateTime(row.expires_at * 1000) : ""}
+                  {row.expires_at ? fmt.dateTime(row.expires_at * 1000) : t("Until revoked")}
                 </td>
                 <td className="cell-actions">
                   <Button
