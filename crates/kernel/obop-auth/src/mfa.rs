@@ -744,7 +744,7 @@ impl Auth {
         p.insert("mfa_enabled".into(), J::Bool(false));
         // Written with the change: a sign-in in flight that checked the factor before this
         // cannot hand out a session that the revocation after it would miss.
-        bump_epoch(&mut p);
+        bump_epoch(&mut p, self.now());
         self.put(name, &p)
     }
 

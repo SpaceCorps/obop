@@ -858,7 +858,7 @@ impl PasskeyApi for Auth {
         patch.extend(self.owed_patch(name, &op, Some(&keep))?);
         // The credential epoch changes in the same batch, so a passwordless sign-in that used the
         // passkey cannot hand out a session that the revocation below would miss.
-        bump_epoch(&mut patch);
+        bump_epoch(&mut patch, self.now());
         self.backend
             .apply(&[
                 Op::Delete {

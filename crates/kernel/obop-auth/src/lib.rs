@@ -77,8 +77,11 @@ pub(crate) fn epoch_of(u: &J) -> Epoch {
 }
 
 /// Put a new credential epoch into `patch` (see [`Epoch`]).
-pub(crate) fn bump_epoch(patch: &mut Fields) {
+pub(crate) fn bump_epoch(patch: &mut Fields, now: u64) {
     patch.insert("epoch".into(), J::from(hex(&random_bytes::<12>())));
+    // When the credentials changed, in the same write: what a revocation finished later ends is
+    // cut off here and not at the note written before the change (L16).
+    patch.insert("epoch_at".into(), J::from(now));
 }
 
 fn str_list(v: &J) -> Vec<String> {

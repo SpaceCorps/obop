@@ -760,7 +760,7 @@ impl Auth {
             .map_err(|e| unavailable(format!("{e:?}")))?;
         let before = obop_storage::fault::change_count();
         let mut p = Fields::new();
-        bump_epoch(&mut p);
+        bump_epoch(&mut p, self.now());
         if let Err(e) = self.put(&user, &p) {
             self.retract_owed(&user, "sso_unbind", &e, before, previous);
             return Err(unavailable(format!("{e:?}")));
@@ -830,7 +830,7 @@ impl Auth {
             // A password that has been unused since the account was made Microsoft-only is not
             // handed back as it was: the person has to choose a new one.
             p.insert("must_change_password".into(), J::Bool(true));
-            bump_epoch(&mut p);
+            bump_epoch(&mut p, self.now());
             self.put(&user, &p)
                 .map_err(|e| unavailable(format!("{e:?}")))?;
             self.sso_event(
@@ -899,7 +899,7 @@ impl Auth {
         // A temporary password the person can no longer use would limit every session to a
         // password change.
         p.insert("must_change_password".into(), J::Bool(false));
-        bump_epoch(&mut p);
+        bump_epoch(&mut p, self.now());
         if let Err(e) = self.put(&user, &p) {
             self.retract_owed(&user, "sso_only", &e, before, previous);
             return Err(unavailable(format!("{e:?}")));

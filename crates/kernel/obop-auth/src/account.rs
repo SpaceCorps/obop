@@ -321,7 +321,11 @@ impl Auth {
             return Ok(None);
         };
         let keep = owed["keep"].as_str().map(String::from);
-        let until = owed["at"].as_u64();
+        // The cutoff is the change of the credentials, not the note written before it (L16): a
+        // sign-in that finished between the two passed the epoch compare with the old epoch and
+        // must end too. One made after the change carries the new epoch and is spared.
+        let changed = u.get("epoch_at").and_then(J::as_u64).unwrap_or(0);
+        let until = owed["at"].as_u64().map(|at| at.max(changed));
         let n = self.revoke_sessions_until(name, keep.as_deref(), until, ch)?;
         self.clear_owed(name, op);
         Ok(Some(n))
@@ -479,7 +483,7 @@ impl Auth {
         patch.insert("password_hash".into(), J::from(hash));
         patch.insert("must_change_password".into(), J::Bool(false));
         patch.insert("password_changed_at".into(), J::from(self.now()));
-        bump_epoch(&mut patch);
+        bump_epoch(&mut patch, self.now());
         self.put(name, &patch)?;
         let h = token_hash(session);
         // A repeat would need the old password, which no longer works (and counts towards the
@@ -636,7 +640,7 @@ impl Auth {
         };
         let mut patch = Fields::new();
         patch.insert("disabled".into(), J::Bool(disabled));
-        bump_epoch(&mut patch);
+        bump_epoch(&mut patch, self.now());
         let was_offboarded = u["offboarded"].as_bool() == Some(true);
         if !disabled && was_offboarded {
             patch.insert("offboarded".into(), J::Bool(false));
@@ -723,7 +727,7 @@ impl Auth {
         let mut patch = Fields::new();
         patch.insert("password_hash".into(), J::from(hash));
         patch.insert("must_change_password".into(), J::Bool(true));
-        bump_epoch(&mut patch);
+        bump_epoch(&mut patch, self.now());
         self.put(&target, &patch)?;
         let ch = Change::new(&target, "password_reset", actor, "temporary password set");
         let n = self.revoke_user_sessions(&target, None, &ch)?;

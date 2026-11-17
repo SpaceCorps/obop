@@ -446,7 +446,7 @@ fn the_account_and_the_provider_are_checked_again_when_the_code_is_spent() {
     // The credentials changed in between (a reset, new groups): the half-finished sign-in ends.
     let code = sso(&r).begin(&id, BINDER).unwrap();
     let mut patch = Fields::new();
-    bump_epoch(&mut patch);
+    bump_epoch(&mut patch, r.a.now());
     r.b.update("auth_user", "ada", &patch).unwrap();
     assert!(matches!(
         sso(&r).exchange(&code, BINDER),
@@ -2215,7 +2215,7 @@ fn epoch_in_store(r: &Rig, user: &str) -> Option<String> {
 /// Give `user` a credential epoch, as any change of credentials does.
 fn change_credentials(r: &Rig, user: &str) {
     let mut patch = Fields::new();
-    bump_epoch(&mut patch);
+    bump_epoch(&mut patch, r.a.now());
     r.b.update("auth_user", user, &patch).unwrap();
 }
 
@@ -2411,7 +2411,7 @@ fn a_change_of_credentials_at_any_point_of_the_flow_sign_in_refuses_it_or_leaves
             skip,
             Box::new(|inner| {
                 let mut patch = Fields::new();
-                bump_epoch(&mut patch);
+                bump_epoch(&mut patch, T0);
                 inner.update("auth_user", "ada", &patch).unwrap();
             }),
         );

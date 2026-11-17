@@ -542,3 +542,31 @@ fn a_repeat_after_a_refusal_at_any_step_leaves_exactly_one_entry_per_device() {
         "the sweep met a refusal in {refused_runs} runs only"
     );
 }
+
+/// L16: a revocation finished later (the repeat of a request whose first revocation was refused)
+/// cuts off at the change of the credentials, not at the note written before it. A phone that
+/// signed in between the two passed the epoch compare with the old epoch and is ended by the
+/// repeat; before, `registered_at` after the note left it in force.
+#[test]
+fn a_revocation_finished_later_ends_a_device_that_signed_in_between_the_note_and_the_change() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    // The note of the change, then the phone's exchange, then the change itself (each a second
+    // apart; the records of the phone carry real time, as the OAuth server writes them).
+    let t1 = now_system() - 5;
+    r.a.set_clock_for_test(t1);
+    r.a.owe_revocation("ada", "user_disable", None).unwrap();
+    let app = sign_in(&r, "ada", "Phone");
+    let mut p = Fields::new();
+    p.insert("disabled".into(), J::Bool(true));
+    r.a.set_clock_for_test(now_system() + 2);
+    crate::bump_epoch(&mut p, r.a.now());
+    r.a.put("ada", &p).unwrap();
+    // The first revocation was refused; the repeat finishes it.
+    let ch = crate::Change::new("ada", "user_disable", "root", "account disabled");
+    r.a.finish_owed("ada", "user_disable", &ch).unwrap();
+    assert!(
+        ended(&r, &app),
+        "the phone that signed in in the gap is ended"
+    );
+}
