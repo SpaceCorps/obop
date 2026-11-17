@@ -1,6 +1,7 @@
 // The slots of a day for one resource: every 30 minutes from 08:00 to 18:00, wider when a booking
 // lies outside those hours; a slot is free when an appointment of `length` minutes starting there
 // overlaps no booking and ends by midnight. On today's date a slot that has already begun is past.
+import { clockText } from "../../inputs/display.ts";
 export const APPOINTMENT = "appointments_appointment";
 export const STEP = 30;
 const OPEN = 8 * 60;
@@ -62,15 +63,8 @@ export function minuteIn(zone: string, now = new Date()): number {
   return now.getHours() * 60 + now.getMinutes();
 }
 
-const clock = new Intl.DateTimeFormat(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "UTC",
-});
-
 /**
- * A time of day in the browser's own format, the one the Start and End inputs show (`10:30` or
- * `10:30 AM`), so the slots and the inputs of the form read alike.
+ * A time of day on the 24-hour clock (`10:30`), the one the Start and End inputs show and every
+ * list writes (`clockText`), so the slots and the inputs of the form read alike (S5).
  */
-export const slotTime = (minutes: number): string =>
-  clock.format(new Date(Date.UTC(2000, 0, 1, Math.floor(minutes / 60), minutes % 60)));
+export const slotTime = (minutes: number): string => clockText(minutes);
