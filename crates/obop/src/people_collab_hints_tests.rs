@@ -488,3 +488,52 @@ fn documents_tiles_and_templates_start_with_sensible_values() {
         "2026-09-01"
     );
 }
+
+#[test]
+fn leave_follows_when_the_employee_s_login_is_set_or_corrected() {
+    // R12: leave filed before an employee had a login, or under a wrong one, becomes the login's.
+    let app = app();
+    let hanna = Principal::user("hanna", &["hr.user", "hr.manager"]);
+    let julia = Principal::user("julia", &["hr.user"]);
+    let emp = id(&ok(
+        &app,
+        &hanna,
+        "hr_employee.create",
+        json!({"name": "Julia Brandt"}),
+    ));
+    let leave = id(&ok(
+        &app,
+        &hanna,
+        "hr_leave_request.create",
+        json!({"employee_id": emp, "start_on": "2026-10-05", "end_on": "2026-10-06", "days": 2}),
+    ));
+    let owner = |app: &crate::app::App| {
+        ok(app, &hanna, "hr_leave_request.get", json!({"id": leave}))["requested_by"].clone()
+    };
+    assert_eq!(owner(&app), "hanna");
+    assert!(run(&app, &julia, "hr_leave_request.get", json!({"id": leave})).is_err());
+    ok(
+        &app,
+        &hanna,
+        "hr_employee.update",
+        json!({"id": emp, "user": "jullia"}),
+    );
+    assert_eq!(owner(&app), "jullia");
+    // Corrected: the leave moves again, and Julia sees it.
+    ok(
+        &app,
+        &hanna,
+        "hr_employee.update",
+        json!({"id": emp, "user": "julia"}),
+    );
+    assert_eq!(owner(&app), "julia");
+    ok(&app, &julia, "hr_leave_request.get", json!({"id": leave}));
+    // A login taken away moves nothing.
+    ok(
+        &app,
+        &hanna,
+        "hr_employee.update",
+        json!({"id": emp, "user": null}),
+    );
+    assert_eq!(owner(&app), "julia");
+}

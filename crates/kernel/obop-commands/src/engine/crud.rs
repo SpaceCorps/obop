@@ -518,7 +518,21 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         if let Some(why) = creator_blocked(&Gate::new(&unit, &look, &actor), def, &after) {
             return Err(why);
         }
+        // Records whose owner is filled from this one follow a changed source (R12).
+        let models: Vec<Arc<ModelDef>> = eng
+            .models
+            .read()
+            .unwrap()
+            .values()
+            .map(|m| m.def.clone())
+            .collect();
+        let follow = hints::follow_owner(&cx, &models, def, &id, &changed)?;
         unit.merge(def.name, &id, changed)?;
+        for (model, rid, own, value) in follow {
+            let mut f = Fields::new();
+            f.insert(own.to_string(), value);
+            unit.merge(model, &rid, f)?;
+        }
         seq::check_unique(&unit, &look)?;
     }
     if steps.is_empty() {
