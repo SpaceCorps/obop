@@ -116,6 +116,11 @@ pub mod code {
     /// D70: the person started more bulk imports in the last minute than the limit allows; nothing
     /// was changed, and the same call can be repeated after the wait of `Retry-After`.
     pub const RATE_LIMITED: &str = "rate_limited";
+    /// D97: the plan was decided (or ran out) before this call reached it; the body says how, by
+    /// whom and when.
+    pub const ALREADY_DECIDED: &str = "already_decided";
+    /// D97: the agent has as many plans waiting as an agent may; a person must decide some first.
+    pub const TOO_MANY_WAITING: &str = "too_many_waiting";
     /// D74: every database connection was in use for the whole acquire timeout, or too many callers
     /// were already waiting. The call did not start.
     pub const STORAGE_BUSY: &str = "storage_busy";
@@ -289,6 +294,20 @@ pub const TABLE: &[Row] = &[
         retry_after: Some(60),
         origin: "D70",
         hint: "Too many bulk imports in the last minute. Nothing was changed. Repeat the same call after the time in Retry-After.",
+    },
+    Row {
+        code: code::ALREADY_DECIDED,
+        status: 409,
+        retry_after: None,
+        origin: "D97",
+        hint: "Somebody decided this request first, or it ran out. Nothing was run by this call. Read it again with plan.get to see what became of it.",
+    },
+    Row {
+        code: code::TOO_MANY_WAITING,
+        status: 409,
+        retry_after: None,
+        origin: "D97",
+        hint: "This agent already has 100 requests waiting for a person. Nothing was proposed. A person must approve or reject some first.",
     },
     Row {
         code: code::STORAGE_BUSY,
@@ -619,6 +638,25 @@ pub fn classify_with(e: &CallError, seen: &Outcome) -> Classified {
             debug(),
         ),
         CallError::PreconditionFailed { current } => precondition(*current),
+        CallError::AlreadyDecided { state, by, at } => {
+            let r = row(code::ALREADY_DECIDED).expect("the table has already_decided");
+            let mut c = Classified::new(
+                Kind::Failed,
+                r.status,
+                r.code,
+                json!({
+                    "error": "this request was decided before",
+                    "code": r.code,
+                    "hint": r.hint,
+                    "state": state,
+                    "decided_by": by,
+                    "decided_at": at,
+                }),
+                debug(),
+            );
+            c.hint = Some(r.hint);
+            c
+        }
         CallError::Handler(m) => handler(m, debug),
     }
 }
@@ -779,6 +817,11 @@ mod tests {
             },
             CallError::UnknownPlan("plan-9".into()),
             CallError::PreconditionFailed { current: 8 },
+            CallError::AlreadyDecided {
+                state: "approved".into(),
+                by: Some("ada".into()),
+                at: Some("2026-11-17T10:00:00Z".into()),
+            },
             CallError::Handler("name is required".into()),
         ];
         for e in &all {
@@ -790,6 +833,7 @@ mod tests {
                 | CallError::ApprovalRequired { .. }
                 | CallError::UnknownPlan(_)
                 | CallError::PreconditionFailed { .. }
+                | CallError::AlreadyDecided { .. }
                 | CallError::Handler(_) => {}
             }
         }
@@ -893,6 +937,31 @@ mod tests {
         }
     }
 
+    /// D97: the loser of a race hears who decided, when and how, with the row's status and hint.
+    #[test]
+    fn already_decided_says_who_when_and_how() {
+        let c = classify(&CallError::AlreadyDecided {
+            state: "rejected".into(),
+            by: Some("ada".into()),
+            at: Some("2026-11-17T10:00:00Z".into()),
+        });
+        assert_eq!(
+            (c.kind.clone(), c.status, c.code),
+            (Kind::Failed, 409, "already_decided")
+        );
+        assert_eq!(c.body["state"], "rejected");
+        assert_eq!(c.body["decided_by"], "ada");
+        assert_eq!(c.body["decided_at"], "2026-11-17T10:00:00Z");
+        assert_eq!(c.body["code"], "already_decided");
+        assert_eq!(c.hint, row("already_decided").map(|r| r.hint));
+        let expired = classify(&CallError::AlreadyDecided {
+            state: "expired".into(),
+            by: None,
+            at: None,
+        });
+        assert_eq!(expired.body["decided_by"], J::Null);
+    }
+
     #[test]
     fn every_variant_has_an_answer() {
         for e in every_variant() {
@@ -955,6 +1024,8 @@ mod tests {
             ("reauth_required", 400),
             ("incomplete", 409),
             ("rate_limited", 429),
+            ("already_decided", 409),
+            ("too_many_waiting", 409),
             ("storage_busy", 503),
             ("storage_unavailable", 503),
             ("storage_timeout", 503),

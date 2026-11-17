@@ -268,7 +268,7 @@ fn the_inventory_names_every_place_the_server_seals_something() {
             "{want:?} missing from the rotation inventory"
         );
     }
-    assert_eq!(KV_PREFIXES, ["plan:", "vault:", "mcp:s:"]);
+    assert_eq!(KV_PREFIXES, ["plan:", "planrec:", "vault:", "mcp:s:"]);
     // The purposes the inventory uses are the ones the code seals with.
     assert_eq!(
         obop_connectors::runtime::PURPOSE_CREDENTIALS,

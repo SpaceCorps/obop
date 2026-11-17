@@ -296,8 +296,9 @@ impl Ingress {
             Err(CallError::Restore(_) | CallError::UnknownPlan(_)) => {
                 Err("the record could not be written".into())
             }
-            // An inbound record carries no version to compare, so this cannot happen today.
-            Err(e @ CallError::PreconditionFailed { .. }) => {
+            // An inbound record carries no version to compare, and a create or an update is no
+            // decision of a plan (D97), so neither can happen today.
+            Err(e @ (CallError::PreconditionFailed { .. } | CallError::AlreadyDecided { .. })) => {
                 Err(obop_commands::errors::classify_with(&e, &Default::default()).cli)
             }
         }
