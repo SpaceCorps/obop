@@ -93,6 +93,10 @@ mod payments_tests;
 #[cfg(test)]
 mod people_collab_hints_tests;
 #[cfg(test)]
+mod plans_cli_tests;
+#[cfg(test)]
+mod plans_http_tests;
+#[cfg(test)]
 mod public_site_tests;
 #[cfg(test)]
 mod recorded_tables_tests;
