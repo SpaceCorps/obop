@@ -175,6 +175,21 @@ impl SignService {
         m.contains_key("sign_link") && m.contains_key("sign_request")
     }
 
+    /// What the server says at start about the signer door (docs/ISSUES.md O29): with `sign`
+    /// installed and no `OBOP_PUBLIC_URL`, a new link is a bare path, and the door checks the
+    /// origin of a post against the `Host` header, over https only when the proxy sends
+    /// `X-Forwarded-Proto: https`; a proxy that does not would have every signature refused.
+    /// `None` when there is nothing to say.
+    pub fn start_up_note(&self) -> Option<String> {
+        if !self.registered() || self.public_url().is_some() {
+            return None;
+        }
+        Some(
+            "sign: OBOP_PUBLIC_URL is not set, so a new signing link is only a path (/sign/...) and the signer page checks where a post came from against the Host header, over https only when the proxy sends X-Forwarded-Proto: https; set OBOP_PUBLIC_URL to the public https address of this instance (docs/SIGN.md)"
+                .to_string(),
+        )
+    }
+
     pub(crate) fn public_url(&self) -> Option<String> {
         self.public_url.read().unwrap().clone()
     }

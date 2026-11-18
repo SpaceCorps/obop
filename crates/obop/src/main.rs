@@ -1416,6 +1416,15 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let default_language =
         obop_http::shell::from_env().map_err(|e| fail(&format!("error: {e}")))?;
     let app = open_app(o)?;
+    // With `sign` installed and no OBOP_PUBLIC_URL the signer page may refuse every post behind
+    // a TLS proxy (docs/ISSUES.md O29).
+    if let Some(note) = app
+        .dispatcher
+        .sign_service()
+        .and_then(|s| s.start_up_note())
+    {
+        eprintln!("{note}");
+    }
     let auth = authenticator(&app, o);
     if !o.dev_auth && Auth::new(app.store.backend()).user_count() == 0 {
         eprintln!(

@@ -195,7 +195,30 @@ impl SignService {
         inner: &dyn Fn(&Value) -> Result<Value, String>,
     ) -> Result<Value, String> {
         if is_admin(p) {
-            return inner(input);
+            // An administrator may change any field, and a revoke by one is logged like any
+            // other (docs/ISSUES.md O19): the link stopped working, whoever stopped it.
+            let id = id_of(input).ok();
+            let was = match &id {
+                Some(id) => self.get("sign_link", id)?,
+                None => None,
+            };
+            let done = inner(input)?;
+            if let (Some(id), Some(was)) = (id, was)
+                && text(&was, "revoked_at").is_empty()
+                && let Some(now) = self.get("sign_link", &id)?
+                && !text(&now, "revoked_at").is_empty()
+            {
+                let id12: String = id.chars().take(12).collect();
+                crate::audit::record_event(
+                    &*self.store.backend,
+                    u64::try_from(self.now_micros() / MICROS_PER_SECOND).unwrap_or(0),
+                    &format!("sign_request:{}", text(&now, "request_id")),
+                    "sign_link_revoked",
+                    &p.id,
+                    &format!("link {id12}; by an administrator"),
+                );
+            }
+            return Ok(done);
         }
         let Value::Map(m) = input else {
             return inner(input);
