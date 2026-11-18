@@ -1,6 +1,7 @@
 //! The rules the generated commands cannot state: a mail server's password is sealed on the way
 //! in and its settings are checked (on create, and on update against the stored record), the
-//! fields the server keeps are not taken from a client, and `outbound_mail` is written only by
+//! fields the server keeps are not taken from a client, a new host forgets the stored password,
+//! an agent only proposes a change to a mail server, and `outbound_mail` is written only by
 //! `send` (no generated `create`, `update` or `bulk_create`).
 
 use crate::meta::{OUTBOUND, SERVER};
@@ -42,8 +43,20 @@ fn after(m: &M, stored: &serde_json::Map<String, J>, k: &str) -> String {
     })
 }
 
+/// An agent only proposes a change to a mail server: a server names where every later message
+/// and the relay's stored password go, so a person approves it (as a Connectors connection
+/// change that exposes more, crates/modules/connectors/src/guards.rs).
+fn agent_proposes() -> Guard {
+    Box::new(|p, _| {
+        Ok(Verdict {
+            approval: !p.is_person(),
+            ..Verdict::default()
+        })
+    })
+}
+
 fn server_input(mail: Arc<Mail>, create: bool) -> Guard {
-    Box::new(move |_, input| {
+    Box::new(move |p, input| {
         let mut m = map(input)?;
         // Kept by the server, never taken from a client.
         for k in [
@@ -125,6 +138,16 @@ fn server_input(mail: Arc<Mail>, create: bool) -> Guard {
         {
             check_kind(k).map_err(|e| format!("kinds: {e}"))?;
         }
+        // A new host without a new password: the stored password belongs to the old relay and is
+        // never sent to another one.
+        let new_host = txt(&m, "host").map(|h| h.trim().to_ascii_lowercase());
+        let old_host = after(&M::new(), &stored, "host")
+            .trim()
+            .to_ascii_lowercase();
+        let new_password = matches!(m.get("password"), Some(Value::Text(pw)) if !pw.is_empty());
+        if !create && new_host.is_some_and(|h| h != old_host) && !new_password {
+            m.insert("password".into(), Value::Null);
+        }
         if let Some(Value::Text(pw)) = m.get("password").cloned() {
             if pw.is_empty() {
                 // An empty field keeps the stored password.
@@ -142,6 +165,7 @@ fn server_input(mail: Arc<Mail>, create: bool) -> Guard {
         }
         Ok(Verdict {
             input: Some(Value::Map(m)),
+            approval: !p.is_person(),
             ..Verdict::default()
         })
     })
@@ -195,6 +219,7 @@ pub fn install(d: &Arc<Dispatcher>, mail: &Arc<Mail>) {
         true,
         server_input(mail.clone(), false),
     );
+    d.add_guard("mail", &format!("{SERVER}.delete"), false, agent_proposes());
     d.add_guard(
         "mail",
         &format!("{SERVER}.bulk_create"),

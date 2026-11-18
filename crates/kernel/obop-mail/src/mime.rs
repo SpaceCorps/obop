@@ -1,7 +1,8 @@
 //! The message as it goes out: RFC 5322 headers and one `text/plain; charset=utf-8` part in
 //! base64 (safe for any text and any line length). Names and subjects that are not plain ASCII
-//! are RFC 2047 encoded words. Every value was checked before (`address`), so no header can be
-//! ended early by what a caller typed; the builder still refuses a line break as a last guard.
+//! are RFC 2047 encoded words, and a long header is folded at spaces. Every value was checked
+//! before (`address`), so no header can be ended early by what a caller typed; the builder still
+//! refuses a line break in a given value as a last guard.
 
 use base64::Engine as _;
 
@@ -45,6 +46,16 @@ impl Message {
 
     /// The whole message, headers and body, with CRLF line ends.
     pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        // The last guard, on what a caller gave and before anything is encoded or folded: a line
+        // break in a value could end a header and start another one.
+        let given = [&self.from_name, &self.from, &self.subject, &self.message_id]
+            .into_iter()
+            .chain(&self.to)
+            .chain(&self.cc)
+            .chain(self.reply_to.as_ref());
+        if given.into_iter().any(|v| v.contains(['\r', '\n'])) {
+            return Err("a header would hold a line break".into());
+        }
         let mut h: Vec<String> = vec![
             format!("Date: {}", rfc5322_date(self.date)),
             format!("From: {}", mailbox(&self.from_name, &self.from)),
@@ -61,10 +72,7 @@ impl Message {
         h.push("MIME-Version: 1.0".into());
         h.push("Content-Type: text/plain; charset=utf-8".into());
         h.push("Content-Transfer-Encoding: base64".into());
-        if h.iter().any(|l| l.contains(['\r', '\n'])) {
-            return Err("a header would hold a line break".into());
-        }
-        let mut out = h.join("\r\n");
+        let mut out = h.iter().map(|l| fold(l)).collect::<Vec<_>>().join("\r\n");
         out.push_str("\r\n\r\n");
         let body = B64.encode(self.crlf_text().as_bytes());
         for chunk in body.as_bytes().chunks(76) {
@@ -105,13 +113,38 @@ fn encode_text(s: &str) -> String {
     }
 }
 
-/// RFC 2047 `=?UTF-8?B?...?=` words of at most 45 source bytes each (75 characters encoded),
-/// split on character boundaries and folded onto continuation lines.
+/// One header folded (RFC 5322 2.2.3) at spaces onto continuation lines of at most 78
+/// characters where a space allows it; a longer word stays whole (`encode_text` keeps the hard
+/// limit of 998). Only a space is ever replaced, by CRLF and that space, so unfolding gives the
+/// line back.
+fn fold(line: &str) -> String {
+    let mut out = String::new();
+    let mut len = 0usize;
+    for (i, word) in line.split(' ').enumerate() {
+        if i > 0 {
+            if len + 1 + word.len() > 78 && len > 0 {
+                out.push_str("\r\n ");
+                len = 1;
+            } else {
+                out.push(' ');
+                len += 1;
+            }
+        }
+        out.push_str(word);
+        len += word.len();
+    }
+    out
+}
+
+/// RFC 2047 `=?UTF-8?B?...?=` words of at most 39 source bytes each (64 characters encoded, so
+/// one fits on a line after `Subject: `), split on character boundaries and separated by a
+/// space where `fold` may break the line (the space between two encoded words is not part of the
+/// text, RFC 2047 6.2).
 pub fn encode_words(s: &str) -> String {
     let mut words = Vec::new();
     let mut cur = String::new();
     for c in s.chars() {
-        if cur.len() + c.len_utf8() > 45 {
+        if cur.len() + c.len_utf8() > 39 {
             words.push(std::mem::take(&mut cur));
         }
         cur.push(c);
@@ -123,7 +156,7 @@ pub fn encode_words(s: &str) -> String {
         .iter()
         .map(|w| format!("=?UTF-8?B?{}?=", B64.encode(w.as_bytes())))
         .collect::<Vec<_>>()
-        .join("\r\n ")
+        .join(" ")
 }
 
 /// `Tue, 18 Nov 2026 09:05:00 +0000`.
@@ -211,7 +244,8 @@ mod tests {
         assert_eq!(mailbox("A, B", "x@example.com"), "\"A, B\" <x@example.com>");
         let long = "ä".repeat(60);
         let enc = encode_words(&long);
-        assert!(enc.split("\r\n ").all(|w| w.len() <= 75), "{enc}");
+        assert!(enc.split(' ').all(|w| w.len() <= 75), "{enc}");
+        assert!(!enc.contains(['\r', '\n']));
         assert!(encode_text("=?UTF-8?B?x?=").starts_with("=?UTF-8?B?"));
     }
 }

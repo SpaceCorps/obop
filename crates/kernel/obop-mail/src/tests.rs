@@ -927,6 +927,18 @@ fn http(status: u16, body: &'static str) -> (u16, Arc<Mutex<Vec<String>>>) {
 
 /// A connected connection of `provider` with a legal basis and the mail fields on its allowlist.
 fn connection(r: &Rig, provider: &str, allow: &[&str], creds: &str, config: &str) -> String {
+    connection_with(r, provider, allow, creds, config, &[])
+}
+
+/// As [`connection`], with more fields on the connection record (its caps).
+fn connection_with(
+    r: &Rig,
+    provider: &str,
+    allow: &[&str],
+    creds: &str,
+    config: &str,
+    extra: &[(&str, J)],
+) -> String {
     let rt = &r.mail.rt;
     let id = uuid::Uuid::now_v7().to_string();
     let mut sealed = String::new();
@@ -941,9 +953,15 @@ fn connection(r: &Rig, provider: &str, allow: &[&str], creds: &str, config: &str
         "state": "connected", "config": config, "credentials": sealed,
         "field_allowlist": json!({"outbound_mail": allow}).to_string(),
         // Addresses, subject and text leave as they are, never pseudonymised: an explicit raise.
-        "policy": json!({"fields": {"outbound_mail.to": "allow", "outbound_mail.subject": "allow", "outbound_mail.body": "allow"}}).to_string(),
+        "policy": json!({"fields": {
+            "outbound_mail.to": "allow", "outbound_mail.cc": "allow", "outbound_mail.bcc": "allow",
+            "outbound_mail.reply_to": "allow", "outbound_mail.subject": "allow", "outbound_mail.body": "allow",
+        }}).to_string(),
     });
-    let J::Object(f) = f else { panic!() };
+    let J::Object(mut f) = f else { panic!() };
+    for (k, val) in extra {
+        f.insert(k.to_string(), val.clone());
+    }
     rt.backend.insert("connection", &id, &f).unwrap();
     let consent = json!({
         "connection": id, "owner_user": "ada", "state": "active", "subject_kind": "instance",
@@ -958,9 +976,16 @@ fn connection(r: &Rig, provider: &str, allow: &[&str], creds: &str, config: &str
     // The agreement with the provider, which the instance requires for personal data by default.
     let policy = json!({"provider": provider, "enabled": true, "dpa_recorded": true});
     let J::Object(policy) = policy else { panic!() };
-    rt.backend
-        .insert("provider_policy", provider, &policy)
-        .unwrap();
+    if rt
+        .backend
+        .get("provider_policy", provider)
+        .unwrap()
+        .is_none()
+    {
+        rt.backend
+            .insert("provider_policy", provider, &policy)
+            .unwrap();
+    }
     id
 }
 
@@ -1003,7 +1028,7 @@ fn postmark_gets_one_request_after_the_gate_and_the_flow_is_logged_without_the_p
     let conn = connection(
         &r,
         "postmark",
-        &["to", "subject", "body"],
+        &["to", "reply_to", "subject", "body"],
         r#"{"api_key":"pm-server-token-test"}"#,
         "{}",
     );
@@ -1103,7 +1128,7 @@ fn graph_and_gmail_send_with_the_connection_s_oauth_token() {
         r.mail
             .use_api_base(provider, &format!("http://127.0.0.1:{port}"))
             .unwrap();
-        let conn = connection(&r, provider, &["to", "subject", "body"], "", "{}");
+        let conn = connection(&r, provider, &["to", "bcc", "subject", "body"], "", "{}");
         let (c, _) = r.mail.rt.connection(&conn).unwrap();
         let tokens = obop_connectors::oauth::Tokens::from_json(&json!({
             "access_token": "at-test-123", "refresh_token": "rt-test", "expires_at": T0 * 2, "scope": "x",
@@ -1149,3 +1174,5 @@ fn graph_and_gmail_send_with_the_connection_s_oauth_token() {
         }
     }
 }
+
+mod review;

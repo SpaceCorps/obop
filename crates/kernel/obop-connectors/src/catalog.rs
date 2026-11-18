@@ -764,7 +764,7 @@ pub fn providers() -> Vec<Provider> {
                     "Empty means the default transactional stream (outbound).",
                 ),
             ],
-            setup: "1. In Postmark verify the sender domain or address. 2. Copy the server API token. 3. Connect here with the token, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
+            setup: "1. In Postmark verify the sender domain or address. 2. Copy the server API token. 3. Connect here with the token, allow the fields to, subject and body of outbound_mail, and cc, bcc and reply_to when messages have them, with the treatment allow (they leave as they are; a message whose copy, blind copy or reply-to field is not allowed is not sent), record the legal basis and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
             ..base()
         },
         Provider {
@@ -790,7 +790,7 @@ pub fn providers() -> Vec<Provider> {
                 true,
                 "An API key with the Mail Send permission.",
             )],
-            setup: "1. In SendGrid authenticate the sender domain. 2. Create an API key with Mail Send. 3. Connect here with the key, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
+            setup: "1. In SendGrid authenticate the sender domain. 2. Create an API key with Mail Send. 3. Connect here with the key, allow the fields to, subject and body of outbound_mail, and cc, bcc and reply_to when messages have them, with the treatment allow (they leave as they are; a message whose copy, blind copy or reply-to field is not allowed is not sent), record the legal basis and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
             ..base()
         },
         Provider {
@@ -826,7 +826,7 @@ pub fn providers() -> Vec<Provider> {
                 ),
                 f("region", "Region", false, false, "us (default) or eu."),
             ],
-            setup: "1. In Mailgun add and verify the sending domain. 2. Create a sending API key. 3. Connect here with the key, the domain and the region, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
+            setup: "1. In Mailgun add and verify the sending domain. 2. Create a sending API key. 3. Connect here with the key, the domain and the region, allow the fields to, subject and body of outbound_mail, and cc, bcc and reply_to when messages have them, with the treatment allow (they leave as they are; a message whose copy, blind copy or reply-to field is not allowed is not sent), record the legal basis and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
             ..base()
         },
         Provider {
@@ -852,7 +852,7 @@ pub fn providers() -> Vec<Provider> {
                 extra: &[],
             }),
             config: vec![],
-            setup: "1. Register an app in Microsoft Entra with the delegated permission Mail.Send and the redirect address shown in the connectors settings. 2. Enter its client id and secret under the provider policy. 3. Create a connection, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis, authorise as the mailbox that sends and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection; its from address must be that mailbox or one it may send as.",
+            setup: "1. Register an app in Microsoft Entra with the delegated permission Mail.Send and the redirect address shown in the connectors settings. 2. Enter its client id and secret under the provider policy. 3. Create a connection, allow the fields to, subject and body of outbound_mail, and cc, bcc and reply_to when messages have them, with the treatment allow (they leave as they are; a message whose copy, blind copy or reply-to field is not allowed is not sent), record the legal basis, authorise as the mailbox that sends and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection; its from address must be that mailbox or one it may send as.",
             ..base()
         },
         Provider {
@@ -882,7 +882,7 @@ pub fn providers() -> Vec<Provider> {
                 extra: &[("access_type", "offline"), ("prompt", "consent")],
             }),
             config: vec![],
-            setup: "1. In Google Cloud Console enable the Gmail API, configure and publish the OAuth consent screen with the scope gmail.send, and create an OAuth client of type Web application with the redirect address shown in the connectors settings. 2. Enter its client id and secret under the provider policy. 3. Create a connection, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis, authorise as the account that sends and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
+            setup: "1. In Google Cloud Console enable the Gmail API, configure and publish the OAuth consent screen with the scope gmail.send, and create an OAuth client of type Web application with the redirect address shown in the connectors settings. 2. Enter its client id and secret under the provider policy. 3. Create a connection, allow the fields to, subject and body of outbound_mail, and cc, bcc and reply_to when messages have them, with the treatment allow (they leave as they are; a message whose copy, blind copy or reply-to field is not allowed is not sent), record the legal basis, authorise as the account that sends and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
             ..base()
         },
         Provider {

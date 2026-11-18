@@ -461,6 +461,20 @@ impl Mail {
 
     /// Claim the due messages (under the cross-process lock) and send them.
     pub fn process(&self, now: u64) -> Result<Run, String> {
+        let mut run = Run::default();
+        for (_, status) in self.process_each(now)? {
+            match status {
+                "sent" => run.sent += 1,
+                "queued" => run.retrying += 1,
+                _ => run.failed += 1,
+            }
+        }
+        Ok(run)
+    }
+
+    /// As [`Mail::process`], with each message that was tried and its new status (`sent`,
+    /// `queued` for another attempt later, or `failed`).
+    pub fn process_each(&self, now: u64) -> Result<Vec<(String, &'static str)>, String> {
         let claimed = {
             let _g = self.backend.lock("mail.queue")?;
             let mut due: Vec<(String, Fields)> = Vec::new();
@@ -500,16 +514,13 @@ impl Mail {
             }
             claimed
         };
-        let mut run = Run::default();
+        let mut out = Vec::new();
         for (id, f) in claimed {
             let outcome = self.attempt(&id, &f);
-            match self.record(&id, &f, outcome, now)? {
-                "sent" => run.sent += 1,
-                "queued" => run.retrying += 1,
-                _ => run.failed += 1,
-            }
+            let status = self.record(&id, &f, outcome, now)?;
+            out.push((id, status));
         }
-        Ok(run)
+        Ok(out)
     }
 
     /// One delivery attempt of a stored message.
@@ -649,6 +660,11 @@ impl Mail {
             .backend
             .get(OUTBOUND, id)?
             .ok_or_else(|| format!("no message {id}"))?;
+        if text(&f, "kind") == "test" {
+            return Err(
+                "a test message is not sent again: use Send test on the mail server".into(),
+            );
+        }
         if text(&f, "status") != "failed" {
             return Err(format!(
                 "only a failed message is sent again; this one is {}",

@@ -90,13 +90,17 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, mail: &Arc<Mail>) {
         m,
         OUTBOUND,
         "process",
+        // One row per message that was tried, under fields the model declares (a result key the
+        // model does not declare is withheld from every surface).
         Box::new(move |_| {
-            let r = ml.process(ml.now_secs())?;
-            Ok(Value::map([
-                ("sent", Value::Int(r.sent as i64)),
-                ("retrying", Value::Int(r.retrying as i64)),
-                ("failed", Value::Int(r.failed as i64)),
-            ]))
+            let done = ml.process_each(ml.now_secs())?;
+            Ok(Value::List(
+                done.into_iter()
+                    .map(|(id, status)| {
+                        Value::map([("id", Value::text(&id)), ("status", Value::text(status))])
+                    })
+                    .collect(),
+            ))
         }),
     );
     let ml = mail.clone();

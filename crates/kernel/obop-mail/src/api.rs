@@ -1,15 +1,20 @@
 //! One message through a provider of the Connectors catalogue whose engine is `mail`
 //! (docs/spec/mail.md 4). The connection holds the sealed credentials or OAuth tokens; before
 //! anything leaves, the Connectors' egress gate decides (flows on, connection connected, a legal
-//! basis that covers the fields, the agreement and adequacy rules), the fields `to`, `subject` and
-//! `body` of `outbound_mail` must be on the connection's allowlist and released as they are, and
-//! the release is one row of the data flow log (a hash, never the payload).
+//! basis that covers the fields, the agreement and adequacy rules, the connection's hourly rate and
+//! daily volume caps); the fields `to`, `subject` and `body` of `outbound_mail`, and `cc`, `bcc`
+//! and `reply_to` when the message has them, must be on the connection's allowlist and released as
+//! they are. As in `Egress::prepare`, the release is written to the data flow log before the
+//! request leaves (a hash, never the payload; a row that cannot be written is a send that does not
+//! happen), a refusal is logged `refused` and a provider that does not accept the message is
+//! logged `rejected` with its answer.
 
 use crate::meta::OUTBOUND;
 use crate::mime::Message;
 use crate::{Failure, Mail};
 use base64::Engine as _;
 use obop_connectors::Engine;
+use obop_connectors::Refusal;
 use obop_connectors::catalog::Provider;
 use obop_connectors::model::Connection;
 use obop_connectors::net::{NetError, Request};
@@ -17,8 +22,25 @@ use obop_connectors::policy::Treatment;
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
 
-/// The fields a mail flow releases.
+/// The fields every mail flow releases.
 pub const FIELDS: [&str; 3] = ["to", "subject", "body"];
+
+/// The fields a message releases: [`FIELDS`] and the copy, blind copy and reply-to recipients it
+/// has, in the order of the model.
+pub fn fields_of(msg: &Message) -> Vec<&'static str> {
+    let mut out = vec!["to"];
+    if !msg.cc.is_empty() {
+        out.push("cc");
+    }
+    if !msg.bcc.is_empty() {
+        out.push("bcc");
+    }
+    if msg.reply_to.as_deref().is_some_and(|r| !r.is_empty()) {
+        out.push("reply_to");
+    }
+    out.extend(["subject", "body"]);
+    out
+}
 
 fn default_base(provider: &str, c: &Connection) -> Option<String> {
     Some(
@@ -251,22 +273,67 @@ pub fn send(mail: &Mail, connection: &str, msg: &Message) -> Result<String, Fail
     if p.engine != Engine::Mail {
         return Err(Failure::Permanent(format!("{} does not send mail", p.name)));
     }
-    // The Connectors' gate, as for every record that leaves.
-    let plan = rt.egress.authorise(&c, &p, OUTBOUND).map_err(|r| match r {
-        obop_connectors::Refusal::StoreBusy | obop_connectors::Refusal::RateLimited(_) => {
-            Failure::Temporary(r.to_string())
+    let egress = &rt.egress;
+    // A refusal is logged as `Egress::prepare` logs one (not when the store was busy: then
+    // nothing could be read or written, and the message is tried again).
+    let refuse = |r: Refusal| -> Failure {
+        if !matches!(r, Refusal::StoreBusy) {
+            egress.log(
+                &c,
+                "outbound",
+                OUTBOUND,
+                0,
+                &[],
+                &[],
+                "",
+                "",
+                "refused",
+                &r.to_string(),
+            );
         }
-        other => Failure::Permanent(format!("the connection may not send it: {other}")),
-    })?;
-    for name in FIELDS {
+        match r {
+            Refusal::StoreBusy | Refusal::RateLimited(_) | Refusal::VolumeCap(_) => {
+                Failure::Temporary(r.to_string())
+            }
+            other => Failure::Permanent(format!("the connection may not send it: {other}")),
+        }
+    };
+    // The Connectors' gate, as for every record that leaves.
+    let plan = egress.authorise(&c, &p, OUTBOUND).map_err(refuse)?;
+    let fields = fields_of(msg);
+    for name in &fields {
         let released = plan
             .sent()
-            .any(|f| f.name == name && f.decision.treatment == Treatment::Allow);
+            .any(|f| f.name == *name && f.decision.treatment == Treatment::Allow);
         if !released {
-            return Err(Failure::Permanent(format!(
+            let why = format!(
                 "the connection's allowlist must let {name} of outbound_mail leave as it is"
-            )));
+            );
+            egress.log(
+                &c,
+                "outbound",
+                OUTBOUND,
+                0,
+                &[],
+                &[],
+                "",
+                "",
+                "refused",
+                &why,
+            );
+            return Err(Failure::Permanent(why));
         }
+    }
+    // The caps of the connection, counted from the log: a log that cannot be read is not "no
+    // flows yet" (D74).
+    let (flows, records) = egress
+        .try_usage(&c.id, obop_connectors::util::now())
+        .map_err(|_| refuse(Refusal::StoreBusy))?;
+    if flows >= c.rate_limit_per_hour {
+        return Err(refuse(Refusal::RateLimited(c.rate_limit_per_hour)));
+    }
+    if records + 1 > c.volume_cap_per_day {
+        return Err(refuse(Refusal::VolumeCap(c.volume_cap_per_day)));
     }
     let secret = if p.auth_kind == "oauth2" {
         rt.access_token(&c).map_err(Failure::Temporary)?
@@ -300,6 +367,38 @@ pub fn send(mail: &Mail, connection: &str, msg: &Message) -> Result<String, Fail
             .map(|b| format!("{b:02x}"))
             .collect::<String>()
     };
+    let sent: Vec<String> = fields.iter().map(|s| s.to_string()).collect();
+    let mode = plan.mode_summary();
+    // Recorded before it leaves: a release that cannot be logged does not happen.
+    egress
+        .try_log(
+            &c,
+            "outbound",
+            OUTBOUND,
+            1,
+            &sent,
+            &[],
+            &mode,
+            &hash,
+            "released",
+            "",
+        )
+        .map_err(|_| Failure::Temporary(Refusal::StoreBusy.to_string()))?;
+    let failed = |f: Failure| -> Failure {
+        egress.log(
+            &c,
+            "outbound",
+            OUTBOUND,
+            1,
+            &sent,
+            &[],
+            &mode,
+            &hash,
+            "rejected",
+            f.text(),
+        );
+        f
+    };
     let r = rt
         .client
         .send(Request {
@@ -309,21 +408,8 @@ pub fn send(mail: &Mail, connection: &str, msg: &Message) -> Result<String, Fail
             body: Some(body),
             allowed_hosts: &allowed,
         })
-        .map_err(net_failure)?;
-    let sent: Vec<String> = FIELDS.iter().map(|s| s.to_string()).collect();
+        .map_err(|e| failed(net_failure(e)))?;
     if (200..300).contains(&r.status) {
-        let _ = rt.egress.try_log(
-            &c,
-            "outbound",
-            OUTBOUND,
-            1,
-            &sent,
-            &[],
-            &plan.mode_summary(),
-            &hash,
-            "released",
-            "",
-        );
         let id = serde_json::from_slice::<J>(&r.body)
             .ok()
             .and_then(|v| {
@@ -337,6 +423,6 @@ pub fn send(mail: &Mail, connection: &str, msg: &Message) -> Result<String, Fail
             .trim()
             .to_string())
     } else {
-        Err(status_failure(p.name, r.status, &r.body))
+        Err(failed(status_failure(p.name, r.status, &r.body)))
     }
 }

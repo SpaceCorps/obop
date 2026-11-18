@@ -275,6 +275,8 @@ pub fn send(
     relay: &Relay,
     msg: &Message,
 ) -> Result<String, Failure> {
+    // Built first: a message that cannot be built is refused before the relay is contacted.
+    let body = msg.to_bytes().map_err(Failure::Permanent)?;
     let addrs = vet(client, relay)?;
     let loopback = addrs.iter().all(|a| a.ip().is_loopback());
     let mut last = None;
@@ -361,7 +363,6 @@ pub fn send(
         )?;
     }
     s.command("DATA", &[354], "DATA")?;
-    let body = msg.to_bytes().map_err(Failure::Permanent)?;
     let mut out = Vec::with_capacity(body.len() + 16);
     for line in body.split_inclusive(|&b| b == b'\n') {
         if line.first() == Some(&b'.') {

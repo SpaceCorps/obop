@@ -641,7 +641,7 @@ function DeliveriesSection({ token, notify }: { token: string; notify: Notify })
                   </td>
                   <td data-label={t("Attempts")}>{s(r.attempts)}</td>
                   <td className="cell-actions">
-                    {st === "failed" && (
+                    {st === "failed" && s(r.kind) !== "test" && (
                       <Button
                         size="sm"
                         loading={busy === r.id}
