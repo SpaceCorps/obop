@@ -423,7 +423,7 @@ export function KanbanView(p: ViewProps) {
         if (a.ui?.needs?.some((n) => isEmpty(r[n]))) return p.onOpen(r.id);
         void (async () => {
           const question = questionOf(model, a);
-          if (question && !(await d.confirm(question, name))) return;
+          if (question && !(await d.confirm(question, name, t("Cancel")))) return;
           setBusyId(r.id);
           if (a.field === gf.name && a.to) {
             const out = await moveRecord(d.run, model, gf, r, a.to, noun);
