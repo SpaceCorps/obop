@@ -26,7 +26,31 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
         "sign_request.send_document",
         Box::new(move |p, input, inner| s.send_document(p, input, inner)),
     );
+    let s = svc.clone();
+    d.screen(
+        "sign_request.send_document",
+        Box::new(move |p, input| s.screen_send(p, input)),
+    );
 }
+
+/// The key under which a call of `send_document` carries the file it is about: set by the screen
+/// when the call is made (the proposal of an agent stores it), compared when a person approves
+/// and again when it runs. The dispatcher strips the prefix from what a client sends.
+fn pinned_key() -> String {
+    format!("{}_sign_hash", crate::query::ACTOR_PREFIX)
+}
+
+fn pinned(input: &Value) -> Option<&str> {
+    match input {
+        Value::Map(m) => match m.get(&pinned_key()) {
+            Some(Value::Text(t)) => Some(t),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+const FILE_CHANGED: &str = "sign_request: the file of the Document changed after the send was proposed; the proposal is about the earlier file, so propose the send again";
 
 /// The person who approved an agent's proposal, when the call carries the stamp of one
 /// (`stamp_approver`): the dispatcher strips these keys from what a client sends.
@@ -145,6 +169,38 @@ impl SignService {
         }
     }
 
+    /// Before a `send_document` runs or is proposed, and again before an approved proposal is
+    /// spent: the caller (and the approver, once a person approves) must see the Document, and
+    /// the call is pinned to the file the Document holds now. An approval is of those bytes: a
+    /// file replaced after the proposal is refused, and the plan stays for nobody to approve
+    /// (docs/ISSUES.md O5, O24). A request that is not a draft about a Document is left to the
+    /// handler and its wrapper, which word the refusal.
+    fn screen_send(&self, p: &Principal, input: &Value) -> Result<Option<Value>, String> {
+        let Ok(id) = id_of(input) else {
+            return Ok(None);
+        };
+        let Some(req) = self.visible_record(p, "sign_request", &id)? else {
+            return Ok(None);
+        };
+        let doc_id = text(&req, "document_id");
+        if text(&req, "state") != "draft" || doc_id.is_empty() {
+            return Ok(None);
+        }
+        let doc = self.visible_document(p, input, doc_id)?;
+        let file = text(&doc, "attachment").to_string();
+        match pinned(input) {
+            Some(h) if h != file => Err(FILE_CHANGED.into()),
+            Some(_) => Ok(None),
+            None => {
+                let Value::Map(mut m) = input.clone() else {
+                    return Ok(None);
+                };
+                m.insert(pinned_key(), Value::Text(file));
+                Ok(Some(Value::Map(m)))
+            }
+        }
+    }
+
     fn send_document(
         &self,
         p: &Principal,
@@ -152,7 +208,7 @@ impl SignService {
         inner: &dyn Fn(&Value) -> Result<Value, String>,
     ) -> Result<Value, String> {
         let id = id_of(input)?;
-        let Some(req) = self.get("sign_request", &id)? else {
+        let Some(req) = self.visible_record(p, "sign_request", &id)? else {
             // The generated handler words the refusal.
             return inner(input);
         };
@@ -167,6 +223,9 @@ impl SignService {
         }
         let doc = self.visible_document(p, input, &doc_id)?;
         let file = text(&doc, "attachment").to_string();
+        if pinned(input).is_some_and(|h| h != file) {
+            return Err(FILE_CHANGED.into());
+        }
         if file.is_empty() {
             return Err(format!("documents_document {doc_id} has no file to sign"));
         }
@@ -184,7 +243,9 @@ impl SignService {
         if !previous.is_empty() && previous != file {
             obop_storage::fault::needed(|| blobs.detach(&previous, &owner))?;
         }
-        obop_storage::fault::needed(|| blobs.attach(&file, &owner))?;
+        // The copy spends nobody's upload claim: a person who uploaded the same bytes and has
+        // not saved yet keeps theirs (K55 d). No uploader is named, so no claim matches.
+        obop_storage::fault::needed(|| blobs.attach_by(&file, &owner, ""))?;
         let mut patch = Fields::new();
         patch.insert("document_file".into(), J::from(file.clone()));
         patch.insert("document_hash".into(), J::from(file.clone()));

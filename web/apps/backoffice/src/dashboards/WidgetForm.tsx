@@ -1,5 +1,17 @@
 import { useMemo, useState } from "react";
-import { Button, Dialog, Input, Notice, Select, Textarea, fmt, inSentence, msg, t } from "@obop/ui";
+import {
+  Button,
+  Dialog,
+  Input,
+  Notice,
+  Select,
+  Textarea,
+  fmt,
+  inSentence,
+  msg,
+  t,
+  useWorded,
+} from "@obop/ui";
 import type { FieldMeta, ModelMeta } from "../api.ts";
 import { useData, useRows } from "../data.tsx";
 import { readPref, writePref } from "../favorites.ts";
@@ -125,7 +137,7 @@ export function WidgetForm(p: {
   }));
   const [titled, setTitled] = useState(!!w);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const [busy, setBusy] = useState(false);
   const tiles = useRows("dashboards_widget");
   const ix = useReportIndex();
@@ -278,7 +290,7 @@ export function WidgetForm(p: {
       filter: text.trim() || null,
     });
     setBusy(false);
-    if (err) setError(err);
+    if (err) setError(() => err);
   }
 
   return (

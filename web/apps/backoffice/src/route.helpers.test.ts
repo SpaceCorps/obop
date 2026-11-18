@@ -24,3 +24,14 @@ describe("route seams", () => {
     expect(parse("#/crm/lead").full).toBe("");
   });
 });
+
+describe("a field named in the address (Q19)", () => {
+  it("is read and written; a name that is not a field name is dropped", async () => {
+    const { href, parse } = await import("./route.ts");
+    expect(parse("#/accounting_se/vat_code?id=c1&field=tax_id").field).toBe("tax_id");
+    expect(href({ app: "a", model: "m", id: "c1", field: "tax_id" })).toBe(
+      "#/a/m?id=c1&field=tax_id",
+    );
+    expect(parse("#/a/m?id=c1&field=%3Cx%3E").field).toBe("");
+  });
+});

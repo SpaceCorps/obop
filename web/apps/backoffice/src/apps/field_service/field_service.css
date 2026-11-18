@@ -1,0 +1,204 @@
+/* Field Service: the technician's day (MyDay.tsx), the sign-off dialog and the printed job report.
+   Tokens only. */
+.fs-day .content {
+  max-inline-size: 52rem;
+  margin-inline: auto;
+}
+.fs-day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  margin-block-end: var(--space-5);
+}
+.fs-day-head h1 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  letter-spacing: var(--tracking-tight);
+}
+.fs-day-head .hint {
+  margin: var(--space-1) 0 0;
+}
+.fs-day-note {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin: 0 0 var(--space-4);
+}
+.fs-day-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.fs-job {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+.fs-job.is-done {
+  background: var(--surface-2);
+  box-shadow: none;
+}
+.fs-job.is-done .fs-job-title {
+  color: var(--text-muted);
+}
+.fs-job.fs-wait {
+  min-block-size: 8rem;
+  background: var(--surface-2);
+  box-shadow: none;
+}
+.fs-job-time {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+.fs-job-time strong {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+}
+.fs-job-body {
+  min-inline-size: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.fs-job-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.fs-job-title {
+  all: unset;
+  cursor: pointer;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+  margin-inline-end: var(--space-1);
+  /* A touch target of 44 px, with the text centred in it. */
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+}
+.fs-job-title:hover {
+  text-decoration: underline;
+}
+.fs-job-title:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+.fs-job-customer {
+  margin: 0;
+  color: var(--text-muted);
+}
+.fs-job-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.fs-job-line > svg {
+  flex: none;
+  color: var(--text-subtle);
+}
+.fs-job-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+  min-inline-size: 0;
+}
+.fs-job-tel {
+  font-variant-numeric: tabular-nums;
+}
+.fs-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+.fs-day-foot {
+  margin: var(--space-5) 0 0;
+  text-align: center;
+}
+@media (max-width: 47.99rem) {
+  /* Tap targets of 44 px: Mine / Everyone and the All jobs link. */
+  .fs-day-head .switcher button {
+    min-block-size: 2.75rem;
+  }
+  .fs-day-foot a {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+    padding-inline: var(--space-3);
+  }
+  .fs-job {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-4);
+  }
+  .fs-job-time {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+  .fs-job-actions .btn {
+    min-block-size: 44px;
+  }
+  .fs-job-actions .btn:first-child {
+    flex: 1 1 auto;
+  }
+  .fs-job-text a {
+    min-block-size: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* The sign-off dialog. */
+.fs-sign {
+  display: grid;
+  gap: var(--space-3);
+}
+.fs-sign-job {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+}
+.fs-sign-report {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  white-space: pre-wrap;
+  max-block-size: 10rem;
+  overflow: auto;
+}
+
+/* The printed job report: the quotation's sheet (sales.css .so-print) plus text blocks. */
+.fs-print h2 {
+  margin: 6mm 0 2mm;
+  font-size: 12pt;
+}
+.fs-print-text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.fs-print-line {
+  margin: 14mm 0 0;
+  padding-block-start: 2mm;
+  border-block-start: 1px solid var(--print-rule, currentColor);
+  inline-size: 70mm;
+  color: var(--print-muted, inherit);
+}

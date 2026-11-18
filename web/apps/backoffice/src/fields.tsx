@@ -129,7 +129,9 @@ export function Cell({
     case "image":
       return <BlobThumb id={String(value)} alt={fieldTitle(field)} size={40} />;
     case "file":
-      return <FileChip id={String(value)} field={field} />;
+      return (
+        <FileChip id={String(value)} field={field} record={row?.id ? String(row.id) : undefined} />
+      );
     case "longtext": {
       const s = String(value);
       if (display === "markdown") return <>{markdownLine(s)}</>;

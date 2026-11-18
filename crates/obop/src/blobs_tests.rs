@@ -172,12 +172,12 @@ async fn upload_attach_download_and_thumbnail_over_http() {
         f.app.store.blobs().info(&id).unwrap().unwrap().owners.len(),
         1
     );
-    // Download: right type, long private cache, hash validator, nosniff, sandboxed.
+    // Download: right type, a private copy that is revalidated on every use (so a reader who
+    // loses the record loses the file too: K53, O12), hash validator, nosniff, sandboxed.
     let (s, body, h) = download(&f, Some(&f.admin), &format!("/api/blobs/{id}")).await;
     assert_eq!(s, 200);
     assert_eq!(h["content-type"], "image/png");
-    assert!(h["cache-control"].to_str().unwrap().contains("private"));
-    assert!(h["cache-control"].to_str().unwrap().contains("immutable"));
+    assert_eq!(h["cache-control"], "private, no-cache");
     assert_eq!(h["x-content-type-options"], "nosniff");
     assert!(
         h["content-security-policy"]
@@ -200,8 +200,18 @@ async fn upload_attach_download_and_thumbnail_over_http() {
         .header("if-none-match", format!("\"{id}\""))
         .body(Body::empty())
         .unwrap();
-    let (s, body, _) = send(&f.router, r).await;
+    let (s, body, h) = send(&f.router, r).await;
     assert_eq!((s, body.len()), (304, 0));
+    assert_eq!(h["cache-control"], "private, no-cache");
+    // The revalidation passes the read gate first: a caller who may not read the record holding
+    // the file gets 404, never a 304 that would let a cached copy show.
+    let r = Request::get(format!("/api/blobs/{id}"))
+        .header("authorization", format!("Bearer {}", f.outsider))
+        .header("if-none-match", format!("\"{id}\""))
+        .body(Body::empty())
+        .unwrap();
+    let (s, _, _) = send(&f.router, r).await;
+    assert_eq!(s, 404);
     // Thumbnails: fixed widths only.
     let (s, small, h) = download(&f, Some(&f.admin), &format!("/api/blobs/{id}?w=320")).await;
     assert_eq!(s, 200);
@@ -527,4 +537,44 @@ async fn erasing_a_contact_deletes_its_photo() {
     let rec = f.app.store.backend().get("party", &party).unwrap().unwrap();
     assert!(rec["photo"].is_null());
     assert_eq!(rec["name"], "[erased]");
+}
+
+/// K55 (d) on the Sign path: sending a request holds a copy of the Document's file and must not
+/// spend the claim of another person who uploaded the same bytes and has not saved yet.
+#[tokio::test]
+async fn sending_a_sign_request_keeps_another_uploaders_claim_on_the_same_bytes() {
+    use crate::sign_tests::{fixture, pdf};
+    let f = fixture().await;
+    // bob uploads the very PDF that ann's restricted Document holds, and has not saved it.
+    let (s, v) = f
+        .upload(
+            "bob",
+            "documents_document.attachment",
+            "application/pdf",
+            pdf(1),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    assert_eq!(
+        v["id"].as_str().unwrap(),
+        f.file,
+        "the same bytes, one blob"
+    );
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api(
+            "bob",
+            "/api/documents_document/create",
+            json!({"title": "Bob's copy", "kind": "contract", "state": "draft",
+                   "owner": "bob", "attachment": f.file}),
+        )
+        .await;
+    assert_eq!(s, 200, "bob's upload must still be his to save: {v}");
 }

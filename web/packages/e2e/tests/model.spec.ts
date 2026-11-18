@@ -127,14 +127,20 @@ test.describe("the data model", () => {
         days: 2,
       });
       expect(mine.requested_by).toBe("eve");
+      // The owner is the server's to set (R1): leave HR files for a colleague with a login is
+      // that colleague's.
+      const colleague = await api.create("root", "hr_employee", {
+        name: uid("Colleague"),
+        user: uid("somebody-else"),
+      });
       const theirs = await api.create("root", "hr_leave_request", {
-        employee_id: employee.id,
+        employee_id: colleague.id,
         leave_kind: "paid",
         start_on: "2026-11-01",
         end_on: "2026-11-03",
         days: 3,
-        requested_by: "somebody-else",
       });
+      expect(theirs.requested_by).toBe(colleague.user);
       const seen = (await api.list("eve", "hr_leave_request")).map((r) => r.id);
       expect(seen).toContain(mine.id);
       expect(seen).not.toContain(theirs.id);

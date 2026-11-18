@@ -446,7 +446,7 @@ fn the_account_and_the_provider_are_checked_again_when_the_code_is_spent() {
     // The credentials changed in between (a reset, new groups): the half-finished sign-in ends.
     let code = sso(&r).begin(&id, BINDER).unwrap();
     let mut patch = Fields::new();
-    bump_epoch(&mut patch);
+    bump_epoch(&mut patch, r.a.now());
     r.b.update("auth_user", "ada", &patch).unwrap();
     assert!(matches!(
         sso(&r).exchange(&code, BINDER),
@@ -866,13 +866,18 @@ fn an_sso_only_account_takes_microsofts_second_factor_as_its_own() {
 fn an_sso_only_account_refuses_its_password_and_ends_its_sessions() {
     let r = world();
     signed_in_once(&r, ADA_OID);
-    let (old, _) = session(&r.a, "ada");
+    let (old, p) = session(&r.a, "ada");
     assert!(r.a.resolve(&old).is_some());
+    let agent =
+        r.a.issue_agent_token(&p, &["base.user".to_string()], "bot")
+            .unwrap();
     let on = sso_only(&r, "ada", true).unwrap();
     assert_eq!(on["changed"], true);
     assert_eq!(on["break_glass"], json!(["root1", "root2", "root3"]));
-    // Signed out at once.
+    // Signed out at once; the agent token made in the session keeps working (D91 section 5: only
+    // its 90-day lifetime ends it, N18).
     assert!(r.a.resolve(&old).is_none());
+    assert!(r.a.resolve(&agent).is_some());
     // The password, right or wrong, gets the answer of a wrong password.
     let right = r.a.login_step("ada", PW).unwrap_err();
     let wrong = r.a.login_step("ada", "not the password").unwrap_err();
@@ -1669,7 +1674,8 @@ fn an_unbind_ends_the_sessions_and_the_phone_apps_but_not_agent_tokens_or_mcp_ap
             .unwrap()
             .is_none()
     );
-    // Not ended: the agent token and the MCP application, which the line of the log says.
+    // Not ended (D91 section 5): the agent token and the MCP application, which the line of the
+    // log says.
     assert!(r.a.resolve(&agent).is_some(), "the agent token works");
     assert!(!revoked("oauth_grant", "grant-mcp"));
     assert!(!revoked("auth_token", &token_hash(&mcp)));
@@ -1686,6 +1692,95 @@ fn an_unbind_ends_the_sessions_and_the_phone_apps_but_not_agent_tokens_or_mcp_ap
             && line.contains("keep working"),
         "{line}"
     );
+}
+
+/// N18 (ratified with D91 by OR-38): an agent token of an account bound to a Microsoft identity
+/// ends after 90 days; one of an account that is not bound does not end by itself.
+#[test]
+fn an_agent_token_of_a_microsoft_bound_account_ends_after_ninety_days() {
+    let r = world();
+    let scopes = vec!["base.user".to_string()];
+    let expiry = |token: &str| {
+        r.b.get("auth_token", &token_hash(token)).unwrap().unwrap()["expires_at"].clone()
+    };
+    crate::mfa_tests::user_with(&r.a, "eve", &["base.user"]);
+    let (_, p) = session(&r.a, "eve");
+    let unbound = r.a.issue_agent_token(&p, &scopes, "bot").unwrap();
+    assert_eq!(expiry(&unbound), J::Null, "not bound: no end");
+    signed_in_once(&r, ADA_OID);
+    let (_, p) = session(&r.a, "ada");
+    let bound = r.a.issue_agent_token(&p, &scopes, "bot").unwrap();
+    assert_eq!(
+        expiry(&bound),
+        json!(r.a.now() + super::MICROSOFT_AGENT_TOKEN_SECS)
+    );
+    assert_eq!(super::MICROSOFT_AGENT_TOKEN_SECS, 90 * 86_400);
+    // The list the Agent tokens screen shows names the end (N18), and none for the unbound one.
+    {
+        use obop_commands::Authenticator;
+        let listed = r.a.agent_tokens_of(&p).unwrap();
+        assert_eq!(
+            listed[0].expires_at,
+            Some(r.a.now() + super::MICROSOFT_AGENT_TOKEN_SECS)
+        );
+        let (_, eve) = session(&r.a, "eve");
+        assert_eq!(r.a.agent_tokens_of(&eve).unwrap()[0].expires_at, None);
+    }
+    assert!(
+        events(&r, "agent_token_issued")
+            .last()
+            .unwrap()
+            .contains("ends in 90 days")
+    );
+    assert!(r.a.resolve(&bound).is_some());
+    r.a.set_clock_for_test(r.a.now() + super::MICROSOFT_AGENT_TOKEN_SECS + 1);
+    assert!(r.a.resolve(&bound).is_none(), "ended after 90 days");
+}
+
+/// N18 for the tokens made before the binding: binding an account ends its agent tokens within 90
+/// days, and the pass at the start of a server does the same for an account bound by a build that
+/// did not, once.
+#[test]
+fn agent_tokens_made_before_a_microsoft_binding_end_within_ninety_days() {
+    let r = world();
+    let scopes = vec!["base.user".to_string()];
+    let expiry = |token: &str| {
+        r.b.get("auth_token", &token_hash(token)).unwrap().unwrap()["expires_at"].clone()
+    };
+    let (_, bob) = session(&r.a, "bob");
+    let old = r.a.issue_agent_token(&bob, &scopes, "old").unwrap();
+    let gone = r.a.issue_agent_token(&bob, &scopes, "gone").unwrap();
+    assert!(r.a.revoke(&gone));
+    assert_eq!(expiry(&old), J::Null, "not bound yet: no end");
+    r.a.set_clock_for_test(r.a.now() + 3_600);
+    r.a.operator_sso_bind("bob", BOB_OID).unwrap();
+    let end = r.a.now() + super::MICROSOFT_AGENT_TOKEN_SECS;
+    assert_eq!(expiry(&old), json!(end), "bound: it ends in 90 days");
+    assert_eq!(expiry(&gone), J::Null, "a revoked token is left as it is");
+    assert!(
+        events(&r, "oidc_bind")
+            .last()
+            .unwrap()
+            .contains("1 agent token(s) now end in 90 days"),
+        "{:?}",
+        events(&r, "oidc_bind")
+    );
+    // A token of a bound account that an older build made without an end gets one at the start,
+    // and a second pass changes nothing.
+    let (_, ada) = session(&r.a, "ada");
+    let legacy = r.a.issue_agent_token(&ada, &scopes, "legacy").unwrap();
+    let mut p = Fields::new();
+    p.insert("expires_at".into(), J::Null);
+    assert!(r.b.update("auth_token", &token_hash(&legacy), &p).unwrap());
+    r.a.set_clock_for_test(r.a.now() + 86_400);
+    assert_eq!(r.a.end_agent_tokens_of_bound_accounts().unwrap(), 1);
+    let later = r.a.now() + super::MICROSOFT_AGENT_TOKEN_SECS;
+    assert_eq!(expiry(&legacy), json!(later));
+    assert_eq!(expiry(&old), json!(end), "an earlier end is kept");
+    assert_eq!(r.a.end_agent_tokens_of_bound_accounts().unwrap(), 0);
+    r.a.set_clock_for_test(later + 1);
+    assert!(r.a.resolve(&legacy).is_none());
+    assert!(r.a.resolve(&old).is_none());
 }
 
 #[test]
@@ -2180,7 +2275,7 @@ fn epoch_in_store(r: &Rig, user: &str) -> Option<String> {
 /// Give `user` a credential epoch, as any change of credentials does.
 fn change_credentials(r: &Rig, user: &str) {
     let mut patch = Fields::new();
-    bump_epoch(&mut patch);
+    bump_epoch(&mut patch, r.a.now());
     r.b.update("auth_user", user, &patch).unwrap();
 }
 
@@ -2376,7 +2471,7 @@ fn a_change_of_credentials_at_any_point_of_the_flow_sign_in_refuses_it_or_leaves
             skip,
             Box::new(|inner| {
                 let mut patch = Fields::new();
-                bump_epoch(&mut patch);
+                bump_epoch(&mut patch, T0);
                 inner.update("auth_user", "ada", &patch).unwrap();
             }),
         );
@@ -2702,4 +2797,50 @@ fn a_reloaded_second_step_is_refused_once_the_provider_is_cleared() {
         tokens,
         "no token for a provider that is gone"
     );
+}
+
+/// N12 (the owner's default of 2026-11-17): the `oidc_*` lines of the security log, which name
+/// Microsoft object ids, are removed after twelve months; other lines are kept, and the purge
+/// runs with the purge of ended tokens, at most once a day.
+#[test]
+fn microsoft_sign_in_lines_older_than_twelve_months_are_removed_and_nothing_else() {
+    let r = crate::mfa_tests::rig();
+    crate::mfa_tests::user_with(&r.a, "ada", &["base.user"]);
+    let now = r.a.now();
+    let day = 86_400;
+    let old = now - (super::OIDC_LOG_RETENTION_DAYS + 1) * day;
+    let recent = now - (super::OIDC_LOG_RETENTION_DAYS - 1) * day;
+    let write = |at: u64, kind: &str| {
+        obop_commands::audit::record_event(&*r.b, at, "-", kind, "-", "oid 0000-1111")
+    };
+    write(old, "oidc_refused");
+    write(old, "oidc_login");
+    write(recent, "oidc_refused");
+    write(old, "login_refused");
+    let kinds = || -> Vec<String> {
+        let mut v: Vec<String> =
+            r.b.list(EVENT_TABLE)
+                .unwrap()
+                .into_iter()
+                .filter(|(_, f)| f["detail"] == "oid 0000-1111")
+                .map(|(id, f)| format!("{}:{}", &id[..12], f["kind"].as_str().unwrap()))
+                .collect();
+        v.sort();
+        v
+    };
+    assert_eq!(kinds().len(), 4);
+    // A sign-in runs the purge (with that of ended tokens).
+    let _ = r.a.login_step("ada", crate::mfa_tests::PW).unwrap();
+    assert_eq!(
+        kinds(),
+        [
+            format!("{old:012}:login_refused"),
+            format!("{recent:012}:oidc_refused"),
+        ]
+    );
+    // Once a day: a second sign-in the same day removes nothing more, even an old line.
+    write(old, "oidc_error");
+    assert_eq!(r.a.purge_old_sso_lines(), 0);
+    assert_eq!(kinds().len(), 3);
+    assert_eq!(r.a.purge_sso_lines_before(now - 365 * day), 1);
 }

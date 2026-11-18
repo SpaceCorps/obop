@@ -48,6 +48,18 @@ describe("money round trips in every locale", () => {
   }
 });
 
+describe("a negative amount", () => {
+  it("is written with the true minus sign in every locale (Q14)", () => {
+    expect(formatMoney(-2380, "EUR", "en-US")).toBe("−€23.80");
+    for (const loc of LOCALES) {
+      const shown = formatMoney(-2380, "EUR", loc);
+      expect(shown, loc).toContain("−");
+      expect(shown, loc).not.toContain("-");
+      expect(formatMoney(2380, "EUR", loc), loc).not.toContain("−");
+    }
+  });
+});
+
 describe("typed amounts", () => {
   const ok = (text: string, locale: string, minor: number, ambiguous = false) => {
     const r = parseMoney(text, "EUR", locale);

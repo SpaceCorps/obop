@@ -54,6 +54,7 @@ pub fn field_hints(o: &mut J, h: &FieldHints) {
             m.insert("hidden".into(), json!(true));
         }
         put_some(&mut m, "currency_from", &u.currency_from);
+        put_some(&mut m, "readonly_when", &u.readonly_when);
         o["ui"] = J::Object(m);
     }
 }
@@ -85,6 +86,7 @@ fn model_ui(u: &ModelUi) -> J {
     put_list(&mut m, "quick_create", &u.quick_create);
     put_some(&mut m, "order", &u.order);
     put_some(&mut m, "default_view", &u.default_view);
+    put_some(&mut m, "default_filter", &u.default_filter);
     put_some(&mut m, "menu", &u.menu);
     put_some(&mut m, "menu_section", &u.menu_section);
     put_some(&mut m, "menu_order", &u.menu_order);
@@ -134,7 +136,16 @@ fn model_ui(u: &ModelUi) -> J {
 /// `ui`, `children`, `plural` and `plural_labels` of a model.
 pub fn model_hints(o: &mut J, x: &ModelInfo) {
     if let Some(u) = &x.ui {
-        let ui = model_ui(u);
+        let mut ui = model_ui(u);
+        // The label of a declared filter per language (U10), beside its English label.
+        if let Some(fs) = ui.get_mut("filter").and_then(J::as_array_mut) {
+            for f in fs {
+                let texts = f["label"].as_str().and_then(|l| x.filter_labels.get(l));
+                if let Some(t) = texts.filter(|t| !t.is_empty()) {
+                    f["labels"] = json!(t);
+                }
+            }
+        }
         if ui.as_object().is_some_and(|m| !m.is_empty()) {
             o["ui"] = ui;
         }

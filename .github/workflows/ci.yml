@@ -23,6 +23,9 @@ jobs:
       # The TLS tests of obop-storage start a throwaway postgres:17 container on the runner's Docker;
       # they run only when asked for (crates/kernel/obop-storage/src/tls_tests.rs), so ask here.
       OBOP_TEST_DOCKER_TLS: "1"
+      # The pool tests that restart a server or put PgBouncer in front of it start containers of
+      # their own, also only when asked for (crates/kernel/obop-storage/src/pg_pool_tests.rs).
+      OBOP_TEST_DOCKER: "1"
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Toolchain from rust-toolchain.toml
@@ -145,10 +148,30 @@ jobs:
           bad=$(git ls-files | grep -E '(^|/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?)$' || true)
           if [ -n "$bad" ]; then echo "forbidden lockfiles:"; echo "$bad"; exit 1; fi
 
+  # The licence of every crate in the build graph against the list in deny.toml (K9, OR-1): a new
+  # licence fails until a person has read it and added it there.
+  licences:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1 (cargo-deny 0.20.2)
+        with:
+          command: check licenses
+
+  # Security advisories (RustSec) for the crates in Cargo.lock. Not part of the required check: an
+  # advisory published today must not block an unrelated change; it shows as a red job to act on.
+  advisories:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1 (cargo-deny 0.20.2)
+        with:
+          command: check advisories
+
   all:
     if: always()
-    needs: [rust, web, e2e, lockfiles]
+    needs: [rust, web, e2e, lockfiles, licences]
     runs-on: ubuntu-latest
     steps:
       - run: |
-          test "${{ needs.rust.result }}" = success && test "${{ needs.web.result }}" = success && test "${{ needs.e2e.result }}" = success && test "${{ needs.lockfiles.result }}" = success
+          test "${{ needs.rust.result }}" = success && test "${{ needs.web.result }}" = success && test "${{ needs.e2e.result }}" = success && test "${{ needs.lockfiles.result }}" = success && test "${{ needs.licences.result }}" = success

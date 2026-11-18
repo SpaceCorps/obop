@@ -1,8 +1,8 @@
 [module]
 id = "appointments"
-version = "0.3.0"
+version = "0.3.2"
 name = "Appointments"
-description = "Bookable resources (people, rooms, equipment) and appointments with a date, start and end time and a status flow. Overlaps are not prevented automatically."
+description = "Bookable resources (people, rooms, equipment) and appointments with a date, start and end time and a status flow. A resource cannot be booked twice at overlapping times, or more times at once than its capacity when it has one (cancelled and missed appointments excepted)."
 author = "SpaceCorps"
 summary = "Bookable people, rooms and equipment, and appointments with a start, an end and a status flow."
 license = "Apache-2.0"
@@ -12,7 +12,7 @@ keywords = ["booking", "scheduling", "resources"]
 categories = ["services"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "The app opens on the appointments calendar; resources sit under Configuration. Start and end read as times of day, a time outside 00:00 to 24:00 is refused, only active resources can be booked, and an appointment that ends before it starts cannot be confirmed. A held, cancelled or missed appointment can no longer be changed."
+changelog = "Refused since 0.3.2: an appointment that ends before it starts, and one that books a resource at an overlapping time more often than its capacity allows (once when it has none). The booking form asks what the appointment is and who comes first, then the resource, the day and the time, and shows the free half-hour slots of that resource on that day: a free slot fills the start and the end, and a time that clashes with another booking is named before saving."
 home = "appointments_appointment"
 
 [[model]]
@@ -77,12 +77,12 @@ write_group = "appointments.user"
   report = { rows = "resource_id", cols = "state" }
 
   [[model.ui.section]]
-  label = "Booking"
-  fields = ["title", "resource_id", "day", "start_minute", "end_minute"]
+  label = "Appointment"
+  fields = ["title", "attendee_name", "attendee_email", "attendee_phone", "notes"]
 
   [[model.ui.section]]
-  label = "Attendee"
-  fields = ["attendee_name", "attendee_email", "attendee_phone", "notes"]
+  label = "Resource and time"
+  fields = ["resource_id", "day", "start_minute", "end_minute"]
 
   [[model.ui.filter]]
   label = "Today"
@@ -95,6 +95,20 @@ write_group = "appointments.user"
   [model.guard]
   immutable_when = ["done", "cancelled", "no_show"]
   message = "A held, cancelled or missed appointment cannot be changed. Book a new one instead."
+
+  [[model.rule]]
+  key = "ends_after_start"
+  expr = "end_minute >= start_minute"
+  message = "The appointment ends before it starts: set an end time after the start"
+
+  [model.no_overlap]
+  rule = "no_double_booking"
+  key = ["resource_id", "day"]
+  start = "start_minute"
+  end = "end_minute"
+  ignore_states = ["cancelled", "no_show"]
+  capacity = "resource_id.capacity"
+  message = "The resource is already booked at that time: pick another time or another resource"
 
   [[model.field]]
   name = "resource_id"

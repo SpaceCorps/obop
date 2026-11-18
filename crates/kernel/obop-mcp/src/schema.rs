@@ -84,6 +84,7 @@ pub fn bound_json(b: Bound) -> J {
     match b {
         Bound::Int(n) => json!(n),
         Bound::Dec(d) => json!(d.to_string()),
+        Bound::Date(_) => json!(b.to_string()),
     }
 }
 
@@ -102,7 +103,7 @@ fn limit_keywords(s: &mut J, f: &FieldInfo) {
     if let Some(n) = f.min_length {
         s["minLength"] = json!(n);
     }
-    let (lo, hi) = if f.kind == "decimal" {
+    let (lo, hi) = if f.kind == "decimal" || f.kind == "date" {
         ("x-obop-minimum", "x-obop-maximum")
     } else {
         ("minimum", "maximum")
@@ -390,7 +391,7 @@ pub fn tools(d: &Dispatcher, p: &Principal) -> Vec<J> {
 
 /// Whether an agent's token is denied a field of this class outright, and not given a mask token
 /// (D40: the sensitive classes and secrets).
-fn withheld_from_agents(class: &str) -> bool {
+pub(crate) fn withheld_from_agents(class: &str) -> bool {
     use obop_types::DataClass;
     DataClass::parse(class).is_some_and(|c| c.is_sensitive() || c == DataClass::Secret)
 }
@@ -425,6 +426,7 @@ mod tests {
             shows_option_when: None,
             max_length: None,
             min_length: None,
+            pattern: None,
             min: None,
             max: None,
             limits_note: String::new(),
@@ -520,6 +522,7 @@ mod tests {
             shows_option_when: None,
             max_length: None,
             min_length: None,
+            pattern: None,
             min: None,
             max: None,
             limits_note: String::new(),
@@ -562,6 +565,7 @@ mod tests {
             plurals: Default::default(),
             guard: None,
             guard_messages: Default::default(),
+            filter_labels: Default::default(),
         }
     }
 

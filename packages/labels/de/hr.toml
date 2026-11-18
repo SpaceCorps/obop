@@ -13,8 +13,8 @@ label = "Name"
 description = "Name der Abteilung"
 
 [labels.de.model.hr_department.field.head]
-label = "Leitung"
-description = "Name der Abteilungsleitung"
+label = "Leitung (Name als Text)"
+description = "Name der Abteilungsleitung als freier Text, aus der Zeit, bevor die Leitung ein Mitarbeiter sein konnte; leer lassen, wenn Leitung gesetzt ist"
 
 [labels.de.model.hr_department.field.cost_centre]
 label = "Kostenstelle"
@@ -196,7 +196,7 @@ description = "Foto der Person (PNG, JPEG, WebP oder GIF; Metadaten wie der Stan
 
 [labels.de.model.hr_leave_request.field.requested_by]
 label = "Beantragt von"
-description = "Benutzername der Person, die die Abwesenheit beantragt; standardmäßig die Person, die den Antrag stellt. Nur sie und hr.manager sehen den Antrag"
+description = "Benutzername, dem der Antrag gehört, nur vom Server gesetzt (ein gesendeter Wert wird abgelehnt): der obop-Benutzer des Mitarbeiters, falls vorhanden, sonst die Person, die den Antrag stellt, und erneut, wenn eine Änderung den Antrag einem anderen Mitarbeiter zuordnet. Nur sie und hr.manager sehen den Antrag"
 
 [labels.de.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Der letzte Tag der Abwesenheit liegt vor ihrem ersten Tag"
@@ -209,3 +209,29 @@ message = "Der letzte Tag der Abwesenheit liegt vor ihrem ersten Tag"
 
 [labels.de.model.hr_leave_request.action.approve.assert.days_given]
 message = "Geben Sie die Zahl der Arbeitstage der Abwesenheit an"
+
+[labels.de.model.hr_department.field.head_id]
+label = "Leitung"
+description = "Der Mitarbeiter, der die Abteilung leitet"
+
+[labels.de.model.hr_employee.field.user]
+label = "obop-Benutzer"
+description = "Der obop-Benutzername (Login) der Person, falls vorhanden: Abwesenheiten für diesen Mitarbeiter gehören diesem Benutzer, und ein neuer Abwesenheitsantrag dieses Benutzers beginnt mit diesem Mitarbeiter"
+
+[labels.de.model.hr_employee.filter.active]
+label = "Aktiv"
+
+[labels.de.model.hr_employee.filter.onboarding]
+label = "Im Onboarding"
+
+[labels.de.model.hr_leave_request.filter.to_approve]
+label = "Zu genehmigen"
+
+[labels.de.model.hr_leave_request.filter.away_today]
+label = "Heute abwesend"
+
+[labels.de.model.hr_leave_request.filter.upcoming]
+label = "Bevorstehend"
+
+[labels.de.model.hr_leave_request.filter.not_refused]
+label = "Nicht abgelehnt"

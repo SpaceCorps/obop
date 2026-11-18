@@ -1,6 +1,6 @@
 [module]
 id = "helpdesk"
-version = "0.5.0"
+version = "0.5.1"
 name = "Helpdesk"
 description = "Support tickets with priority, severity, service-level targets and an open, in progress, resolved and closed flow. Targets are recorded, not enforced or timed automatically. Every ticket gets a number from a series when it is created."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["helpdesk", "tickets", "support", "sla"]
 categories = ["services"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "The app opens on Tickets; the SLA policies sit under Configuration. A new ticket is dated today with normal priority. Taking a ticket assigns it to you when nobody has it yet; resolving one asks how it was solved and dates it today. A closed ticket can no longer be changed."
+changelog = "A ticket is named by its subject, with its number above it on a card and next to the requester in the form."
 home = "helpdesk_ticket"
 
 [[model]]
@@ -78,8 +78,8 @@ read_group = "helpdesk.agent"
 write_group = "helpdesk.agent"
 
   [model.ui]
-  title = "{number} · {subject} | {subject}"
-  subtitle = "{requester_name} | {requester_email}"
+  title = "{subject}"
+  subtitle = "{number} · {requester_name} | {number} · {requester_email} | {number}"
   list = ["number", "subject", "requester_name", "assignee", "priority", "due_on", "state"]
   card = ["number", "subject", "requester_name", "assignee", "due_on", "priority"]
   quick_create = ["subject", "requester_name", "priority"]

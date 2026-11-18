@@ -41,6 +41,10 @@ description = "Dokumentmallen som skickas; tom för en begäran om ett dokument 
 label = "Dokument"
 description = "PDF:en i Dokument som signeraren läser och signerar; när begäran skickas tas dess SHA-256 och en exakt kopia sparas"
 
+[labels.sv.model.sign_request.field.no_document]
+label = "Utan dokument"
+description = "Om begäran inte gäller ett dokument i Dokument; en sådan begäran ser alla som får läsa begäranden, en begäran om ett dokument bara de som får se det dokumentet"
+
 [labels.sv.model.sign_request.field.title]
 label = "Titel"
 description = "Ämne som visas för undertecknaren"

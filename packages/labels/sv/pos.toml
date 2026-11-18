@@ -62,11 +62,11 @@ description = "Dagen då kassapasset stängdes (ÅÅÅÅ-MM-DD)"
 
 [labels.sv.model.pos_session.field.opening_cash]
 label = "Ingående kassa"
-description = "Kontanter som räknades i kassalådan vid öppning (valutans minsta enhet)"
+description = "Kontanter som räknades i lådan vid öppning (minsta valutaenhet); om inget anges, beloppet som räknades när kassan senast stängdes, annars kassans vanliga växelkassa"
 
 [labels.sv.model.pos_session.field.expected_cash]
 label = "Förväntad kassa"
-description = "Kontanter som kassalådan ska innehålla vid stängning: ingående kassa plus kontantbetalningar (anges, beräknas inte)"
+description = "Kontanter som lådan ska innehålla vid stängning: växelkassan plus kontantbetalningarna för passets betalda försäljningar, minus kontanterna för försäljningar från stängda pass som återbetalats i det; för ett stängt pass beloppet det stängdes med"
 
 [labels.sv.model.pos_session.field.closing_cash]
 label = "Utgående kassa"
@@ -74,7 +74,7 @@ description = "Kontanter som faktiskt räknades i kassalådan vid stängning"
 
 [labels.sv.model.pos_session.field.cash_difference]
 label = "Kassadifferens"
-description = "Utgående kassa minus förväntad kassa; negativt betyder att pengar saknas"
+description = "Stängningskassa minus förväntad kassa när stängningskassan har räknats; negativt betyder att pengar saknas"
 
 [labels.sv.model.pos_session.field.note]
 label = "Anteckning"
@@ -226,7 +226,31 @@ description = "Referens från kortterminalen eller betaltjänsten; aldrig ett ko
 
 [labels.sv.model.pos_order.field.stock_location_id]
 label = "Lagerplats"
-description = "Var varorna lämnar lagret; vid betalning skapas lagerrörelserna från denna plats"
+description = "Varifrån varorna lämnar lagret; betalningen skapar lagerflyttarna från den här platsen; om inget anges, passets lagerplats"
 
 [labels.sv.model.pos_order.action.pay.assert.covered]
 message = "Betalningarna täcker inte försäljningens summa: lägg till en betalning för resten"
+
+[labels.sv.model.pos_config.field.stock_location_id]
+label = "Lagerplats"
+description = "Varifrån varorna som säljs i den här kassan lämnar lagret; dess pass och försäljningar tar den, och när en försäljning betalas skapas då lagerflyttarna"
+
+[labels.sv.model.pos_session.field.closed_expected_cash]
+label = "Förväntad kassa vid stängning"
+description = "Den förväntade kassan när passet stängdes, sparad av åtgärden Stäng; ett stängt pass förväntade kassa och kassadifferens läses från den"
+
+[labels.sv.model.pos_session.field.closed_at]
+label = "Stängd"
+description = "När passet stängdes (UTC); kassans senast stängda pass föreslår nästa öppningskassa"
+
+[labels.sv.model.pos_session.field.stock_location_id]
+label = "Lagerplats"
+description = "Varifrån varorna som säljs under det här passet lämnar lagret; om inget anges, kassans lagerplats"
+
+[labels.sv.model.pos_order.field.cash_paid]
+label = "Betalt kontant"
+description = "Den del av betalningarna som gjordes kontant (minsta valutaenhet)"
+
+[labels.sv.model.pos_order.field.refund_session_id]
+label = "Återbetald i pass"
+description = "Passet vars kassalåda betalade ut kontanterna för en återbetalning, satt av servern när en försäljning från ett stängt pass återbetalas: passet som då är öppet i försäljningens kassa; tomt när försäljningens eget pass fortfarande var öppet"

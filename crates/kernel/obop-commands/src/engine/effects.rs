@@ -240,18 +240,30 @@ impl Runner<'_> {
         }
         // Whoever the record names in `not_by` may not run the action, at any depth (D95).
         super::hints::not_by(def, cmd, &rec, &self.actor.id)?;
-        // Assertions look at the record as it is now, children included.
+        // Assertions look at the record as it is now, children included. Every one is asked, and
+        // the refusal names all that fail (Q17), so the caller can fix them in one go.
         if !cmd.asserts.is_empty() {
             let c = Computer::new(&*unit, &look, false);
+            let mut failed: Vec<String> = Vec::new();
             for a in &cmd.asserts {
                 match c.evaluate(def, id, &rec, &a.expr) {
                     Ok(expr::V::Bool(true)) => {}
-                    Ok(_) => return Err(self.refusal(def, cmd, a)),
+                    Ok(_) => failed.push(self.refusal(def, cmd, a)),
                     // A refusal of the store is the store's error, not a reason about the record
                     // (D74): it goes up unchanged, so it is recognised as one.
                     Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
-                    Err(e) => return Err(format!("{} ({e})", self.refusal(def, cmd, a))),
+                    // An assertion that cannot be evaluated after another one failed most often
+                    // reads what that one asks for: only the first failure is named then.
+                    Err(e) if failed.is_empty() => {
+                        failed.push(format!("{} ({e})", self.refusal(def, cmd, a)));
+                    }
+                    Err(_) => {}
                 }
+            }
+            match failed.len() {
+                0 => {}
+                1 => return Err(failed.remove(0)),
+                _ => return Err(locale::note_joined(&failed)),
             }
         }
         // The new state and the numbers this action assigns.

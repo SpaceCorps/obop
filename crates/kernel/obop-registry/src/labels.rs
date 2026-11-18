@@ -50,6 +50,28 @@ pub struct ModelTr {
     /// The message of the model's guard (D77) per language: what the lock banner says,
     /// `[labels.<lang>.model.<m>.guard] message`.
     pub guard: Texts,
+    /// Rule key -> language -> the message of the refusal of a model rule (D88),
+    /// `[labels.<lang>.model.<m>.rule.<key>] message`.
+    pub rules: BTreeMap<String, Texts>,
+    /// Filter key (`filter_key` of its English label) -> language -> the label of a filter the
+    /// package declares (`[[model.ui.filter]]`), `[labels.<lang>.model.<m>.filter.<key>] label`
+    /// (U10).
+    pub filters: BTreeMap<String, Texts>,
+}
+
+/// The key a filter of `[[model.ui.filter]]` is translated under: its English label in lower
+/// case, every run of other characters than ASCII letters and digits one `_` ("Not refused" is
+/// `not_refused`, "Away today" `away_today`).
+pub fn filter_key(label: &str) -> String {
+    let mut k = String::new();
+    for c in label.chars() {
+        if c.is_ascii_alphanumeric() {
+            k.push(c.to_ascii_lowercase());
+        } else if !k.is_empty() && !k.ends_with('_') {
+            k.push('_');
+        }
+    }
+    k.trim_end_matches('_').to_string()
 }
 
 /// All translations of one module.
@@ -94,6 +116,19 @@ pub struct ModelLabels {
     pub action: BTreeMap<String, ActionLabels>,
     /// `[labels.<lang>.model.<m>.guard]`: the message of the model's guard.
     pub guard: Option<GuardLabels>,
+    /// Rule key -> its table: `[labels.<lang>.model.<m>.rule.<key>]` (D88).
+    #[serde(default)]
+    pub rule: BTreeMap<String, AssertLabels>,
+    /// Filter key (`filter_key`) -> its table: `[labels.<lang>.model.<m>.filter.<key>]` (U10).
+    #[serde(default)]
+    pub filter: BTreeMap<String, FilterLabels>,
+}
+
+/// `label`: what a filter the package declares is called in the language.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct FilterLabels {
+    pub label: Option<String>,
 }
 
 /// `message`: what an interface says about a record the model's guard (D77) freezes.
@@ -183,6 +218,10 @@ pub struct ModelShape {
     pub actions: BTreeMap<String, BTreeSet<String>>,
     /// The model has a guard with a message to translate.
     pub guard_message: bool,
+    /// The keys of the model's rules (D88), each with a message to translate.
+    pub rules: BTreeSet<String>,
+    /// The keys (`filter_key`) of the filters the model declares (U10).
+    pub filters: BTreeSet<String>,
 }
 
 impl Shape {
@@ -226,6 +265,11 @@ impl Shape {
                                 .guard
                                 .as_ref()
                                 .is_some_and(|g| g.message.is_some()),
+                            rules: m.rule_keys().into_iter().map(String::from).collect(),
+                            filters: m
+                                .ui()
+                                .map(|u| u.filters.iter().map(|f| filter_key(&f.label)).collect())
+                                .unwrap_or_default(),
                         },
                     )
                 })
@@ -286,6 +330,28 @@ pub fn check_labels(labels: &BTreeMap<String, LangLabels>, shape: &Shape) -> Res
                     &g.message,
                     MAX_DESCRIPTION_CHARS,
                 )?;
+            }
+            for (key, rl) in &ml.rule {
+                let at = format!("{at}.rule.{key}");
+                if !ms.rules.contains(key) {
+                    return Err(format!(
+                        "labels.{at}: {model} has no rule with the key {key:?}"
+                    ));
+                }
+                val(
+                    format!("{at}.message"),
+                    &rl.message,
+                    MAX_ASSERT_MESSAGE_CHARS,
+                )?;
+            }
+            for (key, fl) in &ml.filter {
+                let at = format!("{at}.filter.{key}");
+                if !ms.filters.contains(key) {
+                    return Err(format!(
+                        "labels.{at}: {model} declares no filter whose key is {key:?} (the key is the English label in lower case with _ between the words)"
+                    ));
+                }
+                val(format!("{at}.label"), &fl.label, MAX_LABEL_CHARS)?;
             }
             for (field, fl) in &ml.field {
                 let at = format!("{at}.field.{field}");
@@ -369,6 +435,12 @@ impl Translations {
                 if let Some(g) = &ml.guard {
                     put(&mut mt.guard, lang, &g.message);
                 }
+                for (key, rl) in &ml.rule {
+                    put(mt.rules.entry(key.clone()).or_default(), lang, &rl.message);
+                }
+                for (key, fl) in &ml.filter {
+                    put(mt.filters.entry(key.clone()).or_default(), lang, &fl.label);
+                }
                 for (field, fl) in &ml.field {
                     let ft = mt.fields.entry(field.clone()).or_default();
                     put(&mut ft.entry.labels, lang, &fl.label);
@@ -416,6 +488,16 @@ impl Translations {
         self.models.get(model)?.guard.get(lang).map(String::as_str)
     }
 
+    /// The message of the rule `key` of `model` (D88) in `lang`, if the tables have one.
+    pub fn rule_message(&self, model: &str, key: &str, lang: &str) -> Option<&str> {
+        self.models
+            .get(model)?
+            .rules
+            .get(key)?
+            .get(lang)
+            .map(String::as_str)
+    }
+
     /// The message of the assertion `key` of `model.action` in `lang`, if the tables have one.
     pub fn assertion_message(
         &self,
@@ -451,7 +533,9 @@ impl Module {
         if let Err(e) = check_labels(&all, &Shape::of(&self)) {
             panic!("labels of {}: {e}", self.id);
         }
-        self.translations = std::sync::Arc::new(Translations::from_labels(&all));
+        let t = Translations::from_labels(&all);
+        crate::model_rules::attach_messages(&mut self.models, &t);
+        self.translations = std::sync::Arc::new(t);
         self
     }
 }
@@ -505,6 +589,41 @@ mod tests {
     }
 
     #[test]
+    fn a_declared_filter_is_translated_under_the_key_of_its_english_label() {
+        // U10.
+        assert_eq!(filter_key("Not refused"), "not_refused");
+        assert_eq!(filter_key("Due in 30 days"), "due_in_30_days");
+        assert_eq!(filter_key("  To pay!  "), "to_pay");
+        let mut shape = Shape::default();
+        shape.models.insert(
+            "m".into(),
+            ModelShape {
+                filters: BTreeSet::from(["not_refused".to_string()]),
+                ..ModelShape::default()
+            },
+        );
+        let doc = |key: &str| {
+            format!(
+                "[labels.de.model.m.filter.{key}]
+label = \"Nicht abgelehnt\""
+            )
+        };
+        let check = |s: String| check_labels(&Translations::parse_labels(&s).unwrap(), &shape);
+        assert!(check(doc("not_refused")).is_ok());
+        let t =
+            Translations::from_labels(&Translations::parse_labels(&doc("not_refused")).unwrap());
+        assert_eq!(
+            t.models["m"].filters["not_refused"]["de"],
+            "Nicht abgelehnt"
+        );
+        let e = check(doc("refused")).unwrap_err();
+        assert!(
+            e.contains("declares no filter whose key is \"refused\""),
+            "{e}"
+        );
+    }
+
+    #[test]
     fn a_guard_message_is_translated_only_where_the_model_has_one() {
         let mut shape = Shape::default();
         for (m, has) in [("locked", true), ("plain", false)] {
@@ -539,6 +658,31 @@ mod tests {
     }
 
     #[test]
+    fn rule_messages_are_checked_against_the_rules_of_the_model() {
+        let mut shape = Shape::default();
+        shape.models.insert(
+            "m".into(),
+            ModelShape {
+                rules: BTreeSet::from(["ends_after_start".to_string()]),
+                ..Default::default()
+            },
+        );
+        let doc = |key: &str, msg: &str| format!("[labels.sv.model.m.rule.{key}]\nmessage = {msg}");
+        let parsed = |s: String| Translations::parse_labels(&s).unwrap();
+        let ok = parsed(doc("ends_after_start", "\"Slutar före start\""));
+        assert!(check_labels(&ok, &shape).is_ok());
+        let t = Translations::from_labels(&ok);
+        assert_eq!(
+            t.rule_message("m", "ends_after_start", "sv"),
+            Some("Slutar före start")
+        );
+        assert_eq!(t.rule_message("m", "ends_after_start", "de"), None);
+        let e = check_labels(&parsed(doc("ghost", "\"x\"")), &shape).unwrap_err();
+        assert!(e.contains("no rule with the key \"ghost\""), "{e}");
+        assert!(check_labels(&parsed(doc("ends_after_start", "\"<b>\"")), &shape).is_err());
+    }
+
+    #[test]
     fn assertion_messages_are_checked_against_the_keys_of_the_action() {
         let mut shape = Shape::default();
         shape.models.insert(
@@ -550,6 +694,8 @@ mod tests {
                     ("stop".to_string(), BTreeSet::new()),
                 ]),
                 guard_message: false,
+                rules: BTreeSet::new(),
+                filters: BTreeSet::new(),
             },
         );
         let doc = |at: &str, msg: &str| format!("[labels.sv.model.m.action.{at}]\nmessage = {msg}");

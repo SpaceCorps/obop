@@ -62,11 +62,11 @@ description = "Día en que se cerró la sesión (YYYY-MM-DD)"
 
 [labels.es.model.pos_session.field.opening_cash]
 label = "Efectivo de apertura"
-description = "Efectivo contado en el cajón al abrir (unidad menor de la moneda)"
+description = "Efectivo contado en el cajón al abrir (unidad monetaria mínima); si no se indica, el importe contado cuando la caja se cerró por última vez, y si no, el fondo de apertura habitual de la caja"
 
 [labels.es.model.pos_session.field.expected_cash]
 label = "Efectivo previsto"
-description = "Efectivo que debería haber en el cajón al cerrar: efectivo inicial más pagos en efectivo (introducido, no calculado)"
+description = "Efectivo que debe haber en el cajón al cerrar: el fondo inicial más los pagos en efectivo de las ventas pagadas de la sesión, menos el efectivo de ventas de sesiones cerradas reembolsadas en ella; una vez cerrada, el importe con el que se cerró"
 
 [labels.es.model.pos_session.field.closing_cash]
 label = "Efectivo de cierre"
@@ -74,7 +74,7 @@ description = "Efectivo realmente contado en el cajón al cerrar"
 
 [labels.es.model.pos_session.field.cash_difference]
 label = "Diferencia de efectivo"
-description = "Efectivo al cierre menos efectivo esperado; un valor negativo significa que falta dinero"
+description = "Efectivo de cierre menos efectivo esperado, una vez contado el efectivo de cierre; negativo significa que falta dinero"
 
 [labels.es.model.pos_session.field.note]
 label = "Nota"
@@ -226,7 +226,31 @@ description = "Referencia del terminal de tarjetas o de la pasarela de pago; nun
 
 [labels.es.model.pos_order.field.stock_location_id]
 label = "Ubicación de stock"
-description = "De dónde sale la mercancía del stock; al pagar se crean los movimientos de stock desde esta ubicación"
+description = "De dónde salen los productos del stock; el pago crea los movimientos de stock desde esta ubicación; si no se indica, la ubicación de la sesión"
 
 [labels.es.model.pos_order.action.pay.assert.covered]
 message = "Los pagos no cubren el total de la venta: añada un pago por el resto"
+
+[labels.es.model.pos_config.field.stock_location_id]
+label = "Ubicación de stock"
+description = "De dónde salen del stock los productos vendidos en esta caja; sus sesiones y ventas la toman, y al pagar una venta se crean entonces los movimientos de stock"
+
+[labels.es.model.pos_session.field.closed_expected_cash]
+label = "Efectivo previsto al cerrar"
+description = "El efectivo previsto en el momento del cierre, guardado por la acción Cerrar; el efectivo previsto y la diferencia de caja de una sesión cerrada se leen de él"
+
+[labels.es.model.pos_session.field.closed_at]
+label = "Cerrada el"
+description = "Cuándo se cerró la sesión (UTC); la última sesión cerrada de una caja propone el siguiente fondo de apertura"
+
+[labels.es.model.pos_session.field.stock_location_id]
+label = "Ubicación de stock"
+description = "De dónde salen del stock los productos vendidos en esta sesión; si no se indica, la ubicación de la caja"
+
+[labels.es.model.pos_order.field.cash_paid]
+label = "Pagado en efectivo"
+description = "La parte de los pagos hecha en efectivo (unidad monetaria mínima)"
+
+[labels.es.model.pos_order.field.refund_session_id]
+label = "Reembolsada en la sesión"
+description = "La sesión de cuyo cajón salió el efectivo de un reembolso, fijada por el servidor cuando se reembolsa una venta de una sesión cerrada: la sesión abierta entonces en la caja de la venta; vacía si la sesión de la venta seguía abierta"

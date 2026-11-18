@@ -5,8 +5,11 @@
 name = "Department"
 plural = "Departments"
 
-[labels.en.model.hr_department.field.head]
+[labels.en.model.hr_department.field.head_id]
 label = "Department head"
+
+[labels.en.model.hr_department.field.head]
+label = "Department head (as text)"
 
 [labels.en.model.hr_employee]
 name = "Employee"
@@ -14,6 +17,9 @@ plural = "Employees"
 
 [labels.en.model.hr_employee.field.reports_to_id]
 label = "Manager"
+
+[labels.en.model.hr_employee.field.user]
+label = "obop user"
 
 [labels.en.model.hr_employee.field.national_id]
 label = "National ID"

@@ -1,0 +1,387 @@
+/* ---------- Week grid (GridView: Timesheets) ---------- */
+.tsgrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-inline-size: 0;
+  padding-block-end: var(--space-6);
+}
+.tsgrid-bar {
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
+}
+.tsgrid-scroll {
+  min-inline-size: 0;
+  margin-inline: 1.25rem;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.tsgrid-table {
+  inline-size: 100%;
+  min-inline-size: 46rem;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.tsgrid-table th,
+.tsgrid-table td {
+  padding: var(--space-2) var(--space-1);
+  border-block-end: 1px solid var(--border);
+  text-align: center;
+  vertical-align: middle;
+}
+.tsgrid-table thead th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+}
+.tsgrid-table .tsgrid-linehead,
+.tsgrid-table .tsgrid-line,
+.tsgrid-table tfoot th {
+  text-align: start;
+  min-inline-size: 11rem;
+  padding-inline-start: var(--space-4);
+}
+.tsgrid-line {
+  font-weight: var(--weight-regular);
+}
+.tsgrid-task {
+  display: block;
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+}
+.tsgrid-owner {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+/* A day column is as wide as "10:30" with room around it; the task column takes the rest. */
+.tsgrid-table .tsgrid-dayhead-cell {
+  inline-size: 4.75rem;
+}
+.tsgrid-dayhead-cell .tsgrid-dname,
+.tsgrid-dayhead-cell .tsgrid-dnum {
+  display: block;
+}
+.tsgrid-dayhead-cell .tsgrid-dname {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.tsgrid-dayhead-cell .tsgrid-dnum {
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+.tsgrid-table .today {
+  background: var(--accent-soft);
+}
+.tsgrid-table thead .today .tsgrid-dnum {
+  color: var(--accent-ink);
+}
+.tsgrid-table td.weekend:not(.today) {
+  background: var(--surface-2);
+}
+.tsgrid-table .tsgrid-total {
+  inline-size: 6rem;
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  text-align: end;
+  padding-inline-end: var(--space-4);
+}
+.tsgrid-table tfoot th,
+.tsgrid-table tfoot td {
+  border-block-end: 0;
+  background: var(--surface-2);
+  font-weight: var(--weight-semibold);
+}
+/* When the grid is narrower than the week (a side panel is open), the task and the total stay in
+   view and the days scroll between them. */
+.tsgrid-table .tsgrid-line,
+.tsgrid-table .tsgrid-linehead,
+.tsgrid-table tfoot th,
+.tsgrid-table .tsgrid-total {
+  position: sticky;
+  z-index: 1;
+  background: var(--surface);
+}
+.tsgrid-table .tsgrid-line,
+.tsgrid-table .tsgrid-linehead,
+.tsgrid-table tfoot th {
+  inset-inline-start: 0;
+}
+.tsgrid-table .tsgrid-total {
+  inset-inline-end: 0;
+}
+.tsgrid-table thead th.tsgrid-linehead,
+.tsgrid-table thead th.tsgrid-total,
+.tsgrid-table tfoot th,
+.tsgrid-table tfoot .tsgrid-total {
+  background: var(--surface-2);
+}
+.tsgrid .tsgrid-input {
+  inline-size: 100%;
+  max-inline-size: 5.5rem;
+  min-block-size: 2.25rem;
+  padding: 0 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out);
+}
+.tsgrid .tsgrid-input::placeholder {
+  color: var(--text-subtle);
+  opacity: 0.6;
+}
+.tsgrid .tsgrid-input:hover {
+  border-color: var(--border-control);
+  background: var(--surface);
+}
+.tsgrid .tsgrid-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+.tsgrid .tsgrid-input.filled {
+  font-weight: var(--weight-semibold);
+}
+.tsgrid-locked {
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-block-size: 2.25rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.tsgrid-locked:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.tsgrid-locked:disabled {
+  cursor: default;
+}
+.tsgrid-none {
+  margin: var(--space-6) var(--space-4);
+  text-align: center;
+}
+.tsgrid-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-inline: 1.25rem;
+}
+.tsgrid-add-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.tsgrid-add-pick {
+  flex: 1 1 16rem;
+  max-inline-size: 26rem;
+  min-inline-size: 0;
+}
+.tsgrid-empty {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+}
+
+/* ---------- On a phone: a strip of days and the lines of one day ---------- */
+.tsgrid-phone {
+  gap: var(--space-3);
+  /* Room below the last line for the floating New button of a phone. */
+  padding-block-end: 6rem;
+}
+.tsgrid-phone .tsgrid-bar {
+  padding-inline: var(--space-4);
+}
+/* The Mine / Everyone switch is a tap target on a phone. */
+.tsgrid-phone .switcher button {
+  min-block-size: 2.75rem;
+}
+.tsgrid-phone .calhead {
+  font-size: var(--text-md);
+}
+.tsgrid-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin-inline: var(--space-4);
+}
+.tsgrid-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-inline-size: 0;
+  min-block-size: 4rem;
+  padding: var(--space-2) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.tsgrid-day .tsgrid-dname {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.tsgrid-day .tsgrid-dnum {
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+.tsgrid-day .tsgrid-dsum {
+  overflow: hidden;
+  max-inline-size: 100%;
+  font-size: var(--text-2xs);
+  text-overflow: clip;
+  white-space: nowrap;
+}
+.tsgrid-day.today {
+  border-color: var(--accent-line);
+}
+.tsgrid-day[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.tsgrid-day[aria-selected="true"] .tsgrid-dnum {
+  color: var(--accent-ink);
+}
+.tsgrid-dayhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-inline: var(--space-4);
+}
+.tsgrid-dayhead h3 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+.tsgrid-dayhead .num {
+  color: var(--text-muted);
+  font-weight: var(--weight-semibold);
+}
+.tsgrid-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0 var(--space-4);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  list-style: none;
+}
+.tsgrid-list:empty {
+  display: none;
+}
+.tsgrid-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 3.5rem;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+}
+.tsgrid-item + .tsgrid-item {
+  border-block-start: 1px solid var(--border);
+}
+.tsgrid-item-text {
+  flex: 1;
+  min-inline-size: 0;
+  overflow-wrap: break-word;
+}
+.tsgrid-phone .tsgrid-input,
+.tsgrid-phone .tsgrid-locked {
+  flex: 0 0 5.5rem;
+  min-block-size: 2.75rem;
+  border-color: var(--border-control);
+  background: var(--surface);
+  font-size: var(--text-md);
+}
+.tsgrid-phone .tsgrid-locked {
+  justify-content: center;
+  border: 1px dashed var(--border);
+}
+.tsgrid-phone .tsgrid-add {
+  margin-inline: var(--space-4);
+}
+.tsgrid-phone .tsgrid-add-pick {
+  flex-basis: 100%;
+  max-inline-size: none;
+}
+.tsgrid-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-inline: var(--space-4);
+  color: var(--text-muted);
+}
+.tsgrid-foot strong {
+  color: var(--text);
+}
+.tsgrid-foot .btn {
+  min-block-size: 2.75rem;
+}
+
+/* A project (or what the line's record belongs to) under the task's name. */
+.tsgrid-parent {
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* With touch a typed cell is 16 px (the global input rule), so a locked one is too (S8). */
+@media (max-width: 40rem), (pointer: coarse) {
+  .tsgrid .tsgrid-locked {
+    font-size: max(1rem, 16px);
+  }
+}
+
+/* Seven 44 px days do not fit in 288 px: below 360 px the strip scrolls inside itself (R18). */
+@media (max-width: 22.49rem) {
+  .tsgrid-days {
+    position: relative;
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    /* The end fades, so a cut-off Sunday reads as "more to the right"; the spacer below lets
+       Sunday scroll clear of the fade. */
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
+  .tsgrid-days::after {
+    content: "";
+    flex: 0 0 1.5rem;
+  }
+  .tsgrid-day {
+    flex: 0 0 2.75rem;
+    scroll-snap-align: center;
+  }
+}

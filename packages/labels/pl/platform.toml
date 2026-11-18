@@ -1,5 +1,6 @@
 [labels.pl.module]
 name = "Dostosowanie"
+summary = "Dostosuj instancję: motyw, aplikacje, moduły i marketplace."
 
 [labels.pl.model.module]
 name = "Moduł"
@@ -75,7 +76,7 @@ description = "Zainstaluj moduł z marketplace według id razem z potrzebnymi za
 
 [labels.pl.model.setting]
 name = "Ustawienie"
-description = "Ustawienia interfejsu dla całej instancji: motyw i układ launchera aplikacji"
+description = "Ustawienia całej instancji jako jeden obiekt JSON: motyw, układ launchera aplikacji, zasady bezpieczeństwa i inne. Każda osoba je odczytuje, administratorzy je zapisują; token aplikacji mobilnej nie może ich odczytać"
 
 [labels.pl.model.setting.field.value]
 label = "Wartość"

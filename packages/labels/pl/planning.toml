@@ -90,3 +90,9 @@ description = "Przywraca opublikowaną zmianę do stanu otwartego"
 [labels.pl.model.planning_shift.action.confirm]
 label = "Potwierdź"
 description = "Pracownik potwierdza, że przyjdzie na zmianę"
+
+[labels.pl.model.planning_shift.rule.ends_after_start]
+message = "Zmiana kończy się, zanim się zacznie: ustaw godzinę zakończenia po rozpoczęciu"
+
+[labels.pl.model.planning_shift.rule.no_double_shift]
+message = "Pracownik ma już zmianę w tym czasie: wybierz inną godzinę lub innego pracownika"

@@ -32,6 +32,14 @@ description = "Päivä, johon mennessä projektin on valmistuttava (YYYY-MM-DD)"
 label = "Budjetti"
 description = "Projektin sovittu budjetti (valuutan pienin yksikkö, esimerkiksi sentit)"
 
+[labels.fi.model.projects_project.field.customer_id]
+label = "Asiakas"
+description = "Asiakas, jolta projektin laskutettava aika laskutetaan"
+
+[labels.fi.model.projects_project.field.hourly_rate]
+label = "Tuntihinta"
+description = "Laskutettavan ajan tunnin hinta, kun projektin aika laskutetaan (valuutan pienin yksikkö, esim. sentit)"
+
 [labels.fi.model.projects_project.field.description]
 label = "Kuvaus"
 description = "Projektin tavoite ja laajuus"

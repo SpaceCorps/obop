@@ -117,7 +117,11 @@ fn enrolment_is_two_steps_and_nothing_is_active_until_confirmed() {
     );
     // A wrong code does not activate it.
     assert!(matches!(
-        r.a.confirm(&p, &token, "000000"),
+        r.a.confirm(
+            &p,
+            &token,
+            &wrong_code(&totp::base32_decode(secret_b32).unwrap(), r.a.now())
+        ),
         Err(MfaError::Denied(_))
     ));
     assert!(!r.a.mfa_enabled("ada"));
@@ -323,14 +327,14 @@ fn the_mfa_token_expires_and_survives_only_five_wrong_codes() {
     let t = mfa_token(&r.a, "ada");
     for _ in 0..4 {
         assert!(matches!(
-            r.a.login_mfa(&t, Some("000000"), None),
+            r.a.login_mfa(&t, Some(&wrong_code(&secret, now)), None),
             Err(MfaError::Denied(_))
         ));
     }
     // Lift the per-user lockout to see the per-token cap on its own.
     r.a.clear_failures_for_test("ada");
     assert!(matches!(
-        r.a.login_mfa(&t, Some("000000"), None),
+        r.a.login_mfa(&t, Some(&wrong_code(&secret, now)), None),
         Err(MfaError::Denied(_))
     ));
     r.a.clear_failures_for_test("ada");
@@ -355,7 +359,10 @@ fn wrong_codes_count_toward_the_same_lockout_as_wrong_passwords() {
     }
     let t = mfa_token(&r.a, "ada");
     for _ in 0..3 {
-        assert!(r.a.login_mfa(&t, Some("000000"), None).is_err());
+        assert!(
+            r.a.login_mfa(&t, Some(&wrong_code(&secret, r.a.now())), None)
+                .is_err()
+        );
     }
     assert!(r.a.login_step("ada", PW).unwrap_err().contains("too many"));
     assert!(matches!(
@@ -488,7 +495,7 @@ fn disabling_needs_the_password_and_a_code_or_a_recovery_code() {
         Err(MfaError::BadPassword)
     ));
     assert!(matches!(
-        r.a.disable(&p, PW, Some("000000"), None),
+        r.a.disable(&p, PW, Some(&wrong_code(&secret, T0 + 90)), None),
         Err(MfaError::Denied(_))
     ));
     assert!(matches!(
@@ -619,10 +626,11 @@ fn the_event_log_records_what_happened_and_never_a_secret() {
     let begun = r.a.begin(&p).unwrap();
     let b32 = begun["secret"].as_str().unwrap().to_string();
     let secret = totp::base32_decode(&b32).unwrap();
+    let wrong = wrong_code(&secret, r.a.now());
     // Failed codes: a flood writes a few records, not thousands.
     let (token, _) = session(&r.a, "ada");
     for _ in 0..4 {
-        let _ = r.a.confirm(&p, &token, "999999");
+        let _ = r.a.confirm(&p, &token, &wrong);
     }
     r.a.clear_failures_for_test("ada");
     let good = code_at(&secret, T0);
@@ -650,7 +658,7 @@ fn the_event_log_records_what_happened_and_never_a_secret() {
     for secret in [
         b32.as_str(),
         good.as_str(),
-        "999999",
+        wrong.as_str(),
         codes[0].as_str(),
         begun["uri"].as_str().unwrap(),
     ] {

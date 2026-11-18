@@ -158,6 +158,14 @@ const HINT_BUSY: &str = "Every database connection is in use. Nothing was change
 const HINT_TIMEOUT: &str = "A database statement ran into its time limit. Nothing was changed. Retry later, or ask for less at once.";
 const HINT_UNKNOWN: &str = "The database cannot be reached right now. A change that was in flight may or may not have been applied: read before you repeat a write. Retry after the time in Retry-After.";
 const HINT_UNAVAILABLE_NONE: &str = "The database cannot be reached right now. Nothing was changed. Retry after the time in Retry-After.";
+/// The hint of `immutable_record` for a record that a guard of `mutable_fields` alone fixes once it
+/// is created (Q6): no action reopens such a record, so the hint of the row would mislead.
+const HINT_FIXED_ONCE_CREATED: &str = "The record keeps the values it was created with, and no action takes that back. Change only the fields the message names as still changeable, or make a new record.";
+
+/// The words of a refusal of `immutable_record` for such a record (`engine::frozen`), by which
+/// `handler` picks its hint.
+pub(crate) const FIXED_ONCE_CREATED: &str = "keeps what it was created with";
+
 const HINT_PARTIAL: &str = "Part of this request was applied and a step it needed was refused. Do not repeat it blindly: read the records it touched, then finish or undo the rest. Retry after the time in Retry-After.";
 
 /// The table: one row per code. Producers of the codes of D75, D77, D78 and step 2 are being built;
@@ -239,14 +247,14 @@ pub const TABLE: &[Row] = &[
         status: 400,
         retry_after: None,
         origin: "D56",
-        hint: "A condition of the action does not hold. Change the record as the message says, then retry.",
+        hint: "A condition declared by the package does not hold: an assertion of an action or a rule of the model. Change the record as the message says, then retry.",
     },
     Row {
         code: code::LIMIT_VIOLATED,
         status: 400,
         retry_after: None,
         origin: "D90",
-        hint: "A value is outside the limits of its field (max_length, min_length, min and max in GET /api/meta; a text field with no max_length has the default of its kind). Nothing was changed. Shorten the text or change the number so that it fits, then retry.",
+        hint: "A value is outside the limits of its field (max_length, min_length, min and max in GET /api/meta; a text field with no max_length has the default of its kind). A date outside its bounds or a value in the wrong format (an IBAN, a VAT number, a currency code) is refused with the same code. Nothing was changed. Shorten the text, change the number or date, or write the value in the format the message names, then retry.",
     },
     Row {
         code: code::READONLY_FIELD,
@@ -707,15 +715,20 @@ fn handler(m: &str, debug: impl Fn() -> String) -> Classified {
         {
             return precondition(n);
         }
+        let hint = if r.code == code::IMMUTABLE_RECORD && rest.contains(FIXED_ONCE_CREATED) {
+            HINT_FIXED_ONCE_CREATED
+        } else {
+            r.hint
+        };
         let mut c = Classified::new(
             Kind::Failed,
             r.status,
             r.code,
-            json!({"error": rest, "code": r.code, "hint": r.hint}),
+            json!({"error": rest, "code": r.code, "hint": hint}),
             debug(),
         );
         c.retry_after = r.retry_after;
-        c.hint = Some(r.hint);
+        c.hint = Some(hint);
         return c;
     }
     // An assertion that refused this REST call: the text is the author's message, unchanged.

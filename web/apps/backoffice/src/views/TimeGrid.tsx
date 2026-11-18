@@ -9,7 +9,7 @@ const HOUR = 48;
 const SLOP = 4;
 
 /** A time of day in the region's way of writing it. */
-const hhmm = (min: number) => clockOf(min, fmt.locale);
+const hhmm = (min: number) => clockOf(min);
 
 type Drag = {
   kind: "move" | "resize" | "create";

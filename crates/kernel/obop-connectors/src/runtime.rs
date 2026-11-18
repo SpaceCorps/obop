@@ -237,13 +237,35 @@ impl Runtime {
         self.reader_for(&c.id, &held, model)
     }
 
-    /// A reading principal for `groups`, scoped to the read group of `model`.
+    /// A reading principal for `groups`, scoped to the read group of `model` and to the read
+    /// groups of the parents its `[model.access] via` rule reads (a `sign_link` is visible through
+    /// its request and that request through its Document, D58), with the `see_all` groups of each:
+    /// without them no record behind such a rule could be read. The owner must still hold each
+    /// group, so nothing more is readable than the owner could read.
     pub fn reader_for(&self, id: &str, groups: &[String], model: &str) -> Principal {
-        let scopes: Vec<&str> = self
-            .dispatcher
-            .model_def(model)
-            .map(|d| vec![d.read_group])
-            .unwrap_or_default();
+        let mut scopes: Vec<&str> = Vec::new();
+        let mut next = self.dispatcher.model_def(model);
+        // The access rule follows at most four parents (`engine::access::MAX_HOPS`).
+        for _ in 0..=4 {
+            let Some(d) = next.take() else { break };
+            let see_all = d
+                .access
+                .as_ref()
+                .map(|a| a.see_all.clone())
+                .unwrap_or_default();
+            for g in std::iter::once(d.read_group).chain(see_all) {
+                if !scopes.contains(&g) {
+                    scopes.push(g);
+                }
+            }
+            next = d
+                .access
+                .as_ref()
+                .and_then(|a| a.via)
+                .and_then(|f| d.fields.iter().find(|x| x.name == f))
+                .and_then(|x| x.kind.target())
+                .and_then(|t| self.dispatcher.model_def(t));
+        }
         let refs: Vec<&str> = groups.iter().map(String::as_str).collect();
         let mut p = Principal::agent(&format!("connector:{id}"), &refs, &scopes);
         p.kind = PrincipalKind::User;

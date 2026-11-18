@@ -11,6 +11,7 @@ pub mod ext;
 pub mod guard;
 pub mod labels;
 pub mod limits;
+pub mod model_rules;
 pub mod rules;
 pub mod template;
 pub mod ui;
@@ -19,9 +20,10 @@ pub use ext::{
 };
 pub use labels::Translations;
 pub use limits::{
-    Bound, Breach, DEFAULT_LONGTEXT_MAX, DEFAULT_TEXT_MAX, LONGTEXT_MAX_CAP, Limits, TEXT_MAX_CAP,
-    char_count, limits_note,
+    Bound, Breach, DEFAULT_LONGTEXT_MAX, DEFAULT_TEXT_MAX, LONGTEXT_MAX_CAP, Limits, Pattern,
+    TEXT_MAX_CAP, char_count, limits_note,
 };
+pub use model_rules::{Applies, ModelRule, NoOverlap};
 pub use rules::{
     Access, Assertion, Computed, Effect, EffectKind, Lit, Locator, Reset, SeqFormat, SequenceSpec,
     ShowsOption, ShowsWhen, Src, Target, Unique,
@@ -621,7 +623,7 @@ pub const RESERVED_MODELS: [&str; 5] = [
 /// some of these tables. Neither sees a name built at run time, and N17 lists the other gaps.
 /// (`obop_record` and `obop_record_change` are the SQL tables of the SQLite and PostgreSQL stores:
 /// not models, listed because the name is the program's.)
-pub const INTERNAL_TABLES: [&str; 59] = [
+pub const INTERNAL_TABLES: [&str; 60] = [
     "auth_mfa_token",
     "auth_passkey",
     "auth_sso_link",
@@ -648,6 +650,7 @@ pub const INTERNAL_TABLES: [&str; 59] = [
     "connector_seen",
     "connector_vault",
     "import_map",
+    "invoice_credit",
     "invoice_posting",
     "oas_import_map",
     "oas_import_run",

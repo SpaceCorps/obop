@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Bokföring Sverige"
 description = "Svensk lokalisering av Bokföring: företagsuppgifter, verifikationsserier, momskoder och momsrutor samt en momsrapport per period som godkänns av gruppen accounting.approver. OVERIFIERAT: inget är kontrollerat mot Skatteverket (SKV 4700) eller SIE. Ingen BAS-kontoplan ingår; konton väljer användaren. Belopp i öre, satser i baspunkter. Inget lämnas in härifrån."
+summary = "Svenska företagsuppgifter, verifikationsserier, momskoder, momsrutor och en momsrapport. Alla momskopplingar OVERIFIERADE."
 
 [labels.sv.model.accounting_se_company]
 name = "Företag"

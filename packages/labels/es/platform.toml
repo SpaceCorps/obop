@@ -1,5 +1,6 @@
 [labels.es.module]
 name = "Personalizar"
+summary = "Personaliza la instancia: tema, aplicaciones, módulos y el marketplace."
 
 [labels.es.model.module]
 name = "Módulo"
@@ -75,7 +76,7 @@ description = "Instalar un módulo del mercado por su id, con las dependencias q
 
 [labels.es.model.setting]
 name = "Ajuste"
-description = "Ajustes de interfaz de toda la instancia: tema y distribución del lanzador de aplicaciones"
+description = "Ajustes de toda la instancia como un objeto JSON: tema, distribución del lanzador de aplicaciones, política de seguridad y otros. Cada persona los lee, los administradores los escriben; el token de una aplicación móvil no puede leerlos"
 
 [labels.es.model.setting.field.value]
 label = "Valor"

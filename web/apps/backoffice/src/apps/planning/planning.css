@@ -1,0 +1,272 @@
+/* Planning: the week plan (WeekBoard.tsx). A table of employees by days on a laptop or tablet that
+   scrolls inside its own box, a list by day on a phone. Tokens only. */
+.pl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  margin-block-end: var(--space-4);
+}
+.pl-title h1 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  letter-spacing: var(--tracking-tight);
+}
+.pl-title .hint {
+  margin: var(--space-1) 0 0;
+}
+.pl-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
+.pl-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+.pl-range {
+  margin-inline-start: var(--space-2);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.pl-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.pl-scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.pl-grid {
+  inline-size: 100%;
+  min-inline-size: 56rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.pl-grid th,
+.pl-grid td {
+  border-block-end: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
+  vertical-align: top;
+  text-align: start;
+}
+.pl-grid thead th {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  font-weight: var(--weight-medium);
+}
+.pl-grid thead th.is-today {
+  color: var(--accent-ink);
+}
+.pl-grid td.is-today {
+  background: var(--accent-soft);
+}
+.pl-dname {
+  display: block;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--text-muted);
+}
+.pl-grid thead th.is-today .pl-dname {
+  color: inherit;
+}
+.pl-dnum {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+.pl-grid .pl-who {
+  inline-size: 10rem;
+  border-inline-start: 0;
+  padding: var(--space-3);
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.pl-grid thead .pl-who {
+  background: var(--surface-2);
+}
+.pl-open-row th.pl-who {
+  color: var(--info-ink);
+}
+.pl-open-row td,
+.pl-open-row th {
+  border-block-end-width: 2px;
+}
+.pl-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  min-block-size: 3.25rem;
+}
+.pl-shift {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  gap: 1px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border-inline-start: 3px solid var(--info);
+  background: var(--info-soft);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  min-inline-size: 0;
+}
+.pl-shift:hover {
+  box-shadow: var(--shadow-1);
+}
+.pl-shift:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.pl-shift.pl-open {
+  border-inline-start-style: dashed;
+}
+.pl-shift.pl-published {
+  border-inline-start-color: var(--warning);
+  background: var(--warning-soft);
+}
+.pl-shift.pl-confirmed {
+  border-inline-start-color: var(--success);
+  background: var(--success-soft);
+}
+.pl-shift-time {
+  white-space: nowrap;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.pl-shift-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A long shift name takes two lines in its cell instead of one cut line (R18). */
+.pl-shift-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+.pl-shift-state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.pl-add {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  block-size: 1.75rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-subtle);
+  cursor: pointer;
+  opacity: 0;
+}
+.pl-cell:hover .pl-add,
+.pl-add:focus-visible {
+  opacity: 1;
+  background: var(--surface-2);
+}
+.pl-add:focus-visible {
+  outline: 2px solid var(--focus);
+}
+@media (hover: none) {
+  .pl-add {
+    opacity: 0.6;
+  }
+}
+
+/* A phone: the week as a list by day. */
+.pl-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.pl-days > li {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.pl-days > li.is-today {
+  border-color: var(--accent-line);
+}
+.pl-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.pl-day-head h2 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+.pl-day-list {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+.pl-day-list .pl-shift {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "time name state" "time who state";
+  column-gap: var(--space-3);
+  align-items: center;
+  min-block-size: 44px;
+  padding: var(--space-2) var(--space-3);
+}
+.pl-day-list .pl-shift-time {
+  grid-area: time;
+}
+/* On the phone's list a long name takes two lines instead of an ellipsis after 15 characters. */
+.pl-day-list .pl-shift-name {
+  grid-area: name;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.pl-day-list .pl-shift-who {
+  grid-area: who;
+  color: var(--text-muted);
+}
+.pl-day-list .pl-shift-state {
+  grid-area: state;
+}
+.pl-none {
+  margin: var(--space-1) 0 0;
+}
+@media (max-width: 47.99rem) {
+  .pl-bar .btn-primary,
+  .pl-bar > .btn {
+    flex: 1 1 100%;
+    min-block-size: 44px;
+  }
+  .pl-head .switcher button {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    justify-content: center;
+  }
+}

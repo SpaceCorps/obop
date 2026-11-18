@@ -151,7 +151,12 @@ fn end(db: &Db, id: &str, trip: &Fields, input: &Value) -> Result<Fields, String
         ));
     }
     let fixes: Vec<Fix> = points.iter().map(|p| p.fix).collect();
-    let a = track::analyse(&fixes, &Options::default());
+    // A position from before the trip (a cached fix) is not part of it (5.4, `before_start`).
+    let options = Options {
+        started_at_ms: micros(policy::text(trip, "started_at")).map(|us| us as f64 / 1000.0),
+        ..Options::default()
+    };
+    let a = track::analyse(&fixes, &options);
     let distance = a.distance_text();
     if a.first.is_none() || distance == "0.00" {
         return Err(format!(
@@ -233,6 +238,9 @@ pub(crate) fn run(
             patch.insert("reject_reason".into(), J::Null);
         }
         "confirm" => {
+            // A reason typed for a reject that was cancelled (the form saved it) is not part of a
+            // confirmed trip.
+            patch.insert("reject_reason".into(), J::Null);
             patch.insert("confirmed_at".into(), J::from(now_canonical(clock)?));
             patch.insert("reviewed_by".into(), J::from(decider.clone()));
         }
@@ -270,11 +278,45 @@ pub(crate) fn run(
         // A store fault keeps its own words, so that every surface answers it as a 503 (D74).
         ApplyError::Storage(e) => e,
     })?;
-    let mut out: HashMap<String, Value> = patch
+    // The trip as it is now: what was read inside the lock, with the write on top (no other
+    // write of it can land in between, and a second read would only repeat this one).
+    for (k, v) in patch {
+        trip.insert(k, v);
+    }
+    answer(db, &who, &id, trip)
+}
+
+/// The answer of an action: the trip as `get` gives it (its computed fields filled in), as the
+/// write left it, so that the answer is the record the OpenAPI document names (L21). A caller
+/// who may no longer read the trip after the action (a reviewer who reopened it) gets its `id`
+/// and `state` only, and the start and end are left out for anyone but the driver and an
+/// administrator, as `get` leaves them out (M6; `audit.rs`). An administrator reads them with
+/// `get`, which logs the read; the answer of an action does not carry them, so it needs no entry.
+fn answer(db: &Db, who: &Who, id: &str, mut trip: Fields) -> Result<Value, String> {
+    if !policy::may_see_trip(who, &trip) {
+        return Ok(Value::map([
+            ("id", Value::text(id)),
+            ("state", Value::text(policy::state(&trip))),
+        ]));
+    }
+    let points = db.find(policy::POINT, "trip", &J::from(id))?;
+    let max_seq = points
+        .iter()
+        .filter_map(|(_, p)| p.get("seq").and_then(J::as_i64))
+        .max();
+    trip.insert("point_count".into(), J::from(points.len()));
+    trip.insert("max_seq".into(), max_seq.map_or(J::Null, J::from));
+    trip.insert("reviewable".into(), J::from(policy::reviewable_trip(&trip)));
+    if !policy::owns(who, &trip) {
+        for f in policy::TRIP_POSITIONS {
+            trip.remove(f);
+        }
+    }
+    let mut out: HashMap<String, Value> = trip
         .iter()
         .map(|(k, v)| (k.clone(), Value::from_json(v)))
         .collect();
-    out.insert("id".into(), Value::text(&id));
+    out.insert("id".into(), Value::text(id));
     Ok(Value::Map(out.into_iter().collect()))
 }
 

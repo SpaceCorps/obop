@@ -112,6 +112,21 @@ describe("sections", () => {
     expect(paid.map((x) => x.label)).toEqual(["Claim", "Payment", "Notes"]);
   });
 
+  it("translates a section the module names, falling back to its English label", async () => {
+    provideCatalogue("de", { "section\u0004Review": "Prüfung" });
+    await setLanguage("de");
+    const m = model("trip", [f("name", "text"), f("note", "text")], {
+      ui: {
+        section: [
+          { label: "Review", fields: ["name"] },
+          { label: "Unknown", fields: ["note"] },
+        ],
+      },
+    });
+    const s = sectionsOf(m, m.fields, { creating: true, row: null, filled: () => false });
+    expect(s.map((x) => x.label)).toEqual(["Prüfung", "Unknown"]);
+  });
+
   it("puts the fields an action asks for under More on a new record", () => {
     const reject: Command = {
       id: "trip.reject",
@@ -239,5 +254,22 @@ describe("pages and actions", () => {
       createdRefs(m, before, { invoice_id: "i1", customer_id: "p1" }).map((x) => x.name),
     ).toEqual(["invoice_id"]);
     expect(createdRefs(m, before, null)).toEqual([]);
+  });
+});
+
+describe("keepShown (#105)", () => {
+  it("keeps a section open once drawn open, though its last filled field is emptied", async () => {
+    const { keepShown } = await import("./recordLayout.ts");
+    const seen = new Set<string>();
+    const s = (collapsed: boolean) => [
+      { key: "main", label: "", fields: [], collapsed: false, personal: false },
+      { key: "details", label: "Details", fields: [], collapsed, personal: false },
+      { key: "system", label: "System", fields: [], collapsed: true, personal: false },
+    ];
+    expect(keepShown(s(false), seen).map((x) => x.collapsed)).toEqual([false, false, true]);
+    // Active turned off: the group is empty now, but it stays open.
+    expect(keepShown(s(true), seen).map((x) => x.collapsed)).toEqual([false, false, true]);
+    // A record never drawn with it open folds it as before.
+    expect(keepShown(s(true), new Set()).map((x) => x.collapsed)).toEqual([false, true, true]);
   });
 });

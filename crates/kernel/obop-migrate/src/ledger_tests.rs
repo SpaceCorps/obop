@@ -147,6 +147,49 @@ fn a_step_that_fails_inside_its_transaction_leaves_a_failed_row_and_no_step_row(
     assert_eq!(version(&b), Some(1));
 }
 
+#[test]
+fn a_step_that_keeps_failing_for_the_same_reason_keeps_one_failed_row() {
+    let b = mem();
+    let failing = || {
+        let mut steps = marking();
+        steps[1].run = Run::Ops(|_| {
+            Ok(vec![Op::Merge {
+                model: "log".into(),
+                id: "nope".into(),
+                patch: Fields::new(),
+            }])
+        });
+        steps
+    };
+    // An orchestrator restarts the server against the same failing step (K5).
+    for _ in 0..5 {
+        Migrator::with_steps(b.clone(), ring(), failing())
+            .run(false)
+            .unwrap_err();
+    }
+    let failed: Vec<(String, Fields)> = b
+        .list(ledger::MODEL)
+        .unwrap()
+        .into_iter()
+        .filter(|(id, _)| id.starts_with("core/0002/failed-"))
+        .collect();
+    assert_eq!(failed.len(), 1, "{failed:?}");
+    assert_eq!(failed[0].1["attempts"], 5);
+    // Another reason is a row of its own.
+    let mut other = marking();
+    other[1].run = Run::Ops(|_| Err("another reason".into()));
+    Migrator::with_steps(b.clone(), ring(), other)
+        .run(false)
+        .unwrap_err();
+    let n = b
+        .list(ledger::MODEL)
+        .unwrap()
+        .into_iter()
+        .filter(|(id, _)| id.starts_with("core/0002/failed-"))
+        .count();
+    assert_eq!(n, 2);
+}
+
 static INTERRUPTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
 #[test]

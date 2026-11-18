@@ -41,6 +41,8 @@ export type RecordHeaderProps = {
   actions: NextActions;
   /** Run an action: the panel saves first, asks what it needs and confirms what it must. */
   runAction: (a: Command) => void;
+  /** Save the changed form before an extension's own action runs (RecordExtProps). */
+  saveFirst?: () => Promise<boolean>;
   /** What the model's registrations add to the action row (extensions.ts). */
   extensions: Required<RecordExtension>;
   /** Delete the record (behind the confirm of DeleteDialog); absent when it may not be deleted. */
@@ -365,7 +367,15 @@ export function RecordHeader(p: RecordHeaderProps) {
         <div className="actionrow">
           {shown.map((a, i) => button(a, i))}
           {p.extensions.actions.map((Ext, i) => (
-            <Ext key={`ext-${i}`} model={model} fields={fields} row={row} busy={busy} />
+            <Ext
+              key={`ext-${i}`}
+              model={model}
+              fields={fields}
+              row={row}
+              busy={busy}
+              value={p.value}
+              saveFirst={p.saveFirst}
+            />
           ))}
         </div>
       )}

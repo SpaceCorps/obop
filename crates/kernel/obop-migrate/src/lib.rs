@@ -741,7 +741,9 @@ impl Migrator {
             );
             row.id = ledger::core_failed_id(s.version, ledger::now_ms());
             // Best effort: the failure itself is what the operator needs to see.
-            let _ = self.backend.apply(&[row.insert()]);
+            let _ = self
+                .backend
+                .apply(&[ledger::failed_attempt(&*self.backend, row)]);
         }
         format!(
             "step {} ({}) failed: {e}; the database is at version {} and nothing of this step was kept",

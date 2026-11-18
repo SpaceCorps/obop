@@ -3136,3 +3136,30 @@ async fn the_limit_of_the_exchange_counts_the_address_by_the_one_rule() {
         "an address in the header got a bucket of its own"
     );
 }
+
+/// N19: `/api/auth/sso` (is Microsoft sign-in offered?) has a limit of its own per address: 60 a
+/// minute, then 429; another address is not held up. Written out, not read from the server, so
+/// that a change of the limit is a change of this test too.
+#[tokio::test]
+async fn the_offered_question_is_limited_per_address() {
+    let w = world(true).await;
+    let ask = |ip: String| {
+        let w = &w;
+        async move {
+            w.send_h(
+                "GET",
+                "/api/auth/sso",
+                &Jar::default(),
+                None,
+                &[("x-forwarded-for", ip.as_str())],
+            )
+            .await
+            .status
+        }
+    };
+    for n in 0..60 {
+        assert_eq!(ask("198.51.100.7".into()).await, 200, "request {n}");
+    }
+    assert_eq!(ask("198.51.100.7".into()).await, 429);
+    assert_eq!(ask("198.51.100.8".into()).await, 200);
+}

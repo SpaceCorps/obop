@@ -2,13 +2,15 @@
 //! (docs/spec/accounting-se.md section 7, stage 8).
 //!
 //! The `timesheets` entry has minutes, a billable flag and an approval state, but no rate and no
-//! customer, and a `projects_project` has neither a rate nor a customer. So the caller names the
-//! `customer` (a `party`) and the `hourly_rate_minor`; nothing is built in. The command picks the
-//! billable, approved entries of one project in a period that no earlier run has billed, creates
-//! a draft `invoice` with one `invoice_line` per entry (quantity 1, the amount in the unit price:
-//! the line quantity is a whole number and hours are not), and writes one link row per entry
-//! (`time_billing`: entry id, invoice id). An entry is billed at most once. Posting the invoice is
-//! `invoice.post`, as for any invoice. An agent may only dry-run.
+//! customer. Since projects 0.6.0 a `projects_project` may name its `customer_id` (a `party`) and
+//! its `hourly_rate` (K62); the caller's `customer` and `hourly_rate_minor` win over them, and
+//! one of the two must give each. The currency is the caller's, else the instance currency. The
+//! command picks the billable, approved entries of one project in a period that no earlier run
+//! has billed, creates a draft `invoice` with one `invoice_line` per entry, or per task with
+//! `per = "task"` (quantity 1, the amount in the unit price: the line quantity is a whole number
+//! and hours are not), and writes one link row per entry (`time_billing`: entry id, invoice id).
+//! An entry is billed at most once. Posting the invoice is `invoice.post`, as for any invoice. An
+//! agent may only dry-run.
 //!
 //! Amounts are integer minor units: `minutes * rate / 60`, rounded half up per entry. Hours are
 //! shown as an `obop_values::Decimal` of two places. No float is used.
@@ -44,22 +46,27 @@ pub fn module() -> Module {
                 f("project", "Input: the id, code or name of the project"),
                 f(
                     "customer",
-                    "Input: the id or the name of the customer (a party)",
+                    "Input: the id or the name of the customer (a party); the project's customer when left out",
                 ),
                 f("from", "Input: first day of the period, YYYY-MM-DD"),
                 f("to", "Input: last day of the period, YYYY-MM-DD"),
                 f(
                     "hourly_rate_minor",
-                    "Input: the price of one hour in minor currency units",
+                    "Input: the price of one hour in minor currency units; the project's hourly rate (in the instance currency) when left out",
                 )
                 .kind(FieldKind::Number),
                 f(
                     "currency",
-                    "Input, optional: ISO 4217 code written on the invoice",
+                    "Input, optional: ISO 4217 code written on the invoice; the instance currency when left out",
+                ),
+                f(
+                    "per",
+                    "Input, optional: entry (the default, one invoice line per time entry) or task (one line per task, its minutes added up)",
                 ),
                 f("dry_run", "Input: only show the lines, write nothing").kind(FieldKind::Bool),
                 f("entry_id", "Link: the time entry id"),
                 f("invoice_id", "Link and answer: the draft invoice id"),
+                f("billed", "Answer of get: whether the entry is billed").kind(FieldKind::Bool),
                 f("ok", "Answer: whether the invoice was built").kind(FieldKind::Bool),
                 f("written", "Answer: whether the invoice was created").kind(FieldKind::Bool),
                 f("entries", "Answer: how many entries are billed").kind(FieldKind::Number),
@@ -75,11 +82,18 @@ pub fn module() -> Module {
                 ),
                 f("notes", "Answer: remarks (a list)"),
             ],
-            commands: vec![CommandDef::new(
-                "create_invoice",
-                "Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer at hourly_rate_minor; one line per entry. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post",
-                GROUP,
-            )],
+            commands: vec![
+                CommandDef::new(
+                    "get",
+                    "Whether a time entry (entry: its id) is billed, and on which invoice: billed and invoice_id",
+                    GROUP,
+                ),
+                CommandDef::new(
+                    "create_invoice",
+                    "Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer (customer, else the project's) at hourly_rate_minor (else the project's hourly rate); one line per entry, or per task with per=task. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post",
+                    GROUP,
+                ),
+            ],
             ext: Default::default(),
         }],
         ..Module::default()
@@ -99,12 +113,15 @@ pub struct Input {
     pub to: String,
     pub hourly_rate_minor: Option<i64>,
     pub currency: String,
+    /// One line per task instead of per entry.
+    pub per_task: bool,
 }
 
 /// One planned invoice line.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
-    pub entry_id: String,
+    /// The time entries the line bills (one, or every entry of a task).
+    pub entry_ids: Vec<String>,
     pub description: String,
     pub minutes: i64,
     pub amount: i64,
@@ -169,25 +186,46 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
             format!("cannot read {m}: {e} (are the invoicing module and the projects and timesheets packages installed?)")
         })
     };
-    let rate = i
-        .hourly_rate_minor
-        .ok_or("hourly_rate_minor is required (the price of one hour in minor currency units)")?;
-    if rate <= 0 {
-        return Err("hourly_rate_minor must be greater than zero".into());
-    }
     if crate::sie::from_iso(&i.from).is_none() || crate::sie::from_iso(&i.to).is_none() {
         return Err("from and to are required as YYYY-MM-DD".into());
     }
     if i.from > i.to {
         return Err("from is after to".into());
     }
-    let (party_id, _) = pick(&list("party")?, "customer", &i.customer, &["name"])?;
-    let (pid, _) = pick(
+    let (pid, project) = pick(
         &list("projects_project")?,
         "project",
         &i.project,
         &["code", "name"],
     )?;
+    // The project's customer and rate stand in for what the call leaves out (projects 0.6.0).
+    let rate = i
+        .hourly_rate_minor
+        .or_else(|| project.get("hourly_rate").and_then(J::as_i64))
+        .ok_or("hourly_rate_minor is required (the price of one hour in minor currency units), or set the project's hourly rate")?;
+    // The project's rate is a money field of the instance currency: it is not billed as another.
+    let home = env.d.currency();
+    if i.hourly_rate_minor.is_none() && !i.currency.is_empty() && i.currency != home {
+        return Err(format!(
+            "the project's hourly rate is in the instance currency {home}; to bill in {} give hourly_rate_minor",
+            i.currency
+        ));
+    }
+    if rate <= 0 {
+        return Err("hourly_rate_minor must be greater than zero".into());
+    }
+    let customer = if i.customer.is_empty() {
+        text(&project, "customer_id")
+    } else {
+        i.customer.clone()
+    };
+    if customer.is_empty() {
+        return Err(
+            "customer is required (the id or the name of a contact), or set the project's customer"
+                .into(),
+        );
+    }
+    let (party_id, _) = pick(&list("party")?, "customer", &customer, &["name"])?;
     let tasks: HashMap<String, String> = list("projects_task")?
         .into_iter()
         .filter(|(_, f)| text(f, "project_id") == pid)
@@ -224,7 +262,9 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
         );
     }
     entries.sort_by(|(ia, a), (ib, b)| (text(a, "worked_on"), ia).cmp(&(text(b, "worked_on"), ib)));
-    let mut lines = Vec::new();
+    let mut lines: Vec<Line> = Vec::new();
+    // Per task: the task's line, by its id, in the order of its first entry.
+    let mut of_task: HashMap<String, usize> = HashMap::new();
     for (id, f) in entries {
         let minutes = f.get("minutes").and_then(J::as_i64).unwrap_or(0);
         if minutes <= 0 {
@@ -232,7 +272,26 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
                 "time entry {id} has no positive minutes; fix or reject it first"
             ));
         }
-        let title = tasks.get(&text(&f, "task_id")).cloned().unwrap_or_default();
+        let task = text(&f, "task_id");
+        let title = tasks.get(&task).cloned().unwrap_or_default();
+        if i.per_task {
+            let n = *of_task.entry(task).or_insert_with(|| {
+                lines.push(Line {
+                    entry_ids: Vec::new(),
+                    description: title.clone(),
+                    minutes: 0,
+                    amount: 0,
+                });
+                lines.len() - 1
+            });
+            let l = &mut lines[n];
+            l.entry_ids.push(id);
+            l.minutes = l
+                .minutes
+                .checked_add(minutes)
+                .ok_or("the minutes overflow")?;
+            continue;
+        }
         let mut d = format!(
             "{title} {}: {} h",
             text(&f, "worked_on"),
@@ -243,11 +302,24 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
             d = format!("{d}, {note}");
         }
         lines.push(Line {
-            entry_id: id,
+            entry_ids: vec![id],
             description: d,
             minutes,
             amount: amount_of(minutes, rate)?,
         });
+    }
+    if i.per_task {
+        // A task's minutes are priced once: the line is its hours times the rate.
+        for l in &mut lines {
+            l.amount = amount_of(l.minutes, rate)?;
+            let n = l.entry_ids.len();
+            l.description = format!(
+                "{}: {} h ({n} {})",
+                l.description,
+                hours_of(l.minutes)?,
+                if n == 1 { "entry" } else { "entries" }
+            );
+        }
     }
     let minutes = lines
         .iter()
@@ -261,7 +333,7 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
         return Err("the total is zero; nothing to bill".into());
     }
     let currency = if i.currency.is_empty() {
-        "SEK".to_string()
+        env.d.currency()
     } else {
         i.currency.clone()
     };
@@ -312,21 +384,65 @@ pub fn create_invoice(
             "the invoice lines were refused, the draft invoice {iid} was cancelled: {e}"
         ));
     }
-    for l in &pl.lines {
-        env.store.insert(
-            MODEL,
-            [
-                ("entry_id".to_string(), Value::text(&l.entry_id)),
-                ("invoice_id".to_string(), Value::text(&iid)),
-            ]
-            .into(),
-        )?;
+    // One link per entry, keyed by the entry and written in one batch: an entry that another run
+    // billed in the meantime refuses the whole batch, and this run's draft invoice is cancelled.
+    let ops: Vec<obop_storage::Op> = pl
+        .lines
+        .iter()
+        .flat_map(|l| &l.entry_ids)
+        .map(|entry| {
+            let mut f = obop_storage::Fields::new();
+            f.insert("entry_id".into(), J::from(entry.as_str()));
+            f.insert("invoice_id".into(), J::from(iid.as_str()));
+            obop_storage::Op::Insert {
+                model: MODEL.into(),
+                id: entry.clone(),
+                fields: f,
+            }
+        })
+        .collect();
+    if let Err(e) = env.store.backend().apply(&ops) {
+        let _ = call(env, p, "invoice.cancel", json!({"id": iid}));
+        return Err(format!(
+            "an entry was billed by another run meanwhile, so the draft invoice {iid} was cancelled and nothing is billed twice: {e}"
+        ));
     }
     Ok((pl, Some(iid)))
 }
 
 pub fn register(d: &Arc<Dispatcher>, store: &Store) {
     let m = module();
+    let st = store.clone();
+    d.register(
+        &m,
+        MODEL,
+        "get",
+        Box::new(move |input| {
+            let entry = match input {
+                Value::Map(x) => match x.get("entry").or_else(|| x.get("id")) {
+                    Some(Value::Text(t)) => t.to_string(),
+                    _ => String::new(),
+                },
+                _ => String::new(),
+            };
+            if entry.is_empty() {
+                return Err("entry is required: the id of the time entry".into());
+            }
+            let rows = st.backend().list(MODEL).map_err(|e| e.to_string())?;
+            let invoice = rows
+                .iter()
+                .find(|(_, f)| f.get("entry_id").and_then(J::as_str) == Some(entry.as_str()))
+                .and_then(|(_, f)| f.get("invoice_id").and_then(J::as_str))
+                .unwrap_or_default()
+                .to_string();
+            Ok(Value::map([
+                ("id", Value::text(&entry)),
+                ("entry_id", Value::text(&entry)),
+                ("billed", Value::Bool(!invoice.is_empty())),
+                ("invoice_id", Value::text(&invoice)),
+            ]))
+        }),
+    );
     let (weak, st): (Weak<Dispatcher>, Store) = (Arc::downgrade(d), store.clone());
     d.register_with_actor(
         &m,
@@ -347,7 +463,17 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             }
             let rate = match map.get("hourly_rate_minor") {
                 Some(Value::Int(n)) => Some(*n),
+                Some(Value::Text(t)) if t.trim().parse::<i64>().is_ok() => t.trim().parse().ok(),
                 _ => None,
+            };
+            let per_task = match s("per").as_str() {
+                "" | "entry" => false,
+                "task" => true,
+                other => {
+                    return Err(format!(
+                        "per must be entry or task, not {other:?}; nothing was billed"
+                    ));
+                }
             };
             let groups: Vec<&str> = a.groups.iter().map(String::as_str).collect();
             let p = Principal::user(&a.caller, &groups);
@@ -359,6 +485,7 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 to: s("to"),
                 hourly_rate_minor: rate,
                 currency: s("currency"),
+                per_task,
             };
             let (pl, iid) = create_invoice(Env { d: &d, store: &st }, &p, &inp, dry)?;
             let lines = pl
@@ -375,7 +502,10 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             let mut out = vec![
                 ("ok", Value::Bool(true)),
                 ("written", Value::Bool(!dry)),
-                ("entries", Value::Int(pl.lines.len() as i64)),
+                (
+                    "entries",
+                    Value::Int(pl.lines.iter().map(|l| l.entry_ids.len() as i64).sum()),
+                ),
                 ("minutes", Value::Int(pl.minutes)),
                 ("hours", Value::text(&hours_of(pl.minutes)?.to_string())),
                 ("net", Value::Int(pl.net)),

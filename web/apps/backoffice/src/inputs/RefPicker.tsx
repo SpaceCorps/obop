@@ -6,8 +6,10 @@
 // searched on the server. 'Create "x"' makes a record from the typed name; "Create and edit…"
 // opens the target's full form above and picks what it saved. Picking applies `fill_from`.
 import {
+  createContext,
   lazy,
   Suspense,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -120,6 +122,12 @@ function archivedMatches(
   ).length;
 }
 
+/**
+ * What a person typed before "Create and edit…" opened the full form of a record that is named by
+ * a ref (a vendor by its contact): the picker of that ref starts with it as its search (Q20).
+ */
+const StartQuery = createContext<{ model: string; field: string; text: string } | null>(null);
+
 /** The text field that names a record of `model` (its title), if one does. */
 function textTitleOf(model: ModelMeta): string | undefined {
   return titleFieldsOf(model)
@@ -137,12 +145,20 @@ export function RefPicker(p: RefPickerProps) {
   const moduleId = info?.module.id ?? "";
   const targetTitle = target ? modelTitle(target, moduleId) : to.replace(/_/g, " ");
   const { rows, loaded, total } = useRows(to, !!target);
-  const [query, setQuery] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  const start = useContext(StartQuery);
+  const startHere =
+    !!start && start.field === field.name && start.model === form?.model.name && !value;
+  const [query, setQuery] = useState<string | null>(startHere ? start.text : null);
+  const [open, setOpen] = useState(startHere);
   const [active, setActive] = useState(0);
   const [showAll, setShowAll] = useState(false);
   const [remote, setRemote] = useState<{ q: string; rows: Row[] } | null>(null);
   const [stacked, setStacked] = useState<Record<string, unknown> | null>(null);
+  const [stackedQuery, setStackedQuery] = useState<{
+    model: string;
+    field: string;
+    text: string;
+  } | null>(null);
   const [making, setMaking] = useState(false);
   const listId = useId();
   const box = useRef<HTMLDivElement>(null);
@@ -306,15 +322,15 @@ export function RefPicker(p: RefPickerProps) {
 
   useAnchored(open, input, pop, { maxHeight: 320, minWidth: 240 });
 
+  // The person may not read the records this field points to: say so in words, not with a box
+  // for a raw id nobody knows (Q20).
   if (!target)
     return (
-      <input
-        id={p.id}
-        value={current}
-        readOnly={readOnly}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={t("{model} id", { model: to })}
-      />
+      <p id={p.id} className="hint rp-unreadable">
+        {current
+          ? t("Set, but you may not see the record it points to")
+          : t("You may not see these records, so someone who can must choose one")}
+      </p>
     );
 
   function close() {
@@ -459,6 +475,7 @@ export function RefPicker(p: RefPickerProps) {
   }
 
   function openStacked(text: string) {
+    setStackedQuery(viaRef && text ? { model: to, field: viaRef.field, text } : null);
     setStacked(startValues(text));
     setOpen(false);
   }
@@ -641,22 +658,24 @@ export function RefPicker(p: RefPickerProps) {
           onClose={() => setStacked(null)}
         >
           <Suspense fallback={<p className="hint">{t("Loading…")}</p>}>
-            <RecordPanel
-              model={target}
-              fields={visibleFields(target.fields)}
-              row={null}
-              defaults={stacked}
-              withheld={[]}
-              title={targetTitle}
-              onClose={() => setStacked(null)}
-              onSaved={(id) => {
-                setStacked(null);
-                pick(id);
-                // Focus moves on to the next field of the form, not back into this list.
-                const next = nextFocusable(input.current);
-                (next ?? input.current)?.focus();
-              }}
-            />
+            <StartQuery.Provider value={stackedQuery}>
+              <RecordPanel
+                model={target}
+                fields={visibleFields(target.fields)}
+                row={null}
+                defaults={stacked}
+                withheld={[]}
+                title={targetTitle}
+                onClose={() => setStacked(null)}
+                onSaved={(id) => {
+                  setStacked(null);
+                  pick(id);
+                  // Focus moves on to the next field of the form, not back into this list.
+                  const next = nextFocusable(input.current);
+                  (next ?? input.current)?.focus();
+                }}
+              />
+            </StartQuery.Provider>
           </Suspense>
         </Dialog>
       )}

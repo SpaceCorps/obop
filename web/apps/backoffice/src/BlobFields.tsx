@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type DragEvent } from "react";
-import { t } from "@obop/ui";
+import { t, useWorded } from "@obop/ui";
 import type { FieldMeta } from "./api.ts";
 import {
   FILE_ACCEPT,
@@ -14,6 +14,7 @@ import {
 } from "./blobs.ts";
 import { useData } from "./data.tsx";
 import { loadPreview, type Preview } from "./filePreview.ts";
+import { useFieldForm } from "./inputs/form.ts";
 import { fieldTitle } from "./labels.ts";
 import { Icon } from "./ui.tsx";
 
@@ -90,9 +91,14 @@ export function BlobThumb({
   );
 }
 
-/** A file in a list or a card: a button that downloads it. */
-export function FileChip({ id, field }: { id: string; field: FieldMeta }) {
+/**
+ * A file in a list or a card: a button that downloads it. `record` is the id of the record that
+ * holds it, when known: the download is then named as that record holds the file (K55).
+ */
+export function FileChip({ id, field, record }: { id: string; field: FieldMeta; record?: string }) {
   const d = useData();
+  const from =
+    record && field.model ? { model: field.model, record, field: field.name } : undefined;
   const [state, setState] = useState<"idle" | "busy" | "failed">("idle");
   return (
     <button
@@ -103,7 +109,7 @@ export function FileChip({ id, field }: { id: string; field: FieldMeta }) {
       onClick={async (e) => {
         e.stopPropagation();
         setState("busy");
-        const ok = await saveBlob(d.token, id, fieldTitle(field));
+        const ok = await saveBlob(d.token, id, fieldTitle(field), from);
         setState(ok ? "idle" : "failed");
         if (!ok) d.notify(t("Could not download the file."), "error");
       }}
@@ -219,12 +225,16 @@ type BlobInputProps = {
 export function BlobInput(p: BlobInputProps) {
   const { field: f, value, onChange, readOnly } = p;
   const d = useData();
+  const form = useFieldForm();
+  // The saved record this input edits, when it holds this field: it names a download (K55).
+  const record = form?.model.name === f.model ? form.record : undefined;
   const isImage = f.kind === "image";
   const max = f.max_bytes ?? (isImage ? 5 * 1024 * 1024 : 25 * 1024 * 1024);
   const input = useRef<HTMLInputElement>(null);
   const job = useRef<Upload | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
-  const [error, setError] = useState("");
+  const [errorWorded, setError] = useWorded();
+  const error = errorWorded ?? "";
   const [over, setOver] = useState(false);
   const hintId = useId();
 
@@ -234,12 +244,12 @@ export function BlobInput(p: BlobInputProps) {
     if (!file || readOnly) return;
     setError("");
     if (isImage && !IMAGE_TYPES.includes(file.type)) {
-      return setError(t("Use a PNG, JPEG, WebP or GIF image. SVG files are not accepted."));
+      return setError(() => t("Use a PNG, JPEG, WebP or GIF image. SVG files are not accepted."));
     }
     if (file.size > max) {
-      return setError(t("This file is larger than {size}.", { size: formatBytes(max) }));
+      return setError(() => t("This file is larger than {size}.", { size: formatBytes(max) }));
     }
-    if (!f.model) return setError(t("This field cannot take uploads."));
+    if (!f.model) return setError(() => t("This field cannot take uploads."));
     setProgress(0);
     const up = uploadBlob(d.token, `${f.model}.${f.name}`, file, setProgress);
     job.current = up;
@@ -253,13 +263,13 @@ export function BlobInput(p: BlobInputProps) {
     } else if (r.status === -1) {
       // cancelled
     } else if (r.status === 413) {
-      setError(t("This file is larger than {size}.", { size: formatBytes(max) }));
+      setError(() => t("This file is larger than {size}.", { size: formatBytes(max) }));
     } else if (r.status === 429) {
-      setError(t("Too many uploads. Please wait a few minutes."));
+      setError(() => t("Too many uploads. Please wait a few minutes."));
     } else if (r.status === 0) {
-      setError(t("The upload did not go through. Check your connection and try again."));
+      setError(() => t("The upload did not go through. Check your connection and try again."));
     } else {
-      setError(r.error || t("The upload was refused."));
+      setError(() => r.error || t("The upload was refused."));
     }
   }
 
@@ -386,7 +396,11 @@ export function BlobInput(p: BlobInputProps) {
   return (
     <div className="blobfield" data-over={over || undefined} {...drop}>
       <div className="blobrow">
-        {value ? <FileChip id={value} field={f} /> : <span className="dim">{t("No file")}</span>}
+        {value ? (
+          <FileChip id={value} field={f} record={record} />
+        ) : (
+          <span className="dim">{t("No file")}</span>
+        )}
         {!readOnly && (
           <div className="blobactions">
             <button

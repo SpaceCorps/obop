@@ -113,18 +113,19 @@ const CONST_WORDS: [&str; 3] = ["TABLE", "MODEL", "COLLECTION"];
 /// gap: docs/ISSUES.md N17 says so). Adding a name here is the decision that it is a bundled
 /// package's model and not a table of the program; the test below checks that a bundled package
 /// does declare it and that no module of the `App` and no reserved list has it.
-const BUNDLED_MODELS: [&str; 34] = [
+const BUNDLED_MODELS: [&str; 40] = [
     "accounting_account",
+    "accounting_bank_statement_line",
     "accounting_fiscal_year",
     "accounting_journal",
     "accounting_move",
     "accounting_move_line",
+    "accounting_period",
     "accounting_se_company",
     "accounting_se_vat_box",
     "accounting_se_vat_code",
     "accounting_se_vat_report",
     "accounting_se_vat_report_line",
-    "accounting_tax",
     "documents_document",
     "ecommerce_category",
     "ecommerce_discount_code",
@@ -137,6 +138,11 @@ const BUNDLED_MODELS: [&str; 34] = [
     "ecommerce_payment",
     "ecommerce_shipping_method",
     "ecommerce_tax_rate",
+    "expenses_expense",
+    "pos_config",
+    "pos_order",
+    "pos_payment",
+    "pos_session",
     "projects_project",
     "projects_task",
     "sign_link",
@@ -152,7 +158,8 @@ const BUNDLED_MODELS: [&str; 34] = [
 
 /// Names the scan finds in a place where a table goes that are no table. `show_history` is the field
 /// of a signing request, read with `req.get(HISTORY_FLAG)`: a map lookup with one argument, which the
-/// storage's `Tracking::get(model)` has too, so the scan cannot tell them apart. The other six are
+/// storage's `Tracking::get(model)` has too, so the scan cannot tell them apart; so is
+/// `allow_self_approval`, the expense setting read with `x.get(KEY)`. The other six are
 /// the tables of an imported accounting file (the Open Accounting Schema import keeps a ledger of what
 /// it has imported, by its own table and the id in the file: `cx.done("voucher", ..)`, with a
 /// parameter called `table`); they are no table of the database. `swap` is the label that the
@@ -163,8 +170,9 @@ const BUNDLED_MODELS: [&str; 34] = [
 /// is the switch of the instance's brand, a field of its row, read with `row.get(SWITCH)` (S2). Adding
 /// a name here says it is no table; a name that the scan no longer finds is a failure, like the other
 /// lists.
-const NOT_TABLES: [&str; 9] = [
+const NOT_TABLES: [&str; 10] = [
     "account",
+    "allow_self_approval",
     "company",
     "customer",
     "document",

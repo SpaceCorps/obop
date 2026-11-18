@@ -3,6 +3,7 @@
   "App",
   "Beta",
   "DD",
+  "Deadline",
   "Dimension",
   "Filter",
   "Google Drive",
@@ -13,6 +14,7 @@
   "Passkeys",
   "Policy",
   "Problem",
+  "Start",
   "Status",
   "System",
   "Text",
@@ -24,6 +26,7 @@
   "field\u0004Order",
   "field\u0004Partner",
   "field\u0004Plan",
+  "km",
   "model\u0004Lead",
   "model\u0004Order",
   "model\u0004Period",
@@ -40,5 +43,7 @@
   "{field} ≤ {to}",
   "{field} ≥ {from}",
   "{minutes} min",
-  "{quantity} × {price}"
+  "{m} min",
+  "{quantity} × {price}",
+  "08:00"
 ]

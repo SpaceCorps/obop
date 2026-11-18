@@ -8,7 +8,7 @@ starts a fresh instance (new temp directory, new SQLite files, free ports) and r
 From the repository root, build what is under test once, then run the suite:
 
 ```sh
-cargo build                              # target/debug/obop (or point OBOP_BIN at another binary)
+cargo build                              # target/debug/obop, obop.exe on Windows (or point OBOP_BIN at another binary)
 (cd web/apps/backoffice && vp build)     # web/apps/backoffice/dist
 (cd web/apps/backoffice && OBOP_ADMIN_BASE=/admin/ vp build --outDir dist-admin)  # the same for /admin/ (the shop and brand specs)
 deploy/build-site.sh                     # web/site: the website + sign-up app

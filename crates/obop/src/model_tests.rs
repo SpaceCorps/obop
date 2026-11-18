@@ -665,6 +665,22 @@ fn timesheets_are_private_to_their_worker() {
     assert_eq!(get(&app, &ann, "timesheets_entry", &ea)["worker"], "ann");
     assert_eq!(list(&app, &ann, "timesheets_entry").len(), 1);
     assert_eq!(list(&app, &manager, "timesheets_entry").len(), 2);
+    // The meta tells each caller whether they see everyone's entries, so the week grid offers
+    // Mine / Everyone only where Everyone shows more.
+    let sees_all = |p: &Principal| {
+        let meta = obop_mcp::meta_json(&app.dispatcher, Surface::Rest, p);
+        meta["modules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|m| m["models"].as_array().unwrap())
+            .find(|m| m["name"] == "timesheets_entry")
+            .unwrap()["access"]["sees_all"]
+            .clone()
+    };
+    assert_eq!(sees_all(&ann), json!(false));
+    assert_eq!(sees_all(&manager), json!(true));
+    assert_eq!(sees_all(&admin()), json!(true));
 }
 
 /// Approving or refusing an expense claim and approving or rejecting a time entry are steps an

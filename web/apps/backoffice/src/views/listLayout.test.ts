@@ -22,6 +22,7 @@ import {
   listSummable,
   nextSort,
   trimColumns,
+  canSortBy,
 } from "./listLayout.ts";
 
 beforeEach(async () => {
@@ -232,6 +233,33 @@ describe("the widths of the columns", () => {
     // The person's own columns are never dropped (the table scrolls instead).
     expect(fitColumns(ranked, Infinity, head, "state").cols).toHaveLength(ranked.length);
   });
+
+  it("beside a record panel, give the title the room and keep the status in view (R7)", () => {
+    const states = { governed: true } as const;
+    // Time off: the employee and the dates are the title, then the working days and the status.
+    const leave = [
+      f("employee_id", "ref", { to: "hr_employee" }),
+      f("working_days", "number"),
+      f("state", "select", { options: ["draft", "requested", "approved", "refused"], ...states }),
+    ];
+    const l = fitColumns(leave, 560, head, "state", leave[1]);
+    expect(l.widths.reduce((a, b) => a + b, 52)).toBeLessThanOrEqual(560);
+    // The title gets what the number and the badge do not need.
+    expect(l.widths[0]).toBeGreaterThanOrEqual(240);
+    expect(l.widths[2]).toBeLessThan(140);
+    // Trips: a long title, the distance and five states; nothing more can be dropped.
+    const trips = [
+      f("driver", "text"),
+      f("distance_m", "decimal"),
+      f("state", "select", {
+        options: ["recording", "ended", "in_review", "confirmed", "discarded"],
+        ...states,
+      }),
+    ];
+    const t = fitColumns(trips, 560, head, "state", trips[1]);
+    expect(names(t.cols)).toEqual(["driver", "distance_m", "state"]);
+    expect(t.widths.reduce((a, b) => a + b, 52)).toBeLessThanOrEqual(560);
+  });
 });
 
 describe("cells that edit in place", () => {
@@ -266,6 +294,26 @@ describe("deadlines", () => {
     const today = "2026-11-15";
     expect(dueLevel(inv, due, row({ due_on: "2026-01-01", state: "paid" }), today)).toBeNull();
     expect(dueLevel(inv, due, row({ due_on: "2026-01-01", state: "cancelled" }), today)).toBeNull();
+  });
+
+  it("keep warning on a record in force when the field asks for it (an expiring permit)", () => {
+    const today = "2026-11-15";
+    const permit = f("work_permit_expiry", "date", { ui: { warn_before_days: 60 } });
+    const emp = model("hr_employee", [
+      permit,
+      f("state", "select", { options: ["onboarding", "active", "offboarded"], governed: true }),
+    ]);
+    const at = (d: string, s: string) => row({ work_permit_expiry: d, state: s });
+    expect(dueLevel(emp, permit, at("2026-12-20", "active"), today)).toBe("soon");
+    expect(dueLevel(emp, permit, at("2026-11-01", "active"), today)).toBe("past");
+    expect(dueLevel(emp, permit, at("2026-11-01", "offboarded"), today)).toBeNull();
+    // A finished record (done, paid) still ends the warning, hint or not.
+    const hinted = f("due_on", "date", { ui: { warn_before_days: 7 } });
+    const task = model("task", [
+      hinted,
+      f("state", "select", { options: ["todo", "done"], governed: true }),
+    ]);
+    expect(dueLevel(task, hinted, row({ due_on: "2026-11-01", state: "done" }), today)).toBeNull();
   });
 
   it("compare an instant with now", () => {
@@ -310,8 +358,9 @@ describe("the default order", () => {
     expect(listOrder({ ...expense, ui: { order: "spent_on desc" } }, noDate)).toEqual([
       { field: "id", dir: "desc" },
     ]);
+    // An agent reads the name masked (meta `masked`): the server would refuse that sort.
     const secret = model("hr_employee", [
-      f("name", "text", { required: true, personal_data: true }),
+      f("name", "text", { required: true, personal_data: true, masked: true }),
     ]);
     expect(listOrder(secret, secret.fields)).toEqual([{ field: "id", dir: "desc" }]);
   });
@@ -395,5 +444,39 @@ describe("the totals and the order of rows in the browser (query.ts)", () => {
       sortRows(rows, { f: "spent_on", dir: "asc" }, [date], lk, order).map((r) => r.id),
     ).toEqual(["01", "03", "04", "02"]);
     expect(sortRows(rows, undefined, [date], lk)).toBe(rows);
+  });
+});
+
+describe("what a list may be sorted by (#89, R13)", () => {
+  const trip = model(
+    "mileage_trip",
+    [
+      f("driver", "text", { required: true }),
+      f("started_at", "datetime", { class: "confidential_hr", personal_data: true }),
+      f("photo", "image"),
+      f("receipt", "file"),
+    ],
+    { ui: { order: "started_at desc" } },
+  );
+  it("never by a picture or a file, a masked value or a secret", () => {
+    const by = (name: string) => trip.fields.find((x) => x.name === name)!;
+    expect(canSortBy(by("photo"))).toBe(false);
+    expect(canSortBy(by("receipt"))).toBe(false);
+    expect(canSortBy(by("started_at"))).toBe(true);
+    expect(canSortBy({ ...by("started_at"), masked: true })).toBe(false);
+    expect(canSortBy(f("pin", "text", { class: "secret" }))).toBe(false);
+  });
+  it("the trip queue is in trip order for a person, who reads personal data in clear", () => {
+    expect(listOrder(trip, trip.fields)).toEqual([{ field: "started_at", dir: "desc" }]);
+    const agent = trip.fields.map((x) => (x.personal_data ? { ...x, masked: true } : x));
+    expect(listOrder(trip, agent)).toEqual([{ field: "id", dir: "desc" }]);
+  });
+  it("a saved or linked sort on a picture is ignored, on the server too", () => {
+    const sort = { f: "photo", dir: "asc" as const };
+    const fallback = listOrder(trip, trip.fields);
+    expect(effectiveOrder(trip, trip.fields, sort)).toEqual(fallback);
+    expect(toServer({ facets: [], group: [], sort }, trip.fields, fallback).order).toEqual(
+      fallback,
+    );
   });
 });

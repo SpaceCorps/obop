@@ -447,6 +447,14 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                                 "governed": f.governed, "computed": f.computed,
                                 "unique": f.unique, "sequence": f.sequence,
                             });
+                            // This caller does not read the field in clear (an agent and personal
+                            // data or a sensitive class, D40), so it may not filter or sort by it
+                            // (`query_guard`); a person reads it in clear and may (R13).
+                            if p.kind == obop_commands::PrincipalKind::Agent
+                                && (f.personal_data || schema::withheld_from_agents(f.class))
+                            {
+                                o["masked"] = json!(true);
+                            }
                             if f.kind == "select" {
                                 o["options"] = json!(f.options);
                             }
@@ -472,6 +480,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             }
                             if let Some(b) = f.max {
                                 o["max"] = schema::bound_json(b);
+                            }
+                            if let Some(p) = f.pattern {
+                                o["pattern"] = json!(p);
                             }
                             if f.kind == "decimal" {
                                 o["precision"] = json!(f.precision);
@@ -514,6 +525,7 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                         o["access"] = json!({
                             "own": a.own, "via": a.via, "public_field": a.public_field,
                             "shared_with": a.shared_with, "see_all_group": a.see_all,
+                            "sees_all": a.sees_all,
                         });
                     }
                     ui::model_hints(&mut o, x);

@@ -14,6 +14,7 @@
   "app\u0004Helpdesk",
   "field\u0004Folder",
   "field\u0004Plan",
+  "km",
   "model\u0004Folder",
   "model\u0004Lead",
   "model\u0004Plan",
@@ -24,5 +25,7 @@
   "{field} ≤ {to}",
   "{field} ≥ {from}",
   "{minutes} min",
-  "{quantity} × {price}"
+  "{m} min",
+  "{quantity} × {price}",
+  "08:00"
 ]

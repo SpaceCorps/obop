@@ -109,7 +109,8 @@ pub struct Meta {
 pub struct MigrationM {
     /// The installed versions the step applies to, a requirement such as `<0.4`.
     pub from: String,
-    /// `rename_field`, `set_default`, `drop_field` or `reformat_field`.
+    /// `rename_field`, `set_default`, `drop_field`, `reformat_field`, `fill_from` or
+    /// `link_by_name`.
     pub op: String,
     pub model: String,
     /// The field: the old name for `rename_field`, the field filled for `set_default`, the field
@@ -122,6 +123,10 @@ pub struct MigrationM {
     /// `drop_field`: must be `true`, because the values are deleted.
     #[serde(default)]
     pub confirm: bool,
+    /// `fill_from`: where the value comes from, `ref.field` (a ref of this model and a field of
+    /// the record it points at), as a field's `fill_from` says it. `link_by_name`: the text field
+    /// of this model whose value is matched against the `name` of the record the ref points at.
+    pub source: Option<String>,
     /// A sentence for the plan the administrator confirms.
     #[serde(default)]
     pub description: String,
@@ -159,6 +164,46 @@ pub struct ModelM {
     /// `[model.guard]` (D77, command-layer check): when records are frozen and what may still
     /// change.
     pub guard: Option<GuardM>,
+    /// `[[model.rule]]` (D88, own fields): conditions every write keeps true.
+    #[serde(default)]
+    pub rule: Vec<RuleM>,
+    /// `[model.no_overlap]` (D88 amendment): no two records of one key with overlapping times.
+    pub no_overlap: Option<NoOverlapM>,
+}
+
+/// `[[model.rule]]` (D88).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuleM {
+    pub key: String,
+    pub expr: String,
+    pub message: String,
+    /// `touched` (the default) or `always`.
+    pub applies: Option<String>,
+}
+
+/// `[model.no_overlap]` (D88 amendment of 2026-11-17).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NoOverlapM {
+    /// The rule key: `assert_key` of a refusal and the label slot `rule.<key>`.
+    pub rule: String,
+    /// The fields two records share to clash, such as `["resource_id", "day"]`; empty (`[]`):
+    /// every record of the model is compared with every other (fiscal years).
+    pub key: Vec<String>,
+    pub start: String,
+    pub end: String,
+    /// U9: the end is the last day (or number) of the interval, not the first after it.
+    #[serde(default)]
+    pub inclusive_end: bool,
+    /// The select field `ignore_states` names options of; `state` when absent.
+    pub state_field: Option<String>,
+    #[serde(default)]
+    pub ignore_states: Vec<String>,
+    /// `<ref field of key>.<number field>`: how many records of one key may overlap at once
+    /// (`resource_id.capacity`); 1 when absent.
+    pub capacity: Option<String>,
+    pub message: String,
 }
 
 /// `[model.guard]` (D77).
@@ -238,6 +283,7 @@ pub struct ModelUiM {
     pub section: Vec<SectionM>,
     #[serde(default)]
     pub filter: Vec<FilterM>,
+    pub default_filter: Option<String>,
     pub public_url: Option<String>,
 }
 
@@ -301,6 +347,7 @@ pub struct FieldUiM {
     #[serde(default)]
     pub hidden: bool,
     pub currency_from: Option<String>,
+    pub readonly_when: Option<String>,
 }
 
 /// `[model.action.ui]` (D95).
@@ -483,6 +530,9 @@ pub struct FieldM {
     pub ref_filter: Option<String>,
     /// `[model.field.ui]` (D95).
     pub ui: Option<FieldUiM>,
+    /// `kind = "text"` (K45): a named format every written value must have:
+    /// `"currency_code"`, `"iban"` or `"vat_id"`.
+    pub pattern: Option<String>,
 }
 
 /// The registry kind of a manifest field (`sequence` is a text field that is numbered).
@@ -553,11 +603,38 @@ fn bound_of(key: &str, v: &toml::Value, f: &FieldM) -> Result<Bound, String> {
         ("decimal", _) => Err(format!(
             "`{key}` of a decimal field must be a string such as \"0.10\""
         )),
+        // A day, as a string or a TOML local date (`min = 1900-01-01`).
+        ("date", T::String(_) | T::Datetime(_)) => {
+            let text = match v {
+                T::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            Bound::date(&text).ok_or_else(|| {
+                format!("`{key}` {text:?} of a date field must be a real day written as YYYY-MM-DD")
+            })
+        }
+        ("date", _) => Err(format!(
+            "`{key}` of a date field must be a day such as \"1900-01-01\""
+        )),
         _ => Err(format!(
-            "`min` and `max` are only valid for kind \"number\", \"money\" or \"decimal\", not {:?}",
+            "`min` and `max` are only valid for kind \"number\", \"money\", \"decimal\" or \"date\", not {:?}",
             f.kind
         )),
     }
+}
+
+/// The named format of a text field (K45), parsed; whether the kind takes one is the gate's.
+fn pattern_of(f: &FieldM) -> Result<Option<obop_registry::Pattern>, String> {
+    f.pattern
+        .as_deref()
+        .map(|p| {
+            obop_registry::Pattern::parse(p).ok_or_else(|| {
+                format!(
+                    "`pattern` {p:?} is not a known format; use \"currency_code\", \"iban\" or \"vat_id\""
+                )
+            })
+        })
+        .transpose()
 }
 
 /// The limits a field declares (D90), parsed; their meaning (which kind they fit, `min` above
@@ -568,6 +645,7 @@ fn limits_of(f: &FieldM) -> Result<Limits, String> {
         max_length: f.max_length,
         min: f.min.as_ref().map(|v| bound_of("min", v, f)).transpose()?,
         max: f.max.as_ref().map(|v| bound_of("max", v, f)).transpose()?,
+        pattern: pattern_of(f)?,
     })
 }
 
@@ -886,6 +964,18 @@ impl Manifest {
                                 })
                                 .collect(),
                             guard_message: m.guard.as_ref().is_some_and(|g| g.message.is_some()),
+                            rules: m
+                                .rule
+                                .iter()
+                                .map(|r| r.key.clone())
+                                .chain(m.no_overlap.iter().map(|n| n.rule.clone()))
+                                .collect(),
+                            filters: m
+                                .ui
+                                .iter()
+                                .flat_map(|u| &u.filter)
+                                .map(|f| obop_registry::labels::filter_key(&f.label))
+                                .collect(),
                         },
                     )
                 })
@@ -1089,9 +1179,11 @@ impl Manifest {
                             st.model
                         ));
                     }
-                    if exists(&st.field).is_some() {
+                    // A field that became computed keeps no stored value of its own (the computed
+                    // value is read instead), so its old stored values may move to a new field.
+                    if exists(&st.field).is_some_and(|f| f.computed.is_none()) {
                         return Err(format!(
-                            "{at}: {} is still a field of {} in this version, so it is not renamed away",
+                            "{at}: {} is still a stored field of {} in this version, so it is not renamed away",
                             st.field, st.model
                         ));
                     }
@@ -1155,11 +1247,82 @@ impl Manifest {
                         return Err(format!("{at}: reformat_field takes no other key"));
                     }
                 }
+                "fill_from" => {
+                    // Q8: the value a field's `fill_from` gives a new record, for the records made
+                    // before the field had it: copied through a ref, never over a value.
+                    let Some(f) = exists(&st.field) else {
+                        return Err(format!(
+                            "{at}: {} is not a field of {} in this version",
+                            st.field, st.model
+                        ));
+                    };
+                    let Some((via, from)) = st.source.as_deref().and_then(|s| s.split_once('.'))
+                    else {
+                        return Err(format!(
+                            "{at}: fill_from needs `source = \"ref.field\"`, the ref of {} and the field of the record it points at",
+                            st.model
+                        ));
+                    };
+                    let Some(r) = exists(via).filter(|r| r.kind == "ref") else {
+                        return Err(format!("{at}: {via} is not a ref field of {}", st.model));
+                    };
+                    if let Some(target) = self.model.iter().find(|m| Some(&m.name) == r.to.as_ref())
+                    {
+                        let Some(src) = target.field.iter().find(|x| x.name == from) else {
+                            return Err(format!("{at}: {from} is not a field of {}", target.name));
+                        };
+                        if src.kind != f.kind || src.to != f.to {
+                            return Err(format!(
+                                "{at}: {}.{from} is a {} and {} is a {}; the kinds must be the same",
+                                target.name, src.kind, st.field, f.kind
+                            ));
+                        }
+                    }
+                    if f.computed.is_some() || st.to.is_some() || st.value.is_some() || st.confirm {
+                        return Err(format!(
+                            "{at}: fill_from fills a stored field and takes only `source`"
+                        ));
+                    }
+                }
+                "link_by_name" => {
+                    // R8: a ref set from a text field that names the record (`head` -> `head_id`).
+                    let Some(f) = exists(&st.field).filter(|f| f.kind == "ref") else {
+                        return Err(format!(
+                            "{at}: {} is not a ref field of {} in this version",
+                            st.field, st.model
+                        ));
+                    };
+                    let Some(src) = st.source.as_deref().and_then(exists) else {
+                        return Err(format!(
+                            "{at}: link_by_name needs `source`, a text field of {} in this version",
+                            st.model
+                        ));
+                    };
+                    if !matches!(src.kind.as_str(), "text" | "") {
+                        return Err(format!("{at}: {} is not a text field", src.name));
+                    }
+                    if let Some(target) = self.model.iter().find(|m| Some(&m.name) == f.to.as_ref())
+                        && !target.field.iter().any(|x| x.name == "name")
+                    {
+                        return Err(format!(
+                            "{at}: {} has no field name to match against",
+                            target.name
+                        ));
+                    }
+                    if st.to.is_some() || st.value.is_some() || st.confirm {
+                        return Err(format!("{at}: link_by_name takes only `source`"));
+                    }
+                }
                 other => {
                     return Err(format!(
-                        "{at}: unknown op {other:?} (use rename_field, set_default, drop_field or reformat_field)"
+                        "{at}: unknown op {other:?} (use rename_field, set_default, drop_field, reformat_field, fill_from or link_by_name)"
                     ));
                 }
+            }
+            if st.source.is_some() && !matches!(st.op.as_str(), "fill_from" | "link_by_name") {
+                return Err(format!(
+                    "{at}: `source` belongs to fill_from and link_by_name only"
+                ));
             }
         }
         Ok(())
@@ -2031,6 +2194,7 @@ impl Manifest {
                 warn_before_days: u.warn_before_days,
                 hidden: u.hidden,
                 currency_from: u.currency_from.clone(),
+                readonly_when: u.readonly_when.clone(),
             },
         };
         let hints = obop_registry::FieldHints {
@@ -2101,6 +2265,7 @@ impl Manifest {
                     })
                 })
                 .collect::<Result<_, String>>()?,
+            default_filter: u.default_filter,
             public_url: u.public_url,
             children: m
                 .child
@@ -2323,6 +2488,7 @@ impl Manifest {
                     .collect(),
             });
             let guard = Self::model_guard(m, &commands)?;
+            let (rules, no_overlap) = Self::model_rules(m)?;
             out.push(ModelDef {
                 name: intern(&m.name),
                 description: intern(&m.description),
@@ -2341,11 +2507,73 @@ impl Manifest {
                     },
                     ui: Self::model_ui(m)?,
                     guard,
+                    rules,
+                    no_overlap,
                     ..ModelExt::default()
                 },
             });
         }
         Ok(out)
+    }
+
+    /// `[[model.rule]]` and `[model.no_overlap]` of `m` (D88), parsed; their meaning is checked by
+    /// the install gate (`obop_registry::model_rules::problems`).
+    fn model_rules(
+        m: &ModelM,
+    ) -> Result<
+        (
+            Vec<obop_registry::ModelRule>,
+            Option<obop_registry::NoOverlap>,
+        ),
+        String,
+    > {
+        use obop_registry::model_rules::{Applies, ModelRule, no_overlap};
+        if m.public.as_ref().is_some_and(|p| p.submit)
+            && (!m.rule.is_empty() || m.no_overlap.is_some())
+        {
+            return Err(format!(
+                "{}: a model that takes public submissions cannot declare rules yet",
+                m.name
+            ));
+        }
+        let mut rules = Vec::new();
+        for r in &m.rule {
+            let applies = match r.applies.as_deref() {
+                None => Applies::Touched,
+                Some(a) => Applies::parse(a).ok_or_else(|| {
+                    format!(
+                        "{}: rule {:?}: applies must be \"touched\" or \"always\", not {a:?}",
+                        m.name, r.key
+                    )
+                })?,
+            };
+            rules.push(
+                ModelRule::parse(&r.key, &r.expr, &r.message, applies)
+                    .map_err(|e| format!("{}: rule {:?}: {e}", m.name, r.key))?,
+            );
+        }
+        let overlap = m
+            .no_overlap
+            .as_ref()
+            .map(|n| {
+                no_overlap(
+                    &n.rule,
+                    &n.key,
+                    &n.start,
+                    &n.end,
+                    n.state_field.as_deref(),
+                    &n.ignore_states,
+                    &n.message,
+                )
+            })
+            .map(
+                |o| match m.no_overlap.as_ref().and_then(|n| n.capacity.as_deref()) {
+                    Some(c) => o.with_capacity(c),
+                    None => o,
+                },
+            )
+            .map(|o| o.inclusive(m.no_overlap.as_ref().is_some_and(|n| n.inclusive_end)));
+        Ok((rules, overlap))
     }
 
     /// Build registry metadata and run the D41 install gate over it.
@@ -2363,14 +2591,16 @@ impl Manifest {
     }
 
     fn build_module(&self, reserved: bool) -> Result<Module, String> {
-        let models = self.build_models()?;
+        let mut models = self.build_models()?;
+        let translations = Translations::from_labels(&self.labels);
+        obop_registry::model_rules::attach_messages(&mut models, &translations);
         let module = Module {
             id: self.module.id.clone(),
             name: self.module.name.clone(),
             description: self.module.description.clone(),
             models,
             network_destinations: vec![],
-            translations: std::sync::Arc::new(Translations::from_labels(&self.labels)),
+            translations: std::sync::Arc::new(translations),
             meta: self.module_meta(),
         };
         let mut public_problems = Vec::new();

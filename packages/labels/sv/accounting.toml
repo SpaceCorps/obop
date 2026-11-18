@@ -320,7 +320,7 @@ description = "Betalarens eller mottagarens namn som banken anger det"
 
 [labels.sv.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "Motpartens IBAN"
-description = "Betalarens eller mottagarens bankkonto"
+description = "Betalarens eller mottagarens IBAN"
 
 [labels.sv.model.accounting_bank_statement_line.field.move_line_id]
 label = "Verifikationsrad"
@@ -367,3 +367,19 @@ message = "Verifikationen balanserar inte: summan av debet och kredit måste var
 
 [labels.sv.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Välj verifikationsraden som den här banktransaktionen hör till"
+
+[labels.sv.model.accounting_fiscal_year.rule.ends_after_start]
+message = "Räkenskapsåret slutar innan det börjar: ange en sista dag samma dag som eller efter den första dagen"
+
+[labels.sv.model.accounting_period.rule.ends_after_start]
+message = "Perioden slutar innan den börjar: ange en sista dag samma dag som eller efter den första dagen"
+
+[labels.sv.model.accounting_fiscal_year.rule.no_overlapping_years]
+message = "Ett annat räkenskapsår täcker redan några av dessa dagar: låt det här börja efter dess sista dag"
+
+[labels.sv.model.accounting_period.rule.no_overlapping_periods]
+message = "En annan period täcker redan några av dessa dagar: låt den här börja efter dess sista dag"
+
+[labels.sv.model.accounting_move_line.field.settled]
+label = "Reglerad"
+description = "Om en banktransaktion reglerar den här kund- eller leverantörsposten (dess settles_line_id anger den); beräknad, så även en bokförd rad visar det"
