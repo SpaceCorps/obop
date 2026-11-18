@@ -511,8 +511,6 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
     }
 }
 
-/// Whether this instance can send a person to Microsoft: the connectors runtime exists and the
-/// provider is configured and enabled (the same test as `GET /api/auth/sso`).
 /// The request asks for JSON and not for a page: an `Accept` that names `application/json` and not
 /// `text/html`.
 fn wants_json(h: &HeaderMap) -> bool {
@@ -556,6 +554,8 @@ fn authorize_probe(o: &OAuth, base: &str, pairs: &[(String, String)]) -> Respons
     }
 }
 
+/// Whether this instance can send a person to Microsoft: the connectors runtime exists and the
+/// provider is configured and enabled (the same test as `GET /api/auth/sso`).
 pub(crate) fn microsoft_offered(s: &HttpState) -> bool {
     s.connectors.get().is_some() && s.auth.sso().is_some_and(|a| a.offered())
 }

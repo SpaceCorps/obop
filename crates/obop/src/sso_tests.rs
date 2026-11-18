@@ -194,8 +194,15 @@ impl Idp {
                     let (method, path) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
                     let body = req.split("\r\n\r\n").nth(1).unwrap_or("");
                     let (status, out) = Idp::answer(&state, port, method, path, body);
+                    // A redirect points at an address of the stand-in that answers like the
+                    // endpoint would (N19: a redirect must never be followed).
+                    let location = if (300..400).contains(&status) {
+                        format!("Location: http://127.0.0.1:{port}/elsewhere{path}\r\n")
+                    } else {
+                        String::new()
+                    };
                     let reply = format!(
-                        "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                        "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\n{location}Content-Length: {}\r\nConnection: close\r\n\r\n{out}",
                         out.len()
                     );
                     let _ = s.write_all(reply.as_bytes());
@@ -1360,6 +1367,14 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     .await;
     assert_eq!(g["value"]["enabled"], true, "{g}");
     assert_eq!(g["value"]["break_glass_enough"], true, "{g}");
+    // When and by whom it was last changed (N19: declared and returned).
+    assert_eq!(g["value"]["last_editor"], "boss", "{g}");
+    assert!(
+        g["value"]["modified_at"]
+            .as_str()
+            .is_some_and(|t| t.ends_with('Z') && t.len() == 20),
+        "{g}"
+    );
     // Bind, make SSO-only, and the listing shows it.
     let (s, b) = post(
         r,
@@ -2967,6 +2982,34 @@ async fn failures_a_token_endpoint_that_is_not_well_is_unavailable_and_one_that_
             .iter()
             .any(|l| l.contains("token endpoint answered 400"))
     );
+}
+
+/// The sign-in's calls to Microsoft never follow a redirect (N19): a discovery document, a key set
+/// or a token endpoint that answers 302 is a fault of the provider, and the address it points to
+/// is never asked.
+#[tokio::test]
+async fn failures_a_redirect_of_the_provider_is_never_followed() {
+    let w = world(true).await;
+    for status in [301, 302, 307, 308] {
+        w.idp.st.lock().unwrap().discovery_status = status;
+        w.state.forget_sso_cache_for_test();
+        let r = w.start(&mut Jar::default()).await;
+        assert_eq!(r.location(), "/#oidc_error=unavailable", "{status}");
+    }
+    w.idp.st.lock().unwrap().discovery_status = 200;
+    w.state.forget_sso_cache_for_test();
+    for status in [302, 307] {
+        w.idp.st.lock().unwrap().token_status = status;
+        let r = w.sign_in(&mut Jar::default(), ADA_OID).await;
+        assert_eq!(r.location(), "/#oidc_error=unavailable", "{status}");
+    }
+    w.idp.st.lock().unwrap().token_status = 200;
+    w.idp.st.lock().unwrap().jwks_status = 302;
+    w.state.forget_sso_cache_for_test();
+    let r = w.sign_in(&mut Jar::default(), ADA_OID).await;
+    assert_eq!(r.location(), "/#oidc_error=unavailable");
+    assert_eq!(w.idp.hits("/elsewhere"), 0, "no redirect was followed");
+    assert_eq!(w.idp.arrived("/elsewhere"), 0);
 }
 
 /// 60 callbacks that spent a flow are the most one address may make in a minute (the flows are
