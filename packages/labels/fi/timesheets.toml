@@ -51,11 +51,15 @@ approved = "Hyväksytty"
 [labels.fi.model.timesheets_entry.action.submit]
 label = "Lähetä hyväksyttäväksi"
 description = "Lähetä tuntikirjaus hyväksyttäväksi"
+done = "Lähetetty hyväksyttäväksi"
 
 [labels.fi.model.timesheets_entry.action.approve]
 label = "Hyväksy"
 description = "Hyväksy lähetetty tuntikirjaus (vain esihenkilö)"
+confirm = "Hyväksytäänkö tämä aikakirjaus? Sitä ei voi sen jälkeen muuttaa."
+done = "Hyväksytty"
 
 [labels.fi.model.timesheets_entry.action.reject]
 label = "Hylkää"
 description = "Palauta lähetetty tuntikirjaus luonnokseksi (vain esihenkilö)"
+done = "Palautettu luonnokseksi"

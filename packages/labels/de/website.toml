@@ -47,6 +47,7 @@ archived = "Archiviert"
 [labels.de.model.website_page.action.publish]
 label = "Veröffentlichen"
 description = "Die Seite öffentlich machen (nur Führungskräfte)"
+done = "Veröffentlicht"
 
 [labels.de.model.website_page.action.unpublish]
 label = "Veröffentlichung zurückziehen"
@@ -55,6 +56,7 @@ description = "Die Seite offline nehmen und zurück auf Entwurf setzen"
 [labels.de.model.website_page.action.archive]
 label = "Archivieren"
 description = "Eine veröffentlichte Seite endgültig außer Dienst stellen"
+confirm = "Diese Seite archivieren? Sie geht endgültig offline, ihre Adresse meldet, dass sie entfernt wurde, und sie kann nicht mehr geändert werden."
 
 [labels.de.model.website_menu_item]
 name = "Menüeintrag"
@@ -137,6 +139,7 @@ archived = "Archiviert"
 [labels.de.model.website_blog_post.action.publish]
 label = "Veröffentlichen"
 description = "Den Beitrag öffentlich machen (nur Führungskräfte)"
+done = "Veröffentlicht"
 
 [labels.de.model.website_blog_post.action.unpublish]
 label = "Veröffentlichung zurückziehen"
@@ -145,6 +148,7 @@ description = "Den Beitrag offline nehmen und zurück auf Entwurf setzen"
 [labels.de.model.website_blog_post.action.archive]
 label = "Archivieren"
 description = "Einen veröffentlichten Beitrag außer Dienst stellen"
+confirm = "Diesen Beitrag archivieren? Er geht endgültig offline und kann nicht mehr geändert werden."
 
 [labels.de.model.website_form_submission]
 name = "Formulareingang"
@@ -195,10 +199,12 @@ spam = "Spam"
 [labels.de.model.website_form_submission.action.handle]
 label = "Als bearbeitet markieren"
 description = "Die Nachricht als beantwortet oder erledigt markieren"
+done = "Als erledigt markiert"
 
 [labels.de.model.website_form_submission.action.mark_spam]
 label = "Als Spam markieren"
 description = "Die Nachricht als Spam markieren"
+done = "Als Spam markiert"
 
 [labels.de.model.website_page_translation]
 name = "Seitenübersetzung"
@@ -295,3 +301,18 @@ description = "Bild oben auf dem Beitrag und in Linkvorschauen (PNG, JPEG, WebP 
 [labels.de.model.website_blog_post.field.cover_alt]
 label = "Titelbild-Beschreibung"
 description = "Text, der das Titelbild für Menschen beschreibt, die es nicht sehen können"
+
+[labels.de.model.website_page.section.content]
+label = "Inhalt"
+
+[labels.de.model.website_page.section.cover_picture]
+label = "Titelbild"
+
+[labels.de.model.website_page.section.search_engines]
+label = "Suchmaschinen"
+
+[labels.de.model.website_blog_post.section.content]
+label = "Inhalt"
+
+[labels.de.model.website_blog_post.section.cover_picture]
+label = "Titelbild"

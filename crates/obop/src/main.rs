@@ -3112,7 +3112,7 @@ mod tests {
         let _guard = obop_storage::testing::TempPath::dir("obop-check");
         let dir = _guard.path().to_path_buf();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.3.3", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.4", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),
@@ -4369,6 +4369,27 @@ mod bundled_packages {
         assert!(widget("kpi", "count").is_ok());
         assert!(widget("gauge", "sum").is_err());
         assert!(widget("kpi", "average").is_err());
+        // dashboards 0.4.0 (K1): the period of a dated split is one of the server's buckets.
+        let period = |p: &str| {
+            call(
+                &app,
+                &admin,
+                "dashboards_widget.create",
+                Value::map([
+                    ("dashboard_id", Value::Text(id_of(&board))),
+                    ("title", Value::text("Orders per ISO week")),
+                    ("kind", Value::text("line")),
+                    ("model_name", Value::text("sale_order")),
+                    ("aggregate", Value::text("count")),
+                    ("group_by", Value::text("date_order")),
+                    ("period", Value::text(p)),
+                ]),
+            )
+        };
+        for p in ["day", "week", "iso_week", "month", "year"] {
+            period(p).unwrap_or_else(|e| panic!("{p}: {e:?}"));
+        }
+        assert!(period("fortnight").is_err());
     }
 
     /// The tutorial module of docs/MODULES.md installs, upgrades and fails exactly as the

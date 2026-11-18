@@ -132,10 +132,14 @@ description = "D'où vient la case et ce qui a été contrôlé, par exemple l'�
 [labels.fr.model.accounting_se_vat_box.action.verify]
 label = "Vérifier"
 description = "Marquer la case comme contrôlée avec SKV 4700 (approbateur uniquement) ; enregistre qui a vérifié et quand"
+confirm = "Marquer cette case comme vérifiée par rapport au formulaire SKV 4700 ?"
+done = "Case vérifiée"
 
 [labels.fr.model.accounting_se_vat_box.action.unverify]
 label = "Annuler la vérification"
 description = "Retirer la vérification de la case (approbateur uniquement)"
+confirm = "Retirer la vérification de cette case ?"
+done = "Vérification retirée"
 
 [labels.fr.model.accounting_se_vat_code]
 name = "Code de TVA"
@@ -232,10 +236,14 @@ description = "D'où vient le code et ce qui a été contrôlé, par exemple l'�
 [labels.fr.model.accounting_se_vat_code.action.verify]
 label = "Vérifier"
 description = "Marquer le code comme contrôlé avec SKV 4700 (approbateur uniquement) ; enregistre qui a vérifié et quand"
+confirm = "Marquer ce code de TVA comme vérifié par rapport au formulaire SKV 4700 ?"
+done = "Code de TVA vérifié"
 
 [labels.fr.model.accounting_se_vat_code.action.unverify]
 label = "Annuler la vérification"
 description = "Retirer la vérification du code (approbateur uniquement)"
+confirm = "Retirer la vérification de ce code de TVA ?"
+done = "Vérification retirée"
 
 [labels.fr.model.accounting_se_vat_report]
 name = "Rapport de TVA"
@@ -307,14 +315,18 @@ filed = "Déposé"
 [labels.fr.model.accounting_se_vat_report.action.propose]
 label = "Proposer"
 description = "Proposer le rapport à l'approbation ; les agents peuvent le faire"
+done = "Proposé pour approbation"
 
 [labels.fr.model.accounting_se_vat_report.action.withdraw]
 label = "Retirer"
 description = "Renvoyer un rapport proposé à l'état de brouillon"
+done = "Revenu au brouillon"
 
 [labels.fr.model.accounting_se_vat_report.action.approve]
 label = "Approuver"
 description = "Approuver le rapport (approbateur uniquement ; les cases doivent être confirmées comme contrôlées avec SKV 4700)"
+confirm = "Approuver cette déclaration de TVA ? Elle ne pourra plus être modifiée."
+done = "Déclaration de TVA approuvée"
 
 [labels.fr.model.accounting_se_vat_report.action.approve.assert.boxes_checked]
 message = "Les cases n'ont pas été confirmées comme contrôlées avec SKV 4700"
@@ -322,6 +334,8 @@ message = "Les cases n'ont pas été confirmées comme contrôlées avec SKV 470
 [labels.fr.model.accounting_se_vat_report.action.record_filed]
 label = "Enregistrer le dépôt"
 description = "Enregistrer que la déclaration a été déposée auprès de Skatteverket en dehors de ce système (approbateur uniquement)"
+confirm = "Enregistrer que cette déclaration a été déposée auprès du Skatteverket ?"
+done = "Enregistrée comme déposée"
 
 [labels.fr.model.accounting_se_vat_report_line]
 name = "Ligne de rapport de TVA"

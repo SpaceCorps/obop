@@ -9,7 +9,7 @@ import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.t
 import { defaultFilter } from "./filters.ts";
 import { csvCell, download, plainText, rowCurrency, visibleFields } from "./format.ts";
 import { ImportDialog } from "./ImportDialog.tsx";
-import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
+import { actionTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { PHONE_QUERY, useMedia } from "./media.ts";
 import { pluralTitle } from "./plural.ts";
 import { defaultView, listColumns, newDefaults } from "./presentation.ts";
@@ -37,7 +37,7 @@ import { kanbanField } from "./views/KanbanView.tsx";
 import { listOrder } from "./views/listLayout.ts";
 import { VIEW_REGISTRY, viewOf } from "./views/registry.ts";
 import type { ViewProps } from "./views/types.ts";
-import { governedNames, moveRecord } from "./workflow.ts";
+import { canMove, governedNames, moveRecord, questionOf } from "./workflow.ts";
 
 /** What a page that wraps ModelPage (a registration of extensions.ts) may do with it. */
 export type ModelPageApi = {
@@ -406,6 +406,10 @@ export function ModelPage({
     const f = model.fields.find((x) => x.name === field);
     const row = (serverMode || aggMode ? srv.rows : rows).find((r) => r.id === id);
     if (!f || !row) return t("Record not found");
+    // A list cell asks what the action's button asks (#102, #104); a cancel leaves the value.
+    const step = canMove(model, f, row[field] as string | undefined, to, title, row).action;
+    const question = step && questionOf(model, step);
+    if (question && !(await d.confirm(question, actionTitle(step), t("Cancel")))) return null;
     const out = await moveRecord(d.run, model, f, row, to, title);
     return out.kind === "ok" ? null : serverMessage(out.message);
   };

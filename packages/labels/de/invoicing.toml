@@ -42,10 +42,14 @@ description = "Datum, an dem die Zahlung fällig ist (YYYY-MM-DD); nicht vor dem
 [labels.de.model.invoice.action.post]
 label = "Buchen"
 description = "Einen Rechnungsentwurf buchen und ihm die nächste Nummer der Folge geben"
+confirm = "Diese Rechnung buchen? Sie erhält ihre Nummer und kann nicht mehr geändert werden."
+done = "Rechnung gebucht"
 
 [labels.de.model.invoice.action.cancel]
 label = "Stornieren"
 description = "Einen Rechnungsentwurf stornieren"
+confirm = "Diesen Rechnungsentwurf stornieren?"
+done = "Rechnung storniert"
 
 [labels.de.model.invoice.field.party_id]
 label = "Geschäftspartner"

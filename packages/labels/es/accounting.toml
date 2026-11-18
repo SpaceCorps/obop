@@ -147,10 +147,14 @@ closed = "Cerrado"
 [labels.es.model.accounting_fiscal_year.action.close]
 label = "Cerrar"
 description = "Cerrar el ejercicio fiscal para que no se contabilice nada más en él (solo aprobadores)"
+confirm = "¿Cerrar este ejercicio? No se podrá modificar hasta que se vuelva a abrir."
+done = "Ejercicio cerrado"
 
 [labels.es.model.accounting_fiscal_year.action.reopen]
 label = "Reabrir"
 description = "Reabrir un ejercicio fiscal cerrado para corregirlo (solo aprobadores)"
+confirm = "¿Reabrir este ejercicio cerrado?"
+done = "Ejercicio reabierto"
 
 [labels.es.model.accounting_period]
 name = "Periodo"
@@ -187,10 +191,14 @@ closed = "Cerrado"
 [labels.es.model.accounting_period.action.close]
 label = "Cerrar"
 description = "Cerrar el periodo a nuevas contabilizaciones (solo aprobadores)"
+confirm = "¿Cerrar este periodo? Los asientos con fecha en él ya no se podrán contabilizar ni modificar."
+done = "Periodo cerrado"
 
 [labels.es.model.accounting_period.action.reopen]
 label = "Reabrir"
 description = "Reabrir un periodo cerrado (solo aprobadores)"
+confirm = "¿Reabrir este periodo? Los asientos en borrador con fecha en él se podrán modificar y contabilizar de nuevo."
+done = "Periodo reabierto"
 
 [labels.es.model.accounting_move]
 name = "Movimiento"
@@ -237,14 +245,20 @@ reversed = "Revertido"
 [labels.es.model.accounting_move.action.post]
 label = "Contabilizar"
 description = "Contabilizar un asiento en borrador en el libro mayor y numerarlo (solo aprobadores; se rechaza sin importe o si el debe y el haber no son iguales)"
+confirm = "¿Contabilizar este asiento? Recibe su número y ya no se podrá modificar."
+done = "Asiento contabilizado"
 
 [labels.es.model.accounting_move.action.cancel]
 label = "Cancelar"
 description = "Cancelar un asiento en borrador que nunca se contabilizó"
+confirm = "¿Cancelar este asiento en borrador?"
+done = "Asiento cancelado"
 
 [labels.es.model.accounting_move.action.reverse]
 label = "Revertir"
 description = "Marcar un asiento contabilizado como revertido; el asiento contrario se registra aparte (solo aprobadores)"
+confirm = "¿Marcar este asiento como revertido? Registre el asiento contrario por separado."
+done = "Asiento marcado como revertido"
 
 [labels.es.model.accounting_move_line]
 name = "Línea de movimiento"
@@ -296,7 +310,7 @@ plural = "Líneas de extracto bancario"
 description = "Una línea de extracto bancario pendiente de cruzar con asientos"
 
 [labels.es.model.accounting_bank_statement_line.guard]
-message = "Una transacción bancaria conciliada no se puede modificar."
+message = "Una transacción bancaria conciliada no se puede modificar. Un responsable puede deshacer antes la conciliación."
 
 [labels.es.model.accounting_bank_statement_line.field.journal_id]
 label = "Diario"
@@ -342,14 +356,25 @@ reconciled = "Conciliado"
 [labels.es.model.accounting_bank_statement_line.action.match]
 label = "Emparejar"
 description = "Registrar que la línea corresponde a la línea de asiento indicada en move_line_id"
+done = "Emparejado"
 
 [labels.es.model.accounting_bank_statement_line.action.reconcile]
 label = "Conciliar"
 description = "Conciliar una línea cruzada (solo responsables)"
+confirm = "¿Conciliar esta transacción bancaria? No se podrá modificar hasta que un responsable deshaga la conciliación."
+done = "Conciliado"
 
 [labels.es.model.accounting_bank_statement_line.action.unmatch]
 label = "Desemparejar"
 description = "Deshacer un cruce que era erróneo"
+confirm = "¿Deshacer este emparejamiento?"
+done = "Emparejamiento deshecho"
+
+[labels.es.model.accounting_bank_statement_line.action.unreconcile]
+label = "Deshacer conciliación"
+description = "Deshace una conciliación errónea; la línea vuelve a estar emparejada y se puede modificar de nuevo (solo responsables)"
+confirm = "¿Deshacer la conciliación de esta transacción bancaria? Vuelve a estar emparejada y se puede modificar de nuevo."
+done = "Conciliación deshecha"
 
 [labels.es.model.accounting_move.field.total_debit]
 label = "Total debe"

@@ -47,15 +47,22 @@ lost = "Perdu"
 [labels.fr.model.lead.action.qualify]
 label = "Qualifier"
 description = "Fait passer une nouvelle piste à l’étape qualifié"
+done = "Piste qualifiée"
 
 [labels.fr.model.lead.action.mark_won]
 label = "Marquer gagné"
 description = "Fait passer la piste à l’étape gagné"
+done = "Marquée comme gagnée"
 
 [labels.fr.model.lead.action.mark_lost]
 label = "Marquer perdu"
 description = "Fait passer la piste à l’étape perdu"
+confirm = "Marquer cette piste comme perdue ?"
+done = "Marquée comme perdue"
 
 [labels.fr.model.lead.action.reopen]
 label = "Rouvrir"
 description = "Remet la piste à l’étape nouveau"
+
+[labels.fr.model.lead.section.why_it_was_lost]
+label = "Pourquoi elle a été perdue"

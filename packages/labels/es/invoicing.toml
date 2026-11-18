@@ -42,10 +42,14 @@ description = "Fecha en que vence el pago (YYYY-MM-DD); no anterior a la fecha d
 [labels.es.model.invoice.action.post]
 label = "Contabilizar"
 description = "Contabilizar una factura en borrador y asignarle el siguiente número de la serie"
+confirm = "¿Contabilizar esta factura? Recibe su número y ya no se podrá modificar."
+done = "Factura contabilizada"
 
 [labels.es.model.invoice.action.cancel]
 label = "Cancelar"
 description = "Cancelar una factura en borrador"
+confirm = "¿Cancelar este borrador de factura?"
+done = "Factura cancelada"
 
 [labels.es.model.invoice.field.party_id]
 label = "Tercero"

@@ -87,18 +87,22 @@ no_show = "No presentado"
 [labels.es.model.appointments_appointment.action.confirm]
 label = "Confirmar"
 description = "Confirmar una cita programada"
+done = "Confirmado"
 
 [labels.es.model.appointments_appointment.action.complete]
 label = "Completar"
 description = "Marcar una cita confirmada como realizada"
+done = "Marcado como celebrado"
 
 [labels.es.model.appointments_appointment.action.cancel]
 label = "Cancelar"
 description = "Cancelar una cita programada"
+confirm = "¿Cancelar esta cita? Después ya no se podrá modificar."
 
 [labels.es.model.appointments_appointment.action.mark_no_show]
 label = "Marcar como no presentado"
 description = "Registrar que el asistente no se presentó"
+confirm = "¿Registrar que el asistente no vino?"
 
 [labels.es.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "La cita termina antes de empezar: indique una hora de fin posterior al inicio"
@@ -108,3 +112,9 @@ message = "La cita termina antes de empezar: indique una hora de fin posterior a
 
 [labels.es.model.appointments_appointment.rule.no_double_booking]
 message = "El recurso ya está reservado a esa hora: elija otra hora u otro recurso"
+
+[labels.es.model.appointments_appointment.section.appointment]
+label = "Cita"
+
+[labels.es.model.appointments_appointment.section.resource_and_time]
+label = "Recurso y hora"

@@ -1,7 +1,7 @@
 import { inSentence, t } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta, Reply } from "./api.ts";
 import { isEmpty, optionLabel } from "./format.ts";
-import { actionTitle } from "./labels.ts";
+import { actionConfirm, actionTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { JOB, needsSignature } from "./apps/field_service/job.ts";
 
@@ -178,6 +178,39 @@ export function canMove(
     needsApproval: false,
     current: false,
   };
+}
+
+/**
+ * A step with no way back for this person (#102): no action they may run moves the field on from
+ * the state it leads to. `/api/meta` lists only runnable actions, so a step that someone else could
+ * still undo counts as one-way here, and the question says what this person can do afterwards.
+ */
+export function oneWay(model: ModelMeta, a: Command): boolean {
+  if (!a.field || !a.to) return false;
+  return !model.actions.some(
+    (b) =>
+      b.id !== a.id &&
+      b.field === a.field &&
+      !!b.to &&
+      b.to !== a.to &&
+      (isEmpty(b.from) || b.from === a.to),
+  );
+}
+
+/**
+ * The question asked before an action runs, by its button, "Move to…", the status bar, the kanban
+ * and a list cell alike (#102, #104): the package's `confirm`, else one for a step with no way back,
+ * else none.
+ */
+export function questionOf(model: ModelMeta, a: Command): string | undefined {
+  const asked = actionConfirm(a);
+  if (asked) return asked;
+  if (!oneWay(model, a)) return undefined;
+  const f = model.fields.find((x) => x.name === a.field);
+  return t("{action}? There is no way back: afterwards no action moves it out of {state}.", {
+    action: actionTitle(a),
+    state: optionLabel(a.to!, f),
+  });
 }
 
 /** The label of an action button: "Mark won". */

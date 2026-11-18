@@ -1,6 +1,6 @@
 [module]
 id = "hr"
-version = "0.5.0"
+version = "0.5.1"
 name = "Human Resources"
 description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group. An employee sees and files only their own leave requests; hr.manager sees all of them."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["people"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "hr_employee"
-changelog = "0.5.0: Requested by of a leave request is set only by the server, from the employee’s login, and a value sent for it is refused; a request moved to another employee follows that employee also when the form sends the old value back. Someone without hr.manager who files leave for a colleague with a login is told so plainly. The salary bank account must be a valid IBAN; one stored before is kept until it is changed. 0.4.1: a department whose head was written as a name gets that employee as its head when exactly one employee has that name; the name stays. An employee can be linked to their obop user name, so leave that HR files for them is theirs (they see it: Requested by is filled in from the employee). A department head can be an employee. The back office gains an org chart, and a new leave request starts on the person's own employee record. Changed: someone without hr.manager can no longer file leave for a colleague who has a login (the request would be the colleague's, out of their sight); hr.manager files it. The Time off list opens without refused requests: the filter Not refused is on until you remove it."
+changelog = "0.5.1: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.5.0: Requested by of a leave request is set only by the server, from the employee’s login, and a value sent for it is refused; a request moved to another employee follows that employee also when the form sends the old value back. Someone without hr.manager who files leave for a colleague with a login is told so plainly. The salary bank account must be a valid IBAN; one stored before is kept until it is changed. 0.4.1: a department whose head was written as a name gets that employee as its head when exactly one employee has that name; the name stays. An employee can be linked to their obop user name, so leave that HR files for them is theirs (they see it: Requested by is filled in from the employee). A department head can be an employee. The back office gains an org chart, and a new leave request starts on the person's own employee record. Changed: someone without hr.manager can no longer file leave for a colleague who has a login (the request would be the colleague's, out of their sight); hr.manager files it. The Time off list opens without refused requests: the filter Not refused is on until you remove it."
 
 [[model]]
 name = "hr_department"

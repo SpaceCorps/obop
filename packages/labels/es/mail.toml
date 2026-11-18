@@ -129,10 +129,12 @@ description = "Poner un mensaje en cola: to, subject y body, o template con lang
 [labels.es.model.outbound_mail.action.retry]
 label = "Enviar de nuevo"
 description = "Volver a poner en cola un mensaje fallido, intentos desde cero"
+done = "En cola de nuevo"
 
 [labels.es.model.outbound_mail.action.cancel]
 label = "Cancelar"
 description = "Cancelar un mensaje en cola; su texto se borra"
+done = "Cancelado"
 
 [labels.es.model.outbound_mail.action.process]
 label = "Enviar pendientes"
@@ -235,6 +237,7 @@ description = "Entrada de test_send: la dirección del mensaje de prueba; nunca 
 [labels.es.model.mail_server.action.test_send]
 label = "Enviar prueba"
 description = "Enviar ahora un breve mensaje de prueba por este servidor a test_recipient y registrar la respuesta"
+done = "Mensaje de prueba enviado"
 
 [labels.es.model.mail_template]
 name = "Plantilla de correo"

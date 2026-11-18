@@ -91,6 +91,8 @@ closed = "Abgeschlossen"
 [labels.de.model.pos_session.action.close]
 label = "Abschließen"
 description = "Die Sitzung abschließen, sobald die Schublade gezählt ist (nur Führungskräfte)"
+confirm = "Diese Kassensitzung schließen? Zählen Sie zuerst das Bargeld in der Schublade; eine geschlossene Sitzung kann nicht geändert werden."
+done = "Sitzung geschlossen"
 
 [labels.de.model.pos_session.action.close.assert.difference_explained]
 message = "Die Kassendifferenz ist nicht erklärt: vor dem Abschließen im Notizfeld begründen"
@@ -144,14 +146,18 @@ cancelled = "Storniert"
 [labels.de.model.pos_order.action.pay]
 label = "Bezahlen"
 description = "Der Verkauf ist vollständig bezahlt: abgelehnt, bis die Zahlungen die Summe decken; erzeugt je Position eine Lagerbewegung als Entwurf (braucht die Gruppe inventory.user)"
+done = "Verkauf bezahlt"
 
 [labels.de.model.pos_order.action.cancel]
 label = "Stornieren"
 description = "Einen Verkauf stornieren, der nie bezahlt wurde"
+confirm = "Diesen Verkauf stornieren? Er behält seine Belegnummer und kann danach nicht mehr geändert werden."
 
 [labels.de.model.pos_order.action.refund]
 label = "Erstatten"
 description = "Einen bezahlten Verkauf an den Kunden erstatten (nur Führungskräfte)"
+confirm = "Diesen Verkauf dem Kunden erstatten?"
+done = "Verkauf erstattet"
 
 [labels.de.model.pos_order_line]
 name = "Verkaufsposition"
@@ -254,3 +260,6 @@ description = "Der in bar bezahlte Teil der Zahlungen (kleinste Währungseinheit
 [labels.de.model.pos_order.field.refund_session_id]
 label = "Erstattet in Sitzung"
 description = "Die Sitzung, aus deren Schublade das Bargeld einer Erstattung ausgezahlt wurde, vom Server gesetzt, wenn ein Verkauf einer geschlossenen Sitzung erstattet wird: die dann an der Kasse des Verkaufs offene Sitzung; leer, wenn die eigene Sitzung des Verkaufs noch offen war"
+
+[labels.de.model.pos_session.section.cash_count]
+label = "Kassenzählung"

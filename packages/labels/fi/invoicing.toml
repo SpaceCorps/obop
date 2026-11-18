@@ -42,10 +42,14 @@ description = "Päivä, jona maksu erääntyy (YYYY-MM-DD); ei ennen laskun päi
 [labels.fi.model.invoice.action.post]
 label = "Kirjaa"
 description = "Kirjaa luonnoslasku ja anna sille sarjan seuraava numero"
+confirm = "Kirjataanko tämä lasku? Se saa numeronsa eikä sitä voi enää muuttaa."
+done = "Lasku kirjattu"
 
 [labels.fi.model.invoice.action.cancel]
 label = "Peruuta"
 description = "Peruuta luonnoslasku"
+confirm = "Perutaanko tämä laskuluonnos?"
+done = "Lasku peruttu"
 
 [labels.fi.model.invoice.field.party_id]
 label = "Osapuoli"

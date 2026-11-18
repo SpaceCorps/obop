@@ -136,14 +136,19 @@ cancelled = "Annullerad"
 [labels.sv.model.email_marketing_campaign.action.schedule]
 label = "Schemalägg"
 description = "Markera kampanjen som schemalagd till dess dag"
+done = "Schemalagd"
 
 [labels.sv.model.email_marketing_campaign.action.send]
 label = "Markera som skickad"
 description = "Markera den schemalagda kampanjen som skickad; ingen e-post skickas (endast chef)"
+confirm = "Markera den här kampanjen som skickad? Inget e-postmeddelande skickas: den här instansen skickar inte e-post än. Kampanjen kan inte ändras efteråt."
+done = "Markerad som skickad; inget e-postmeddelande skickades"
 
 [labels.sv.model.email_marketing_campaign.action.send_now]
 label = "Markera som skickad"
 description = "Markera en kampanj i utkast som skickad; ingen e-post skickas (endast chef)"
+confirm = "Markera den här kampanjen som skickad? Inget e-postmeddelande skickas: den här instansen skickar inte e-post än. Kampanjen kan inte ändras efteråt."
+done = "Markerad som skickad; inget e-postmeddelande skickades"
 
 [labels.sv.model.email_marketing_campaign.action.unschedule]
 label = "Avbryt schemaläggning"
@@ -152,3 +157,16 @@ description = "Flytta en schemalagd kampanj tillbaka till utkast"
 [labels.sv.model.email_marketing_campaign.action.cancel]
 label = "Annullera"
 description = "Annullera en schemalagd kampanj"
+confirm = "Avbryta den här kampanjen? Den kan inte ändras efteråt."
+
+[labels.sv.model.email_marketing_campaign.section.message]
+label = "Meddelande"
+
+[labels.sv.model.email_marketing_campaign.section.content]
+label = "Innehåll"
+
+[labels.sv.model.email_marketing_campaign.section.schedule]
+label = "Schema"
+
+[labels.sv.model.email_marketing_campaign.section.results]
+label = "Resultat"

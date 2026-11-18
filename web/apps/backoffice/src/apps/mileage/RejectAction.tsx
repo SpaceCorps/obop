@@ -10,6 +10,7 @@ import type { Edit } from "../../edit.ts";
 import { ActionDialog } from "../../ActionDialog.tsx";
 import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
+import { actionDone } from "../../labels.ts";
 import { serverMessage } from "../../serverMessage.ts";
 import { reviewRefusal } from "./track.ts";
 import { Button } from "../../ui.tsx";
@@ -41,7 +42,7 @@ export function RejectAction({ model, row, busy, value, saveFirst }: RecordExtPr
     setRunning(true);
     const r = await d.run(REJECT, { id: row.id, ...values });
     setRunning(false);
-    if (r.kind === "ok") d.notify(reject!.ui?.done ?? t("Trip rejected"));
+    if (r.kind === "ok") d.notify(actionDone(reject!) ?? t("Trip rejected"));
     else if (r.kind === "approval")
       d.notify(t("Rejecting was proposed and waits for approval."), "info");
     else {

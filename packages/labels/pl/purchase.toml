@@ -82,18 +82,25 @@ cancelled = "Anulowane"
 [labels.pl.model.purchase_order.action.send]
 label = "Wyślij"
 description = "Wysyła zamówienie robocze do dostawcy jako zapytanie ofertowe"
+done = "Oznaczono jako wysłane"
 
 [labels.pl.model.purchase_order.action.confirm]
 label = "Potwierdź"
 description = "Zobowiązuje do zamówienia u dostawcy (tylko kierownik)"
+confirm = "Potwierdzić to zamówienie u dostawcy?"
+done = "Zamówienie potwierdzone"
 
 [labels.pl.model.purchase_order.action.receive]
 label = "Przyjmij"
 description = "Rejestruje, że towar dotarł: tworzona jest robocza operacja magazynowa na pozycję do zatwierdzenia przez magazyn (wymaga grupy inventory.user)"
+confirm = "Przyjąć towar? Gdy ustawiono miejsce przyjęcia, dla każdej pozycji powstaje szkic ruchu magazynowego do zatwierdzenia przez magazyn, a zamówienia nie będzie można już zmienić."
+done = "Zamówienie przyjęte"
 
 [labels.pl.model.purchase_order.action.cancel]
 label = "Anuluj"
 description = "Anuluje zamówienie, które nie zostało jeszcze wysłane"
+confirm = "Anulować to zamówienie?"
+done = "Zamówienie anulowane"
 
 [labels.pl.model.purchase_order_line]
 name = "Pozycja zamówienia"

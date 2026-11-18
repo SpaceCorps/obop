@@ -333,9 +333,18 @@ export function GridView(p: ViewProps) {
     </div>
   );
 
+  // The worker by name: the employee linked to the login (`hr_employee.user`), else the login (S7).
+  const employees =
+    spec.owner && !mine && d.models.has("hr_employee") ? d.store.peek("hr_employee") : undefined;
+  const ownerName = (login: string) => {
+    const name = employees?.find((r) => r.user === login)?.name;
+    return typeof name === "string" && name ? name : login;
+  };
   const ownerLine = (l: GridLine) =>
     spec.owner && (!mine || l.owner !== user) && l.owner ? (
-      <span className="tsgrid-owner">{l.owner}</span>
+      <span className="tsgrid-owner" title={l.owner}>
+        {ownerName(l.owner)}
+      </span>
     ) : null;
 
   const empty = grid.lines.length === 0 && (

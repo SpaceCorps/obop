@@ -73,18 +73,24 @@ refused = "Avslagen"
 [labels.sv.model.expenses_expense.action.submit]
 label = "Skicka in"
 description = "Skicka in ansökan för godkännande"
+done = "Inskickad för godkännande"
 
 [labels.sv.model.expenses_expense.action.approve]
 label = "Godkänn"
 description = "Godkänn en inskickad ansökan (endast chef)"
+done = "Utlägg godkänt"
 
 [labels.sv.model.expenses_expense.action.pay]
 label = "Betala"
 description = "Registrera ersättningen som utbetald (endast ekonomi); betaldatum blir i dag om inget anges"
+confirm = "Registrera det här utlägget som betalt?"
+done = "Utlägg markerat som betalt"
 
 [labels.sv.model.expenses_expense.action.refuse]
 label = "Avslå"
 description = "Avslå en inskickad ansökan (endast chef)"
+confirm = "Avslå det här utlägget? Ett avslaget utlägg kan inte längre ändras."
+done = "Utlägg avslaget"
 
 [labels.sv.model.expenses_expense.field.number]
 label = "Nummer"
@@ -93,3 +99,15 @@ description = "Utläggsnummer som EXP-2026-0042, tilldelas när utlägget skapas
 [labels.sv.model.expenses_expense.field.receipt]
 description = "Foto eller skanning av kvittot (PDF eller bild); kan bara laddas ned av den som får läsa utlägget"
 label = "Kvitto"
+
+[labels.sv.model.expenses_expense.section.expense]
+label = "Utlägg"
+
+[labels.sv.model.expenses_expense.section.notes]
+label = "Anteckningar"
+
+[labels.sv.model.expenses_expense.section.claimed_by]
+label = "Begärt av"
+
+[labels.sv.model.expenses_expense.section.payment]
+label = "Betalning"

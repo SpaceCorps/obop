@@ -87,10 +87,13 @@ archived = "Arkiverat"
 [labels.sv.model.documents_document.action.publish]
 label = "Publicera"
 description = "Gör ett dokument i utkast till gällande version"
+done = "Dokumentet är publicerat"
 
 [labels.sv.model.documents_document.action.archive]
 label = "Arkivera"
 description = "Arkivera ett publicerat dokument (endast chef)"
+confirm = "Arkivera det här dokumentet? Inget steg tar tillbaka det."
+done = "Dokumentet är arkiverat"
 
 [labels.sv.model.documents_document.field.attachment]
 label = "Fil"
@@ -99,3 +102,9 @@ description = "Själva dokumentfilen (PDF, bild, text, kalkylblad eller kontorsd
 [labels.sv.model.documents_document.field.open_to_all]
 label = "Öppen för alla"
 description = "Om alla som får läsa dokument kan se detta: sant för offentliga och interna dokument"
+
+[labels.sv.model.documents_document.section.document]
+label = "Dokument"
+
+[labels.sv.model.documents_document.section.where_it_is_kept]
+label = "Förvaringsplats"

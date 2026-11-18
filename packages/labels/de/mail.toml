@@ -129,10 +129,12 @@ description = "Eine Nachricht einreihen: to, subject und body oder template mit 
 [labels.de.model.outbound_mail.action.retry]
 label = "Erneut senden"
 description = "Eine fehlgeschlagene Nachricht erneut einreihen, Versuche ab null"
+done = "Erneut eingereiht"
 
 [labels.de.model.outbound_mail.action.cancel]
 label = "Stornieren"
 description = "Eine eingereihte Nachricht stornieren; ihr Text wird gelöscht"
+done = "Abgebrochen"
 
 [labels.de.model.outbound_mail.action.process]
 label = "Fällige senden"
@@ -235,6 +237,7 @@ description = "Eingabe von test_send: die Adresse der Testnachricht; nie gespeic
 [labels.de.model.mail_server.action.test_send]
 label = "Test senden"
 description = "Jetzt eine kurze Testnachricht über diesen Server an test_recipient senden und die Antwort festhalten"
+done = "Testnachricht gesendet"
 
 [labels.de.model.mail_template]
 name = "E-Mail-Vorlage"

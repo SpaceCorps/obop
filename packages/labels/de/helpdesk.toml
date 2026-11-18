@@ -128,14 +128,18 @@ closed = "Abgeschlossen"
 [labels.de.model.helpdesk_ticket.action.take]
 label = "Übernehmen"
 description = "Die Arbeit an einem offenen Ticket beginnen"
+done = "Ticket übernommen"
 
 [labels.de.model.helpdesk_ticket.action.resolve]
 label = "Als gelöst markieren"
 description = "Ein Ticket in Bearbeitung als gelöst markieren"
+done = "Ticket gelöst"
 
 [labels.de.model.helpdesk_ticket.action.close]
 label = "Abschließen"
 description = "Ein gelöstes Ticket endgültig abschließen (nur Führungskräfte)"
+confirm = "Dieses Ticket endgültig schließen? Ein geschlossenes Ticket kann nicht mehr geändert werden."
+done = "Ticket geschlossen"
 
 [labels.de.model.helpdesk_ticket.action.reopen]
 label = "Wieder öffnen"
@@ -144,3 +148,15 @@ description = "Ein gelöstes Ticket wieder öffnen, wenn das Problem erneut auft
 [labels.de.model.helpdesk_ticket.field.number]
 label = "Nummer"
 description = "Ticketnummer wie TCK-00042, wird beim Anlegen des Tickets vergeben"
+
+[labels.de.model.helpdesk_ticket.section.request]
+label = "Anliegen"
+
+[labels.de.model.helpdesk_ticket.section.requester]
+label = "Anfragende Person"
+
+[labels.de.model.helpdesk_ticket.section.handling]
+label = "Bearbeitung"
+
+[labels.de.model.helpdesk_ticket.section.resolution]
+label = "Lösung"

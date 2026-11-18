@@ -106,11 +106,20 @@ description = "Remet un abonnement en retard à l’état actif après paiement"
 [labels.fr.model.subscriptions_subscription.action.cancel_trial]
 label = "Annuler l’essai"
 description = "Annule un abonnement pendant son essai"
+confirm = "Résilier cet abonnement ? Il ne pourra plus être modifié ensuite."
 
 [labels.fr.model.subscriptions_subscription.action.cancel]
 label = "Annuler"
 description = "Annule un abonnement actif"
+confirm = "Résilier cet abonnement ? Il ne pourra plus être modifié ensuite."
 
 [labels.fr.model.subscriptions_subscription.action.cancel_overdue]
 label = "Annuler (en retard)"
 description = "Annule un abonnement en retard"
+confirm = "Résilier cet abonnement ? Il ne pourra plus être modifié ensuite."
+
+[labels.fr.model.subscriptions_subscription.section.billing]
+label = "Facturation"
+
+[labels.fr.model.subscriptions_subscription.section.cancellation]
+label = "Annulation"

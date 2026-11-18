@@ -51,11 +51,15 @@ approved = "Aprobado"
 [labels.es.model.timesheets_entry.action.submit]
 label = "Presentar"
 description = "Enviar el registro para su aprobación"
+done = "Presentado para aprobación"
 
 [labels.es.model.timesheets_entry.action.approve]
 label = "Aprobar"
 description = "Aprobar un registro enviado (solo responsables)"
+confirm = "¿Aprobar este registro de tiempo? Después ya no se podrá modificar."
+done = "Aprobado"
 
 [labels.es.model.timesheets_entry.action.reject]
 label = "Rechazar"
 description = "Devolver a borrador un registro enviado (solo responsables)"
+done = "Devuelto a borrador"

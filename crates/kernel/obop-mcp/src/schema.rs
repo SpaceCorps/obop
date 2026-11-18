@@ -566,6 +566,9 @@ mod tests {
             guard: None,
             guard_messages: Default::default(),
             filter_labels: Default::default(),
+            section_labels: Default::default(),
+            confirm_labels: Default::default(),
+            done_labels: Default::default(),
         }
     }
 

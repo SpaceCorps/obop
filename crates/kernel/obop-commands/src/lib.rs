@@ -517,6 +517,13 @@ pub struct ModelInfo {
     pub guard_messages: Texts,
     /// The label of each filter the package declares, by its English label, per language (U10).
     pub filter_labels: BTreeMap<String, Texts>,
+    /// The label of each form section the package declares, by its English label, per language
+    /// (R17).
+    pub section_labels: BTreeMap<String, Texts>,
+    /// Action name -> the question of its `ui.confirm` per language (R17).
+    pub confirm_labels: BTreeMap<String, Texts>,
+    /// Action name -> the note of its `ui.done` per language (R17).
+    pub done_labels: BTreeMap<String, Texts>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -788,6 +795,22 @@ impl Dispatcher {
                                 .collect()
                         })
                         .unwrap_or_default(),
+                    section_labels: m
+                        .def
+                        .ui()
+                        .map(|u| {
+                            u.sections
+                                .iter()
+                                .filter_map(|x| {
+                                    let key = obop_registry::labels::filter_key(&x.label);
+                                    let t = mtr.and_then(|t| t.sections.get(&key))?;
+                                    Some((x.label.clone(), t.clone()))
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    confirm_labels: mtr.map(|t| t.confirms.clone()).unwrap_or_default(),
+                    done_labels: mtr.map(|t| t.dones.clone()).unwrap_or_default(),
                     name: name.clone(),
                     description: m.description,
                     labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),

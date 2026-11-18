@@ -132,10 +132,13 @@ expired = "Caducado"
 [labels.es.model.sign_request.action.send]
 label = "Enviar"
 description = "Enviar la solicitud al firmante"
+done = "Enviado al firmante"
 
 [labels.es.model.sign_request.action.sign]
 label = "Firmar"
 description = "Registra a mano que el firmante firmó; solo para una solicitud sin documento, porque una solicitud sobre un documento la firma el firmante mediante el enlace"
+confirm = "¿Registrar que el firmante firmó? Una solicitud sobre un documento se firma en cambio con su enlace de firma."
+done = "Marcado como firmado"
 
 [labels.es.model.sign_request.action.sign.assert.document_request]
 message = "Una solicitud sobre un documento la firma el firmante mediante el enlace; no se puede marcar como firmada a mano"
@@ -143,14 +146,19 @@ message = "Una solicitud sobre un documento la firma el firmante mediante el enl
 [labels.es.model.sign_request.action.decline]
 label = "Rechazar"
 description = "Registrar que el firmante rechazó"
+confirm = "¿Registrar que el firmante lo rechazó?"
+done = "Marcado como rechazado"
 
 [labels.es.model.sign_request.action.expire]
 label = "Marcar como caducado"
 description = "Registrar que la solicitud caducó sin firma"
+confirm = "¿Registrar que la solicitud caducó sin firmar?"
+done = "Marcado como caducado"
 
 [labels.es.model.sign_request.action.send_document]
 label = "Enviar documento"
 description = "Enviar una solicitud sobre un documento de Documentos: toma el SHA-256 del PDF, guarda una copia exacta y pasa la solicitud a enviada; después cree el enlace de firma"
+done = "Enviado. Cree ahora el enlace de firma."
 
 [labels.es.model.sign_link]
 name = "Enlace de firma"
@@ -176,3 +184,15 @@ description = "Cuándo se revocó el enlace (UTC); establézcalo para revocar el
 [labels.es.model.sign_link.field.link]
 label = "Dirección del enlace"
 description = "El enlace en sí: solo en la respuesta de create, se muestra una vez, nunca se guarda y nunca lo devuelven get, list ni search"
+
+[labels.es.model.sign_request.section.request]
+label = "Solicitud"
+
+[labels.es.model.sign_request.section.options]
+label = "Opciones"
+
+[labels.es.model.sign_request.section.sent_file]
+label = "Archivo enviado"
+
+[labels.es.model.sign_request.section.evidence]
+label = "Pruebas"

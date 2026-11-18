@@ -119,10 +119,13 @@ offboarded = "Sorti"
 [labels.fr.model.hr_employee.action.activate]
 label = "Activer"
 description = "Termine l’intégration et marque l’employé comme actif"
+done = "L'employé est maintenant actif"
 
 [labels.fr.model.hr_employee.action.offboard]
 label = "Valider le départ"
 description = "Met fin au dossier d’emploi ; ne l’annulez que sur décision des RH"
+confirm = "Faire sortir cet employé ? La fiche et ses informations restent, et aucune étape ne le fait revenir."
+done = "L'employé est sorti"
 
 [labels.fr.model.hr_leave_request]
 name = "Demande de congé"
@@ -181,14 +184,18 @@ refused = "Refusée"
 [labels.fr.model.hr_leave_request.action.request]
 label = "Demander"
 description = "Soumet la demande au responsable"
+done = "Envoyé pour approbation"
 
 [labels.fr.model.hr_leave_request.action.approve]
 label = "Approuver"
 description = "Approuve un congé demandé (responsable uniquement)"
+done = "Congé approuvé"
 
 [labels.fr.model.hr_leave_request.action.refuse]
 label = "Refuser"
 description = "Refuse un congé demandé (responsable uniquement)"
+confirm = "Refuser cette demande de congé ?"
+done = "Congé refusé"
 
 [labels.fr.model.hr_employee.field.photo]
 label = "Photo"
@@ -235,3 +242,24 @@ label = "À venir"
 
 [labels.fr.model.hr_leave_request.filter.not_refused]
 label = "Non refusées"
+
+[labels.fr.model.hr_employee.section.work]
+label = "Travail"
+
+[labels.fr.model.hr_employee.section.employment]
+label = "Emploi"
+
+[labels.fr.model.hr_employee.section.private]
+label = "Privé"
+
+[labels.fr.model.hr_employee.section.pay]
+label = "Rémunération"
+
+[labels.fr.model.hr_employee.section.sensitive]
+label = "Sensible"
+
+[labels.fr.model.hr_leave_request.section.leave]
+label = "Congé"
+
+[labels.fr.model.hr_leave_request.section.sick_leave]
+label = "Arrêt maladie"
