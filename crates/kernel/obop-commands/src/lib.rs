@@ -9,8 +9,8 @@ mod shared;
 pub use shared::Shared;
 use shared::{Pending, Plans};
 
-use obop_masking::mode_for;
 pub use obop_masking::{PrincipalKind, RestoreError, Vault};
+use obop_masking::{Restored, mode_for};
 pub use obop_registry::Bound;
 use obop_registry::labels::Texts;
 use obop_registry::{FieldDef, Module, Transition, Translations};
@@ -1318,6 +1318,16 @@ impl Dispatcher {
         // The fields an agent sent in clear although it is shown them masked count as changed in
         // this call, whatever their value (K63; `engine::frozen::sent_clear`).
         let _clear = engine::frozen::ClearScope::enter(self.sent_in_clear(&c, p, vault, input));
+        if let Some(field) = self.token_into_clear(&c, p, vault, input) {
+            return Err(refusal(
+                format!(
+                    "{field} is shown to agents in clear, so a mask token cannot be written into \
+                     it: send the value itself, or write the token into a field that is masked \
+                     for agents"
+                ),
+                input,
+            ));
+        }
         let mut input = self.restore(p, vault, input)?;
         if let Value::Map(m) = &mut input {
             // The caller is set by the dispatcher and by guards, never by a client.
@@ -1675,12 +1685,60 @@ impl Dispatcher {
             .collect()
     }
 
+    /// O37: the first field of a writing command's input that an agent is shown in clear and that
+    /// it sent a mask token of its vault for, as `model.field`. Restoring that token would store the
+    /// value the token hides where the agent (and everyone who reads the field) reads it in clear,
+    /// so the call is refused instead. A token in a field the agent is shown masked or not at all
+    /// is restored as before (D40: an agent copies personal data without seeing it). Checked: the
+    /// top-level fields of the command's model and the fields of each row of `bulk_create`.
+    fn token_into_clear(
+        &self,
+        c: &Registered,
+        p: &Principal,
+        vault: &Vault,
+        input: &Value,
+    ) -> Option<String> {
+        let (true, PrincipalKind::Agent, Value::Map(m)) = (c.writes, p.kind, input) else {
+            return None;
+        };
+        let models = self.models.read().unwrap();
+        let meta = models.get(c.model)?;
+        let is_token = |v: &Value| match v {
+            Value::Text(t) => vault.restore(t, |_| true).is_ok(),
+            Value::List(l) => l
+                .iter()
+                .any(|x| matches!(x, Value::Text(t) if vault.restore(t, |_| true).is_ok())),
+            _ => false,
+        };
+        let check = |row: &BTreeMap<String, Value>| {
+            row.iter().find_map(|(k, v)| {
+                let f = meta.fields.iter().find(|f| f.name == k.as_str())?;
+                let class = f.class.unwrap_or(obop_types::DataClass::Secret);
+                let clear = matches!(mode_for(p.kind, class, f.personal_data), MaskMode::Allow);
+                (clear && is_token(v)).then(|| format!("{}.{k}", c.model))
+            })
+        };
+        if let Some(hit) = check(m) {
+            return Some(hit);
+        }
+        match m.get("rows") {
+            Some(Value::List(rows)) if c.id.ends_with(".bulk_create") => {
+                rows.iter().find_map(|r| match r {
+                    Value::Map(r) => check(r),
+                    _ => None,
+                })
+            }
+            _ => None,
+        }
+    }
+
     /// Replace tokens in input text with the values they stand for, if the principal could read
     /// the record they came from (D10).
     fn restore(&self, p: &Principal, vault: &Vault, v: &Value) -> Result<Value, CallError> {
         Ok(match v {
-            Value::Text(t) => match vault.restore(t, |_| p.allows_any_read()) {
-                Ok(real) => Value::Text(real.into()),
+            Value::Text(t) => match vault.restore_typed(t, |_| p.allows_any_read()) {
+                Ok(Restored::Text(real)) => Value::Text(real.into()),
+                Ok(Restored::Json(real)) => Value::from_json(&real),
                 Err(RestoreError::UnknownToken(_)) => v.clone(), // ordinary text
                 Err(e) => return Err(CallError::Restore(e)),
             },
@@ -1756,9 +1814,16 @@ impl Dispatcher {
                             shaped.insert(k, v);
                         }
                         MaskMode::Mask => {
+                            // A null is not a secret and stays null; a value that is not text
+                            // gets a token that restores to the same typed value (O39).
                             let masked = match &v {
+                                Value::Null => Value::Null,
                                 Value::Text(t) => Value::Text(vault.mask(&label(&k), &record, t)),
-                                _ => Value::text("[masked]"),
+                                other => Value::Text(vault.mask_json(
+                                    &label(&k),
+                                    &record,
+                                    &other.to_json(),
+                                )),
                             };
                             shaped.insert(k, masked);
                         }
@@ -2283,6 +2348,8 @@ mod keyexpr_parity;
 mod kinds_tests;
 #[cfg(test)]
 mod limits_tests;
+#[cfg(test)]
+mod mask_restore_tests;
 #[cfg(test)]
 mod masked_guess_tests;
 #[cfg(test)]

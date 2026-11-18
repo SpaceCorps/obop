@@ -2761,7 +2761,15 @@ pub fn admin_module() -> Module {
                         "actor",
                         "Who did it: the user, an administrator or the operator",
                     ),
-                    f("detail", "A short note without any code or secret"),
+                    // Personal: it may repeat a network address, a peer or forwarded lines (the
+                    // sign door's entries), so an agent reads it as a token (O36, D40).
+                    FieldDef::new(
+                        "detail",
+                        "A short note without any code or secret",
+                        DataClass::Internal,
+                        true,
+                        ADMIN_GROUP,
+                    ),
                     f("at", "When it happened, in UTC (RFC 3339)"),
                 ],
                 commands: vec![],
@@ -3139,7 +3147,8 @@ mod tests {
         let (d, _) = setup(&store);
         let mut f = Fields::new();
         f.insert("user".into(), J::from("ada"));
-        f.insert("kind".into(), J::from("enrol_confirm"));
+        f.insert("kind".into(), J::from("sign_signed"));
+        f.insert("detail".into(), J::from("address 203.0.113.9"));
         store.backend().insert("security_event", "001", &f).unwrap();
         let rows =
             |p: &Principal| call(&d, p, "security_event.list", Value::Map(Default::default()));
@@ -3164,10 +3173,21 @@ mod tests {
             );
         }
         let agent = Principal::agent("ada/agent", &[ADMIN_GROUP], &[ADMIN_GROUP]);
-        assert!(
-            rows(&agent).is_ok(),
-            "an agent scoped to the admin group may read it"
-        );
+        let Ok(r) = rows(&agent) else {
+            panic!("an agent scoped to the admin group may read it")
+        };
+        // ...but the detail, which may hold an address, only as a token (O36); a person reads it.
+        let Value::List(l) = r.value else { panic!() };
+        let Value::Map(row) = &l[0] else { panic!() };
+        let Some(Value::Text(detail)) = row.get("detail") else {
+            panic!("{row:?}")
+        };
+        assert!(detail.starts_with("DETAIL_"), "{detail}");
+        assert_eq!(row.get("kind"), Some(&Value::text("sign_signed")));
+        let Ok(r) = rows(&admin()) else { panic!() };
+        let Value::List(l) = r.value else { panic!() };
+        let Value::Map(row) = &l[0] else { panic!() };
+        assert_eq!(row.get("detail"), Some(&Value::text("address 203.0.113.9")));
     }
 
     #[test]
