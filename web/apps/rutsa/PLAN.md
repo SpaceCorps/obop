@@ -66,8 +66,8 @@ Checkpoint: `vp check` and `vp test` pass.
 - [x] B1 `feat(rutsa): trip and point types`: `core/types.ts` (trip: id, start, end, state
       `recording`, `paused` or `ended`, distance, source `recorded` or `manual`, segment, from, to,
       note; point: time, lat, lon, accuracy, speed, segment)
-- [ ] B2 `feat(rutsa): SQL layer`: `core/sql.ts` (from `mileage-app`), a test database on
-      `node:sqlite`
+- [x] B2 `feat(rutsa): SQL layer`: `core/sql.ts` (from `mileage-app`) and its tests (queue,
+      commit, rollback), a test database on `node:sqlite` (`test-support/memory-db.ts`)
 - [ ] B3 `feat(rutsa): database schema`: `core/schema.ts` (`trip`, `point`, `meta` with the schema
       version) and tests
 - [ ] B4 `feat(rutsa): fix conversion and thinning`: `core/fix.ts`, `core/thin.ts` (from
@@ -193,3 +193,4 @@ D23).
   UI test folder) and with the test of `xcode-lib.mjs`.
 - 2026-11-18: B1 has `from` and `to` (D7 types them); latitude and longitude are numbers, not the
   texts `mileage-app` sends to its server.
+- 2026-11-18: B2 has a test of its own (`mileage-app` tests `sql.ts` only through its store).
