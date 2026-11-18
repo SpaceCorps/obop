@@ -36,6 +36,9 @@ pub enum Engine {
     /// The instance reads on demand through a connected account (a Drive browser): nothing is
     /// pushed or pulled on a schedule, and no record of obop leaves.
     Browse,
+    /// Outbound mail through the provider's API: the `mail` module sends one message at a time
+    /// through the connection; no record is sent on events (docs/spec/mail.md).
+    Mail,
     /// Nothing runs.
     None,
 }
@@ -48,6 +51,7 @@ impl Engine {
             Self::RestPull => "rest_pull",
             Self::CsvExport => "csv_export",
             Self::Browse => "browse",
+            Self::Mail => "mail",
             Self::None => "none",
         }
     }
@@ -59,6 +63,7 @@ impl Engine {
             Self::RestPull,
             Self::CsvExport,
             Self::Browse,
+            Self::Mail,
             Self::None,
         ]
         .into_iter()
@@ -727,6 +732,160 @@ pub fn providers() -> Vec<Provider> {
             ..base()
         },
         Provider {
+            id: "postmark",
+            name: "Postmark (send mail)",
+            category: "messaging",
+            maturity: Maturity::GenericAdapter,
+            engine: Engine::Mail,
+            auth_kind: "api_key",
+            direction: "outbound",
+            max_classes: vec![NoClass, PublicDirectory, Internal],
+            purpose: "Send the instance's outbound mail (invoices, replies, notices) through Postmark.",
+            description: "A mail server of the Mail settings in Customize sends each message as one request to the Postmark email API with the server token. Tested against a local stand-in, not against Postmark itself.",
+            legal_name: "Postmark (ActiveCampaign, LLC; confirm the contracting entity)",
+            country: NOT_VERIFIED,
+            dpa_url: "https://postmarkapp.com/dpa",
+            eu_adequate: "verify",
+            allowed_hosts: vec!["api.postmarkapp.com"],
+            api_key_header: "X-Postmark-Server-Token",
+            config: vec![
+                f(
+                    "api_key",
+                    "Server API token",
+                    true,
+                    true,
+                    "From the server's API Tokens page in Postmark.",
+                ),
+                f(
+                    "message_stream",
+                    "Message stream",
+                    false,
+                    false,
+                    "Empty means the default transactional stream (outbound).",
+                ),
+            ],
+            setup: "1. In Postmark verify the sender domain or address. 2. Copy the server API token. 3. Connect here with the token, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
+            ..base()
+        },
+        Provider {
+            id: "sendgrid",
+            name: "SendGrid (send mail)",
+            category: "messaging",
+            maturity: Maturity::GenericAdapter,
+            engine: Engine::Mail,
+            auth_kind: "api_key",
+            direction: "outbound",
+            max_classes: vec![NoClass, PublicDirectory, Internal],
+            purpose: "Send the instance's outbound mail through Twilio SendGrid.",
+            description: "A mail server of the Mail settings in Customize sends each message as one request to the SendGrid v3 mail send API with a bearer API key. Tested against a local stand-in, not against SendGrid itself.",
+            legal_name: "Twilio Inc. (confirm the contracting entity)",
+            country: NOT_VERIFIED,
+            dpa_url: "https://www.twilio.com/en-us/legal/data-protection-addendum",
+            eu_adequate: "verify",
+            allowed_hosts: vec!["api.sendgrid.com"],
+            config: vec![f(
+                "api_key",
+                "API key",
+                true,
+                true,
+                "An API key with the Mail Send permission.",
+            )],
+            setup: "1. In SendGrid authenticate the sender domain. 2. Create an API key with Mail Send. 3. Connect here with the key, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
+            ..base()
+        },
+        Provider {
+            id: "mailgun",
+            name: "Mailgun (send mail)",
+            category: "messaging",
+            maturity: Maturity::GenericAdapter,
+            engine: Engine::Mail,
+            auth_kind: "basic",
+            direction: "outbound",
+            max_classes: vec![NoClass, PublicDirectory, Internal],
+            purpose: "Send the instance's outbound mail through Mailgun.",
+            description: "A mail server of the Mail settings in Customize sends each message as one form request to the Mailgun messages API of the sending domain (US or EU region). Tested against a local stand-in, not against Mailgun itself.",
+            legal_name: "Mailgun Technologies, Inc. (confirm the contracting entity)",
+            country: NOT_VERIFIED,
+            dpa_url: "https://www.mailgun.com/legal/dpa/",
+            eu_adequate: "verify",
+            allowed_hosts: vec!["api.mailgun.net", "api.eu.mailgun.net"],
+            config: vec![
+                f(
+                    "api_key",
+                    "API key",
+                    true,
+                    true,
+                    "A sending or private API key.",
+                ),
+                f(
+                    "domain",
+                    "Sending domain",
+                    false,
+                    true,
+                    "The domain as Mailgun lists it, such as mg.example.com.",
+                ),
+                f("region", "Region", false, false, "us (default) or eu."),
+            ],
+            setup: "1. In Mailgun add and verify the sending domain. 2. Create a sending API key. 3. Connect here with the key, the domain and the region, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
+            ..base()
+        },
+        Provider {
+            id: "microsoft_graph_mail",
+            name: "Microsoft 365 (send mail through Graph)",
+            category: "messaging",
+            maturity: Maturity::GenericAdapter,
+            engine: Engine::Mail,
+            auth_kind: "oauth2",
+            direction: "outbound",
+            max_classes: vec![NoClass, PublicDirectory, Internal],
+            purpose: "Send the instance's outbound mail as a Microsoft 365 mailbox, without SMTP AUTH.",
+            description: "A mail server of the Mail settings in Customize sends each message with Microsoft Graph sendMail as the mailbox that signed in. Needs your own app registration in Microsoft Entra; obop ships none. Tested against a local stand-in, not against Microsoft.",
+            legal_name: "Microsoft (confirm the contracting entity of your tenant)",
+            country: NOT_VERIFIED,
+            dpa_url: "https://www.microsoft.com/licensing/docs/view/Microsoft-Products-and-Services-Data-Protection-Addendum-DPA",
+            eu_adequate: "verify",
+            allowed_hosts: vec!["login.microsoftonline.com", "graph.microsoft.com"],
+            oauth: Some(OAuthDef {
+                auth_url: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+                token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+                scopes: "offline_access Mail.Send",
+                extra: &[],
+            }),
+            config: vec![],
+            setup: "1. Register an app in Microsoft Entra with the delegated permission Mail.Send and the redirect address shown in the connectors settings. 2. Enter its client id and secret under the provider policy. 3. Create a connection, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis, authorise as the mailbox that sends and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection; its from address must be that mailbox or one it may send as.",
+            ..base()
+        },
+        Provider {
+            id: "gmail_send",
+            name: "Gmail or Google Workspace (send mail through the Gmail API)",
+            category: "messaging",
+            maturity: Maturity::GenericAdapter,
+            engine: Engine::Mail,
+            auth_kind: "oauth2",
+            direction: "outbound",
+            max_classes: vec![NoClass, PublicDirectory, Internal],
+            purpose: "Send the instance's outbound mail as a Gmail or Google Workspace account, without an app password.",
+            description: "A mail server of the Mail settings in Customize sends each message with the Gmail API (messages.send) as the account that signed in. Needs your own OAuth client (a Google Cloud project with the consent screen configured); obop ships none. Tested against a local stand-in, not against Google.",
+            legal_name: "Google (confirm: Google Ireland Limited or Google LLC, depending on your agreement)",
+            country: NOT_VERIFIED,
+            dpa_url: "https://cloud.google.com/terms/data-processing-addendum",
+            eu_adequate: "verify",
+            allowed_hosts: vec![
+                "accounts.google.com",
+                "oauth2.googleapis.com",
+                "gmail.googleapis.com",
+            ],
+            oauth: Some(OAuthDef {
+                auth_url: "https://accounts.google.com/o/oauth2/v2/auth",
+                token_url: "https://oauth2.googleapis.com/token",
+                scopes: "https://www.googleapis.com/auth/gmail.send",
+                extra: &[("access_type", "offline"), ("prompt", "consent")],
+            }),
+            config: vec![],
+            setup: "1. In Google Cloud Console enable the Gmail API, configure and publish the OAuth consent screen with the scope gmail.send, and create an OAuth client of type Web application with the redirect address shown in the connectors settings. 2. Enter its client id and secret under the provider policy. 3. Create a connection, allow the fields to, subject and body of outbound_mail with the treatment allow (they leave as they are), record the legal basis, authorise as the account that sends and connect. 4. In Customize, Mail add a mail server of the kind Provider and choose this connection.",
+            ..base()
+        },
+        Provider {
             id: "zapier",
             name: "Zapier",
             category: "automation",
@@ -921,6 +1080,11 @@ mod tests {
             "make",
             "n8n",
             "google_drive",
+            "postmark",
+            "sendgrid",
+            "mailgun",
+            "microsoft_graph_mail",
+            "gmail_send",
         ] {
             assert_eq!(by(id), Maturity::GenericAdapter, "{id}");
         }
@@ -947,6 +1111,7 @@ mod tests {
             Engine::RestPull,
             Engine::CsvExport,
             Engine::Browse,
+            Engine::Mail,
             Engine::None,
         ] {
             assert_eq!(Engine::parse(e.as_str()), Some(e));

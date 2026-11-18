@@ -1270,6 +1270,7 @@ dependencies = [
  "obop-connectors",
  "obop-http",
  "obop-keys",
+ "obop-mail",
  "obop-masking",
  "obop-mcp",
  "obop-media",
@@ -1441,6 +1442,25 @@ dependencies = [
  "obop-storage",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "obop-mail"
+version = "0.2.2"
+dependencies = [
+ "base64 0.22.1",
+ "obop-commands",
+ "obop-connectors",
+ "obop-registry",
+ "obop-storage",
+ "obop-types",
+ "obop-values",
+ "rustls",
+ "serde_json",
+ "sha2",
+ "url",
+ "uuid",
+ "webpki-roots",
 ]
 
 [[package]]

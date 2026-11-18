@@ -1,0 +1,263 @@
+# Machine-drafted labels of the built-in Mail module (docs/spec/mail.md).
+
+[labels.es.module]
+name = "Correo"
+description = "Correo saliente: servidores de correo (relés SMTP y API de proveedores a través de los Conectores), plantillas en siete idiomas, una cola con reintentos y un registro de envíos que nunca muestra el texto."
+summary = "Envía correo a través de tu propio relé SMTP o un proveedor, con plantillas y registro de envíos."
+
+[labels.es.model.outbound_mail]
+name = "Correo saliente"
+plural = "Envíos"
+description = "Un mensaje saliente: la cola y el registro de envíos. Nunca muestra el texto"
+
+[labels.es.model.outbound_mail.field.kind]
+label = "Tipo"
+description = "Para qué es el mensaje, por ejemplo invoice o password_reset; general si no se indica"
+
+[labels.es.model.outbound_mail.field.to]
+label = "Para"
+description = "Destinatarios, separados por comas"
+
+[labels.es.model.outbound_mail.field.cc]
+label = "Copia"
+description = "Destinatarios en copia, separados por comas"
+
+[labels.es.model.outbound_mail.field.bcc]
+label = "Cco"
+description = "Destinatarios en copia oculta, separados por comas; nunca en un encabezado"
+
+[labels.es.model.outbound_mail.field.reply_to]
+label = "Responder a"
+description = "Adónde van las respuestas; vacío significa el ajuste del servidor"
+
+[labels.es.model.outbound_mail.field.subject]
+label = "Asunto"
+description = "Línea de asunto"
+
+[labels.es.model.outbound_mail.field.body]
+label = "Texto"
+description = "El texto, sellado; se borra cuando el mensaje se envía o se cancela"
+
+[labels.es.model.outbound_mail.field.template]
+label = "Plantilla"
+description = "Entrada de send: la clave de la plantilla; se guarda"
+
+[labels.es.model.outbound_mail.field.language]
+label = "Idioma"
+description = "Entrada de send: el idioma de la plantilla"
+
+[labels.es.model.outbound_mail.field.language.options]
+en = "Inglés"
+de = "Alemán"
+fr = "Francés"
+pl = "Polaco"
+fi = "Finés"
+sv = "Sueco"
+es = "Español"
+
+[labels.es.model.outbound_mail.field.vars]
+label = "Valores"
+description = "Entrada de send: los valores de la plantilla como objeto JSON; nunca se guardan"
+
+[labels.es.model.outbound_mail.field.server]
+label = "Servidor de correo"
+description = "El servidor de correo que lo envía"
+
+[labels.es.model.outbound_mail.field.status]
+label = "Estado"
+description = "en cola, enviándose, enviado, fallido o cancelado"
+
+[labels.es.model.outbound_mail.field.status.options]
+queued = "En cola"
+sending = "Enviando"
+sent = "Enviado"
+failed = "Fallido"
+cancelled = "Cancelado"
+
+[labels.es.model.outbound_mail.field.attempts]
+label = "Intentos"
+description = "Intentos de entrega hasta ahora"
+
+[labels.es.model.outbound_mail.field.next_attempt_at]
+label = "Próximo intento"
+description = "Cuándo se intenta de nuevo"
+
+[labels.es.model.outbound_mail.field.queued_at]
+label = "En cola"
+description = "Cuándo se puso en cola"
+
+[labels.es.model.outbound_mail.field.sent_at]
+label = "Enviado"
+description = "Cuándo lo aceptó el servidor o el proveedor"
+
+[labels.es.model.outbound_mail.field.last_error]
+label = "Último error"
+description = "Por qué falló el último intento, sin el texto ni las credenciales"
+
+[labels.es.model.outbound_mail.field.server_reply]
+label = "Respuesta del servidor"
+description = "La respuesta del servidor o proveedor al mensaje aceptado"
+
+[labels.es.model.outbound_mail.field.message_id]
+label = "Message-ID"
+description = "El encabezado Message-ID, el mismo en cada intento"
+
+[labels.es.model.outbound_mail.field.related_model]
+label = "Modelo relacionado"
+description = "El modelo del registro al que se refiere el mensaje"
+
+[labels.es.model.outbound_mail.field.related_id]
+label = "Registro relacionado"
+description = "El id de ese registro"
+
+[labels.es.model.outbound_mail.field.requested_by]
+label = "Puesto en cola por"
+description = "Quién lo puso en cola"
+
+[labels.es.model.outbound_mail.field.lease_until]
+label = "Reservado hasta"
+description = "Reserva del proceso, en segundos desde 1970"
+
+[labels.es.model.outbound_mail.field.due]
+label = "Vencimiento"
+description = "Cuándo toca, en segundos desde 1970"
+
+[labels.es.model.outbound_mail.action.send]
+label = "Enviar"
+description = "Poner un mensaje en cola: to, subject y body, o template con language y vars; devuelve su id. El proceso lo envía después de la llamada"
+
+[labels.es.model.outbound_mail.action.retry]
+label = "Enviar de nuevo"
+description = "Volver a poner en cola un mensaje fallido, intentos desde cero"
+
+[labels.es.model.outbound_mail.action.cancel]
+label = "Cancelar"
+description = "Cancelar un mensaje en cola; su texto se borra"
+
+[labels.es.model.outbound_mail.action.process]
+label = "Enviar pendientes"
+description = "Enviar los mensajes pendientes ahora (el proceso lo hace cada pocos segundos)"
+
+[labels.es.model.mail_server]
+name = "Servidor de correo"
+plural = "Servidores de correo"
+description = "Una salida para el correo: un relé SMTP o un proveedor a través de una conexión de los Conectores"
+
+[labels.es.model.mail_server.field.name]
+label = "Nombre"
+description = "Un nombre que distingue los servidores"
+
+[labels.es.model.mail_server.field.kind]
+label = "Envía a través de"
+description = "smtp (un relé) o provider (una API a través de una conexión de los Conectores)"
+
+[labels.es.model.mail_server.field.kind.options]
+smtp = "Relé SMTP"
+provider = "Proveedor"
+
+[labels.es.model.mail_server.field.enabled]
+label = "Activado"
+description = "El correo puede salir por este servidor"
+
+[labels.es.model.mail_server.field.is_default]
+label = "Servidor predeterminado"
+description = "Se usa para todo tipo de mensaje que ningún otro servidor indique"
+
+[labels.es.model.mail_server.field.kinds]
+label = "Tipos de mensaje"
+description = "Tipos de mensaje que envía este servidor, separados por comas (por ejemplo invoice, password_reset); vacío significa todos"
+
+[labels.es.model.mail_server.field.host]
+label = "Servidor (host)"
+description = "SMTP: nombre de host del relé"
+
+[labels.es.model.mail_server.field.port]
+label = "Puerto"
+description = "SMTP: puerto (587 para STARTTLS, 465 para TLS)"
+
+[labels.es.model.mail_server.field.security]
+label = "Seguridad"
+description = "SMTP: starttls, tls o none (none no envía contraseña)"
+
+[labels.es.model.mail_server.field.security.options]
+starttls = "STARTTLS"
+tls = "TLS"
+none = "Ninguna"
+
+[labels.es.model.mail_server.field.username]
+label = "Nombre de usuario"
+description = "SMTP: nombre de usuario; vacío significa sin autenticación"
+
+[labels.es.model.mail_server.field.password]
+label = "Contraseña"
+description = "SMTP: contraseña; solo escritura, se guarda cifrada, nunca se devuelve"
+
+[labels.es.model.mail_server.field.password_set]
+label = "Contraseña guardada"
+description = "SMTP: si hay una contraseña guardada"
+
+[labels.es.model.mail_server.field.connection]
+label = "Conexión"
+description = "Proveedor: la conexión de los Conectores que envía"
+
+[labels.es.model.mail_server.field.from_address]
+label = "Dirección del remitente"
+description = "Dirección del remitente de cada mensaje de este servidor"
+
+[labels.es.model.mail_server.field.from_name]
+label = "Nombre del remitente"
+description = "Nombre del remitente que ve el destinatario"
+
+[labels.es.model.mail_server.field.reply_to]
+label = "Dirección de respuesta"
+description = "Adónde van las respuestas; vacío significa la dirección del remitente"
+
+[labels.es.model.mail_server.field.footer]
+label = "Pie"
+description = "Texto añadido bajo cada mensaje, como los datos de la empresa o cómo dejar de recibir estos mensajes"
+
+[labels.es.model.mail_server.field.last_test_at]
+label = "Última prueba"
+description = "Cuándo se envió el último mensaje de prueba"
+
+[labels.es.model.mail_server.field.last_test_result]
+label = "Resultado de la última prueba"
+description = "Lo que respondió el servidor al último mensaje de prueba"
+
+[labels.es.model.mail_server.field.test_recipient]
+label = "Destinatario de prueba"
+description = "Entrada de test_send: la dirección del mensaje de prueba; nunca se guarda"
+
+[labels.es.model.mail_server.action.test_send]
+label = "Enviar prueba"
+description = "Enviar ahora un breve mensaje de prueba por este servidor a test_recipient y registrar la respuesta"
+
+[labels.es.model.mail_template]
+name = "Plantilla de correo"
+plural = "Plantillas de correo"
+description = "Asunto y texto de un tipo de mensaje en un idioma, con marcadores (un nombre entre llaves dobles)"
+
+[labels.es.model.mail_template.field.key]
+label = "Clave"
+description = "El tipo de mensaje de la plantilla, por ejemplo invoice o password_reset"
+
+[labels.es.model.mail_template.field.language]
+label = "Idioma"
+description = "Idioma del texto"
+
+[labels.es.model.mail_template.field.language.options]
+en = "Inglés"
+de = "Alemán"
+fr = "Francés"
+pl = "Polaco"
+fi = "Finés"
+sv = "Sueco"
+es = "Español"
+
+[labels.es.model.mail_template.field.subject]
+label = "Asunto"
+description = "Línea de asunto, con marcadores (un nombre entre llaves dobles)"
+
+[labels.es.model.mail_template.field.body]
+label = "Texto"
+description = "Texto, con marcadores (un nombre entre llaves dobles)"
