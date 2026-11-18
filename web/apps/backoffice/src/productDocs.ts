@@ -59,22 +59,34 @@ export const PRODUCT_DOC_TABS: readonly string[] = ["brand", "guide"];
 /** The tabs a person without the administrator right may open. */
 const PERSONAL_TABS: readonly string[] = ["theme", "security", ...PRODUCT_DOC_TABS];
 
+/** The Customize tab of the mail servers, open to whoever may read them (group `mail.admin`). */
+const MAIL_TAB = "mail";
+
+/** Whether the person's `/api/meta` holds the mail servers: they hold `mail.admin`. */
+export function holdsMailServers(
+  modules: readonly { models: readonly { name: string }[] }[],
+): boolean {
+  return modules.some((m) => m.models.some((x) => x.name === "mail_server"));
+}
+
 /**
  * The tabs of Customize one person sees: an administrator all of them, anyone else their own theme
- * and security (and the two documents), and nobody the two documents while they are hidden.
+ * and security (and the two documents), a person who may read the mail servers the Mail tab too
+ * (docs/spec/mail.md 1), and nobody the two documents while they are hidden.
  */
 export function visibleTabs<T extends { id: string }>(
   all: readonly T[],
-  who: { isAdmin: boolean; docs: boolean },
+  who: { isAdmin: boolean; docs: boolean; mail?: boolean },
 ): T[] {
   return all.filter(
     (x) =>
       (who.docs || !PRODUCT_DOC_TABS.includes(x.id)) &&
-      (who.isAdmin || PERSONAL_TABS.includes(x.id)),
+      (who.isAdmin || PERSONAL_TABS.includes(x.id) || (!!who.mail && x.id === MAIL_TAB)),
   );
 }
 
 /** Whether a tab id is one a person without the administrator right may open. */
-export function isPersonalTab(id: string, docs: boolean): boolean {
+export function isPersonalTab(id: string, docs: boolean, mail = false): boolean {
+  if (mail && id === MAIL_TAB) return true;
   return PERSONAL_TABS.includes(id) && (docs || !PRODUCT_DOC_TABS.includes(id));
 }

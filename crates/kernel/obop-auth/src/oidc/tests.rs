@@ -1479,6 +1479,69 @@ fn removing_the_last_passkey_of_a_local_administrator_keeps_two_local_ones() {
     r.a.remove(&p, &token, &id, &pw()).unwrap();
 }
 
+/// The rule refuses only a change that leaves an administrator with no second factor (N20 b): with
+/// exactly two break-glass administrators, one that holds an authenticator app and a passkey may
+/// remove the passkey, and then, with a passkey again, turn the app off; the last factor is not
+/// removed.
+#[test]
+fn a_break_glass_administrator_with_two_second_factors_may_drop_one_of_them() {
+    let (r, secret2) = depending_world();
+    r.a.set_clock_for_test(T0 + 60);
+    let t = mfa_token(&r.a, "root2");
+    let (token, _) = session_of(
+        r.a.login_mfa(&t, Some(&code_at(&secret2, T0 + 60)), None)
+            .unwrap(),
+    );
+    let p = r.a.resolve(&token).unwrap();
+    let prove = |key: &mut SoftAuthenticator| {
+        let opts = r.a.proof_options(&p, &ctx()).unwrap();
+        r.a.proof(&p, &ctx(), &key.get(&opts, ORIGIN)).unwrap();
+    };
+    let first_id = |r: &Rig| {
+        r.a.list(&p, &ctx()).unwrap()["passkeys"][0]["id"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    // Adding a passkey asks for the password and a code of the app again.
+    let add_at = |key: &mut SoftAuthenticator, name: &str, at: u64| {
+        r.a.set_clock_for_test(at);
+        let code = code_at(&secret2, at);
+        let again = obop_commands::Reauth {
+            password: PW,
+            code: Some(&code),
+            ..Default::default()
+        };
+        let opts = r.a.register_options(&p, &ctx(), &again).unwrap();
+        let cred = key.create(&opts, ORIGIN);
+        r.a.register_finish(&p, &token, &ctx(), name, &cred)
+            .unwrap();
+    };
+    // The app and a passkey: the passkey goes, the app is left.
+    let mut key = SoftAuthenticator::es256();
+    add_at(&mut key, "Key", T0 + 90);
+    prove(&mut key);
+    r.a.remove(&p, &token, &first_id(&r), &pw()).unwrap();
+    assert_eq!(
+        sso(&r).bindings(&admin("root1")).unwrap()["break_glass"],
+        json!(["root1", "root2"])
+    );
+    // A passkey again and the app goes, the passkey is left.
+    let mut key = SoftAuthenticator::es256();
+    add_at(&mut key, "Key 2", T0 + 150);
+    r.a.set_clock_for_test(T0 + 210);
+    r.a.disable(&p, PW, Some(&code_at(&secret2, T0 + 210)), None)
+        .unwrap();
+    assert_eq!(
+        sso(&r).bindings(&admin("root1")).unwrap()["break_glass"],
+        json!(["root1", "root2"]),
+        "the passkey keeps root2 a break-glass administrator"
+    );
+    // The last one stays.
+    prove(&mut key);
+    shortfall(r.a.remove(&p, &token, &first_id(&r), &pw()));
+}
+
 #[test]
 fn the_operator_is_warned_not_stopped_and_the_line_says_what_was_left() {
     let (r, _) = depending_world();
@@ -1615,6 +1678,24 @@ fn a_binding_of_another_tenant_than_the_providers_is_not_made_microsoft_only() {
 /// made, and not an application connected through the OAuth sign-in for MCP clients.
 #[test]
 fn an_unbind_ends_the_sessions_and_the_phone_apps_but_not_agent_tokens_or_mcp_apps() {
+    ends_sessions_and_phones_only("oidc_unbind", |r| {
+        sso(r).unbind(&admin("root1"), "ada").unwrap();
+    });
+}
+
+/// Making the account Microsoft-only runs the same ending as an unbind (`revoke_user_sessions`),
+/// and leaves the same things working (N20 g; D91 section 5, unchanged by the owner's answer of
+/// 2026-11-18).
+#[test]
+fn microsoft_only_ends_the_sessions_and_the_phone_apps_but_not_agent_tokens_or_mcp_apps() {
+    ends_sessions_and_phones_only("oidc_sso_only", |r| {
+        sso_only(r, "ada", true).unwrap();
+    });
+}
+
+/// `change` ends the sessions and the phone app of `ada` (signed in once with Microsoft) and leaves
+/// her agent token and her MCP application working, as the line of kind `kind` says.
+fn ends_sessions_and_phones_only(kind: &str, change: impl Fn(&Rig)) {
     use obop_commands::OAuthTokens;
     let r = world();
     signed_in_once(&r, ADA_OID);
@@ -1658,7 +1739,7 @@ fn an_unbind_ends_the_sessions_and_the_phone_apps_but_not_agent_tokens_or_mcp_ap
     }
     r.b.insert("device", "dev-1", &d).unwrap();
 
-    sso(&r).unbind(&admin("root1"), "ada").unwrap();
+    change(&r);
 
     let revoked = |table: &str, id: &str| r.b.get(table, id).unwrap().unwrap()["revoked"] == true;
     // Ended: the session, and the phone (its device, grant, access token and refresh token).
@@ -1684,7 +1765,7 @@ fn an_unbind_ends_the_sessions_and_the_phone_apps_but_not_agent_tokens_or_mcp_ap
             .unwrap()
             .is_some()
     );
-    let line = events(&r, "oidc_unbind").pop().unwrap();
+    let line = events(&r, kind).pop().unwrap();
     assert!(
         line.contains("the phone apps of the account with them")
             && line.contains("agent tokens")

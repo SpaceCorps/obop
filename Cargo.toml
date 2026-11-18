@@ -24,6 +24,7 @@ obop-migrate = { path = "crates/kernel/obop-migrate" }
 obop-ops = { path = "crates/kernel/obop-ops" }
 obop-media = { path = "crates/kernel/obop-media" }
 obop-payments = { path = "crates/kernel/obop-payments" }
+obop-mail = { path = "crates/kernel/obop-mail" }
 obop-auth = { path = "crates/kernel/obop-auth" }
 obop-oauth = { path = "crates/kernel/obop-oauth" }
 obop-pkg = { path = "crates/kernel/obop-pkg" }

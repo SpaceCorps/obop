@@ -109,6 +109,15 @@ description = "Det fullständiga namn som signeraren skrev (bevis); signer_name 
 label = "Version av samtycket"
 description = "Samtyckestextens id: dess version, språket för inskickningen (formulärets lang om det anger ett av de sju; om formuläret saknar fältet lang helt, adressens; annars webbläsarens, instansens och till sist engelska; inget bevis för sidan som visades) och de 8 första hextecknen i en hash av texterna på det språket, till exempel v1-draft/sv/9e91bef0"
 
+[labels.sv.model.sign_request.field.evidence_check]
+label = "Kontroll av bevis"
+description = "Om bevisen för en begäran som signerats via länk fortfarande stämmer med säkerhetsloggens post från signeringen (från Sign 0.3.0 även rubrik, meddelande och begärt namn): stämmer, avviker (ändrad efter signeringen) eller ingen post. Tas fram bara vid get, tom i listor. Inte förfalskningssäkert: den som kan skriva i databasen kan ändra båda"
+
+[labels.sv.model.sign_request.field.evidence_check.options]
+matches = "Stämmer"
+differs = "Avviker"
+no_entry = "Ingen post"
+
 [labels.sv.model.sign_request.field.state]
 label = "Status"
 description = "Begärans status: utkast, skickad, signerad, avböjd, utgången"
