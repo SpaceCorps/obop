@@ -213,13 +213,21 @@ export function ModelPage({
   const base = useMemo(() => ({ app: route.app, model: route.model }), [route.app, route.model]);
   const put = useCallback(
     (
-      patch: { view?: string; id?: string; st?: string; page?: string; full?: string },
+      patch: {
+        view?: string;
+        id?: string;
+        st?: string;
+        page?: string;
+        full?: string;
+        field?: string;
+      },
       replace = false,
     ) => {
       const id = patch.id ?? route.id;
       go(
         {
           ...base,
+          ...(patch.field ? { field: patch.field } : {}),
           view: patch.view ?? route.view,
           id,
           st: patch.st ?? route.st,
@@ -261,7 +269,9 @@ export function ModelPage({
       return;
     }
     const preset = defaultFilter(model, fields, { user, today: today() });
-    if (preset) put({ st: encodeState({ ...decodeState(""), facets: preset }) }, true);
+    // The field a link names (`&field=`, Q19) stays, so the record it opens still focuses it.
+    if (preset)
+      put({ st: encodeState({ ...decodeState(""), facets: preset }), field: route.field }, true);
     // only on first open of this model
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -293,4 +293,8 @@ describe("defaultFilter", () => {
     expect(defaultFilter(plain, plain.fields, { today: "2026-11-17" })).toBeNull();
     expect(defaultFilter(leave, [], { today: "2026-11-17" })).toBeNull();
   });
+  it("is nothing for a reader who sees its field masked (an agent cannot filter on it)", () => {
+    const masked = { ...leave, fields: leave.fields.map((x) => ({ ...x, masked: true })) };
+    expect(defaultFilter(masked, masked.fields, { today: "2026-11-17" })).toBeNull();
+  });
 });
