@@ -1,6 +1,6 @@
 [module]
 id = "knowledge"
-version = "0.2.1"
+version = "0.2.2"
 name = "Knowledge"
 description = "A wiki: articles arranged in a tree through a parent article, with a draft, published, archived flow, a visibility setting and tags. Visibility is a label for the UI and for people to respect; the platform has no row-level permissions yet, so everyone with the Knowledge groups can read every article."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["productivity"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "knowledge_article"
-changelog = "Clearer screens: an article opens with its title, parent and body first and the body shown as formatted text until you edit it, with the details folded below, saved filters and safer action buttons. A new article is for the workspace and names the person who writes it unless they say otherwise. Publishing now stamps the day it was first published; that date is set by the server only."
+changelog = "0.2.2: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). Clearer screens: an article opens with its title, parent and body first and the body shown as formatted text until you edit it, with the details folded below, saved filters and safer action buttons. A new article is for the workspace and names the person who writes it unless they say otherwise. Publishing now stamps the day it was first published; that date is set by the server only."
 
 [[model]]
 name = "knowledge_article"
