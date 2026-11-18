@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Buchführung Schweden"
 description = "Schwedische Lokalisierung der Buchführung: Firmendaten, Belegserien, Mehrwertsteuercodes und -felder sowie ein Mehrwertsteuerbericht je Periode, den die Gruppe accounting.approver freigibt. UNGEPRÜFT: nichts wurde mit Skatteverket (SKV 4700) oder SIE abgeglichen. Kein BAS-Kontenplan enthalten; Konten wählt der Nutzer. Beträge in Öre, Sätze in Basispunkten. Nichts wird von hier eingereicht."
+summary = "Schwedische Firmendaten, Belegserien, Mehrwertsteuercodes, -felder und ein Mehrwertsteuerbericht. Alle Mehrwertsteuerzuordnungen UNGEPRÜFT."
 
 [labels.de.model.accounting_se_company]
 name = "Unternehmen"

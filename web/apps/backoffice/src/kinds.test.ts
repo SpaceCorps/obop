@@ -28,6 +28,18 @@ const fields = [price, at];
 const lk: Lookup = { refText: (_m, id) => id, refIds: () => [] };
 const row = (v: Partial<Row>): Row => ({ id: "r", ...v });
 
+describe("time of day fields in forms", () => {
+  it("say a time is expected, not a whole number (S5)", () => {
+    const start = f("start_minute", "number", {
+      ui: { display: "time_of_day" },
+    } as Partial<FieldMeta>);
+    expect(fromEdit(start, "14:3x")).toEqual({ error: expect.stringContaining("time like 14:30") });
+    expect(fromEdit(f("qty", "number"), "x")).toEqual({
+      error: expect.stringContaining("whole number"),
+    });
+  });
+});
+
 describe("decimal fields in forms", () => {
   it("turn what was typed into the canonical text, or say why not", () => {
     for (const [typed, want] of [

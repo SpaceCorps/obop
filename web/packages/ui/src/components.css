@@ -475,6 +475,11 @@ th > input[type="checkbox"] {
   opacity: 0;
   cursor: pointer;
 }
+/* Stays invisible when disabled: the rule that dims a disabled checkbox is more specific. */
+.switch input:disabled {
+  opacity: 0;
+  cursor: not-allowed;
+}
 .switch .track {
   position: relative;
   flex: none;

@@ -63,6 +63,9 @@ describe("times of day", () => {
     expect(clockText(0)).toBe("00:00");
     expect(parseClock("14:30")).toBe(870);
     expect(parseClock("1430")).toBe(870);
+    // A German phone's number keypad has a comma and no colon.
+    expect(parseClock("14,30")).toBe(870);
+    expect(parseClock("14.30")).toBe(870);
     expect(parseClock("9")).toBe(540);
     expect(parseClock("24:00")).toBeNull();
   });

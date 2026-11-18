@@ -23,6 +23,10 @@ pub struct ModelExt {
     pub system_fields: bool,
     /// `[model.ui]` and `[[model.child]]` (D95); `None`: none declared.
     pub ui: Option<std::sync::Arc<crate::ui::ModelUi>>,
+    /// `[[model.rule]]` (D88, first slice): conditions every write of the model keeps true.
+    pub rules: Vec<crate::model_rules::ModelRule>,
+    /// `[model.no_overlap]` (D88 amendment): no two records of one key with overlapping times.
+    pub no_overlap: Option<crate::model_rules::NoOverlap>,
 }
 
 /// Record history of one model (D75). A model that does not turn it off keeps the full history,

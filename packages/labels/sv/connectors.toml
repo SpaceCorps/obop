@@ -704,3 +704,38 @@ description = "Varje fält med klass och behandling, som JSON; sparas aldrig"
 [labels.sv.model.privacy_preview.action.render]
 label = "Rendera"
 description = "Rendera en exempelpost efter maskering och pseudonymisering"
+
+# The providers of the catalogue, offered where a setting or a connection picks one (GitHub issue 108).
+# Machine-drafted; the native-speaker review is the gate.
+
+[labels.sv.model.provider_policy.field.provider.options]
+webhook_out = "Webhook (skicka)"
+webhook_in = "Webhook (ta emot)"
+rest_api_pull = "REST-API (hämtning)"
+csv_export = "CSV-export"
+slack_webhook = "Slack (inkommande webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (e-signatur)"
+github_webhook = "GitHub (inkommande webhook)"
+google_drive = "Google Drive (bläddra och lägg till dokument)"
+google_oauth = "Google (kalender och kontakter, läsa)"
+microsoft_oauth = "Microsoft (kalender och kontakter, läsa)"
+zapier = "Zapier (automatisering)"
+make = "Make (automatisering)"
+n8n = "n8n (automatisering)"
+
+[labels.sv.model.connection.field.provider.options]
+webhook_out = "Webhook (skicka)"
+webhook_in = "Webhook (ta emot)"
+rest_api_pull = "REST-API (hämtning)"
+csv_export = "CSV-export"
+slack_webhook = "Slack (inkommande webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (e-signatur)"
+github_webhook = "GitHub (inkommande webhook)"
+google_drive = "Google Drive (bläddra och lägg till dokument)"
+google_oauth = "Google (kalender och kontakter, läsa)"
+microsoft_oauth = "Microsoft (kalender och kontakter, läsa)"
+zapier = "Zapier (automatisering)"
+make = "Make (automatisering)"
+n8n = "n8n (automatisering)"

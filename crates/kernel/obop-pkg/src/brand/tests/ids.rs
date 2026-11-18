@@ -202,6 +202,51 @@ fn a_package_cannot_take_the_id_of_a_module_registered_before_the_installer() {
     }
 }
 
+/// K58: a module of the program that holds only an observer (no command) is reserved all the
+/// same: a package of its id is refused, so that its uninstall cannot remove the observer.
+#[test]
+fn a_package_cannot_take_the_id_of_a_module_that_has_only_an_observer() {
+    let store = Store::new();
+    let d = Arc::new(Dispatcher::new());
+    d.observe("ghost", Box::new(|_, _, _, _| {}));
+    let inst = Installer::new(store.clone(), &d, vec![admin_module()], Arc::new(Bundled));
+    register_admin(&d, &inst);
+    let e = inst
+        .install(
+            &package("ghost", "0.1.0", &["ghost_item"]),
+            "upload",
+            "root",
+        )
+        .unwrap_err();
+    assert!(e.contains("ghost is a built-in module"), "{e}");
+    assert!(d.module_ids().iter().any(|m| m == "ghost"));
+}
+
+/// K57: after a package is installed, a module of the program cannot be registered under its id,
+/// so the package's uninstall cannot take such a module's commands with it.
+#[test]
+fn a_module_of_the_program_cannot_be_registered_under_the_id_of_a_package() {
+    let store = Store::new();
+    let b = process(&store, &[], &[]);
+    b.inst
+        .install(
+            &package("fleet", "0.1.0", &["fleet_item"]),
+            "upload",
+            "root",
+        )
+        .unwrap();
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        b.d.register_crud(&hand_module("fleet", "fleet_other"), &store)
+    }));
+    assert!(
+        r.is_err(),
+        "the program's module was registered under the package's id"
+    );
+    assert!(!b.d.has_model("fleet_other"));
+    b.inst.uninstall("fleet").unwrap();
+    assert!(!b.d.module_ids().iter().any(|m| m == "fleet"));
+}
+
 /// The ids and the model names are those the dispatcher had when the installer was made, not those
 /// it still has: a module that is gone again is still the program's id, and its model is still a
 /// name the program keeps. (The module has a model that a package of another id could declare.)

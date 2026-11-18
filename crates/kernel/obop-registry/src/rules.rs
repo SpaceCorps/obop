@@ -749,6 +749,7 @@ impl ModelDef {
             .iter()
             .any(|f| f.unique.is_some() || f.sequence.is_some())
             || self.commands.iter().any(|c| !c.effects.is_empty())
+            || self.ext.no_overlap.is_some()
     }
 
     pub fn computed_fields(&self) -> impl Iterator<Item = &FieldDef> {
@@ -1613,6 +1614,9 @@ pub fn check_rules(module: &Module, lookup_ext: Lookup<'_>, strict: bool) -> Vec
         }
         if let Some(a) = &m.access {
             check_access(m, a, &lookup, &mut |p| bad(mp.clone(), p));
+        }
+        for p in crate::model_rules::problems(m, &lookup) {
+            bad(format!("{mp}.rule"), p);
         }
         for c in &m.commands {
             let cp = format!("{mp}::{}", c.name);

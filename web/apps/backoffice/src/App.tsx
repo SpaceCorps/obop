@@ -168,10 +168,12 @@ export function App() {
     // Before the first screen: the Brand book and the Guide are never drawn and then taken away. A
     // read that failed changes nothing.
     if (hideDocs !== undefined) setProductDocsHidden(hideDocs);
+    // The instance language is loaded before the first screen, so it is drawn in that language and
+    // not first in the browser's (D12). A catalogue that fails to load leaves the language as it is.
+    await setInstanceDefaults({ language: s.language, currency: s.currency }).catch(() => {});
     setModules(m);
     setSettings(s);
     applyTheme(resolveTheme(s.theme));
-    void setInstanceDefaults({ language: s.language, currency: s.currency });
     setReady(true);
   }, [token, signOut]);
 
@@ -239,7 +241,8 @@ export function App() {
     });
   }, [route.app, route.model]);
   const confirm = useCallback(
-    (message: string, confirmLabel = t("Discard"), cancelLabel = t("Keep editing")) =>
+    // The default labels are worded when the dialog is drawn, in the language of that moment (D8).
+    (message: string, confirmLabel?: string, cancelLabel?: string) =>
       new Promise<boolean>((resolve) =>
         setConfirmReq({
           message,
@@ -284,6 +287,15 @@ export function App() {
   // The names of the apps and their order are translated and sorted when the list is built, so it is
   // built again when the language or the region changes (the root renders again, but a memo keeps its value).
   const { lang, locale } = useI18n();
+  // A toast keeps the words it was written in: after a change of language the open ones go, so no
+  // sentence stays in the old language (D8).
+  const shownLang = useRef(lang);
+  useEffect(() => {
+    if (shownLang.current === lang) return;
+    shownLang.current = lang;
+    toastAt.current.clear();
+    setToasts([]);
+  }, [lang]);
   const apps = useMemo(
     () => buildApps(modules, settings, isAdmin),
     [modules, settings, isAdmin, lang, locale],

@@ -68,6 +68,11 @@ export type FieldUi = {
   hidden?: boolean;
   /** Where the currency of a money field comes from: a path such as `journal_id.currency`. */
   currency_from?: string;
+  /**
+   * A condition on the saved record (the display subset, displayCondition.ts) while which the form
+   * shows the field read-only. A hint only: the server holds its own rule.
+   */
+  readonly_when?: string;
 };
 
 /**
@@ -109,6 +114,8 @@ export type ModelUi = {
   report?: { rows?: string; cols?: string; measure?: string };
   section?: UiSection[];
   filter?: UiFilter[];
+  /** The label of one of `filter` that a list opened without a search of its own starts with. */
+  default_filter?: string;
   /** Where a record is seen on the public site: `/blog/{slug}`. */
   public_url?: string;
 };
@@ -196,6 +203,8 @@ export type FieldMeta = {
   option_labels?: Record<string, Translations>;
   class: string;
   personal_data: boolean;
+  /** This caller does not read the field in clear (an agent and personal data): no sort or filter by it. */
+  masked?: boolean;
   kind: Kind;
   required: boolean;
   /** Only for `select`: the allowed values, in their natural order (for example statuses). */

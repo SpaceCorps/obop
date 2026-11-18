@@ -6,6 +6,77 @@ import { expect, test } from "../support/fixtures.ts";
 // `requested_by` is filled from the employee's user by the server.
 
 test.describe("employees", () => {
+  test("a day picked in the leave calendar keeps its date and the person's own record", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const root = await api.token("root");
+    await api.post("/api/marketplace_listing/install", { id: "hr" }, root);
+    try {
+      for (const was of (await api.list("root", "hr_employee")).filter((r) => r.user === "eve"))
+        await api.post("/api/hr_employee/update", { id: was.id, user: null }, root);
+      const eve = await api.create("root", "hr_employee", { name: uid("Eve Day"), user: "eve" });
+      await signIn("eve", "/hr/hr_leave_request?view=calendar");
+      // R2: the new form opened from a day starts on that day and on her own employee record.
+      // A day that is not today (the form's own default), so that the date can only come from the
+      // click.
+      const day = page
+        .getByRole("button", { name: /^New record on / })
+        .filter({ hasNotText: String(new Date().getDate()) })
+        .nth(3);
+      const label = (await day.getAttribute("aria-label"))!.replace("New record on ", "");
+      const d = new Date(label);
+      const shown = d.toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+      });
+      await day.click();
+      await expect(page.getByRole("combobox", { name: "Employee" })).toHaveValue(eve.name);
+      await expect(page.locator("input").and(page.getByLabel("First day"))).toHaveValue(shown);
+    } finally {
+      await api.post("/api/module/uninstall", { id: "hr" }, root);
+    }
+  });
+
+  test("the time off list opens without refused leave until the filter is removed", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const root = await api.token("root");
+    await api.post("/api/marketplace_listing/install", { id: "hr" }, root);
+    try {
+      const who = await api.create("root", "hr_employee", { name: uid("Rita Refused") });
+      const leave = (start: string) =>
+        api.create("root", "hr_leave_request", {
+          employee_id: who.id,
+          leave_kind: "paid",
+          start_on: start,
+          end_on: start,
+          days: 1,
+        });
+      const kept = await leave("2026-12-02");
+      const refused = await leave("2026-12-03");
+      for (const a of ["request", "refuse"])
+        await api.post(`/api/hr_leave_request/${a}`, { id: refused.id }, root);
+      await signIn("root", "/hr/hr_leave_request?view=list");
+      // R5: the package's default filter is on, and hides the refused request.
+      const chip = page.getByRole("button", { name: /^Remove filter/ });
+      await expect(chip).toHaveCount(1);
+      const rows = page.getByRole("row").filter({ hasText: who.name });
+      await expect(rows).toHaveCount(1);
+      expect(kept.id).toBeTruthy();
+      await chip.click();
+      await expect(rows).toHaveCount(2);
+    } finally {
+      await api.post("/api/module/uninstall", { id: "hr" }, root);
+    }
+  });
+
   test("the org chart shows who reports to whom and opens a person", async ({
     page,
     signIn,
@@ -62,6 +133,56 @@ test.describe("employees", () => {
       await hit.click();
       await expect(page).toHaveURL(new RegExp(`hr_employee\\?id=${clerk.id}`));
       await expect(page.getByRole("complementary", { name: /record$/ })).toContainText(clerk.name);
+    } finally {
+      await api.post("/api/module/uninstall", { id: "hr" }, root);
+    }
+  });
+
+  test("the org chart is one Tab stop and walks with the arrow keys (R15)", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const root = await api.token("root");
+    await api.post("/api/marketplace_listing/install", { id: "hr" }, root);
+    try {
+      const boss = await api.create("root", "hr_employee", { name: uid("Kai Keys") });
+      const lead = await api.create("root", "hr_employee", {
+        name: uid("Lena Left"),
+        reports_to_id: boss.id,
+      });
+      const clerk = await api.create("root", "hr_employee", {
+        name: uid("Rui Right"),
+        reports_to_id: lead.id,
+      });
+
+      await signIn("root", "/hr/org_chart");
+      const tree = page.getByRole("tree", { name: "Org chart" });
+      await expect(tree.getByRole("treeitem", { name: boss.name })).toBeVisible();
+      // One Tab stop: a single person of the chart is in the tab order, the links and buttons not.
+      expect(await tree.locator('[tabindex="0"]').count()).toBe(1);
+      expect(
+        await tree.locator("a:not([tabindex='-1']), button:not([tabindex='-1'])").count(),
+      ).toBe(0);
+
+      const focused = () =>
+        page.evaluate(() => document.activeElement?.getAttribute("data-person"));
+      await tree.getByRole("treeitem", { name: boss.name }).focus();
+      await page.keyboard.press("ArrowDown");
+      expect(await focused()).toBe(lead.id);
+      await page.keyboard.press("ArrowDown");
+      expect(await focused()).toBe(clerk.id);
+      await page.keyboard.press("ArrowLeft");
+      expect(await focused()).toBe(lead.id);
+      // Left on an unfolded person folds them; Right unfolds again.
+      await page.keyboard.press("ArrowLeft");
+      await expect(tree.getByRole("treeitem", { name: clerk.name })).toHaveCount(0);
+      await page.keyboard.press("ArrowRight");
+      await expect(tree.getByRole("treeitem", { name: clerk.name })).toBeVisible();
+      // Enter opens the person.
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(new RegExp(`hr_employee\\?id=${lead.id}`));
     } finally {
       await api.post("/api/module/uninstall", { id: "hr" }, root);
     }

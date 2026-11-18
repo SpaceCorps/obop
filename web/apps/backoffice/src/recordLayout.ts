@@ -22,6 +22,19 @@ export type FormSection = {
   personal: boolean;
 };
 
+/**
+ * A section once drawn open stays open for the record (#105): emptying the last filled field of a
+ * group (turning Active off) must not fold the group and hide the control just used. `seen` holds
+ * the keys drawn open so far for this record and is updated.
+ */
+export function keepShown(sections: FormSection[], seen: Set<string>): FormSection[] {
+  const out = sections.map((s) =>
+    s.collapsed && seen.has(s.key) ? { ...s, collapsed: false } : s,
+  );
+  for (const s of out) if (!s.collapsed) seen.add(s.key);
+  return out;
+}
+
 /** A field the person never writes: the server computes, numbers or sets it. */
 export const serverSet = (f: FieldMeta): boolean => !!(f.computed || f.sequence || f.readonly);
 

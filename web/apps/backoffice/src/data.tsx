@@ -27,6 +27,18 @@ import type { Lookup } from "./query.ts";
 const NO_STRINGS: string[] = [];
 const NO_ROWS: Row[] = [];
 
+/**
+ * Models the server computes from another model's records: a write to the key changes what the
+ * listed models read, so their cached rows are loaded again with it (#109: a provider policy
+ * saved from any form enables or locks its provider in the connectors catalogue).
+ */
+export const DERIVED: Readonly<Record<string, readonly string[]>> = {
+  provider_policy: ["connector_provider"],
+};
+
+/** The models whose cached rows a write to `model` makes stale: itself and what derives from it. */
+export const staleAfter = (model: string): string[] => [model, ...(DERIVED[model] ?? [])];
+
 export type Tone = "ok" | "error" | "info";
 
 /** Lists of records, loaded once per model and shared by the page, ref pickers, labels and smart buttons. */
@@ -261,7 +273,7 @@ export function DataProvider(props: {
       },
       linkTo: linkFor,
       changed: async (model) => {
-        await store.refresh(model);
+        await Promise.all(staleAfter(model).map((m) => store.refresh(m)));
         setMutations((n) => n + 1);
       },
       refreshAll: () => {
@@ -272,7 +284,7 @@ export function DataProvider(props: {
         const r = await call(token, id, body);
         if (r.kind === "ok") {
           // Actions and writes change records of their own model, and a delete may free others.
-          await store.refresh(id.split(".")[0]!);
+          await Promise.all(staleAfter(id.split(".")[0]!).map((m) => store.refresh(m)));
           setMutations((n) => n + 1);
         }
         return r;

@@ -22,7 +22,7 @@ import {
   compareText,
   t,
 } from "@obop/ui";
-import { call, search, type Reply, type Row } from "../../api.ts";
+import { call, type Reply, type Row } from "../../api.ts";
 import { BlobThumb } from "../../BlobFields.tsx";
 import type { App } from "../../Chrome.tsx";
 import { useData, useRows } from "../../data.tsx";
@@ -161,23 +161,15 @@ function OpenRegister(p: {
   const cur = str(chosen?.currency) || undefined;
   const [cash, setCash] = useState<string>("");
   const [busy, setBusy] = useState(false);
-  // The drawer holds what was counted when the till last closed; the till's default only when it
-  // never closed.
+  // The server proposes what the drawer holds: what was counted when the till last closed, the
+  // till's default only when it never closed (pos_opening.propose, the default of create too).
   useEffect(() => {
     let live = true;
     setCash(chosen ? majorString(num(chosen.default_opening_cash), cur) : "");
     if (chosen)
-      void search(d.token, SESSION, {
-        filter: [
-          { field: "config_id", op: "eq", value: chosen.id },
-          { field: "state", op: "eq", value: "closed" },
-        ],
-        order: [{ field: "closed_on", dir: "desc" }],
-        limit: 1,
-      }).then((r) => {
-        const last = "error" in r ? undefined : r.rows[0];
-        if (live && last && typeof last.closing_cash === "number")
-          setCash(majorString(last.closing_cash, cur));
+      void call(d.token, "pos_opening.propose", { config: chosen.id }).then((r) => {
+        const v = r.kind === "ok" ? (r.value as Row).opening_cash : undefined;
+        if (live && typeof v === "number") setCash(majorString(v, cur));
       });
     return () => {
       live = false;
@@ -994,8 +986,10 @@ function CloseDialog(p: {
   onClosed: () => void;
 }) {
   const d = useData();
-  const opening = num(p.session.opening_cash);
-  const [cashSales, setCashSales] = useState<number | null>(null);
+  // The server computes what the drawer should hold (pos_session.expected_cash: the opening cash
+  // plus the cash payments of the paid sales); the dialog shows it and sends only the count.
+  const [opening, setOpening] = useState(num(p.session.opening_cash));
+  const [expected, setExpected] = useState<number | null>(null);
   const [count, setCount] = useState(0);
   const [counted, setCounted] = useState("");
   const [note, setNote] = useState("");
@@ -1003,43 +997,31 @@ function CloseDialog(p: {
   useEffect(() => {
     let live = true;
     void (async () => {
-      const orders = await call(d.token, "pos_order.search", {
-        filter: [
-          { field: "session_id", op: "eq", value: p.session.id },
-          { field: "state", op: "eq", value: "paid" },
-        ],
-        limit: 5000,
-      });
-      const ids =
-        orders.kind === "ok" ? (orders.value as { rows: Row[] }).rows.map((r) => r.id) : [];
-      let cash = 0;
-      if (ids.length) {
-        const pays = await call(d.token, "pos_payment.search", {
+      const [s, orders] = await Promise.all([
+        call(d.token, `${SESSION}.get`, { id: p.session.id }),
+        call(d.token, "pos_order.search", {
           filter: [
-            { field: "order_id", op: "in", value: ids },
-            { field: "method", op: "eq", value: "cash" },
+            { field: "session_id", op: "eq", value: p.session.id },
+            { field: "state", op: "eq", value: "paid" },
           ],
-          limit: 5000,
-        });
-        if (pays.kind === "ok")
-          cash = (pays.value as { rows: Row[] }).rows.reduce((s, r) => s + num(r.amount), 0);
-      }
-      if (live) {
-        setCount(ids.length);
-        setCashSales(cash);
-      }
+          limit: 1,
+        }),
+      ]);
+      if (!live || s.kind !== "ok") return;
+      const row = s.value as Row;
+      const exp = num(row.expected_cash);
+      setOpening(num(row.opening_cash));
+      setExpected(exp);
+      setCounted(majorString(exp, p.currency));
+      setCount(orders.kind === "ok" ? num((orders.value as { total?: number }).total) : 0);
     })();
     return () => {
       live = false;
     };
-  }, [d.token, p.session.id]);
-  const expected = opening + (cashSales ?? 0);
-  useEffect(() => {
-    if (cashSales !== null) setCounted(majorString(expected, p.currency));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cashSales]);
+  }, [d.token, p.session.id, p.currency]);
+  const cashSales = expected === null ? null : expected - opening;
   const closing = parseMoney(counted, p.currency);
-  const diff = closing === null ? null : closing - expected;
+  const diff = closing === null || expected === null ? null : closing - expected;
   // A difference closes only with a note that explains it (the close action asserts the same).
   const [tried, setTried] = useState(false);
   const noteMissing = !!diff && !note.trim();
@@ -1050,12 +1032,7 @@ function CloseDialog(p: {
     setBusy(true);
     try {
       // The count is an update of its own; the state moves only through the close action.
-      const body: Record<string, unknown> = {
-        id: p.session.id,
-        expected_cash: expected,
-        closing_cash: closing,
-        cash_difference: diff ?? 0,
-      };
+      const body: Record<string, unknown> = { id: p.session.id, closing_cash: closing };
       if (note.trim()) body.note = note.trim();
       const u = await d.run(`${SESSION}.update`, body);
       if (u.kind !== "ok") return d.notify(failure(u), "error");
@@ -1112,7 +1089,7 @@ function CloseDialog(p: {
             </div>
             <div className="pos-sum-total">
               <dt>{t("Expected in the drawer")}</dt>
-              <dd className="tabular">{money(expected, p.currency)}</dd>
+              <dd className="tabular">{money(expected ?? 0, p.currency)}</dd>
             </div>
           </dl>
           <Input

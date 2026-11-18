@@ -26,6 +26,7 @@ test("a manufacturing order uses its components and makes its product", async ({
   signIn,
   api,
   uid,
+  allowHttpErrors,
 }) => {
   await withManufacturing(api, async () => {
     const wh = await api.create("root", "inventory_warehouse", {
@@ -71,7 +72,17 @@ test("a manufacturing order uses its components and makes its product", async ({
     expect(mo.product_id).toBe(kit.id);
     expect(mo.number).toMatch(/^MO-\d{5}$/);
 
-    await signIn("root", `/manufacturing/manufacturing_order?id=${mo.id}`);
+    // Q17: an order with neither a location nor components is told both on one Confirm.
+    allowHttpErrors(400);
+    const bare = await api.create("root", "manufacturing_order", { bom_id: bom.id, quantity: 1 });
+    await signIn("root", `/manufacturing/manufacturing_order?id=${bare.id}`);
+    const barePanel = page.getByRole("complementary", { name: "Manufacturing order record" });
+    await barePanel.getByRole("button", { name: "Confirm", exact: true }).click();
+    const refusal = page.locator(".toast").filter({ hasText: "Choose the production location" });
+    await expect(refusal).toContainText("Add the components first");
+    await expect(refusal).not.toContainText("assertion");
+
+    await page.goto(`/#/manufacturing/manufacturing_order?id=${mo.id}`);
     const panel = page.getByRole("complementary", { name: "Manufacturing order record" });
     await panel.getByRole("button", { name: "Add components from the bill of materials" }).click();
     await expect(page.locator(".toast").filter({ hasText: "2 components added" })).toBeVisible();
