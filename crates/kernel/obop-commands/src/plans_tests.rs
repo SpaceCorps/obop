@@ -657,7 +657,9 @@ fn rule8_a_plan_without_a_receipt_lists_as_time_unknown_and_is_approvable() {
 
 #[test]
 fn rule8_the_stored_plan_is_what_it_was() {
-    // `plan:{id}` keeps its shape: the three keys an older process reads, nothing more.
+    // `plan:{id}` keeps main's shape: D97 adds nothing to it. Main's K63 added `clear` (the
+    // fields the agent sent in clear, which an older process reads as none); the other three are
+    // the keys every process reads.
     let r = rig();
     let id = r.seed();
     let plan = r.propose_post(&id);
@@ -667,7 +669,7 @@ fn rule8_the_stored_plan_is_what_it_was() {
     let j: J = serde_json::from_str(&text).unwrap();
     let mut keys: Vec<&String> = j.as_object().unwrap().keys().collect();
     keys.sort();
-    assert_eq!(keys, ["command", "input", "principal"]);
+    assert_eq!(keys, ["clear", "command", "input", "principal"]);
     // And the alias approves it, answering not found the second time, as before.
     r.d.approve(&ann(), &mut Vault::new(), &plan).unwrap();
     assert!(matches!(
