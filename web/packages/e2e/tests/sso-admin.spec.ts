@@ -46,9 +46,17 @@ const row = (page: Page, name: string) =>
 async function offersButton(browser: import("@playwright/test").Browser) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
+  // The page asks /api/auth/sso after it has drawn the form: count only once the server answered
+  // (a 429 is asked again later, N19), or a slow answer reads as "no button".
+  const answered = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === "/api/auth/sso" && r.status() !== 429,
+  );
   await page.goto(ssoAdminUrl());
   await expect(page.getByLabel("Username")).toBeVisible();
-  const n = await page.getByRole("button", { name: "Sign in with Microsoft" }).count();
+  const enabled = ((await (await answered).json()) as { enabled?: boolean }).enabled === true;
+  const button = page.getByRole("button", { name: "Sign in with Microsoft" });
+  if (enabled) await expect(button).toBeVisible();
+  const n = await button.count();
   await ctx.close();
   return n > 0;
 }
