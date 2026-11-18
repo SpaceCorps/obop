@@ -1343,9 +1343,6 @@ impl Dispatcher {
             .is_some_and(|m| m.generated_writes)
     }
 
-    /// The names of the models that have a command registered right now, sorted. The installer
-    /// takes them when it starts: every model that exists before any package is registered is a
-    /// built-in one, and no package may declare its name.
     /// The unique indexes of `backend` (`obop_uq_...`) that no registered model declares: left
     /// by an uninstalled module or a removed rule (docs/ISSUES.md K41, D78). They keep enforcing
     /// and their violations come out as raw storage text. Only read here; `obop storage
@@ -1368,6 +1365,9 @@ impl Dispatcher {
             .collect())
     }
 
+    /// The names of the models that have a command registered right now, sorted. The installer
+    /// takes them when it starts: every model that exists before any package is registered is a
+    /// built-in one, and no package may declare its name.
     pub fn model_names(&self) -> Vec<String> {
         let mut names: Vec<String> = self.models.read().unwrap().keys().cloned().collect();
         names.sort();
