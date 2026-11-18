@@ -400,6 +400,35 @@ describe("the list", () => {
     expect(flat(rows[1]!.querySelector(".appr-sub"))).toBe("Rejected · Somebody · 1 hour ago");
   });
 
+  it("a decided row names its record when the server gives its title, and reads as before without", async () => {
+    const decided = (id: string, record_id: string, record_title: string | null) =>
+      row({
+        id,
+        command: "invoice.post",
+        action: "post",
+        kind: "action",
+        record_id,
+        record_title,
+        status: "approved",
+        decided_by: "bo",
+        decided_at: iso(now - HOUR),
+      });
+    server.decided = [
+      decided("p-a", "inv-7", "INV-0007"),
+      decided("p-b", "inv-9", "INV-0009"),
+      // A record the person cannot read: no title, the row as it was.
+      decided("p-c", "inv-11", null),
+    ];
+    await mount("#/approvals?view=decided");
+    const things = [...document.querySelectorAll("tbody .appr-thing")].map(flat);
+    expect(things).toHaveLength(3);
+    expect(things[0]).toContain("“INV-0007”");
+    expect(things[1]).toContain("“INV-0009”");
+    expect(things[0], "the rows can be told apart").not.toBe(things[1]);
+    expect(things[2]).not.toMatch(/[“”]|inv-11/);
+    expect(things[2]).toBe(things[0]!.replace(/ “INV-0007”$/, ""));
+  });
+
   it("lists the decided requests on their own tab, with the outcome", async () => {
     await mount();
     await click(button("Decided"));

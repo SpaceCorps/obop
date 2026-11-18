@@ -1653,3 +1653,50 @@ fn n15_one_approval_names_the_approver_once_per_line_and_a_rejection_keeps_its_r
         "nothing ran"
     );
 }
+
+// ---- a decided row says which record -----------------------------------------------------------
+
+/// The Decided tab named three rows "Finish ..." with nothing to tell them apart: a decided row
+/// now carries the record's title for a person who reads the record, read as that person (the
+/// read group, the row rules and the masking), and none for a person who cannot read it.
+#[test]
+fn a_decided_row_names_its_record_to_whoever_reads_it_and_to_nobody_else() {
+    let r = rig();
+    let id = r.seed();
+    let approved = r.propose_post(&id);
+    r.ok(&ann(), "plan.approve", m(&[("id", t(&approved))]));
+    let rejected = r.propose_post(&r.seed());
+    r.ok(&ann(), "plan.reject", m(&[("id", t(&rejected))]));
+    let decided = m(&[("state", t("decided"))]);
+    // ann decided both and reads both records (her own).
+    let rows = r.list(&ann(), decided.clone());
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    for row in &rows {
+        assert_eq!(row["record_title"], "Old name", "{row}");
+    }
+    let one = r.ok(&ann(), "plan.get", m(&[("id", t(&approved))]));
+    assert_eq!(one["status"], "approved");
+    assert_eq!(one["record_title"], "Old name", "{one}");
+    // boss with pt.boss reads every record (see_all): he sees the titles too.
+    for row in r.list(&boss(), decided.clone()) {
+        assert_eq!(row["record_title"], "Old name", "{row}");
+    }
+    // boss without pt.boss: still the owner of the agent, so he sees the decided rows, and the
+    // row rule `own` keeps ann's records from him: no title and no field of them.
+    let boss_now = Principal::user("boss", &[U]);
+    let rows = r.list(&boss_now, decided);
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    for row in &rows {
+        assert!(row["record_title"].is_null(), "{row}");
+        assert!(row["record_id"].is_string(), "the row is as before: {row}");
+        for k in ["changes", "record", "seen_version"] {
+            assert!(row.get(k).is_none(), "{k}: {row}");
+        }
+        let text = row.to_string();
+        for v in ["Old name", "old secret", "Old Client"] {
+            assert!(!text.contains(v), "{v}: {text}");
+        }
+    }
+    let one = r.ok(&boss_now, "plan.get", m(&[("id", t(&approved))]));
+    assert!(one["record_title"].is_null(), "{one}");
+}

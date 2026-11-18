@@ -885,7 +885,11 @@ impl Dispatcher {
             .unwrap_or_default();
         let action = command.rsplit('.').next().unwrap_or(command).to_string();
         let target = it.target();
-        let title = match (&target, rights.is_some_and(|r| r.decider)) {
+        // A waiting row names its record to a person who may decide it; a decided row (no rights:
+        // its visibility was settled by `may_see_decided`) to whoever reads the record now. Both
+        // read it through `look.read`, as the person: their read group, the row rules and the
+        // masking apply, and a record they cannot read gives no title.
+        let title = match (&target, rights.is_none_or(|r| r.decider)) {
             (Some(id), true) => match look.read(&model, id) {
                 Read::Yes(rec) => self.title_of(&model, &rec),
                 _ => None,
