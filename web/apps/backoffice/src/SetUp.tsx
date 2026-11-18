@@ -9,6 +9,8 @@ const MIN_PASSWORD = 12;
 const USERNAME = /^[A-Za-z0-9._\-@]+$/;
 
 type Field = "instance_name" | "username" | "password" | "repeat";
+/** The inputs of the form: what is sent to the server. */
+const FIELDS = ["instance_name", "code", "username", "password", "repeat"];
 
 /**
  * What the person is told for a refusal of the server. With `field`, the sentence belongs to that
@@ -129,9 +131,17 @@ export function SetUp({
     } else setFailure({ word: () => twoFactorMessage({ status: 0, code: "" }) });
   }
 
+  // A refusal of the server is about what was sent: once a field changes it no longer describes
+  // the form, so it goes. "Already has an administrator" stays: no field changes that. The
+  // language below is no field of the form: a switch words the refusal again (D9).
+  function changed(e: React.FormEvent<HTMLFormElement>) {
+    const name = (e.target as HTMLInputElement).name;
+    if (failure && !failure.closed && FIELDS.includes(name)) setFailure(null);
+  }
+
   const off = needsKey;
   return (
-    <form className="signin setup" onSubmit={(e) => void submit(e)} noValidate>
+    <form className="signin setup" onSubmit={(e) => void submit(e)} onChange={changed} noValidate>
       <h1 className="signin-logo">
         <InstanceLogo variant="full" size={30} />
       </h1>

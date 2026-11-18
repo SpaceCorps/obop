@@ -236,6 +236,28 @@ describe("the answers of the server", () => {
       expect(onDone).not.toHaveBeenCalled();
     });
 
+  it("a refusal goes away when a field changes, without a new request", async () => {
+    answer = () => json(403, { code: "setup_code_invalid" });
+    await show();
+    await fill();
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    await act(async () => type("code", "abcde-fghjk-lmnpq-rstuw"));
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(text()).not.toContain("The set-up code is not right");
+    expect(posts).toHaveLength(1);
+  });
+
+  it("an account made meanwhile stays said when a field changes", async () => {
+    answer = () => json(409, { code: "setup_closed" });
+    await show();
+    await fill();
+    await act(async () => type("username", "Other"));
+    expect(text()).toContain(
+      "This instance already has an administrator. Sign in with that account.",
+    );
+    expect(button("Go to sign in")).toBeTruthy();
+  });
+
   it("a name the server refuses: says so under the name, in the page's words, and moves there", async () => {
     answer = () =>
       json(400, {
@@ -298,6 +320,19 @@ describe("a switch of the language words the messages again (D9)", () => {
     await act(async () => setLanguage("de", false));
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Code falsch (de)");
     expect(text()).not.toContain(WRONG);
+  });
+
+  it("a switch with the page's own language list keeps the refusal and words it again", async () => {
+    answer = () => json(403, { code: "setup_code_invalid" });
+    await show();
+    await fill();
+    const select = container.querySelector("select")!;
+    await act(async () => {
+      select.value = "de";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {});
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Code falsch (de)");
   });
 
   it("a message under a field", async () => {
