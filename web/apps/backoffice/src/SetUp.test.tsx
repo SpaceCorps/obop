@@ -286,7 +286,9 @@ describe("a switch of the language words the messages again (D9)", () => {
   const WRONG =
     "The set-up code is not right, or it has run out. Check the log of the server, or restart it to print a new code.";
   const DIFFER = "The two passwords are not the same.";
-  beforeEach(() => provideCatalogue("de", { [WRONG]: "Code falsch (de)", [DIFFER]: "Ungleich (de)" }));
+  beforeEach(() =>
+    provideCatalogue("de", { [WRONG]: "Code falsch (de)", [DIFFER]: "Ungleich (de)" }),
+  );
 
   it("the refusal of the server", async () => {
     answer = () => json(403, { code: "setup_code_invalid" });

@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  InstanceLogo,
-  LanguageSelect,
-  t,
-  twoFactorMessage,
-  useI18n,
-  type Wording,
-} from "@obop/ui";
+import { InstanceLogo, LanguageSelect, t, twoFactorMessage, useI18n, type Wording } from "@obop/ui";
 import { setupCreate, type LoginResult } from "./api.ts";
 import { storageFaultMessage } from "./serverMessage.ts";
 import { Button, Input, Notice } from "./ui.tsx";
