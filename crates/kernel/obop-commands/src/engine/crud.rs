@@ -414,7 +414,7 @@ pub(crate) fn create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     unit.insert(def.name, &id, f)?;
     seq::check_unique(&unit, &look)?;
     commit(eng, unit)?;
-    crate::blobs::hold_created(&eng.store, def, &id, &held);
+    crate::blobs::hold_created(&eng.store, def, &id, &held, &actor.caller);
     row_after_commit(eng, def, &id, &held)
 }
 
@@ -555,7 +555,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         }
     }
     if edited {
-        crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after);
+        crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after, &actor.caller);
     }
     row_after_commit(eng, def, &id, &after)
 }
