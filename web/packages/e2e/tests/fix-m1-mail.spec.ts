@@ -77,8 +77,12 @@ test.describe("Customize > Mail", () => {
       await form.getByRole("textbox", { name: "Host", exact: true }).fill("127.0.0.1");
       await form.getByRole("combobox", { name: "Security" }).selectOption("none");
       await form.getByRole("textbox", { name: "Port", exact: true }).fill(String(stand.port));
-      await form.getByRole("textbox", { name: "Sender address", exact: true }).fill("rechnung@nordlicht.example");
-      await form.getByRole("textbox", { name: "Sender name", exact: true }).fill("Nordlicht Werkzeuge GmbH");
+      await form
+        .getByRole("textbox", { name: "Sender address", exact: true })
+        .fill("rechnung@nordlicht.example");
+      await form
+        .getByRole("textbox", { name: "Sender name", exact: true })
+        .fill("Nordlicht Werkzeuge GmbH");
       await form.getByRole("button", { name: "Add mail server" }).click();
       await expect(page.locator(".toast").filter({ hasText: "Mail server added." })).toBeVisible();
       const card = page.locator(".mail-server").filter({ hasText: name });
@@ -89,12 +93,17 @@ test.describe("Customize > Mail", () => {
       // A test message goes out at once and the answer is recorded.
       await card.getByRole("button", { name: "Send test" }).click();
       await card.getByLabel("Send a test message to").fill("ada@example.org");
-      await card.getByRole("form", { name: "Send a test message" }).getByRole("button", { name: "Send test" }).click();
+      await card
+        .getByRole("form", { name: "Send a test message" })
+        .getByRole("button", { name: "Send test" })
+        .click();
       await expect(card.getByRole("status")).toHaveText(
         "The test message was sent to ada@example.org.",
       );
       expect(stand.messages.length).toBe(1);
-      expect(stand.messages[0]).toContain("From: Nordlicht Werkzeuge GmbH <rechnung@nordlicht.example>");
+      expect(stand.messages[0]).toContain(
+        "From: Nordlicht Werkzeuge GmbH <rechnung@nordlicht.example>",
+      );
       await expect(card).toContainText("Last test");
 
       // A message queued through the command (as any module would) is sent by the worker.
