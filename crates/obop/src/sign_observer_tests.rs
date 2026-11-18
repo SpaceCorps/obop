@@ -156,7 +156,9 @@ async fn a_connection_subscribed_to_sign_link_create_never_sends_the_link() {
     let handed = answers.lock().unwrap().clone();
     assert!(!handed.is_empty(), "the observer was told");
     assert!(
-        handed.iter().all(|a| !a.contains(&token) && !a.contains("\"link\"")),
+        handed
+            .iter()
+            .all(|a| !a.contains(&token) && !a.contains("\"link\"")),
         "an observer never holds the link: {handed:?}"
     );
     // ...and the connection sent the stored record, which does not hold it.
