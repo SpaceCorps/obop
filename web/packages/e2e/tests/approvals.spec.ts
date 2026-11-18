@@ -189,6 +189,7 @@ test.describe("the approvals inbox on a phone", () => {
     expect(issued.status).toBe(200);
     const rec = await api.create("ivy", MODEL, { title: uid("Lamps") });
     await api.run("ivy", `${MODEL}.start`, { id: rec.id });
+    const before = await waiting(api, ivy);
     // The page signed in with the agent's token: the person at the keyboard is the agent's own.
     await page.addInitScript(
       ([t, u]) => {
@@ -211,6 +212,15 @@ test.describe("the approvals inbox on a phone", () => {
     await expect(toast.getByRole("button", { name: /approve|reject/i })).toHaveCount(0);
     await expect(toast).not.toContainText(/plan [0-9a-f]{8}/);
     expect((await api.run("ivy", `${MODEL}.get`, { id: rec.id })).state).toBe("doing");
+    // Leave the instance as the test found it: ivy rejects the plan the toast links to, and her
+    // waiting count is what it was before.
+    const href = (await link.getAttribute("href")) ?? "";
+    const plan = new URLSearchParams(href.slice(href.indexOf("?") + 1)).get("id");
+    expect(plan, href).toBeTruthy();
+    expect(await waiting(api, ivy)).toBe(before + 1);
+    const rejected = await api.post("/api/plan/reject", { id: plan }, ivy);
+    expect(rejected.status, JSON.stringify(rejected.json)).toBe(200);
+    expect(await waiting(api, ivy)).toBe(before);
   });
 });
 
