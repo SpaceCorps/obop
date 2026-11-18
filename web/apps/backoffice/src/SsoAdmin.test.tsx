@@ -50,6 +50,8 @@ let server: {
   users: User[];
   /** A sentence makes the command of that name answer 400 with it. */
   refuse: Record<string, string>;
+  /** A status makes the command of that name answer with it and no sentence (a proxy, a crash). */
+  fault: Record<string, number>;
   /** A status makes `sso_provider.list` answer with that error. */
   listStatus: number;
   /** A status makes the people list (`/api/auth/users`) answer with that error. */
@@ -106,6 +108,7 @@ function fakeServer() {
       const name = `${command[1]}.${command[2]}`;
       if (server.gate && server.gated.includes(name)) await server.gate;
       if (server.refuse[name]) return json({ error: server.refuse[name] }, 400);
+      if (server.fault[name]) return json({}, server.fault[name]);
       if (name === "sso_provider.list" && server.listStatus)
         return json({ error: "the provider list is not available" }, server.listStatus);
       if (name === "sso_provider.list")
@@ -218,6 +221,7 @@ beforeEach(async () => {
     provider: null,
     users: [person("ada"), person("bea")],
     refuse: {},
+    fault: {},
     listStatus: 0,
     usersStatus: 0,
     gate: null,
@@ -1211,5 +1215,52 @@ describe("People: Microsoft, the questions and the rules", () => {
     expect(document.activeElement).toBe(oid);
     expect(oid.getAttribute("aria-invalid")).toBe("true");
     expect(describedBy(oid)).toContain("This is an e-mail address, not an object ID.");
+  });
+});
+
+// A refusal kept on the screen is worded when it is drawn, so a switch of the language words it
+// again (docs/ISSUES.md D9): the server's own sentence is English, the interface knows this one.
+describe("a refusal kept on the screen follows a switch of the language (D9)", () => {
+  const FAULT = "The server had a problem (status {status}). Try again in a moment.";
+  const FAULT_DE = "Der Server hatte ein Problem (Status {status}). Gleich noch einmal versuchen.";
+  // In English the server's own words are shown as received.
+  const english = "The server had a problem (status 503)";
+  const german = "Der Server hatte ein Problem (Status 503). Gleich noch einmal versuchen.";
+  beforeEach(() => provideCatalogue("de", { [FAULT]: FAULT_DE }));
+
+  it("the set-up form", async () => {
+    server.fault["sso_provider.configure"] = 503;
+    await mountSection();
+    await click(button("Set up Microsoft sign-in"));
+    await type(field("Tenant ID"), TENANT);
+    await type(field("Application (client) ID"), APP);
+    await type(field("Client secret"), SECRET);
+    await click(button("Save", dialog()!));
+    expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(english);
+    await act(async () => void (await setLanguage("de", false)));
+    expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(german);
+  });
+
+  it("the question before Remove", async () => {
+    server.provider = stored();
+    server.fault["sso_provider.clear"] = 503;
+    await mountSection();
+    await click(button("Remove", container));
+    await click(button("Remove", alertDialog()!));
+    expect(alertDialog()!.querySelector('[role="alert"]')?.textContent).toBe(english);
+    await act(async () => void (await setLanguage("de", false)));
+    expect(alertDialog()!.querySelector('[role="alert"]')?.textContent).toBe(german);
+  });
+
+  it("the Bind dialog of a person", async () => {
+    server.provider = stored();
+    server.fault["user_account.bind_sso"] = 503;
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    await type(field("Object ID"), OID);
+    await click(button("Bind", dialog()!));
+    expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(english);
+    await act(async () => void (await setLanguage("de", false)));
+    expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(german);
   });
 });
