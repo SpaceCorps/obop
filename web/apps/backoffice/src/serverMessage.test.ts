@@ -301,15 +301,16 @@ describe("server messages use the package's own option labels", () => {
         'desk_ticket.status cannot change from "new" to "closed"; from "new" it can only go to: under_review',
       ),
     ).toContain("från Ny till Stängd; från Ny kan det bara ändras till: Under review");
-    // Models that give the same value different words: the field is unknown, not guessed.
+    // Two models agree on the field's title and give the same value different words: the title is
+    // kept, and only the option words, which cannot be chosen between, come from the generic table.
     registerMeta(
       desk(
         model("desk_ticket", [status(), owner]),
         model("desk_task", [status({ option_labels: { new: { sv: "Planerad" } } }), owner]),
       ),
     );
-    expect(serverMessage('status must be new to do this, it is "closed"')).toContain(
-      "måste vara Ny för att göra detta, det är Stängd",
+    expect(serverMessage('status must be new to do this, it is "closed"')).toBe(
+      "Läge måste vara Ny för att göra detta, det är Stängd",
     );
   });
 
