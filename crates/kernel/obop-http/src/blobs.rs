@@ -230,7 +230,12 @@ pub async fn download(
         let Some(svc) = s.dispatcher.blob_service() else {
             return error(StatusCode::NOT_FOUND, "not found");
         };
-        match svc.get(&p, &id, width) {
+        // The record the download comes from names the file (K55): `model`, `record`, `field`.
+        let from = match (q.get("model"), q.get("record"), q.get("field")) {
+            (Some(m), Some(r), Some(f)) => Some((m.as_str(), r.as_str(), f.as_str())),
+            _ => None,
+        };
+        match svc.get_from(&p, &id, width, from) {
             // Content addressed, so the URL never changes meaning, but who may read it does (the
             // row rules of the record that holds it, K53): `no-cache` makes the browser ask again
             // on every use, and the read gate above runs before a 304 is answered, so a person

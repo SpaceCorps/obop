@@ -267,6 +267,19 @@ impl BlobService {
 
     /// The blob for a signed-in caller; `width` asks for a thumbnail.
     pub fn get(&self, p: &Principal, id: &str, width: Option<u32>) -> Result<Served, BlobError> {
+        self.get_from(p, id, width, None)
+    }
+
+    /// Like `get`, downloaded from one record: `from` is its model, record id and field. Identical
+    /// bytes are stored once, so the file is named as that record holds it when the caller can
+    /// read that record and it holds these bytes there; otherwise as `get` names it (K55).
+    pub fn get_from(
+        &self,
+        p: &Principal,
+        id: &str,
+        width: Option<u32>,
+        from: Option<(&str, &str, &str)>,
+    ) -> Result<Served, BlobError> {
         let info = self
             .store
             .blobs
@@ -277,14 +290,34 @@ impl BlobService {
             return Err(BlobError::NotFound);
         }
         let mut served = serve(&self.store, &info, width)?;
-        served.filename = self.filename_for(p, &info);
+        served.filename = self.filename_for(p, &info, from);
         Ok(served)
     }
 
-    /// The file name `p` is served: the one they gave their own upload, else the one of a record
-    /// they can read. Identical bytes are stored once, so the name another person gave the same
-    /// file is never shown to someone who only uploaded it too (K55).
-    fn filename_for(&self, p: &Principal, info: &BlobInfo) -> String {
+    /// The file name `p` is served: the one the record named by `from` gave it, else the one they
+    /// gave their own upload, else the one of a record they can read. Identical bytes are stored
+    /// once, so the name another person gave the same file is never shown to someone who only
+    /// uploaded it too, nor on a record that holds it under another name (K55).
+    fn filename_for(
+        &self,
+        p: &Principal,
+        info: &BlobInfo,
+        from: Option<(&str, &str, &str)>,
+    ) -> String {
+        if let Some((model, record, field)) = from {
+            let models = self.models.read().unwrap();
+            let reads = Plain(&*self.store.backend);
+            let actor = Actor::of(p);
+            if let Some(o) = info.owners.iter().find(|o| {
+                o.model == model
+                    && o.record == record
+                    && o.field == field
+                    && !o.filename.is_empty()
+                    && can_read_owner(p, &actor, &models, &reads, o)
+            }) {
+                return o.filename.clone();
+            }
+        }
         let own = info
             .pending
             .iter()

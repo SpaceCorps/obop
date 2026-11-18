@@ -1175,6 +1175,52 @@ fn a_second_uploader_of_the_same_bytes_is_served_their_own_file_name() {
     );
 }
 
+/// K55 (b), after the save: once the second uploader's claim is spent, a download from their own
+/// record is still named as that record holds the file, not as an earlier record they can also
+/// read names the same bytes. A download that names no record keeps the old rule.
+#[test]
+fn a_download_from_a_record_is_named_as_that_record_holds_the_file() {
+    let e = env();
+    let (ann, bob) = (user("ann"), user("bob"));
+    let save = |who: &Principal, title: &str, owner: &str, name: &str| {
+        let b = e
+            .svc
+            .upload(who, "doc.attachment", "application/pdf", name, &pdf(12))
+            .unwrap()
+            .id;
+        let mut m = match map(&[("title", title), ("owner", owner), ("attachment", &b)]) {
+            Value::Map(m) => m,
+            _ => unreachable!(),
+        };
+        m.insert("open".into(), Value::Bool(true));
+        (
+            id_of_row(&call(&e, who, "doc.create", Value::Map(m)).unwrap()),
+            b,
+        )
+    };
+    let (ra, a) = save(&ann, "Contract", "ann", "ann-contract.pdf");
+    let (rb, b) = save(&bob, "Mine", "bob", "bob-private-name.pdf");
+    assert_eq!(a, b, "content addressed");
+    assert!(e.s.blobs().info(&b).unwrap().unwrap().pending.is_empty());
+    let name = |who: &Principal, rec: &str| {
+        e.svc
+            .get_from(who, &b, None, Some(("doc", rec, "attachment")))
+            .unwrap()
+            .filename
+    };
+    for who in [&ann, &bob] {
+        assert_eq!(name(who, &rb), "bob-private-name.pdf");
+        assert_eq!(name(who, &ra), "ann-contract.pdf");
+    }
+    // A record that does not hold these bytes in that field names nothing: the old rule answers.
+    let other = e
+        .svc
+        .get_from(&bob, &b, None, Some(("doc", &rb, "title")))
+        .unwrap()
+        .filename;
+    assert_eq!(other, e.svc.get(&bob, &b, None).unwrap().filename);
+}
+
 /// K55 (c): the group of a file field gates writing it, not only reading it.
 #[test]
 fn a_file_field_whose_group_the_caller_lacks_cannot_be_set_or_cleared() {

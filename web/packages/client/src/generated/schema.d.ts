@@ -305,7 +305,7 @@ export interface paths {
         };
         /**
          * Download a stored image or file (D60)
-         * @description Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. Strong ETag; files are sent as attachments.
+         * @description Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. `model`, `record` and `field` together name the record the download comes from: identical bytes are stored once, so the file is then named as that record holds it, when the caller can read it. Strong ETag; files are sent as attachments.
          */
         get: operations["downloadBlob"];
         put?: never;
@@ -5549,6 +5549,9 @@ export interface operations {
         parameters: {
             query?: {
                 w?: 320 | 640 | 960 | 1280;
+                model?: string;
+                record?: string;
+                field?: string;
             };
             header?: never;
             path: {
