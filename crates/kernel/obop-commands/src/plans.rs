@@ -1,7 +1,7 @@
 //! The approvals inbox, server side (D97, PROPOSED): what a person needs to see an agent's
 //! proposal, decide it and learn afterwards what became of it, and what the agent is told.
 //!
-//! A proposal is still the sealed plan `plan:{id}` of D18 and D42, byte for byte, living seven
+//! A proposal is still the sealed plan `plan:{id}` of D18 and D42, unchanged by D97, living seven
 //! days. Beside it the dispatcher now writes a **receipt** `planrec:{id}` (sealed, 37 days): who
 //! proposed which command on which record, when it runs out, and what became of it (approved,
 //! rejected with the person's reason, failed with the code of the refusal, expired). A receipt
@@ -1440,6 +1440,22 @@ impl Dispatcher {
         // that proposed it as the caller. Stamped again after the guard, which may have rewritten
         // the input.
         crate::stamp_approver(&mut input, approver);
+        // The write context of the run names the approving person (N15): the security log line
+        // of whatever the plan does says who approved it (`audit::event_record`), next to the
+        // agent that proposed it as the actor. The `plan_approved` / `plan_failed` line below is
+        // written by the approver, so it names nobody twice.
+        let mut ctx = obop_storage::ctx::current().unwrap_or_else(|| {
+            let owner = plan.principal.id.strip_suffix("/agent");
+            obop_storage::WriteCtx::new(owner.unwrap_or(&plan.principal.id), "", &plan.id)
+        });
+        ctx.via.approver = Some(approver.id.clone());
+        ctx.via.agent = plan.principal.kind == crate::PrincipalKind::Agent;
+        let _approved = obop_storage::ctx::scope(ctx);
+        // The actions the call implies (D48) are calls of their own, through their wrappers:
+        // they see the approver as a direct call of the action does (docs/ISSUES.md O5).
+        for step in &mut pre {
+            crate::stamp_approver(&mut step.input, approver);
+        }
         let result = self.run(&c, &proposer, vault, input, pre);
         // The store refused before the call changed anything: the plan goes back (D74; see
         // `put_plan_back`) and the receipt still says it waits.

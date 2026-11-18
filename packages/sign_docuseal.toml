@@ -1,6 +1,6 @@
 [module]
 id = "sign_docuseal"
-version = "0.2.1"
+version = "0.2.2"
 name = "Sign with DocuSeal"
 description = "Receives the events of a DocuSeal server (viewed, signed, declined, expired) as records, next to the Sign app's requests. A signature request is sent to DocuSeal by the DocuSeal connector when sign_request.send runs; DocuSeal keeps the signed document and its audit trail, and the event here names the request by its reference and links to the document. The event does not move the request: a person still records the signature with the sign action, which needs approval."
 author = "SpaceCorps"
@@ -14,10 +14,10 @@ maturity = "experimental"
 requires_core = "^0.2.2"
 home = "sign_docuseal_event"
 launcher = false
-changelog = "The DocuSeal events no longer have a launcher tile of their own; open them from the command palette (Ctrl+K). They have business names, list columns and the document address as a link."
+changelog = "Works with Sign 0.3 as well as 0.2."
 
 [module.dependencies]
-sign = "^0.2"
+sign = ">=0.2, <0.4"
 
 [[model]]
 name = "sign_docuseal_event"

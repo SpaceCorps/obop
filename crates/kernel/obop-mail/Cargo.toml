@@ -1,0 +1,32 @@
+[package]
+name = "obop-mail"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Outbound mail: the mail servers (SMTP relays and provider APIs through the Connectors), templates, the queue with retries and the deliveries log"
+
+[dependencies]
+obop-types.workspace = true
+obop-registry.workspace = true
+obop-commands.workspace = true
+obop-storage.workspace = true
+obop-values.workspace = true
+obop-connectors.workspace = true
+serde_json = "1"
+uuid = { version = "1", features = ["v7"] }
+base64 = "0.22"
+sha2 = "0.11.1"
+url = "2.5.8"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
+
+[dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }
+# A certificate for the TLS stand-in, made at test time (already in the tree through rustls).
+ring = "0.17.14"
+
+[lints]
+workspace = true

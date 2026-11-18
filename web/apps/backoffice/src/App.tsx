@@ -44,6 +44,7 @@ import { parseModulesRoute } from "./modules/route.ts";
 import { isApprovals } from "./approvals/route.ts";
 import {
   PRODUCT_DOC_TABS,
+  holdsMailServers,
   isPersonalTab,
   readProductDocsHidden,
   setProductDocsHidden,
@@ -324,9 +325,12 @@ export function App() {
     [modules, settings, isAdmin, lang, locale],
   );
   const app = apps.find((a) => a.id === route.app);
-  // Everyone may set their own theme and read the brand book; the rest of Customize is for admins.
+  // Everyone may set their own theme and read the brand book, and a holder of mail.admin may open
+  // the Mail tab (docs/spec/mail.md 1); the rest of Customize is for admins.
   const personalCustomize =
-    route.app === "customize" && !isAdmin && isPersonalTab(route.tab || route.model, docsVisible);
+    route.app === "customize" &&
+    !isAdmin &&
+    isPersonalTab(route.tab || route.model, docsVisible, holdsMailServers(modules));
   // What the open app adds to the shell: sidebar entries and pages of its own (extensions.ts).
   const ext = useAppPages(
     app && app.id !== "customize" ? { app, route, go, token, email, ready } : null,

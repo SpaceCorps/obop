@@ -21,6 +21,9 @@ const KNOWN_OMITTED: &[&str] = &[
     "mileage_point.delete",
     "mileage_point.update",
     "mileage_trip.delete",
+    "outbound_mail.bulk_create",
+    "outbound_mail.create",
+    "outbound_mail.update",
 ];
 
 /// The committed copy: `web/packages/client/openapi.json`, from the root of the workspace.

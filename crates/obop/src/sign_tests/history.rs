@@ -38,8 +38,23 @@ fn sha(text: &str) -> String {
 
 /// The page with the request id and the secret of its link replaced, so that the pages of two
 /// instances can be compared.
+/// The hidden field `words` that the form carries from `sign` 0.3.0 on (the wording digest, O59) is
+/// taken out, since it is not part of the history: what these pins hold is that the history adds
+/// nothing to the page of a request that does not ask for it.
 fn normalised(body: &str, rid: &str, tok: &str) -> String {
-    body.replace(rid, "RID").replace(tok, "TOK")
+    without_words(body).replace(rid, "RID").replace(tok, "TOK")
+}
+
+/// The page without its `<input type="hidden" name="words" value="...">`.
+fn without_words(body: &str) -> String {
+    let at = "<input type=\"hidden\" name=\"words\" value=\"";
+    match body.find(at) {
+        Some(i) => {
+            let end = i + body[i..].find("\">").expect("the field ends") + 2;
+            format!("{}{}", &body[..i], &body[end..])
+        }
+        None => body.to_string(),
+    }
 }
 
 /// The SHA-256 of the pages of a request that does not show the signatures so far, as the code
@@ -1779,7 +1794,7 @@ async fn the_door_follows_an_update_and_a_rollback_of_the_package_for_the_switch
         .installer
         .install(&Bundled.fetch("sign").unwrap(), "marketplace", "test")
         .unwrap();
-    assert_eq!(installed_sign(&f), "0.2.5");
+    assert_eq!(installed_sign(&f), "0.3.0");
     tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
     flaky.reset_reads();
     let html = page_of(&f, &path, 171).await;
@@ -1892,11 +1907,11 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
     let new = obop_pkg::Manifest::parse(&new_text).unwrap();
     assert_eq!(
         (old.module.version.as_str(), new.module.version.as_str()),
-        ("0.2.1", "0.2.5")
+        ("0.2.1", "0.3.0")
     );
     let changes = obop_pkg::migrate::diff(&old, &new);
-    // The switch, and (0.2.5) the computed flag the row rule of a request without a Document
-    // reads; neither breaks a record.
+    // The switch, (0.2.5) the computed flag the row rule of a request without a Document reads,
+    // and (0.3.0) the evidence check, which is never stored; none breaks a record.
     let mut seen: Vec<_> = changes
         .iter()
         .map(|c| (c.kind, c.model.as_str(), c.field.as_deref(), c.breaking))
@@ -1905,6 +1920,7 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
     assert_eq!(
         seen,
         vec![
+            ("field_added", "sign_request", Some("evidence_check"), false),
             ("field_added", "sign_request", Some("no_document"), false),
             ("field_added", "sign_request", Some("show_history"), false),
         ],
@@ -1946,14 +1962,14 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
         data.blockers.is_empty() && data.steps.is_empty() && data.warnings.is_empty(),
         "{data:?}"
     );
-    assert_eq!(data.changes.len(), 2);
+    assert_eq!(data.changes.len(), 3);
 
     let out = f
         .app
         .installer
         .install_outcome(&new_text, "marketplace", "test")
         .unwrap();
-    assert_eq!(out.root.version, "0.2.5");
+    assert_eq!(out.root.version, "0.3.0");
     // Not a record was rewritten.
     let after: Vec<_> = ids.iter().map(|id| f.record("sign_request", id)).collect();
     assert_eq!(after, before);
