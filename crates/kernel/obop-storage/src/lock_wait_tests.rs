@@ -37,3 +37,26 @@ fn only_the_migration_lock_takes_the_setting() {
     }
     assert_eq!(MIGRATION_LOCK, "obop.migrate");
 }
+
+#[test]
+fn a_probe_bounds_the_wait_of_every_lock_on_its_thread() {
+    let w = Duration::from_millis(250);
+    crate::with_lock_wait(w, || {
+        assert_eq!(lock_wait(MIGRATION_LOCK), Ok(w));
+        assert_eq!(lock_wait("obop.write"), Ok(w));
+    });
+    assert_eq!(lock_wait("obop.write"), Ok(LOCK_WAIT), "restored after");
+}
+
+#[test]
+fn a_held_migration_lock_is_given_up_after_the_probe_s_wait() {
+    let b = crate::memory::Memory::default();
+    let held = crate::Backend::lock(&b, MIGRATION_LOCK).unwrap();
+    let t = std::time::Instant::now();
+    let r = crate::with_lock_wait(Duration::from_millis(200), || {
+        crate::Backend::lock(&b, MIGRATION_LOCK).map(drop)
+    });
+    assert!(r.is_err());
+    assert!(t.elapsed() < Duration::from_secs(10), "{:?}", t.elapsed());
+    drop(held);
+}

@@ -520,6 +520,9 @@ pub fn migration_lock_wait_from(v: Option<&str>) -> Result<std::time::Duration> 
 /// setting `OBOP_MIGRATION_LOCK_WAIT_SECS` (default 300). The setting is read on each wait, so
 /// a value that is not valid fails that lock with a message that names it.
 pub fn lock_wait(key: &str) -> Result<std::time::Duration> {
+    if let Some(w) = LOCK_WAIT_OVERRIDE.with(|c| c.get()) {
+        return Ok(w);
+    }
     if key == MIGRATION_LOCK {
         migration_lock_wait_from(
             std::env::var("OBOP_MIGRATION_LOCK_WAIT_SECS")
@@ -529,6 +532,27 @@ pub fn lock_wait(key: &str) -> Result<std::time::Duration> {
     } else {
         Ok(LOCK_WAIT)
     }
+}
+
+thread_local! {
+    static LOCK_WAIT_OVERRIDE: std::cell::Cell<Option<std::time::Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Runs `f` with every `Backend::lock` taken on this thread waiting at most `wait`, whatever the
+/// key and the setting. A probe that only asks whether a lock is free (the migration gate's
+/// preflight) uses it, so it never outlives its question or holds a pooled session for the full
+/// migration wait.
+pub fn with_lock_wait<T>(wait: std::time::Duration, f: impl FnOnce() -> T) -> T {
+    let before = LOCK_WAIT_OVERRIDE.with(|c| c.replace(Some(wait)));
+    struct Restore(Option<std::time::Duration>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            LOCK_WAIT_OVERRIDE.with(|c| c.set(self.0));
+        }
+    }
+    let _restore = Restore(before);
+    f()
 }
 
 /// Held while a `Backend::lock` is taken; dropping it releases the lock.
