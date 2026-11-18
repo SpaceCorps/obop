@@ -1509,3 +1509,13 @@ a.kpi.ov-kpi:hover {
     min-block-size: 2.75rem;
   }
 }
+
+/* ---------- Devices as cards on a tablet ---------- */
+/* Devices is cards up to 60rem (stack-md). Between a phone and that width the kit's 6rem cells put
+   five labelled cells on one line and left Status alone under them; three to a line, as on a phone,
+   keeps a date on one line and the two lines even. */
+@media (min-width: 40.01rem) and (max-width: 60rem) {
+  .table.sec-devices > tbody > tr > td[data-label] {
+    flex: 1 1 30%;
+  }
+}
