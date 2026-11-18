@@ -256,6 +256,9 @@ describe("where", () => {
     expect(w("is_set(priority)")).toEqual([{ op: "isnot", f: "priority", v: [""] }]);
     expect(w("!active")).toEqual([{ op: "bool", f: "active", v: false }]);
   });
+  it('reads a text that must differ (Contacts opens with name != "[erased]", U1)', () => {
+    expect(w('subject != "[erased]"')).toEqual([{ op: "isnot", f: "subject", v: ["[erased]"] }]);
+  });
   it("refuses what it cannot express", () => {
     expect(w("state == 'new' || priority == 'high'")).toBeNull();
     expect(w("(state == 'new' || priority == 'high')")).toBeNull();

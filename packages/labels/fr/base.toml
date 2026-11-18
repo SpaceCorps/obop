@@ -29,3 +29,6 @@ description = "Anonymise le tiers sur place et enregistre l’effacement"
 [labels.fr.model.party.field.photo]
 label = "Photo"
 description = "Photo ou logo du contact (PNG, JPEG, WebP ou GIF, jusqu'à 2 Mio)"
+
+[labels.fr.model.party.filter.not_erased]
+label = "Non anonymisés"
