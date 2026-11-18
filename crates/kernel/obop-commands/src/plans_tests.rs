@@ -1574,3 +1574,82 @@ fn rule4_the_owner_who_cannot_read_the_record_sees_no_field_of_it() {
         "{full}"
     );
 }
+
+// ---- N15 (main) beside D97 rules 8 and 10: what one decision writes to the security log -------
+
+/// Main's N15 ends every line an approved plan writes with "(approved by NAME)"; D97 writes its
+/// own `plan_*` lines. One approval writes: `plan_proposed` (the agent, at the proposal), the
+/// command's own line (the agent as actor, ending with the approver) and `plan_approved` (the
+/// approver as actor, with no such ending), so nothing says the same thing twice and the approver
+/// is named by the same id in both. A rejection writes `plan_rejected` alone, without the reason
+/// and without an "approved by".
+#[test]
+fn n15_one_approval_names_the_approver_once_per_line_and_a_rejection_keeps_its_reason_out() {
+    let r = rig();
+    // The action writes a line of its own, as a binding or a change of a person does.
+    let backend = r.backend.clone();
+    r.d.around(
+        &format!("{M}.post"),
+        Box::new(move |p, input, next| {
+            crate::audit::record_event(&*backend, 1, "ann", "pt_posted", &p.id, "posted");
+            next(input)
+        }),
+    );
+    let id = r.seed();
+    let plan = r.propose_post(&id);
+    r.ok(&ann(), "plan.approve", m(&[("id", t(&plan))]));
+    let events = r.events();
+    let line = |kind: &str| -> Vec<&(String, String, String, String)> {
+        events.iter().filter(|e| e.0 == kind).collect()
+    };
+    assert_eq!(events.len(), 3, "{events:?}");
+    let [proposed] = line("plan_proposed")[..] else {
+        panic!("{events:?}")
+    };
+    let [posted] = line("pt_posted")[..] else {
+        panic!("{events:?}")
+    };
+    let [approved] = line("plan_approved")[..] else {
+        panic!("{events:?}")
+    };
+    assert_eq!(proposed.2, "boss/agent");
+    assert!(!proposed.3.contains("approved by"), "{proposed:?}");
+    assert_eq!(posted.2, "boss/agent", "the agent stays the actor");
+    assert_eq!(posted.3, "posted (approved by ann)", "{posted:?}");
+    assert_eq!(
+        approved.2, "ann",
+        "the approver is the actor, named as in N15"
+    );
+    assert!(!approved.3.contains("approved by"), "{approved:?}");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| e.3.contains("approved by"))
+            .count(),
+        1,
+        "{events:?}"
+    );
+    // A rejection: one line, the person as actor, no reason and no approver ending.
+    let rejected = r.propose_post(&r.seed());
+    let reason = "Wrong supplier, ask Kim first";
+    r.ok(
+        &ann(),
+        "plan.reject",
+        m(&[("id", t(&rejected)), ("reason", t(reason))]),
+    );
+    let after = r.events();
+    assert_eq!(after.len(), 5, "{after:?}");
+    let rej: Vec<_> = after.iter().filter(|e| e.0 == "plan_rejected").collect();
+    assert_eq!(rej.len(), 1, "{after:?}");
+    assert_eq!(rej[0].2, "ann");
+    assert!(!rej[0].3.contains("approved by"), "{rej:?}");
+    assert!(
+        after.iter().all(|e| !e.3.contains("Wrong supplier")),
+        "{after:?}"
+    );
+    assert_eq!(
+        after.iter().filter(|e| e.0 == "pt_posted").count(),
+        1,
+        "nothing ran"
+    );
+}

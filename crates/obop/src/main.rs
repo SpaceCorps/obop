@@ -102,6 +102,8 @@ mod people_collab_hints_tests;
 mod plans_cli_tests;
 #[cfg(test)]
 mod plans_http_tests;
+#[cfg(test)]
+mod plans_mail_tests;
 mod pos_cash;
 #[cfg(test)]
 mod pos_cash_tests;

@@ -602,3 +602,131 @@ async fn v16_a_revoked_agent_token_leaves_its_waiting_plan_to_a_person() {
     let (_, b) = post(r, Some(&ada), "/api/plan/list", json!({})).await;
     assert_eq!(b["value"]["total"], 0, "nothing waits any more: {b}");
 }
+
+/// Main's N5: an account that signs in with Microsoft only can now connect an MCP client through
+/// the OAuth sign-in pages (a grant of at most 30 days). Its access token is what the exchange
+/// issues for any MCP client, an agent of the account, so on every door it is still no person: the
+/// tools list holds `plan__get` alone, the four commands of a person are unknown tools, and a
+/// plan waiting for that person is left as it was.
+#[tokio::test]
+async fn n5_the_mcp_client_of_a_microsoft_only_account_is_no_person() {
+    use obop_commands::OAuthTokens;
+    let w = world();
+    let r = &w.r;
+    let ada = token(r, "ada").await;
+    let agent = agent_token(r, &ada).await;
+    let plan = propose(r, &agent).await;
+    // ada signs in with Microsoft only from now on (what `sso_only` stores).
+    let mut only = obop_storage::Fields::new();
+    only.insert("sso_only".into(), json!(true));
+    w.app
+        .store
+        .backend()
+        .update("auth_user", "ada", &only)
+        .unwrap();
+    assert_eq!(w.auth.is_microsoft_only("ada"), Ok(true));
+    let (client, _) = w
+        .auth
+        .issue_oauth_access(
+            "ada",
+            &["base.user".to_string(), "privacy.officer".to_string()],
+            "client",
+            30 * 24 * 3600,
+            &obop_oauth::mcp_resource("http://inst.test"),
+            "grant-ms-only",
+        )
+        .unwrap();
+    let principal = w.auth.resolve(&client).expect("the client's token works");
+    assert!(!principal.is_person(), "{principal:?}");
+    let (sid, _) = crate::mcp_tests::initialize(r, &client, "2025-11-25").await;
+    let list = mcp(
+        r,
+        &client,
+        &sid,
+        json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
+    )
+    .await;
+    let names: Vec<&str> = list["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .filter(|n| n.starts_with("plan__"))
+        .collect();
+    assert_eq!(names, ["plan__get"]);
+    for c in ["count", "list", "approve", "reject"] {
+        let name = format!("plan__{c}");
+        let reply = mcp(
+            r,
+            &client,
+            &sid,
+            json!({"jsonrpc":"2.0","id":3,"method":"tools/call",
+                   "params":{"name": name, "arguments": {"id": plan}}}),
+        )
+        .await;
+        assert_eq!(
+            reply["error"]["message"],
+            format!("unknown tool: {name}"),
+            "{reply}"
+        );
+    }
+    // plan__get: the client is an agent of ada, the principal `ada/agent` that every agent token
+    // and connected client of hers shares (docs/ISSUES.md V7, V17), so it reads the plan as its
+    // own, with the answer an agent gets: what became of it and what to do, no person's view.
+    let reply = mcp(
+        r,
+        &client,
+        &sid,
+        json!({"jsonrpc":"2.0","id":4,"method":"tools/call",
+               "params":{"name": "plan__get", "arguments": {"id": plan}}}),
+    )
+    .await;
+    let told = &reply["result"]["structuredContent"]["value"];
+    assert_eq!(told["status"], "waiting", "{reply}");
+    let mut keys: Vec<&str> = told
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "command",
+            "created_at",
+            "decided_at",
+            "expires_at",
+            "failure",
+            "id",
+            "instruction",
+            "reason",
+            "record_id",
+            "status"
+        ],
+        "{reply}"
+    );
+    // Nothing was decided: the plan still waits for a person who may decide it.
+    let person = obop_commands::Principal::user(
+        "ada",
+        &w.app
+            .all_groups()
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    );
+    let rows = w
+        .app
+        .dispatcher
+        .call(
+            obop_commands::Surface::Rest,
+            &person,
+            &mut obop_commands::Vault::new(),
+            "plan.list",
+            &obop_commands::Value::Map(Default::default()),
+        )
+        .unwrap()
+        .value
+        .to_json();
+    assert_eq!(rows["total"], 1, "{rows}");
+}
