@@ -713,6 +713,9 @@ impl Dispatcher {
                 };
                 actions.sort_by(|a, b| (place(&a.id), &a.id).cmp(&(place(&b.id), &b.id)));
                 let mtr = m.translations.models.get(name.as_str());
+                // Whether the generated `create` and `update` write this model's fields, which is
+                // where the field limits are checked (D90).
+                let written = m.generated_writes;
                 infos.push(ModelInfo {
                     ui: m.def.ext.ui.clone(),
                     children: {
@@ -782,11 +785,18 @@ impl Dispatcher {
                                     .filter(|s| sees_target(s))
                                     .and_then(|s| s.when.as_ref())
                                     .map(|w| w.source.clone()),
-                                max_length: f.effective_max_length(),
-                                min_length: f.effective_min_length(),
-                                min: f.lower_bound(),
-                                max: f.upper_bound(),
-                                limits_note: f.limits_note(),
+                                // The limits are those `create` and `update` hold; a model
+                                // written only by handlers of its own (the module list, the
+                                // security log) states none it does not enforce (K44 b).
+                                max_length: f.effective_max_length().filter(|_| written),
+                                min_length: f.effective_min_length().filter(|_| written),
+                                min: f.lower_bound().filter(|_| written),
+                                max: f.upper_bound().filter(|_| written),
+                                limits_note: if written {
+                                    f.limits_note()
+                                } else {
+                                    String::new()
+                                },
                                 hints: f.hints.clone(),
                             }
                         })

@@ -3144,7 +3144,7 @@ mod tests {
     #[test]
     fn the_security_event_log_is_readable_by_admins_and_never_writable() {
         let store = Store::new();
-        let (d, _) = setup(&store);
+        let (d, inst) = setup(&store);
         let mut f = Fields::new();
         f.insert("user".into(), J::from("ada"));
         f.insert("kind".into(), J::from("sign_signed"));
@@ -3188,6 +3188,25 @@ mod tests {
         let Value::List(l) = r.value else { panic!() };
         let Value::Map(row) = &l[0] else { panic!() };
         assert_eq!(row.get("detail"), Some(&Value::text("address 203.0.113.9")));
+        // Nothing writes it through `create` or `update`, so the metadata states no limit for it
+        // (K44 b), nor for the long list of a module's contents; a stored model keeps its limits.
+        let limit = |model: &str, field: &str| {
+            d.meta(Surface::Rest, &admin())
+                .into_iter()
+                .flat_map(|m| m.models)
+                .find(|m| m.name == model)
+                .and_then(|m| m.fields.into_iter().find(|f| f.name == field))
+                .map(|f| f.max_length)
+        };
+        assert_eq!(limit("security_event", "detail"), Some(None));
+        assert_eq!(limit("module", "contents"), Some(None));
+        inst.install(
+            include_str!("../../../../packages/fleet.toml"),
+            "upload",
+            "root",
+        )
+        .unwrap();
+        assert_eq!(limit("fleet_vehicle", "plate"), Some(Some(2048)));
     }
 
     #[test]
