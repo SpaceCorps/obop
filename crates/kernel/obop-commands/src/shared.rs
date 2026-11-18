@@ -13,8 +13,8 @@ use serde_json::{Value as J, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// The lock every guarded write takes.
-const TXN_KEY: &str = "dispatcher.txn";
+/// The lock every guarded write takes (and the signer door of `sign`, around its batch).
+pub(crate) const TXN_KEY: &str = "dispatcher.txn";
 /// How long a proposed plan waits for a human.
 pub(crate) const PLAN_TTL_MS: u64 = 7 * 24 * 3600 * 1000;
 

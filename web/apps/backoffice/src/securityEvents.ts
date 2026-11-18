@@ -60,4 +60,8 @@ export const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   plan_rejected: msg("Request rejected"),
   plan_failed: msg("Approved request refused by the system"),
   plan_expired: msg("Request expired"),
+  sign_link_issued: msg("Signing link made"),
+  sign_link_revoked: msg("Signing link revoked"),
+  sign_signed: msg("Signed through a signing link"),
+  sign_refused: msg("Signing link refused"),
 };

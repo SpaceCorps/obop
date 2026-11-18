@@ -76,7 +76,7 @@ description = "Installer un module de la place de marché par son id, avec les d
 
 [labels.fr.model.setting]
 name = "Paramètre"
-description = "Paramètres d’interface valables pour toute l’instance : thème et disposition du lanceur d’applications"
+description = "Paramètres de toute l’instance sous forme d’un objet JSON : thème, disposition du lanceur d’applications, politique de sécurité et autres. Chaque personne les lit, les administrateurs les écrivent ; le jeton d’une application mobile ne peut pas les lire"
 
 [labels.fr.model.setting.field.value]
 label = "Valeur"

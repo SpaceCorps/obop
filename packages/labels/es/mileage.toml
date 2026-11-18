@@ -58,7 +58,7 @@ description = "El mayor número de secuencia entre los puntos guardados"
 
 [labels.es.model.mileage_trip.field.integrity]
 label = "Integridad"
-description = "Marcas que puso la validación al terminar: seq_gap, speed_jump y low_accuracy con su número; vacío si el rastro era limpio"
+description = "Marcas que puso la validación al terminar: seq_gap, speed_jump, low_accuracy, before_start y reanchor con su número; vacío si el rastro era limpio"
 
 [labels.es.model.mileage_trip.field.start_lat]
 label = "Inicio (latitud)"
@@ -94,7 +94,7 @@ description = "Cuándo se confirmó el viaje, fijado por Confirmar; el mes de es
 
 [labels.es.model.mileage_trip.field.reviewable]
 label = "Revisable"
-description = "Verdadero mientras el viaje está en revisión, confirmado o rechazado: los estados que lee un revisor"
+description = "Verdadero mientras el viaje está en revisión, confirmado o rechazado y su motivo no es privado: los viajes que lee un revisor"
 
 [labels.es.model.mileage_trip.field.state]
 label = "Estado"

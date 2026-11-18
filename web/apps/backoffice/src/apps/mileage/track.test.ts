@@ -1,6 +1,14 @@
 // track.ts: the route and the check of a trip, for the review screen.
 import { describe, expect, it } from "vite-plus/test";
-import { drawRoute, flagsOf, kmOf, minutesBetween, pointsOf, reviewRefusal } from "./track.ts";
+import {
+  checkNotes,
+  drawRoute,
+  flagsOf,
+  kmOf,
+  minutesBetween,
+  pointsOf,
+  reviewRefusal,
+} from "./track.ts";
 
 const r = (id: string, lat: string, lon: string, accuracy_m: string | null = "8.00") => ({
   id,
@@ -68,5 +76,22 @@ describe("mileage track", () => {
       "This trip was already reviewed.",
     );
     expect(reviewRefusal("not allowed")).toBeNull();
+  });
+  it("never calls a track clean when the server flagged it", () => {
+    const clean = checkNotes("", 10, true);
+    expect(clean).toEqual([
+      { tone: "ok", text: "The track is clean: all 10 points were used for the distance." },
+    ]);
+    const early = checkNotes("before_start:1", 10, true);
+    expect(early.map((n) => n.tone)).toEqual(["warn"]);
+    expect(early[0].text).toBe("1 point was recorded before the trip started and was left out.");
+    expect(checkNotes("before_start:3", 10, true)[0].text).toContain("3 points were recorded");
+    const jumped = checkNotes("reanchor:2", 10, true);
+    expect(jumped.map((n) => n.tone)).toEqual(["warn"]);
+    expect(jumped[0].text).toContain("2 times");
+    expect(checkNotes("reanchor:1", 10, true)[0].text).not.toContain("times");
+    const unknown = checkNotes("something_new:1", 10, true);
+    expect(unknown.map((n) => n.tone)).toEqual(["warn"]);
+    expect(checkNotes("", 10, false)).toEqual([]);
   });
 });

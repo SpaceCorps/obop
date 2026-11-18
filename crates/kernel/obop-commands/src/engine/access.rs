@@ -2,8 +2,8 @@
 //! the group checks of the model.
 //!
 //! A record is visible when any declared rule grants it: the caller is the `own` of the record,
-//! the record's `via` parent is visible, the `public_field` is true, or the caller is listed in
-//! `shared_with`. The holders of the `see_all` groups and the instance administrator see every record.
+//! the record's `via` parent is visible (and of a model the caller may read), the `public_field`
+//! is true, or the caller is listed in `shared_with`. The holders of the `see_all` groups and the instance administrator see every record.
 //! A model without `[model.access]` is not restricted. A record the caller cannot see is treated
 //! exactly like a record that does not exist, in every command and in every error message.
 
@@ -123,6 +123,13 @@ impl<'a> Gate<'a> {
                 .and_then(|d| d.kind.target())
                 .and_then(|t| (self.lookup)(t))
         {
+            // A parent of a model the caller may not read at all is not visible to them, whatever
+            // its own rules say (a Document open to every reader of Documents is not open to a
+            // reader of signature requests who holds no role in Documents). Where the parent has
+            // the child's read group the command has checked it already, so this changes nothing.
+            if parent.read_group != def.read_group && !self.actor.holds(parent.read_group) {
+                return false;
+            }
             return self.visible_at(&parent, pid, hops + 1);
         }
         false

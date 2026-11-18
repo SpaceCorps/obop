@@ -335,12 +335,13 @@ async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_
 // the two paths `/api/auth/agent-tokens` and `/api/auth/agent-tokens/{id}/revoke`, the description
 // of the scopes of `issueAgentToken`, and two more kinds in the description of `security_event.kind`.
 // Again on `feat/ui-L9` (D95, 2026-11-15), on purpose: `info.version` 0.2.2 and the `message` key of
-// the error schema. Again on `feat/approvals-inbox` (D97, 2026-11-17), on purpose: the
-// description of the `ApprovalRequired` schema names the Approvals page and `/api/plan/*`.
+// the error schema. Again on `fix/w2b-h2` (N18, 2026-11-17), on purpose: the `expires_at` of a row of
+// `listAgentTokens`. Again on `feat/approvals-inbox` (D97, 2026-11-17; main merged in 2026-11-18), on
+// purpose: the description of the `ApprovalRequired` schema names the Approvals page and `/api/plan/*`.
 #[rustfmt::skip]
 const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
-    ("dev/openapi", "3e752740067945a2d7db5a0b9bdab2ce50e1a9fb4de0e285f97f25752255c2c9"),
-    ("auth/openapi", "268d82b8159772fa8f2e581a435c3179722f7d75f92a858e4fdee6576bddc2e1"),
+    ("dev/openapi", "34e6c386c2c2e2a2b37115864795715609350da33edc5ec7f25afd1eefdc775c"),
+    ("auth/openapi", "43610b4b9d4a7de11f5013cf69caee44b969d32c9de5279c8ddfa28e8f908396"),
 ];
 
 /// With a brand row in the store the anonymous document is the one an instance with no row sends,
@@ -363,4 +364,27 @@ async fn with_a_brand_row_the_anonymous_openapi_document_is_what_it_was_but_for_
         now.push((format!("{}/openapi", inst.name), pin::sha(&put_back)));
     }
     pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
+}
+
+/// L6: `device.update` takes the name and nothing else (its guard refuses every other field), and
+/// the document says so, in its summary and in its body; the generic sentence of the model engine
+/// ("a status field only moves along a declared action") described another command.
+#[test]
+fn the_device_update_operation_says_it_renames_and_takes_only_the_name() {
+    let doc: J = serde_json::from_str(&document()).unwrap();
+    let op = &doc["paths"]["/api/device/update"]["post"];
+    assert_eq!(
+        op["summary"],
+        obop_commands::devices::UPDATE_SUMMARY,
+        "{op}"
+    );
+    let body = &op["requestBody"]["content"]["application/json"]["schema"];
+    let keys: BTreeSet<&str> = body["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(keys, BTreeSet::from(["id", "name"]), "{body}");
+    assert_eq!(body["required"], serde_json::json!(["id", "name"]));
 }

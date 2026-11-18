@@ -1262,9 +1262,7 @@ fn a_mobile_refresh_refused_at_any_call_keeps_the_old_token_and_makes_no_orphan(
 fn ending_a_device_refused_at_any_call_is_never_reported_as_done_and_asking_again_finishes_it() {
     // A refusal of one call at every position, and a store that stays refused for longer than a
     // step is tried again from a few positions.
-    let sweep = (0..60)
-        .map(|k| (k, 1))
-        .chain([1, 3, 5, 8, 12, 16].map(|k| (k, 6)));
+    let sweep = (0..60).map(|k| (k, 1)).chain((0..20).map(|k| (k, 6)));
     let mut refused = 0;
     let mut past_the_end = false;
     for (skip, stays) in sweep {
@@ -1314,9 +1312,11 @@ fn ending_a_device_refused_at_any_call_is_never_reported_as_done_and_asking_agai
             "invalid_grant",
             "skip={skip}"
         );
-        assert!(
-            r.events("device_revoked").len() <= 1,
-            "skip={skip}: one entry at most, however many tries"
+        // The record and its entry are one atomic write (L11): exactly one, however many tries.
+        assert_eq!(
+            r.events("device_revoked").len(),
+            1,
+            "skip={skip}: one entry, however many tries"
         );
     }
     assert!(refused >= 3, "the sweep reached the revocation: {refused}");
@@ -1336,10 +1336,11 @@ fn a_refused_write_of_the_device_still_ends_the_token_and_a_refused_token_still_
     let (id, _) = r.the_device();
     let access = t["access_token"].as_str().unwrap();
     fault::begin_request(Default::default());
-    flaky.refuse_model(dev::MODEL, Mode::Updates);
+    // The record is marked in an atomic batch with its entry of the log (L11).
+    flaky.refuse_applies(100);
     let e = r.o.revoke_device(&id, "ada", None).unwrap_err();
     fault::end_request();
-    flaky.allow_models();
+    flaky.refuse_applies(0);
     assert_eq!(e.status, 503);
     assert!(
         r.auth.resolve(access).is_none(),
@@ -1485,4 +1486,28 @@ fn the_page_texts_of_the_mobile_class_exist_in_every_language() {
 
 fn rand_byte() -> u32 {
     u32::from_str_radix(&crate::util::rand_hex::<1>(), 16).unwrap()
+}
+
+/// L10: an operator who lists the redirect schemes of the mobile apps it accepts
+/// (`OBOP_OAUTH_MOBILE_SCHEMES`) refuses the registration of any other mobile client; MCP clients
+/// are not affected, and without a list every app that follows RFC 8252 registers as before.
+#[test]
+fn an_operator_list_of_mobile_apps_refuses_the_others() {
+    let r = rig_with(OAuthConfig {
+        mobile_schemes: crate::parse_schemes(" Org.Obop.Mileage , http "),
+        ..OAuthConfig::default()
+    });
+    r.mobile_with(&[APP, LOOP4]).unwrap();
+    let e = r.mobile_with(&["com.example.other:/oauth"]).unwrap_err();
+    assert_eq!(e.error, "invalid_redirect_uri", "{e:?}");
+    assert!(
+        e.description.contains("OBOP_OAUTH_MOBILE_SCHEMES"),
+        "{}",
+        e.description
+    );
+    // One redirect outside the list refuses the whole registration.
+    assert!(r.mobile_with(&[APP, "com.example.other:/oauth"]).is_err());
+    let open = rig_with(OAuthConfig::default());
+    open.mobile_with(&["com.example.other:/oauth"]).unwrap();
+    assert_eq!(crate::parse_schemes(" , "), None);
 }

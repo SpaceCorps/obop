@@ -1419,6 +1419,10 @@ impl Dispatcher {
                 input = i;
             }
         }
+        // A module's screen of the command (`Dispatcher::screen`) checks again before the plan is
+        // spent, so a refusal leaves the plan for another approver; it sees the principal the
+        // plan runs as, as the guard does.
+        self.run_screen(&plan.id, &proposer, &mut input)?;
         // Taken out first, so it runs once; if it is still there the plan would run again.
         self.plans
             .remove(self.shared.get(), plan_id)
