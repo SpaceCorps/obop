@@ -714,7 +714,9 @@ async fn the_door_follows_a_rollback_and_an_update_made_by_another_process() {
 
 /// docs/ISSUES.md O31: the upgrade as the Modules page runs it, the command `module.upgrade` (its
 /// plan, the lock and the migration steps, and not `installer.install`), on an instance that also
-/// has `sign_docuseal`, which depends on `sign`.
+/// has `sign_docuseal` 0.2.1 as deployed, which depends on `sign` `^0.2` and so does not accept
+/// `sign` 0.3.0: `sign` alone is refused with the reason, `sign_docuseal` goes first (its bundled
+/// version accepts 0.2 and 0.3), then `sign` (docs/SIGN.md, "Upgrade runbook", step 4).
 #[tokio::test]
 async fn module_upgrade_moves_sign_to_the_bundled_version_with_sign_docuseal_installed() {
     let Old {
@@ -722,14 +724,20 @@ async fn module_upgrade_moves_sign_to_the_bundled_version_with_sign_docuseal_ins
         requests,
         template,
     } = old_instance().await;
+    // `sign_docuseal` 0.2.1, the version instances have: the bundled text with the version and
+    // the range of 0.2.1.
+    let bundled = Bundled.fetch("sign_docuseal").unwrap();
+    let deployed = bundled
+        .replacen("version = \"0.2.2\"", "version = \"0.2.1\"", 1)
+        .replacen("sign = \">=0.2, <0.4\"", "sign = \"^0.2\"", 1);
+    assert_ne!(
+        deployed, bundled,
+        "the bundled sign_docuseal moved: update this test"
+    );
     f.app
         .installer
-        .install(
-            &Bundled.fetch("sign_docuseal").unwrap(),
-            "marketplace",
-            "test",
-        )
-        .expect("sign_docuseal installs on sign 0.2.0");
+        .install(&deployed, "marketplace", "test")
+        .expect("sign_docuseal 0.2.1 installs on sign 0.2.0");
     let before = snapshot(&f, &requests);
     let before_template = f.record("sign_template", &template);
     // A plain user cannot ask for one.
@@ -737,6 +745,31 @@ async fn module_upgrade_moves_sign_to_the_bundled_version_with_sign_docuseal_ins
         .api("sam", "/api/module/upgrade", json!({"id": "sign"}))
         .await;
     assert_ne!(s, 200, "{v}");
+    // `sign` alone would break `sign_docuseal` 0.2.1: refused, and the plan says why.
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/module_plan/preview",
+            json!({"id": "sign", "action": "upgrade"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert!(v.to_string().contains("would break sign_docuseal"), "{v}");
+    let (s, v) = f
+        .api("admin", "/api/module/upgrade", json!({"id": "sign"}))
+        .await;
+    assert_ne!(s, 200, "{v}");
+    assert!(v.to_string().contains("would break sign_docuseal"), "{v}");
+    assert_eq!(snapshot(&f, &requests), before, "nothing was changed");
+    // `sign_docuseal` first, then `sign`.
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/module/upgrade",
+            json!({"id": "sign_docuseal"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
     let (s, v) = f
         .api("admin", "/api/module/upgrade", json!({"id": "sign"}))
         .await;
