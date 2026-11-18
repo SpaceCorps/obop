@@ -19,7 +19,7 @@ Module `mail`, built in (`crates/kernel/obop-mail`). Permission groups (Proposed
 | Model | Purpose | Notes |
 |---|---|---|
 | `mail_server` | A way out: SMTP relay or provider connection | `password` is data class `secret`: write-only, sealed with the instance key (`OBOP_SECRET_KEY` ring, purpose `mail-server-password`), never returned on any surface |
-| `outbound_mail` | The queue and the deliveries log | the body is sealed (purpose `outbound-mail:<id>`) in a field of group `mail.system` and erased once the message is sent or cancelled |
+| `outbound_mail` | The queue and the deliveries log | the body is sealed (purpose `outbound-mail:<id>`) in a field of group `mail.system` and erased once the message is sent or cancelled; no screen shows it, and only `platform.admin` (which holds every group) can read the sealed text through the API, never the plain text |
 | `mail_template` | Subject and text per key and language | unique per key and language |
 
 | Command | Group | What it does |
@@ -68,6 +68,7 @@ An administrator connects the provider in the Connectors app as for any other pr
 - **Template sandbox** (`minijinja`): placeholders are plain substitutions; no conditions or loops.
 - **A real relay or provider.** Nothing was sent to a real server: SMTP was tested against a stand-in on loopback (plain, STARTTLS and implicit TLS with a test certificate), each provider against a fake HTTP server.
 - **The log-only sink of the hosted sandbox** (platform.md 4.18).
+- **"Edit in list"** on the generated Deliveries page is offered and refused by the server (`outbound_mail.update` is not allowed); New and Import are hidden.
 
 ## 6. Questions for the owner
 

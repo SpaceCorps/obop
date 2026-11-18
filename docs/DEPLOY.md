@@ -508,6 +508,16 @@ Routes (bearer token of a person): `GET /api/drive/status` (`connected`, `may_br
 
 A file or picture is served to a signed-in person who may read a record that holds it: the read group of the model, the group of the field and, when the model has row rules (`[model.access]`, D58), the record itself. A record the person cannot see answers like a missing file (404), also when they know the file's id (its SHA-256). The instance administrator sees every record. Agents never get bytes. This is a change: before it, the row rules were not applied to the bytes, so a restricted Document's file was readable by anyone with `documents.user` who knew its id (D60 amendment of 2026-11-03).
 
+## Outbound mail
+
+The built-in `mail` module ([spec/mail.md](spec/mail.md)) sends mail through mail servers that an administrator adds under Customize, Mail: an SMTP relay (host, port, `starttls`, `tls` or `none`, user name and a password sealed with the server key) or a provider connection of the Connectors (Postmark, SendGrid, Mailgun, Microsoft Graph, the Gmail API). Each server process runs one worker that sends what is queued (every 5 seconds and when a message is queued; claims are made under a storage lock with a 5 minute lease, so several processes on one database share the queue). Settings:
+
+- `OBOP_MAIL_RETENTION_DAYS` (default 90): sent, cancelled and failed messages are removed after this many days, once a day.
+- `OBOP_PUBLIC_URL`: its host is the name given in `EHLO` (else `localhost`).
+- The relay's host passes the same checks as every outbound request: the operator's host allow-list and a public address. A relay on a loopback address works only with `OBOP_CONNECTORS_ALLOW_LOOPBACK=1` (tests and local development); a relay on a private address is refused (an open question for the owner, spec/mail.md 6).
+
+Send a test message from the server's card in Customize, Mail, or `obop call mail_server test_send id=<server> test_recipient=<address>`. Nothing in obop queues mail by itself yet; the command `outbound_mail.send` is there for the modules that will.
+
 ## The server key
 
 `OBOP_SECRET_KEY` seals four kinds of secret: two-factor seeds, connection credentials and OAuth tokens (and the keys behind pseudonyms), and the transient sessions, vaults and plans above. Every sealed value names the key that sealed it (an id: the first eight hex digits of a SHA-256, which says nothing usable about the key), so opening picks the right key at once and a missing key is reported by id, never by content.
