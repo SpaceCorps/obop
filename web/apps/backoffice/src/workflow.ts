@@ -1,4 +1,5 @@
 import { inSentence, t } from "@obop/ui";
+import { sentText } from "./approvals/sent.ts";
 import type { Command, FieldMeta, ModelMeta, Reply } from "./api.ts";
 import { isEmpty, optionLabel } from "./format.ts";
 import { actionTitle } from "./labels.ts";
@@ -188,26 +189,6 @@ export type MoveOutcome =
   | { kind: "approval"; planId: string; message: string }
   | { kind: "error"; message: string; raw: string };
 
-/** Text for the toast of a 202: names the plan and what it would do. */
-export function moveApproval(
-  noun: string,
-  to: string,
-  planId: string,
-  action?: Command,
-  field?: FieldMeta,
-): string {
-  const vars = { noun: inSentence(noun), state: optionLabel(to, field), plan: planId.slice(0, 8) };
-  return action
-    ? t(
-        "Approval needed: moving {noun} to {state} ({action}) was proposed as plan {plan}. Nothing changes until a human approves it.",
-        { ...vars, action: actionTitle(action) },
-      )
-    : t(
-        "Approval needed: moving {noun} to {state} was proposed as plan {plan}. Nothing changes until a human approves it.",
-        vars,
-      );
-}
-
 /**
  * Move a record along a governed field. Prefers the action command, so the action's own handler
  * runs; falls back to `update` when only an implicit move exists (an older server).
@@ -232,7 +213,7 @@ export async function moveRecord(
     return {
       kind: "approval",
       planId: r.planId,
-      message: moveApproval(noun, to, r.planId, m.action, field),
+      message: sentText(),
     };
   }
   // `raw` is the server's own sentence, for a caller that keeps it and words it when it is shown.

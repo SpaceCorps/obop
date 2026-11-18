@@ -188,10 +188,12 @@ test.describe("delete", () => {
       .getByRole("alertdialog", { name: /^Delete/ })
       .getByRole("button", { name: "Delete", exact: true })
       .click();
-    const toast = page.locator(".toast").filter({ hasText: "Approval needed" });
-    await expect(toast).toContainText("deleting");
-    await expect(toast).toContainText(/plan [0-9a-f]{8}/);
-    await expect(toast).toContainText("Nothing is deleted until a human approves it");
+    const toast = page.locator(".toast").filter({ hasText: "Sent for approval." });
+    await expect(toast.getByRole("link", { name: "Open Approvals" })).toHaveAttribute(
+      "href",
+      /#\/approvals\?id=[0-9a-f-]+/,
+    );
+    await expect(toast).not.toContainText(/plan [0-9a-f]{8}/);
     expect((await api.list("root", model)).some((r) => r.id === rec.id)).toBe(true);
   });
 });

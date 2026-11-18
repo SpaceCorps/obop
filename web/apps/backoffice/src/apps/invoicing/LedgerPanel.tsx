@@ -5,6 +5,7 @@
 // where the accounting package is installed and the person may read the ledger.
 import { useEffect, useState } from "react";
 import { Button, Notice, t } from "@obop/ui";
+import { notifySent } from "../../approvals/sent.ts";
 import { call } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
@@ -64,8 +65,7 @@ export function LedgerPanel({ row, busy }: RecordExtProps) {
     setRunning(true);
     const r = await d.run("invoice_posting.create_move", { invoice: row.id });
     setRunning(false);
-    if (r.kind === "approval")
-      return d.notify(t("Approval needed: nothing changes until a human approves it."), "info");
+    if (r.kind === "approval") return notifySent(d.notify, r.planId);
     if (r.kind !== "ok") return d.notify(serverMessage(r.message), "error");
     d.notify(t("Booked as a draft entry"), "ok");
     await d.changed(MOVE);

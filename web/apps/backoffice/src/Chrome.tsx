@@ -41,6 +41,10 @@ import { recentRecords } from "./recent.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { shortcut } from "./keys.ts";
 import { notForRecord } from "./workflow.ts";
+import { ApprovalsButton } from "./approvals/ApprovalsEntry.tsx";
+import { approvalsHref } from "./approvals/route.ts";
+import { notifySent } from "./approvals/sent.ts";
+import { showsApprovals, usePlanCount } from "./approvals/usePlanCount.ts";
 
 export type App = { id: string; name: string; color: string; module: ModuleMeta };
 
@@ -138,8 +142,12 @@ export function TopBar(props: {
   onTheme: () => void;
   onBrand: () => void;
   onSecurity: () => void;
+  /** The signed-in token: the count of waiting approvals is read with it (none, none shown). */
+  token?: string;
 }) {
   const { current } = props;
+  const plans = usePlanCount(props.token ?? "");
+  const entry = showsApprovals(plans) ? plans : null;
   const i18n = useI18n();
   const docs = productDocsVisible();
   const languages: MenuItem = {
@@ -198,6 +206,7 @@ export function TopBar(props: {
         <span aria-hidden="true">{t("Search apps, records and actions")}</span>
         <Kbd>{shortcut("K")}</Kbd>
       </button>
+      {entry && <ApprovalsButton count={entry} />}
       <div className="systray">
         <Menu
           ariaLabel={t("Account")}
@@ -208,6 +217,21 @@ export function TopBar(props: {
             { heading: props.email || t("Signed in") },
             { label: t("Theme"), icon: "sun", onSelect: props.onTheme },
             languages,
+            ...(entry
+              ? [
+                  {
+                    label: t("Approvals"),
+                    icon: "check-circle" as const,
+                    description:
+                      entry.waiting > 0
+                        ? t("{n} waiting for you", { n: entry.waiting })
+                        : undefined,
+                    onSelect: () => {
+                      location.hash = approvalsHref();
+                    },
+                  },
+                ]
+              : []),
             { label: t("Security"), icon: "shield-check", onSelect: props.onSecurity },
             ...(docs
               ? [{ label: t("Brand book"), icon: "sparkle" as const, onSelect: props.onBrand }]
@@ -486,14 +510,7 @@ export function Palette({
     if (a.ui?.confirm && !(await data.confirm(a.ui.confirm, name, t("Cancel")))) return;
     const r = await data.run(a.id, { id: openRow.id });
     if (r.kind === "ok") data.notify(t("{name} done", { name }));
-    else if (r.kind === "approval")
-      data.notify(
-        t(
-          "Approval needed: “{name}” was proposed (plan {plan}). Nothing changes until a human approves it.",
-          { name, plan: r.planId.slice(0, 8) },
-        ),
-        "info",
-      );
+    else if (r.kind === "approval") notifySent(data.notify, r.planId);
     else data.notify(serverMessage(r.message), "error");
   };
 

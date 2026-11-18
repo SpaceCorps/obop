@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Badge, Table, fmt, t } from "@obop/ui";
+import { sentText } from "../approvals/sent.ts";
 import { useData, useRows } from "../data.tsx";
 import { serverMessage } from "../serverMessage.ts";
 import { Button, Dialog, Notice } from "../ui.tsx";
@@ -66,13 +67,7 @@ export function ConnectionDetail({ id, onClose }: { id: string; onClose: () => v
     if (r.kind === "approval")
       return setMessage({
         tone: "info",
-        text: t(
-          "Approval needed: {action} was proposed as plan {plan}. Nothing changes until a human approves it.",
-          {
-            action: label,
-            plan: r.planId.slice(0, 8),
-          },
-        ),
+        text: sentText(),
       });
     if (r.kind === "error") return setMessage({ tone: "danger", text: serverMessage(r.message) });
     const result = parseJson<Record<string, unknown>>((r.value as { result?: string }).result, {});

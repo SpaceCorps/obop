@@ -8,6 +8,7 @@ import {
   type TouchEvent,
 } from "react";
 import { getCurrency, inSentence, panelId, t, tabId, Tabs, useI18n, type MenuItem } from "@obop/ui";
+import { notifySent } from "../approvals/sent.ts";
 import { search, type Command, type FieldMeta, type Row, type ServerFilter } from "../api.ts";
 import { ActionDialog } from "../ActionDialog.tsx";
 import { Cell, FieldInput } from "../fields.tsx";
@@ -389,7 +390,7 @@ export function KanbanView(p: ViewProps) {
       const step = canMove(model, gf, row[gf.name] as string, key, noun, row).action;
       if (step?.ui?.needs?.some((n) => isEmpty(row[n]))) return setAsking({ row, action: step });
       const out = await moveRecord(d.run, model, gf, row, key, noun);
-      if (out.kind === "approval") d.notify(out.message, "info");
+      if (out.kind === "approval") notifySent(d.notify, out.planId);
       else if (out.kind === "error") d.notify(out.message, "error");
       return;
     }
@@ -424,20 +425,14 @@ export function KanbanView(p: ViewProps) {
             const out = await moveRecord(d.run, model, gf, r, a.to, noun);
             setBusyId(null);
             if (out.kind === "ok") d.notify(a.ui?.done ?? t("{name} done", { name }));
-            else d.notify(out.message, out.kind === "approval" ? "info" : "error");
+            else if (out.kind === "approval") notifySent(d.notify, out.planId);
+            else d.notify(out.message, "error");
             return;
           }
           const reply = await d.run(a.id, { id: r.id });
           setBusyId(null);
           if (reply.kind === "ok") d.notify(a.ui?.done ?? t("{name} done", { name }));
-          else if (reply.kind === "approval")
-            d.notify(
-              t(
-                "Approval needed: “{name}” was proposed (plan {plan}). Nothing changes until a human approves it.",
-                { name, plan: reply.planId.slice(0, 8) },
-              ),
-              "info",
-            );
+          else if (reply.kind === "approval") notifySent(d.notify, reply.planId);
           else d.notify(serverMessage(reply.message), "error");
         })();
       },
@@ -517,13 +512,7 @@ export function KanbanView(p: ViewProps) {
       return;
     }
     if (r.kind === "approval") {
-      d.notify(
-        t(
-          "Approval needed: creating the record was proposed as plan {plan}. Nothing changes until a human approves it.",
-          { plan: r.planId.slice(0, 8) },
-        ),
-        "info",
-      );
+      notifySent(d.notify, r.planId);
       return setQuick(null);
     }
     // The server's words, made a sentence for a person (B10); shown in the form, not only a toast.
@@ -894,14 +883,7 @@ export function KanbanView(p: ViewProps) {
     const reply = await d.run(action.id, { id: row.id, ...values });
     setBusyId(null);
     if (reply.kind === "ok") d.notify(action.ui?.done ?? t("{name} done", { name }));
-    else if (reply.kind === "approval")
-      d.notify(
-        t(
-          "Approval needed: “{name}” was proposed (plan {plan}). Nothing changes until a human approves it.",
-          { name, plan: reply.planId.slice(0, 8) },
-        ),
-        "info",
-      );
+    else if (reply.kind === "approval") notifySent(d.notify, reply.planId);
     else d.notify(serverMessage(reply.message), "error");
   }
 

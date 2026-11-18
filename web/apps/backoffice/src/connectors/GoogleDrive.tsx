@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Badge, t } from "@obop/ui";
+import { sentText } from "../approvals/sent.ts";
 import type { Reply } from "../api.ts";
 import { useData, useRows } from "../data.tsx";
 import { request } from "../net.ts";
@@ -126,12 +127,7 @@ export function GoogleDrive() {
     if (r.kind === "approval") {
       setMessage({
         tone: "info",
-        text: t(
-          "Approval needed: this was proposed as plan {plan}. Nothing changes until a human approves it.",
-          {
-            plan: r.planId.slice(0, 8),
-          },
-        ),
+        text: sentText(),
       });
       return true;
     }

@@ -55,4 +55,9 @@ export const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   mileage_discard_stuck: msg("Stuck trip discarded"),
   brand_configured: msg("The identity of the instance changed"),
   brand_cleared: msg("The identity of the instance was removed"),
+  plan_proposed: msg("Request sent for approval"),
+  plan_approved: msg("Request approved"),
+  plan_rejected: msg("Request rejected"),
+  plan_failed: msg("Approved request refused"),
+  plan_expired: msg("Request expired"),
 };

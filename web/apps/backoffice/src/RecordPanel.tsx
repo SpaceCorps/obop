@@ -5,6 +5,7 @@
 // the pager and the trail, locks and read-only values.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fmt, getCurrency, inSentence, t, useFocusTrap, useI18n } from "@obop/ui";
+import { notifySent } from "./approvals/sent.ts";
 import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
 import { ActionDialog } from "./ActionDialog.tsx";
 import { useData } from "./data.tsx";
@@ -405,15 +406,7 @@ export function RecordPanel({
         onSaved(id);
         return id;
       } else if (r.kind === "approval") {
-        d.notify(
-          t(
-            "Approval needed: the change was proposed (plan {plan}). A human must approve it first.",
-            {
-              plan: r.planId.slice(0, 8),
-            },
-          ),
-          "info",
-        );
+        notifySent(d.notify, r.planId);
       } else failure(r.message);
       return null;
     } finally {
@@ -451,7 +444,7 @@ export function RecordPanel({
           values: optionLabel(s, statusField),
         }),
       );
-    } else if (out.kind === "approval") d.notify(out.message, "info");
+    } else if (out.kind === "approval") notifySent(d.notify, out.planId);
     else {
       // The server's own words (D48), also inline so they stay readable.
       setError({ raw: out.raw });
@@ -499,14 +492,7 @@ export function RecordPanel({
             : t("{name} done", { name })),
       );
       setMade(createdRefs(model, row, after).map((x) => ({ field: x, id: String(after[x.name]) })));
-    } else if (r.kind === "approval")
-      d.notify(
-        t(
-          "Approval needed: “{name}” was proposed (plan {plan}). Nothing changes until a human approves it.",
-          { name, plan: r.planId.slice(0, 8) },
-        ),
-        "info",
-      );
+    } else if (r.kind === "approval") notifySent(d.notify, r.planId);
     else {
       const message = serverMessage(r.message);
       setError({ raw: r.message });
@@ -532,7 +518,7 @@ export function RecordPanel({
           values: optionLabel(to, f),
         }),
       );
-    else if (out.kind === "approval") d.notify(out.message, "info");
+    else if (out.kind === "approval") notifySent(d.notify, out.planId);
     else {
       setError({ raw: out.raw });
       d.notify(out.message, "error");

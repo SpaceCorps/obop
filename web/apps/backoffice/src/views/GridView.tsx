@@ -14,6 +14,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { fmt, t } from "@obop/ui";
+import { notifySent } from "../approvals/sent.ts";
 import { getTime, search, type Command, type Row, type ServerFilter } from "../api.ts";
 import { useData } from "../data.tsx";
 import { todayIn, addDays } from "../filters.ts";
@@ -216,7 +217,7 @@ export function GridView(p: ViewProps) {
       return "failed";
     }
     if (r.kind === "approval") {
-      d.notify(t("Approval needed: nothing changes until a human approves it."), "info");
+      notifySent(d.notify, r.planId);
       return "failed";
     }
     return "saved";

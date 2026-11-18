@@ -25,6 +25,7 @@ import {
   type ReactNode,
 } from "react";
 import { fmt, getCurrency, t } from "@obop/ui";
+import { notifySent } from "./approvals/sent.ts";
 import type { ChildMeta, FieldMeta, ModelMeta, Row, ServerOrder } from "./api.ts";
 import { BlobThumb } from "./BlobFields.tsx";
 import { useData } from "./data.tsx";
@@ -146,8 +147,6 @@ type Lines = {
 };
 
 const freshKey = (k: string) => k.startsWith("new-");
-const APPROVAL =
-  "Approval needed: the change was proposed (plan {plan}). A human must approve it first.";
 
 function ChildSection(props: SectionProps) {
   const { slot, child, model, moduleId, shape, index } = props;
@@ -525,7 +524,7 @@ function ChildSection(props: SectionProps) {
       return true;
     }
     if (r.kind === "approval") {
-      d.notify(t(APPROVAL, { plan: r.planId.slice(0, 8) }), "info");
+      notifySent(d.notify, r.planId);
       revert(key);
       return true;
     }
@@ -548,7 +547,7 @@ function ChildSection(props: SectionProps) {
       s.errors.delete(key);
       void d.changed(parent.name);
     } else if (r.kind === "approval") {
-      d.notify(t(APPROVAL, { plan: r.planId.slice(0, 8) }), "info");
+      notifySent(d.notify, r.planId);
     } else {
       s.errors.set(key, r.message);
       d.notify(serverMessage(r.message), "error");
@@ -1228,7 +1227,7 @@ function ImageGrid(p: {
       if (!r || numeric(r[pos.name]) === i + 1) continue;
       const res = await d.run(`${model.name}.update`, { id, [pos.name]: i + 1 });
       if (res.kind === "approval") {
-        d.notify(t(APPROVAL, { plan: res.planId.slice(0, 8) }), "info");
+        notifySent(d.notify, res.planId);
         setOrder(null);
         return;
       }

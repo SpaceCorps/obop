@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { ConfirmDialog, getLang, t } from "@obop/ui";
+import { approvalsHref } from "./approvals/route.ts";
+import { notifySent } from "./approvals/sent.ts";
 import type { ModelMeta } from "./api.ts";
 import { useData } from "./data.tsx";
 import { modelTitle } from "./labels.ts";
@@ -86,19 +88,7 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
       return onClose();
     }
     if (out.every((r) => r.status === "approval")) {
-      const plan = approvals[0]!.planId!.slice(0, 8);
-      d.notify(
-        many
-          ? t(
-              "Approval needed: deleting {count} {noun} was proposed as plan {plan}. Nothing is deleted until a human approves it.",
-              { count: out.length, noun: plural(out.length), plan },
-            )
-          : t(
-              "Approval needed: deleting {noun} “{label}” was proposed as plan {plan}. Nothing is deleted until a human approves it.",
-              { noun, label: out[0]!.label, plan },
-            ),
-        "info",
-      );
+      notifySent(d.notify, approvals[0]!.planId!);
       return onClose();
     }
     setResults(out);
@@ -140,9 +130,11 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
                   {r.status === "deleted" && <span className="ok-text">{t("deleted")}</span>}
                   {r.status === "approval" && (
                     <span>
-                      {t("waiting for approval (plan {plan})", {
-                        plan: r.planId?.slice(0, 8) ?? "",
-                      })}
+                      {r.planId ? (
+                        <a href={approvalsHref({ id: r.planId })}>{t("waiting for approval")}</a>
+                      ) : (
+                        t("waiting for approval")
+                      )}
                     </span>
                   )}
                   {r.status === "referenced" && r.refs && (

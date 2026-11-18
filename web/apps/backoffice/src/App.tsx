@@ -441,6 +441,7 @@ export function App() {
           onTheme={() => go({ app: "customize", model: "theme", tab: "theme" })}
           onBrand={() => go({ app: "customize", model: "brand", tab: "brand" })}
           onSecurity={() => go({ app: "customize", model: "security", tab: "security" })}
+          token={token}
         />
         <div className="workspace">
           {app && app.id !== "customize" && (

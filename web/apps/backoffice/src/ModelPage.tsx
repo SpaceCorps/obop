@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fmt, getCurrency, inSentence, t } from "@obop/ui";
+import { sentText } from "./approvals/sent.ts";
 import { search, type FieldMeta, type ModelMeta, type Row } from "./api.ts";
 import { collect, EXPORT_CAP } from "./bulk.ts";
 import type { App } from "./Chrome.tsx";
@@ -367,24 +368,12 @@ export function ModelPage({
   useMissingRecord(found, route.id, () => put({ id: "", full: "" }, true));
 
   const governed = useMemo(() => governedNames(model), [model]);
-  const approval = (what: "change" | "create", planId: string) => {
-    const plan = planId.slice(0, 8);
-    return what === "change"
-      ? t(
-          "Approval needed: the change was proposed as plan {plan}. Nothing changes until a human approves it.",
-          { plan },
-        )
-      : t(
-          "Approval needed: creating the record was proposed as plan {plan}. Nothing changes until a human approves it.",
-          { plan },
-        );
-  };
   const update: ViewProps["update"] = async (id, patch) => {
     const body = { ...patch };
     for (const f of model.fields) if (f.computed || f.sequence) delete body[f.name];
     const r = await d.run(`${model.name}.update`, { id, ...body });
     if (r.kind === "ok") return null;
-    if (r.kind === "approval") return approval("change", r.planId);
+    if (r.kind === "approval") return sentText();
     return serverMessage(r.message);
   };
   const create: ViewProps["create"] = async (body) => {
@@ -399,7 +388,7 @@ export function ModelPage({
       d.notify(t("{model} created", { model: title }));
       return null;
     }
-    if (r.kind === "approval") return approval("create", r.planId);
+    if (r.kind === "approval") return sentText();
     return serverMessage(r.message);
   };
   const moveState: ViewProps["moveState"] = async (id, field, to) => {

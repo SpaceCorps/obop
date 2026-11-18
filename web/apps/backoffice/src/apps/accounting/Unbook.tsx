@@ -4,6 +4,7 @@
 // booking exists, its entry is still a draft and the transaction is not reconciled.
 import { useEffect, useState } from "react";
 import { Button, t } from "@obop/ui";
+import { notifySent } from "../../approvals/sent.ts";
 import { call } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
@@ -39,8 +40,7 @@ export function UnbookButton({ row, busy }: RecordExtProps) {
     setRunning(true);
     const r = await d.run("bank_matching.unbook", { bank_line: row.id });
     setRunning(false);
-    if (r.kind === "approval")
-      return d.notify(t("Approval needed: nothing changes until a human approves it."), "info");
+    if (r.kind === "approval") return notifySent(d.notify, r.planId);
     if (r.kind !== "ok") return d.notify(serverMessage(r.message), "error");
     d.notify(t("Booking undone"), "ok");
     await Promise.all([d.changed("accounting_bank_statement_line"), d.changed(MOVE)]);

@@ -30,6 +30,7 @@ export const badgeText = (n: number): string => (n > 9 ? "9+" : String(n));
 export function usePlanCount(token: string): PlanCount | null {
   const [count, setCount] = useState<PlanCount | null>(null);
   const read = useCallback(async () => {
+    if (!token) return;
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     const r = await planCount(token);
     if (r.ok) setCount(r.value);
