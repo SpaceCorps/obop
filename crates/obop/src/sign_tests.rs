@@ -17,6 +17,7 @@ use tower::ServiceExt;
 mod brand;
 mod brand_words;
 mod door;
+mod fixes;
 mod hardening;
 mod history;
 mod pinned;

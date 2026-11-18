@@ -114,6 +114,13 @@ fn narrow_list(model: &'static str, positions: &'static [&'static str], logged: 
         let who = Who::of(p);
         if !who.plain_driver() {
             check_position_use(model, positions, logged, map(input)?)?;
+            // A reviewer does not read the start and end of another driver's trip (M6), so a
+            // filter by one (a bisection by count) is refused too; an administrator's is logged.
+            if model == policy::TRIP && !who.admin && crate::audit::filters_by_position(input) {
+                return Err(format!(
+                    "{model} cannot be filtered by its start or end position by a reviewer: a reviewer reads the distance, not where a trip began or ended"
+                ));
+            }
             return Ok(Verdict::default());
         }
         let mut m = map(input)?.clone();

@@ -230,6 +230,34 @@ pub fn revoked_patch(now_secs: u64) -> Fields {
     f
 }
 
+/// End the device `id` and write its `device_revoked` entry in one atomic batch (L11): the entry
+/// exists exactly when the device was ended by this call, so a repeat writes no second one and a
+/// refused batch loses none. `Ok(false)`: the device was no longer in force (ended meanwhile), and
+/// nothing was written.
+pub fn end_with_entry(
+    backend: &dyn obop_storage::Backend,
+    id: &str,
+    now_secs: u64,
+    user: &str,
+    actor: &str,
+    detail: &str,
+) -> Result<bool, String> {
+    let ops = [
+        obop_storage::Op::Patch {
+            model: MODEL.into(),
+            id: id.into(),
+            patch: revoked_patch(now_secs),
+            expect: vec![("state".into(), J::from(ACTIVE))],
+        },
+        crate::audit::event_op(now_secs, user, EVENT_REVOKED, actor, detail),
+    ];
+    match backend.apply_checked(&ops) {
+        Ok(()) => Ok(true),
+        Err(obop_storage::ApplyError::Conflict { index: 0, .. }) => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 /// Whether the record is one that is in force: not ended by a person, by reuse or by an offboarding.
 pub fn is_active(rec: &Fields) -> bool {
     rec.get("state").and_then(J::as_str) == Some(ACTIVE)
@@ -270,6 +298,49 @@ pub fn administers(p: &Principal) -> bool {
 /// devices.
 pub fn may_list(p: &Principal) -> bool {
     p.is_person() || administers(p)
+}
+
+/// What `device.update` does, for the API description (L6): its guard refuses every field but the
+/// name, so the generic sentence of the model engine would describe a command that does not exist.
+pub const UPDATE_SUMMARY: &str =
+    "Rename a device: give id and name; nothing else of a device can be changed";
+
+/// Commands of group `*` that a mobile app's token is refused (L20). The instance's setting record
+/// holds the whole settings object (the theme, the app order, the security policy, the shop's
+/// payment instructions and whatever an administrator saves there), and an app needs none of it: a
+/// phone is lost more easily than a desk, and its token is the person narrowed to a few groups.
+pub const REFUSED_TO_AN_APP: &[&str] = &["setting.get", "setting.list", "setting.search"];
+
+/// Whether the command `id` is refused to the principal whatever its groups: a mobile app's token
+/// and [`REFUSED_TO_AN_APP`]. The dispatcher answers it like a group the token lacks.
+pub fn refused(id: &str, p: &Principal) -> bool {
+    p.device.is_some() && REFUSED_TO_AN_APP.contains(&id)
+}
+
+/// Whether the command `id` is one the principal can use at all, for the catalogues (MCP
+/// `tools/list`, `GET /api/commands`, the command-line help; L17). The device commands are in
+/// group `*`, so the group does not tell; this follows [`may_see`] and [`may_list`]: a mobile app's
+/// token cannot list or search (it reads, renames and revokes its own device), and an agent's
+/// token cannot rename and, without the device administration, cannot read, list or search (it
+/// can only propose the revoking of its owner's device). Every other command is usable as far as
+/// this says.
+pub fn usable(id: &str, p: &Principal) -> bool {
+    if refused(id, p) {
+        return false;
+    }
+    let Some(verb) = id
+        .strip_prefix(MODEL)
+        .and_then(|rest| rest.strip_prefix('.'))
+    else {
+        return true;
+    };
+    let agent = p.device.is_none() && p.kind == crate::PrincipalKind::Agent;
+    match verb {
+        "list" | "search" => may_list(p),
+        "get" => !agent || administers(p),
+        "update" => !agent,
+        _ => true,
+    }
 }
 
 /// Who may see, rename and revoke the device `id` (the record `rec`):

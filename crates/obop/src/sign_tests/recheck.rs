@@ -77,7 +77,7 @@ async fn clearing_the_document_does_not_unlock_the_manual_signature() {
             json!({"id": f.req, "document_id": doc2}),
         ),
     ] {
-        for who in ["sam", "mia"] {
+        for who in ["dan", "mia"] {
             let (s, v) = f.api(who, "/api/sign_request/update", body.clone()).await;
             assert_eq!(s, 400, "{who} {what}: {v}");
             // The guard of the module refuses it, in each spelling, and says so: it comes before
@@ -132,7 +132,7 @@ async fn clearing_the_document_does_not_unlock_the_manual_signature() {
     let tpl = v["value"]["id"].as_str().unwrap().to_string();
     let (s, v) = f
         .api(
-            "sam",
+            "mia",
             "/api/sign_request/update",
             json!({"id": f.req, "template_id": tpl}),
         )
@@ -141,7 +141,7 @@ async fn clearing_the_document_does_not_unlock_the_manual_signature() {
     every_manual_signature_is_refused(&f, &["mia", "admin"], "a template was added").await;
     let (s, v) = f
         .api(
-            "sam",
+            "mia",
             "/api/sign_request/update",
             json!({"id": f.req, "template_id": null}),
         )
@@ -280,7 +280,7 @@ async fn the_document_of_a_template_request_sent_with_send_cannot_be_taken_off_b
     let doc2 = second_document(&f).await;
 
     // Taking the Document off, in both spellings of nothing, by a plain user and by the manager.
-    for who in ["sam", "mia"] {
+    for who in ["dan", "mia"] {
         for (what, body) in [
             ("null", json!({"id": f.req, "document_id": null})),
             ("empty text", json!({"id": f.req, "document_id": ""})),
@@ -422,7 +422,7 @@ async fn staff_cannot_blank_the_evidence_with_null_or_empty_text() {
     // change": it would erase what the door compares the document against.
     let (f, _, path, _) = sent().await;
     let held = f.record("sign_request", &f.req);
-    for who in ["sam", "mia"] {
+    for who in ["dan", "mia"] {
         for key in ["document_hash", "document_file"] {
             for blank in [J::Null, json!("")] {
                 let (s, v) = f
@@ -457,7 +457,7 @@ async fn staff_cannot_blank_the_evidence_with_null_or_empty_text() {
             "the door wrote {key}"
         );
     }
-    for who in ["sam", "mia"] {
+    for who in ["dan", "mia"] {
         for key in DOOR_KEYS {
             for blank in [J::Null, json!("")] {
                 let (s, v) = f
@@ -827,7 +827,7 @@ async fn a_refused_update_that_moves_the_state_moves_nothing() {
     assert_ne!(before, "declined");
     let (s, v) = f
         .api(
-            "sam",
+            "mia",
             "/api/sign_request/update",
             json!({"id": f.req, "state": "declined", "signed_name": "Jane Forged"}),
         )
@@ -1006,26 +1006,44 @@ async fn a_proxy_entry_that_is_not_an_address_is_not_replaced_by_another_header(
 }
 
 #[tokio::test]
-async fn the_dates_of_a_request_are_free_for_a_plain_user_to_set_today() {
-    // Known and documented (docs/ISSUES.md O34): `sent_on` and `signed_on` are not door-owned, so
-    // a sign.user can write them on any request that is not signed. They are labels for lists,
-    // not evidence (the evidence is `signed_at`, which only the door writes). The fix that is
-    // proposed there (add both to the door's keys) would fail this test, which is the point of
-    // having it: change O34 with it.
+async fn the_dates_of_a_request_are_set_by_the_system_only() {
+    // docs/ISSUES.md O34: `sent_on` and `signed_on` are door-owned keys now, so a request that was
+    // not signed cannot show a signing day (a plain user and a manager could write both before).
     let (f, _, _, _) = sent().await;
+    let sent_on = f.record("sign_request", &f.req)["sent_on"].clone();
+    assert!(sent_on.as_str().is_some_and(|d| d.len() == 10), "{sent_on}");
+    for who in ["mia", "ann"] {
+        for body in [
+            json!({"id": f.req, "sent_on": "2001-01-01"}),
+            json!({"id": f.req, "signed_on": "2001-01-02"}),
+        ] {
+            let (s, v) = f.api(who, "/api/sign_request/update", body.clone()).await;
+            assert_eq!(s, 400, "{who} {body}: {v}");
+            assert!(err(&v).contains("signing process"), "{who}: {v}");
+        }
+    }
+    // The stored day sent back as it is, as a form saves the whole record, is no change.
     let (s, v) = f
         .api(
-            "sam",
+            "mia",
             "/api/sign_request/update",
-            json!({"id": f.req, "sent_on": "2001-01-01", "signed_on": "2001-01-02"}),
+            json!({"id": f.req, "sent_on": sent_on, "title": "Please sign the test NDA"}),
         )
         .await;
     assert_eq!(s, 200, "{v}");
     let r = f.record("sign_request", &f.req);
-    assert_eq!(r["sent_on"], "2001-01-01");
-    assert_eq!(r["signed_on"], "2001-01-02");
-    assert!(r.get("signed_at").is_none_or(J::is_null), "no evidence");
+    assert_eq!(r["sent_on"], sent_on);
+    assert!(r.get("signed_on").is_none_or(J::is_null), "no signing day");
     assert_eq!(r["state"], "sent");
+    // Nor can a new request carry them.
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "Dated", "signer_name": "Jane Test", "signed_on": "2001-01-02"}),
+        )
+        .await;
+    assert_eq!(s, 400, "{v}");
 }
 
 #[tokio::test]
@@ -1037,7 +1055,7 @@ async fn a_closed_request_keeps_its_document_too() {
         let (f, _, _, _) = sent().await;
         let (s, v) = f
             .api(
-                "sam",
+                "mia",
                 &format!("/api/sign_request/{close}"),
                 json!({"id": f.req}),
             )
@@ -1045,22 +1063,76 @@ async fn a_closed_request_keeps_its_document_too() {
         assert_eq!(s, 200, "{close}: {v}");
         let before = f.record("sign_request", &f.req);
         assert_ne!(before["state"], "sent", "{close}");
-        for who in ["sam", "mia"] {
-            let (s, v) = f
-                .api(
-                    who,
-                    "/api/sign_request/update",
-                    json!({"id": f.req, "document_id": null}),
-                )
-                .await;
-            assert_eq!(s, 400, "{close} {who}: {v}");
-            assert!(
-                err(&v).contains("cannot be changed after the request was sent"),
-                "{close} {who}: {v}"
-            );
-            assert_eq!(f.record("sign_request", &f.req), before, "{close} {who}");
-        }
+        let (s, v) = f
+            .api(
+                "mia",
+                "/api/sign_request/update",
+                json!({"id": f.req, "document_id": null}),
+            )
+            .await;
+        assert_eq!(s, 400, "{close}: {v}");
+        assert!(
+            err(&v).contains("cannot be changed after the request was sent"),
+            "{close}: {v}"
+        );
+        assert_eq!(f.record("sign_request", &f.req), before, "{close}");
     }
+}
+
+#[tokio::test]
+async fn a_plain_user_neither_closes_nor_rewords_a_sent_request() {
+    // docs/ISSUES.md O19: `decline` and `expire` need sign.manager, and a request that was sent is
+    // a manager's to change (its title, message and requested name are what the signer reads).
+    // `dan` holds sign.user and sees the Document (documents.manager), so only the rule stops him.
+    let (f, _, path, _) = sent().await;
+    for close in ["decline", "expire"] {
+        let (s, v) = f
+            .api(
+                "dan",
+                &format!("/api/sign_request/{close}"),
+                json!({"id": f.req}),
+            )
+            .await;
+        // Not his command: answered as one that does not exist for him.
+        assert_eq!(s, 404, "{close}: {v}");
+    }
+    for body in [
+        json!({"id": f.req, "signer_name": "Someone Else"}),
+        json!({"id": f.req, "title": "Another title"}),
+        json!({"id": f.req, "message": "Another message"}),
+        json!({"id": f.req, "state": "declined"}),
+    ] {
+        let (s, v) = f.api("dan", "/api/sign_request/update", body.clone()).await;
+        assert_eq!(s, 400, "{body}: {v}");
+    }
+    let r = f.record("sign_request", &f.req);
+    assert_eq!(
+        (r["state"].as_str(), r["signer_name"].as_str()),
+        (Some("sent"), Some("Jane Test"))
+    );
+    assert_eq!(
+        f.get(&path, &ip(85)).await.status,
+        200,
+        "the link still works"
+    );
+    // A draft is still his to edit.
+    let (s, v) = f
+        .api(
+            "dan",
+            "/api/sign_request/create",
+            json!({"title": "Draft", "signer_name": "Jane Test", "state": "draft"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let id = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "dan",
+            "/api/sign_request/update",
+            json!({"id": id, "title": "Draft 2"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
 }
 
 /// An agent token of `owner` with these scopes, kept under `name`.
@@ -1078,26 +1150,38 @@ async fn agent_with(f: &mut Fx, owner: &str, scopes: &[&str], name: &'static str
 }
 
 #[tokio::test]
-async fn an_agent_token_that_holds_sign_manager_revokes_a_link_and_one_with_sign_user_ends_a_request()
- {
-    // docs/SIGN.md "Known limits" and O19: no approval is asked and no entry is written when an
-    // agent token revokes a link (it needs `sign.manager`) or declines or expires a sent request
-    // (it needs `sign.user`), so a prompt-injected agent can stop a signature that was handed
-    // over. The tests state what is documented; if the owner wants a person to decide, the
-    // actions get `approval = true` and these change with them.
+async fn an_agent_token_neither_revokes_a_link_nor_ends_a_request_without_a_person() {
+    // docs/ISSUES.md O19: a link that was just handed over is the signer's way in, so an agent
+    // token cannot revoke it (it cannot make one either), and `decline` and `expire` are only
+    // proposed by an agent, for a person with sign.manager to approve. Both ran at once before.
     let (mut f, link_id, path, _) = sent().await;
-    agent_with(&mut f, "mia", &["sign.user", "sign.manager"], "manager_bot").await;
+    agent_with(
+        &mut f,
+        "mia",
+        &[
+            "sign.user",
+            "sign.manager",
+            "documents.user",
+            "documents.manager",
+        ],
+        "manager_bot",
+    )
+    .await;
     agent_with(&mut f, "mia", &["sign.user"], "user_bot").await;
-    let events = f.events().len();
     let revoke = json!({"id": link_id, "revoked_at": "2001-01-01T00:00:00Z"});
-    // With `sign.user` alone it cannot even see the link.
-    let (s, _) = f
-        .api("user_bot", "/api/sign_link/update", revoke.clone())
-        .await;
-    assert_ne!(s, 200);
+    for bot in ["user_bot", "manager_bot"] {
+        let (s, v) = f.api(bot, "/api/sign_link/update", revoke.clone()).await;
+        assert_ne!(s, 200, "{bot}: {v}");
+    }
+    assert!(
+        f.record("sign_link", &link_id)
+            .get("revoked_at")
+            .is_none_or(J::is_null)
+    );
     assert_eq!(f.get(&path, &ip(83)).await.status, 200, "still open");
-    // With `sign.manager` it revokes, at once, with the server's time.
-    let (s, v) = f.api("manager_bot", "/api/sign_link/update", revoke).await;
+    // A person revokes it, with the server's time, and the security log says so.
+    let events = f.events_of("sign_link_revoked").len();
+    let (s, v) = f.api("mia", "/api/sign_link/update", revoke).await;
     assert_eq!(s, 200, "{v}");
     let stamped = f.record("sign_link", &link_id)["revoked_at"]
         .as_str()
@@ -1105,12 +1189,26 @@ async fn an_agent_token_that_holds_sign_manager_revokes_a_link_and_one_with_sign
         .to_string();
     assert!(!stamped.starts_with("2001"), "{stamped}");
     assert_eq!(f.get(&path, &ip(83)).await.status, 410, "the link is dead");
-    assert_eq!(f.events().len(), events, "and nothing was logged");
-    // Declining a sent request needs `sign.user` only, and no approval either.
+    let logged = f.events_of("sign_link_revoked");
+    assert_eq!(logged.len(), events + 1);
+    assert_eq!(logged[events]["actor"], "mia");
+    // Declining: the agent with sign.user alone cannot; the one with sign.manager gets a plan, and
+    // the request stays sent until a person approves.
     let (f, _, path, _) = sent().await;
     let mut f = f;
     agent_with(&mut f, "mia", &["sign.user"], "user_bot").await;
-    let events = f.events().len();
+    agent_with(
+        &mut f,
+        "mia",
+        &[
+            "sign.user",
+            "sign.manager",
+            "documents.user",
+            "documents.manager",
+        ],
+        "manager_bot",
+    )
+    .await;
     let (s, v) = f
         .api(
             "user_bot",
@@ -1118,10 +1216,21 @@ async fn an_agent_token_that_holds_sign_manager_revokes_a_link_and_one_with_sign
             json!({"id": f.req}),
         )
         .await;
-    assert_eq!(s, 200, "{v}");
-    assert_eq!(f.record("sign_request", &f.req)["state"], "declined");
-    assert_eq!(f.get(&path, &ip(84)).await.status, 410, "its link is dead");
-    assert_eq!(f.events().len(), events, "and nothing was logged");
+    assert_eq!(s, 404, "{v}");
+    let (s, v) = f
+        .api(
+            "manager_bot",
+            "/api/sign_request/decline",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 202, "{v}");
+    assert_eq!(f.record("sign_request", &f.req)["state"], "sent");
+    assert_eq!(
+        f.get(&path, &ip(84)).await.status,
+        200,
+        "its link still works"
+    );
 }
 
 /// One write of a door-owned key: `op` is `update` (of `req`), `create` or `bulk` (one row).
@@ -1224,8 +1333,27 @@ async fn a_guess_at_the_evidence_is_refused_the_same_whether_it_is_right_or_wron
     assert_eq!(s, 200, "{v}");
     // The agents: a manager's, a manager's narrowed to `sign.user`, and one that holds the
     // administrator's group (an agent is never an administrator, but it holds every group).
-    agent_with(&mut f, "mia", &["sign.user", "sign.manager"], "manager_bot").await;
-    agent_with(&mut f, "mia", &["sign.user"], "narrowed_bot").await;
+    // Each holds `documents.manager` too, so that it sees the request about the restricted
+    // Document (O4): only the field rules are probed here.
+    agent_with(
+        &mut f,
+        "mia",
+        &[
+            "sign.user",
+            "sign.manager",
+            "documents.user",
+            "documents.manager",
+        ],
+        "manager_bot",
+    )
+    .await;
+    agent_with(
+        &mut f,
+        "mia",
+        &["sign.user", "documents.user", "documents.manager"],
+        "narrowed_bot",
+    )
+    .await;
     agent_with(
         &mut f,
         "root",
@@ -1245,10 +1373,16 @@ async fn a_guess_at_the_evidence_is_refused_the_same_whether_it_is_right_or_wron
         "signer_user_agent",
         "signature_reference",
     ];
-    let all: Vec<&str> = DOOR_KEYS.to_vec();
-    // (who, the keys of the eight that they cannot read in clear)
+    // The two days (O34) are door-owned but readable by every reader of requests.
+    let all: Vec<&str> = DOOR_KEYS
+        .iter()
+        .copied()
+        .filter(|k| !["sent_on", "signed_on"].contains(k))
+        .collect();
+    // (who, the door-owned keys that they cannot read in clear); `dan` holds sign.user and sees
+    // the Document.
     let cannot: [(&str, Vec<&str>); 5] = [
-        ("sam", all.clone()),
+        ("dan", all.clone()),
         ("narrowed_bot", all.clone()),
         // Holds the group of seven, but is shown the four personal ones as tokens; nobody has
         // the group of the held copy.
@@ -1311,7 +1445,7 @@ async fn a_guess_at_the_evidence_is_refused_the_same_whether_it_is_right_or_wron
         }
     }
     assert_eq!(count(&f, "sign_request"), 1, "nothing was made");
-    // An empty value in a new row is let through for a reader and not for `sam` (the empty
+    // An empty value in a new row is let through for a reader and not for `dan` (the empty
     // pass-through is a reader's).
     let (s, v) = f
         .api(

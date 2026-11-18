@@ -10,7 +10,7 @@ import type { RecordExtProps } from "../../extensions.ts";
 import { useData } from "../../data.tsx";
 import { optionLabel } from "../../format.ts";
 import { knownZone } from "../../instants.ts";
-import { accepted, drawRoute, flagsOf, kmOf, minutesBetween, pointsOf } from "./track.ts";
+import { accepted, checkNotes, drawRoute, kmOf, minutesBetween, pointsOf } from "./track.ts";
 import "./mileage.css";
 
 const POINT = "mileage_point";
@@ -67,7 +67,6 @@ export function TripReview({ model, row }: RecordExtProps) {
   const pts = useMemo(() => (points.kind === "ready" ? pointsOf(points.rows) : []), [points]);
   const drawn = useMemo(() => drawRoute(pts, W, H, 24), [pts]);
   const poor = pts.filter((p) => !accepted(p)).length;
-  const flags = flagsOf(row.integrity);
   const km = kmOf(row.distance_m);
   const minutes = minutesBetween(row.started_at, row.ended_at);
   const purposeField = model.fields.find((f) => f.name === "purpose");
@@ -82,37 +81,8 @@ export function TripReview({ model, row }: RecordExtProps) {
 
   // What the check found, as sentences; the counts come from the server (`integrity`), the number
   // of points from the points read here.
-  const notes: { tone: "ok" | "warn"; text: string }[] = [];
   const total = Number(row.point_count ?? pts.length) || pts.length;
-  if (flags.low_accuracy)
-    notes.push({
-      tone: "warn",
-      text: t("{n} of {total} points had poor GPS accuracy and were left out of the distance.", {
-        n: fmt.integer(flags.low_accuracy),
-        total: fmt.integer(total),
-      }),
-    });
-  if (flags.speed_jump)
-    notes.push({
-      tone: "warn",
-      text: t("{n} points jumped further than a car can drive and were left out.", {
-        n: fmt.integer(flags.speed_jump),
-      }),
-    });
-  if (flags.seq_gap)
-    notes.push({
-      tone: "warn",
-      text: t("{n} gaps in the recording: the phone sent fewer points than it counted.", {
-        n: fmt.integer(flags.seq_gap),
-      }),
-    });
-  if (!notes.length && state !== "recording" && km !== null)
-    notes.push({
-      tone: "ok",
-      text: t("The track is clean: all {total} points were used for the distance.", {
-        total: fmt.integer(total),
-      }),
-    });
+  const notes = checkNotes(row.integrity, total, state !== "recording" && km !== null);
 
   const facts: [string, string][] = [
     [t("Driver"), String(row.driver ?? "")],

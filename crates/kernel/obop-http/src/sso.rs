@@ -537,8 +537,20 @@ pub(crate) fn is_flow_id(s: &str) -> bool {
 
 // ---- GET /api/auth/sso ----------------------------------------------------------------------
 
-pub(crate) async fn status(State(s): Shared) -> Response {
+/// Reads of whether Microsoft sign-in is offered, per client address and minute (N19: the route
+/// had no limit of its own). The sign-in page reads it once per load.
+pub(crate) const STATUS_PER_MIN: u64 = 60;
+
+pub(crate) async fn status(State(s): Shared, parts: Parts) -> Response {
     blocking(move || {
+        if limited(&s, "status", &client_ip(&s, &parts), STATUS_PER_MIN) {
+            return api_error(
+                StatusCode::TOO_MANY_REQUESTS,
+                "too many requests, try again in a minute",
+                "rate_limited",
+                "Wait a minute and reload the sign-in page.",
+            );
+        }
         let enabled = s.connectors.get().is_some() && s.auth.sso().is_some_and(|a| a.offered());
         let mut r = axum::Json(json!({"enabled": enabled})).into_response();
         r.headers_mut()

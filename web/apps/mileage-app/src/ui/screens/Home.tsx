@@ -1,11 +1,13 @@
 import { Banner, Button, Row, Screen, Text } from "@obop/ui-native";
-import { useState } from "react";
-import { View } from "react-native";
+import { useEffect, useState } from "react";
+import { AppState, View } from "react-native";
 import { formatDistance, statusText, tripStatus } from "../../core/present.ts";
 import { hasWork } from "../../core/store.ts";
 import { PURPOSES, type Purpose } from "../../core/types.ts";
 import { formatDateTime, t, tp, type MessageKey } from "../../i18n/index.ts";
 import type { Runtime } from "../../native/runtime.ts";
+import { emitChange } from "../../native/bus.ts";
+import { refreshOnShow } from "../foreground.ts";
 import { useOutbox, useStaleFileNote, useSyncStatus } from "../hooks.ts";
 import type { Nav } from "../router.ts";
 
@@ -14,6 +16,17 @@ export function Home({ rt, nav }: { rt: Runtime; nav: Nav }) {
   const sync = useSyncStatus(rt);
   const restored = useStaleFileNote(rt);
   const [purpose, setPurpose] = useState<Purpose>("business");
+
+  // The state of the last trip is the server's (a reviewer may have confirmed it since): read the
+  // driver's trips when Home opens and when the app comes back to the foreground. Offline, the
+  // phone's copy stays as it was.
+  useEffect(
+    () =>
+      refreshOnShow(AppState, () => {
+        rt.engine.refreshRemote().then(emitChange, () => undefined);
+      }),
+    [rt],
+  );
 
   const last = trips.find((trip) => trip.clientTripId !== active?.clientTripId);
   const waiting = trips.filter(
@@ -101,10 +114,12 @@ export function Home({ rt, nav }: { rt: Runtime; nav: Nav }) {
 
       {last ? (
         <Text tone="muted">
-          {t("home.last", {
-            distance: formatDistance(last.distanceM) ?? t("common.unknown"),
-            state: statusText(tripStatus(last)),
-          })}
+          {formatDistance(last.distanceM) === null
+            ? t("home.last.uncounted", { state: statusText(tripStatus(last)) })
+            : t("home.last", {
+                distance: formatDistance(last.distanceM) ?? "",
+                state: statusText(tripStatus(last)),
+              })}
         </Text>
       ) : (
         <Text tone="muted">{t("home.none")}</Text>

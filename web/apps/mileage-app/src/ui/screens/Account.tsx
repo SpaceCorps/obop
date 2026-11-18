@@ -191,8 +191,8 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
             onPress={save}
           />
           <Row
-            title={device.platform}
-            subtitle={device.appVersion}
+            title={device.name}
+            subtitle={`${device.platform} ${device.appVersion}`}
             value={deviceStateText(device.state)}
           />
         </>

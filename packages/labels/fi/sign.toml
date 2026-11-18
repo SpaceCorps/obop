@@ -41,6 +41,10 @@ description = "Lähetettävä asiakirjapohja; tyhjä pyynnössä, joka koskee As
 label = "Asiakirja"
 description = "Asiakirjat-sovelluksen PDF, jonka allekirjoittaja lukee ja allekirjoittaa; pyynnön lähettäminen ottaa sen SHA-256:n ja säilyttää tarkan kopion"
 
+[labels.fi.model.sign_request.field.no_document]
+label = "Ei asiakirjaa"
+description = "Onko pyyntö muu kuin Asiakirjat-sovelluksen asiakirjaa koskeva; sellaisen näkevät kaikki pyyntöjen lukijat, asiakirjaa koskevan vain ne, jotka näkevät kyseisen asiakirjan"
+
 [labels.fi.model.sign_request.field.title]
 label = "Otsikko"
 description = "Allekirjoittajalle näytettävä aihe"

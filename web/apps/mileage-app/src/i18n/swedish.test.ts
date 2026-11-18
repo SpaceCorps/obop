@@ -228,13 +228,13 @@ describe("Swedish sentences with a count", () => {
 describe("Swedish sentences that hold a label of the catalogue or an iPhone menu", () => {
   afterEach(() => setLanguage("en"));
 
-  test("the last trip reads right with a state, which starts with a capital, and with an unknown distance", () => {
+  test("the last trip reads right with a state, which starts with a capital, and with a distance not counted yet", () => {
     setLanguage("sv");
     expect(
       t("home.last", { distance: formatDistance("12345.67")!, state: statusText("ended") }),
     ).toBe("Senaste resan. Sträcka: 12,3 km. Status: Avslutad.");
-    expect(t("home.last", { distance: t("common.unknown"), state: statusText("recording") })).toBe(
-      "Senaste resan. Sträcka: Okänd. Status: Pågår.",
+    expect(t("home.last.uncounted", { state: statusText("recording") })).toBe(
+      "Senaste resan. Sträckan är inte räknad än. Status: Pågår.",
     );
   });
 

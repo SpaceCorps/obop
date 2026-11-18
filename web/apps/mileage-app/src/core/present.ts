@@ -148,8 +148,12 @@ export function integrityLines(flags: string): string[] {
   return lines;
 }
 
-/** Whether the driver may submit the trip: the server has it ended and it was not submitted. */
+/**
+ * Whether the driver may submit the trip: the server has it ended and it was not submitted. A
+ * private trip is never submitted: no reviewer reads it, and the server refuses the submit.
+ */
 export function canSubmit(trip: LocalTrip): boolean {
+  if (trip.purpose === "private") return false;
   if (trip.origin === "device" && !trip.endDone) return false;
   if (trip.submitDone || trip.submitRequested) return false;
   if (trip.discardReason !== null) return false;
