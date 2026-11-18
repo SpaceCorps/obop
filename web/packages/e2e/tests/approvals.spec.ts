@@ -271,9 +271,17 @@ async function listProblems(page: Page, opts: { oneLineDates: boolean }): Promis
       r.selectNodeContents(node);
       return [...r.getClientRects()].filter((q) => q.width > 0).length;
     };
-    if (oneLineDates)
-      for (const td of document.querySelectorAll<HTMLElement>("td.appr-nowrap"))
-        if (lines(td) !== 1) out.push(`"${td.textContent}" is on ${lines(td)} lines`);
+    if (oneLineDates) {
+      // The cells under the headers "Asked" and "Expires", found by their header, not by a class.
+      const heads = [...document.querySelectorAll("thead th")].map((h) => h.textContent?.trim());
+      const dates = [heads.indexOf("Asked"), heads.indexOf("Expires")];
+      if (dates.includes(-1)) out.push("the list has no Asked and Expires columns");
+      for (const tr of document.querySelectorAll("tbody tr"))
+        for (const at of dates) {
+          const td = tr.children[at];
+          if (td && lines(td) !== 1) out.push(`"${td.textContent}" is on ${lines(td)} lines`);
+        }
+    }
     // A word of fewer than 20 characters is never broken inside (hyphens and dashes may break).
     const walker = document.createTreeWalker(
       document.querySelector(".appr-page") ?? document.body,
