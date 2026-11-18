@@ -73,8 +73,45 @@ fn split_url(url: &str) -> Result<(String, String), String> {
         .or_else(|| url.strip_prefix("postgresql://"))
         .ok_or("expected a postgres:// URL")?;
     let (_, host_and_db) = rest.rsplit_once('@').ok_or("the URL needs credentials")?;
-    let host = host_and_db.split('/').next().unwrap_or("");
+    let host = host_and_db.split(['/', '?']).next().unwrap_or("");
     Ok((host.to_string(), host_and_db.to_string()))
+}
+
+/// The TLS settings of the admin URL (`sslmode`, `sslrootcert`; D66) as a query to put on the
+/// URLs of a new database, so an instance and the control plane reach it as the cell is reached
+/// (I4). Empty when the admin URL sets neither. Other parameters stay with the admin URL.
+fn tls_query(url: &str) -> String {
+    let Some((_, query)) = url.split_once('?') else {
+        return String::new();
+    };
+    let kept: Vec<&str> = query
+        .split('&')
+        .filter(|kv| {
+            let key = kv.split('=').next().unwrap_or("");
+            key == "sslmode" || key == "sslrootcert"
+        })
+        .collect();
+    if kept.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", kept.join("&"))
+    }
+}
+
+/// The two URLs of the role and database `name`, with the admin URL's TLS settings.
+fn database_urls(
+    admin_url: &str,
+    instance_host: Option<&str>,
+    name: &str,
+    pw: &str,
+) -> Result<DbUrls, String> {
+    let (host, _) = split_url(admin_url)?;
+    let instance_host = instance_host.unwrap_or(&host);
+    let q = tls_query(admin_url);
+    Ok(DbUrls {
+        instance: format!("postgres://{name}:{pw}@{instance_host}/{name}{q}"),
+        control: format!("postgres://{name}:{pw}@{host}/{name}{q}"),
+    })
 }
 
 fn ident(slug: &str) -> Result<String, String> {
@@ -109,8 +146,8 @@ pub struct PgCell {
 impl CellDb for PgCell {
     fn create_database(&self, slug: &str) -> Result<DbUrls, String> {
         let name = ident(slug)?;
-        let (host, _) = split_url(&self.admin_url)?;
-        let instance_host = self.instance_host.clone().unwrap_or_else(|| host.clone());
+        // Checked before anything is created.
+        split_url(&self.admin_url)?;
         let pw = random_password();
         let mut c = obop_storage::tls::connect(&self.admin_url)?;
         // `name` is restricted to [a-z0-9_] by `ident`, so interpolating it is safe.
@@ -120,10 +157,7 @@ impl CellDb for PgCell {
             let _ = c.batch_execute(&format!("DROP ROLE IF EXISTS {name}"));
             return Err(e.to_string());
         }
-        Ok(DbUrls {
-            instance: format!("postgres://{name}:{pw}@{instance_host}/{name}"),
-            control: format!("postgres://{name}:{pw}@{host}/{name}"),
-        })
+        database_urls(&self.admin_url, self.instance_host.as_deref(), &name, &pw)
     }
 
     fn seed_admin(&self, url: &str, email: &str, hash: &str) -> Result<(), String> {
@@ -195,9 +229,29 @@ impl Config {
 
 /// Asks a running instance whether it is healthy (after an upgrade).
 pub trait Health: Send + Sync {
-    /// `Ok` when `GET {base}/api/openapi.json` answers 200: the server is up and has opened its
+    /// `Ok` when `GET {base}/readyz` answers 200: the server is up, its database answers and its
+    /// schema is one it serves (D67). An image from before `/readyz` answers it 404 and is asked
+    /// `GET {base}/api/openapi.json` instead (I7): that one answers once the server has opened its
     /// database (a version that cannot read the schema, or a failed migration, never listens).
     fn check(&self, base: &str) -> Result<(), String>;
+}
+
+/// One round of the health check with `get` answering the status of a URL: `/readyz`, and
+/// `/api/openapi.json` only when `/readyz` is not there (404).
+fn ready_once(base: &str, get: &mut dyn FnMut(&str) -> Result<u16, String>) -> Result<(), String> {
+    let base = base.trim_end_matches('/');
+    let readyz = format!("{base}/readyz");
+    match get(&readyz)? {
+        200 => Ok(()),
+        404 => {
+            let old = format!("{base}/api/openapi.json");
+            match get(&old)? {
+                200 => Ok(()),
+                s => Err(format!("{old} answered {s} (no /readyz)")),
+            }
+        }
+        s => Err(format!("{readyz} answered {s}")),
+    }
 }
 
 /// The health check over HTTPS, retried for up to a minute while the new version starts.
@@ -210,17 +264,25 @@ impl Health for HttpHealth {
             .http_status_as_error(false)
             .build()
             .into();
-        let url = format!("{}/api/openapi.json", base.trim_end_matches('/'));
+        let mut get = |url: &str| -> Result<u16, String> {
+            agent
+                .get(url)
+                .call()
+                .map(|r| r.status().as_u16())
+                .map_err(|e| format!("{url}: {e}"))
+        };
         let mut last = String::new();
         for _ in 0..20 {
-            match agent.get(&url).call() {
-                Ok(r) if r.status() == 200 => return Ok(()),
-                Ok(r) => last = format!("answered {}", r.status()),
-                Err(e) => last = e.to_string(),
+            match ready_once(base, &mut get) {
+                Ok(()) => return Ok(()),
+                Err(e) => last = e,
             }
             std::thread::sleep(Duration::from_secs(3));
         }
-        Err(format!("{url} did not answer 200 within a minute ({last})"))
+        Err(format!(
+            "{} was not ready within a minute ({last})",
+            base.trim_end_matches('/')
+        ))
     }
 }
 
@@ -589,6 +651,61 @@ impl Provisioner for Sliplane {
 mod tests {
     use super::*;
     use std::sync::Mutex;
+
+    #[test]
+    fn a_new_database_keeps_the_tls_settings_of_the_cell() {
+        let u = database_urls(
+            "postgres://admin:x@db.example.com:5432/postgres?sslmode=verify-full&sslrootcert=/etc/obop/ca.pem&application_name=cp",
+            Some("db.internal:5432"),
+            "obop_acme",
+            "pw",
+        )
+        .unwrap();
+        assert_eq!(
+            u.instance,
+            "postgres://obop_acme:pw@db.internal:5432/obop_acme?sslmode=verify-full&sslrootcert=/etc/obop/ca.pem"
+        );
+        assert_eq!(
+            u.control,
+            "postgres://obop_acme:pw@db.example.com:5432/obop_acme?sslmode=verify-full&sslrootcert=/etc/obop/ca.pem"
+        );
+        // A URL with no path before its query, and one with no TLS settings.
+        let u = database_urls("postgres://a:b@db?sslmode=require", None, "obop_x", "pw").unwrap();
+        assert_eq!(u.control, "postgres://obop_x:pw@db/obop_x?sslmode=require");
+        let u = database_urls("postgres://a:b@db:5432/postgres", None, "obop_x", "pw").unwrap();
+        assert_eq!(u.instance, "postgres://obop_x:pw@db:5432/obop_x");
+    }
+
+    type Asked = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
+
+    fn answering(map: Vec<(&'static str, u16)>) -> (Asked, impl FnMut(&str) -> Result<u16, String>) {
+        let asked: Asked = Default::default();
+        let a = asked.clone();
+        let get = move |url: &str| {
+            a.borrow_mut().push(url.to_string());
+            Ok(map.iter().find(|(p, _)| url.ends_with(p)).map_or(500, |(_, s)| *s))
+        };
+        (asked, get)
+    }
+
+    #[test]
+    fn the_health_check_asks_readyz_and_the_old_route_only_where_readyz_is_missing() {
+        // A current image: ready, and the old route is never asked.
+        let (asked, mut get) = answering(vec![("/readyz", 200), ("/api/openapi.json", 200)]);
+        assert!(ready_once("https://a.example/", &mut get).is_ok());
+        assert_eq!(*asked.borrow(), vec!["https://a.example/readyz".to_string()]);
+        // Not ready (its database needs migration): no fall back to the route that would pass.
+        let (asked, mut get) = answering(vec![("/readyz", 503), ("/api/openapi.json", 200)]);
+        let e = ready_once("https://a.example", &mut get).unwrap_err();
+        assert!(e.contains("503"), "{e}");
+        assert_eq!(asked.borrow().len(), 1);
+        // An image from before /readyz.
+        let (asked, mut get) = answering(vec![("/readyz", 404), ("/api/openapi.json", 200)]);
+        assert!(ready_once("https://a.example", &mut get).is_ok());
+        assert_eq!(asked.borrow().len(), 2);
+        let (_, mut get) = answering(vec![("/readyz", 404), ("/api/openapi.json", 502)]);
+        assert!(ready_once("https://a.example", &mut get).is_err());
+    }
 
     #[derive(Default)]
     struct FakeRunner {
