@@ -229,13 +229,53 @@ fn platform(sub: &str, args: &mut Vec<String>) -> Exit {
                         _ => String::new(),
                     };
                     let min_from = take(args, "--min-from").unwrap_or_default();
+                    // The release key (H7): a PKCS#8 file that `release keygen` wrote.
+                    let key = match take(args, "--signing-key") {
+                        Some(f) => Some(
+                            std::fs::read(&f)
+                                .map_err(|e| fail(&format!("cannot read {f}: {e}")))?,
+                        ),
+                        None => None,
+                    };
                     if !args.is_empty() {
                         return Err(usage());
                     }
                     let r = platform
-                        .publish_release(&version, &image, &notes, &min_from)
+                        .publish_release_signed(&version, &image, &notes, &min_from, key.as_deref())
                         .map_err(|e| fail(&e))?;
-                    println!("published {} ({})", r.version, r.image);
+                    let signed = if r.signature.is_empty() {
+                        "not signed"
+                    } else {
+                        "signed"
+                    };
+                    println!("published {} ({}), {signed}", r.version, r.image);
+                    Ok(())
+                }
+                "keygen" => {
+                    // A new release key, written once to a file of the owner's choosing; the
+                    // public half is printed to pin in obop-update's RELEASE_PUBLIC_KEYS.
+                    let out = take(args, "--out").ok_or_else(usage)?;
+                    if !args.is_empty() {
+                        return Err(usage());
+                    }
+                    let (pkcs8, public) =
+                        obop_update::release::generate_release_key().map_err(|e| fail(&e))?;
+                    let mut f = std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&out)
+                        .map_err(|e| fail(&format!("cannot create {out}: {e}")))?;
+                    std::io::Write::write_all(&mut f, &pkcs8)
+                        .and_then(|()| f.sync_all())
+                        .map_err(|e| fail(&format!("cannot write {out}: {e}")))?;
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        let _ =
+                            std::fs::set_permissions(&out, std::fs::Permissions::from_mode(0o600));
+                    }
+                    println!("wrote the release key to {out}; keep it secret and off this server");
+                    println!("public key: {public}");
                     Ok(())
                 }
                 "withdraw" => {

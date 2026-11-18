@@ -1648,6 +1648,7 @@ dependencies = [
  "obop-registry",
  "obop-storage",
  "obop-types",
+ "ring",
  "serde_json",
  "sha2",
  "ureq",

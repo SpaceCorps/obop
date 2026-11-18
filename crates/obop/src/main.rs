@@ -323,7 +323,8 @@ const USAGE: &str = "usage: obop <command>
                                                 managed instances: back up (OBOP_BACKUP_DIR), then ask the control plane (OBOP_UPDATE_URL,
                                                 OBOP_UPDATE_TOKEN) to upgrade this instance to a published release
   update rollback --yes                         ask the control plane to put the previous version back
-  platform release publish --version V --image REF [--notes T | --notes-file F] [--min-from V] [--db URL]
+  platform release publish --version V --image REF [--notes T | --notes-file F] [--min-from V] [--signing-key FILE] [--db URL]
+  platform release keygen --out FILE            a new release key (Ed25519, PKCS#8) for --signing-key; prints the public key
   platform release list | withdraw V            the releases instances read at /api/releases
   platform register-instance SLUG --url URL [--external-id ID] [--image REF] [--token-stdin]
   platform update-token SLUG [--revoke]         register an instance this control plane did not create, or issue a new update token
