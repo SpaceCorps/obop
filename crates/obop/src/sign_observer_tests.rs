@@ -1,6 +1,7 @@
-//! O27: the answer of `sign_link.create` holds the link (its secret), and the dispatcher hands that
-//! answer to its observers. The connectors runtime is one: a connection subscribed to
-//! `sign_link.create` must send the stored record, which holds only a hash, never the link.
+//! O27: the answer of `sign_link.create` holds the link (its secret); the dispatcher hands its
+//! observers that answer without the link (U46). The connectors runtime is one: a connection
+//! subscribed to `sign_link.create` must send the stored record, which holds only a hash, never
+//! the link.
 
 use crate::sign_tests::fixture;
 use obop_connectors::catalog::providers;
@@ -88,7 +89,8 @@ async fn a_connection_subscribed_to_sign_link_create_never_sends_the_link() {
         None,
     );
     connectors::register(&f.app.dispatcher, &f.app.store, &rt);
-    // A raw observer next to it: it is handed the answer, link included (what O27 is about).
+    // A raw observer next to it: it is handed the answer without the link, which is shown once
+    // and never stored (U46: what an observer could forward holds no one-time secret).
     let answers: Arc<Mutex<Vec<String>>> = Arc::default();
     let seen = answers.clone();
     f.app.dispatcher.observe(
@@ -150,10 +152,14 @@ async fn a_connection_subscribed_to_sign_link_create_never_sends_the_link() {
     let (link_id, path) = f.mint("mia", &f.req.clone()).await;
     let token = path.rsplit('/').next().unwrap().to_string();
     assert!(token.len() >= 20, "{path}");
-    // The observer was handed the link...
+    // The observer was handed the answer, without the link (the caller got it: `mint`)...
+    let handed = answers.lock().unwrap().clone();
+    assert!(!handed.is_empty(), "the observer was told");
     assert!(
-        answers.lock().unwrap().iter().any(|a| a.contains(&token)),
-        "the raw answer holds the link"
+        handed
+            .iter()
+            .all(|a| !a.contains(&token) && !a.contains("\"link\"")),
+        "an observer never holds the link: {handed:?}"
     );
     // ...and the connection sent the stored record, which does not hold it.
     let got = r.wait_for_one();

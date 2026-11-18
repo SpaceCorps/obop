@@ -1109,3 +1109,40 @@ fn a_row_that_failed_leaves_nothing_behind_in_a_bulk_call() {
         assert_eq!(it.store.backend.count(&it.model).unwrap(), 3, "{url}");
     }
 }
+
+// ---- K41: the unique indexes no model declares ----------------------------------------------
+
+/// The index of a removed rule or an uninstalled module is listed as orphaned, the indexes of the
+/// registered models are not, and only an `obop_uq_` name can be dropped. On SQLite always, and
+/// on PostgreSQL in a scratch database when `OBOP_TEST_POSTGRES_URL` is set.
+#[test]
+fn an_index_no_registered_model_declares_is_listed_and_can_be_dropped() {
+    let path = obop_storage::testing::TempPath::new("prune-idx");
+    let pg = obop_storage::testing::TestDb::new();
+    let mut urls = vec![path.url()];
+    if let Some(db) = &pg {
+        urls.push(db.url().to_string());
+    }
+    for url in urls {
+        let store = Store::open(&url).unwrap();
+        let d = Dispatcher::new();
+        d.register_crud(&item_module("kp"), &store);
+        let b = store.backend();
+        let mut ours = b.unique_indexes().unwrap();
+        ours.sort();
+        assert_eq!(ours.len(), 3, "{url}: {ours:?}");
+        assert!(d.orphaned_unique_indexes(&*b).unwrap().is_empty());
+        // What an uninstalled module left behind.
+        b.ensure_unique("obop_uq_gone_code", "gone", &["code"])
+            .unwrap();
+        assert_eq!(
+            d.orphaned_unique_indexes(&*b).unwrap(),
+            vec!["obop_uq_gone_code".to_string()]
+        );
+        assert!(b.drop_unique_index("obop_record_pkey").is_err());
+        assert!(b.drop_unique_index("obop_uq_x; DROP TABLE t").is_err());
+        b.drop_unique_index("obop_uq_gone_code").unwrap();
+        assert!(d.orphaned_unique_indexes(&*b).unwrap().is_empty());
+        assert_eq!(b.unique_indexes().unwrap().len(), 3);
+    }
+}

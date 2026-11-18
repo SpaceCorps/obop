@@ -42,6 +42,7 @@ type Server = Row & {
   host?: string;
   port?: number | null;
   security?: string;
+  allow_private_network?: boolean;
   username?: string;
   password_set?: boolean;
   connection?: string;
@@ -63,6 +64,7 @@ type Draft = {
   host: string;
   port: string;
   security: string;
+  allow_private_network: boolean;
   username: string;
   password: string;
   password_set: boolean;
@@ -82,6 +84,7 @@ const EMPTY: Draft = {
   host: "",
   port: "587",
   security: "starttls",
+  allow_private_network: false,
   username: "",
   password: "",
   password_set: false,
@@ -105,6 +108,7 @@ function draftOf(r: Server): Draft {
     host: s(r.host),
     port: s(r.port),
     security: s(r.security) || "starttls",
+    allow_private_network: r.allow_private_network === true,
     username: s(r.username),
     password: "",
     password_set: r.password_set === true,
@@ -185,6 +189,9 @@ function ServerForm({
         security: d.security,
         username: d.username.trim(),
       });
+      // Sent only when it changes: a person turns it on, and the server refuses an agent that tries.
+      if (d.allow_private_network !== draft.allow_private_network)
+        body.allow_private_network = d.allow_private_network;
       // Empty keeps the stored password.
       if (d.password) body.password = d.password;
     } else body.connection = d.connection;
@@ -253,7 +260,9 @@ function ServerForm({
               >
                 <option value="starttls">{t("STARTTLS")}</option>
                 <option value="tls">{t("TLS")}</option>
-                <option value="none">{t("None (no password)")}</option>
+                <option value="none">
+                  {d.allow_private_network ? t("None (no TLS)") : t("None (no password)")}
+                </option>
               </Select>
               <Input
                 label={t("Port")}
@@ -281,6 +290,22 @@ function ServerForm({
               onChange={(e) => set("password", e.target.value)}
             />
           </div>
+          <Switch
+            label={t("Allow a relay on our own network")}
+            checked={d.allow_private_network}
+            onChange={(e) => set("allow_private_network", e.target.checked)}
+          />
+          {d.allow_private_network ? (
+            <Notice tone="warning" title={t("Our own network")}>
+              {t(
+                "Mail may go to a relay on a private address (such as 10.0.0.5), and security None is accepted there, so a password can travel unencrypted on that network. Turn this on only for a relay inside your own network.",
+              )}
+            </Notice>
+          ) : (
+            <p className="hint">
+              {t("Off: a relay on a private address is refused, as is a password without TLS.")}
+            </p>
+          )}
         </>
       ) : (
         <>

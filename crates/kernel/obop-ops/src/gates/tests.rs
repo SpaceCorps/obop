@@ -447,9 +447,10 @@ fn a_held_lock_a_newer_database_and_a_drifted_ledger_each_stop_the_run() {
     let (_, c) = older.preflight().unwrap();
     assert_eq!(check(&c, "schema").level, Level::Fail);
     assert!(older.run(false, &mut |_| {}).is_err());
-    // A lock held elsewhere is seen within the wait the gate was given, not after the full 60 s
-    // a migration would wait: the preflight is a question, not a queue. The wait is injected, so
-    // a loaded machine cannot make the test flaky.
+    // A lock held elsewhere is seen within the wait the gate was given, not after the full
+    // OBOP_MIGRATION_LOCK_WAIT_SECS (default 300 s) a migration would wait: the preflight is a
+    // question, not a queue. The wait is injected, so a loaded machine cannot make the test
+    // flaky.
     // (The migrated database above has nothing pending, which asks nothing of the lock: use one
     // with steps to run.)
     // Bound to a name: a temporary Dir is dropped, and its directory removed, at the end of the

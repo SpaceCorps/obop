@@ -183,6 +183,12 @@ impl Backend for Flaky {
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         self.inner.ensure_unique(name, model, fields)
     }
+    fn unique_indexes(&self) -> Result<Vec<String>> {
+        self.inner.unique_indexes()
+    }
+    fn drop_unique_index(&self, name: &str) -> Result<()> {
+        self.inner.drop_unique_index(name)
+    }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.refused(model)?;
         self.inner.find(model, field, value)

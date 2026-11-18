@@ -1343,6 +1343,28 @@ impl Dispatcher {
             .is_some_and(|m| m.generated_writes)
     }
 
+    /// The unique indexes of `backend` (`obop_uq_...`) that no registered model declares: left
+    /// by an uninstalled module or a removed rule (docs/ISSUES.md K41, D78). They keep enforcing
+    /// and their violations come out as raw storage text. Only read here; `obop storage
+    /// prune-indexes` lists them and drops them when an operator asks.
+    pub fn orphaned_unique_indexes(
+        &self,
+        backend: &dyn obop_storage::Backend,
+    ) -> Result<Vec<String>, String> {
+        let want: HashSet<String> = self
+            .models
+            .read()
+            .unwrap()
+            .values()
+            .flat_map(|m| engine::seq::index_names(&m.def))
+            .collect();
+        Ok(backend
+            .unique_indexes()?
+            .into_iter()
+            .filter(|n| !want.contains(n))
+            .collect())
+    }
+
     /// The names of the models that have a command registered right now, sorted. The installer
     /// takes them when it starts: every model that exists before any package is registered is a
     /// built-in one, and no package may declare its name.
@@ -1783,8 +1805,19 @@ impl Dispatcher {
             .iter()
             .map(|(_, o)| o.clone())
             .collect();
-        for o in observers {
-            o(&c.id, p, &input, &out);
+        if !observers.is_empty() {
+            // Never a secret or a value shown once: an observer may forward what it sees (U46).
+            let fields = self
+                .models
+                .read()
+                .unwrap()
+                .get(c.model)
+                .map(|m| m.fields.clone())
+                .unwrap_or_default();
+            let (seen_in, seen_out) = observe::for_observers(&c.id, &fields, &input, &out);
+            for o in observers {
+                o(&c.id, p, &seen_in, &seen_out);
+            }
         }
         let mut denied = Vec::new();
         let value = match out {
@@ -2435,6 +2468,7 @@ pub mod import_map;
 pub mod inline_pdf;
 pub mod json;
 mod kinds;
+mod observe;
 pub mod pay;
 pub mod public;
 pub mod query;
@@ -2507,6 +2541,8 @@ mod limits_tests;
 mod mask_restore_tests;
 #[cfg(test)]
 mod masked_guess_tests;
+#[cfg(test)]
+mod observe_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]

@@ -548,3 +548,31 @@ fn an_installed_manifest_is_read_as_the_previous_core_read_it() {
     let e = Manifest::parse_installed(&text).expect_err("not a number at all");
     assert!(e.contains("does not fit the number field qty"), "{e}");
 }
+
+/// K44 (c): an action effect that writes a constant outside its field's limits is refused by the
+/// install gate (it would be refused every time the action runs); a constant within them, and a
+/// copied value, pass.
+#[test]
+fn an_effect_constant_outside_the_limits_of_its_field_is_refused_at_install() {
+    let with_effect = |set: &str| {
+        pkg(&[
+            field("state", "kind = \"select\"\noptions = [\"open\", \"done\"]"),
+            field("code", "max_length = 4"),
+            field("qty", "kind = \"number\"\nmin = 0\nmax = 10"),
+            field("other", ""),
+            format!(
+                "\n  [[model.action]]\n  name = \"close\"\n  description = \"d\"\n  field = \"state\"\n  from = \"open\"\n  to = \"done\"\n\n    [[model.action.effect]]\n    kind = \"set\"\n    set = {{ {set} }}\n"
+            ),
+        ]
+        .concat())
+    };
+    assert_eq!(problem(&with_effect("code = \"ABCD\", qty = 10")), None);
+    assert_eq!(problem(&with_effect("code = \"$self.other\"")), None);
+    let long = problem(&with_effect("code = \"ABCDE\"")).unwrap();
+    assert!(
+        long.contains("lim_doc.code must be at most 4 characters"),
+        "{long}"
+    );
+    let big = problem(&with_effect("qty = 11")).unwrap();
+    assert!(big.contains("lim_doc.qty must be at most 10"), "{big}");
+}

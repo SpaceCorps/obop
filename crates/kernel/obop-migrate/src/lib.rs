@@ -45,7 +45,7 @@ pub const META_MODEL: &str = "obop_meta";
 pub const META_ID: &str = "schema";
 /// The record that names this database (see [`Migrator::ensure_instance_id`]).
 pub const INSTANCE_ID: &str = "instance";
-const LOCK: &str = "obop.migrate";
+const LOCK: &str = obop_storage::MIGRATION_LOCK;
 
 /// Models only the operator commands write: a database that holds nothing else is still new. The
 /// catalogue models are named in `obop-ops` (`catalog.rs`), which cannot be imported here; a test
