@@ -10,7 +10,7 @@ import { MailTab } from "./mail/MailTab.tsx";
 import { BuildTab } from "./ModuleBuilder.tsx";
 import { SecurityTab } from "./Security.tsx";
 import { UpdatesPage } from "./updates/UpdatesPage.tsx";
-import { productDocsVisible, visibleTabs } from "./productDocs.ts";
+import { holdsMailServers, productDocsVisible, visibleTabs } from "./productDocs.ts";
 import { href } from "./route.ts";
 import { ContrastReport } from "./brand/ContrastReport.tsx";
 import { ACCENTS, applyTheme, hasPersonalTheme, rememberTheme, resolveTheme } from "./theme.ts";
@@ -135,7 +135,11 @@ export function Customize(p: Props) {
   // Everyone gets their own theme and the read-only brand book; the rest changes the instance. The
   // Brand book and the Guide go when the instance hides them, and the address of a tab that is not
   // shown opens the first one that is.
-  const tabs = visibleTabs(TABS, { isAdmin: p.isAdmin, docs: productDocsVisible() });
+  const tabs = visibleTabs(TABS, {
+    isAdmin: p.isAdmin,
+    docs: productDocsVisible(),
+    mail: holdsMailServers(p.modules),
+  });
   const byModel = MODEL_TABS[p.tab];
   const asked = byModel?.tab ?? p.tab;
   const tab = tabs.some((x) => x.id === asked) ? asked : tabs[0]!.id;

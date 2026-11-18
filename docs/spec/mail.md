@@ -4,7 +4,7 @@ Status: first slice built on branch `fix/w3a-m1` (2026-11-18). Everything here i
 
 ## 1. What a person sees
 
-Customize has a **Mail** tab (administrators, group `mail.admin`):
+Customize has a **Mail** tab (administrators, and anyone who holds `mail.admin` without being an administrator: the tab is shown to a person whose `/api/meta` holds `mail_server`). It is the one screen that sets a relay's password, since the generated form never shows a field of class `secret`:
 
 - **Mail servers.** One or more ways out. A server is either an **SMTP relay** (host, port, security `starttls`, `tls` or `none`, user name, password) or a **provider** reached through a Connectors connection (Postmark, SendGrid, Mailgun, Microsoft Graph `sendMail`, the Gmail API). Each server has its sender (from address and name), an optional reply-to address, an optional footer added to every message, and the message kinds it serves (empty: any). One server can be the default. **Send test** sends one short message to an address the administrator types and shows the server's answer.
 - **Deliveries.** The log of every message: kind, recipients, subject, server, status (`queued`, `sending`, `sent`, `failed`, `cancelled`), attempts, the last error, when it was sent. Never the body. A failed message can be sent again; a queued one can be cancelled.
