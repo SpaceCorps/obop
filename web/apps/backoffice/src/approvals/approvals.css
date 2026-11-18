@@ -1,0 +1,238 @@
+/* The Approvals page (approvals/ApprovalsPage.tsx) and one plan's panel (PlanPanel.tsx). The panel
+   is the record panel's shape (`.record` in record.css); what is here is only the page's own. */
+
+.appr-head {
+  padding: 1rem 1.25rem 0.5rem;
+}
+.appr-head h1 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  letter-spacing: var(--tracking-snug);
+}
+.appr-head h1:focus {
+  outline: none;
+}
+.appr-page > .tabs {
+  padding-inline: 1.25rem;
+}
+
+/* The list: a table that fits its box. The first column takes what the others leave; they keep
+   their words on one line where they can, and wrap between words where they cannot. */
+.appr-table {
+  inline-size: 100%;
+  table-layout: auto;
+}
+.appr-table > tbody > tr {
+  position: relative;
+}
+.appr-table > tbody > tr:hover {
+  background: var(--surface-2);
+}
+.appr-table > tbody > tr[aria-current="true"] {
+  background: var(--accent-soft);
+}
+.appr-table .cell-main {
+  inline-size: 55%;
+}
+.appr-table .appr-col {
+  color: var(--text-muted);
+  overflow-wrap: normal;
+  word-break: normal;
+}
+/* One control per row: the button, whose invisible edge covers the whole row. */
+.appr-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  min-block-size: 2.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.appr-open::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+.appr-open:focus-visible {
+  outline: none;
+}
+.appr-open:focus-visible::after {
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+.appr-thing {
+  font-weight: var(--weight-semibold);
+  overflow-wrap: break-word;
+}
+/* The second line belongs to a phone's block; a table has its columns. */
+.appr-sub {
+  display: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}
+.appr-chip {
+  margin-block-start: 0.35rem;
+}
+
+/* One plan. */
+.appr-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) 1.25rem;
+}
+.appr-what h3 {
+  margin: 0 0 var(--space-2);
+}
+.appr-changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+}
+.appr-bulk-row {
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+.appr-change dt {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.appr-change dd {
+  margin: 0.1rem 0 0;
+  overflow-wrap: break-word;
+}
+.appr-from {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+.appr-arrow {
+  color: var(--text-muted);
+}
+.appr-to {
+  font-weight: var(--weight-semibold);
+}
+.appr-hidden {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.appr-delete {
+  margin: 0;
+  color: var(--danger-ink);
+  font-weight: var(--weight-semibold);
+}
+.appr-who,
+.appr-why,
+.appr-closed {
+  margin: 0;
+}
+.appr-who {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.appr-why {
+  color: var(--warning-ink);
+}
+.appr-closed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.appr-note {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.appr-note.danger {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+}
+.appr-note.warning {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+}
+.appr-note.info {
+  border-color: var(--info);
+  background: var(--info-soft);
+  color: var(--info-ink);
+}
+.appr-note:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Reject and Approve stay in view at the end of the panel. Reject on the left, Approve on the
+   right; on a phone stacked, Approve at the bottom, under the thumb. */
+.appr-foot {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  margin-block-start: auto;
+  padding: var(--space-3) 1.25rem max(var(--space-3), env(safe-area-inset-bottom));
+  border-block-start: 1px solid var(--border);
+  background: var(--surface);
+}
+.appr-foot > .btn {
+  min-block-size: 3rem;
+}
+
+.appr-reject textarea {
+  inline-size: 100%;
+}
+
+@media (max-width: 40rem) {
+  .appr-head {
+    padding-inline: var(--space-4);
+  }
+  .appr-page > .tabs {
+    padding-inline: var(--space-4);
+  }
+  .appr-sub {
+    display: block;
+  }
+  /* A phone's block shows the thing and its second line; the columns say the same again. */
+  .appr-table.stack-sm > tbody > tr > td.appr-col {
+    display: none;
+  }
+  .appr-table.stack-sm > tbody > tr > td.cell-main {
+    overflow-wrap: break-word;
+  }
+  .appr-table.stack-sm > tbody > tr {
+    min-block-size: 3.5rem;
+  }
+  .appr-body {
+    padding-inline: var(--space-4);
+  }
+  .appr-foot {
+    flex-direction: column;
+    gap: var(--space-3);
+    padding-inline: var(--space-4);
+  }
+  .appr-foot > .btn {
+    inline-size: 100%;
+  }
+}
+/* A finger reaches every control: 44 px at least on a touch screen. */
+@media (pointer: coarse) {
+  .appr-open {
+    min-block-size: 2.75rem;
+  }
+}

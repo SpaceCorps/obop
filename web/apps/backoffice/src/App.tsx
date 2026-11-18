@@ -41,6 +41,7 @@ import type { Cond } from "./query.ts";
 import { rememberRecord } from "./recent.ts";
 import { SetupCard } from "./SetupCard.tsx";
 import { parseModulesRoute } from "./modules/route.ts";
+import { isApprovals } from "./approvals/route.ts";
 import {
   PRODUCT_DOC_TABS,
   isPersonalTab,
@@ -69,6 +70,9 @@ import { applyTheme, resolveTheme } from "./theme.ts";
 const Customize = lazy(() => import("./Customize.tsx").then((m) => ({ default: m.Customize })));
 const AppOverview = lazy(() =>
   import("./AppOverview.tsx").then((m) => ({ default: m.AppOverview })),
+);
+const ApprovalsPage = lazy(() =>
+  import("./approvals/ApprovalsPage.tsx").then((m) => ({ default: m.ApprovalsPage })),
 );
 
 /** What every route shows while it loads. */
@@ -511,6 +515,8 @@ export function App() {
                   onModulesChanged={() => void refresh()}
                   notify={notify}
                 />
+              ) : isApprovals(route) ? (
+                <ApprovalsPage route={route} go={go} />
               ) : extPage ? (
                 extPage
               ) : app && (isOverview(route) || atHome) ? (
