@@ -115,6 +115,8 @@ mod sie;
 #[cfg(test)]
 mod sie_tests;
 #[cfg(test)]
+mod sign_observer_tests;
+#[cfg(test)]
 mod sign_tests;
 mod time_billing;
 #[cfg(test)]
