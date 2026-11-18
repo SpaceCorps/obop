@@ -146,7 +146,10 @@ pub struct Installer {
     /// a change made through another process can be told from this process's own (sync.rs).
     pub(crate) registered: Mutex<std::collections::BTreeMap<String, String>>,
     pub(crate) seen_version: std::sync::atomic::AtomicU64,
+    /// When this process last looked at the shared counter, on [`Installer::clock_ms`].
     pub(crate) last_check_ms: std::sync::atomic::AtomicU64,
+    /// When this installer was made: the start of [`Installer::clock_ms`].
+    pub(crate) made: std::time::Instant,
     /// The backup gate of updates that rewrite records (see [`MigrationGate`]).
     gate: Mutex<Option<Arc<dyn MigrationGate>>>,
 }
@@ -326,6 +329,7 @@ impl Installer {
             registered: Mutex::default(),
             seen_version: Default::default(),
             last_check_ms: Default::default(),
+            made: std::time::Instant::now(),
             gate: Mutex::new(None),
         })
     }
@@ -4618,12 +4622,17 @@ write_group = "fleetlog.manager"
                 .iter()
                 .any(|m| m.id == "fleet")
         };
-        let now = || {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64
-        };
+        // The installer's own monotonic clock, not the wall clock (O41): a stepped system clock
+        // moves nothing here.
+        let now = || b.clock_ms();
+        let wall = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        assert!(
+            now() < wall / 2,
+            "the look is timed on the installer's clock, not the milliseconds since 1970"
+        );
         a.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
             .unwrap();
         // B looked half a second ago: three looks now change nothing, and the time of the last

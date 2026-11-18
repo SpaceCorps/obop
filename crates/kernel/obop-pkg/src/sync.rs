@@ -24,13 +24,18 @@ fn fingerprint(f: &Fields) -> String {
     )
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_millis() as u64)
-}
+/// Where the throttle's clock starts: an hour, so that a stored 0 ("look at the next call") is
+/// always more than a second ago, and a test can set a look a second back from the start.
+const CLOCK_START_MS: u64 = 3_600_000;
 
 impl Installer {
+    /// The clock of the once-a-second look: milliseconds on a monotonic clock since this installer
+    /// was made (plus [`CLOCK_START_MS`]). Never the wall clock, so a clock that is stepped back
+    /// or forward does not delay the next look or let one through early (O41).
+    pub(crate) fn clock_ms(&self) -> u64 {
+        CLOCK_START_MS + self.made.elapsed().as_millis() as u64
+    }
+
     fn fingerprints(&self) -> BTreeMap<String, String> {
         self.stored()
             .into_iter()
@@ -76,7 +81,7 @@ impl Installer {
     /// Bring this process's registered modules in line with the stored packages, if another
     /// process changed them. Cheap when nothing changed: one counter read, at most once a second.
     pub fn sync_modules(&self) {
-        let now = now_ms();
+        let now = self.clock_ms();
         let last = self.last_check_ms.load(Ordering::Acquire);
         if now.saturating_sub(last) < 1000 {
             return;
