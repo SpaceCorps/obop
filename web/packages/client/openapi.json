@@ -575,6 +575,10 @@
             "readOnly": true,
             "type": "string"
           },
+          "our_reference": {
+            "description": "Our reference printed on the invoice (Var referens), free text",
+            "type": "string"
+          },
           "party_id": {
             "description": "Customer party id",
             "type": "string"
@@ -590,6 +594,10 @@
               "posted",
               "cancelled"
             ],
+            "type": "string"
+          },
+          "their_reference": {
+            "description": "The customer's reference printed on the invoice (Er referens), free text",
             "type": "string"
           },
           "total_minor": {
@@ -11576,6 +11584,11 @@
                           "format": "date",
                           "type": "string"
                         },
+                        "our_reference": {
+                          "description": "Our reference printed on the invoice (Var referens), free text",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
                         "party_id": {
                           "description": "Customer party id",
                           "type": "string"
@@ -11591,6 +11604,11 @@
                             "posted",
                             "cancelled"
                           ],
+                          "type": "string"
+                        },
+                        "their_reference": {
+                          "description": "The customer's reference printed on the invoice (Er referens), free text",
+                          "maxLength": 2048,
                           "type": "string"
                         }
                       },
@@ -11903,6 +11921,11 @@
                     "format": "date",
                     "type": "string"
                   },
+                  "our_reference": {
+                    "description": "Our reference printed on the invoice (Var referens), free text",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
                   "party_id": {
                     "description": "Customer party id",
                     "type": "string"
@@ -11918,6 +11941,11 @@
                       "posted",
                       "cancelled"
                     ],
+                    "type": "string"
+                  },
+                  "their_reference": {
+                    "description": "The customer's reference printed on the invoice (Er referens), free text",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -12825,6 +12853,11 @@
                     "format": "date",
                     "type": "string"
                   },
+                  "our_reference": {
+                    "description": "Our reference printed on the invoice (Var referens), free text",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
                   "party_id": {
                     "description": "Customer party id",
                     "type": "string"
@@ -12840,6 +12873,11 @@
                       "posted",
                       "cancelled"
                     ],
+                    "type": "string"
+                  },
+                  "their_reference": {
+                    "description": "The customer's reference printed on the invoice (Er referens), free text",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
