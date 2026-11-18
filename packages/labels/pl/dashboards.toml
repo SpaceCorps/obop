@@ -72,6 +72,17 @@ sum = "Suma"
 label = "Grupuj według"
 description = "Pole podziału wyniku (wybór, odwołanie lub data); puste dla jednej wartości"
 
+[labels.pl.model.dashboards_widget.field.period]
+label = "Okres"
+description = "Gdy group_by to data lub data z godziną: okres, w jakim liczone są wartości (dzień, tydzień, tydzień ISO, miesiąc lub rok); puste oznacza miesiąc"
+
+[labels.pl.model.dashboards_widget.field.period.options]
+day = "Dzień"
+week = "Tydzień"
+iso_week = "Tydzień ISO"
+month = "Miesiąc"
+year = "Rok"
+
 [labels.pl.model.dashboards_widget.field.filter]
 label = "Filtr"
 description = "Obiekt JSON z nazwami pól i dokładnymi wartościami, które muszą spełniać rekordy, np. pole state o wartości paid; puste oznacza wszystkie rekordy"

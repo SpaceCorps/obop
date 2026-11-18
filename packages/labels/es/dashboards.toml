@@ -72,6 +72,17 @@ sum = "Suma"
 label = "Agrupar por"
 description = "Campo por el que dividir el resultado (selección, referencia o fecha); vacío para un único valor"
 
+[labels.es.model.dashboards_widget.field.period]
+label = "Periodo"
+description = "Si group_by es una fecha o una fecha y hora: el periodo por el que se cuentan sus valores (día, semana, semana ISO, mes o año); vacío significa mes"
+
+[labels.es.model.dashboards_widget.field.period.options]
+day = "Día"
+week = "Semana"
+iso_week = "Semana ISO"
+month = "Mes"
+year = "Año"
+
 [labels.es.model.dashboards_widget.field.filter]
 label = "Filtro"
 description = "Objeto JSON de nombres de campo con los valores exactos que deben cumplir los registros, por ejemplo state = paid; vacío significa todos los registros"

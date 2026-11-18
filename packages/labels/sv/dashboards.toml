@@ -72,6 +72,17 @@ sum = "Summa"
 label = "Gruppera efter"
 description = "Fält att dela upp resultatet efter (ett val-, referens- eller datumfält); tomt för ett enda värde"
 
+[labels.sv.model.dashboards_widget.field.period]
+label = "Period"
+description = "När group_by är ett datum eller ett datum med tid: perioden som värdena räknas per (dag, vecka, ISO-vecka, månad eller år); tomt betyder månad"
+
+[labels.sv.model.dashboards_widget.field.period.options]
+day = "Dag"
+week = "Vecka"
+iso_week = "ISO-vecka"
+month = "Månad"
+year = "År"
+
 [labels.sv.model.dashboards_widget.field.filter]
 label = "Filter"
 description = "Fältnamn med exakta värden som posterna måste ha, till exempel state = paid; tomt betyder alla poster"

@@ -20,11 +20,14 @@ import { fieldTitle, modelTitle } from "../labels.ts";
 import { stateFieldOf, summable, type MetaIndex } from "../presentation.ts";
 import { useReportIndex } from "../views/PivotView.tsx";
 import {
+  BUCKETS,
+  bucketName,
   currenciesOf,
   defaultRows,
   dimensionsOf,
   formatMeasure,
   isDated,
+  type Bucket,
   type MeasureSel,
 } from "../reports.ts";
 import { useReportRows } from "../useAggregate.ts";
@@ -73,6 +76,8 @@ type Draft = {
   aggregate: "count" | "sum";
   measure_field: string;
   group_by: string;
+  /** The period of a dated split; empty is month. */
+  period: Bucket | "";
   conds: Condition[];
   raw: string | null;
 };
@@ -132,6 +137,7 @@ export function WidgetForm(p: {
     aggregate: w?.aggregate ?? "count",
     measure_field: w?.measure_field ?? "",
     group_by: w?.group_by ?? "",
+    period: w?.period ?? "",
     conds: "conds" in parsed ? parsed.conds : [],
     raw: "error" in parsed ? (w?.filter ?? "") : null,
   }));
@@ -159,6 +165,9 @@ export function WidgetForm(p: {
   );
   const dims = dimensionsOf(fields);
   const chart = isChart(draft.kind);
+  // A date or date-and-time split counts per a period (K1): day, week, ISO week, month or year.
+  const splitField = dims.find((f) => f.name === draft.group_by);
+  const dated = !!splitField && isDated(splitField);
   const text = draft.raw ?? formatFilter(draft.conds);
   const title = titled ? draft.title : autoTitle(draft, model, moduleId);
 
@@ -287,6 +296,7 @@ export function WidgetForm(p: {
       aggregate: draft.aggregate,
       measure_field: draft.aggregate === "sum" ? draft.measure_field : null,
       group_by: draft.group_by || null,
+      period: dated ? draft.period || null : null,
       filter: text.trim() || null,
     });
     setBusy(false);
@@ -408,7 +418,22 @@ export function WidgetForm(p: {
             <option value="">{chart ? t("Choose a field") : t("Nothing")}</option>
             {dims.map((f) => (
               <option key={f.name} value={f.name}>
-                {isDated(f) ? t("{field} (month)", { field: fieldTitle(f) }) : fieldTitle(f)}
+                {fieldTitle(f)}
+              </option>
+            ))}
+          </Select>
+        )}
+        {draft.kind !== "kpi" && dated && (
+          <Select
+            label={t("Period")}
+            value={draft.period || "month"}
+            onChange={(e) =>
+              set({ period: e.target.value === "month" ? "" : (e.target.value as Bucket) })
+            }
+          >
+            {BUCKETS.map((b) => (
+              <option key={b} value={b}>
+                {bucketName(b)}
               </option>
             ))}
           </Select>
@@ -566,7 +591,10 @@ function Sentence(p: {
     draft.kind === "kpi" || !by
       ? ""
       : isDated(by)
-        ? t("One value per month of {field}.", { field: inSentence(fieldTitle(by)) })
+        ? t("One value per {period} of {field}.", {
+            period: inSentence(bucketName(draft.period || "month")),
+            field: inSentence(fieldTitle(by)),
+          })
         : t("One value per {field}.", { field: inSentence(fieldTitle(by)) });
   return (
     <div className="wsentence" role="status" aria-live="polite">

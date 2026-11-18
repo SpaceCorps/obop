@@ -1,6 +1,6 @@
 [module]
 id = "dashboards"
-version = "0.3.1"
+version = "0.4.0"
 name = "Dashboards"
 description = "Dashboards and their widgets stored as data, for a UI to render. A dashboard has a title and an owner and is private to them (and to dashboards.manager) unless it is shared; its tiles follow it. A widget describes one tile with these fields: kind (kpi, bar, line, pie or table), model_name (the model to read, for example sale_order), measure_field (the field to aggregate; empty for count), aggregate (count or sum; sum needs a number or money measure_field), group_by (field to split by, for bar, line, pie and table; empty for a single kpi value), filter (a JSON object of field names to exact values, for example {\"state\":\"paid\"}; empty means all records) and position (order on the dashboard, lowest first). The package only stores the definition; it does not check that the model or fields exist and it computes nothing."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["dashboards", "kpi", "reporting"]
 categories = ["productivity"]
 maturity = "experimental"
 requires_core = "^0.2.2"
-changelog = "Business names for dashboards and tiles, which now sit under Manage, list columns in the order of the board, and sensible starting values: a new dashboard belongs to the person who makes it and a new tile counts records."
+changelog = "0.4.0: a tile split by a date or a date and time can count per day, week, ISO week, month or year (Period); empty stays per month. Business names for dashboards and tiles, which now sit under Manage, list columns in the order of the board, and sensible starting values: a new dashboard belongs to the person who makes it and a new tile counts records."
 
 [[model]]
 name = "dashboards_dashboard"
@@ -142,6 +142,13 @@ write_group = "dashboards.manager"
   name = "group_by"
   description = "Field to split the result by (a select, ref or date field); empty for one value"
   class = "none"
+
+  [[model.field]]
+  name = "period"
+  description = "When group_by is a date or a date and time: the period its values are counted per (day, week, iso_week, month or year); empty means month"
+  class = "none"
+  kind = "select"
+  options = ["day", "week", "iso_week", "month", "year"]
 
   [[model.field]]
   name = "filter"

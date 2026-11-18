@@ -72,6 +72,17 @@ sum = "Summa"
 label = "Ryhmittely"
 description = "Kenttä, jolla tulos jaetaan (valinta-, viite- tai päivämääräkenttä); tyhjä yhdelle arvolle"
 
+[labels.fi.model.dashboards_widget.field.period]
+label = "Jakso"
+description = "Kun group_by on päivämäärä tai päivämäärä ja aika: jakso, jonka mukaan arvot lasketaan (päivä, viikko, ISO-viikko, kuukausi tai vuosi); tyhjä tarkoittaa kuukautta"
+
+[labels.fi.model.dashboards_widget.field.period.options]
+day = "Päivä"
+week = "Viikko"
+iso_week = "ISO-viikko"
+month = "Kuukausi"
+year = "Vuosi"
+
 [labels.fi.model.dashboards_widget.field.filter]
 label = "Suodatin"
 description = "JSON-olio, jossa kentän nimi on yhdistetty tarkkaan arvoon, jota tietueiden on vastattava, esimerkiksi state = paid; tyhjä tarkoittaa kaikkia tietueita"

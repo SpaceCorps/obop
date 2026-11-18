@@ -72,6 +72,17 @@ sum = "Somme"
 label = "Regrouper par"
 description = "Champ selon lequel découper le résultat (champ de sélection, de référence ou de date) ; vide pour une seule valeur"
 
+[labels.fr.model.dashboards_widget.field.period]
+label = "Période"
+description = "Si group_by est une date ou une date et heure : la période par laquelle ses valeurs sont comptées (jour, semaine, semaine ISO, mois ou année) ; vide signifie mois"
+
+[labels.fr.model.dashboards_widget.field.period.options]
+day = "Jour"
+week = "Semaine"
+iso_week = "Semaine ISO"
+month = "Mois"
+year = "Année"
+
 [labels.fr.model.dashboards_widget.field.filter]
 label = "Filtre"
 description = "Objet JSON associant des noms de champs à des valeurs exactes que les enregistrements doivent respecter, par exemple state=paid ; vide signifie tous les enregistrements"

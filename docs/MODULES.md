@@ -1083,6 +1083,7 @@ The `dashboards` package stores dashboards as records so a UI can render them la
 | `measure_field` | text | Number or money field to aggregate; empty when counting. |
 | `aggregate` | select, required: `count`, `sum` | How records are combined. `sum` needs `measure_field`. |
 | `group_by` | text | Field to split by (a select, ref or date field), for `bar`, `line`, `pie` and `table`; empty for a single `kpi` value. |
+| `period` | select: `day`, `week`, `iso_week`, `month`, `year` | dashboards 0.4.0 (K1): when `group_by` is a date or a date and time, the period its values are counted per (in the instance's zone, as the server buckets them); empty means `month`. |
 | `filter` | longtext | A JSON object of field name to exact value, for example `{"state":"paid"}`; empty means all records. Only equality is defined. |
 | `position` | number | Order of the tile on the dashboard; lower first. |
 

@@ -72,6 +72,17 @@ sum = "Summe"
 label = "Gruppieren nach"
 description = "Feld, nach dem das Ergebnis aufgeteilt wird (Auswahl-, Referenz- oder Datumsfeld); leer für einen Wert"
 
+[labels.de.model.dashboards_widget.field.period]
+label = "Zeitraum"
+description = "Bei einem Datums- oder Zeitfeld in group_by: der Zeitraum, für den gezählt wird (Tag, Woche, ISO-Woche, Monat oder Jahr); leer bedeutet Monat"
+
+[labels.de.model.dashboards_widget.field.period.options]
+day = "Tag"
+week = "Woche"
+iso_week = "ISO-Woche"
+month = "Monat"
+year = "Jahr"
+
 [labels.de.model.dashboards_widget.field.filter]
 label = "Filter"
 description = "JSON-Objekt aus Feldnamen und exakten Werten, denen Datensätze entsprechen müssen, zum Beispiel state mit dem Wert paid; leer bedeutet alle Datensätze"
