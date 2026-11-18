@@ -439,9 +439,12 @@ function ServersSection({
   token,
   notify,
   onTested,
+  readsConnections,
 }: {
   token: string;
   notify: Notify;
+  /** The person may list the Connectors connections; a mail.admin without them is not asked. */
+  readsConnections: boolean;
   /** A test message was sent or refused: it is a row of the deliveries log now. */
   onTested: () => void;
 }) {
@@ -479,9 +482,10 @@ function ServersSection({
       setProblem(null);
       setRows(r.rows as Server[]);
     }
+    if (!readsConnections) return;
     const c = await search(token, "connection", { limit: 500 });
     if (!("error" in c)) setConnections(c.rows);
-  }, [token]);
+  }, [token, readsConnections]);
   useEffect(() => void load(), [load]);
 
   return (
@@ -728,11 +732,25 @@ function DeliveriesSection({
 }
 
 /** The Mail tab of Customize. */
-export function MailTab({ token, notify }: { token: string; notify: Notify }) {
+export function MailTab({
+  token,
+  notify,
+  readsConnections = true,
+}: {
+  token: string;
+  notify: Notify;
+  /** Whether the person's metadata holds `connection` (a provider server needs one). */
+  readsConnections?: boolean;
+}) {
   const [stamp, setStamp] = useState(0);
   return (
     <div className="stack mail-tab">
-      <ServersSection token={token} notify={notify} onTested={() => setStamp((n) => n + 1)} />
+      <ServersSection
+        token={token}
+        notify={notify}
+        readsConnections={readsConnections}
+        onTested={() => setStamp((n) => n + 1)}
+      />
       <DeliveriesSection token={token} notify={notify} stamp={stamp} />
       <section className="stack">
         <h3 className="overline">{t("Templates")}</h3>

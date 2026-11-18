@@ -189,7 +189,15 @@ export function Customize(p: Props) {
           {tab === "updates" && <UpdatesPage token={p.token} notify={p.notify} />}
           {tab === "build" && <BuildTab {...p} />}
           {tab === "security" && <SecurityTab {...p} />}
-          {tab === "mail" && <MailTab token={p.token} notify={p.notify} />}
+          {tab === "mail" && (
+            <MailTab
+              token={p.token}
+              notify={p.notify}
+              readsConnections={p.modules.some((m) =>
+                m.models.some((x) => x.name === "connection"),
+              )}
+            />
+          )}
           {tab === "guide" && (
             <Suspense fallback={<Skeleton rows={6} cols={3} />}>
               <GuidePage anchor={p.anchor} goAnchor={p.goAnchor} notify={p.notify} />
