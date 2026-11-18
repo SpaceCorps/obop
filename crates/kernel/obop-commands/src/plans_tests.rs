@@ -1541,3 +1541,36 @@ fn k63_the_receipt_and_the_security_log_hold_no_value_and_no_field_list() {
         );
     }
 }
+
+#[test]
+fn rule4_the_owner_who_cannot_read_the_record_sees_no_field_of_it() {
+    let r = rig();
+    let id = r.seed();
+    let plan = r.propose_update(&id);
+    // boss without pt.boss: still the owner of the agent, and the row rule `own` keeps ann's
+    // record from him, so he cannot decide (rule 3) and must see no field of it.
+    let boss_now = Principal::user("boss", &[U]);
+    let view = r.ok(&boss_now, "plan.get", m(&[("id", t(&plan))]));
+    assert_eq!(view["status"], "waiting", "{view}");
+    assert_eq!(view["own_agent"], true, "{view}");
+    assert_eq!(view["can_reject"], false, "{view}");
+    for k in ["changes", "record", "seen_version", "rows"] {
+        assert!(view.get(k).is_none(), "{k}: {view}");
+    }
+    let text = view.to_string();
+    for v in [
+        SECRET,
+        "New name",
+        "Old name",
+        "Erika Example",
+        "Old Client",
+    ] {
+        assert!(!text.contains(v), "{v}: {text}");
+    }
+    // The same owner with the group that reads every record sees the change view.
+    let full = r.ok(&boss(), "plan.get", m(&[("id", t(&plan))]));
+    assert!(
+        full["changes"].as_array().is_some_and(|c| !c.is_empty()),
+        "{full}"
+    );
+}
