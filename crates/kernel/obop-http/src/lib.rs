@@ -47,6 +47,8 @@ mod brand_scan_tests;
 #[cfg(test)]
 mod error_tests;
 #[cfg(test)]
+mod platform_health_tests;
+#[cfg(test)]
 mod src_scan;
 
 pub struct HttpState {
@@ -986,6 +988,11 @@ pub trait PlatformApi: Send + Sync {
     fn update_rollback(&self, _update_token: &str) -> Result<J, String> {
         Err("this control plane does not run updates".into())
     }
+    /// Whether the control plane's database answers, for `/readyz` (I6). `Err` names the cause
+    /// for the log only; the route answers with a fixed reason.
+    fn ready(&self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 type Api = State<Arc<dyn PlatformApi>>;
@@ -1052,6 +1059,9 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         .route("/api/platform/update/status", get(p_update_status))
         .route("/api/platform/update/start", post(p_update_start))
         .route("/api/platform/update/rollback", post(p_update_rollback))
+        // Health of the control plane (I6), open and as terse as an instance's (D67).
+        .route("/healthz", get(ops::healthz))
+        .route("/readyz", get(p_readyz))
         .with_state(api.clone())
         .route("/openapi.json", get(platform_openapi))
         .route("/api/openapi.json", get(platform_openapi));
@@ -1069,6 +1079,37 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
     // The control plane's database is pooled too: a refused call is a 503 here as well (D74),
     // not a 401 "invalid username or password" or a 404.
     r.layer(axum::middleware::from_fn(ops::storage_faults))
+}
+
+/// `GET /readyz` of the control plane: 200 while its database answers, else 503 with a fixed
+/// reason. A pool that is only full counts as ready, as on an instance.
+async fn p_readyz(State(api): Api) -> Response {
+    let ready = blocking(move || api.ready()).await;
+    match ready {
+        Err(e)
+            if obop_storage::fault::Fault::of_message(&e)
+                != Some(obop_storage::fault::Fault::Busy) =>
+        {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                [
+                    ("content-type", "application/json"),
+                    ("cache-control", "no-store"),
+                ],
+                "{\"status\":\"unavailable\",\"reason\":\"database unreachable\"}",
+            )
+                .into_response()
+        }
+        _ => (
+            StatusCode::OK,
+            [
+                ("content-type", "application/json"),
+                ("cache-control", "no-store"),
+            ],
+            "{\"status\":\"ready\"}",
+        )
+            .into_response(),
+    }
 }
 
 /// The release feed instances read (D63): public, cacheable for a minute.
