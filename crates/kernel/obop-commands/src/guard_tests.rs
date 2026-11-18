@@ -186,6 +186,17 @@ impl Rig {
             Ok(r) => panic!("{model}.{c}: expected a refusal, got {:?}", r.value),
         }
     }
+    /// The hint of a refusal that must be the guard's.
+    fn frozen_hint(&self, model: &str, c: &str, input: Value) -> String {
+        match self.call(model, c, input) {
+            Err(e) => {
+                let k = errors::classify(&e);
+                assert_eq!(k.code, "immutable_record", "{:?}", k.body);
+                k.body["hint"].as_str().unwrap_or_default().to_string()
+            }
+            Ok(r) => panic!("{model}.{c}: expected a refusal, got {:?}", r.value),
+        }
+    }
     fn create(&self, model: &str, pairs: Vec<(&str, Value)>) -> String {
         text(&self.ok(model, "create", m(pairs)), "id")
     }
@@ -395,6 +406,30 @@ fn a_guard_of_mutable_fields_alone_fixes_the_rest_once_created() {
         assert!(why.contains("keeps what it was created with"), "{why}");
         assert!(why.contains("only level can still change"), "{why}");
         r.frozen("stock", "delete", m(vec![("id", t(&id))]));
+    });
+}
+
+/// Q6: no action reopens a record that is fixed once created, so its refusal does not send the
+/// caller looking for one; a record frozen by its state still gets that hint.
+#[test]
+fn a_record_fixed_once_created_is_not_told_to_reopen_it() {
+    each(|r| {
+        let id = r.create("stock", vec![("product", t("drill")), ("level", t("3"))]);
+        for (c, input) in [
+            ("update", m(vec![("id", t(&id)), ("product", t("saw"))])),
+            ("delete", m(vec![("id", t(&id))])),
+        ] {
+            let hint = r.frozen_hint("stock", c, input);
+            assert!(!hint.contains("reopens"), "{c}: {hint}");
+            assert!(hint.contains("created with"), "{c}: {hint}");
+        }
+        let order = r.order("confirmed");
+        let hint = r.frozen_hint(
+            "order",
+            "update",
+            m(vec![("id", t(&order)), ("name", t("New"))]),
+        );
+        assert!(hint.contains("reopens"), "{hint}");
     });
 }
 

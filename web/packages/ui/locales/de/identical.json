@@ -61,5 +61,6 @@
   "{field} in {model}",
   "{field} ≤ {to}",
   "{field} ≥ {from}",
-  "{quantity} × {price}"
+  "{quantity} × {price}",
+  "08:00"
 ]

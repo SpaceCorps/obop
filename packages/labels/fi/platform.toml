@@ -1,5 +1,6 @@
 [labels.fi.module]
 name = "Mukauta"
+summary = "Mukauta instanssia: teema, sovellukset, moduulit ja marketplace."
 
 [labels.fi.model.module]
 name = "Moduuli"

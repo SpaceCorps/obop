@@ -58,7 +58,22 @@ export type DField = {
   precision: string;
   scale: string;
   round: string;
+  /** The description is the example's English text, worded in the language shown until edited (D10). */
+  seed?: boolean;
 };
+
+/** The example the builder starts with, as English message ids: worded when shown (D10). */
+export const SEED = {
+  name: msg("Fleet check"),
+  model: msg("Inspection"),
+  title: msg("What was inspected"),
+  inspector: msg("Who did it"),
+  due: msg("When it is due"),
+};
+
+/** A field as shown: an untouched example description in the language of the moment. */
+export const shownField = (f: DField): DField =>
+  f.seed ? { ...f, description: t(f.description), seed: false } : f;
 
 const blank = (): DField => ({
   name: "",
@@ -177,19 +192,25 @@ export function manifest(
 
 export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
   const { lang } = useI18n();
-  const [name, setName] = useState(() => t("Fleet check"));
-  const [modelName, setModelName] = useState(() => t("Inspection"));
-  const [fields, setFields] = useState<DField[]>(() => [
-    { ...blank(), name: "title", description: t("What was inspected"), required: true },
+  // The example's texts stay message ids until the person edits them (null): a change of
+  // language words them again instead of keeping the language they were first drawn in (D10).
+  const [ownName, setName] = useState<string | null>(null);
+  const [ownModel, setModelName] = useState<string | null>(null);
+  const name = ownName ?? t(SEED.name);
+  const modelName = ownModel ?? t(SEED.model);
+  const [own, setFields] = useState<DField[]>(() => [
+    { ...blank(), name: "title", description: SEED.title, seed: true, required: true },
     {
       ...blank(),
       name: "inspector",
-      description: t("Who did it"),
+      description: SEED.inspector,
+      seed: true,
       class: "internal",
       personal: true,
     },
-    { ...blank(), name: "due", description: t("When it is due"), kind: "date" },
+    { ...blank(), name: "due", description: SEED.due, seed: true, kind: "date" },
   ]);
+  const fields = useMemo(() => own.map(shownField), [own, lang]);
   const [statuses, setStatuses] = useState("open, done");
   const [error, setError] = useState<string | null>(null);
   const st = useMemo(() => listOf(statuses), [statuses]);
@@ -249,7 +270,11 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
   );
   const id = slug(name);
   const upd = (i: number, patch: Partial<DField>) =>
-    setFields(fields.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+    setFields(
+      own.map((f, j) =>
+        j !== i ? f : { ...f, ...patch, ...("description" in patch ? { seed: false } : {}) },
+      ),
+    );
 
   function problem(): string | null {
     if (!id) return t("Give the module a name");
@@ -349,7 +374,7 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                 </select>
                 <button
                   className="icon-btn"
-                  onClick={() => setFields(fields.filter((_, j) => j !== i))}
+                  onClick={() => setFields(own.filter((_, j) => j !== i))}
                   aria-label={t("Remove field")}
                 >
                   <Icon name="close" size={16} />
@@ -456,7 +481,7 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
             </li>
           ))}
         </ul>
-        <button className="btn add-field" onClick={() => setFields([...fields, blank()])}>
+        <button className="btn add-field" onClick={() => setFields([...own, blank()])}>
           {t("Add field")}
         </button>
         <label className="field">

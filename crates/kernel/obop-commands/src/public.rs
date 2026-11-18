@@ -367,6 +367,7 @@ impl Dispatcher {
     /// Register the public declarations of `module`. The models must be registered already; the
     /// gate runs again here, so a declaration that does not pass cannot take effect.
     pub fn register_public(&self, module: &str, specs: Vec<PublicSpec>) -> Result<(), String> {
+        self.claim(module);
         let models = self.models.read().unwrap();
         for s in &specs {
             let meta = models

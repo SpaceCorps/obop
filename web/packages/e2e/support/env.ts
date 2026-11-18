@@ -7,9 +7,14 @@ import { fileURLToPath } from "node:url";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 
+/** The debug build at the repository root: `obop.exe` on Windows, `obop` elsewhere. */
+export function defaultBinary(platform: NodeJS.Platform = process.platform): string {
+  return resolve(repoRoot, platform === "win32" ? "target/debug/obop.exe" : "target/debug/obop");
+}
+
 /** The binary under test: `$OBOP_BIN`, else the debug build at the repository root. */
 export function obopBinary(): string {
-  const bin = process.env.OBOP_BIN ?? resolve(repoRoot, "target/debug/obop");
+  const bin = process.env.OBOP_BIN ?? defaultBinary();
   if (!existsSync(bin))
     throw new Error(`obop binary not found at ${bin}; run \`cargo build\` or set OBOP_BIN`);
   return bin;

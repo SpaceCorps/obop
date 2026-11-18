@@ -345,3 +345,43 @@
 .tsgrid-foot .btn {
   min-block-size: 2.75rem;
 }
+
+/* A project (or what the line's record belongs to) under the task's name. */
+.tsgrid-parent {
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* With touch a typed cell is 16 px (the global input rule), so a locked one is too (S8). */
+@media (max-width: 40rem), (pointer: coarse) {
+  .tsgrid .tsgrid-locked {
+    font-size: max(1rem, 16px);
+  }
+}
+
+/* Seven 44 px days do not fit in 288 px: below 360 px the strip scrolls inside itself (R18). */
+@media (max-width: 22.49rem) {
+  .tsgrid-days {
+    position: relative;
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    /* The end fades, so a cut-off Sunday reads as "more to the right"; the spacer below lets
+       Sunday scroll clear of the fade. */
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
+  .tsgrid-days::after {
+    content: "";
+    flex: 0 0 1.5rem;
+  }
+  .tsgrid-day {
+    flex: 0 0 2.75rem;
+    scroll-snap-align: center;
+  }
+}

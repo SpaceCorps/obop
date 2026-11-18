@@ -4,11 +4,11 @@
 // from presentation.ts, actions that save first and ask what they need, sections, the full page,
 // the pager and the trail, locks and read-only values.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getCurrency, inSentence, t, useFocusTrap } from "@obop/ui";
+import { fmt, getCurrency, inSentence, t, useFocusTrap, useI18n } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
 import { ActionDialog } from "./ActionDialog.tsx";
 import { useData } from "./data.tsx";
-import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
+import { fromEdit, relocaleNumber, sameAsStored, toEdit, validate, type Edit } from "./edit.ts";
 import { recordExtensionOf, withoutOverridden } from "./extensions.ts";
 import { FormBody, flushLines, linesDirty, newLinesRegistry } from "./FormBody.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
@@ -33,16 +33,18 @@ import {
   copyValues,
   createdRefs,
   deleteBlocked,
+  keepShown,
   keyFigures,
   lockOf,
   sectionsOf,
   serverSet,
 } from "./recordLayout.ts";
+import { readonlyByState } from "./readonlyWhen.ts";
 import { RecordHeader } from "./RecordHeader.tsx";
 import { RelatedChips } from "./RelatedChips.tsx";
-import { nav } from "./route.ts";
+import { nav, useRoute } from "./route.ts";
 import "./registrations.ts";
-import { initialOption, isGoverned, moveRecord } from "./workflow.ts";
+import { canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -114,6 +116,24 @@ export function RecordPanel({
   const d = useData();
   const creating = row === null;
   const [draft, setDraft] = useState<Record<string, Edit>>({});
+  // A number typed before a change of language or region is written again with the new
+  // separators, so Save reads what was typed and not another number (D11).
+  const { locale } = useI18n();
+  const marks = useRef(fmt.separators());
+  useEffect(() => {
+    const now = fmt.separators();
+    const was = marks.current;
+    marks.current = now;
+    if (was.decimal === now.decimal && was.group === now.group) return;
+    setDraft((x) => {
+      const out = { ...x };
+      for (const f of fields)
+        if ((f.kind === "decimal" || f.kind === "money") && typeof out[f.name] === "string")
+          out[f.name] = relocaleNumber(out[f.name] as string, was, now);
+      return out;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
   // What went wrong is kept as names and as the server's own words, and the sentence is written
   // when it is drawn: text kept finished would stay in the language it was written in after a
   // change of language (the panel keeps its state through one).
@@ -176,7 +196,11 @@ export function RecordPanel({
       : toEdit(f, row ? row[f.name] : defaults[f.name], currency);
   const value = (f: FieldMeta): Edit => (f.name in draft ? draft[f.name]! : baseline(f));
   const masked = (f: FieldMeta) => !!row && isMasked(row[f.name]) && !(f.name in draft);
-  const changed = (f: FieldMeta) => f.name in draft && draft[f.name] !== baseline(f);
+  // An unset switch shows No: choosing No for it is a change that writes an explicit false.
+  const changed = (f: FieldMeta) =>
+    f.name in draft &&
+    (draft[f.name] !== baseline(f) ||
+      (!!row && f.kind === "bool" && !sameAsStored(f, row[f.name], draft[f.name]!)));
   const dirty = fields.some(changed);
   // Unsaved line edits count as unsaved changes: leaving asks first, and Save saves them too.
   const lines = useRef(newLinesRegistry()).current;
@@ -186,9 +210,11 @@ export function RecordPanel({
   // The save that is on its way: leaving waits for it instead of asking about it (`nav.saving`).
   const saving = useRef<Promise<void> | null>(null);
 
-  // A frozen record (meta `guard`) keeps only its mutable fields; the server says the same.
+  // A frozen record (meta `guard`) keeps only its mutable fields; the server says the same. A field
+  // whose `ui.readonly_when` holds on the saved record is shown read-only too (R6).
   const lock = lockOf(model, row);
-  const fixed = (f: FieldMeta) => !canEdit || serverSet(f) || (!!lock && !lock.mutable.has(f.name));
+  const fixed = (f: FieldMeta) =>
+    !canEdit || serverSet(f) || (!!lock && !lock.mutable.has(f.name)) || readonlyByState(f, row);
   const editable = fields.some((f) => !fixed(f) && !governed(f) && f !== statusField);
   const writable = (f: FieldMeta) => !fixed(f) && !masked(f);
 
@@ -198,15 +224,26 @@ export function RecordPanel({
   const bodyFields = fields.filter(
     (f) => f !== statusField && !(creating && serverSet(f)) && !shownInHeader.has(f.name),
   );
-  const sections = sectionsOf(model, bodyFields, {
-    creating,
-    row,
-    state: statusField ? String(value(statusField)) : undefined,
-    filled: (f) => {
-      const v = value(f);
-      return v !== "" && v !== false;
-    },
-  });
+  const shownSections = useRef(new Set<string>()).current;
+  // The field the address names (`&field=`, Q19): also a later link to another field of the
+  // record that is already open.
+  const [route] = useRoute();
+  const focusField =
+    row && route.id === row.id && fields.some((f) => f.name === route.field)
+      ? route.field
+      : undefined;
+  const sections = keepShown(
+    sectionsOf(model, bodyFields, {
+      creating,
+      row,
+      state: statusField ? String(value(statusField)) : undefined,
+      filled: (f) => {
+        const v = value(f);
+        return v !== "" && v !== false;
+      },
+    }),
+    shownSections,
+  );
   const chips = row ? subtitleOf(model, row, ctx).split(" · ").filter(Boolean).slice(0, 3) : [];
   const actions = row ? withoutOverridden(nextActions(model, row), ext.overrides) : NO_ACTIONS;
   const mayDelete = !!row && model.can_delete && !deleteBlocked(model, row);
@@ -385,9 +422,23 @@ export function RecordPanel({
     }
   }
 
+  /**
+   * A move by "Move to…" or the status bar that an action makes asks what the action button asks
+   * (its words, its confirm, a danger): the same move never runs unasked by another way (#104).
+   * True when the question is now open.
+   */
+  function askedFirst(f: FieldMeta, to: string): boolean {
+    if (!row) return false;
+    const m = canMove(model, f, row[f.name] as string | undefined, to, title, row);
+    if (!m.action || !m.allowed || !asks(m.action)) return false;
+    setAsking(m.action);
+    return true;
+  }
+
   async function setStatus(s: string) {
     if (!statusField || creating || busy) return;
     if (!governed(statusField) && !model.can_update) return;
+    if (askedFirst(statusField, s)) return;
     setBusy(true);
     setError(null);
     const out = await moveRecord(d.run, model, statusField, row, s, title);
@@ -414,9 +465,11 @@ export function RecordPanel({
       .filter((f): f is FieldMeta => !!f);
 
   /** An action button was pressed: ask first when it needs words or a confirm, else run it. */
+  const asks = (a: Command) =>
+    needsOf(a).length > 0 || !!a.ui?.confirm || actions.danger.some((x) => x.id === a.id);
   function requestAction(a: Command) {
     if (!row || busy) return;
-    if (needsOf(a).length || a.ui?.confirm || actions.danger.includes(a)) setAsking(a);
+    if (asks(a)) setAsking(a);
     else void runAction(a, {});
   }
 
@@ -465,7 +518,8 @@ export function RecordPanel({
   }
 
   async function moveField(f: FieldMeta, to: string) {
-    if (!row) return;
+    if (!row || busy) return;
+    if (askedFirst(f, to)) return;
     if (dirtyRef.current && (await save()) === null) return;
     setBusy(true);
     setError(null);
@@ -559,6 +613,7 @@ export function RecordPanel({
             <Panel key={i} model={model} fields={fields} row={row} busy={busy} />
           ))}
         <FormBody
+          focusField={focusField}
           lines={lines}
           model={model}
           fields={fields}
@@ -603,14 +658,14 @@ export function RecordPanel({
             needs={needsOf(asking)}
             question={
               asking.ui?.confirm ??
-              (actions.danger.includes(asking)
+              (actions.danger.some((x) => x.id === asking.id)
                 ? t("{action} “{name}”?", {
                     action: actionLabelFor(asking, inSentence(title)),
                     name: label,
                   })
                 : undefined)
             }
-            danger={actions.danger.includes(asking)}
+            danger={actions.danger.some((x) => x.id === asking.id)}
             currency={currency}
             onCancel={() => setAsking(null)}
             onConfirm={(values) => void runAction(asking, values)}

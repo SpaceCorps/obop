@@ -47,6 +47,7 @@ import { canMove, isGoverned } from "../workflow.ts";
 import { InlineEdit } from "./InlineEdit.tsx";
 import {
   cardMeta,
+  canSortBy,
   cardRoles,
   chooseColumns,
   dueLevel,
@@ -229,8 +230,13 @@ export function ListView(p: ViewProps) {
   const nCols = (phone ? 1 : cols.length) + 1;
 
   // The list's order: the person's sort, else the default order (marked, not chosen).
-  const shownSort: (Sort & { chosen: boolean }) | undefined = state.sort
-    ? { ...state.sort, chosen: true }
+  // A saved or linked sort on a picture or a file is not a sort (#89): the default order shows.
+  const ownSort =
+    state.sort && fields.some((f) => f.name === state.sort!.f && !canSortBy(f))
+      ? undefined
+      : state.sort;
+  const shownSort: (Sort & { chosen: boolean }) | undefined = ownSort
+    ? { ...ownSort, chosen: true }
     : order[0] && order[0].field !== "id"
       ? { f: order[0].field, dir: order[0].dir, chosen: false }
       : undefined;
@@ -739,7 +745,10 @@ export function ListView(p: ViewProps) {
     </Popover>
   );
 
-  const sortable = useMemo(() => listColumns(model, 100_000, { fields }), [model, fields]);
+  const sortable = useMemo(
+    () => listColumns(model, 100_000, { fields }).filter(canSortBy),
+    [model, fields],
+  );
   const sortMenu = (
     <Popover
       label={
@@ -898,6 +907,20 @@ export function ListView(p: ViewProps) {
               ) : (
                 cols.map((f, ci) => {
                   const s = shownSort?.f === f.name ? shownSort : undefined;
+                  const className = `${isNum(f) ? "num" : ""}${ci === 0 ? " titlecol" : ""}`;
+                  // A picture or a file cannot be sorted: its heading is only its name (#89).
+                  if (!canSortBy(f))
+                    return (
+                      <th
+                        key={f.name}
+                        role="columnheader"
+                        scope="col"
+                        className={className}
+                        title={describeFor(f)}
+                      >
+                        <span className="thlabel">{fieldTitle(f)}</span>
+                      </th>
+                    );
                   return (
                     <th
                       key={f.name}
@@ -906,7 +929,7 @@ export function ListView(p: ViewProps) {
                       aria-sort={
                         s?.dir === "asc" ? "ascending" : s?.dir === "desc" ? "descending" : "none"
                       }
-                      className={`${isNum(f) ? "num" : ""}${ci === 0 ? " titlecol" : ""}`}
+                      className={className}
                       title={describeFor(f)}
                     >
                       <button className="thbtn" onClick={() => sortBy(f)}>

@@ -119,7 +119,10 @@ fn check_json(
                 wrong()
             }
         }
-        (FieldKind::Date, J::String(t)) if is_valid_date(t) => Ok(()),
+        (FieldKind::Date, J::String(t)) if is_valid_date(t) => match unchanged {
+            true => Ok(()),
+            false => kinds::check_date_limits(model, f, t, say_value),
+        },
         // Decimals and instants are stored as canonical text (D72); every write path
         // canonicalises first, so anything else here is refused.
         (FieldKind::Decimal { .. } | FieldKind::Datetime, J::String(t)) => {
@@ -472,9 +475,12 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     kinds::canonicalise(def, &mut patch, Path::Write)?;
     hints::refuse_readonly(def, &patch, Some(&cur))?;
     check_fields_against(&unit, &look, &actor, def, &patch, false, Some(&cur))?;
+    // A field the caller sent in clear although it is shown masked counts as changed whatever
+    // its value (K63): the answer must not tell whether a guess equals what is stored.
+    let clear = |k: &str| super::frozen::sent_clear(def.name, k);
     let mut changed: Fields = patch
         .iter()
-        .filter(|(k, v)| cur.get(*k) != Some(*v))
+        .filter(|(k, v)| cur.get(*k) != Some(*v) || clear(k))
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
     let edited = !changed.is_empty();
@@ -486,7 +492,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     // as before.
     let alters = changed
         .iter()
-        .any(|(k, v)| cur.contains_key(k) || !v.is_null());
+        .any(|(k, v)| cur.contains_key(k) || !v.is_null() || clear(k));
     if let Some(why) = implied::not_mixed(&steps, alters) {
         return Err(why);
     }

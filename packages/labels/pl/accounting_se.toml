@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Księgowość Szwecja"
 description = "Szwedzka lokalizacja księgowości: dane firmy, serie dowodów, kody i pola VAT oraz raport VAT za okres zatwierdzany przez grupę accounting.approver. NIEZWERYFIKOWANE: nic nie sprawdzono w Skatteverket (SKV 4700) ani w SIE. Plan kont BAS nie jest dołączony; konta wybiera użytkownik. Kwoty w öre, stawki w punktach bazowych. Stąd nic nie jest składane."
+summary = "Dane szwedzkiej firmy, serie dowodów, kody i pola VAT oraz raport VAT. Wszystkie przypisania VAT NIEZWERYFIKOWANE."
 
 [labels.pl.model.accounting_se_company]
 name = "Firma"
