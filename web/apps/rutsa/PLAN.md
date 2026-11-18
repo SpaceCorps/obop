@@ -82,8 +82,9 @@ Checkpoint: `vp check` and `vp test` pass.
       trip at most; ids from a generator the caller passes in; fixes chosen by `acceptFixes` in the
       transaction of the write; at Stop the distance is `analyseTrack` of `@obop/trip-core` per
       segment (a pause starts a new segment, so the gap is not counted); tests
-- [ ] B7 `feat(rutsa): totals and formatting`: `core/present.ts` (km, duration, trips by day,
-      today and this month; times are stored in UTC, days follow the phone's time zone) and tests
+- [x] B7 `feat(rutsa): totals and formatting`: `core/present.ts` (km, clock time, duration, trips
+      by day, today and this month; times are stored in UTC, days follow the time zone given, the
+      phone's own; numbers and times through `Intl` for the language given, no words) and tests
 - [ ] B8 `feat(rutsa): English texts`: `i18n/index.ts`, `i18n/en.ts` (the notification of C4 and
       the screens of D use them)
 
@@ -211,3 +212,5 @@ D23).
 - 2026-11-18: B6 refuses a typed trip that ends before it starts or has a distance below 0 with a
   `RangeError` (D7 checks the input first); a Stop at a time before the start (a clock set back)
   ends the trip at its start.
+- 2026-11-18: B7 has no words (B8 comes after it): the duration is hours and minutes, the screens
+  write "Today" and "min"; a trip belongs to the day and month of its start, compared by day keys.
