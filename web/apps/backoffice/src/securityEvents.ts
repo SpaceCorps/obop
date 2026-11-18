@@ -58,6 +58,6 @@ export const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   plan_proposed: msg("Request sent for approval"),
   plan_approved: msg("Request approved"),
   plan_rejected: msg("Request rejected"),
-  plan_failed: msg("Approved request refused"),
+  plan_failed: msg("Approved request refused by the system"),
   plan_expired: msg("Request expired"),
 };
