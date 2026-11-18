@@ -669,12 +669,7 @@ export function RecordPanel({
               // record (with the no-way-back sentence when it is one); else the question of a
               // step with no way back (#102).
               actions.danger.some((x) => x.id === asking.id)
-                ? namedQuestionOf(
-                    model,
-                    asking,
-                    actionLabelFor(asking, inSentence(title)),
-                    label,
-                  )
+                ? namedQuestionOf(model, asking, actionLabelFor(asking, inSentence(title)), label)
                 : questionOf(model, asking)
             }
             danger={actions.danger.some((x) => x.id === asking.id)}
