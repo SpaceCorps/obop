@@ -48,8 +48,18 @@ beforeEach(async () => {
   hits = [];
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       hits.push(String(url));
+      if (String(url) === "/api/commands") {
+        // An agent's catalogue has no plan.count: the server answers it as for an unknown command.
+        const agent = String((init?.headers as Record<string, string>)?.authorization).includes(
+          "agent-token",
+        );
+        return new Response(
+          JSON.stringify({ commands: [{ id: agent ? "lead.list" : "plan.count" }] }),
+          { headers: { "content-type": "application/json" } },
+        );
+      }
       if (count === null) return new Response("{}", { status: 404 });
       return new Response(JSON.stringify({ value: count }), {
         headers: { "content-type": "application/json" },
@@ -116,6 +126,13 @@ describe("the top-bar button", () => {
     await act(async () => root.render(bar()));
     await settle();
     expect(entry()).toBeNull();
+  });
+
+  it("asks nothing of the plan commands for an agent's token: no count, and no refused call", async () => {
+    await act(async () => root.render(bar("agent-token")));
+    await settle();
+    expect(entry()).toBeNull();
+    expect(hits).toEqual(["/api/commands"]);
   });
 
   it("announces a change of the count politely, once, and not the first count", async () => {

@@ -3,7 +3,7 @@
 // the tab becomes visible, after the page decided a plan (`plansChanged`), and every 60 seconds
 // while the tab is visible. Nothing is read while the tab is hidden.
 import { useCallback, useEffect, useState } from "react";
-import { planCount, type PlanCount } from "./planApi.ts";
+import { mayCountPlans, planCount, type PlanCount } from "./planApi.ts";
 
 /** How often the count is read again while the tab is visible. */
 export const COUNT_EVERY_MS = 60_000;
@@ -32,6 +32,7 @@ export function usePlanCount(token: string): PlanCount | null {
   const read = useCallback(async () => {
     if (!token) return;
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    if (!(await mayCountPlans(token))) return;
     const r = await planCount(token);
     if (r.ok) setCount(r.value);
     else if (r.status !== 0) setCount(null);

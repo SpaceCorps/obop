@@ -76,6 +76,10 @@ describe("the count", () => {
       vi.stubGlobal(
         "fetch",
         vi.fn(async (url: string) => {
+          if (String(url) === "/api/commands")
+            return new Response(JSON.stringify({ commands: [{ id: "plan.count" }] }), {
+              headers: { "content-type": "application/json" },
+            });
           expect(String(url)).toMatch(/^\/api\/plan\/count/);
           reads++;
           return new Response(

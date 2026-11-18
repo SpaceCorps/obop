@@ -1,6 +1,6 @@
 ---
 title: "The approval loop"
-description: "How obop keeps a person in charge: an agent proposes a step that needs approval, the server returns a plan id and changes nothing, and a person approves it. Examples over REST and MCP."
+description: "How obop keeps a person in charge: an agent proposes a step that needs approval, the server returns a plan id and changes nothing, and a person approves it on the Approvals page. Examples over REST and MCP."
 lead: "Agents propose. Humans approve. This page shows the loop end to end."
 ---
 
@@ -17,9 +17,9 @@ lead: "Agents propose. Humans approve. This page shows the loop end to end."
 
 1. **The agent calls the command.** Same call as any other.
 2. **The server answers with a plan.** Nothing is changed. Over REST it is `202 Accepted` with `{"approval_required":true,"plan_id":"..."}`. Over MCP the tool result is `{"status":"approval_required","plan_id":"...","instruction":"..."}`. The CLI prints `error: ApprovalRequired { plan_id: "..." }` on stderr and exits with status 1.
-3. **The agent tells a person.** The plan id and a plain description of what it wanted to do and why. The agent cannot approve its own plan: an agent token asking to approve gets `404` (a token from the MCP browser sign-in gets `401`, because it works on `/mcp` only).
-4. **A person approves.** They sign in and call `POST /api/approve/{plan_id}` with their own session token.
-5. **The action runs.** The server checks again that the approver holds the action's group, that the proposing agent was allowed to do it, and that the record still allows the change. The result comes back to the approver.
+3. **The agent tells a person.** A plain description of what it wanted to do and why. The agent cannot approve its own plan: an agent token asking to approve gets `404` (a token from the MCP browser sign-in gets `401`, because it works on `/mcp` only). It can read the state of its own plan with `plan.get` (MCP: `plan__get`): waiting, approved, rejected, failed or expired, and the reason a person gave when they rejected it.
+4. **A person decides on the Approvals page.** The back office shows a button with the number of requests waiting for the person in its top bar (and an Approvals item in the account menu on a phone). The page lists what waits, oldest first. Opening a request shows what changes (each field from and to; a field the person may not read shows only "Set, not shown to you"), who asked and when, and when it runs out. The filled button names the act ("Approve and save", "Approve and delete"); Reject takes an optional reason of up to 300 characters, which the agent will read. Nothing is decided from the list, the badge or a notice: one request is on screen, with its change, when a person presses a button. A link in the notice "Sent for approval." opens that request. Scripts can do the same with a person's token: `POST /api/plan/list`, `/api/plan/get`, `/api/plan/approve` (with `seen_version` to approve only what was shown) and `/api/plan/reject`, or `POST /api/approve/{plan_id}` as before.
+5. **The action runs.** The server checks again that the approver holds the action's group, that the proposing agent was allowed to do it, and that the record still allows the change. If the record changed after the person opened the request, the approval is refused and the request stays waiting, so a person only ever approves what they saw. The result comes back to the approver.
 
 ## Example: posting an invoice
 
@@ -78,11 +78,11 @@ If the database refuses the approval before anything was changed (`503` with `"a
     "content": [
       {
         "type": "text",
-        "text": "{\"instruction\":\"Nothing has run. This step needs a human: ask a person with the right permissions to approve this plan in the back office (or POST /api/approve/<plan_id>), then check the record. Do not call this tool again for the same step.\",\"plan_id\":\"01a14660-1971-733a-8a1e-19e32cc341b2\",\"status\":\"approval_required\"}"
+        "text": "{\"instruction\":\"Nothing has run. A person must approve plan 01a14660-1971-733a-8a1e-19e32cc341b2 in the back office, on the Approvals page. Check it later with plan__get (plan.get with id). Do not call this tool again for the same step.\",\"plan_id\":\"01a14660-1971-733a-8a1e-19e32cc341b2\",\"status\":\"approval_required\"}"
       }
     ],
     "structuredContent": {
-      "instruction": "Nothing has run. This step needs a human: ask a person with the right permissions to approve this plan in the back office (or POST /api/approve/<plan_id>), then check the record. Do not call this tool again for the same step.",
+      "instruction": "Nothing has run. A person must approve plan 01a14660-1971-733a-8a1e-19e32cc341b2 in the back office, on the Approvals page. Check it later with plan__get (plan.get with id). Do not call this tool again for the same step.",
       "plan_id": "01a14660-1971-733a-8a1e-19e32cc341b2",
       "status": "approval_required"
     },
@@ -96,7 +96,8 @@ If the database refuses the approval before anything was changed (`503` with `"a
 ## Limits, honestly
 
 - A pending plan is kept sealed in the instance's database for 7 days, so a restart does not lose it, and any server process on that database can approve it. After 7 days it is forgotten: approving it answers 404 and the agent has to propose again.
-- There is no list-pending-plans call. The plan id travels from the agent to the approver by whatever channel you set up (a chat message, a ticket).
-- A person approving should read what the plan does. The plan id alone does not show it; ask the agent to describe the change in words before you approve.
+- A person sees the requests they may decide (the action's group and the right to read the record) and those of their own agents; a request they may not decide does not exist for them. The back office shows the count when the page is opened, when the window gets focus and once a minute: it does not push a message to a phone. Tell the person by whatever channel you set up (a chat message, a ticket) that something waits.
+- A decided request stays visible to the people who could decide it, and to the proposing agent through `plan.get`, for 30 days.
+- One agent can have 100 requests waiting; the 101st is refused until some are decided.
 
 See [Safety best practices](/docs/agents/safety/).

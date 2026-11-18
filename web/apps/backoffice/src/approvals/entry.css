@@ -23,3 +23,9 @@
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+/* On the narrowest phones the app's name needs the room: the account menu has the same way in. */
+@media (max-width: 21rem) {
+  .appr-entry {
+    display: none;
+  }
+}

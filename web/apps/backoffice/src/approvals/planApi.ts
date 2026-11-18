@@ -102,3 +102,33 @@ export const planReject = (token: string, id: string, reason: string) =>
 export const REASON_MAX = 300;
 /** Characters as the server counts them. */
 export const reasonLength = (s: string): number => Array.from(s.trim()).length;
+
+/**
+ * Whether this token may call the plan commands at all: a person's may, an agent's may not (the
+ * server answers an agent as for an unknown command, and a browser logs every such answer as an
+ * error). The catalogue of `GET /api/commands` is what the token may use; a reading that fails says
+ * yes, and the count then asks for itself. Asked once per token.
+ */
+const MAY = new Map<string, Promise<boolean>>();
+export function mayCountPlans(token: string): Promise<boolean> {
+  let known = MAY.get(token);
+  if (!known) {
+    known = (async () => {
+      try {
+        const res = await request("/api/commands", {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return true;
+        const body = (await res.json().catch(() => null)) as {
+          commands?: { id?: string }[];
+        } | null;
+        if (!Array.isArray(body?.commands)) return true;
+        return body.commands.some((c) => c.id === "plan.count");
+      } catch {
+        return true;
+      }
+    })();
+    MAY.set(token, known);
+  }
+  return known;
+}
