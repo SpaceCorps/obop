@@ -92,6 +92,8 @@ fn row(
         ("client_id", s(p["client_id"].as_str().unwrap_or(""))),
         ("enabled", flag(&p["enabled"])),
         ("secret_set", flag(&p["secret_set"])),
+        ("modified_at", s(p["updated_at"].as_str().unwrap_or(""))),
+        ("last_editor", s(p["updated_by"].as_str().unwrap_or(""))),
         ("break_glass", Value::Text(names.join(", "))),
         ("break_glass_enough", flag(&b["break_glass_enough"])),
     ])))
