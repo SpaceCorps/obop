@@ -26,8 +26,10 @@ const spec: ModuleSpec = {
 const PHONE = { width: 390, height: 844 };
 const TOUCH = 44;
 
-const panelOf = (page: Page) => page.getByRole("complementary", { name: "Approval request" });
-const dialogOf = (page: Page) => page.getByRole("dialog", { name: "Approval request" });
+// The plan's panel is named by its own heading ("An agent asks to ..."), so it is found by what it
+// is: beside the list an `aside`, over it (up to 1024 px) a dialog.
+const panelOf = (page: Page) => page.locator("aside[data-plan-panel]:not([role])");
+const dialogOf = (page: Page) => page.locator("aside[data-plan-panel][role=dialog]");
 
 /** The box of a control that must be on screen: its numbers, for the layout assertions. */
 async function boxOf(loc: Locator) {
@@ -149,6 +151,10 @@ test.describe("the approvals inbox on a phone", () => {
     await expect(ask).toContainText(`${reason.length} of 300 characters`);
     await ask.getByRole("button", { name: "Reject request" }).click();
     await expect(page.locator(".toast").filter({ hasText: "Rejected." })).toBeVisible();
+    // Focus is on the page's heading after the decision, never left on `body` (the button that
+    // opened the dialog is gone with the request).
+    await expect(page.getByRole("heading", { level: 1, name: "Approvals" })).toBeFocused();
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe("H1");
     expect((await api.run("ivy", `${MODEL}.get`, { id: rec.id })).state).toBe("doing");
     const told = await api.post("/api/plan/get", { id: second }, first.agent);
     expect(told.json.value.status).toBe("rejected");
@@ -237,5 +243,218 @@ test.describe("the approvals inbox on a laptop", () => {
       .getByRole("button", { name: "Reject request" })
       .click();
     await expect(page.locator(".toast").filter({ hasText: "Rejected." })).toBeVisible();
+  });
+});
+
+/**
+ * What the list and the detail must not do with a title that has no space in it (a part number, an
+ * e-mail address): push the page or the table's box sideways, break a short word in two, or put the
+ * date of a row on two lines. Everything is measured in the browser, from boxes and from the lines of
+ * a `Range`.
+ */
+async function listProblems(page: Page, opts: { oneLineDates: boolean }): Promise<string[]> {
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null))),
+  );
+  return page.evaluate((oneLineDates) => {
+    const out: string[] = [];
+    const de = document.documentElement;
+    if (de.scrollWidth > de.clientWidth + 1)
+      out.push(`the page scrolls sideways: ${de.scrollWidth} > ${de.clientWidth}`);
+    for (const box of document.querySelectorAll<HTMLElement>(".table-wrap, aside[data-plan-panel]"))
+      if (box.scrollWidth > box.clientWidth + 1)
+        out.push(
+          `${box.className || box.tagName} scrolls sideways: ${box.scrollWidth} > ${box.clientWidth}`,
+        );
+    const lines = (node: Node) => {
+      const r = document.createRange();
+      r.selectNodeContents(node);
+      return [...r.getClientRects()].filter((q) => q.width > 0).length;
+    };
+    if (oneLineDates)
+      for (const td of document.querySelectorAll<HTMLElement>("td.appr-nowrap"))
+        if (lines(td) !== 1) out.push(`"${td.textContent}" is on ${lines(td)} lines`);
+    // A word of fewer than 20 characters is never broken inside (hyphens and dashes may break).
+    const walker = document.createTreeWalker(
+      document.querySelector(".appr-page") ?? document.body,
+      NodeFilter.SHOW_TEXT,
+    );
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = n.textContent ?? "";
+      for (const m of text.matchAll(/[^\s\-–—]+/g)) {
+        if (m[0].length >= 20) continue;
+        const r = document.createRange();
+        r.setStart(n, m.index!);
+        r.setEnd(n, m.index! + m[0].length);
+        const pieces = [...r.getClientRects()].filter((q) => q.width > 0).length;
+        if (pieces > 1) out.push(`the word "${m[0]}" is broken in ${pieces} pieces`);
+      }
+    }
+    return out;
+  }, opts.oneLineDates);
+}
+
+/** 70 letters and digits with no space, unique to the test: a record title nobody can break by eye. */
+const unbroken = (uid: (p: string) => string) =>
+  (
+    uid("part").replace(/[^a-z0-9]/gi, "") +
+    "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz"
+  ).slice(0, 70);
+
+test.describe("the list and the detail with a title that has no space", () => {
+  test("a table that fits its box with dates on one line, at 390, 768 and 1280 px", async ({
+    page,
+    api,
+    uid,
+    scratchModule,
+    signIn,
+  }) => {
+    await scratchModule(spec);
+    const ivy = await api.token("ivy");
+    const issued = await api.post(
+      "/api/auth/agent-token",
+      { scopes: [`${MODEL}.user`, `${MODEL}.manager`], label: "long title agent" },
+      ivy,
+    );
+    const agent: string = issued.json.token;
+    const plain = uid("Chairs");
+    const long = unbroken(uid);
+    expect(long).toHaveLength(70);
+    expect(long).not.toMatch(/\s/);
+    for (const title of [plain, long]) {
+      const rec = await api.create("ivy", MODEL, { title, amount: 5 });
+      await api.run("ivy", `${MODEL}.start`, { id: rec.id });
+      await proposeFinish(api, agent, rec.id);
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signIn("ivy", "/");
+
+    // A phone: one block per row; the long title breaks inside its own line.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/#/approvals");
+    await expect(page.getByRole("button", { name: new RegExp(long.slice(0, 20)) })).toBeVisible();
+    expect(await listProblems(page, { oneLineDates: false }), "the list at 390 px").toEqual([]);
+    expect(await layoutProblems(page), "the list at 390 px").toEqual([]);
+
+    // A tablet and a laptop: a table, and the dates never wrap.
+    for (const [w, h] of [
+      [768, 1024],
+      [1280, 800],
+    ] as const) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.goto("/#/approvals");
+      await expect(page.getByRole("table")).toBeVisible();
+      expect(await listProblems(page, { oneLineDates: true }), `the list at ${w} px`).toEqual([]);
+      expect(await layoutProblems(page), `the list at ${w} px`).toEqual([]);
+    }
+
+    // The laptop with the detail open beside the list: the room is smaller, the same holds.
+    await page.getByRole("button", { name: new RegExp(plain) }).click();
+    await expect(panelOf(page)).toBeVisible();
+    await expect(page.getByRole("table")).toBeVisible();
+    expect(
+      await listProblems(page, { oneLineDates: true }),
+      "the list at 1280 px, panel open",
+    ).toEqual([]);
+    expect(await layoutProblems(page), "the list at 1280 px, panel open").toEqual([]);
+
+    // Leave nothing waiting that this test made.
+    for (const row of [plain, long]) {
+      await page.goto("/#/approvals");
+      await page.getByRole("button", { name: new RegExp(row.slice(0, 30)) }).click();
+      await panelOf(page).getByRole("button", { name: "Reject", exact: true }).click();
+      await page
+        .getByRole("alertdialog", { name: "Reject this request?" })
+        .getByRole("button", { name: "Reject request" })
+        .click();
+      await expect(page.locator(".toast").filter({ hasText: "Rejected." })).toBeVisible();
+    }
+  });
+
+  test("the detail at 320 and 390 px: no sideways scroll, a heading in full, a footer button that wraps", async ({
+    page,
+    api,
+    uid,
+    scratchModule,
+    signIn,
+  }) => {
+    await scratchModule({
+      ...spec,
+      actions: [
+        ...spec.actions!,
+        // The action's label is its name in words: this is the button a person reads.
+        {
+          name: "settle_the_claim_as_paid_and_close_it",
+          field: "state",
+          from: "new",
+          to: "done",
+          approval: true,
+        },
+      ],
+    });
+    const ivy = await api.token("ivy");
+    const issued = await api.post(
+      "/api/auth/agent-token",
+      { scopes: [`${MODEL}.user`, `${MODEL}.manager`], label: "narrow agent" },
+      ivy,
+    );
+    const agent: string = issued.json.token;
+    const rec = await api.create("ivy", MODEL, { title: unbroken(uid), amount: 5 });
+    await api.run("ivy", `${MODEL}.start`, { id: rec.id });
+    const plan = await proposeFinish(api, agent, rec.id);
+    const rec2 = await api.create("ivy", MODEL, { title: uid("Stool"), amount: 5 });
+    const r = await api.post(
+      `/api/${MODEL}/settle_the_claim_as_paid_and_close_it`,
+      { id: rec2.id },
+      agent,
+    );
+    expect(r.status, JSON.stringify(r.json)).toBe(202);
+    const settle: string = r.json.plan_id;
+
+    await page.setViewportSize({ width: 390, height: 700 });
+    await signIn("ivy", "/");
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 700 });
+      for (const id of [plan, settle]) {
+        await page.goto(`/#/approvals?id=${id}`);
+        const panel = dialogOf(page);
+        await expect(panel).toBeVisible();
+        await expect(panel.getByRole("button", { name: /^Approve and/ })).toBeVisible();
+        const sizes = await panel.evaluate((el) => {
+          const h = el.querySelector("h2")!;
+          const b = [...el.querySelectorAll<HTMLElement>("footer .btn")];
+          return {
+            panelOver: el.scrollWidth - el.clientWidth,
+            headingCut: h.scrollHeight - h.clientHeight,
+            buttonsOver: b.map((x) => x.scrollWidth - x.clientWidth),
+            buttonTexts: b.map((x) => x.textContent),
+          };
+        });
+        expect(sizes.panelOver, `the panel at ${width} px scrolls sideways`).toBeLessThanOrEqual(0);
+        expect(sizes.headingCut, "the heading is cut short").toBeLessThanOrEqual(1);
+        expect(
+          sizes.buttonsOver.every((o) => o <= 0),
+          `a footer button overflows: ${sizes.buttonTexts}`,
+        ).toBe(true);
+        expect(await layoutProblems(page), `the detail at ${width} px`).toEqual([]);
+      }
+    }
+    // The long action's label really is long, so the check above means something.
+    await expect(
+      dialogOf(page).getByRole("button", {
+        name: "Approve and settle the claim as paid and close it",
+      }),
+    ).toBeVisible();
+
+    // Leave nothing waiting that this test made.
+    for (const id of [plan, settle]) {
+      await page.goto(`/#/approvals?id=${id}`);
+      await dialogOf(page).getByRole("button", { name: "Reject", exact: true }).click();
+      await page
+        .getByRole("alertdialog", { name: "Reject this request?" })
+        .getByRole("button", { name: "Reject request" })
+        .click();
+      await expect(page.locator(".toast").filter({ hasText: "Rejected." })).toBeVisible();
+    }
   });
 });
