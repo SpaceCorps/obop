@@ -1571,6 +1571,11 @@ impl Dispatcher {
         ctx.via.approver = Some(approver.id.clone());
         ctx.via.agent = plan.principal.kind == PrincipalKind::Agent;
         let _approved = obop_storage::ctx::scope(ctx);
+        // The actions the call implies (D48) are calls of their own, through their wrappers:
+        // they see the approver as a direct call of the action does (docs/ISSUES.md O5).
+        for step in &mut pre {
+            stamp_approver(&mut step.input, approver);
+        }
         let result = self.run(&c, &plan.principal, vault, input, pre);
         // The store refused before the call changed anything: the plan goes back, or the
         // approver's retry (the 503 says to retry) would meet "not found" and the proposal would

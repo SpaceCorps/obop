@@ -109,6 +109,15 @@ description = "Le nom complet saisi par le signataire (preuve) ; signer_name res
 label = "Version du consentement"
 description = "Identifiant du texte de consentement : sa version, la langue de l'envoi (le lang du formulaire s'il désigne l'une des sept ; si le formulaire n'a aucun champ lang, celle de l'adresse ; sinon celle du navigateur, de l'instance, puis l'anglais ; pas une preuve de la page affichée) et les 8 premiers caractères hexadécimaux d'une empreinte des textes de la langue, par exemple v1-draft/fr/31aa87b0"
 
+[labels.fr.model.sign_request.field.evidence_check]
+label = "Contrôle des preuves"
+description = "Indique si les preuves d'une demande signée par lien correspondent encore à l'entrée du journal de sécurité écrite à la signature (depuis Sign 0.3.0, aussi le titre, le message et le nom demandé) : conforme, différent (modifié après la signature) ou aucune entrée. Calculé par get seulement, vide dans les listes. Pas infalsifiable : qui écrit dans la base peut changer les deux"
+
+[labels.fr.model.sign_request.field.evidence_check.options]
+matches = "Conforme"
+differs = "Différent"
+no_entry = "Aucune entrée"
+
 [labels.fr.model.sign_request.field.state]
 label = "Statut"
 description = "Statut de la demande : brouillon, envoyée, signée, déclinée, expirée"
