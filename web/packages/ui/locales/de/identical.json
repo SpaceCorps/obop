@@ -62,5 +62,10 @@
   "{field} ≤ {to}",
   "{field} ≥ {from}",
   "{quantity} × {price}",
-  "08:00"
+  "08:00",
+  "Host",
+  "Port",
+  "SMTP {host}:{port}",
+  "STARTTLS",
+  "TLS"
 ]

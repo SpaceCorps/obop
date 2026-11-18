@@ -1,0 +1,87 @@
+/* Customize > Mail (docs/spec/mail.md). */
+.mail-tab {
+  gap: var(--space-6);
+}
+.mail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mail-servers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.mail-server {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: grid;
+  gap: 6px;
+  background: var(--surface);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mail-server-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mail-badges {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mail-test {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mail-test > :first-child {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.mail-test > .hint {
+  flex-basis: 100%;
+}
+.mail-error {
+  color: var(--danger);
+}
+.mail-to {
+  overflow-wrap: anywhere;
+}
+/* A stacked row on a phone: the status badge does not wrap, so its cell takes the badge's width
+   (a long word such as "Fehlgeschlagen" ran past the card in a 6rem cell). */
+@media (max-width: 40rem) {
+  .table.stack-sm > tbody > tr > td.mail-status {
+    flex: 0 0 auto;
+  }
+}
+.mail-switches {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.mail-form {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+.mail-tab .hint a {
+  color: var(--accent-text, var(--accent));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* Tap targets of 44 px on touch: "Sends through" (SMTP relay / Provider) of the server form. */
+@media (pointer: coarse) {
+  .mail-form .switcher button {
+    min-block-size: 2.75rem;
+  }
+}

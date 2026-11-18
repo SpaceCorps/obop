@@ -20,6 +20,7 @@ mod door;
 mod fixes;
 mod hardening;
 mod history;
+mod m3;
 mod pinned;
 mod recheck;
 mod rules;

@@ -52,6 +52,7 @@ describe("the kinds of the security log", () => {
     const sign = listed.filter((k) => k.startsWith("sign_"));
     expect(sign.sort()).toEqual([
       "sign_link_issued",
+      "sign_link_restored",
       "sign_link_revoked",
       "sign_refused",
       "sign_signed",

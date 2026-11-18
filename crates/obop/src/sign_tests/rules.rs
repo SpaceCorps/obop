@@ -830,6 +830,8 @@ fn the_wrappers_rely_on_names_the_package_still_declares() {
         assert!(field(day).group.is_none(), "{day}");
     }
     owned.push(obop_commands::sign::HISTORY_FLAG);
+    // 0.3.0: the evidence check, which nobody writes (`readonly`) and only a manager reads.
+    owned.push("evidence_check");
     owned.sort_unstable();
     assert_eq!(grouped, owned);
     assert_eq!(

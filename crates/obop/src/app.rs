@@ -18,6 +18,8 @@ pub struct App {
     pub connectors: Arc<Connectors>,
     /// Payments for the web shop (D62): bank transfer, Stripe Checkout, the local demo.
     pub payments: Arc<obop_payments::Payments>,
+    /// Outbound mail (docs/spec/mail.md): servers, templates, the queue and its worker.
+    pub mail: Arc<obop_mail::Mail>,
 }
 
 /// The bundled catalog, plus a remote one when `OBOP_MARKETPLACE_URL` is set.
@@ -63,6 +65,8 @@ impl App {
             ConnectorConfig::from_env(),
         );
         ::connectors::register(&d, &store, &connectors);
+        let mail = obop_mail::Mail::new(connectors.clone(), obop_mail::Config::from_env());
+        mail.register(&d, &store);
         crate::sie::command::register(&d, &store);
         crate::vat::register(&d, &store);
         crate::invoice_posting::register(&d, &store);
@@ -90,6 +94,7 @@ impl App {
             invoicing::module(),
             mileage::module(),
             ::connectors::module(),
+            obop_mail::module(),
             obop_pkg::admin_module(),
         ];
         let market = marketplace();
@@ -120,6 +125,7 @@ impl App {
             market,
             connectors,
             payments,
+            mail,
         }
     }
 

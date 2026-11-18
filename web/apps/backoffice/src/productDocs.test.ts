@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   PRODUCT_DOC_TABS,
+  holdsMailServers,
   isPersonalTab,
   productDocsVisible,
   readProductDocsHidden,
@@ -23,6 +24,7 @@ const TABS = [
   { id: "updates" },
   { id: "build" },
   { id: "security" },
+  { id: "mail" },
   { id: "brand" },
   { id: "guide" },
 ];
@@ -67,6 +69,18 @@ describe("the tabs of Customize", () => {
         expect(isPersonalTab(t.id, docs), `${t.id} ${docs}`).toBe(
           visibleTabs(TABS, { isAdmin: false, docs }).some((x) => x.id === t.id),
         );
+  });
+
+  it("show the Mail tab to a person who may read the mail servers, and to no one else", () => {
+    const mailer = [{ models: [{ name: "outbound_mail" }, { name: "mail_server" }] }];
+    const sender = [{ models: [{ name: "outbound_mail" }] }];
+    expect(holdsMailServers(mailer)).toBe(true);
+    expect(holdsMailServers(sender)).toBe(false);
+    const shown = ids(visibleTabs(TABS, { isAdmin: false, docs: true, mail: true }));
+    expect(shown).toEqual(["theme", "security", "mail", "brand", "guide"]);
+    expect(ids(visibleTabs(TABS, { isAdmin: false, docs: true }))).not.toContain("mail");
+    for (const t of TABS) expect(isPersonalTab(t.id, true, true), t.id).toBe(shown.includes(t.id));
+    expect(isPersonalTab("mail", true)).toBe(false);
   });
 
   it("name exactly the Brand book and the Guide as the product documents", () => {
@@ -156,9 +170,9 @@ describe("the places that point at the Brand book or the Guide", () => {
     const text = (file: string) => readFileSync(join(SRC, file), "utf8");
     // 1. the tab filter; 2. personalCustomize
     expect(text("Customize.tsx")).toMatch(
-      /visibleTabs\(TABS, \{ isAdmin: p\.isAdmin, docs: productDocsVisible\(\) \}\)/,
+      /visibleTabs\(TABS, \{\s*isAdmin: p\.isAdmin,\s*docs: productDocsVisible\(\),/,
     );
-    expect(text("App.tsx")).toMatch(/isPersonalTab\(route\.tab \|\| route\.model, docsVisible\)/);
+    expect(text("App.tsx")).toMatch(/isPersonalTab\(route\.tab \|\| route\.model, docsVisible,/);
     // 3. the account-menu item
     expect(text("Chrome.tsx")).toMatch(/\.\.\.\(docs\s*\?\s*\[\{ label: t\("Brand book"\)/);
     // 4. the palette entry
