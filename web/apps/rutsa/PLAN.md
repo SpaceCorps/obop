@@ -230,3 +230,5 @@ D23).
   iOS Keychain class is `AFTER_FIRST_UNLOCK`, not "this device only", because the phone holds the
   only copy; `App.tsx` shows a line with the number of trips and the SQLCipher version until the
   screens of D replace it.
+- 2026-11-18: outside the plan, `docs/spec/rutsa.md` gained BR-35 and US-17 (an app lock with a PIN
+  or a password, before the release); not built in this stage.
