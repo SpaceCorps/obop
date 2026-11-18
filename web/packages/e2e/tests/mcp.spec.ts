@@ -148,7 +148,8 @@ test.describe("remote MCP over Streamable HTTP", () => {
     const out = proposed.result.structuredContent;
     expect(proposed.result.isError).toBe(false);
     expect(out.status).toBe("approval_required");
-    expect(out.instruction).toMatch(/human/);
+    expect(out.instruction).toMatch(/A person must approve plan .* on the Approvals page/);
+    expect(out.instruction).toContain("plan__get");
     expect((await api.list("sam", "lead")).some((l) => l.id === lead.id)).toBe(true);
 
     // The agent cannot approve its own plan.
