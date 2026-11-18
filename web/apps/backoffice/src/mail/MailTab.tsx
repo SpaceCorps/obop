@@ -16,6 +16,7 @@ import { call, search, type Row } from "../api.ts";
 import "./mail.css";
 import { href } from "../route.ts";
 import { serverMessage } from "../serverMessage.ts";
+import { mailRefusal } from "./refusal.ts";
 
 /* Customize > Mail (docs/spec/mail.md): the mail servers (an SMTP relay, or a provider reached through
    a Connectors connection), a test message, and the deliveries log. Everything goes through the
@@ -122,7 +123,7 @@ function draftOf(r: Server): Draft {
 
 const message = (r: { kind: string; message?: string }, fallback: string) =>
   r.kind === "error"
-    ? serverMessage(r.message) || fallback
+    ? mailRefusal(r.message) || serverMessage(r.message) || fallback
     : r.kind === "approval"
       ? t("Sent for approval.")
       : fallback;

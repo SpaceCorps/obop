@@ -251,6 +251,8 @@
   "A name that tells you what this connection is for.": "A name that tells you what this connection is for.",
   "A new {noun} starts as {state}; it moves on through actions": "A new {noun} starts as {state}; it moves on through actions",
   "A number the server assigns; it cannot be edited": "A number the server assigns; it cannot be edited",
+  "A password is never sent without TLS. Set Security to STARTTLS or TLS, leave the user name empty, or switch on “{allow}”.": "A password is never sent without TLS. Set Security to STARTTLS or TLS, leave the user name empty, or switch on “{allow}”.",
+  "A password is never sent without TLS. To switch off “{allow}”, also set Security to STARTTLS or TLS, or leave the user name empty.": "A password is never sent without TLS. To switch off “{allow}”, also set Security to STARTTLS or TLS, or leave the user name empty.",
   "A permission group, for example platform.admin or documents.user. One Drive is connected for the whole instance, so keep this narrow.": "A permission group, for example platform.admin or documents.user. One Drive is connected for the whole instance, so keep this narrow.",
   "A permission group. Creating folders, Google Docs and uploads needs this group and a sign-in that allowed it.": "A permission group. Creating folders, Google Docs and uploads needs this group and a sign-in that allowed it.",
   "A person with the right to create these records must approve it first.": "A person with the right to create these records must approve it first.",

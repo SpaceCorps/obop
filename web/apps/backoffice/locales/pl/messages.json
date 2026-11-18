@@ -251,6 +251,8 @@
   "A name that tells you what this connection is for.": "Nazwa, która mówi, do czego służy to połączenie.",
   "A new {noun} starts as {state}; it moves on through actions": "Nowy rekord ({noun}) zaczyna ze statusem „{state}”; dalej przechodzi przez akcje",
   "A number the server assigns; it cannot be edited": "Numer nadawany przez serwer; nie można go edytować",
+  "A password is never sent without TLS. Set Security to STARTTLS or TLS, leave the user name empty, or switch on “{allow}”.": "Hasło nigdy nie jest wysyłane bez TLS. Ustaw Bezpieczeństwo na STARTTLS lub TLS, zostaw nazwę użytkownika pustą albo włącz „{allow}”.",
+  "A password is never sent without TLS. To switch off “{allow}”, also set Security to STARTTLS or TLS, or leave the user name empty.": "Hasło nigdy nie jest wysyłane bez TLS. Aby wyłączyć „{allow}”, ustaw też Bezpieczeństwo na STARTTLS lub TLS albo zostaw nazwę użytkownika pustą.",
   "A permission group, for example platform.admin or documents.user. One Drive is connected for the whole instance, so keep this narrow.": "Grupa uprawnień, na przykład platform.admin lub documents.user. Dla całej instancji podłączony jest jeden Dysk, więc zachowaj wąski krąg osób.",
   "A permission group. Creating folders, Google Docs and uploads needs this group and a sign-in that allowed it.": "Grupa uprawnień. Tworzenie folderów, Dokumentów Google i przesyłanie plików wymaga tej grupy oraz logowania, które to zezwoliło.",
   "A person with the right to create these records must approve it first.": "Osoba uprawniona do tworzenia tych rekordów musi to najpierw zatwierdzić.",

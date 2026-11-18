@@ -251,6 +251,8 @@
   "A name that tells you what this connection is for.": "machine-drafted",
   "A new {noun} starts as {state}; it moves on through actions": "machine-drafted",
   "A number the server assigns; it cannot be edited": "machine-drafted",
+  "A password is never sent without TLS. Set Security to STARTTLS or TLS, leave the user name empty, or switch on “{allow}”.": "machine-drafted",
+  "A password is never sent without TLS. To switch off “{allow}”, also set Security to STARTTLS or TLS, or leave the user name empty.": "machine-drafted",
   "A permission group, for example platform.admin or documents.user. One Drive is connected for the whole instance, so keep this narrow.": "machine-drafted",
   "A permission group. Creating folders, Google Docs and uploads needs this group and a sign-in that allowed it.": "machine-drafted",
   "A person with the right to create these records must approve it first.": "machine-drafted",

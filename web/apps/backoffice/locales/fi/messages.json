@@ -251,6 +251,8 @@
   "A name that tells you what this connection is for.": "Nimi, josta näkee, mihin tätä yhteyttä käytetään.",
   "A new {noun} starts as {state}; it moves on through actions": "Uusi {noun} on aluksi tilassa {state}; se etenee toimintojen kautta",
   "A number the server assigns; it cannot be edited": "Palvelimen antama numero; sitä ei voi muokata",
+  "A password is never sent without TLS. Set Security to STARTTLS or TLS, leave the user name empty, or switch on “{allow}”.": "Salasanaa ei koskaan lähetetä ilman TLS:ää. Valitse Tietoturva-kohtaan STARTTLS tai TLS, jätä käyttäjätunnus tyhjäksi tai ota käyttöön ”{allow}”.",
+  "A password is never sent without TLS. To switch off “{allow}”, also set Security to STARTTLS or TLS, or leave the user name empty.": "Salasanaa ei koskaan lähetetä ilman TLS:ää. Jos haluat poistaa käytöstä kohdan ”{allow}”, valitse myös Tietoturva-kohtaan STARTTLS tai TLS tai jätä käyttäjätunnus tyhjäksi.",
   "A permission group, for example platform.admin or documents.user. One Drive is connected for the whole instance, so keep this narrow.": "Käyttöoikeusryhmä, esimerkiksi platform.admin tai documents.user. Koko instanssiin liitetään yksi Drive, joten pidä joukko suppeana.",
   "A permission group. Creating folders, Google Docs and uploads needs this group and a sign-in that allowed it.": "Käyttöoikeusryhmä. Kansioiden, Google Docs -tiedostojen ja latausten luominen vaatii tämän ryhmän ja kirjautumisen, joka sen salli.",
   "A person with the right to create these records must approve it first.": "Henkilön, jolla on oikeus luoda nämä tietueet, on ensin hyväksyttävä se.",
