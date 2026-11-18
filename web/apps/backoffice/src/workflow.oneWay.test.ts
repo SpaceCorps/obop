@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { provideCatalogue, setLanguage } from "@obop/ui";
 import type { Command, ModelMeta } from "./api.ts";
-import { oneWay, questionOf } from "./workflow.ts";
+import { namedQuestionOf, oneWay, questionOf } from "./workflow.ts";
 
 const act = (id: string, from: string | null, to: string, ui?: Command["ui"]): Command => ({
   id: `shift.${id}`,
@@ -79,5 +79,30 @@ describe("oneWay and questionOf", () => {
   it("asks nothing for an action that moves no state", () => {
     const send: Command = { id: "shift.notify", description: "", needs_approval: false };
     expect(questionOf(model([publish, send]), send)).toBeUndefined();
+  });
+});
+
+describe("namedQuestionOf, the danger question of a record's panel", () => {
+  const publish = act("publish", "draft", "published");
+  const cancel = act("cancel", "draft", "cancelled");
+
+  it("names the record and keeps the sentence of a step with no way back", () => {
+    expect(namedQuestionOf(model([publish, cancel]), cancel, "Cancel", "Early shift")).toBe(
+      "Cancel “Early shift”? There is no way back: afterwards no action moves it out of Cancelled.",
+    );
+  });
+
+  it("only names the record when there is a way back", () => {
+    const reopen = act("reopen", "cancelled", "draft");
+    expect(namedQuestionOf(model([publish, cancel, reopen]), cancel, "Cancel", "Early shift")).toBe(
+      "Cancel “Early shift”?",
+    );
+  });
+
+  it("keeps the package's own question first", () => {
+    const asked = act("cancel", "draft", "cancelled", { confirm: "Cancel the shift?" });
+    expect(namedQuestionOf(model([publish, asked]), asked, "Cancel", "Early shift")).toBe(
+      "Cancel the shift?",
+    );
   });
 });

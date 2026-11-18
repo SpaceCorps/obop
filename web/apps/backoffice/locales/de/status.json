@@ -10,6 +10,7 @@
   "(opens in a new tab)": "machine-drafted",
   "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.": "machine-drafted",
   "{action} “{name}”?": "machine-drafted",
+  "{action} “{name}”? There is no way back: afterwards no action moves it out of {state}.": "machine-drafted",
   "{action} {noun}": "machine-drafted",
   "{action} week ({count})": "machine-drafted",
   "{action}? There is no way back: afterwards no action moves it out of {state}.": "machine-drafted",

@@ -10,6 +10,7 @@
   "(opens in a new tab)": "(avautuu uuteen välilehteen)",
   "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.": "{account} on myyntisaamistili, eikä tätä laskua ole vielä kirjanpidossa, joten tili ei voi ottaa maksua vastaan. Valitse toinen tili, esimerkiksi tulotili. Mitään ei kirjattu.",
   "{action} “{name}”?": "{action}: ”{name}”?",
+  "{action} “{name}”? There is no way back: afterwards no action moves it out of {state}.": "{action}: ”{name}”? Paluuta ei ole: sen jälkeen mikään toiminto ei siirrä tietuetta pois tilasta {state}.",
   "{action} {noun}": "{noun}: {action}",
   "{action} week ({count})": "{action}: viikko ({count})",
   "{action}? There is no way back: afterwards no action moves it out of {state}.": "{action}? Paluuta ei ole: sen jälkeen mikään toiminto ei siirrä tietuetta pois tilasta {state}.",

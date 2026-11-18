@@ -10,6 +10,7 @@
   "(opens in a new tab)": "(öppnas i en ny flik)",
   "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.": "{account} är ett kundfordringskonto, och den här fakturan finns inte i huvudboken än, så kontot kan inte ta emot betalningen. Välj ett annat konto, till exempel ett intäktskonto. Inget bokfördes.",
   "{action} “{name}”?": "{action}: ”{name}”?",
+  "{action} “{name}”? There is no way back: afterwards no action moves it out of {state}.": "{action}: ”{name}”? Det finns ingen väg tillbaka: efteråt flyttar ingen åtgärd den ut ur {state}.",
   "{action} {noun}": "{action}: {noun}",
   "{action} week ({count})": "{action}: veckan ({count})",
   "{action}? There is no way back: afterwards no action moves it out of {state}.": "{action}? Det finns ingen väg tillbaka: efteråt flyttar ingen åtgärd den ut ur {state}.",

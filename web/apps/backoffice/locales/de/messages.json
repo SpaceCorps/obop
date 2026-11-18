@@ -10,6 +10,7 @@
   "(opens in a new tab)": "(öffnet in einem neuen Tab)",
   "{account} is a receivable, and this invoice is not in the ledger yet, so it cannot take the payment. Choose another account, such as a revenue account. Nothing was booked.": "{account} ist ein Forderungskonto, und diese Rechnung ist noch nicht im Hauptbuch, daher kann es die Zahlung nicht aufnehmen. Wählen Sie ein anderes Konto, etwa ein Erlöskonto. Es wurde nichts gebucht.",
   "{action} “{name}”?": "{action}: „{name}“?",
+  "{action} “{name}”? There is no way back: afterwards no action moves it out of {state}.": "{action}: „{name}“? Danach gibt es keinen Weg zurück: Keine Aktion bringt den Datensatz mehr aus {state} heraus.",
   "{action} {noun}": "{noun}: {action}",
   "{action} week ({count})": "{action}: Woche ({count})",
   "{action}? There is no way back: afterwards no action moves it out of {state}.": "{action}? Danach gibt es keinen Weg zurück: Keine Aktion bringt den Datensatz mehr aus {state} heraus.",

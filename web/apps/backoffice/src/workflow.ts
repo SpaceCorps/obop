@@ -215,6 +215,22 @@ export function questionOf(model: ModelMeta, a: Command): string | undefined {
   });
 }
 
+/**
+ * The question of a danger action in a record's panel, which names the record: the package's
+ * `confirm`, else "Mark spam “Johanna Becker”?", with the sentence of a step with no way back
+ * when it is one (as the kanban asks it).
+ */
+export function namedQuestionOf(model: ModelMeta, a: Command, action: string, name: string) {
+  const asked = actionConfirm(a);
+  if (asked) return asked;
+  if (!oneWay(model, a)) return t("{action} “{name}”?", { action, name });
+  const f = model.fields.find((x) => x.name === a.field);
+  return t(
+    "{action} “{name}”? There is no way back: afterwards no action moves it out of {state}.",
+    { action, name, state: optionLabel(a.to!, f) },
+  );
+}
+
 /** The label of an action button: "Mark won". */
 export const actionLabel = (a: Command) => actionTitle(a);
 
