@@ -23,12 +23,14 @@ export class Api {
   uninstalledAt: number | null = null;
   constructor(private request: APIRequestContext) {}
 
-  async post(path: string, body: object = {}, token?: string): Promise<Reply> {
+  /** `timeout` is the request's own, in ms (default: the action time-out of the config). */
+  async post(path: string, body: object = {}, token?: string, timeout?: number): Promise<Reply> {
     if (path === "/api/module/uninstall" && this.uninstalledAt === null)
       this.uninstalledAt = Date.now();
     const res = await this.request.post(path, {
       data: body,
       headers: token ? { authorization: `Bearer ${token}` } : {},
+      timeout,
     });
     return { status: res.status(), json: await res.json().catch(() => null) };
   }

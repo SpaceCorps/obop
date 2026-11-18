@@ -149,6 +149,8 @@ const installed = async (api: Api) =>
 // One instance backs the whole run and other specs install the same bundled packages, expecting
 // to find them absent: what a test of this spec installs is removed again after that test.
 const added: string[] = [];
+/** An uninstall drops the package's tables: longer than the default 10 seconds on a busy machine. */
+const UNINSTALL_TIMEOUT = 60_000;
 
 /** Install a bundled package unless it is there; a busy machine can take longer than the default
  *  10 seconds. The package and whatever it brought with it are noted for removal. */
@@ -167,11 +169,19 @@ async function install(api: Api, request: APIRequestContext, id: string) {
 }
 
 test.afterEach(async ({ api }) => {
+  if (!added.length) return;
   const root = await api.token("root");
+  const failed: string[] = [];
   for (const id of added.splice(0)) {
-    const r = await api.post("/api/module/uninstall", { id }, root);
-    expect.soft(r.status, `uninstall ${id}`).toBe(200);
+    // One refusal or a thrown call (a time-out) must not leave the ones after it installed.
+    try {
+      const r = await api.post("/api/module/uninstall", { id }, root, UNINSTALL_TIMEOUT);
+      if (r.status !== 200) failed.push(`${id}: status ${r.status}`);
+    } catch (e) {
+      failed.push(`${id}: ${e instanceof Error ? (e.message.split("\n")[0] ?? "") : String(e)}`);
+    }
   }
+  expect(failed, "modules this test could not uninstall").toEqual([]);
 });
 
 /** A connection that has run twice, so the detail has runs and flows to show. */
