@@ -660,6 +660,23 @@ describe("focus after a decision", () => {
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(document.activeElement).toBe(heading());
   });
+
+  it("takes focus back to the heading when a dialog's late focus return leaves it on the body", async () => {
+    await mount("#/approvals?id=p-update");
+    await decideThenListAnswers(document.querySelector("[data-testid=plan-approve]"));
+    for (let i = 0; i < 3; i++)
+      await act(async () => {
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+      });
+    expect(document.activeElement).toBe(heading());
+    // What the kit's dialog does after 300 ms when its opener is gone: nothing has focus.
+    heading()!.blur();
+    expect(document.activeElement).toBe(document.body);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    expect(document.activeElement).toBe(heading());
+  });
 });
 
 describe("approve", () => {

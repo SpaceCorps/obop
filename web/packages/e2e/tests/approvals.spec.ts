@@ -338,11 +338,16 @@ test.describe("the list and the detail with a title that has no space", () => {
     await signIn("ivy", "/");
 
     // A phone: one block per row; the long title breaks inside its own line.
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/#/approvals");
-    await expect(page.getByRole("button", { name: new RegExp(long.slice(0, 20)) })).toBeVisible();
-    expect(await listProblems(page, { oneLineDates: false }), "the list at 390 px").toEqual([]);
-    expect(await layoutProblems(page), "the list at 390 px").toEqual([]);
+    for (const [w, h] of [
+      [390, 844],
+      [320, 640],
+    ] as const) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.goto("/#/approvals");
+      await expect(page.getByRole("button", { name: new RegExp(long.slice(0, 20)) })).toBeVisible();
+      expect(await listProblems(page, { oneLineDates: false }), `the list at ${w} px`).toEqual([]);
+      expect(await layoutProblems(page), `the list at ${w} px`).toEqual([]);
+    }
 
     // A tablet and a laptop: a table, and the dates never wrap.
     for (const [w, h] of [
@@ -354,6 +359,15 @@ test.describe("the list and the detail with a title that has no space", () => {
       await expect(page.getByRole("table")).toBeVisible();
       expect(await listProblems(page, { oneLineDates: true }), `the list at ${w} px`).toEqual([]);
       expect(await layoutProblems(page), `the list at ${w} px`).toEqual([]);
+      if (w === 1280) {
+        // The Request column takes what the other three leave, not a fixed share of the table.
+        const share = await page.evaluate(() => {
+          const table = document.querySelector("table")!;
+          const first = document.querySelector("tbody tr td")!;
+          return first.getBoundingClientRect().width / table.getBoundingClientRect().width;
+        });
+        expect(share, "the Request column's share of the table at 1280 px").toBeGreaterThan(0.6);
+      }
     }
 
     // The laptop with the detail open beside the list: the room is smaller, the same holds.
