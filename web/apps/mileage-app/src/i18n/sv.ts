@@ -229,6 +229,9 @@ export const sv: Translation<"one"> = {
   "trip.distance": "Sträcka",
   "trip.distance.pending": "Servern har inte räknat ut den än",
   "trip.purpose": "Syfte",
+  "trip.purpose.change": "Du kan ändra syftet tills resan har skickats in.",
+  "trip.private.note":
+    "En privat resa skickas inte in för granskning: ingen granskare läser den. Servern sparar sträckan och tiderna, inte färdvägen. Om resan var i tjänsten, ändra syftet.",
   "trip.state": "Status",
   "trip.checks": "Serverns kontroller",
   "trip.check.seq_gap.one": "{count} lucka i numreringen av punkterna",

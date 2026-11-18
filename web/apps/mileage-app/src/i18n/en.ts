@@ -219,6 +219,9 @@ export const en = {
   "trip.distance": "Distance",
   "trip.distance.pending": "The server has not counted it yet",
   "trip.purpose": "Purpose",
+  "trip.purpose.change": "You can change the purpose until the trip is submitted.",
+  "trip.private.note":
+    "A private trip is not submitted for review: no reviewer reads it. The server keeps its distance and times, not its route. If the trip was for work, change the purpose.",
   "trip.state": "State",
   "trip.checks": "Checks by the server",
   "trip.check.seq_gap.one": "{count} gap in the numbering of the points",

@@ -249,12 +249,21 @@ pub(crate) fn run(
         }
         _ => {}
     }
+    // A private trip keeps its distance and its times, not its route: the points and the start and
+    // end positions go in the same step as the state leaves `recording` (PT, owner answer of
+    // 2026-11-18). While it records, the points are needed to count the distance at `end`.
+    let route = if policy::text(&trip, "purpose") == policy::PRIVATE && to != policy::RECORDING {
+        drop_route(db, &id, &mut patch)?
+    } else {
+        Vec::new()
+    };
     let mut batch = vec![Op::Patch {
         model: policy::TRIP.into(),
         id: id.clone(),
         patch: patch.clone(),
         expect: vec![("state".into(), J::from(policy::state(&trip)))],
     }];
+    batch.extend(route);
     if action == "discard_stuck" {
         // Who discarded it is in the log, written in the same batch as the discard (no change
         // history keeps it yet, D75 is not active): the entry exists exactly when the discard
@@ -284,6 +293,77 @@ pub(crate) fn run(
         trip.insert(k, v);
     }
     answer(db, &who, &id, trip)
+}
+
+/// What a private trip leaves behind of its route: the start and end positions are cleared in
+/// `patch`, and the answer is the deletes of its points. The distance, the times and the checks
+/// stay. Nothing else deletes a point: the commands refuse it for everyone.
+fn drop_route(db: &Db, id: &str, patch: &mut Fields) -> Result<Vec<Op>, String> {
+    for f in policy::TRIP_POSITIONS {
+        patch.insert(f.into(), J::Null);
+    }
+    Ok(db
+        .find(policy::POINT, "trip", &J::from(id))?
+        .into_iter()
+        .map(|(point, _)| Op::Delete {
+            model: policy::POINT.into(),
+            id: point,
+        })
+        .collect())
+}
+
+/// After an `update`: a trip that is private and no longer recording holds no route. This is where
+/// a driver who marks an ended or rejected trip private loses its route, in the call that marks it
+/// (under the dispatcher's lock, as the update itself); a later update finds nothing left to drop.
+/// The answer is the trip without the positions, with no points.
+pub(crate) fn after_update(db: &Db, input: &Value, mut out: Value) -> Result<Value, String> {
+    let id = text(input, "id");
+    let Some(trip) = db.get(policy::TRIP, &id)? else {
+        return Ok(out);
+    };
+    let st = policy::state(&trip);
+    if policy::text(&trip, "purpose") != policy::PRIVATE || st == policy::RECORDING {
+        return Ok(out);
+    }
+    let mut patch = Fields::new();
+    let route = drop_route(db, &id, &mut patch)?;
+    let holds = !route.is_empty()
+        || policy::TRIP_POSITIONS
+            .iter()
+            .any(|f| !matches!(trip.get(*f), None | Some(J::Null)));
+    if holds {
+        let mut batch = vec![Op::Patch {
+            model: policy::TRIP.into(),
+            id: id.clone(),
+            patch,
+            expect: vec![
+                ("state".into(), J::from(st)),
+                ("purpose".into(), J::from(policy::PRIVATE)),
+            ],
+        }];
+        batch.extend(route);
+        db.apply_checked(&batch).map_err(|e| match e {
+            ApplyError::Conflict { .. } => errors::coded(
+                code::STATE_CONFLICT,
+                "the trip changed while its route was removed; send the update again",
+            ),
+            ApplyError::Storage(e) => e,
+        })?;
+    }
+    if let Value::Map(m) = &mut out {
+        for f in policy::TRIP_POSITIONS {
+            if m.contains_key(f) {
+                m.insert(f.into(), Value::Null);
+            }
+        }
+        if m.contains_key("point_count") {
+            m.insert("point_count".into(), Value::Int(0));
+        }
+        if m.contains_key("max_seq") {
+            m.insert("max_seq".into(), Value::Null);
+        }
+    }
+    Ok(out)
 }
 
 /// The answer of an action: the trip as `get` gives it (its computed fields filled in), as the

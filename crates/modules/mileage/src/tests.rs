@@ -3154,3 +3154,87 @@ fn a_private_trip_is_not_submitted_to_a_review_no_reviewer_could_see() {
         r.ok(&rev, "mileage_trip.confirm", json!({"id": id}));
     });
 }
+
+#[test]
+fn a_private_trip_keeps_its_distance_and_times_but_not_its_route() {
+    each_rig(|r| {
+        let (ann, boss) = (driver("ann"), admin("bo"));
+        let positions = |id: &str| {
+            let row = r.trip_row(id);
+            policy::TRIP_POSITIONS
+                .iter()
+                .filter(|f| !row.get(**f).is_none_or(J::is_null))
+                .count()
+        };
+        // Marked private while it records: the points count the distance at `end`, then go.
+        let id = r.recording(&ann);
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "private"}),
+        );
+        r.walk(&ann, &id, 1, 10);
+        let ended = r.ok(
+            &ann,
+            "mileage_trip.end",
+            json!({"id": id, "expected_points": 10, "last_seq": 10}),
+        );
+        assert_eq!(ended["state"], "ended");
+        assert!(
+            ended["distance_m"].as_str().is_some_and(|d| d != "0.00"),
+            "{ended}"
+        );
+        assert_eq!(ended["point_count"], 0);
+        assert!(ended["start_lat"].is_null(), "{ended}");
+        assert_eq!(r.points_stored(&id), 0);
+        assert_eq!(positions(&id), 0);
+        assert!(!r.trip_row(&id)["ended_at"].is_null());
+        // An administrator finds no route either.
+        let got = r.ok(&boss, "mileage_trip.get", json!({"id": id}));
+        assert_eq!(got["point_count"], 0, "{got}");
+
+        // Marked private after it ended: the route goes in the same call.
+        let id = r.ended(&ann);
+        assert_eq!(r.points_stored(&id), 10);
+        let distance = r.trip_row(&id)["distance_m"].clone();
+        let made = r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "private"}),
+        );
+        assert_eq!(made["point_count"], 0, "{made}");
+        assert!(made["end_lat"].is_null(), "{made}");
+        assert_eq!(r.points_stored(&id), 0);
+        assert_eq!(positions(&id), 0);
+        // A trip marked private by mistake goes back to business and is submitted with its
+        // distance, until it is submitted.
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "business"}),
+        );
+        r.ok(&ann, "mileage_trip.submit", json!({"id": id}));
+        assert_eq!(r.trip_row(&id)["distance_m"], distance);
+
+        // A private trip that is discarded while it records leaves no route either.
+        let id = r.recording(&ann);
+        r.walk(&ann, &id, 1, 3);
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "private"}),
+        );
+        assert_eq!(r.points_stored(&id), 3);
+        r.ok(
+            &ann,
+            "mileage_trip.discard",
+            json!({"id": id, "discard_reason": "test drive"}),
+        );
+        assert_eq!(r.points_stored(&id), 0);
+
+        // A business trip keeps its route.
+        let id = r.ended(&ann);
+        assert_eq!(r.points_stored(&id), 10);
+        assert_eq!(positions(&id), 4);
+    });
+}

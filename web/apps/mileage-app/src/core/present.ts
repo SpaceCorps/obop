@@ -1,6 +1,8 @@
 import { formatNumber, t, tp, type MessageKey, type PluralKey } from "../i18n/index.ts";
 import type { SignalNote } from "./signal.ts";
 import { hasWork } from "./store.ts";
+
+export { canChangePurpose } from "./store.ts";
 import type { LocalTrip, ServerState } from "./types.ts";
 
 /** What a trip is, in the words the driver sees (the keys of `state.*` in the catalogue). */

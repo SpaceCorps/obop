@@ -70,6 +70,8 @@ export function TripReview({ model, row }: RecordExtProps) {
   const km = kmOf(row.distance_m);
   const minutes = minutesBetween(row.started_at, row.ended_at);
   const purposeField = model.fields.find((f) => f.name === "purpose");
+  // A private trip is never reviewed, and the server keeps no route of it once it has ended.
+  const isPrivate = row.purpose === "private";
   const day = inZone(row.started_at, {
     weekday: "short",
     day: "numeric",
@@ -109,6 +111,13 @@ export function TripReview({ model, row }: RecordExtProps) {
             {t("Check the route and the details, then confirm or reject the trip.")}
           </p>
         )}
+        {isPrivate && (state === "ended" || state === "rejected") && (
+          <p className="trip-ask" data-testid="trip-private-note">
+            {t(
+              "A private trip is not submitted for review: no reviewer reads it. If the trip was for work, change its purpose.",
+            )}
+          </p>
+        )}
       </div>
 
       <figure className="trip-map">
@@ -136,7 +145,9 @@ export function TripReview({ model, row }: RecordExtProps) {
             <Icon name="info" size={16} />
             {state === "recording"
               ? t("The trip is still being recorded.")
-              : t("No route: this trip has no points.")}
+              : isPrivate
+                ? t("A private trip keeps no route: only its distance and times.")
+                : t("No route: this trip has no points.")}
           </p>
         )}
         {drawn.path && (

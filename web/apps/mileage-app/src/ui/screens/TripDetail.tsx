@@ -1,6 +1,8 @@
 import { Banner, Button, Field, Row, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
+import { View } from "react-native";
 import {
+  canChangePurpose,
   canDiscard,
   canSubmit,
   formatDistance,
@@ -10,7 +12,8 @@ import {
   tripStatus,
 } from "../../core/present.ts";
 import { formatDateTime, t, type MessageKey } from "../../i18n/index.ts";
-import { discardTrip, retryTrip, submitTrip } from "../../native/actions.ts";
+import { changeTripPurpose, discardTrip, retryTrip, submitTrip } from "../../native/actions.ts";
+import { PURPOSES } from "../../core/types.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { useOutbox } from "../hooks.ts";
 import type { Nav } from "../router.ts";
@@ -190,7 +193,31 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
           />
           <Row title={t("trip.started")} value={when(trip.startedAt) ?? ""} />
           {trip.endedAt ? <Row title={t("trip.ended")} value={when(trip.endedAt) ?? ""} /> : null}
-          <Row title={t("trip.purpose")} value={t(`purpose.${trip.purpose}` as MessageKey)} />
+          {canChangePurpose(trip) ? (
+            <>
+              <Text variant="label">{t("trip.purpose")}</Text>
+              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                {PURPOSES.map((p) => (
+                  <Button
+                    key={p}
+                    label={t(`purpose.${p}` as MessageKey)}
+                    variant={p === trip.purpose ? "primary" : "secondary"}
+                    selected={p === trip.purpose}
+                    onPress={() => act(() => changeTripPurpose(trip.clientTripId, p))}
+                    testID={`trip-purpose-${p}`}
+                  />
+                ))}
+              </View>
+              <Text tone="muted">{t("trip.purpose.change")}</Text>
+            </>
+          ) : (
+            <Row title={t("trip.purpose")} value={t(`purpose.${trip.purpose}` as MessageKey)} />
+          )}
+          {trip.purpose === "private" && status !== "recording" && !trip.discardDone ? (
+            <Text tone="muted" testID="private-note">
+              {t("trip.private.note")}
+            </Text>
+          ) : null}
           {trip.integrity ? (
             <Row title={t("trip.checks")} subtitle={integrityLines(trip.integrity).join("\n")} />
           ) : null}

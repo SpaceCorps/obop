@@ -21,7 +21,13 @@ export interface TripApi {
   createPoints(rows: readonly PointRow[], key: string): Promise<void>;
   updateTrip(
     id: string,
-    fields: { endedAt?: string; expectedPoints?: number; lastSeq?: number; discardReason?: string },
+    fields: {
+      endedAt?: string;
+      expectedPoints?: number;
+      lastSeq?: number;
+      discardReason?: string;
+      purpose?: Purpose;
+    },
   ): Promise<void>;
   endTrip(id: string): Promise<RemoteTrip>;
   submitTrip(id: string): Promise<RemoteTrip>;
@@ -167,6 +173,7 @@ export function createTripApi(client: ObopClient, options: TripApiOptions = {}):
       if (fields.expectedPoints !== undefined) input.expected_points = fields.expectedPoints;
       if (fields.lastSeq !== undefined) input.last_seq = fields.lastSeq;
       if (fields.discardReason !== undefined) input.discard_reason = fields.discardReason;
+      if (fields.purpose !== undefined) input.purpose = fields.purpose;
       await run("mileage_trip", "update", input);
     },
 
