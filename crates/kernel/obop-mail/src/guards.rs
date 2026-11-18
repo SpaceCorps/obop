@@ -75,6 +75,22 @@ fn server_input(mail: Arc<Mail>, create: bool) -> Guard {
                 .get(SERVER, &id)?
                 .ok_or_else(|| format!("no mail server {id}"))?
         };
+        // The switch that lets a relay on the business's own network in (docs/spec/mail.md 6):
+        // only a person turns it on; an agent cannot, not even as a proposal (an approved
+        // proposal runs as the agent, so this refuses it then too). Turning it off is always
+        // allowed.
+        let private_on = matches!(m.get("allow_private_network"), Some(Value::Bool(true)));
+        if private_on && !p.is_person() {
+            return Err(
+                "allow_private_network: only a person turns this on, in the Mail servers form"
+                    .into(),
+            );
+        }
+        let private_network = match m.get("allow_private_network") {
+            Some(Value::Bool(b)) => *b,
+            Some(_) => false,
+            None => stored.get("allow_private_network") == Some(&J::Bool(true)),
+        };
         let get = |k: &str| after(&m, &stored, k);
         let kind = get("kind");
         match kind.as_str() {
@@ -103,8 +119,10 @@ fn server_input(mail: Arc<Mail>, create: bool) -> Guard {
                         || host
                             .parse::<std::net::IpAddr>()
                             .is_ok_and(|ip| ip.is_loopback());
-                    if !loopback {
-                        return Err("a password is never sent without TLS: choose starttls or tls, or leave the user name empty".into());
+                    // With the switch on, the send step still sends a password without TLS
+                    // only when every address of the relay is on the business's own network.
+                    if !loopback && !private_network {
+                        return Err("a password is never sent without TLS: choose starttls or tls, leave the user name empty, or allow the business's own network".into());
                     }
                 }
             }
@@ -211,7 +229,43 @@ fn template_input() -> Guard {
     })
 }
 
+/// The audit line of the switch `allow_private_network`: every create or update that names it
+/// writes a `security_event` of kind `mail_private_network` once the change has committed (an
+/// observer runs only after a command succeeded), with the server and the new value.
+fn audit_private_network(mail: Arc<Mail>) -> Box<obop_commands::Observer> {
+    Box::new(move |cmd, p, input, out| {
+        if cmd != format!("{SERVER}.create") && cmd != format!("{SERVER}.update") {
+            return;
+        }
+        let Value::Map(m) = input else { return };
+        let Some(Value::Bool(on)) = m.get("allow_private_network") else {
+            return;
+        };
+        let id = match (m.get("id"), out) {
+            (Some(Value::Text(id)), _) => id.clone(),
+            (_, Value::Map(o)) => match o.get("id") {
+                Some(Value::Text(id)) => id.clone(),
+                _ => String::new(),
+            },
+            _ => String::new(),
+        };
+        let detail = format!(
+            "mail server {id}: a relay on the business's own network is {}",
+            if *on { "allowed" } else { "refused" }
+        );
+        obop_commands::audit::record_event(
+            &*mail.backend,
+            mail.now_secs(),
+            "",
+            "mail_private_network",
+            &p.id,
+            &detail,
+        );
+    })
+}
+
 pub fn install(d: &Arc<Dispatcher>, mail: &Arc<Mail>) {
+    d.observe("mail", audit_private_network(mail.clone()));
     d.add_guard(
         "mail",
         &format!("{SERVER}.create"),

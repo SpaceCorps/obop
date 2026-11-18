@@ -184,6 +184,10 @@ starttls = "STARTTLS"
 tls = "TLS"
 none = "Ei mitään"
 
+[labels.fi.model.mail_server.field.allow_private_network]
+label = "Salli oma verkko"
+description = "SMTP: välityspalvelin saa olla yrityksen omassa verkossa (yksityinen osoite, kuten 10.0.0.5), ja suojaus none hyväksytään siellä; oletuksena pois, vain henkilö kytkee sen päälle (docs/spec/mail.md 6)"
+
 [labels.fi.model.mail_server.field.username]
 label = "Käyttäjätunnus"
 description = "SMTP: käyttäjätunnus; tyhjä tarkoittaa, ettei kirjauduta"

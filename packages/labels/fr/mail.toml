@@ -184,6 +184,10 @@ starttls = "STARTTLS"
 tls = "TLS"
 none = "Aucune"
 
+[labels.fr.model.mail_server.field.allow_private_network]
+label = "Autoriser notre propre réseau"
+description = "SMTP : le relais peut se trouver sur le réseau de l’entreprise (une adresse privée comme 10.0.0.5), et la sécurité none y est acceptée ; désactivé par défaut, seule une personne l’active (docs/spec/mail.md 6)"
+
 [labels.fr.model.mail_server.field.username]
 label = "Nom d’utilisateur"
 description = "SMTP : nom d’utilisateur ; vide signifie sans authentification"

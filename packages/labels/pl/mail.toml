@@ -184,6 +184,10 @@ starttls = "STARTTLS"
 tls = "TLS"
 none = "Brak"
 
+[labels.pl.model.mail_server.field.allow_private_network]
+label = "Zezwól na własną sieć"
+description = "SMTP: przekaźnik może być w sieci firmy (adres prywatny, np. 10.0.0.5), a zabezpieczenie none jest tam akceptowane; domyślnie wyłączone, włącza je tylko osoba (docs/spec/mail.md 6)"
+
 [labels.pl.model.mail_server.field.username]
 label = "Nazwa użytkownika"
 description = "SMTP: nazwa użytkownika; puste oznacza brak uwierzytelniania"

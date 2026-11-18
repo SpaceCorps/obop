@@ -184,6 +184,10 @@ starttls = "STARTTLS"
 tls = "TLS"
 none = "Keine"
 
+[labels.de.model.mail_server.field.allow_private_network]
+label = "Eigenes Netzwerk erlauben"
+description = "SMTP: Das Relay darf im eigenen Netzwerk des Unternehmens liegen (eine private Adresse wie 10.0.0.5), und die Sicherheit none ist dort erlaubt; standardmäßig aus, nur eine Person schaltet es ein (docs/spec/mail.md 6)"
+
 [labels.de.model.mail_server.field.username]
 label = "Benutzername"
 description = "SMTP: Benutzername; leer bedeutet keine Anmeldung"

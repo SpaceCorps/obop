@@ -184,6 +184,10 @@ starttls = "STARTTLS"
 tls = "TLS"
 none = "Ninguna"
 
+[labels.es.model.mail_server.field.allow_private_network]
+label = "Permitir la red propia"
+description = "SMTP: el relé puede estar en la red propia de la empresa (una dirección privada como 10.0.0.5) y allí se acepta la seguridad none; desactivado por defecto, solo una persona lo activa (docs/spec/mail.md 6)"
+
 [labels.es.model.mail_server.field.username]
 label = "Nombre de usuario"
 description = "SMTP: nombre de usuario; vacío significa sin autenticación"
