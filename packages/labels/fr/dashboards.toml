@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Tableaux de bord"
-description = "Tableaux de bord et leurs tuiles, stockés comme données pour qu’une interface les affiche. Un tableau de bord reste privé à son propriétaire et à dashboards.manager tant qu’il n’est pas partagé. Une tuile définit son type, le modèle lu, le champ de mesure, l’agrégation, le regroupement, un filtre et une position. Le package ne stocke que la définition et ne calcule rien."
+description = "Tableaux de bord et leurs tuiles, stockés comme données pour qu’une interface les affiche. Un tableau de bord reste privé à son propriétaire et à dashboards.manager tant qu’il n’est pas partagé. Une tuile définit son type, le modèle lu, le champ de mesure, l’agrégation, le regroupement, la période, un filtre et une position. Le package ne stocke que la définition et ne calcule rien."
 summary = "Tableaux de bord et tuiles stockés comme données, que le back-office affiche en indicateurs, graphiques et tableaux."
 
 [labels.fr.model.dashboards_dashboard]

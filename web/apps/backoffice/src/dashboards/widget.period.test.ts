@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ModelMeta } from "../api.ts";
 import { resolve, widgetDim, type Widget } from "./widget.ts";
+import { suggestionsOf } from "./WidgetForm.tsx";
 
 const orders: ModelMeta = {
   name: "sale_order",
@@ -47,5 +48,15 @@ describe("the period of a dated split", () => {
     expect(bucketOf(tile("iso_week"))).toBe("iso_week");
     expect(bucketOf(tile("year"))).toBe("year");
     expect(bucketOf(tile("day"))).toBe("day");
+  });
+});
+
+describe("the suggestions of the tile form", () => {
+  it("set the whole tile, so Per month of puts a chosen period back to month", () => {
+    const all = suggestionsOf(orders, orders.fields);
+    const perMonth = all.find((s) => s.label.startsWith("Per month of"));
+    expect(perMonth?.values.group_by).toBe("ordered_at");
+    expect(perMonth?.values.period).toBe("");
+    for (const s of all) expect(s.values.period, s.label).toBe("");
   });
 });

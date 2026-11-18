@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Koontinäytöt"
-description = "Koontinäytöt ja niiden ruudut tallennettuna tietona käyttöliittymän piirrettäväksi. Koontinäytöllä on otsikko ja omistaja, ja se on yksityinen (myös dashboards.manager näkee sen), ellei sitä jaeta. Ruutu määrittelee lajin, luettavan tietuetyypin, mittarikentän, yhdistämistavan, ryhmittelyn, suodattimen ja järjestyksen. Paketti ei tarkista tietuetyyppiä tai kenttiä eikä laske mitään."
+description = "Koontinäytöt ja niiden ruudut tallennettuna tietona käyttöliittymän piirrettäväksi. Koontinäytöllä on otsikko ja omistaja, ja se on yksityinen (myös dashboards.manager näkee sen), ellei sitä jaeta. Ruutu määrittelee lajin, luettavan tietuetyypin, mittarikentän, yhdistämistavan, ryhmittelyn, jakson, suodattimen ja järjestyksen. Paketti ei tarkista tietuetyyppiä tai kenttiä eikä laske mitään."
 summary = "Koontinäytöt ja ruudut tallennettuna tietona, jotka käyttöliittymä piirtää KPI-lukuina, kaavioina ja taulukoina."
 
 [labels.fi.model.dashboards_dashboard]

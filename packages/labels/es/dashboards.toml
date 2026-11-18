@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Paneles de control"
-description = "Paneles de control y sus widgets guardados como datos, para que una interfaz los muestre. Un panel es privado para su propietario (y dashboards.manager) salvo que se comparta. Un widget es una tarjeta con tipo, modelo, campo de medida, agregación (contar o sumar), agrupación, filtro y posición. El paquete solo guarda la definición; no comprueba que existan el modelo o los campos y no calcula nada."
+description = "Paneles de control y sus widgets guardados como datos, para que una interfaz los muestre. Un panel es privado para su propietario (y dashboards.manager) salvo que se comparta. Un widget define tipo, modelo, campo de medida, agregación (contar o sumar), agrupación, periodo, filtro y posición. El paquete solo guarda la definición; no comprueba que existan el modelo o los campos y no calcula nada."
 summary = "Paneles y widgets guardados como datos, para que el backoffice los muestre como KPI, gráficos y tablas."
 
 [labels.es.model.dashboards_dashboard]

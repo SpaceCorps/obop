@@ -106,6 +106,48 @@ function presets(
   return { money, split, date, ref, state: state && dims.find((f) => f.name === state.name) };
 }
 
+/**
+ * The templates a model suggests: one click sets what to show, add up, split by and per which
+ * period. Each sets the whole tile, so "Per month of" also puts a chosen period back to month (K1).
+ */
+export function suggestionsOf(
+  model: ModelMeta,
+  fields: FieldMeta[],
+  ix?: { index: MetaIndex; setup: (model: string) => boolean },
+): { label: string; values: Partial<Draft> }[] {
+  const pre = presets(model, fields, ix);
+  const sum = pre.money
+    ? { aggregate: "sum" as const, measure_field: pre.money.name }
+    : { aggregate: "count" as const, measure_field: "" };
+  const out: { label: string; values: Partial<Draft> }[] = [
+    {
+      label: t("Number of records"),
+      values: { kind: "kpi", aggregate: "count", measure_field: "", group_by: "", period: "" },
+    },
+  ];
+  if (pre.money)
+    out.push({
+      label: t("Total {field}", { field: inSentence(fieldTitle(pre.money)) }),
+      values: { kind: "kpi", ...sum, group_by: "", period: "" },
+    });
+  if (pre.state)
+    out.push({
+      label: t("By {field}", { field: inSentence(fieldTitle(pre.state)) }),
+      values: { kind: "bar", ...sum, group_by: pre.state.name, period: "" },
+    });
+  if (pre.date)
+    out.push({
+      label: t("Per month of {field}", { field: inSentence(fieldTitle(pre.date)) }),
+      values: { kind: "line", ...sum, group_by: pre.date.name, period: "" },
+    });
+  if (pre.ref)
+    out.push({
+      label: t("Top {field}", { field: inSentence(fieldTitle(pre.ref)) }),
+      values: { kind: "bar", ...sum, group_by: pre.ref.name, period: "" },
+    });
+  return out;
+}
+
 /** A title from what the tile shows, until the person writes their own. */
 function autoTitle(draft: Draft, model: ModelMeta | undefined, moduleId: string): string {
   if (!model) return "";
@@ -210,41 +252,11 @@ export function WidgetForm(p: {
   }
 
   // The templates a model suggests: one click sets what to show, add up and split by.
-  const templates = useMemo(() => {
-    if (!model) return [];
-    const pre = presets(model, fields, ix);
-    const sum = pre.money
-      ? { aggregate: "sum" as const, measure_field: pre.money.name }
-      : { aggregate: "count" as const, measure_field: "" };
-    const out: { label: string; values: Partial<Draft> }[] = [
-      {
-        label: t("Number of records"),
-        values: { kind: "kpi", aggregate: "count", measure_field: "", group_by: "" },
-      },
-    ];
-    if (pre.money)
-      out.push({
-        label: t("Total {field}", { field: inSentence(fieldTitle(pre.money)) }),
-        values: { kind: "kpi", ...sum, group_by: "" },
-      });
-    if (pre.state)
-      out.push({
-        label: t("By {field}", { field: inSentence(fieldTitle(pre.state)) }),
-        values: { kind: "bar", ...sum, group_by: pre.state.name },
-      });
-    if (pre.date)
-      out.push({
-        label: t("Per month of {field}", { field: inSentence(fieldTitle(pre.date)) }),
-        values: { kind: "line", ...sum, group_by: pre.date.name },
-      });
-    if (pre.ref)
-      out.push({
-        label: t("Top {field}", { field: inSentence(fieldTitle(pre.ref)) }),
-        values: { kind: "bar", ...sum, group_by: pre.ref.name },
-      });
-    return out;
+  const templates = useMemo(
+    () => (model ? suggestionsOf(model, fields, ix) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, fields, d.lang]);
+    [model, fields, d.lang],
+  );
 
   // The live sentence: what the tile will show, with the numbers of today.
   const checked = useMemo(() => {

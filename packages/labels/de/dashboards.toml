@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Dashboards"
-description = "Dashboards und ihre Kacheln, als Daten gespeichert und von einer Oberfläche darzustellen. Ein Dashboard ist privat für seinen Eigentümer und dashboards.manager, solange es nicht geteilt ist. Eine Kachel legt Darstellung, Modell, Kennzahlfeld, Aggregation, Gruppierung, Filter und Position fest. Das Paket speichert nur die Definition und berechnet nichts."
+description = "Dashboards und ihre Kacheln, als Daten gespeichert und von einer Oberfläche darzustellen. Ein Dashboard ist privat für seinen Eigentümer und dashboards.manager, solange es nicht geteilt ist. Eine Kachel legt Darstellung, Modell, Kennzahlfeld, Aggregation, Gruppierung, Zeitraum, Filter und Position fest. Das Paket speichert nur die Definition und berechnet nichts."
 summary = "Dashboards und Kacheln als Daten gespeichert, damit das Backoffice sie als Kennzahlen, Diagramme und Tabellen darstellt."
 
 [labels.de.model.dashboards_dashboard]
