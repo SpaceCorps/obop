@@ -79,3 +79,9 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* Tap targets of 44 px on touch: "Sends through" (SMTP relay / Provider) of the server form. */
+@media (pointer: coarse) {
+  .mail-form .switcher button {
+    min-block-size: 2.75rem;
+  }
+}

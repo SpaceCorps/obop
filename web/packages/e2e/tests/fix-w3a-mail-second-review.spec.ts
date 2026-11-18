@@ -169,3 +169,18 @@ test.describe("Mail after the second review", () => {
     await expect(card.getByRole("button", { name: "Edit" })).toBeFocused();
   });
 });
+
+test.describe("Mail on touch", () => {
+  test.use({ viewport: { width: 320, height: 720 }, hasTouch: true, isMobile: true });
+
+  test("Sends through is a 44 px target", async ({ page, signIn }) => {
+    await signIn("root", "/customize/mail");
+    await page.getByRole("button", { name: "Add mail server" }).click();
+    const form = page.getByRole("form", { name: "Add mail server" });
+    for (const name of ["SMTP relay", "Provider"]) {
+      const box = await form.getByRole("radio", { name }).boundingBox();
+      expect(box!.height, name).toBeGreaterThanOrEqual(44);
+    }
+    await form.getByRole("button", { name: "Cancel" }).click();
+  });
+});
