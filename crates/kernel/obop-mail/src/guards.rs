@@ -171,8 +171,10 @@ fn server_input(mail: Arc<Mail>, create: bool) -> Guard {
     })
 }
 
+/// A template decides the text of every later message of its kind, so an agent only proposes a
+/// change of one, as it does for a mail server.
 fn template_input() -> Guard {
-    Box::new(move |_, input| {
+    Box::new(move |p, input| {
         let m = map(input)?;
         if let Some(k) = txt(&m, "key") {
             check_kind(&k).map_err(|e| format!("key: {e}"))?;
@@ -202,7 +204,10 @@ fn template_input() -> Guard {
                 }
             }
         }
-        Ok(Verdict::default())
+        Ok(Verdict {
+            approval: !p.is_person(),
+            ..Verdict::default()
+        })
     })
 }
 
@@ -237,4 +242,5 @@ pub fn install(d: &Arc<Dispatcher>, mail: &Arc<Mail>) {
     }
     d.add_guard("mail", "mail_template.create", false, template_input());
     d.add_guard("mail", "mail_template.update", false, template_input());
+    d.add_guard("mail", "mail_template.delete", false, agent_proposes());
 }

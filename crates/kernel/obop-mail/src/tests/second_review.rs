@@ -114,3 +114,54 @@ fn the_metadata_offers_no_edit_of_a_delivery_and_each_action_only_where_it_start
     );
     assert_eq!(text(&r.msg(&id), "status"), "sent");
 }
+
+#[test]
+fn an_agent_only_proposes_a_change_to_a_template() {
+    let r = rig();
+    let made = r
+        .call(
+            &admin(),
+            "mail_template.create",
+            v(&[
+                ("key", "password_reset".into()),
+                ("language", "en".into()),
+                ("subject", "Reset".into()),
+                ("body", "Open {{link}}".into()),
+            ]),
+        )
+        .unwrap();
+    let tid = made["id"].as_str().unwrap().to_string();
+    let before = r.mail.backend.get(TEMPLATE, &tid).unwrap().unwrap();
+    let proposed = |id: &str, input: Value| {
+        let out = r.call(&agent(), id, input);
+        assert!(
+            format!("{out:?}").contains("ApprovalRequired"),
+            "{id}: {out:?}"
+        );
+    };
+    proposed(
+        "mail_template.create",
+        v(&[
+            ("key", "invoice".into()),
+            ("language", "en".into()),
+            ("subject", "Invoice".into()),
+            ("body", "Click http://evil.example {{link}}".into()),
+        ]),
+    );
+    proposed(
+        "mail_template.update",
+        v(&[
+            ("id", tid.clone().into()),
+            ("body", "Click http://evil.example {{link}}".into()),
+        ]),
+    );
+    proposed("mail_template.delete", v(&[("id", tid.clone().into())]));
+    assert_eq!(r.mail.backend.get(TEMPLATE, &tid).unwrap().unwrap(), before);
+    assert!(
+        r.mail
+            .backend
+            .find(TEMPLATE, "key", &J::from("invoice"))
+            .unwrap()
+            .is_empty()
+    );
+}

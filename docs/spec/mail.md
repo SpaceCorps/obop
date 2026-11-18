@@ -33,7 +33,7 @@ Module `mail`, built in (`crates/kernel/obop-mail`). Permission groups (Proposed
 
 CLI: `obop call outbound_mail send to=a@example.com subject=Hi body=Text`; REST `POST /api/outbound_mail/send`; MCP tool `outbound_mail.send`.
 
-**Agents and mail servers.** A mail server names where every later message and the relay's stored password go, so an agent (an agent token, also one scoped to `mail.admin`) only proposes `mail_server.create`, `update` and `delete`, and a person approves the plan; `test_send`, `send` and `retry` need approval too. A change of the host without a new password forgets the stored password (`password_set` becomes false), so a password is never sent to a relay it was not entered for.
+**Agents and mail servers.** A mail server names where every later message and the relay's stored password go, so an agent (an agent token, also one scoped to `mail.admin`) only proposes `mail_server.create`, `update` and `delete`, and a person approves the plan; the same holds for `mail_template.create`, `update` and `delete`, since a template decides the text of every later message of its kind; `test_send`, `send` and `retry` need approval too. A change of the host without a new password forgets the stored password (`password_set` becomes false), so a password is never sent to a relay it was not entered for.
 
 **Choosing the server.** The server named in the call; else an enabled server whose kinds list the message kind; else the enabled default server; else the one enabled server when there is exactly one; else the call is refused ("no mail server is set up"). The server is fixed on the message when it is queued.
 
