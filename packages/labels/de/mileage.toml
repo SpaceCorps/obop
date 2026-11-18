@@ -120,6 +120,7 @@ done = "Zur Prüfung gesendet"
 [labels.de.model.mileage_trip.action.confirm]
 label = "Bestätigen"
 description = "Eine Fahrt in Prüfung bestätigen; ab dann zählt sie. Ein Prüfer kann seine eigene Fahrt nicht bestätigen"
+confirm = "Diese Fahrt bestätigen? Ab dann zählt sie, und keine Aktion nimmt das zurück."
 done = "Fahrt bestätigt"
 
 [labels.de.model.mileage_trip.action.reject]

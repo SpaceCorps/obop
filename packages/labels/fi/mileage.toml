@@ -120,6 +120,7 @@ done = "Lähetetty tarkastettavaksi"
 [labels.fi.model.mileage_trip.action.confirm]
 label = "Vahvista"
 description = "Vahvista tarkastuksessa oleva matka; siitä lähtien se lasketaan. Tarkastaja ei voi vahvistaa omaa matkaansa"
+confirm = "Vahvistetaanko tämä matka? Siitä lähtien se lasketaan, eikä mikään toiminto peru sitä."
 done = "Matka vahvistettu"
 
 [labels.fi.model.mileage_trip.action.reject]

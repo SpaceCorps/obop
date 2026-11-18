@@ -120,6 +120,7 @@ done = "Wysłano do weryfikacji"
 [labels.pl.model.mileage_trip.action.confirm]
 label = "Potwierdź"
 description = "Potwierdź przejazd w sprawdzaniu; od teraz się liczy. Recenzent nie może potwierdzić własnego przejazdu"
+confirm = "Potwierdzić ten przejazd? Od teraz się liczy i żadna akcja tego nie cofnie."
 done = "Przejazd potwierdzony"
 
 [labels.pl.model.mileage_trip.action.reject]

@@ -120,6 +120,7 @@ done = "Envoyé pour vérification"
 [labels.fr.model.mileage_trip.action.confirm]
 label = "Confirmer"
 description = "Confirmer un trajet en vérification ; il compte dès lors. Un vérificateur ne peut pas confirmer son propre trajet"
+confirm = "Confirmer ce trajet ? Il compte dès lors, et aucune action ne revient en arrière."
 done = "Trajet confirmé"
 
 [labels.fr.model.mileage_trip.action.reject]

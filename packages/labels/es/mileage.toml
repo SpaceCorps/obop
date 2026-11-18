@@ -120,6 +120,7 @@ done = "Enviado a revisión"
 [labels.es.model.mileage_trip.action.confirm]
 label = "Confirmar"
 description = "Confirmar un viaje en revisión; desde entonces cuenta. Un revisor no puede confirmar su propio viaje"
+confirm = "¿Confirmar este viaje? Desde ahora cuenta y ninguna acción lo deshace."
 done = "Viaje confirmado"
 
 [labels.es.model.mileage_trip.action.reject]

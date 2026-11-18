@@ -120,6 +120,7 @@ done = "Skickad för granskning"
 [labels.sv.model.mileage_trip.action.confirm]
 label = "Bekräfta"
 description = "Bekräfta en resa under granskning; från nu räknas den. En granskare kan inte bekräfta sin egen resa"
+confirm = "Bekräfta den här resan? Från nu räknas den, och ingen åtgärd tar tillbaka det."
 done = "Resan bekräftad"
 
 [labels.sv.model.mileage_trip.action.reject]
