@@ -221,6 +221,10 @@ pub struct Pre {
 /// have changed since.
 pub type Guard = Box<dyn Fn(&Principal, &Value) -> Result<Verdict, String> + Send + Sync>;
 
+/// A check on one command that, unlike a [`Guard`], survives the command being registered again
+/// (see [`Dispatcher::screen`]). It may refuse, or hand back the input to use instead.
+pub type Screen = dyn Fn(&Principal, &Value) -> Result<Option<Value>, String> + Send + Sync;
+
 struct Guarded {
     module: String,
     /// Mutating guards run under the dispatcher's transaction lock, so the check and the write
@@ -298,6 +302,8 @@ pub struct Dispatcher {
     brand: std::sync::OnceLock<Arc<brand::Reader>>,
     /// Wrappers around a command's handler, by command id (see `around`).
     around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
+    /// Screens by command id (see `screen`).
+    screens: std::sync::RwLock<HashMap<String, Arc<Screen>>>,
     /// Models whose writes run under the transaction lock because a rule needs it: a unique
     /// field, a sequence, an effect, or being the target of one (D56, D57).
     lock_models: std::sync::RwLock<HashSet<String>>,
@@ -604,13 +610,17 @@ impl Dispatcher {
         let never = self.never.read().unwrap();
         let visible =
             |c: &Registered| on_surface(c.surfaces, surface) && p.allows(c.permission_group);
+        // A command of group `*` that the kind of token can never use is left out, as from the
+        // catalogues (L17).
         let listed = |model: &str| {
-            cmds.get(&format!("{model}.list"))
-                .is_some_and(|l| visible(l))
+            let id = format!("{model}.list");
+            devices::usable(&id, p) && cmds.get(&id).is_some_and(|l| visible(l))
         };
         let mut out: Vec<CommandInfo> = cmds
             .iter()
-            .filter(|(id, c)| visible(c) && !never.contains_key(*id) && !listed(c.model))
+            .filter(|(id, c)| {
+                visible(c) && devices::usable(id, p) && !never.contains_key(*id) && !listed(c.model)
+            })
             .map(|(id, c)| CommandInfo {
                 id: id.clone(),
                 description: c.description,
@@ -652,13 +662,15 @@ impl Dispatcher {
                 let Some(list) = cmds.get(&format!("{name}.list")) else {
                     continue;
                 };
-                if !visible(list) {
+                if !visible(list) || !devices::usable(&format!("{name}.list"), p) {
                     continue;
                 }
                 let never = self.never.read().unwrap();
                 let can = |c: &str| {
                     let id = format!("{name}.{c}");
-                    !never.contains_key(&id) && cmds.get(&id).is_some_and(|r| visible(r))
+                    !never.contains_key(&id)
+                        && devices::usable(&id, p)
+                        && cmds.get(&id).is_some_and(|r| visible(r))
                 };
                 let mut actions: Vec<CommandInfo> = cmds
                     .iter()
@@ -667,6 +679,7 @@ impl Dispatcher {
                             && id.starts_with(&format!("{name}."))
                             && !m.def.is_generated_command(&id[name.len() + 1..])
                             && visible(c)
+                            && devices::usable(id, p)
                     })
                     .map(|(id, c)| {
                         let tr = m
@@ -1063,6 +1076,28 @@ impl Dispatcher {
             .insert(id.to_string(), Arc::from(wrapper));
     }
 
+    /// Check command `id` after its guard, in `call` and, for an agent's proposal, in `approve`
+    /// **before the plan is spent**: a screen that refuses at approval leaves the plan in place for
+    /// another approver. The input carries the approver's stamp there (`stamp_approver`), and what
+    /// a screen hands back at the call is what a proposal stores. Like `around`, it survives the
+    /// command being registered again; a second screen for the same id replaces the first.
+    pub fn screen(&self, id: &str, screen: Box<Screen>) {
+        self.screens
+            .write()
+            .unwrap()
+            .insert(id.to_string(), Arc::from(screen));
+    }
+
+    fn run_screen(&self, id: &str, p: &Principal, input: &mut Value) -> Result<(), CallError> {
+        let screen = self.screens.read().unwrap().get(id).cloned();
+        if let Some(s) = screen
+            && let Some(i) = s(p, input).map_err(|m| refusal(m, input))?
+        {
+            *input = i;
+        }
+        Ok(())
+    }
+
     /// Be told about every command that succeeds, with the module that owns the observer (removed
     /// with it). Observers run inside the call, under the dispatcher's locks: they must be quick
     /// and must not call the dispatcher; hand the work to another thread.
@@ -1281,11 +1316,16 @@ impl Dispatcher {
     }
 
     /// Command ids the principal may call on `surface`: what MCP `tools/list` and CLI help show.
+    /// A command of group `*` that the kind of token can never use is left out (L17).
     pub fn visible(&self, surface: Surface, p: &Principal) -> Vec<String> {
         let cmds = self.commands.read().unwrap();
         let mut v: Vec<_> = cmds
             .iter()
-            .filter(|(_, c)| on_surface(c.surfaces, surface) && p.allows(c.permission_group))
+            .filter(|(id, c)| {
+                on_surface(c.surfaces, surface)
+                    && p.allows(c.permission_group)
+                    && devices::usable(id, p)
+            })
             .map(|(id, _)| id.clone())
             .collect();
         v.sort();
@@ -1311,8 +1351,9 @@ impl Dispatcher {
         if !on_surface(c.surfaces, surface) {
             return Err(CallError::NotOnSurface(id.into()));
         }
-        // Same answer for "no such group" and "scope too narrow": do not leak which.
-        if !p.allows(c.permission_group) {
+        // Same answer for "no such group" and "scope too narrow": do not leak which. A command a
+        // mobile app's token is refused whatever its groups is answered the same (L20).
+        if !p.allows(c.permission_group) || devices::refused(id, p) {
             return Err(CallError::Forbidden(id.into()));
         }
         // The fields an agent sent in clear although it is shown them masked count as changed in
@@ -1341,6 +1382,7 @@ impl Dispatcher {
                 input = i;
             }
         }
+        self.run_screen(id, p, &mut input)?;
         if (c.needs_approval || guard_approval) && p.kind == PrincipalKind::Agent {
             // A call that mixes what cannot be stored as a whole gets no plan: the plan would
             // be refused when a person approves it, and spent by that. The agent hears it now.
@@ -1409,6 +1451,7 @@ impl Dispatcher {
                 input = i;
             }
         }
+        self.run_screen(&plan.id, &plan.principal, &mut input)?;
         // Taken out first, so it runs once; if it is still there the plan would run again.
         self.plans
             .remove(self.shared.get(), plan_id)
@@ -1895,6 +1938,9 @@ pub struct AgentTokenInfo {
     pub scopes: Vec<String>,
     /// Unix seconds.
     pub created_at: u64,
+    /// Unix seconds; `None` when the token has no end of its own (one made by an account bound to
+    /// a Microsoft identity ends after 90 days, N18).
+    pub expires_at: Option<u64>,
 }
 
 /// The few identity operations the OAuth authorization server (D64) needs. Tokens it issues are

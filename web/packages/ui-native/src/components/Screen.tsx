@@ -19,7 +19,7 @@ export type ScreenProps = {
   footer?: ReactNode;
   /** `false` only for a placeholder with nothing to scroll (the Loading screens). Every real screen scrolls, the recording screen too, so that large text never hides a banner. */
   scroll?: boolean;
-  /** The back button stands at the start of the header, as wide as its word. Default: across the header, its word in the middle. */
+  /** The back button stands at the start of the header, as wide as its word (the default); `false` puts it across the header, its word in the middle. */
   backAtStart?: boolean;
   /** With the phone on its side, the back button and the title share one line, so the content gets more of the little height. */
   compactInLandscape?: boolean;
@@ -34,7 +34,7 @@ export function Screen({
   onBack,
   footer,
   scroll = true,
-  backAtStart = false,
+  backAtStart = true,
   compactInLandscape = false,
   footerToEdges = false,
   children,

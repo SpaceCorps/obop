@@ -1,6 +1,6 @@
 //! The callers of the one address rule (`obop-http` `addr::client_address`) over HTTP, at the
 //! OAuth endpoints and sign-in pages that limit by the client's address: registration, token,
-//! revoke, authorize and the password step of the sign-in page. Each is tried behind a proxy that
+//! revoke, authorize and the password, second-factor and passkey steps of the sign-in page. Each is tried behind a proxy that
 //! is trusted and behind one that is not, with the properties the rule gives:
 //!
 //! - trusted: the **last** entry of the line is the address (the entries before it are the
@@ -10,7 +10,7 @@
 //! - not trusted: the header is ignored, so every spelling shares the one bucket of the peer.
 //!
 //! The first 429 must come at the endpoint's own per-address limit (register 20 an hour,
-//! authorize 60 and login 30 in ten minutes, token and revoke 120 a minute; `OAuthConfig`), not at
+//! authorize 60 and the three sign-in steps 30 together in ten minutes, token and revoke 120 a minute; `OAuthConfig`), not at
 //! some other cap: registration has a global cap of 300 an hour that would end a test that gave every
 //! request a bucket of its own, and a count that only had to run out somewhere would pass.
 //!
@@ -24,7 +24,7 @@
 //! door (`sign_tests/`) and the public site (`public_site_tests.rs`). What each of them pins:
 //!
 //! - the first 429 at the endpoint's own limit, trusted and not, with several entries on the
-//!   line: the five endpoints above in this file (`per_address`), the passkey options in
+//!   line: the seven endpoints above in this file (`per_address`), the passkey options in
 //!   `passkey_tests.rs`, and the start and the exchange of Microsoft sign-in in `sso_tests.rs`;
 //! - trusted and not, with several entries, without the number: the phone's return
 //!   (`sso_tests/phone.rs`), which shows that the count runs out;
@@ -75,7 +75,18 @@ fn rig(trust_proxy: bool) -> Rig {
     }
 }
 
-const ENDPOINTS: [&str; 5] = ["register", "token", "revoke", "authorize", "login"];
+/// `mfa` and `passkey` are the second-factor step and the passkey step of the sign-in page: they
+/// spend the same per-address count as the password step (`login_per_ip`, K48: no test held them
+/// before, and removing either check passed every test).
+const ENDPOINTS: [&str; 7] = [
+    "register",
+    "token",
+    "revoke",
+    "authorize",
+    "login",
+    "mfa",
+    "passkey",
+];
 
 /// The number of requests of one address that an endpoint answers before it says 429. Written
 /// out, not read from `OAuthConfig`, so that a change of a limit is a change of this test too.
@@ -84,7 +95,7 @@ fn per_address(endpoint: &str) -> u32 {
         "register" => 20,
         "token" | "revoke" => 120,
         "authorize" => 60,
-        "login" => 30,
+        "login" | "mfa" | "passkey" => 30,
         other => unreachable!("{other}"),
     }
 }
@@ -138,6 +149,26 @@ async fn hit(r: &axum::Router, client: &str, endpoint: &str, xff: &str) -> u16 {
             )
             .await
             .status
+        }
+        // A step of a flow of its own, as for the password step: a second-factor token and a
+        // passkey answer that are no good (the limit comes before either is looked at).
+        "mfa" => {
+            let (_, mut b) = start(r, &authorize_url(client, REDIRECT, &[])).await;
+            b.ip = xff.to_string();
+            b.post(
+                r,
+                "/oauth/authorize/mfa",
+                &[("mfa_token", "obopmfa_nothing"), ("code", "123456")],
+            )
+            .await
+            .status
+        }
+        "passkey" => {
+            let (_, mut b) = start(r, &authorize_url(client, REDIRECT, &[])).await;
+            b.ip = xff.to_string();
+            b.post(r, "/oauth/authorize/passkey", &[("credential", "{}")])
+                .await
+                .status
         }
         other => unreachable!("{other}"),
     }

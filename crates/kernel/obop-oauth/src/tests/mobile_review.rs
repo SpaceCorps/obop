@@ -595,6 +595,61 @@ fn a_person_has_only_so_many_devices_signed_in_and_a_refusal_is_in_the_log() {
     assert_eq!(OAuthConfig::default().max_devices_per_user, 20);
 }
 
+/// L15: the cap and the credential epoch are looked at before the code is spent only for a request
+/// that holds what the code was issued to. Someone with an intercepted code and no verifier is told
+/// nothing about the account (not that it is at the cap) and writes nothing to its log.
+#[test]
+fn a_code_presented_without_its_verifier_learns_nothing_of_the_cap_and_writes_no_log_line() {
+    let r = rig_with(OAuthConfig {
+        max_devices_per_user: 1,
+        ..OAuthConfig::default()
+    });
+    let c = r.mobile_client();
+    let first = r.mobile_code(&c, &["base.user"]);
+    let stolen = r.mobile_code(&c, &["base.user"]);
+    r.mobile_token(&c, &first, &verifier(), APP, &DEVICE)
+        .unwrap();
+    assert_eq!(r.devices().len(), 1);
+    let wrong = "w".repeat(43);
+    let e = r
+        .mobile_token(&c, &stolen, &wrong, APP, &DEVICE)
+        .unwrap_err();
+    assert_eq!(e.error, "invalid_grant", "{e:?}");
+    assert!(event_rows(&r, "device_limit").is_empty());
+    assert_eq!(r.devices().len(), 1);
+}
+
+/// L15: codes of one person exchanged at the same moment cannot together pass the cap; the count
+/// and the write are under one lock per person. Eight codes, room for two.
+#[test]
+fn codes_exchanged_at_the_same_moment_never_pass_the_cap_together() {
+    let r = rig_with(OAuthConfig {
+        max_devices_per_user: 2,
+        ..OAuthConfig::default()
+    });
+    let c = r.mobile_client();
+    let codes: Vec<String> = (0..8).map(|_| r.mobile_code(&c, &["base.user"])).collect();
+    let start = std::sync::Barrier::new(codes.len());
+    let ok = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|s| {
+        for code in &codes {
+            let (r, c, start, ok) = (&r, &c, &start, &ok);
+            s.spawn(move || {
+                start.wait();
+                if r.mobile_token(c, code, &verifier(), APP, &DEVICE).is_ok() {
+                    ok.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }
+            });
+        }
+    });
+    let active = r
+        .devices()
+        .iter()
+        .filter(|(_, d)| d["state"] == "active")
+        .count();
+    assert_eq!((ok.into_inner(), active), (2, 2));
+}
+
 // ---- who the log names -----------------------------------------------------------------------------
 
 #[test]

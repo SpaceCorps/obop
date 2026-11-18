@@ -1234,10 +1234,11 @@ async fn a_device_read_the_store_refuses_is_a_503_and_never_a_200_or_a_401() {
     let eve = session(r, "eve").await;
     let (_, v) = command(r, &eve, "device.list", json!({})).await;
     let id = rows(&v)[0]["id"].as_str().unwrap().to_string();
-    flaky.refuse_model("device", Mode::Updates);
+    // The record is marked in an atomic batch with its entry of the log (L11).
+    flaky.refuse_applies(100);
     let (s, v) = command(r, &eve, "device.revoke", json!({"id": id})).await;
     assert_eq!(s, 503, "{v}");
-    flaky.allow_models();
+    flaky.refuse_applies(0);
     let (s, v) = command(r, &eve, "device.revoke", json!({"id": id})).await;
     assert_eq!(s, 200, "{v}");
     assert_eq!(command(r, &bearer, "party.list", json!({})).await.0, 401);
@@ -1430,6 +1431,119 @@ async fn the_cli_and_the_mcp_server_list_rename_and_revoke_devices_like_rest() {
         401,
         "the access token stopped"
     );
+}
+
+/// L17: the catalogues (MCP `tools/list`, `GET /api/commands`, CLI help) show a token only the
+/// device commands it can use. They are in group `*`, so the group alone listed all five to every
+/// token; an agent could use one of them (a proposal to revoke) and a mobile app three.
+#[test]
+fn the_tool_list_shows_a_token_only_the_device_commands_it_can_use() {
+    use obop_commands::{Principal, Surface};
+    let rig = rig();
+    let d = &rig.app.dispatcher;
+    let devices = |p: &Principal| -> Vec<String> {
+        d.visible(Surface::Mcp, p)
+            .into_iter()
+            .filter(|id| id.starts_with("device."))
+            .collect()
+    };
+    let all = [
+        "device.get",
+        "device.list",
+        "device.revoke",
+        "device.search",
+        "device.update",
+    ];
+    let person = Principal::user("bob", &["base.user"]);
+    assert_eq!(devices(&person), all);
+    let agent = Principal::agent("bob/agent", &["base.user"], &["base.user"]);
+    assert_eq!(devices(&agent), ["device.revoke"]);
+    let admin_agent = Principal::agent(
+        "dana/agent",
+        &["base.user", "api.device_admin"],
+        &["base.user", "api.device_admin"],
+    );
+    assert_eq!(
+        devices(&admin_agent),
+        [
+            "device.get",
+            "device.list",
+            "device.revoke",
+            "device.search"
+        ]
+    );
+    let mut app = Principal::user("bob", &["base.user"]);
+    app.device = Some("dev_1".into());
+    app.scopes = Some(["base.user".to_string()].into_iter().collect());
+    assert_eq!(
+        devices(&app),
+        ["device.get", "device.revoke", "device.update"]
+    );
+    // The same list is what `tools/list` answers over MCP.
+    let mut session = obop_mcp::Session::new();
+    let line = json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}).to_string();
+    let out = obop_mcp::handle(d, &agent, &mut session, &line).unwrap();
+    let tools: Vec<String> = serde_json::from_str::<J>(&out).unwrap()["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|t| t["name"].as_str().map(String::from))
+        .filter(|n| n.starts_with("device__"))
+        .collect();
+    assert_eq!(tools, ["device__revoke"]);
+}
+
+/// The OpenAPI document (`GET /api/openapi.json`, built from `meta` and `commands_outside_meta`)
+/// names the same device commands as the catalogues, and no setting command for a mobile app's
+/// token (K26, L17, L20): it listed `device.list`, `device.search` and `setting.get` to a token
+/// that is refused all three.
+#[test]
+fn the_openapi_document_of_a_token_names_only_the_commands_it_can_use() {
+    use obop_commands::{Principal, Surface};
+    let rig = rig();
+    let d = &rig.app.dispatcher;
+    let names = |p: &Principal| -> Vec<String> {
+        let mut ids: Vec<String> = d
+            .commands_outside_meta(Surface::Rest, p)
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        for m in d.meta(Surface::Rest, p) {
+            for model in m.models {
+                ids.push(format!("{}.list", model.name));
+                if model.can_update {
+                    ids.push(format!("{}.update", model.name));
+                }
+                ids.extend(model.actions.into_iter().map(|a| a.id));
+            }
+        }
+        ids.sort();
+        ids
+    };
+    let devices = |p: &Principal| -> Vec<String> {
+        names(p)
+            .into_iter()
+            .filter(|id| id.starts_with("device."))
+            .collect()
+    };
+    let mut app = Principal::user("bob", &["base.user"]);
+    app.device = Some("dev_1".into());
+    app.scopes = Some(["base.user".to_string()].into_iter().collect());
+    assert_eq!(
+        devices(&app),
+        ["device.get", "device.revoke", "device.update"]
+    );
+    assert!(
+        !names(&app).iter().any(|id| id.starts_with("setting.")),
+        "{:?}",
+        names(&app)
+    );
+    let agent = Principal::agent("bob/agent", &["base.user"], &["base.user"]);
+    assert_eq!(devices(&agent), ["device.revoke"]);
+    // A person keeps the device model in the metadata the back office renders from.
+    let person = Principal::user("bob", &["base.user"]);
+    assert!(devices(&person).contains(&"device.list".to_string()));
+    assert!(devices(&person).contains(&"device.update".to_string()));
 }
 
 async fn command_resp(r: &axum::Router, bearer: &str, cmd: &str, body: J) -> Resp {

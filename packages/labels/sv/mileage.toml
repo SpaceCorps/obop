@@ -58,7 +58,7 @@ description = "Det högsta löpnumret bland de lagrade punkterna"
 
 [labels.sv.model.mileage_trip.field.integrity]
 label = "Integritet"
-description = "Flaggor som kontrollen satte vid avslut: seq_gap, speed_jump och low_accuracy med antal; tomt när spåret var rent"
+description = "Flaggor som kontrollen satte vid avslut: seq_gap, speed_jump, low_accuracy, before_start och reanchor med antal; tomt när spåret var rent"
 
 [labels.sv.model.mileage_trip.field.start_lat]
 label = "Start (latitud)"
@@ -94,7 +94,7 @@ description = "När resan bekräftades, satt av Bekräfta; månaden för tidpunk
 
 [labels.sv.model.mileage_trip.field.reviewable]
 label = "Granskningsbar"
-description = "Sant medan resan är under granskning, bekräftad eller avvisad: de statusar en granskare läser"
+description = "Sant medan resan är under granskning, bekräftad eller avvisad och dess syfte inte är privat: de resor en granskare läser"
 
 [labels.sv.model.mileage_trip.field.state]
 label = "Status"

@@ -8,12 +8,10 @@ use obop_commands::{ADMIN_GROUP, MfaError, Principal};
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
 
-/// What ending the devices of a person has done so far, kept across the tries of one request: the
-/// ones whose entry of the log is written (so a try does not write it again) and how many were
-/// ended.
+/// What ending the devices of a person has done so far, kept across the tries of one request: how
+/// many were ended.
 #[derive(Default)]
 pub(crate) struct DeviceTally {
-    pub logged: Vec<String>,
     pub ended: usize,
 }
 
@@ -54,21 +52,23 @@ fn admin_name(p: &Principal) -> Result<&str, MfaError> {
 }
 
 impl Auth {
-    /// Whether an administrator disabled the account.
-    pub(crate) fn is_disabled(&self, name: &str) -> bool {
-        self.backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .is_some_and(|u| u.get("disabled").and_then(J::as_bool) == Some(true))
+    /// A flag of the account that is set to `true`. A read the store refused is the error, never
+    /// "not set": a sign-in decided from a refused read would let a disabled or Microsoft-only
+    /// account in, or skip its second factor (N22).
+    pub(crate) fn account_flag(&self, name: &str, key: &str) -> Result<bool, String> {
+        Ok(self
+            .backend
+            .get("auth_user", name)?
+            .is_some_and(|u| u.get(key).and_then(J::as_bool) == Some(true)))
     }
 
-    pub(crate) fn must_change_password(&self, name: &str) -> bool {
-        self.backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .is_some_and(|u| u.get("must_change_password").and_then(J::as_bool) == Some(true))
+    /// Whether an administrator disabled the account.
+    pub(crate) fn is_disabled(&self, name: &str) -> Result<bool, String> {
+        self.account_flag(name, "disabled")
+    }
+
+    pub(crate) fn must_change_password(&self, name: &str) -> Result<bool, String> {
+        self.account_flag(name, "must_change_password")
     }
 
     /// Revoke the sessions of a user, all but the one whose token hash is `keep`. Agent tokens
@@ -128,14 +128,12 @@ impl Auth {
     }
 
     /// End the devices of `name` that are still in force (and, with `until`, were registered at
-    /// that time or before): one `device_revoked` entry of the security log (`actor`, `why`), then
-    /// the refresh-token family and the access token of the device, then the record. The entry
-    /// comes first because a device that is marked ended is never looked at again, so an entry
-    /// that failed after it could never be written; the other way round, an entry written and a
-    /// step then refused is written again by a repeat of the request (`tally.logged` keeps it
-    /// from being written twice by the tries of one request). Every step reads again what is
-    /// left, so a repeat finishes what a refused store left undone. `tally` counts the devices
-    /// ended, also by a call that fails part way.
+    /// that time or before): the refresh-token family and the access token of the device, then the
+    /// record together with its one `device_revoked` entry of the security log (`actor`, `why`) in
+    /// one atomic batch (`devices::end_with_entry`, L11), so the entry exists exactly when the
+    /// device was ended: a repeat writes no second one, and a refused batch loses none. Every step
+    /// reads again what is left, so a repeat finishes what a refused store left undone. `tally`
+    /// counts the devices ended, also by a call that fails part way.
     ///
     /// Only rows this crate's partner wrote (`devices::is_ours`) are touched: a table of the same
     /// name that somebody else once filled is not ours to end.
@@ -161,17 +159,6 @@ impl Auth {
                 continue;
             }
             let now = self.now();
-            if !tally.logged.contains(&id) {
-                obop_commands::audit::try_record_event(
-                    &*self.backend,
-                    now,
-                    name,
-                    dev::EVENT_REVOKED,
-                    actor,
-                    &format!("{}: ended by {why}", dev::describe(&d, &id)),
-                )?;
-                tally.logged.push(id.clone());
-            }
             if let Some(gid) = d.get("grant").and_then(J::as_str)
                 && let Some(g) = self.backend.get("oauth_grant", gid)?
             {
@@ -190,9 +177,18 @@ impl Auth {
                     self.backend.delete("oauth_refresh", &rid)?;
                 }
             }
-            self.backend
-                .update(dev::MODEL, &id, &dev::revoked_patch(now))?;
-            tally.ended += 1;
+            // The device and its entry of the log in one batch (L11): last, so a step above that
+            // the store refuses leaves the device in force for the repeat, with no entry yet.
+            if dev::end_with_entry(
+                &*self.backend,
+                &id,
+                now,
+                name,
+                actor,
+                &format!("{}: ended by {why}", dev::describe(&d, &id)),
+            )? {
+                tally.ended += 1;
+            }
         }
         Ok(())
     }
@@ -325,7 +321,11 @@ impl Auth {
             return Ok(None);
         };
         let keep = owed["keep"].as_str().map(String::from);
-        let until = owed["at"].as_u64();
+        // The cutoff is the change of the credentials, not the note written before it (L16): a
+        // sign-in that finished between the two passed the epoch compare with the old epoch and
+        // must end too. One made after the change carries the new epoch and is spared.
+        let changed = u.get("epoch_at").and_then(J::as_u64).unwrap_or(0);
+        let until = owed["at"].as_u64().map(|at| at.max(changed));
         let n = self.revoke_sessions_until(name, keep.as_deref(), until, ch)?;
         self.clear_owed(name, op);
         Ok(Some(n))
@@ -334,6 +334,7 @@ impl Auth {
     /// Remove tokens that ended a day ago or more, and spent second-step tokens. Runs at most
     /// once every ten minutes across all server processes.
     pub(crate) fn purge_tokens(&self) {
+        self.purge_old_sso_lines();
         let first = self
             .backend
             .counter_add("auth.purge", 600_000, false)
@@ -461,7 +462,10 @@ impl Auth {
             return Err(MfaError::BadPassword);
         }
         // With two-factor on, the password alone does not change the password.
-        if self.has_second_factor(name) {
+        if self
+            .has_second_factor(name)
+            .map_err(MfaError::Unavailable)?
+        {
             self.check_second_factor(name, code, recovery)?;
         }
         if new.chars().count() < MIN_PASSWORD_CHARS {
@@ -479,7 +483,7 @@ impl Auth {
         patch.insert("password_hash".into(), J::from(hash));
         patch.insert("must_change_password".into(), J::Bool(false));
         patch.insert("password_changed_at".into(), J::from(self.now()));
-        bump_epoch(&mut patch);
+        bump_epoch(&mut patch, self.now());
         self.put(name, &patch)?;
         let h = token_hash(session);
         // A repeat would need the old password, which no longer works (and counts towards the
@@ -499,7 +503,8 @@ impl Auth {
         // Read until no read of it was refused: a policy read as "not required" because the store
         // refused the lookup would free a session that still owes its two-factor enrolment.
         let still_limited = self
-            .settled(|| self.enrolment_required_for(&groups) && !self.has_second_factor(name))
+            .settled(|| Ok(self.enrolment_required_for(&groups) && !self.has_second_factor(name)?))
+            .and_then(|r: Result<bool, String>| r.map_err(MfaError::Unavailable))
             .map_err(|e| match e {
                 MfaError::Unavailable(m) => {
                     self.incomplete(&ch, "reading the two-factor policy", m)
@@ -635,7 +640,7 @@ impl Auth {
         };
         let mut patch = Fields::new();
         patch.insert("disabled".into(), J::Bool(disabled));
-        bump_epoch(&mut patch);
+        bump_epoch(&mut patch, self.now());
         let was_offboarded = u["offboarded"].as_bool() == Some(true);
         if !disabled && was_offboarded {
             patch.insert("offboarded".into(), J::Bool(false));
@@ -722,7 +727,7 @@ impl Auth {
         let mut patch = Fields::new();
         patch.insert("password_hash".into(), J::from(hash));
         patch.insert("must_change_password".into(), J::Bool(true));
-        bump_epoch(&mut patch);
+        bump_epoch(&mut patch, self.now());
         self.put(&target, &patch)?;
         let ch = Change::new(&target, "password_reset", actor, "temporary password set");
         let n = self.revoke_user_sessions(&target, None, &ch)?;

@@ -15,7 +15,13 @@ const SECRET = `obop_${"s".repeat(43)}`;
 const ID = "a1".repeat(32);
 const CREATED = 1731600000;
 
-type TokenRow = { id: string; label: string; scopes: string[]; created_at: number };
+type TokenRow = {
+  id: string;
+  label: string;
+  scopes: string[];
+  created_at: number;
+  expires_at?: number | null;
+};
 type Call = { method: string; path: string; auth: string; body: unknown };
 
 let container: HTMLDivElement;
@@ -151,6 +157,19 @@ afterEach(async () => {
 });
 
 describe("the list of agent tokens", () => {
+  it("shows when a token ends by itself, and Until revoked for one that does not (N18)", async () => {
+    const ENDS = CREATED + 90 * 86_400;
+    server.tokens = [
+      { ...server.tokens[0], expires_at: ENDS },
+      { id: "c3".repeat(32), label: "Old", scopes: ["base.user"], created_at: CREATED },
+    ];
+    await mount();
+    const cells = [...container.querySelectorAll('tbody td[data-label="Ends"]')].map(
+      (td) => td.textContent,
+    );
+    expect(cells).toEqual([fmt.dateTime(ENDS * 1000), "Until revoked"]);
+  });
+
   it("shows each token with its label, its groups and when it was made", async () => {
     await mount();
     const row = container.querySelector("tbody tr")!;

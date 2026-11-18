@@ -76,7 +76,7 @@ description = "Asenna moduuli moduulikaupasta tunnuksen perusteella tarvittavine
 
 [labels.fi.model.setting]
 name = "Asetus"
-description = "Koko instanssin käyttöliittymäasetukset: teema ja sovellusvalikon asettelu"
+description = "Koko instanssin asetukset yhtenä JSON-objektina: teema, sovellusvalikon asettelu, tietoturvakäytäntö ja muut. Jokainen henkilö lukee ne, ylläpitäjät kirjoittavat ne; mobiilisovelluksen tunniste ei voi lukea niitä"
 
 [labels.fi.model.setting.field.value]
 label = "Arvo"
