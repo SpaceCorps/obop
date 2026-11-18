@@ -224,7 +224,9 @@ export function TopBar(props: {
                     icon: "check-circle" as const,
                     description:
                       entry.waiting > 0
-                        ? t("{n} waiting for you", { n: entry.waiting })
+                        ? t("{n, plural, one {# waiting for you} other {# waiting for you}}", {
+                            n: entry.waiting,
+                          })
                         : undefined,
                     onSelect: () => {
                       location.hash = approvalsHref();

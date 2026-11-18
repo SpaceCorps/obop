@@ -2,7 +2,7 @@
 // A row only opens its plan: no Approve or Reject on a row, a badge or a toast (rule 10). One plan
 // is on screen at a time, in PlanPanel, with its change visible and a button that names the act.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge, EmptyState, Skeleton, Table, Tabs, panelId, t } from "@obop/ui";
+import { Badge, Button, EmptyState, Skeleton, Table, Tabs, panelId, t } from "@obop/ui";
 import { useData } from "../data.tsx";
 import type { Go, Route } from "../route.ts";
 import { planList, type PlanRow } from "./planApi.ts";
@@ -14,7 +14,7 @@ import "./approvals.css";
 type List =
   | { kind: "loading" }
   | { kind: "error" }
-  | { kind: "ok"; rows: PlanRow[]; total: number };
+  | { kind: "ok"; rows: PlanRow[]; total: number; more?: "busy" | "failed" };
 
 export function ApprovalsPage({ route, go }: { route: Route; go: Go }) {
   const d = useData();
@@ -25,11 +25,38 @@ export function ApprovalsPage({ route, go }: { route: Route; go: Go }) {
   const [list, setList] = useState<List>({ kind: "loading" });
   const heading = useRef<HTMLHeadingElement>(null);
 
-  const load = useCallback(async () => {
-    setList({ kind: "loading" });
-    const r = await planList(d.token, tab);
-    setList(r.ok ? { kind: "ok", rows: r.value.rows, total: r.value.total } : { kind: "error" });
-  }, [d.token, tab]);
+  // `quiet`: read again behind the open panel, without the list going back to a skeleton.
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setList({ kind: "loading" });
+      const r = await planList(d.token, tab);
+      setList((was) =>
+        r.ok
+          ? { kind: "ok", rows: r.value.rows, total: r.value.total }
+          : quiet && was.kind === "ok"
+            ? was
+            : { kind: "error" },
+      );
+    },
+    [d.token, tab],
+  );
+  /** The next fifty, below the ones shown (the badge counts all of them). */
+  const more = useCallback(async () => {
+    if (list.kind !== "ok") return;
+    const have = list.rows;
+    setList({ ...list, more: "busy" });
+    const r = await planList(d.token, tab, have.length);
+    setList((was) => {
+      if (was.kind !== "ok") return was;
+      if (!r.ok) return { ...was, more: "failed" };
+      const seen = new Set(have.map((x) => x.id));
+      return {
+        kind: "ok",
+        rows: [...have, ...r.value.rows.filter((x) => !seen.has(x.id))],
+        total: r.value.total,
+      };
+    });
+  }, [d.token, tab, list]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -118,6 +145,21 @@ export function ApprovalsPage({ route, go }: { route: Route; go: Go }) {
               onOpen={(id) => put({ id })}
             />
           )}
+          {list.kind === "ok" && list.total > list.rows.length && (
+            <div className="appr-more">
+              <p className="hint">
+                {t("Showing {shown} of {total}.", { shown: list.rows.length, total: list.total })}
+              </p>
+              {list.more === "failed" && (
+                <p className="hint" role="alert">
+                  {t("The approvals could not be loaded.")}
+                </p>
+              )}
+              <Button loading={list.more === "busy"} onClick={() => void more()}>
+                {t("Show more")}
+              </Button>
+            </div>
+          )}
         </div>
       </section>
       {open && (
@@ -130,6 +172,7 @@ export function ApprovalsPage({ route, go }: { route: Route; go: Go }) {
             put({});
             void load();
           }}
+          onStale={() => void load(true)}
         />
       )}
     </>

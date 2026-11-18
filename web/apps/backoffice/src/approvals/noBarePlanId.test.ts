@@ -22,6 +22,16 @@ describe("the sentences of the back office", () => {
     expect(bad).toEqual([]);
   });
 
+  it("never put a plan's id into a template string (the full id is no better than eight characters)", () => {
+    // The link to a plan (route.ts, sent.ts) and the REST path (api.ts) are the only places that
+    // may build text from an id.
+    const allowed = /[\\/](api|route|sent)\.ts$/;
+    const bad = all
+      .filter(([p, s]) => !allowed.test(p) && /\$\{[^}]*[pP]lanId[^}]*\}/.test(s))
+      .map(([p]) => p);
+    expect(bad).toEqual([]);
+  });
+
   it("have no sentence with a plan in braces", () => {
     const bad = all.filter(([, s]) => /\(plan \{plan\}\)|plan \{plan\}/.test(s)).map(([p]) => p);
     expect(bad).toEqual([]);

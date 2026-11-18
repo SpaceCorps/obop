@@ -11,7 +11,9 @@ import "./entry.css";
 /** The name of the entry, for a screen reader and the tooltip: the count in words. */
 export function entryName(count: PlanCount): string {
   return count.waiting > 0
-    ? t("Approvals, {n} waiting for you", { n: count.waiting })
+    ? t("Approvals, {n, plural, one {# waiting for you} other {# waiting for you}}", {
+        n: count.waiting,
+      })
     : t("Approvals, nothing waiting");
 }
 

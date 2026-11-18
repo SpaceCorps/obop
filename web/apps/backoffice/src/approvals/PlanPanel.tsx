@@ -9,8 +9,6 @@ import {
   IconButton,
   Skeleton,
   Textarea,
-  fmt,
-  inSentence,
   t,
   useFocusTrap,
 } from "@obop/ui";
@@ -39,7 +37,6 @@ import {
   thingOf,
   valueText,
   whenOf,
-  whoOf,
   type Names,
 } from "./words.ts";
 
@@ -59,12 +56,15 @@ export function PlanPanel({
   names,
   onClose,
   onDecided,
+  onStale,
 }: {
   id: string;
   names: Names;
   onClose: () => void;
   /** A decision went through: back to the list, which reads again. */
   onDecided: () => void;
+  /** The plan is not as the list shows it (decided by somebody else, failed, gone): read it again. */
+  onStale?: () => void;
 }) {
   const d = useData();
   const [view, setView] = useState<View>({ kind: "loading" });
@@ -103,14 +103,18 @@ export function PlanPanel({
   useEffect(() => {
     panel.current?.focus({ preventScroll: true });
   }, []);
+  // The panel does not close while a decision is on its way: its answer would have nowhere to go,
+  // and a late success would close the plan the person opened next.
+  const close = useCallback(() => {
+    if (!inFlight.current) onClose();
+  }, [onClose]);
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".overlay"))
-        onClose();
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".overlay")) close();
     };
     addEventListener("keydown", on);
     return () => removeEventListener("keydown", on);
-  }, [onClose]);
+  }, [close]);
   // A refused decision is announced (role="alert") and takes focus.
   useEffect(() => {
     if (note) noteRef.current?.focus({ preventScroll: false });
@@ -118,24 +122,36 @@ export function PlanPanel({
 
   const plan = view.kind === "plan" ? view.plan : null;
 
+  /** The list and the count are read again: the plan is not what they last showed. */
+  function stale() {
+    plansChanged();
+    onStale?.();
+  }
+
   async function failed(r: PlanFail, act: Act, shown: PlanDetail) {
     if (r.status === 412 || r.code === "precondition_failed") {
       setBusy("reload");
-      await reload();
-      setNote({
-        tone: "warning",
-        text: t("This record changed after you opened the request. Look at it again."),
-      });
+      const now = await reload();
+      setNote(
+        now
+          ? {
+              tone: "warning",
+              text: t("This record changed after you opened the request. Look at it again."),
+            }
+          : { tone: "info", text: goneSentence() },
+      );
+      if (!now) stale();
       return;
     }
     if (r.status === 409 && r.code === "already_decided") {
       const text = alreadyDecidedSentence(r, shown.expires_at);
       setClosed(text);
       setNote({ tone: "info", text });
-      plansChanged();
+      stale();
       return;
     }
     if (r.status === 404) {
+      stale();
       // Not "not waiting any more" while the plan can still be read: it changed under the person
       // (the agent's owner lost the right), so it is shown again as it is now.
       setBusy("reload");
@@ -165,6 +181,7 @@ export function PlanPanel({
       return;
     }
     if (act === "approve" && r.status === 400) {
+      stale();
       // The command's own refusal: the plan is spent (failed), or a guard refused it and it waits.
       setBusy("reload");
       const now = await reload();
@@ -248,7 +265,7 @@ export function PlanPanel({
 
   return (
     <>
-      {sheet && <div className="record-scrim" aria-hidden="true" onClick={onClose} />}
+      {sheet && <div className="record-scrim" aria-hidden="true" onClick={close} />}
       <aside
         ref={panel}
         className={`record panel appr-panel${sheet ? " sheet" : ""}${phone ? " phone" : ""}`}
@@ -266,15 +283,13 @@ export function PlanPanel({
               label={t("Back to Approvals")}
               tooltip={false}
               className="back"
-              onClick={onClose}
+              onClick={close}
             />
           )}
           <div className="rec-title">
             <h2>{plan ? askOf(plan, names) : t("Approval request")}</h2>
           </div>
-          {!phone && (
-            <IconButton icon="close" label={t("Close")} tooltip={false} onClick={onClose} />
-          )}
+          {!phone && <IconButton icon="close" label={t("Close")} tooltip={false} onClick={close} />}
         </header>
         <div className="appr-body">
           {view.kind === "loading" && <Skeleton rows={4} cols={2} />}
@@ -298,17 +313,16 @@ export function PlanPanel({
           )}
           {plan && (
             <>
-              <section className="appr-what" aria-labelledby={`appr-what-${id}`}>
-                <h3 id={`appr-what-${id}`} className="overline">
-                  {t("What changes")}
-                </h3>
-                <WhatChanges plan={plan} names={names} record={record} />
-              </section>
+              {plan.status === "waiting" && (
+                <section className="appr-what" aria-labelledby={`appr-what-${id}`}>
+                  <h3 id={`appr-what-${id}`} className="overline">
+                    {t("What changes")}
+                  </h3>
+                  <WhatChanges plan={plan} names={names} record={record} />
+                </section>
+              )}
               <p className="appr-who">
-                {t("Proposed by {who}, {when}.", {
-                  who: inSentence(whoOf(plan)),
-                  when: whenOf(plan.created_at),
-                })}
+                {proposedBy(plan, whenOf(plan.created_at))}
                 {plan.status === "waiting" && plan.expires_at && (
                   <> {t("Expires on {date}.", { date: dateOf(plan.expires_at) })}</>
                 )}
@@ -325,6 +339,16 @@ export function PlanPanel({
                   )}
                 </p>
               )}
+              {plan.status === "waiting" && !closed && !plan.can_approve && !plan.can_reject && (
+                <p className="appr-why" data-testid="plan-someone-else">
+                  {t("Waiting for a person who can approve it.")}
+                </p>
+              )}
+              {waiting && plan.can_approve && unseen(plan) && (
+                <p className="appr-why" data-testid="plan-unseen">
+                  {t("The rows are not shown here, so this cannot be approved from this page.")}
+                </p>
+              )}
               {recordHref && (
                 <p>
                   <a className="appr-record" href={recordHref}>
@@ -335,7 +359,7 @@ export function PlanPanel({
             </>
           )}
         </div>
-        {plan && waiting && (plan.can_approve || plan.can_reject) && (
+        {plan && waiting && ((plan.can_approve && !unseen(plan)) || plan.can_reject) && (
           <footer className="appr-foot">
             {plan.can_reject && (
               <Button
@@ -347,7 +371,7 @@ export function PlanPanel({
                 {t("Reject")}
               </Button>
             )}
-            {plan.can_approve && (
+            {plan.can_approve && !unseen(plan) && (
               <Button
                 size="lg"
                 variant="primary"
@@ -384,6 +408,35 @@ export function PlanPanel({
   );
 }
 
+/** "Proposed by Ada's agent, 2 hours ago." One sentence for each who, so each language can inflect it. */
+function proposedBy(plan: PlanDetail, when: string): string {
+  if (plan.own_agent) return t("Proposed by your own agent, {when}.", { when });
+  return plan.owner
+    ? t("Proposed by {name}'s agent, {when}.", { name: plan.owner, when })
+    : t("Proposed by an agent, {when}.", { when });
+}
+
+/**
+ * A bulk create whose rows the person is not shown (it was proposed as csv, or its rows are not
+ * records): there is nothing to approve that they can read, so only Reject is offered.
+ */
+function unseen(plan: PlanDetail): boolean {
+  if (plan.kind !== "bulk_create" || !(plan.rows_total && plan.rows_total > 0)) return false;
+  const rows = (plan.rows ?? []) as unknown[];
+  return !rows.some(Array.isArray);
+}
+
+/**
+ * A record's name for a reference in the change. The model's records are read first; until they
+ * are, or when this person may not read them, no short id is shown in their place.
+ */
+function refName(d: ReturnType<typeof useData>, model: string, id: string): string {
+  if (!d.models.has(model)) return t("Not shown to you");
+  const rows = d.store.peek(model);
+  if (!rows) return d.store.errorOf(model) ? t("Not shown to you") : "…";
+  return rows.some((r) => r.id === id) ? d.refText(model, id) : t("Not shown to you");
+}
+
 /** The question a destructive plan asks before it is approved: the action's own `ui.confirm` first. */
 function confirmQuestion(plan: PlanDetail, names: Names, record: string): string {
   if (plan.confirm) return plan.confirm;
@@ -399,6 +452,7 @@ function confirmQuestion(plan: PlanDetail, names: Names, record: string): string
 /** The change, only the fields that differ; a hidden one is "Set, not shown to you". */
 function WhatChanges({ plan, names, record }: { plan: PlanDetail; names: Names; record: string }) {
   const d = useData();
+  const refText = (model: string, id: string) => refName(d, model, id);
   if (plan.kind === "delete")
     return (
       <p className="appr-delete">
@@ -412,7 +466,7 @@ function WhatChanges({ plan, names, record }: { plan: PlanDetail; names: Names; 
     plan.transition && !changes.some((c) => c.field === plan.transition?.field)
       ? plan.transition
       : null;
-  const rows = (plan.rows ?? []) as PlanChange[][];
+  const rows = (plan.rows ?? []) as (PlanChange[] | null)[];
   const pair = (c: PlanChange): ReactNode => {
     const f = names.field(plan.model, c.field);
     return (
@@ -422,35 +476,53 @@ function WhatChanges({ plan, names, record }: { plan: PlanDetail; names: Names; 
           {c.hidden ? (
             <span className="appr-hidden">{t("Set, not shown to you")}</span>
           ) : plan.kind === "create" || plan.kind === "bulk_create" ? (
-            <span className="appr-to">{valueText(c.to, f.meta, d.refText)}</span>
+            <span className="appr-to">{valueText(c.to, f.meta, refText)}</span>
           ) : (
             <>
-              <span className="appr-from">{valueText(c.from, f.meta, d.refText)}</span>
+              <span className="appr-from">{valueText(c.from, f.meta, refText)}</span>
               <span className="appr-arrow" aria-label={t("becomes")} role="img">
                 {" → "}
               </span>
-              <span className="appr-to">{valueText(c.to, f.meta, d.refText)}</span>
+              <span className="appr-to">{valueText(c.to, f.meta, refText)}</span>
             </>
           )}
         </dd>
       </div>
     );
   };
-  if (plan.kind === "bulk_create")
+  if (plan.kind === "bulk_create") {
+    const total = plan.rows_total ?? rows.length;
+    if (unseen(plan))
+      return (
+        <p className="hint">
+          {t(
+            "{count, plural, one {# record will be created, but its row is not shown here.} other {# records will be created, but their rows are not shown here.}}",
+            { count: total },
+          )}
+        </p>
+      );
     return (
       <>
         <p>
-          {t("{count} records will be created. The first ones:", {
-            count: fmt.integer(plan.rows_total ?? rows.length),
-          })}
+          {t(
+            "{count, plural, one {# record will be created. The first one:} other {# records will be created. The first ones:}}",
+            { count: total },
+          )}
         </p>
-        {rows.map((r, i) => (
-          <dl key={i} className="appr-changes appr-bulk-row">
-            {r.map(pair)}
-          </dl>
-        ))}
+        {rows.map((r, i) =>
+          Array.isArray(r) ? (
+            <dl key={i} className="appr-changes appr-bulk-row">
+              {r.map(pair)}
+            </dl>
+          ) : (
+            <p key={i} className="hint">
+              {t("This row is not shown.")}
+            </p>
+          ),
+        )}
       </>
     );
+  }
   if (!changes.length && !transition)
     return <p className="hint">{t("No changed field that you may read.")}</p>;
   return (

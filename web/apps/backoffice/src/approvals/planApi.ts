@@ -77,8 +77,12 @@ async function post<T>(token: string, command: string, body: object): Promise<Pl
 export const planCount = (token: string) => post<PlanCount>(token, "count", {});
 
 /** One page of the person's plans: waiting (oldest first) or decided (newest decision first). */
-export const planList = (token: string, state: "waiting" | "decided") =>
-  post<{ rows: PlanRow[]; total: number }>(token, "list", { state, limit: 50 });
+export const planList = (token: string, state: "waiting" | "decided", offset = 0) =>
+  post<{ rows: PlanRow[]; total: number }>(token, "list", {
+    state,
+    limit: 50,
+    ...(offset > 0 ? { offset } : {}),
+  });
 
 /** One plan with its change, read as this person. */
 export const planGet = (token: string, id: string) => post<PlanDetail>(token, "get", { id });
@@ -100,8 +104,26 @@ export const planReject = (token: string, id: string, reason: string) =>
 
 /** The most characters a reason may have (the server counts characters, not UTF-16 units). */
 export const REASON_MAX = 300;
-/** Characters as the server counts them. */
-export const reasonLength = (s: string): number => Array.from(s.trim()).length;
+/**
+ * What the server keeps of a reason (`devices::strip_hidden`): white space as one space, no control
+ * or format character, a joiner only between two characters that are drawn, trimmed.
+ */
+export function cleanReason(raw: string): string {
+  const chars = Array.from(raw);
+  const hidden = (c: string) => /[\p{Cc}\p{Cf}]/u.test(c);
+  const seen = (c: string | undefined) => c !== undefined && !/\s/u.test(c) && !hidden(c);
+  let out = "";
+  chars.forEach((c, i) => {
+    if (/\s/u.test(c)) {
+      if (out && !out.endsWith(" ")) out += " ";
+    } else if (c === "\u200c" || c === "\u200d") {
+      if (seen(chars[i - 1]) && seen(chars[i + 1])) out += c;
+    } else if (!hidden(c)) out += c;
+  });
+  return out.trim();
+}
+/** Characters as the server counts them (after the hidden ones are taken out). */
+export const reasonLength = (s: string): number => Array.from(cleanReason(s)).length;
 
 /**
  * Whether this token may call the plan commands at all: a person's may, an agent's may not (the

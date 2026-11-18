@@ -12,6 +12,12 @@ import { DataProvider } from "../data.tsx";
 import { href, nav, parse, type Go, type Route } from "../route.ts";
 import { ApprovalsPage } from "./ApprovalsPage.tsx";
 import type { PlanDetail, PlanRow } from "./planApi.ts";
+import { plansChanged } from "./usePlanCount.ts";
+
+vi.mock("./usePlanCount.ts", async (original) => ({
+  ...(await original<typeof import("./usePlanCount.ts")>()),
+  plansChanged: vi.fn(),
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,6 +49,15 @@ const modules: ModuleMeta[] = [
             name: "state",
             kind: "select",
             options: ["draft", "posted"],
+            description: "",
+            class: "none",
+            personal_data: false,
+            required: false,
+          },
+          {
+            name: "client",
+            kind: "ref",
+            to: "contact",
             description: "",
             class: "none",
             personal_data: false,
@@ -124,7 +139,7 @@ const fail = (status: number, body: Record<string, unknown>): Answer => ({ statu
 let server: {
   waiting: PlanRow[];
   decided: PlanRow[];
-  list: (state: string) => Answer;
+  list: (state: string, body: Record<string, unknown>) => Answer;
   get: (id: string) => Answer;
   approve: (body: { id: string; seen_version?: number }) => Answer;
   reject: (body: { id: string; reason?: string }) => Answer;
@@ -153,7 +168,7 @@ function fakeServer() {
       const hold = holds[command];
       if (hold) await hold;
       let a: Answer;
-      if (command === "list") a = server.list(body.state);
+      if (command === "list") a = server.list(body.state, body);
       else if (command === "get") a = server.get(body.id);
       else if (command === "approve") a = server.approve(body);
       else if (command === "reject") a = server.reject(body);
@@ -238,6 +253,7 @@ beforeEach(async () => {
   nav.ask = null;
   nav.dirty = null;
   notify = vi.fn();
+  vi.mocked(plansChanged).mockClear();
   calls = [];
   holds = {};
   plans = new Map([
@@ -801,5 +817,243 @@ describe("reject", () => {
       "bo approved this 1 minute ago.",
     );
     expect(panel()!.querySelector(".appr-foot")).toBeNull();
+  });
+});
+
+describe("after the review", () => {
+  const reasonField = () =>
+    document.querySelector<HTMLTextAreaElement>('textarea[name="plan_reject_reason"]')!;
+  const bulk = (over: Partial<PlanDetail>) =>
+    plans.set(
+      "p-bulk",
+      detail({
+        ...row({ id: "p-bulk", kind: "bulk_create", command: "invoice.bulk_create" }),
+        changes: [],
+        ...over,
+      }),
+    );
+
+  it("a bulk create proposed as csv shows no rows, says so, and offers only Reject", async () => {
+    bulk({ rows: null, rows_total: 12 } as never);
+    await mount("#/approvals?id=p-bulk");
+    expect(flat(panel())).not.toContain("The first ones");
+    expect(flat(panel())).toContain(
+      "12 records will be created, but their rows are not shown here.",
+    );
+    expect(flat(panel())).toContain("this cannot be approved from this page");
+    expect(button("Approve and create", panel()!)).toBeUndefined();
+    expect(button("Reject", panel()!)).toBeTruthy();
+    expect(decisions()).toEqual([]);
+  });
+
+  it("a bulk row that is not a record does not break the panel; a person can still reject", async () => {
+    bulk({
+      rows: [null, [{ field: "amount", from: null, to: "10.00", hidden: false }]],
+      rows_total: 2,
+    } as never);
+    await mount("#/approvals?id=p-bulk");
+    expect(flat(panel())).toContain("This row is not shown.");
+    expect(flat(panel())).toContain("Amount10.00");
+    expect(button("Approve and create", panel()!)).toBeTruthy();
+    bulk({ rows: [null], rows_total: 1 } as never);
+    await mount("#/approvals?id=p-bulk");
+    expect(button("Reject", panel()!)).toBeTruthy();
+    expect(button("Approve and create", panel()!)).toBeUndefined();
+  });
+
+  it("a waiting plan nobody here can decide says it waits for somebody else", async () => {
+    plans.set("p-update", detail({ own_agent: true, can_approve: false, can_reject: false }));
+    await mount("#/approvals?id=p-update");
+    expect(flat(panel())).toContain("Waiting for a person who can approve it.");
+    expect(panel()!.querySelector(".appr-foot")).toBeNull();
+  });
+
+  it("reads more than fifty: says how many are shown and fetches the next ones", async () => {
+    const all = Array.from({ length: 70 }, (_, i) => row({ id: `p${i}`, record_title: `R${i}` }));
+    server.list = (_s, body) => {
+      const at = Number(body.offset ?? 0);
+      return ok({ rows: all.slice(at, at + 50), total: 70 });
+    };
+    await mount();
+    expect(document.querySelectorAll(".appr-thing")).toHaveLength(50);
+    expect(page()).toContain("Showing 50 of 70.");
+    await click(button("Show more"));
+    expect(sent("list").at(-1)?.body).toMatchObject({ offset: 50 });
+    expect(document.querySelectorAll(".appr-thing")).toHaveLength(70);
+    expect(page()).not.toContain("Show more");
+  });
+
+  it("reads the list again after a decision, and tells the count", async () => {
+    await mount("#/approvals?id=p-update");
+    const before = sent("list").length;
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    expect(sent("list").length).toBeGreaterThan(before);
+    expect(plansChanged).toHaveBeenCalled();
+    vi.mocked(plansChanged).mockClear();
+    await mount("#/approvals?id=p-update");
+    const beforeReject = sent("list").length;
+    await click(button("Reject", panel()!));
+    await click(button("Reject request"));
+    expect(sent("list").length).toBeGreaterThan(beforeReject);
+    expect(plansChanged).toHaveBeenCalled();
+  });
+
+  it("a 404 or a 400 from the decision reads the list and the count again", async () => {
+    server.approve = () => fail(400, { error: "the record moved on", code: "bad_request" });
+    await mount("#/approvals?id=p-update");
+    let before = sent("list").length;
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    expect(sent("list").length).toBeGreaterThan(before);
+    expect(plansChanged).toHaveBeenCalled();
+    vi.mocked(plansChanged).mockClear();
+    server.approve = () => fail(404, { error: "not found", code: "not_found" });
+    before = sent("list").length;
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    expect(sent("list").length).toBeGreaterThan(before);
+    expect(plansChanged).toHaveBeenCalled();
+  });
+
+  it("does not close while a decision is on its way (Escape, Close)", async () => {
+    const release = holdBack("approve");
+    await mount("#/approvals?id=p-update");
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    await act(async () => {
+      dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await click(button("Close"));
+    expect(panel(), "closed with a decision in flight").not.toBeNull();
+    await act(async () => release());
+    await settle();
+    expect(panel()).toBeNull();
+    expect(notify).toHaveBeenCalledWith("Approved.");
+    // Once nothing is in flight, Escape closes it again.
+    await mount("#/approvals?id=p-update");
+    await act(async () => {
+      dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(panel()).toBeNull();
+  });
+
+  it("a decided plan shows its outcome and no change block that reads as still to come", async () => {
+    plans.set(
+      "p-gone",
+      detail({
+        ...plans.get("p-delete")!,
+        id: "p-gone",
+        status: "rejected",
+        decided_by: "bo",
+        decided_at: iso(now - HOUR),
+        can_approve: false,
+        can_reject: false,
+      }),
+    );
+    await mount("#/approvals?id=p-gone");
+    expect(flat(panel())).toMatch(/bo rejected this /);
+    expect(flat(panel())).not.toContain("What changes");
+    expect(flat(panel())).not.toContain("for good");
+    plans.set(
+      "p-ex",
+      detail({ status: "expired", changes: undefined, can_approve: false, can_reject: false }),
+    );
+    await mount("#/approvals?id=p-ex");
+    expect(flat(panel())).not.toContain("No changed field that you may read.");
+  });
+
+  it("412 and the plan is gone after the reload: says it is not waiting, not that the record changed", async () => {
+    server.approve = () => {
+      plans.delete("p-update");
+      return fail(412, { error: "changed", code: "precondition_failed", current_version: 9 });
+    };
+    await mount("#/approvals?id=p-update");
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    const note = flat(document.querySelector("[data-testid=plan-note]"));
+    expect(note).toContain("not waiting any more");
+    expect(note).not.toContain("This record changed");
+  });
+
+  it("a reference in the change shows no short id while its records are not known", async () => {
+    plans.set(
+      "p-update",
+      detail({
+        changes: [
+          {
+            field: "client",
+            from: "3f9a2c1d-0000-4000-8000-000000000001",
+            to: "8b1e44a0-0000-4000-8000-000000000002",
+            hidden: false,
+          },
+        ],
+      }),
+    );
+    await mount("#/approvals?id=p-update");
+    await settle(10);
+    const text = flat(panel()!.querySelector(".appr-change"));
+    expect(text).toContain("Not shown to you");
+    expect(text).not.toMatch(/3f9a2c1d|8b1e44a0/);
+  });
+
+  it("counts a reason as the server does: hidden characters do not count", async () => {
+    await mount("#/approvals?id=p-update");
+    await click(button("Reject", panel()!));
+    await type(reasonField(), "é".repeat(300) + "​⁠");
+    expect(page()).toContain("300 of 300 characters");
+    expect(button("Reject request")?.disabled).toBe(false);
+    await type(reasonField(), "é".repeat(301) + "​");
+    expect(button("Reject request")?.disabled).toBe(true);
+  });
+
+  it("opening a deep link decides nothing", async () => {
+    await mount("#/approvals?id=p-update");
+    expect(decisions()).toEqual([]);
+  });
+
+  it("a deep link whose plan cannot be read says so, and is not the not-waiting sentence", async () => {
+    server.get = () => fail(500, { error: "storage" });
+    await mount("#/approvals?id=p-update");
+    expect(flat(panel())).toContain("This request could not be loaded.");
+    expect(flat(panel())).not.toContain("not waiting any more");
+    expect(button("Try again", panel()!)).toBeTruthy();
+  });
+
+  it("offers Approve alone when the person may approve but not reject", async () => {
+    plans.set("p-update", detail({ can_approve: true, can_reject: false }));
+    await mount("#/approvals?id=p-update");
+    expect(button("Approve and save", panel()!)).toBeTruthy();
+    expect(button("Reject", panel()!)).toBeUndefined();
+  });
+
+  it("a delete has no link to the record that is about to go", async () => {
+    await mount("#/approvals?id=p-delete");
+    expect(panel()!.querySelector("a.appr-record")).toBeNull();
+    await mount("#/approvals?id=p-update");
+    expect(panel()!.querySelector("a.appr-record")).not.toBeNull();
+  });
+
+  it("sends the version that was shown, not one read at the click", async () => {
+    let gets = 0;
+    server.get = (id) => {
+      gets++;
+      const p = plans.get(id)!;
+      return ok({ ...p, seen_version: gets === 1 ? 7 : 99 });
+    };
+    await mount("#/approvals?id=p-update");
+    const readsBefore = sent("get").length;
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    expect(sent("get").length, "no read at the click").toBe(readsBefore);
+    expect(sent("approve")[0]?.body).toEqual({ id: "p-update", seen_version: 7 });
+  });
+
+  it("rejects once when the button is pressed twice", async () => {
+    const release = holdBack("reject");
+    await mount("#/approvals?id=p-update");
+    await click(button("Reject", panel()!));
+    const confirm = button("Reject request")!;
+    await act(async () => {
+      confirm.click();
+      confirm.click();
+    });
+    await act(async () => release());
+    await settle();
+    expect(sent("reject")).toHaveLength(1);
   });
 });
