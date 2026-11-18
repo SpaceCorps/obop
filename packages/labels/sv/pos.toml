@@ -66,7 +66,7 @@ description = "Kontanter som räknades i lådan vid öppning (minsta valutaenhet
 
 [labels.sv.model.pos_session.field.expected_cash]
 label = "Förväntad kassa"
-description = "Kontanter som lådan borde innehålla vid stängning: öppningskassan plus kontantbetalningarna för passets betalda försäljningar"
+description = "Kontanter som lådan ska innehålla vid stängning: växelkassan plus kontantbetalningarna för passets betalda försäljningar, minus kontanterna för försäljningar från stängda pass som återbetalats i det; för ett stängt pass beloppet det stängdes med"
 
 [labels.sv.model.pos_session.field.closing_cash]
 label = "Utgående kassa"
@@ -250,3 +250,7 @@ description = "Varifrån varorna som säljs under det här passet lämnar lagret
 [labels.sv.model.pos_order.field.cash_paid]
 label = "Betalt kontant"
 description = "Den del av betalningarna som gjordes kontant (minsta valutaenhet)"
+
+[labels.sv.model.pos_order.field.refund_session_id]
+label = "Återbetald i pass"
+description = "Passet vars kassalåda betalade ut kontanterna för en återbetalning, satt av servern när en försäljning från ett stängt pass återbetalas: passet som då är öppet i försäljningens kassa; tomt när försäljningens eget pass fortfarande var öppet"

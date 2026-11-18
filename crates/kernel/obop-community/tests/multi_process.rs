@@ -169,17 +169,19 @@ fn the_status_page_stays_consistent_across_two_processes_on_one_sqlite_file() {
 
 #[test]
 fn both_stay_consistent_on_postgres_when_available() {
-    let Ok(url) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
-        eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
+    // A scratch database of this run's own (dropped afterwards): the status leader lease of an
+    // earlier run in the shared database would otherwise still be held (G13). `None` (after
+    // saying why) without `OBOP_TEST_POSTGRES_URL`.
+    let Some(db) = obop_storage::testing::TestDb::new() else {
         return;
     };
-    // A scratch schema keeps the run independent of what other tests left in the database.
+    let url = db.url();
     forum_stays_consistent(
-        obop_storage::open(&url).unwrap(),
-        obop_storage::open(&url).unwrap(),
+        obop_storage::open(url).unwrap(),
+        obop_storage::open(url).unwrap(),
     );
     status_stays_consistent(
-        obop_storage::open(&url).unwrap(),
-        obop_storage::open(&url).unwrap(),
+        obop_storage::open(url).unwrap(),
+        obop_storage::open(url).unwrap(),
     );
 }

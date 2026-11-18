@@ -32,6 +32,14 @@ description = "Data, do której projekt musi być zakończony (YYYY-MM-DD)"
 label = "Budżet"
 description = "Uzgodniony budżet projektu (w jednostkach podrzędnych waluty, np. groszach)"
 
+[labels.pl.model.projects_project.field.customer_id]
+label = "Klient"
+description = "Klient, któremu fakturowany jest rozliczalny czas projektu"
+
+[labels.pl.model.projects_project.field.hourly_rate]
+label = "Stawka godzinowa"
+description = "Cena jednej godziny rozliczalnego czasu przy fakturowaniu czasu projektu (najmniejsza jednostka waluty, np. grosze)"
+
 [labels.pl.model.projects_project.field.description]
 label = "Opis"
 description = "Cel i zakres projektu"

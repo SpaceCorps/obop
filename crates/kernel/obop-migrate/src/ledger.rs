@@ -3,7 +3,8 @@
 //!
 //! ```text
 //! core/0002                 module "core",  kind "rust":    step 2 of obop-migrate
-//! core/0002/failed-<ms>     one row per failed attempt (the step's own row stays as it was)
+//! core/0002/failed-<ms>     a failed attempt (the step's own row stays as it was); attempts
+//!                           that fail again with the same reason count up `attempts` on it
 //! pkg/<id>/<from>-<to>/<ms>-<n>   module <id>, kind "package": a [[migration]] step of module.upgrade
 //! core/rollback-<ms>        a rollback by restore, with the reason
 //! ```
@@ -15,9 +16,10 @@
 //! (drift) stops the server from starting and names the step, because an edited migration means
 //! the database in front of the operator was not produced by the code in front of them.
 //!
-//! Rows are append-only by convention here (a step's row moves `partial` to `applied` once, in the
-//! transaction that completes it; attempts that failed are separate rows). Making that a database
-//! guarantee is D77.
+//! Rows are append-only by convention here, with two exceptions: a step's row moves `partial` to
+//! `applied` once, in the transaction that completes it, and a failed attempt's row is rewritten
+//! when the same step fails again for the same reason (its `attempts` counts up; a new reason is a
+//! new row). Making the rest a database guarantee is D77, which must leave both rewrites allowed.
 
 use obop_storage::{Backend, Fields, Op};
 use serde_json::Value as J;
@@ -210,6 +212,36 @@ pub fn core_id(version: u32) -> String {
 /// The id of a failed attempt of a core step.
 pub fn core_failed_id(version: u32, at_ms: u64) -> String {
     format!("core/{version:04}/failed-{at_ms}")
+}
+
+/// The write that records the failed attempt `row` (an id from [`core_failed_id`]): a new row,
+/// or, when the last failed attempt of the same step failed with the same reason, that row again
+/// with its `attempts` counted up and the time and duration of this one. A server that an
+/// orchestrator restarts every few seconds against a step that keeps failing would otherwise add
+/// a row on every start (K5). A different reason, or a run in between, starts a new row.
+pub fn failed_attempt(backend: &dyn Backend, mut row: Entry) -> Op {
+    let prefix = format!("core/{}/failed-", row.step);
+    let rows = backend.list(MODEL).unwrap_or_default();
+    let last = rows
+        .iter()
+        .rev()
+        .find(|(id, _)| id.starts_with(&prefix) || *id == core_id(row.version.unwrap_or(0)));
+    let mut attempts = 1;
+    if let Some((id, f)) = last
+        && id.starts_with(&prefix)
+        && Entry::from_fields(id, f)
+            .is_some_and(|e| e.note == row.note && e.checksum == row.checksum)
+    {
+        attempts = f.get("attempts").and_then(J::as_u64).unwrap_or(1) + 1;
+        row.id = id.clone();
+    }
+    let mut fields = row.to_fields();
+    fields.insert("attempts".into(), J::from(attempts));
+    Op::Put {
+        model: MODEL.into(),
+        id: row.id,
+        fields,
+    }
 }
 
 /// Every row of the ledger, in the order they were written.

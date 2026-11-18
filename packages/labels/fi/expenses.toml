@@ -19,6 +19,10 @@ description = "Mihin rahat käytettiin"
 label = "Työntekijä"
 description = "Kulun hakevan henkilön käyttäjänimi; korvauksen luova henkilö, ellei toisin määritetä"
 
+[labels.fi.model.expenses_expense.field.submitted_by]
+label = "Lähettäjä"
+description = "Korvauksen lähettäneen henkilön käyttäjänimi, jonka Lähetä-toiminto tallentaa; hänkään ei voi hyväksyä sitä, ellei oma hyväksyntä ole sallittu"
+
 [labels.fi.model.expenses_expense.field.spent_on]
 label = "Ostopäivä"
 description = "Oston päivämäärä (YYYY-MM-DD)"

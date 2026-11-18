@@ -89,8 +89,11 @@ export type UiSection = {
   /** Shown only while the record's state is one of these. */
   show_in?: string[];
 };
-/** `[[model.ui.filter]]`: a saved filter offered by the control panel. */
-export type UiFilter = { label: string; where: string };
+/**
+ * `[[model.ui.filter]]`: a saved filter offered by the control panel; `labels` is its label per
+ * language from the package's label files (U10), absent when none translates it.
+ */
+export type UiFilter = { label: string; where: string; labels?: Record<string, string> };
 
 /** `[model.ui]`. */
 export type ModelUi = {
@@ -225,6 +228,8 @@ export type FieldMeta = {
    */
   max_length?: number;
   min_length?: number;
+  /** Only for `text` (K45, U3): the named format a written value has. */
+  pattern?: "currency_code" | "iban" | "vat_id";
   /**
    * Only for `number`, `money` (minor units) and `decimal` (a canonical string at the scale of the
    * field) (D90): the inclusive bounds the package declares.
@@ -669,6 +674,22 @@ async function loginStep(path: string, body: object): Promise<LoginResult> {
 
 export function login(username: string, password: string): Promise<LoginResult> {
   return loginStep("/api/auth/login", { username, password });
+}
+
+/**
+ * The login the server signed in with `token`, from the two-factor status (`user`), or null when
+ * it cannot be read. A password sign-in's answer does not name the login, and `$user` of a filter
+ * or a read-only hint compares with the server's (docs/ISSUES.md U11).
+ */
+export async function signedInLogin(token: string): Promise<string | null> {
+  try {
+    const res = await fetch("/api/auth/mfa", { headers: { authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { user?: unknown };
+    return typeof json.user === "string" && json.user ? json.user : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

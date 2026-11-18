@@ -78,3 +78,33 @@ test.describe("Expenses: a claim on a phone", () => {
     });
   });
 });
+
+test.describe("Expenses: the receipt on a touch phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("the Download button of the receipt is as tall as the buttons beside it", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    await withExpenses(api, async () => {
+      const claim = await api.create("root", "expenses_expense", {
+        description: uid("Hotel"),
+        amount: 12000,
+        category: "travel",
+      });
+      await signIn("root", `/expenses/expenses_expense?view=list&id=${claim.id}`);
+      const field = page.locator(".blobfield").first();
+      await field.locator('input[type="file"]').setInputFiles({
+        name: "receipt.png",
+        mimeType: "image/png",
+        buffer: png,
+      });
+      const download = field.locator(".blobrow .filechip");
+      await expect(download).toBeVisible();
+      const h = await download.evaluate((e) => Math.round(e.getBoundingClientRect().height));
+      expect(h, "a finger-sized Download button").toBeGreaterThanOrEqual(44);
+    });
+  });
+});

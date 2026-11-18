@@ -883,6 +883,13 @@ fn an_error_of_an_effect_that_is_not_a_limit_is_wrapped_as_before() {
     );
 }
 
+/// The refusal of a mask token sent for a field the agent reads in clear (O37).
+fn in_clear(field: &str) -> String {
+    format!(
+        "{field} is shown to agents in clear, so a mask token cannot be written into it: send the value itself, or write the token into a field that is masked for agents"
+    )
+}
+
 /// A name of 40 characters (an agent never reads it, only its token).
 const LONG_NAME: &str = "Aleksandra Katarzyna Kowalska-Nowakowska";
 
@@ -908,8 +915,9 @@ fn an_agent_is_not_told_how_long_a_value_it_only_holds_as_a_token_is() {
         let token = text(get(&row, "person"));
         assert_ne!(token, LONG_NAME, "the agent must hold a token");
 
-        // It writes the token where three characters fit. The handler sees the real name, 40
-        // characters; the refusal must not say so.
+        // It writes the token where three characters fit, a field it reads in clear. That is
+        // refused before any limit is checked (O37: a token is never restored into a field the
+        // agent reads in clear), and the refusal does not say how long the name is.
         let e = r.err_as(
             &bot,
             Surface::Mcp,
@@ -918,13 +926,7 @@ fn an_agent_is_not_told_how_long_a_value_it_only_holds_as_a_token_is() {
             "create",
             m(vec![("short", t(&token))]),
         );
-        assert_eq!(
-            e,
-            format!(
-                "limit_violated: {}_log.short must be at most 3 characters",
-                r.p
-            )
-        );
+        assert_eq!(e, in_clear(&format!("{}_log.short", r.p)));
         // The same through update, bulk_create and a number the agent wrote itself.
         let e = r.err_as(
             &bot,
@@ -934,13 +936,7 @@ fn an_agent_is_not_told_how_long_a_value_it_only_holds_as_a_token_is() {
             "update",
             m(vec![("id", t(&doc)), ("title", t(&token))]),
         );
-        assert_eq!(
-            e,
-            format!(
-                "limit_violated: {}_doc.title must be at most 10 characters",
-                r.p
-            )
-        );
+        assert_eq!(e, in_clear(&format!("{}_doc.title", r.p)));
         let e = r.err_as(
             &bot,
             Surface::Mcp,
@@ -964,7 +960,7 @@ fn an_agent_is_not_told_how_long_a_value_it_only_holds_as_a_token_is() {
                 Value::List(vec![m(vec![("title", t(&token))])]),
             )]),
         );
-        assert!(e.contains("must be at most 10 characters"), "{e}");
+        assert_eq!(e, in_clear(&format!("{}_doc.title", r.p)));
         let said = r.bare(&e);
         assert!(!said.contains("this has") && !said.contains("40"), "{e}");
         assert_eq!(r.count("log"), 0);
@@ -1125,7 +1121,7 @@ fn a_state_move_with_an_over_limit_field_is_refused_before_the_action_runs() {
         assert_eq!(text(get(&row, "state")), "new");
         assert_eq!(text(get(&row, "title")), "ok");
         // An agent that holds a name as a token and sends it as the title along with the move
-        // is refused the same way and is not told how long the name behind the token is.
+        // is refused (O37: the title is read in clear) and is not told how long the name is.
         let named = r.create("doc", vec![("title", t("ok")), ("person", t(LONG_NAME))]);
         let (bot, mut vault) = (r.bot(), Vault::new());
         let seen = r
@@ -1153,13 +1149,7 @@ fn a_state_move_with_an_over_limit_field_is_refused_before_the_action_runs() {
                 ("title", t(&token)),
             ]),
         );
-        assert_eq!(
-            e,
-            format!(
-                "limit_violated: {}_doc.title must be at most 10 characters",
-                r.p
-            )
-        );
+        assert_eq!(e, in_clear(&format!("{}_doc.title", r.p)));
         assert_eq!(r.count("log"), 0, "the action ran for the agent");
         assert_eq!(text(get(&r.read("doc", &id), "state")), "new");
         // Nothing wrong with the same move once the title fits.

@@ -4,7 +4,7 @@
 // sends (`ui.list`, `ui.order`, `ui.aggregate`, `ui.warn_before_days`, `readonly`) wins over the
 // heuristics here without a change to this file.
 import type { FieldMeta, ModelMeta, Row, ServerOrder } from "../api.ts";
-import { isEmpty } from "../format.ts";
+import { isEmpty, optionLabel } from "../format.ts";
 import {
   defaultOrder,
   listColumns,
@@ -238,9 +238,21 @@ export function columnWidth(f: FieldMeta, head: string, first = false): number {
   if (first && !short && f.kind !== "ref" && f.kind !== "text" && f.kind !== "longtext")
     return Math.round(Math.max(KIND_WIDTH[f.kind] ?? 160, head.length * 7.2 + 44));
   if (first) return short ? 160 : f.kind === "ref" ? 200 : TITLE_WIDTH;
-  const base = short ? 150 : (KIND_WIDTH[f.kind] ?? 160);
+  const base = short ? 150 : f.kind === "select" ? badgeWidth(f) : (KIND_WIDTH[f.kind] ?? 160);
   return Math.round(Math.min(260, Math.max(base, head.length * 7.2 + 44)));
 }
+
+/**
+ * A status column is as wide as its longest option drawn as a badge (dot and padding), between 96
+ * and 140 px: a list of short states ("Requested") leaves the rest to the title (R7).
+ */
+function badgeWidth(f: FieldMeta): number {
+  const longest = Math.max(0, ...(f.options ?? []).map((o) => optionLabel(o, f).length));
+  return longest ? Math.min(140, Math.max(96, Math.round(longest * 7.5 + 64))) : 140;
+}
+
+/** The narrowest a first column is squeezed to so that the status and the amount stay in view. */
+const TITLE_FLOOR = 160;
 
 /**
  * The columns that fit `width` pixels and their widths: the lowest-ranked go first (trimColumns),
@@ -262,17 +274,28 @@ export function fitColumns(
     cols = trimColumns(cols, 1, state, measure);
     widths = widthsOf(cols);
   }
+  // Still too wide with only the title, the amount and the status left (a record panel beside the
+  // list): the title gives up the excess, down to a floor, so the status is not cut at the edge.
+  const over = Number.isFinite(width) ? Math.ceil(total() - width) : 0;
+  if (over > 0 && widths.length > 1)
+    widths[0] = Math.max(Math.min(TITLE_FLOOR, widths[0]!), widths[0]! - over);
   // Room left over: a first column that is a name takes a third (at most 320 px more); the rest goes
   // to the columns of words (names, subjects, refs) in proportion, else to every column, so a
   // short number ("MO-0018") never gets the room a description needs.
   const extra = Number.isFinite(width) ? Math.floor(width - total()) : 0;
   if (extra > 0 && widths.length) {
     const titleTakes = widths.length > 1 && wordy(cols[0]!);
-    const toTitle =
-      widths.length === 1 ? extra : titleTakes ? Math.min(Math.floor(extra / 3), 320) : 0;
-    const rest = extra - toTitle;
     const takers = cols.map((f, i) => i > 0 && wordy(f));
     const anyTaker = takers.some(Boolean);
+    // Beside numbers and a status only, the title takes it all: a number or a badge does not grow
+    // with its column, a name does (R7).
+    const toTitle =
+      widths.length === 1 || (titleTakes && !anyTaker)
+        ? extra
+        : titleTakes
+          ? Math.min(Math.floor(extra / 3), 320)
+          : 0;
+    const rest = extra - toTitle;
     const share = (i: number) => (anyTaker ? takers[i] : i > 0 || !titleTakes);
     const pool = widths.reduce((a, w, i) => a + (share(i) ? w : 0), 0);
     widths = widths.map(
@@ -295,11 +318,18 @@ export const isMaskedValue = (v: unknown) =>
 
 /** States after which a deadline no longer matters. */
 const SETTLED = new Set(["archived", "superseded", "discarded", "reversed"]);
+/**
+ * Ok states that mean "in force", not "finished": a date the field marks with
+ * `ui.warn_before_days` (an expiring permit of an active employee, a published document's end)
+ * keeps its warning in them.
+ */
+const IN_FORCE = new Set(["active", "running", "published", "available", "connected"]);
 
 /**
  * Whether a due-like date is past (`past`), close (`soon`: within `ui.warn_before_days`, default
  * 7 days), or neither. A record whose status is settled (done, paid, cancelled, expired, archived)
- * has no deadline left. `today` is `YYYY-MM-DD` in the instance's zone; `now` an instant.
+ * has no deadline left; a record in force (active, published) keeps it when the field declares
+ * `ui.warn_before_days`. `today` is `YYYY-MM-DD` in the instance's zone; `now` an instant.
  */
 export function dueLevel(
   model: ModelMeta,
@@ -315,7 +345,8 @@ export function dueLevel(
   if (state) {
     const s = String(row[state.name] ?? "");
     const tone = toneOf(state, s, model);
-    if (tone === "ok" || tone === "bad" || SETTLED.has(s)) return null;
+    const inForce = tone === "ok" && IN_FORCE.has(s) && f.ui?.warn_before_days != null;
+    if ((tone === "ok" && !inForce) || tone === "bad" || SETTLED.has(s)) return null;
   }
   const days = f.ui?.warn_before_days ?? 7;
   if (f.kind === "datetime") {

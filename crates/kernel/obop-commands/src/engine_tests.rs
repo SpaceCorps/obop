@@ -259,12 +259,13 @@ fn workshop(p: &str) -> Module {
 }
 
 fn each_rig(f: impl Fn(&Rig)) {
-    let mut urls = vec!["memory:".to_string(), "sqlite::memory:".to_string()];
-    if let Ok(u) = std::env::var("OBOP_TEST_POSTGRES_URL") {
-        urls.push(u);
+    for url in ["memory:", "sqlite::memory:"] {
+        f(&rig_for(Store::open(url).unwrap()));
     }
-    for url in urls {
-        f(&rig_for(Store::open(&url).unwrap()));
+    // PostgreSQL in a scratch database of this test's own, dropped afterwards (K41): the shared
+    // database of `OBOP_TEST_POSTGRES_URL` would keep every rig's unique indexes.
+    if let Some(db) = obop_storage::testing::TestDb::new() {
+        f(&rig_for(Store::open(db.url()).unwrap()));
     }
 }
 

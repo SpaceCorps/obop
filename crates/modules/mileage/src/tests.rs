@@ -733,6 +733,24 @@ fn a_reviewer_confirms_or_rejects_and_the_driver_corrects_and_submits_again() {
 }
 
 #[test]
+fn a_reason_typed_for_a_reject_that_was_cancelled_does_not_stand_on_a_confirmed_trip() {
+    each_rig(|r| {
+        let (ann, rev) = (driver("ann"), reviewer("rita"));
+        let id = r.in_review(&ann);
+        // The reviewer typed a reason (the form saved it) and then cancelled the reject.
+        r.ok(
+            &rev,
+            "mileage_trip.update",
+            json!({"id": id, "reject_reason": "Private detour"}),
+        );
+        r.ok(&rev, "mileage_trip.confirm", json!({"id": id}));
+        let row = r.trip_row(&id);
+        assert_eq!(row["state"], "confirmed");
+        assert_eq!(row["reject_reason"], J::Null, "{row:?}");
+    });
+}
+
+#[test]
 fn nobody_decides_their_own_trip() {
     each_rig(|r| {
         let (rita, rex) = (reviewer("rita"), reviewer("rex"));
@@ -3051,11 +3069,12 @@ fn a_reviewer_reads_the_distance_not_the_start_and_end_and_an_admin_read_is_logg
         assert_eq!(events.len(), 2, "{events:?}");
         assert!(events.iter().any(|e| e.0 == audit::ALL_DRIVERS));
         // An administrator's update answers with them too (here one that changes nothing), and
-        // that read is logged as well.
+        // that read is logged as well. The confirm cleared the reason the reviewer typed, so an
+        // empty reason is the update that changes nothing.
         let admin_update = r.ok(
             &boss,
             "mileage_trip.update",
-            json!({"id": id, "reject_reason": "probe"}),
+            json!({"id": id, "reject_reason": null}),
         );
         assert_eq!(admin_update["end_lat"], "52.0020000");
         let events = r.events(audit::KIND);

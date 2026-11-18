@@ -188,6 +188,105 @@ fn an_approved_plan_is_refused_when_the_maker_approves_it() {
     };
     assert!(e.contains("someone else has to approve it"), "{e}");
     assert_eq!(state(&a, &id), "submitted");
+    // U7: the refusal leaves the plan, and someone else approves it.
+    a.dispatcher
+        .approve(&manager("bob"), &mut Vault::new(), &plan_id)
+        .unwrap();
+    assert_eq!(state(&a, &id), "approved");
+}
+
+#[test]
+fn the_person_who_submitted_a_claim_for_a_colleague_cannot_approve_it() {
+    let a = app();
+    // root writes a claim in bob's name and submits it.
+    let root = manager("root");
+    let id = call(
+        &a,
+        &root,
+        "expenses_expense.create",
+        json!({"description": "Hotel", "amount": 9900, "category": "lodging", "employee": "bob"}),
+    )
+    .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    call(&a, &root, "expenses_expense.submit", json!({"id": id})).unwrap();
+    let stored = a
+        .store
+        .backend()
+        .get("expenses_expense", &id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored["submitted_by"], "root", "{stored:?}");
+    let got = call(&a, &root, "expenses_expense.get", json!({"id": id})).unwrap();
+    assert_eq!(got["submitted_by"], "root", "{got}");
+    // Nobody writes it by hand.
+    let e = refused(call(
+        &a,
+        &root,
+        "expenses_expense.update",
+        json!({"id": id, "submitted_by": "carol"}),
+    ));
+    assert!(e.contains("is set by the server"), "{e}");
+    for who in ["root", "bob"] {
+        let e = refused(call(
+            &a,
+            &manager(who),
+            "expenses_expense.approve",
+            json!({"id": id}),
+        ));
+        assert!(e.contains("someone else has to approve it"), "{who}: {e}");
+    }
+    assert_eq!(state(&a, &id), "submitted");
+    call(
+        &a,
+        &manager("carol"),
+        "expenses_expense.approve",
+        json!({"id": id}),
+    )
+    .unwrap();
+    assert_eq!(state(&a, &id), "approved");
+}
+
+#[test]
+fn a_claim_submitted_through_the_person_s_own_agent_cannot_be_approved_by_that_person() {
+    let a = app();
+    let groups = ["expenses.user", "expenses.manager"];
+    let agent = Principal::agent("root/agent", &groups, &groups);
+    let id = call(
+        &a,
+        &agent,
+        "expenses_expense.create",
+        json!({"description": "Hotel", "amount": 9900, "category": "lodging", "employee": "bob"}),
+    )
+    .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    call(&a, &agent, "expenses_expense.submit", json!({"id": id})).unwrap();
+    let stored = a
+        .store
+        .backend()
+        .get("expenses_expense", &id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored["submitted_by"], "root/agent", "{stored:?}");
+    let e = refused(call(
+        &a,
+        &manager("root"),
+        "expenses_expense.approve",
+        json!({"id": id}),
+    ));
+    assert!(e.contains("someone else has to approve it"), "{e}");
+    assert_eq!(state(&a, &id), "submitted");
+    call(
+        &a,
+        &manager("carol"),
+        "expenses_expense.approve",
+        json!({"id": id}),
+    )
+    .unwrap();
+    assert_eq!(state(&a, &id), "approved");
 }
 
 #[test]

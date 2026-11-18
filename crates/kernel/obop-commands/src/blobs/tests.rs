@@ -1094,3 +1094,194 @@ fn a_move_with_a_wrapper_is_not_mixed_with_a_new_file_and_nothing_of_the_call_is
         "nobody holds the old image"
     );
 }
+
+// ---- K55 -------------------------------------------------------------------------------------
+
+/// K55 (a): an upload is saved only into the field it was made for, so a file field's upload
+/// (no re-encoding, a larger limit) cannot be put into an image field.
+#[test]
+fn an_upload_goes_only_into_the_field_it_was_made_for() {
+    let e = env();
+    let ann = user("ann");
+    // A picture uploaded as a document (kept byte for byte) and one for the small badge.
+    let as_file = up(&e, &ann, "item.manual", &fx::png(400, 300, 7), "image/png");
+    let as_photo = up(&e, &ann, "item.photo", &fx::png(40, 30, 8), "image/png");
+    for (field, id) in [
+        ("photo", &as_file),
+        ("badge", &as_file),
+        ("manual", &as_photo),
+    ] {
+        let r = call(&e, &ann, "item.create", map(&[("title", "x"), (field, id)]));
+        assert!(
+            matches!(&r, Err(crate::CallError::Handler(m)) if m.contains(&format!("item.{field} must be"))),
+            "{field}: {r:?}"
+        );
+    }
+    call(
+        &e,
+        &ann,
+        "item.create",
+        map(&[("title", "x"), ("manual", &as_file)]),
+    )
+    .unwrap();
+    call(
+        &e,
+        &ann,
+        "item.create",
+        map(&[("title", "y"), ("photo", &as_photo)]),
+    )
+    .unwrap();
+}
+
+/// K55 (b): identical bytes are stored once; a person who uploaded them too is served the name
+/// they gave, not the name of the record that already holds them.
+#[test]
+fn a_second_uploader_of_the_same_bytes_is_served_their_own_file_name() {
+    let e = env();
+    let (ann, bob) = (user("ann"), user("bob"));
+    let a = e
+        .svc
+        .upload(
+            &ann,
+            "doc.attachment",
+            "application/pdf",
+            "Ann salary review.pdf",
+            &pdf(9),
+        )
+        .unwrap()
+        .id;
+    let mut m = match map(&[("title", "Review"), ("owner", "ann"), ("attachment", &a)]) {
+        Value::Map(m) => m,
+        _ => unreachable!(),
+    };
+    m.insert("open".into(), Value::Bool(false));
+    call(&e, &ann, "doc.create", Value::Map(m)).unwrap();
+    let b = e
+        .svc
+        .upload(
+            &bob,
+            "doc.attachment",
+            "application/pdf",
+            "template.pdf",
+            &pdf(9),
+        )
+        .unwrap()
+        .id;
+    assert_eq!(a, b, "content addressed");
+    assert_eq!(e.svc.get(&bob, &b, None).unwrap().filename, "template.pdf");
+    assert_eq!(
+        e.svc.get(&ann, &a, None).unwrap().filename,
+        "Ann salary review.pdf"
+    );
+}
+
+/// K55 (b), after the save: once the second uploader's claim is spent, a download from their own
+/// record is still named as that record holds the file, not as an earlier record they can also
+/// read names the same bytes. A download that names no record keeps the old rule.
+#[test]
+fn a_download_from_a_record_is_named_as_that_record_holds_the_file() {
+    let e = env();
+    let (ann, bob) = (user("ann"), user("bob"));
+    let save = |who: &Principal, title: &str, owner: &str, name: &str| {
+        let b = e
+            .svc
+            .upload(who, "doc.attachment", "application/pdf", name, &pdf(12))
+            .unwrap()
+            .id;
+        let mut m = match map(&[("title", title), ("owner", owner), ("attachment", &b)]) {
+            Value::Map(m) => m,
+            _ => unreachable!(),
+        };
+        m.insert("open".into(), Value::Bool(true));
+        (
+            id_of_row(&call(&e, who, "doc.create", Value::Map(m)).unwrap()),
+            b,
+        )
+    };
+    let (ra, a) = save(&ann, "Contract", "ann", "ann-contract.pdf");
+    let (rb, b) = save(&bob, "Mine", "bob", "bob-private-name.pdf");
+    assert_eq!(a, b, "content addressed");
+    assert!(e.s.blobs().info(&b).unwrap().unwrap().pending.is_empty());
+    let name = |who: &Principal, rec: &str| {
+        e.svc
+            .get_from(who, &b, None, Some(("doc", rec, "attachment")))
+            .unwrap()
+            .filename
+    };
+    for who in [&ann, &bob] {
+        assert_eq!(name(who, &rb), "bob-private-name.pdf");
+        assert_eq!(name(who, &ra), "ann-contract.pdf");
+    }
+    // A record that does not hold these bytes in that field names nothing: the old rule answers.
+    let other = e
+        .svc
+        .get_from(&bob, &b, None, Some(("doc", &rb, "title")))
+        .unwrap()
+        .filename;
+    assert_eq!(other, e.svc.get(&bob, &b, None).unwrap().filename);
+}
+
+/// K55 (c): the group of a file field gates writing it, not only reading it.
+#[test]
+fn a_file_field_whose_group_the_caller_lacks_cannot_be_set_or_cleared() {
+    let e = env();
+    let (ann, mia) = (user("ann"), manager("mia"));
+    let pic = up(
+        &e,
+        &mia,
+        "item.private_photo",
+        &fx::png(40, 30, 9),
+        "image/png",
+    );
+    let rec = id_of_row(
+        &call(
+            &e,
+            &mia,
+            "item.create",
+            map(&[("title", "x"), ("private_photo", &pic)]),
+        )
+        .unwrap(),
+    );
+    let clear = Value::Map(
+        [
+            ("id".to_string(), Value::text(&rec)),
+            ("private_photo".to_string(), Value::Null),
+        ]
+        .into(),
+    );
+    let r = call(&e, &ann, "item.update", clear.clone());
+    assert!(
+        matches!(&r, Err(crate::CallError::Handler(m)) if m.contains("item.private_photo can be changed only by a holder of t.manager")),
+        "{r:?}"
+    );
+    assert_eq!(holders(&e, &pic).len(), 1, "still held");
+    // Her other fields she may still change, and a manager may clear it.
+    call(
+        &e,
+        &ann,
+        "item.update",
+        map(&[("id", &rec), ("title", "y")]),
+    )
+    .unwrap();
+    call(&e, &mia, "item.update", clear).unwrap();
+}
+
+/// K55 (d): saving a record spends only the saver's own claim; another person who uploaded the
+/// same bytes can still save their upload, also when the first record is one they cannot see.
+#[test]
+fn a_save_spends_only_the_savers_own_claim() {
+    let e = env();
+    let bob = user("bob");
+    let b = up(&e, &bob, "doc.attachment", &pdf(11), "application/pdf");
+    // Ann uploads the same bytes and saves them into her restricted Document.
+    let (_rec, a) = ann_doc(&e, false, 11);
+    assert_eq!(a, b);
+    let mut m = match map(&[("title", "Mine"), ("owner", "bob"), ("attachment", &b)]) {
+        Value::Map(m) => m,
+        _ => unreachable!(),
+    };
+    m.insert("open".into(), Value::Bool(false));
+    call(&e, &bob, "doc.create", Value::Map(m)).unwrap();
+    assert_eq!(holders(&e, &a).len(), 2);
+    assert!(e.s.blobs().info(&a).unwrap().unwrap().pending.is_empty());
+}

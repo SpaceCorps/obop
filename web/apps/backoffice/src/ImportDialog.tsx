@@ -31,7 +31,7 @@ type Phase =
   | { at: "choose" }
   | { at: "checking" }
   | { at: "checked"; report: Report }
-  | { at: "refused"; message: string }
+  | { at: "refused"; word: () => string }
   | { at: "importing" }
   | { at: "proposed" }
   | { at: "done"; report: Report };
@@ -66,7 +66,7 @@ export function ImportDialog({
     });
     if (r.kind === "ok") setPhase({ at: "checked", report: r.value as Report });
     else if (r.kind === "approval") setPhase({ at: "proposed" });
-    else setPhase({ at: "refused", message: serverMessage(r.message) });
+    else setPhase({ at: "refused", word: () => serverMessage(r.message) });
   }
 
   async function pick(file: File | undefined) {
@@ -75,7 +75,7 @@ export function ImportDialog({
     if (file.size > MAX_BYTES) {
       setPhase({
         at: "refused",
-        message: t("The file is larger than 1 MiB. Split it into smaller files."),
+        word: () => t("The file is larger than 1 MiB. Split it into smaller files."),
       });
       return;
     }
@@ -93,7 +93,7 @@ export function ImportDialog({
     });
     if (r.kind === "ok") setPhase({ at: "done", report: r.value as Report });
     else if (r.kind === "approval") setPhase({ at: "proposed" });
-    else setPhase({ at: "refused", message: serverMessage(r.message) });
+    else setPhase({ at: "refused", word: () => serverMessage(r.message) });
   }
 
   const checked = phase.at === "checked" ? phase.report : null;
@@ -202,7 +202,7 @@ export function ImportDialog({
         {phase.at === "importing" && <p role="status">{t("Importing...")}</p>}
         {phase.at === "refused" && (
           <Notice tone="danger" title={t("The file cannot be imported")}>
-            {phase.message}
+            {phase.word()}
           </Notice>
         )}
         {phase.at === "proposed" && (

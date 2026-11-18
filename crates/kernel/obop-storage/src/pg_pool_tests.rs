@@ -1486,7 +1486,65 @@ fn only_a_statement_on_a_connection_that_broke_is_in_flight() {
 
 // ---- containers: a restart, and PgBouncer in front -------------------------------------------
 
+/// The variable that asks for the tests that start containers of their own (a server restart,
+/// PgBouncer in front of PostgreSQL; K51). Without it they skip and never run `docker`, as the
+/// TLS tests do without `OBOP_TEST_DOCKER_TLS`; once asked for, a missing Docker is a failure.
+const DOCKER_POOL: &str = "OBOP_TEST_DOCKER";
+
+thread_local! {
+    /// How often this thread ran `docker`: the test of the gate reads it.
+    static DOCKER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The value the gate reads in place of [`DOCKER_POOL`] on this thread (the outer `Option`
+    /// says whether it is replaced), so the tests beside it see the real one.
+    static GATE_VALUE: std::cell::RefCell<Option<Option<String>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Does [`DOCKER_POOL`] ask for the container tests? `1` or `true`; anything else is "no".
+fn docker_requested() -> bool {
+    let value = GATE_VALUE
+        .with(|v| v.borrow().clone())
+        .unwrap_or_else(|| std::env::var(DOCKER_POOL).ok());
+    matches!(
+        value.map(|v| v.trim().to_ascii_lowercase()).as_deref(),
+        Some("1" | "true")
+    )
+}
+
+/// `true` when the container tests may start; says why not otherwise. Once asked for, Docker
+/// must answer.
+fn docker_gate() -> bool {
+    if !docker_requested() {
+        eprintln!(
+            "skipped: set {DOCKER_POOL}=1 to run the tests that start containers (needs Docker)"
+        );
+        return false;
+    }
+    assert!(
+        docker(&["info", "--format", "{{.ServerVersion}}"]).is_some(),
+        "{DOCKER_POOL} is set but Docker is not available"
+    );
+    true
+}
+
+#[test]
+fn the_container_tests_skip_without_calling_docker_unless_asked_for() {
+    let before = DOCKER_CALLS.with(|n| n.get());
+    for value in [None, Some(""), Some("0"), Some("no")] {
+        GATE_VALUE.with(|v| *v.borrow_mut() = Some(value.map(str::to_string)));
+        assert!(OwnPg::start(None).is_none(), "{value:?}");
+        assert!(Bouncer::start(None).is_none(), "{value:?}");
+    }
+    GATE_VALUE.with(|v| *v.borrow_mut() = None);
+    assert_eq!(
+        DOCKER_CALLS.with(|n| n.get()),
+        before,
+        "a skipped test must not run docker"
+    );
+}
+
 fn docker(args: &[&str]) -> Option<String> {
+    DOCKER_CALLS.with(|n| n.set(n.get() + 1));
     let o = Command::new("docker").args(args).output().ok()?;
     o.status
         .success()
@@ -1530,7 +1588,9 @@ struct OwnPg {
 
 impl OwnPg {
     fn start(network: Option<&str>) -> Option<Self> {
-        docker(&["info", "--format", "{{.ServerVersion}}"])?;
+        if !docker_gate() {
+            return None;
+        }
         let name = unique("obop-pool-pg");
         let port = free_port();
         let publish = format!("127.0.0.1:{port}:5432");
@@ -1586,7 +1646,9 @@ macro_rules! docker_pg {
         match OwnPg::start(None) {
             Some(p) => p,
             None => {
-                eprintln!("skipping: docker (and the postgres:17 image) are not available");
+                eprintln!(
+                    "skipping: no container (see above), or the postgres:17 image did not start"
+                );
                 return;
             }
         }
@@ -1735,7 +1797,9 @@ impl Bouncer {
     /// `max_prepared`: PgBouncer's `max_prepared_statements` (`None` keeps its default, which
     /// supports protocol-level prepared statements in transaction mode; `0` turns that off).
     fn start(max_prepared: Option<&str>) -> Option<Self> {
-        docker(&["info", "--format", "{{.ServerVersion}}"])?;
+        if !docker_gate() {
+            return None;
+        }
         let net_name = unique("obop-pool-net");
         docker(&["network", "create", &net_name])?;
         let net = Network(net_name.clone());

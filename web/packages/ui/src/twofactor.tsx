@@ -4,6 +4,7 @@ import { Icon } from "./icons.tsx";
 import { QrCode } from "./qr.tsx";
 import { Badge, Button, Checkbox, Input, Notice } from "./primitives.tsx";
 import { t } from "./i18n/store.ts";
+import { useWorded, type Wording } from "./i18n/react.tsx";
 
 /* Two-factor authentication (D53), shared by the back office and the sign-up app: the second
    sign-in step and the setup panel. The apps give them an adapter for the HTTP routes. */
@@ -125,17 +126,17 @@ export function TwoFactorStep({
   methods = ["totp"],
   onPasskey,
 }: {
-  onSubmit: (factor: Factor) => Promise<string | null>;
+  onSubmit: (factor: Factor) => Promise<Wording | string | null>;
   onBack: () => void;
   methods?: string[];
-  onPasskey?: () => Promise<string | null>;
+  onPasskey?: () => Promise<Wording | string | null>;
 }) {
   const totp = methods.includes("totp");
   const passkey = methods.includes("passkey") && !!onPasskey;
   const [recovery, setRecovery] = useState(false);
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const showCode = totp || recovery;
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -247,7 +248,7 @@ export function TwoFactorStep({
 
 type View =
   | { name: "loading" }
-  | { name: "failed"; message: string }
+  | { name: "failed"; word: Wording }
   | { name: "status"; s: TwoFactorStatus }
   | { name: "enrol"; s: TwoFactorStatus; info: TwoFactorBegin }
   | { name: "codes"; s: TwoFactorStatus; codes: string[]; fresh: boolean; account: string };
@@ -275,7 +276,7 @@ export function TwoFactorPanel({
   const [view, setView] = useState<View>({ name: "loading" });
   const [action, setAction] = useState<null | "disable" | "regenerate">(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const [recovery, setRecovery] = useState(false);
   const [saved, setSaved] = useState(false);
   const account = useRef("");
@@ -283,7 +284,7 @@ export function TwoFactorPanel({
 
   async function load() {
     const r = await api.status();
-    if (!r.ok) return setView({ name: "failed", message: twoFactorMessage(r) });
+    if (!r.ok) return setView({ name: "failed", word: () => twoFactorMessage(r) });
     account.current = (r.value as TwoFactorStatus & { user?: string }).user ?? account.current;
     setView({ name: "status", s: r.value });
   }
@@ -300,7 +301,7 @@ export function TwoFactorPanel({
     setError(null);
     const r = await api.begin();
     setBusy(false);
-    if (!r.ok) return setError(twoFactorMessage(r));
+    if (!r.ok) return setError(() => twoFactorMessage(r));
     account.current = r.value.account;
     setView({ name: "enrol", s: status, info: r.value });
   }
@@ -313,7 +314,7 @@ export function TwoFactorPanel({
     setError(null);
     const r = await api.confirm(code);
     setBusy(false);
-    if (!r.ok) return setError(twoFactorMessage(r));
+    if (!r.ok) return setError(() => twoFactorMessage(r));
     setSaved(false);
     setView({
       name: "codes",
@@ -342,7 +343,7 @@ export function TwoFactorPanel({
     if (action === "disable") {
       const r = await api.disable(password, factor);
       setBusy(false);
-      if (!r.ok) return setError(twoFactorMessage(r));
+      if (!r.ok) return setError(() => twoFactorMessage(r));
       setAction(null);
       notify?.(t("Two-factor authentication is off"));
       onChanged?.();
@@ -350,7 +351,7 @@ export function TwoFactorPanel({
     } else {
       const r = await api.regenerate(password, factor);
       setBusy(false);
-      if (!r.ok) return setError(twoFactorMessage(r));
+      if (!r.ok) return setError(() => twoFactorMessage(r));
       setAction(null);
       setSaved(false);
       setView({
@@ -370,7 +371,7 @@ export function TwoFactorPanel({
         {t("Loading")}
       </p>
     );
-  if (view.name === "failed") return <Notice tone="danger" title={view.message} />;
+  if (view.name === "failed") return <Notice tone="danger" title={view.word()} />;
 
   if (view.name === "codes") {
     const text = recoveryText(view.account, view.codes);

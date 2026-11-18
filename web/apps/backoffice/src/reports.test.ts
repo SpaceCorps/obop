@@ -100,6 +100,36 @@ describe("dimensions", () => {
     expect(dimRef(parseDim("ordered_on:year", dims)!)).toBe("ordered_on:year");
   });
 
+  it("offer the ISO week the server cuts, the year of its Thursday (K1)", () => {
+    const day = f("on", "date");
+    const dims = dimensionsOf([day]);
+    const iso = parseDim("on:iso_week", dims)!;
+    expect(iso.bucket).toBe("iso_week");
+    expect(dimRef(iso)).toBe("on:iso_week");
+    // The cases of obop-values' own test.
+    const key = (on: string) => dimKeyOf(iso, { id: "a", on });
+    expect(key("2026-01-01")).toBe("2026-W01");
+    expect(key("2024-12-30")).toBe("2025-W01");
+    expect(key("2027-01-01")).toBe("2026-W53");
+    expect(key("2021-01-03")).toBe("2020-W53");
+    expect(key("2026-10-25")).toBe("2026-W43");
+    expect(key("2026-10-26")).toBe("2026-W44");
+    expect(key("2019-12-30")).toBe("2020-W01");
+    expect(bucketLabel("iso_week", "2026-W44")).toBe("Week 44, 2026");
+    expect(dimCond(iso, "2026-W44")).toEqual({
+      op: "range",
+      f: "on",
+      min: "2026-10-26",
+      max: "2026-11-01",
+    });
+    expect(fillPeriods(["2026-W52", "2027-W02"], "iso_week")).toEqual([
+      "2026-W52",
+      "2026-W53",
+      "2027-W01",
+      "2027-W02",
+    ]);
+  });
+
   it("cut records into periods the way the server does, weeks from Monday", () => {
     const at = f("at", "datetime");
     const day = f("on", "date");
