@@ -252,13 +252,20 @@ for (const size of SIZES) {
       await fits(page, "sign-in");
       // The link sits under the password field, right-aligned: its text ends where the field ends
       // (no padding of its own pushes it inside), and it is still a finger high.
-      const link = await page.getByRole("button", { name: "Forgot your password?" }).boundingBox();
+      const linkButton = page.getByRole("button", { name: "Forgot your password?" });
+      const link = await linkButton.boundingBox();
+      // The edge of the text itself: a padding of the button would hide in its box.
+      const textRight = await linkButton.evaluate((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return range.getBoundingClientRect().right;
+      });
       const field = await page.getByLabel("Password").boundingBox();
       expect(link, "the link has a box").not.toBeNull();
       expect(field, "the password field has a box").not.toBeNull();
       expect(
-        Math.abs(link!.x + link!.width - (field!.x + field!.width)),
-        "the right edge of Forgot your password? against the password field's",
+        Math.abs(textRight - (field!.x + field!.width)),
+        "the right edge of the text of Forgot your password? against the password field's",
       ).toBeLessThanOrEqual(1);
       expect(link!.height, "Forgot your password? is a finger high").toBeGreaterThanOrEqual(43.5);
       await page.getByRole("button", { name: "Forgot your password?" }).click();
