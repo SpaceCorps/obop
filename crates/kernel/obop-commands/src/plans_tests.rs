@@ -48,6 +48,8 @@ fn doc_model() -> ModelDef {
             f("note", DataClass::Secret, false, U),
             f("private_cost", DataClass::Internal, false, BOSS).kind(FieldKind::Number),
             f("client", DataClass::Internal, true, U),
+            // Personal and of a group `ann` does not hold: masked to the agent, hidden from ann.
+            f("salary", DataClass::Internal, true, BOSS),
             f("state", DataClass::None, false, U).select(&["draft", "posted"]),
             unclassified,
         ],
@@ -1349,3 +1351,176 @@ fn the_plan_commands_are_never_among_the_commands_outside_meta() {
         );
     }
 }
+
+// ---- main's K63 (c810e695): a plan keeps the names of the fields its agent sent in clear ------
+//
+// Since K63 the stored plan carries `clear`, the fields (`model.field`) the agent sent in clear
+// although it is shown them masked, so that approving counts them as changed. The values were in
+// the plan's input before (the agent sent them); K63 adds their names. One test per door states
+// that no door shows a person a value they may not read, or an agent a value it was not shown,
+// because of it.
+
+/// A value of `salary`, which the agent is shown masked and `ann` may not read.
+const SALARY: &str = "salary-71-k63";
+
+/// The agent proposes an update that sends three masked fields in clear: `note` (secret: nobody
+/// is shown it), `client` (personal: masked to the agent, shown to a person who reads the record)
+/// and `salary` (personal and of `pt.boss`: masked to the agent, hidden from ann). Answers the
+/// plan id and the refusal the agent was given.
+fn k63_propose(r: &Rig, id: &str) -> (String, CallError) {
+    let input = m(&[
+        ("id", t(id)),
+        ("name", t("New name")),
+        ("note", t(SECRET)),
+        ("client", t("Erika Example")),
+        ("salary", t(SALARY)),
+    ]);
+    let e = r
+        .d
+        .call(
+            Surface::Mcp,
+            &agent(),
+            &mut Vault::new(),
+            &format!("{M}.update"),
+            &input,
+        )
+        .unwrap_err();
+    let CallError::ApprovalRequired { plan_id } = &e else {
+        panic!("expected a plan, got {e:?}")
+    };
+    // K63 holds in this rig: the plan keeps the three names.
+    let stored = r.d.plans.get(r.d.shared.get(), plan_id).unwrap();
+    let mut clear = stored.clear.clone();
+    clear.sort();
+    assert_eq!(clear, [format!("{M}.client"), format!("{M}.note"), format!("{M}.salary")]);
+    (plan_id.clone(), e)
+}
+
+/// No value ann may not read, and not the list of clear fields, in `text`.
+fn k63_nothing_hidden_in(who: &str, text: &str) {
+    for v in [SECRET, SALARY, "\"clear\""] {
+        assert!(!text.contains(v), "{who} reads {v}: {text}");
+    }
+}
+
+#[test]
+fn k63_the_inbox_list_and_count_show_no_value_sent_in_clear() {
+    let r = rig();
+    let id = r.seed();
+    let (plan, _) = k63_propose(&r, &id);
+    let doors = |r: &Rig| {
+        for who in [ann(), boss(), eve(), outsider()] {
+            for state in ["waiting", "decided"] {
+                let list = r.ok(&who, "plan.list", m(&[("state", t(state))])).to_string();
+                k63_nothing_hidden_in(&who.id, &list);
+                // A row carries no value at all, also not one the person may read.
+                assert!(!list.contains("Erika Example"), "{}: {list}", who.id);
+            }
+            k63_nothing_hidden_in(&who.id, &r.ok(&who, "plan.count", m(&[])).to_string());
+        }
+    };
+    doors(&r);
+    assert_eq!(r.list(&ann(), m(&[])).len(), 1);
+    r.ok(&ann(), "plan.approve", m(&[("id", t(&plan))]));
+    doors(&r);
+}
+
+#[test]
+fn k63_the_detail_and_its_change_view_hide_what_the_person_may_not_read() {
+    let r = rig();
+    let id = r.seed();
+    let (plan, _) = k63_propose(&r, &id);
+    let view = r.ok(&ann(), "plan.get", m(&[("id", t(&plan))]));
+    k63_nothing_hidden_in("ann", &view.to_string());
+    let change = |v: &J, f: &str| {
+        v["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["field"] == f)
+            .unwrap_or_else(|| panic!("no change of {f}: {v}"))
+            .clone()
+    };
+    for f in ["note", "salary"] {
+        assert_eq!(
+            change(&view, f),
+            json!({"field": f, "from": null, "to": null, "hidden": true}),
+            "ann"
+        );
+    }
+    // Personal data the person may read is shown to them in clear, as before K63 (D40).
+    assert_eq!(change(&view, "client")["to"], "Erika Example");
+    // boss holds pt.boss and reads the salary he may read; the secret stays hidden from him too.
+    let boss_view = r.ok(&boss(), "plan.get", m(&[("id", t(&plan))]));
+    assert_eq!(change(&boss_view, "salary")["to"], SALARY);
+    assert_eq!(change(&boss_view, "note")["hidden"], true);
+    assert!(!boss_view.to_string().contains(SECRET), "{boss_view}");
+    assert!(!boss_view.to_string().contains("\"clear\""), "{boss_view}");
+    // Who may not decide or read the record gets the not-found of an unknown plan.
+    for who in [eve(), outsider()] {
+        let e = r.call(&who, "plan.get", m(&[("id", t(&plan))])).unwrap_err();
+        assert_eq!(answer(&e), not_found(), "{}", who.id);
+    }
+    // Decided, the detail is the row only: no change view, no value.
+    r.ok(&ann(), "plan.approve", m(&[("id", t(&plan))]));
+    for who in [ann(), boss()] {
+        let after = r.ok(&who, "plan.get", m(&[("id", t(&plan))])).to_string();
+        k63_nothing_hidden_in(&who.id, &after);
+        assert!(!after.contains("Erika Example"), "{}: {after}", who.id);
+    }
+}
+
+#[test]
+fn k63_the_agent_reads_back_no_value_through_plan_get() {
+    let r = rig();
+    let id = r.seed();
+    let (plan, _) = k63_propose(&r, &id);
+    let told = |r: &Rig| {
+        let text = r.ok(&agent(), "plan.get", m(&[("id", t(&plan))])).to_string();
+        k63_nothing_hidden_in("the agent", &text);
+        for v in ["Erika Example", "New name"] {
+            assert!(!text.contains(v), "the agent reads {v}: {text}");
+        }
+    };
+    told(&r);
+    r.ok(&ann(), "plan.approve", m(&[("id", t(&plan))]));
+    told(&r);
+}
+
+#[test]
+fn k63_the_answer_a_toast_is_made_of_carries_the_plan_id_only() {
+    let r = rig();
+    let id = r.seed();
+    let (plan, e) = k63_propose(&r, &id);
+    let (_, _, body) = answer(&e);
+    let text = body.to_string();
+    k63_nothing_hidden_in("the proposer", &text);
+    assert!(!text.contains("Erika Example"), "{text}");
+    assert!(text.contains(&plan), "{text}");
+}
+
+#[test]
+fn k63_the_receipt_and_the_security_log_hold_no_value_and_no_field_list() {
+    let r = rig();
+    let id = r.seed();
+    let (plan, _) = k63_propose(&r, &id);
+    r.ok(&ann(), "plan.approve", m(&[("id", t(&plan))]));
+    let (rejected, _) = k63_propose(&r, &id);
+    r.ok(
+        &boss(),
+        "plan.reject",
+        m(&[("id", t(&rejected)), ("reason", t("Not now"))]),
+    );
+    for p in [&plan, &rejected] {
+        let receipt = r.d.receipts.get(r.d.shared.get(), p).unwrap();
+        k63_nothing_hidden_in("the receipt", &receipt);
+        assert!(!receipt.contains("Erika Example"), "{receipt}");
+    }
+    let events = r.events();
+    assert!(events.iter().any(|e| e.0 == "plan_proposed"), "{events:?}");
+    for e in &events {
+        k63_nothing_hidden_in("the security log", &e.3);
+        assert!(!e.3.contains("Erika Example") && !e.3.contains("salary"), "{e:?}");
+    }
+}
+

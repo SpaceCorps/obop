@@ -195,6 +195,67 @@ fn an_approved_plan_is_refused_when_the_maker_approves_it() {
     assert_eq!(state(&a, &id), "approved");
 }
 
+/// U7 meets the approvals inbox (D97): the claimant who presses Approve on an agent's plan of their
+/// own claim is refused with the rule's sentence before the plan is spent (`before_approve`), the
+/// plan still waits for them and for a colleague, nothing is logged as failed, and the colleague
+/// approves it from the inbox.
+#[test]
+fn u7_the_inbox_refuses_the_claimant_and_keeps_the_plan_for_someone_else() {
+    let a = app();
+    let id = claim(&a, "alice");
+    let agent = Principal::agent(
+        "carol/agent",
+        &["expenses.user", "expenses.manager"],
+        &["expenses.user", "expenses.manager"],
+    );
+    let Err(CallError::ApprovalRequired { plan_id }) =
+        call(&a, &agent, "expenses_expense.approve", json!({"id": id}))
+    else {
+        panic!("an agent proposes")
+    };
+    let waiting = |who: &str| -> Vec<J> {
+        call(&a, &manager(who), "plan.list", json!({})).unwrap()["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["id"] == plan_id.as_str())
+            .cloned()
+            .collect()
+    };
+    // alice may decide it (she holds the group and reads the claim), so it is in her inbox.
+    assert_eq!(waiting("alice").len(), 1);
+    let e = refused(call(
+        &a,
+        &manager("alice"),
+        "plan.approve",
+        json!({"id": plan_id}),
+    ));
+    assert!(
+        e.contains("You made this expense claim, so someone else has to approve it"),
+        "{e}"
+    );
+    assert_eq!(state(&a, &id), "submitted");
+    for who in ["alice", "bob"] {
+        let rows = waiting(who);
+        assert_eq!(rows.len(), 1, "{who}");
+        assert_eq!(rows[0]["status"], "waiting", "{who}");
+    }
+    let kinds: Vec<String> = a
+        .store
+        .backend()
+        .list("security_event")
+        .unwrap()
+        .into_iter()
+        .filter_map(|(_, f)| f["kind"].as_str().map(String::from))
+        .collect();
+    assert!(!kinds.iter().any(|k| k == "plan_failed"), "{kinds:?}");
+    call(&a, &manager("bob"), "plan.approve", json!({"id": plan_id})).unwrap();
+    assert_eq!(state(&a, &id), "approved");
+    let got = call(&a, &manager("bob"), "plan.get", json!({"id": plan_id})).unwrap();
+    assert_eq!(got["status"], "approved", "{got}");
+    assert_eq!(got["decided_by"], "bob", "{got}");
+}
+
 #[test]
 fn the_person_who_submitted_a_claim_for_a_colleague_cannot_approve_it() {
     let a = app();
