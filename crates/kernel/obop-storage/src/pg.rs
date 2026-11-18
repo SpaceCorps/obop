@@ -723,7 +723,7 @@ impl Backend for Pg {
     fn lock(&self, key: &str) -> Result<LockGuard> {
         let local = self.locks.take(key)?;
         let session = self.lock_session()?;
-        let deadline = std::time::Instant::now() + LOCK_WAIT;
+        let deadline = std::time::Instant::now() + crate::lock_wait(key)?;
         loop {
             if session.ask("SELECT pg_try_advisory_lock(hashtextextended($1, 0))", key)? {
                 return Ok(Box::new(PgGuard {

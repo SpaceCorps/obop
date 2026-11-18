@@ -640,7 +640,7 @@ impl Backend for Sqlite {
             .write(true)
             .open(format!("{path}.lock-{}", lock_file_part(key)))
             .map_err(|x| format!("cannot open the lock file: {x}"))?;
-        let deadline = std::time::Instant::now() + LOCK_WAIT;
+        let deadline = std::time::Instant::now() + crate::lock_wait(key)?;
         loop {
             match file.try_lock() {
                 Ok(()) => {

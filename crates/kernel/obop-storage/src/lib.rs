@@ -480,8 +480,46 @@ pub type Row = (String, String, Fields);
 /// Receives the batches of `Backend::export`.
 pub type RowSink<'a> = dyn FnMut(&[Row]) -> Result<()> + 'a;
 
-/// How long `Backend::lock` waits before giving up.
+/// How long `Backend::lock` waits before giving up, for every key but the migration lock.
 pub const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The cross-process lock of migrations (`obop-migrate`), which a self-migrating start also holds
+/// while it takes its backup.
+pub const MIGRATION_LOCK: &str = "obop.migrate";
+
+/// How long a process waits for [`MIGRATION_LOCK`] when `OBOP_MIGRATION_LOCK_WAIT_SECS` is not set
+/// (docs/ISSUES.md K5, owner default of 2026-11-18): a second process that starts while the first
+/// takes its backup under the lock waits this long before it gives up.
+pub const MIGRATION_LOCK_WAIT_DEFAULT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// The value of `OBOP_MIGRATION_LOCK_WAIT_SECS`: whole seconds from 1 to 86,400. Empty or unset
+/// is the default; anything else is an error that names the variable.
+pub fn migration_lock_wait_from(v: Option<&str>) -> Result<std::time::Duration> {
+    match v.map(str::trim).filter(|v| !v.is_empty()) {
+        None => Ok(MIGRATION_LOCK_WAIT_DEFAULT),
+        Some(v) => match v.parse::<u64>() {
+            Ok(n) if (1..=86_400).contains(&n) => Ok(std::time::Duration::from_secs(n)),
+            _ => Err(
+                "OBOP_MIGRATION_LOCK_WAIT_SECS: a whole number of seconds from 1 to 86400".into(),
+            ),
+        },
+    }
+}
+
+/// How long `Backend::lock` waits for `key`: [`LOCK_WAIT`], and for [`MIGRATION_LOCK`] the
+/// setting `OBOP_MIGRATION_LOCK_WAIT_SECS` (default 300). The setting is read on each wait, so
+/// a value that is not valid fails that lock with a message that names it.
+pub fn lock_wait(key: &str) -> Result<std::time::Duration> {
+    if key == MIGRATION_LOCK {
+        migration_lock_wait_from(
+            std::env::var("OBOP_MIGRATION_LOCK_WAIT_SECS")
+                .ok()
+                .as_deref(),
+        )
+    } else {
+        Ok(LOCK_WAIT)
+    }
+}
 
 /// Held while a `Backend::lock` is taken; dropping it releases the lock.
 pub type LockGuard = Box<dyn std::any::Any + Send>;
@@ -545,7 +583,7 @@ impl Drop for LocalGuard {
 
 impl LocalLocks {
     fn take(self: &Arc<Self>, key: &str) -> Result<LocalGuard> {
-        let deadline = std::time::Instant::now() + LOCK_WAIT;
+        let deadline = std::time::Instant::now() + lock_wait(key)?;
         let mut g = self.held.lock().unwrap_or_else(|e| e.into_inner());
         while g.contains(key) {
             let left = deadline.saturating_duration_since(std::time::Instant::now());
@@ -726,6 +764,8 @@ mod guard;
 pub mod history;
 pub mod keyexpr;
 pub mod limit;
+#[cfg(test)]
+mod lock_wait_tests;
 mod memory;
 mod pg;
 mod pg_hist;
