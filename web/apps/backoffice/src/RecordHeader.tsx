@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 import { describeFor, fmt, inSentence, t } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
+import { ApprovalMark } from "./ApprovalMark.tsx";
 import { BlobThumb } from "./BlobFields.tsx";
 import type { Edit } from "./edit.ts";
 import type { RecordExtension } from "./extensions.ts";
@@ -68,16 +69,6 @@ export type RecordHeaderProps = {
   onFull?: (on: boolean) => void;
   lock: Lock | null;
 };
-
-/** The shield that marks an action an agent may only propose (a person approves it). */
-function ApprovalMark() {
-  const text = t("An agent needs a person's approval for this");
-  return (
-    <span className="approval-mark" role="img" aria-label={text} title={text}>
-      <Icon name="shield" size={13} />
-    </span>
-  );
-}
 
 /**
  * Where the public site shows a record: `ui.public_url` filled from the row ("/blog/{slug}"), once
