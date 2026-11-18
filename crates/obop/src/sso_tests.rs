@@ -2984,6 +2984,44 @@ async fn failures_a_token_endpoint_that_is_not_well_is_unavailable_and_one_that_
     );
 }
 
+/// A begun sign-in is stored with a lifetime of ten minutes at the store itself (N20 a): a flow
+/// stored without one would never be purged, because `purge_expired` removes only rows stored
+/// with a lifetime. Read from the SQLite table, since the Backend has no read of a row's lifetime.
+#[tokio::test]
+async fn failures_a_begun_sign_in_is_stored_with_a_lifetime_of_ten_minutes() {
+    let dir = obop_storage::testing::TempPath::dir("obop-sso-flow-ttl");
+    let file = dir.path().join("app.db");
+    let backend = obop_storage::open(&format!("sqlite://{}", file.to_str().unwrap())).unwrap();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    let before = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    assert_eq!(w.start(&mut Jar::default()).await.status, 303);
+    let after = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let db = rusqlite::Connection::open(&file).unwrap();
+    let expiries: Vec<i64> = db
+        .prepare("SELECT expires_ms FROM obop_kv WHERE key LIKE 'auth.sso.flow:%'")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(expiries.len(), 1, "one begun sign-in");
+    let ten = 10 * 60 * 1000;
+    assert!(
+        (before + ten..=after + ten).contains(&expiries[0]),
+        "{} is not ten minutes after the start",
+        expiries[0]
+    );
+    drop(db);
+    drop(w);
+}
+
 /// The sign-in's calls to Microsoft never follow a redirect (N19): a discovery document, a key set
 /// or a token endpoint that answers 302 is a fault of the provider, and the address it points to
 /// is never asked.
