@@ -555,7 +555,11 @@ async fn sending_a_sign_request_keeps_another_uploaders_claim_on_the_same_bytes(
         )
         .await;
     assert_eq!(s, 201, "{v}");
-    assert_eq!(v["id"].as_str().unwrap(), f.file, "the same bytes, one blob");
+    assert_eq!(
+        v["id"].as_str().unwrap(),
+        f.file,
+        "the same bytes, one blob"
+    );
     let (s, v) = f
         .api(
             "mia",
