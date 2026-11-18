@@ -47,11 +47,9 @@ mod brand_scan_tests;
 #[cfg(test)]
 mod error_tests;
 #[cfg(test)]
-<<<<<<< HEAD
 mod platform_health_tests;
-=======
+#[cfg(test)]
 mod serve_tests;
->>>>>>> origin/fix/w2c-h3b
 #[cfg(test)]
 mod src_scan;
 
