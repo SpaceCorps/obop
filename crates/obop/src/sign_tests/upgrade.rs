@@ -1,5 +1,5 @@
 //! Upgrading `sign` from the version that is deployed today (0.2.0) to the one with the signer
-//! door (0.2.1; the bundled package is 0.2.4, see `history.rs` and `brand_words.rs`), on an
+//! door (0.2.1; the bundled package is 0.2.5, see `history.rs` and `brand_words.rs`), on an
 //! instance that already has records in every state. The two fixtures are copies of
 //! `packages/sign.toml` and `packages/documents.toml` as they were on `main` before D92; they are
 //! not edited.
@@ -170,9 +170,10 @@ async fn the_upgrade_from_0_2_0_is_additive_and_keeps_every_record() {
         .installer
         .install_outcome(&new_text, "marketplace", "test")
         .unwrap();
-    // The bundled package is 0.2.4 (0.2.2 added the switch `show_history`, 0.2.3 rewords one help,
-    // 0.2.4 adds the D95 hints); the upgrade from 0.2.0 still goes in one step.
-    assert_eq!(out.root.version, "0.2.4");
+    // The bundled package is 0.2.5 (0.2.2 added the switch `show_history`, 0.2.3 rewords one help,
+    // 0.2.4 adds the D95 hints, 0.2.5 the row rule and the manager's decline and expiry); the
+    // upgrade from 0.2.0 still goes in one step.
+    assert_eq!(out.root.version, "0.2.5");
 
     // Nothing was rewritten.
     assert_eq!(snapshot(&f, &requests), before);
@@ -445,11 +446,12 @@ async fn a_sent_document_request_after_a_rollback_is_closed_by_setting_a_templat
             "{step}: {v}"
         );
         assert_eq!(f.record("sign_request", id)["state"], "sent");
-        // The template alone is not enough: the address is named next. (Anybody who holds
-        // `sign.user` may set both, `sam` here; no administrator is needed, docs/SIGN.md.)
+        // The template alone is not enough: the address is named next. (A manager may set both,
+        // `mia` here: a request that was sent is a manager's to change, O19; no administrator is
+        // needed, docs/SIGN.md.)
         let (s, v) = f
             .api(
-                "sam",
+                "mia",
                 "/api/sign_request/update",
                 json!({"id": id, "template_id": template}),
             )
@@ -466,7 +468,7 @@ async fn a_sent_document_request_after_a_rollback_is_closed_by_setting_a_templat
         // path of the old version is the one that is left.)
         let (s, v) = f
             .api(
-                "sam",
+                "mia",
                 "/api/sign_request/update",
                 json!({"id": id, "signer_email": "nobody@example.test"}),
             )

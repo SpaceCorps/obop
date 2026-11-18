@@ -24,6 +24,8 @@ type TokenRow = {
   scopes: string[];
   /** Unix seconds. */
   created_at: number;
+  /** Unix seconds when the token ends by itself; null when it has none (N18). */
+  expires_at?: number | null;
 };
 
 type Listing = {
@@ -155,6 +157,7 @@ export function AgentTokensSection({ token, notify }: { token: string; notify: N
               <th scope="col">{t("Label")}</th>
               <th scope="col">{t("Can act with")}</th>
               <th scope="col">{t("Created")}</th>
+              <th scope="col">{t("Ends")}</th>
               <th scope="col">
                 <span className="sr-only">{t("Actions")}</span>
               </th>
@@ -169,6 +172,9 @@ export function AgentTokensSection({ token, notify }: { token: string; notify: N
                 <td data-label={t("Can act with")}>{row.scopes.join(", ")}</td>
                 <td data-label={t("Created")}>
                   {row.created_at ? fmt.dateTime(row.created_at * 1000) : ""}
+                </td>
+                <td data-label={t("Ends")}>
+                  {row.expires_at ? fmt.dateTime(row.expires_at * 1000) : t("Until revoked")}
                 </td>
                 <td className="cell-actions">
                   <Button
