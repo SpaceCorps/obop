@@ -38,8 +38,23 @@ fn sha(text: &str) -> String {
 
 /// The page with the request id and the secret of its link replaced, so that the pages of two
 /// instances can be compared.
+/// The hidden field `words` that the form carries from `sign` 0.3.0 on (the wording digest, O59) is
+/// taken out, since it is not part of the history: what these pins hold is that the history adds
+/// nothing to the page of a request that does not ask for it.
 fn normalised(body: &str, rid: &str, tok: &str) -> String {
-    body.replace(rid, "RID").replace(tok, "TOK")
+    without_words(body).replace(rid, "RID").replace(tok, "TOK")
+}
+
+/// The page without its `<input type="hidden" name="words" value="...">`.
+fn without_words(body: &str) -> String {
+    let at = "<input type=\"hidden\" name=\"words\" value=\"";
+    match body.find(at) {
+        Some(i) => {
+            let end = i + body[i..].find("\">").expect("the field ends") + 2;
+            format!("{}{}", &body[..i], &body[end..])
+        }
+        None => body.to_string(),
+    }
 }
 
 /// The SHA-256 of the pages of a request that does not show the signatures so far, as the code

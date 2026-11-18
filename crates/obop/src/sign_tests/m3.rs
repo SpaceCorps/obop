@@ -33,6 +33,32 @@ async fn a_revoke_by_an_administrator_is_written_to_the_security_log() {
         .await;
     assert_eq!(s, 200, "{v}");
     assert_eq!(f.events_of("sign_link_revoked").len(), before + 1);
+    // Emptying it brings the link back, and that is logged as well.
+    assert!(f.events_of("sign_link_restored").is_empty());
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_link/update",
+            json!({"id": link_id, "revoked_at": null}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(
+        f.get(&path, &ip(92)).await.status,
+        200,
+        "the link works again"
+    );
+    let restored = f.events_of("sign_link_restored");
+    assert_eq!(restored.len(), 1, "{restored:?}");
+    assert_eq!(restored[0]["actor"], "admin");
+    assert!(
+        restored[0]["detail"]
+            .as_str()
+            .unwrap()
+            .ends_with("by an administrator"),
+        "{restored:?}"
+    );
+    assert_eq!(f.events_of("sign_link_revoked").len(), before + 1);
 }
 
 // ---- O29: the server says at start when the signer door has no public address ----------------
@@ -326,4 +352,63 @@ async fn a_signed_request_says_whether_its_evidence_still_equals_the_log_entry()
     let (s, v) = f.api("mia", "/api/sign_request/list", json!({})).await;
     assert_eq!(s, 200, "{v}");
     assert!(!v.to_string().contains("evidence_check\":\""), "{v}");
+}
+
+// ---- O19, O59: words edited after the page was made are not signed ---------------------------
+
+/// The value of a hidden field of the signer's page.
+fn hidden(html: &str, name: &str) -> String {
+    let at = format!("name=\"{name}\" value=\"");
+    let rest = &html[html.find(&at).unwrap_or_else(|| panic!("{name}: {html}")) + at.len()..];
+    rest[..rest.find('"').unwrap()].to_string()
+}
+
+#[tokio::test]
+async fn a_title_edited_after_the_page_was_made_is_shown_again_before_anything_is_signed() {
+    let (f, _, path, _) = sent().await;
+    let page = f.get(&path, &ip(181)).await;
+    assert_eq!(page.status, 200, "{}", page.text());
+    let words = hidden(&page.text(), "words");
+    assert_eq!(words.len(), 64, "{words}");
+    // The manager changes the title while the signer reads the page.
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": f.req, "title": "Pay 900 EUR"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let form = |w: &str| {
+        [
+            ("name", "Jane Test".to_string()),
+            ("agree", "1".to_string()),
+            ("doc", f.file.clone()),
+            ("words", w.to_string()),
+        ]
+    };
+    let pairs = form(&words);
+    let pairs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let r = f.post(&path, &ip(181), &pairs).await;
+    assert_eq!(r.status, 400, "{}", r.text());
+    let html = r.text();
+    assert!(
+        html.contains("The page has changed since you opened it"),
+        "{html}"
+    );
+    assert!(
+        html.contains("Pay 900 EUR"),
+        "the new title is shown: {html}"
+    );
+    assert_eq!(f.record("sign_request", &f.req)["state"], "sent");
+    assert!(f.events_of("sign_signed").is_empty());
+    // Signed from the page that shows the new title, the evidence matches it.
+    let again = hidden(&html, "words");
+    assert_ne!(again, words);
+    let pairs = form(&again);
+    let pairs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let r = f.post(&path, &ip(181), &pairs).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(f.record("sign_request", &f.req)["title"], "Pay 900 EUR");
+    assert_eq!(check_of(&f, "mia").await, "matches");
 }

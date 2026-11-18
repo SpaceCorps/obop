@@ -202,21 +202,40 @@ impl SignService {
                 Some(id) => self.get("sign_link", id)?,
                 None => None,
             };
+            // Emptying `revoked_at` again brings a link that was not used back to life, which is
+            // logged too, as `sign_link_restored`.
             let done = inner(input)?;
             if let (Some(id), Some(was)) = (id, was)
-                && text(&was, "revoked_at").is_empty()
                 && let Some(now) = self.get("sign_link", &id)?
-                && !text(&now, "revoked_at").is_empty()
             {
-                let id12: String = id.chars().take(12).collect();
-                crate::audit::record_event(
-                    &*self.store.backend,
-                    u64::try_from(self.now_micros() / MICROS_PER_SECOND).unwrap_or(0),
-                    &format!("sign_request:{}", text(&now, "request_id")),
-                    "sign_link_revoked",
-                    &p.id,
-                    &format!("link {id12}; by an administrator"),
+                let (before, after) = (
+                    text(&was, "revoked_at").is_empty(),
+                    text(&now, "revoked_at").is_empty(),
                 );
+                let id12: String = id.chars().take(12).collect();
+                let at = u64::try_from(self.now_micros() / MICROS_PER_SECOND).unwrap_or(0);
+                let user = format!("sign_request:{}", text(&now, "request_id"));
+                let detail = format!("link {id12}; by an administrator");
+                let backend = &*self.store.backend;
+                if before && !after {
+                    crate::audit::record_event(
+                        backend,
+                        at,
+                        &user,
+                        "sign_link_revoked",
+                        &p.id,
+                        &detail,
+                    );
+                } else if !before && after {
+                    crate::audit::record_event(
+                        backend,
+                        at,
+                        &user,
+                        "sign_link_restored",
+                        &p.id,
+                        &detail,
+                    );
+                }
             }
             return Ok(done);
         }

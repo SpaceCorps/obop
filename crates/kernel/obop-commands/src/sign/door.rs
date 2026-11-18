@@ -102,7 +102,8 @@ pub enum Invalid {
     /// that did not say so: the staff switch was turned on after the signer opened the page. Nothing
     /// was written; the page is shown again with the notice.
     History,
-    /// The switch was cleared between the door's read and its write (docs/ISSUES.md O50): nothing
+    /// The switch was cleared between the door's read and its write (docs/ISSUES.md O50), or the
+    /// title, message or requested name differ from the page the form came from (O59): nothing
     /// was written, and the page is shown again as it is now.
     Changed,
 }
@@ -117,6 +118,10 @@ pub struct ViewData {
     /// The SHA-256 of the document (hex); the form sends it back as `doc`.
     pub document_hash: String,
     pub expires_at: String,
+    /// The digest of the title, message and requested name as stored when the page was made
+    /// (`evidence::wording_digest`); the form sends it back as `words`, so that an edit of them
+    /// between the page and the post is not signed under the new words (docs/ISSUES.md O19, O59).
+    pub wording: String,
     /// The signatures so far on this file, when the request asks for them (`show_history`); `None`
     /// for every other request, which is shown the page it has always been shown.
     pub history: Option<History>,
@@ -155,6 +160,12 @@ pub struct SignForm {
     /// This is the client's word: the door cannot tell what the browser was shown, only that a
     /// form for a request that asks must say so (see `submit`).
     pub saw_history: bool,
+    /// The wording digest of the page the form came from (the hidden field `words`, see
+    /// [`ViewData::wording`]). When it differs from the request as stored at the post, nothing is
+    /// signed and the page is shown again ([`Invalid::Changed`]). Like `hist`, it is the client's
+    /// word: a client that leaves it out (a page made before `sign` 0.3.0, a script) is not
+    /// compared.
+    pub words: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -426,6 +437,7 @@ impl SignService {
                     document_title: cut(text(&doc, "title"), 200),
                     document_hash: text(&f.req, "document_hash").to_string(),
                     expires_at: text(&f.link, "expires_at").to_string(),
+                    wording: super::evidence::wording_digest(&f.req),
                     history: self.history_for(&f)?,
                 }))
             }
@@ -515,6 +527,14 @@ impl SignService {
         if !form.agree {
             return Err(DoorError::Invalid(Invalid::Agree));
         }
+        // What the signer read of the request (its title, message and requested name), so that
+        // `evidence_check` can tell a later edit of them (docs/ISSUES.md O19). The page carries
+        // the same digest: when staff edited them after the page was made, the signer is shown
+        // the new words before anything is signed (O59). The batch below holds them as read.
+        let shown = super::evidence::wording_digest(&f.req);
+        if !form.words.is_empty() && !token::ct_eq(&form.words, &shown) {
+            return Err(DoorError::Invalid(Invalid::Changed));
+        }
         let hash = text(&f.req, "document_hash").to_string();
         if !token::ct_eq(&form.doc, &hash) {
             self.refused(&f, "stale_form", client);
@@ -570,10 +590,6 @@ impl SignService {
             ("signature_reference", reference.as_str()),
         ]);
 
-        // What the signer read of the request (its title, message and requested name), so that
-        // `evidence_check` can tell a later edit of them (docs/ISSUES.md O19).
-        let shown = super::evidence::wording_digest(&f.req);
-
         let mut link_patch = Fields::new();
         link_patch.insert("used_at".into(), J::from(signed_at.clone()));
         let mut req_patch = Fields::new();
@@ -609,6 +625,19 @@ impl SignService {
                     (
                         HISTORY_FLAG.into(),
                         f.req.get(HISTORY_FLAG).cloned().unwrap_or(J::Null),
+                    ),
+                    // The words of the wording digest are those that were read (O19, O59).
+                    (
+                        "title".into(),
+                        f.req.get("title").cloned().unwrap_or(J::Null),
+                    ),
+                    (
+                        "message".into(),
+                        f.req.get("message").cloned().unwrap_or(J::Null),
+                    ),
+                    (
+                        "signer_name".into(),
+                        f.req.get("signer_name").cloned().unwrap_or(J::Null),
                     ),
                 ],
             },
@@ -667,6 +696,14 @@ impl SignService {
             && text(r, "state") == "signed"
         {
             return Ok(Done { already: true });
+        }
+        if let Some(r) = &req
+            && text(r, "state") == "sent"
+            && super::evidence::wording_digest(r) != super::evidence::wording_digest(&f.req)
+        {
+            // Staff edited the title, the message or the requested name in that instant: show the
+            // page again with the new words (O59).
+            return Err(DoorError::Invalid(Invalid::Changed));
         }
         if let Some(r) = &req
             && text(r, "state") == "sent"

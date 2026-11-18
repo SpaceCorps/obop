@@ -104,3 +104,72 @@ test("a signer signs on a phone and the request shows its evidence check (O10, O
     expect(after.evidence_check).toBe("differs");
   });
 });
+
+test("a title edited while the signer reads the page is shown again before anything is signed (O59)", async ({
+  browser,
+  request,
+  api,
+  uid,
+  baseURL,
+}) => {
+  test.setTimeout(120_000);
+  await withPackages(api, ["documents", "sign"], async () => {
+    const root = await api.token("root");
+    const title = uid("Pay 100 EUR");
+    const upload = await request.post(
+      "/api/blobs?field=documents_document.attachment&filename=terms.pdf",
+      {
+        data: Buffer.from(`%PDF-1.4\n% made-up test document ${title}\n%%EOF\n`),
+        headers: { authorization: `Bearer ${root}`, "content-type": "application/pdf" },
+      },
+    );
+    expect(upload.status()).toBe(201);
+    const doc = await api.create("root", "documents_document", {
+      title: `${title} (file)`,
+      kind: "contract",
+      confidentiality: "internal",
+      owner: "root",
+      attachment: (await upload.json()).id,
+    });
+    const req = await api.create("root", "sign_request", {
+      title,
+      signer_name: "Jane Example",
+      document_id: doc.id,
+    });
+    await api.run("root", "sign_request.send_document", { id: req.id });
+    const link = (await api.run("root", "sign_link.create", { request_id: req.id })).link as string;
+    const path = link.startsWith("/") ? link : new URL(link).pathname;
+    const phone = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+      baseURL,
+    });
+    try {
+      const signer = await phone.newPage();
+      await signer.goto(`${path}?lang=en`);
+      await expect(signer.getByText(title).first()).toBeVisible();
+      // The sender changes the title while the page is open.
+      const edited = `${title} (now 900 EUR)`;
+      await api.run("root", "sign_request.update", { id: req.id, title: edited });
+      await signer.getByLabel("Your full name").fill("Jane Example");
+      await signer.getByRole("checkbox").check();
+      await signer.getByRole("button", { name: "Sign", exact: true }).click();
+      await expect(signer.getByRole("alert")).toContainText(
+        "The page has changed since you opened it",
+      );
+      await expect(signer.getByText(edited).first()).toBeVisible();
+      expect((await api.run("root", "sign_request.get", { id: req.id })).state).toBe("sent");
+      // Signed from the page with the new title.
+      await signer.getByRole("checkbox").check();
+      await signer.getByRole("button", { name: "Sign", exact: true }).click();
+      await expect(signer.getByRole("heading", { name: "Signed" })).toBeVisible();
+    } finally {
+      await phone.close();
+    }
+    const got = await api.run("root", "sign_request.get", { id: req.id });
+    expect(got.state).toBe("signed");
+    expect(got.title).toBe(`${title} (now 900 EUR)`);
+    expect(got.evidence_check).toBe("matches");
+  });
+});
