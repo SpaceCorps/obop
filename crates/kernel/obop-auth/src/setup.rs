@@ -474,10 +474,10 @@ impl SetupApi for Auth {
         );
         drop(lock);
         // The answer of a password sign-in: limited to enrolment where the policy says so. The
-        // policy is applied to the groups just written, not to a read of the account: a read the
-        // store refused would give no groups, and with them a full session that never proved a
-        // second factor (`after_first_factor` reads them leniently). A new account has no second
-        // factor yet, so there is no second step to ask for.
+        // policy is applied to the groups just written, not to a read of the account: the groups
+        // are in hand, so no read of the store stands between the new account and the policy (a
+        // refused read there is an error since N22, but this path needs none). A new account has
+        // no second factor yet, so there is no second step to ask for.
         let limited = self.enrolment_required_for(groups);
         if limited {
             self.event(
