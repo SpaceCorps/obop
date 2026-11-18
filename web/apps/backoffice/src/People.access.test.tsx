@@ -108,7 +108,9 @@ function fakeServer() {
       calls.push({ method, path, body });
       if (path === "/api/auth/users" && method === "GET") return json({ users: server.users });
       if (path === "/api/auth/users" && method === "POST")
-        return server.failStatus ? json({ error: "no" }, server.failStatus) : json({ user: body?.username });
+        return server.failStatus
+          ? json({ error: "no" }, server.failStatus)
+          : json({ user: body?.username });
       if (server.failLists && (path === "/api/auth/groups" || path === "/api/module/list"))
         return json({ error: "down" }, 500);
       if (path === "/api/auth/groups") return json({ groups: KNOWN });
