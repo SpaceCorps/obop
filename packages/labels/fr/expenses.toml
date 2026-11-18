@@ -19,6 +19,10 @@ description = "Ce pour quoi l’argent a été dépensé"
 label = "Employé"
 description = "Nom d’utilisateur de la personne qui demande le remboursement ; par défaut la personne qui crée la demande"
 
+[labels.fr.model.expenses_expense.field.submitted_by]
+label = "Soumise par"
+description = "Nom d’utilisateur de la personne qui a soumis la note, enregistré par l’action Soumettre ; elle ne peut pas non plus l’approuver, sauf si l’auto-approbation est autorisée"
+
 [labels.fr.model.expenses_expense.field.spent_on]
 label = "Date de la dépense"
 description = "Date de l’achat (YYYY-MM-DD)"

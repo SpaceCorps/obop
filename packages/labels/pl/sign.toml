@@ -41,6 +41,10 @@ description = "Szablon dokumentu do wysłania; puste przy prośbie o dokument z 
 label = "Dokument"
 description = "Plik PDF w Dokumentach, który osoba podpisująca czyta i podpisuje; wysłanie prośby zapisuje jego SHA-256 i zachowuje dokładną kopię"
 
+[labels.pl.model.sign_request.field.no_document]
+label = "Bez dokumentu"
+description = "Czy prośba nie dotyczy dokumentu w Dokumentach; taką prośbę widzi każdy, kto czyta prośby, a prośbę dotyczącą dokumentu tylko ci, którzy mogą zobaczyć ten dokument"
+
 [labels.pl.model.sign_request.field.title]
 label = "Tytuł"
 description = "Temat widoczny dla podpisującego"
@@ -104,6 +108,15 @@ description = "Pełne imię i nazwisko wpisane przez osobę podpisującą (dowó
 [labels.pl.model.sign_request.field.consent_version]
 label = "Wersja zgody"
 description = "Identyfikator tekstu zgody: jego wersja, język wysłania (lang formularza, jeśli wskazuje jeden z siedmiu; jeśli formularz w ogóle nie ma pola lang, język adresu; w przeciwnym razie przeglądarki, instancji, a na końcu angielski; to nie dowód, jaka strona została pokazana) oraz pierwsze 8 znaków szesnastkowych skrótu tekstów w tym języku, na przykład v1-draft/pl/c3127377"
+
+[labels.pl.model.sign_request.field.evidence_check]
+label = "Kontrola dowodów"
+description = "Czy dowody wniosku podpisanego przez link nadal odpowiadają wpisowi w dzienniku bezpieczeństwa z chwili podpisania (od Sign 0.3.0 także tytuł, wiadomość i żądane imię i nazwisko): zgodne, różne (zmienione po podpisaniu) lub brak wpisu. Ustalane tylko przy get, puste na listach. Nie chroni przed fałszerstwem: kto może zapisywać w bazie, może zmienić oba"
+
+[labels.pl.model.sign_request.field.evidence_check.options]
+matches = "Zgodne"
+differs = "Różne"
+no_entry = "Brak wpisu"
 
 [labels.pl.model.sign_request.field.state]
 label = "Status"

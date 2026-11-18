@@ -8,6 +8,7 @@
 import type { FieldMeta, ModelMeta, Row } from "../api.ts";
 import { isEmpty } from "../format.ts";
 import { displayOf, stateFieldOf } from "../presentation.ts";
+import { fromZonedInput, toZonedInput } from "../instants.ts";
 import { rangeEndOf } from "./board.ts";
 
 /** The fields that place a record on the calendar. */
@@ -26,7 +27,14 @@ export type CalSpec = {
   color?: FieldMeta;
 };
 
-export const dateFields = (fields: readonly FieldMeta[]) => fields.filter((f) => f.kind === "date");
+/**
+ * The fields a calendar can start on: dates first, then instants (a trip's start, a meeting), which
+ * are placed on the day and at the time they have on the instance's wall clock (K1).
+ */
+export const dateFields = (fields: readonly FieldMeta[]) => [
+  ...fields.filter((f) => f.kind === "date"),
+  ...fields.filter((f) => f.kind === "datetime"),
+];
 
 const START = /^(start|starts|start_on|start_date|starts_on|begins_on|day|date|work_date)$|^start_/;
 
@@ -64,6 +72,19 @@ export function calendarSpec(
   const stateF = stateFieldOf(model);
   const color = byName(hint?.color) ?? byName(stateF?.name);
   const spec: CalSpec = { start, ...(color ? { color } : {}) };
+  if (start.kind === "datetime") {
+    // An instant carries its own time; its end is the instant that ends it (started_at, ended_at).
+    const hinted = byName(hint?.end);
+    const end =
+      (hinted?.kind === "datetime" ? hinted : undefined) ??
+      fields.find(
+        (f) =>
+          f.kind === "datetime" &&
+          f !== start &&
+          f.name === start.name.replace(/^start(ed|s)?(?=_|$)/, (_, s) => `end${s ?? ""}`),
+      );
+    return end ? { ...spec, end } : spec;
+  }
   if (start !== main) return spec;
   const hintedEnd = byName(hint?.end);
   const end = hintedEnd?.kind === "date" ? hintedEnd : rangeEndOf(fields, start);
@@ -81,8 +102,22 @@ export function calendarSpec(
   };
 }
 
+/**
+ * The values of a record made from a day of the calendar: it starts that day, and a range ends
+ * that day too (else its end keeps its own default, today, and ends before it starts).
+ */
+export function newOnDay(spec: CalSpec, day: string, zone = "UTC"): Record<string, string> {
+  if (spec.start.kind === "datetime") {
+    // An instant starts at nine on that day on the instance's clock; its end is left to the form.
+    const at = fromZonedInput(`${day} 09:00`, zone);
+    return "value" in at ? { [spec.start.name]: at.value } : {};
+  }
+  return spec.end ? { [spec.start.name]: day, [spec.end.name]: day } : { [spec.start.name]: day };
+}
+
 /** Whether the spec has times of day: the week is then a time grid. */
-export const timed = (s: CalSpec | undefined): boolean => !!s?.startMinute;
+export const timed = (s: CalSpec | undefined): boolean =>
+  !!s?.startMinute || s?.start.kind === "datetime";
 
 // ---- days as numbers ---------------------------------------------------------------------------
 
@@ -119,8 +154,23 @@ const minutes = (v: unknown): number | undefined => {
   return isEmpty(v) || !Number.isFinite(n) ? undefined : Math.max(0, Math.min(1440, n));
 };
 
+/** The day and the minutes after midnight of an instant on the wall clock of `zone`. */
+function wallOf(v: unknown, zone: string): { day: string; min: number } | null {
+  const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})/.exec(toZonedInput(v, zone));
+  return m ? { day: m[1]!, min: Number(m[2]) * 60 + Number(m[3]) } : null;
+}
+
 /** The event of a record, or null when it has no valid start date. */
-export function eventOf(spec: CalSpec, row: Row): CalEvent | null {
+export function eventOf(spec: CalSpec, row: Row, zone = "UTC"): CalEvent | null {
+  if (spec.start.kind === "datetime") {
+    const s = wallOf(row[spec.start.name], zone);
+    if (!s) return null;
+    const e = spec.end ? wallOf(row[spec.end.name], zone) : null;
+    // An end on a later day makes a bar across the days; on the same day, a block of the grid.
+    if (e && e.day > s.day) return { row, start: s.day, end: e.day };
+    const endMin = e && e.day === s.day && e.min > s.min ? e.min : Math.min(1440, s.min + 60);
+    return { row, start: s.day, end: s.day, startMin: s.min, endMin };
+  }
   const start = String(row[spec.start.name] ?? "").slice(0, 10);
   if (!DAY.test(start)) return null;
   const rawEnd = spec.end ? String(row[spec.end.name] ?? "").slice(0, 10) : "";
@@ -170,19 +220,13 @@ export function hhmm(min: number): string {
 }
 
 /**
- * A time of day the way the region writes it ("14:30", "2:30 PM"); `hhmm` where the browser has no
- * such format. Midnight at the end of a day is "24:00" in either case.
+ * A time of day on the calendar: the 24-hour clock ("14:30") that the time boxes and the date
+ * popover use and a time-of-day field shows in a list, My day and the week plan, whatever the
+ * browser's language (one rule for times of day, S5). Midnight at the end of a day is "24:00".
+ * A date and time (an instant) in a title or a list is not a time of day: it keeps the browser's
+ * own format ("Aug 18, 2026, 8:10 AM"), so a calendar block of an instant may show both.
  */
-export function clockOf(min: number, locale: string): string {
-  if (min >= 1440) return hhmm(1440);
-  try {
-    return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(
-      new Date(2000, 0, 1, Math.floor(min / 60), Math.round(min % 60)),
-    );
-  } catch {
-    return hhmm(min);
-  }
-}
+export const clockOf = (min: number): string => hhmm(min);
 
 // ---- the month: bars in lanes ------------------------------------------------------------------
 
@@ -318,7 +362,25 @@ export function movePatch(
   day: string,
   startMin: number,
   endMin: number,
+  zone = "UTC",
 ): Record<string, unknown> {
+  if (spec.start.kind === "datetime") {
+    // An instant keeps the slot's time of day on the instance's clock (a new record made from a
+    // slot of the week grid), as newOnDay does for a day of the month.
+    const at = (min: number) => {
+      const r = fromZonedInput(
+        `${addDaysIso(day, Math.floor(min / 1440))} ${hhmm(min % 1440)}`,
+        zone,
+      );
+      return "value" in r ? r.value : undefined;
+    };
+    const patch: Record<string, unknown> = {};
+    const start = at(startMin);
+    if (start) patch[spec.start.name] = start;
+    const end = spec.end?.kind === "datetime" ? at(endMin) : undefined;
+    if (end && spec.end) patch[spec.end.name] = end;
+    return patch;
+  }
   const patch: Record<string, unknown> = { [spec.start.name]: day };
   if (spec.startMinute) patch[spec.startMinute.name] = startMin;
   if (spec.endMinute) patch[spec.endMinute.name] = endMin;

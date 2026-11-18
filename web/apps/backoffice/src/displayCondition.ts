@@ -24,12 +24,16 @@
 // fail one of the two sides.
 //
 // A source this parser does not understand compiles to `null`; the caller then never relabels.
+//
+// `readonly_when` (R6, M2) may also read `$user`, the login of the person viewing the record, as text
+// (`Expr::parse_viewer` on the server, `{ viewer: true }` here); every other condition refuses it.
 
 type Val = null | number | string | boolean;
 
 type Node =
   | { t: "lit"; v: Val }
   | { t: "field"; name: string }
+  | { t: "user" }
   | { t: "isSet"; name: string }
   | { t: "not"; a: Node }
   | { t: "bin"; op: CmpOp | "&&" | "||"; a: Node; b: Node };
@@ -39,7 +43,8 @@ type Tok =
   | { k: "int"; v: number }
   | { k: "str"; v: string }
   | { k: "id"; v: string }
-  | { k: "op"; v: string };
+  | { k: "op"; v: string }
+  | { k: "user" };
 
 /** The largest whole number the gate allows in a condition (2^53 - 1). */
 const MAX_INT = Number.MAX_SAFE_INTEGER;
@@ -69,7 +74,7 @@ const isAlpha = (c: number | undefined) =>
   c !== undefined && (isLower(c) || (c >= 0x41 && c <= 0x5a));
 
 /** The tokens of `src`, or `null` for anything the language (or this subset) does not have. */
-function lex(src: string): Tok[] | null {
+function lex(src: string, viewer: boolean): Tok[] | null {
   const cs = Array.from(src, (ch) => ch.codePointAt(0)!);
   const out: Tok[] = [];
   let i = 0;
@@ -108,6 +113,14 @@ function lex(src: string): Tok[] | null {
         }
       }
       out.push({ k: "str", v: s });
+    } else if (
+      viewer &&
+      c === 0x24 &&
+      String.fromCodePoint(...cs.slice(i + 1, i + 5)) === "user" &&
+      !(isLower(cs[i + 5]) || isDigit(cs[i + 5]) || cs[i + 5] === 0x5f)
+    ) {
+      out.push({ k: "user" });
+      i += 5;
     } else if (isLower(c) || c === 0x5f) {
       let s = "";
       while (isLower(cs[i]) || isDigit(cs[i]) || cs[i] === 0x5f)
@@ -169,6 +182,7 @@ class Parser {
     const t = this.toks[this.pos++];
     if (!t) throw new Error("the expression ends too soon");
     if (t.k === "int" || t.k === "str") return { t: "lit", v: t.v };
+    if (t.k === "user") return { t: "user" };
     if (t.k === "op") {
       if (t.v !== "(") throw new Error(`unexpected ${t.v}`);
       const e = this.or();
@@ -208,10 +222,12 @@ function compareCodePoints(a: string, b: string): number {
   return x.length - y.length;
 }
 
-function run(n: Node, row: Record<string, unknown>): Val {
+function run(n: Node, row: Record<string, unknown>, user: string): Val {
   switch (n.t) {
     case "lit":
       return n.v;
+    case "user":
+      return user;
     case "field":
       return value(row[n.name]);
     case "isSet": {
@@ -219,13 +235,13 @@ function run(n: Node, row: Record<string, unknown>): Val {
       return v !== null && v !== "";
     }
     case "not":
-      return !truthy(run(n.a, row));
+      return !truthy(run(n.a, row, user));
     case "bin": {
       // `&&` and `||` stop early, so a guard such as `is_set(x) && ...` is meaningful.
-      if (n.op === "&&") return truthy(run(n.a, row)) && truthy(run(n.b, row));
-      if (n.op === "||") return truthy(run(n.a, row)) || truthy(run(n.b, row));
-      const x = run(n.a, row);
-      const y = run(n.b, row);
+      if (n.op === "&&") return truthy(run(n.a, row, user)) && truthy(run(n.b, row, user));
+      if (n.op === "||") return truthy(run(n.a, row, user)) || truthy(run(n.b, row, user));
+      const x = run(n.a, row, user);
+      const y = run(n.b, row, user);
       const ord =
         typeof x === "string" || typeof y === "string"
           ? compareCodePoints(asText(x), asText(y))
@@ -248,15 +264,15 @@ function run(n: Node, row: Record<string, unknown>): Val {
   }
 }
 
-/** Whether a condition holds on a record. */
-export type Condition = (row: Record<string, unknown>) => boolean;
+/** Whether a condition holds on a record, for the person `user` (the login `$user` reads). */
+export type Condition = (row: Record<string, unknown>, user?: string) => boolean;
 
 /**
  * The condition of `src` as a function of a record, or `null` when `src` is not in the subset or does
  * not parse (the install gate refuses such a source, so this is a server newer than the browser).
  */
-export function compileCondition(src: string): Condition | null {
-  const toks = lex(src);
+export function compileCondition(src: string, opts: { viewer?: boolean } = {}): Condition | null {
+  const toks = lex(src, !!opts.viewer);
   if (!toks || toks.length === 0) return null;
   const p = new Parser(toks);
   let root: Node;
@@ -267,5 +283,5 @@ export function compileCondition(src: string): Condition | null {
   }
   if (!p.done()) return null;
   // As on the server (assertions and `when` of effects): it holds when it is exactly `true`.
-  return (row) => run(root, row) === true;
+  return (row, user = "") => run(root, row, user) === true;
 }

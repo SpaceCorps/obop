@@ -209,10 +209,21 @@ impl OAuth {
                 meta = device_metadata(form)?;
                 // What was begun before the credentials of the account changed does not finish
                 // after it, and a person has only so many devices. Both are checked before the
-                // code is spent; the batch below checks the epoch again, atomically.
-                let owner = peek["owner"].as_str().unwrap_or("");
-                self.check_epoch(owner, peek["epoch"].as_str())?;
-                self.check_device_cap(owner)?;
+                // code is spent; the batch below checks the epoch again, atomically, and the cap
+                // again under a lock. Only for a request that holds what the code was issued to
+                // (the client, the redirect and the PKCE verifier, L15): someone with only an
+                // intercepted code learns nothing of the account and writes nothing to its log.
+                let challenge = peek["challenge"].as_str().unwrap_or("-");
+                let holder = peek["client_id"].as_str() == Some(client_id)
+                    && peek["redirect_uri"].as_str() == Some(redirect_uri)
+                    && is_verifier(verifier)
+                    && is_challenge(challenge)
+                    && ct_eq(&s256(verifier), challenge);
+                if holder {
+                    let owner = peek["owner"].as_str().unwrap_or("");
+                    self.check_epoch(owner, peek["epoch"].as_str())?;
+                    self.check_device_cap(owner)?;
+                }
             }
         }
         let consumed = raw.is_some() && self.backend.kv_delete(&key).map_err(storage)?;
@@ -324,17 +335,16 @@ impl OAuth {
             .as_u64()
             .unwrap_or(1)
             .clamp(1, u64::from(MAX_DAYS));
-        if class.is_mobile() {
-            // The kind of the account as it is now, not as the code was made: a phone grant of an
-            // account that signs in with Microsoft only lasts at most 30 days. A refused read is a
-            // 503 that gives the code back, never "no cap". (A change of the setting between this
-            // read and the batch below bumps the credential epoch, which the batch expects.)
-            let only = self
-                .tokens()
-                .is_microsoft_only(owner)
-                .map_err(|_| give_back(storage_busy()))?;
-            days = days.min(u64::from(max_days(only)));
-        }
+        // The kind of the account as it is now, not as the code was made: a grant of an account
+        // that signs in with Microsoft only, a phone's or an MCP client's (N5), lasts at most 30
+        // days. A refused read is a 503 that gives the code back, never "no cap". (For a phone a
+        // change of the setting between this read and the batch below bumps the credential epoch,
+        // which the batch expects; an MCP client's grant is not bound to the epoch.)
+        let only = self
+            .tokens()
+            .is_microsoft_only(owner)
+            .map_err(|_| give_back(storage_busy()))?;
+        days = days.min(u64::from(max_days(only)));
         let grant_id = format!("og_{}", rand_hex::<12>());
         let client_name = rec["client_name"].as_str().unwrap_or("");
         let device_id = class.is_mobile().then(|| uuid::Uuid::now_v7().to_string());
@@ -435,6 +445,24 @@ impl OAuth {
                 fields: record.clone(),
             });
         }
+        // The cap is counted again and the device written under one lock per person (L15): two
+        // codes of one person exchanged at the same moment cannot both pass a count taken before
+        // either was written. Ending a device takes no lock; it only makes room.
+        let _cap = match &registered {
+            Some(_) => {
+                let key = format!("oauth.device_cap.{}", &sha_hex(owner)[..24]);
+                let guard = self.backend.lock(&key).map_err(|_| {
+                    self.unissue(&access_id);
+                    give_back(storage_busy())
+                })?;
+                if let Err(e) = self.check_device_cap(owner) {
+                    self.unissue(&access_id);
+                    return Err(if e.status == 503 { give_back(e) } else { e });
+                }
+                Some(guard)
+            }
+            None => None,
+        };
         match self.backend.apply_checked(&ops) {
             Ok(()) => {}
             Err(ApplyError::Conflict { .. }) => {
@@ -923,20 +951,15 @@ impl OAuth {
         let Some(rec) = rec.filter(dev::is_active) else {
             return Ok(());
         };
+        let owner = grant.get("owner").and_then(J::as_str).unwrap_or("");
+        let detail = format!("{}: {why}", dev::describe(&rec, did));
+        // The record and its entry of the log in one batch (L11): neither is lost without the other.
         fault::patiently(TRIES, PAUSE, || {
             fault::allow(|| {
-                self.backend
-                    .update(dev::MODEL, did, &dev::revoked_patch(self.now()))
+                dev::end_with_entry(&*self.backend, did, self.now(), owner, actor, &detail)
             })
         })
         .map_err(|_| storage_busy())?;
-        let owner = grant.get("owner").and_then(J::as_str).unwrap_or("");
-        self.audit_by(
-            owner,
-            dev::EVENT_REVOKED,
-            actor,
-            &format!("{}: {why}", dev::describe(&rec, did)),
-        );
         Ok(())
     }
 

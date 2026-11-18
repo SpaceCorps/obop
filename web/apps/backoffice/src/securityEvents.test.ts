@@ -48,6 +48,18 @@ describe("the kinds of the security log", () => {
     }
   });
 
+  it("lists the kinds of Sign and has words for every one", () => {
+    const sign = listed.filter((k) => k.startsWith("sign_"));
+    expect(sign.sort()).toEqual([
+      "sign_link_issued",
+      "sign_link_restored",
+      "sign_link_revoked",
+      "sign_refused",
+      "sign_signed",
+    ]);
+    for (const k of sign) expect(EVENT_KINDS[k], `no label for ${k}`).toBeDefined();
+  });
+
   it("has words for every device kind", () => {
     const device = listed.filter((k) => k.startsWith("device_"));
     expect(device.length).toBeGreaterThanOrEqual(4);

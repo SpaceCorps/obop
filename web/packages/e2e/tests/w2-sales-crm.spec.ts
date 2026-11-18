@@ -24,7 +24,7 @@ test.describe("CRM to Sales", () => {
     await signIn("root", `/crm/lead?id=${lead.id}`);
     await page.getByRole("button", { name: "New quotation" }).click();
     const ask = page.getByRole("dialog", { name: "Who is the customer?" });
-    await ask.getByLabel("Customer").fill(customer.name);
+    await ask.getByLabel("Customer", { exact: true }).fill(customer.name);
     await page.getByRole("option", { name: new RegExp(customer.name) }).click();
     await ask.getByRole("button", { name: "Create quotation" }).click();
 
@@ -47,7 +47,7 @@ test.describe("CRM to Sales", () => {
       .toBe(8900);
 
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
-    await expect(page.getByText("A draft invoice is ready")).toBeVisible();
+    await expect(page.getByText("A draft invoice is ready", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Open invoice" }).click();
     await expect(page).toHaveURL(/#\/invoicing\/invoice\?id=/);
     const invoice = (await api.list("root", "invoice")).find((i) => i.sale_order_id === quote.id);

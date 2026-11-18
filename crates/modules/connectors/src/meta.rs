@@ -28,6 +28,15 @@ fn sel(name: &'static str, desc: &'static str, g: &'static str, o: &[&str]) -> F
 fn person(name: &'static str, desc: &'static str, g: &'static str) -> F {
     F::new(name, desc, Internal, true, g)
 }
+/// The provider of a setting or a connection: one of the catalogue ids, so every surface offers
+/// the catalogue to pick from (GitHub issue 108) and stores the id, as before.
+fn provider(desc: &'static str, g: &'static str) -> F {
+    let ids: Vec<&'static str> = obop_connectors::catalog::providers()
+        .iter()
+        .map(|p| p.id)
+        .collect();
+    sel("provider", desc, g, &ids)
+}
 fn class(name: &'static str, desc: &'static str, c: DataClass, g: &'static str) -> F {
     F::new(name, desc, c, false, g).kind(FieldKind::LongText)
 }
@@ -41,12 +50,13 @@ pub const CATEGORIES: [&str; 6] = [
     "automation",
 ];
 pub const MATURITY: [&str; 3] = ["working", "generic_adapter", "definition_only"];
-pub const ENGINES: [&str; 6] = [
+pub const ENGINES: [&str; 7] = [
     "webhook_out",
     "webhook_in",
     "rest_pull",
     "csv_export",
     "browse",
+    "mail",
     "none",
 ];
 pub const AUTH_KINDS: [&str; 7] = [
@@ -111,7 +121,7 @@ pub fn models() -> Vec<ModelDef> {
             write_group: ADMIN,
             access: None,
             fields: vec![
-                t("provider", "Id of the provider this policy is for", ADMIN).required(),
+                provider("Id of the provider this policy is for", ADMIN).required(),
                 flag("enabled", "The provider may be connected at all", ADMIN),
                 flag("users_may_use", "People with connectors.user may connect their own accounts", ADMIN),
                 t("allowed_group", "Permission group that may use it; empty means connectors.user", ADMIN),
@@ -137,7 +147,7 @@ pub fn models() -> Vec<ModelDef> {
             access: None,
             fields: vec![
                 t("name", "A name that tells you what the connection is for", USER).required(),
-                t("provider", "Id of the provider from the catalogue", USER).required(),
+                provider("Id of the provider from the catalogue", USER).required(),
                 sel("owner_scope", "Whether the connection belongs to the instance or to one person", USER, &["instance", "user"]).required(),
                 person("owner_user", "The person who owns the connection", USER),
                 t("owner_groups", "Permission groups the owner held when the connection was last changed", ADMIN),
@@ -328,6 +338,19 @@ pub fn models() -> Vec<ModelDef> {
 /// A text field that is an identifier an administrator typed, not personal data.
 fn person_free(name: &'static str, desc: &'static str, g: &'static str) -> F {
     F::new(name, desc, Internal, false, g)
+}
+
+/// Let the provider fields offer the providers `providers` (the runtime's): the catalogue in a
+/// server, the catalogue and a stand-in in a test that runs one (GitHub issue 108).
+pub fn offer_providers(m: &mut Module, providers: &[obop_connectors::catalog::Provider]) {
+    let ids: Vec<&'static str> = providers.iter().map(|p| p.id).collect();
+    for model in m.models.iter_mut() {
+        if model.name == "provider_policy" || model.name == "connection" {
+            for f in model.fields.iter_mut().filter(|f| f.name == "provider") {
+                *f = f.clone().select(&ids);
+            }
+        }
+    }
 }
 
 pub fn module() -> Module {

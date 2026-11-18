@@ -41,6 +41,10 @@ description = "Lähetettävä asiakirjapohja; tyhjä pyynnössä, joka koskee As
 label = "Asiakirja"
 description = "Asiakirjat-sovelluksen PDF, jonka allekirjoittaja lukee ja allekirjoittaa; pyynnön lähettäminen ottaa sen SHA-256:n ja säilyttää tarkan kopion"
 
+[labels.fi.model.sign_request.field.no_document]
+label = "Ei asiakirjaa"
+description = "Onko pyyntö muu kuin Asiakirjat-sovelluksen asiakirjaa koskeva; sellaisen näkevät kaikki pyyntöjen lukijat, asiakirjaa koskevan vain ne, jotka näkevät kyseisen asiakirjan"
+
 [labels.fi.model.sign_request.field.title]
 label = "Otsikko"
 description = "Allekirjoittajalle näytettävä aihe"
@@ -104,6 +108,15 @@ description = "Koko nimi, jonka allekirjoittaja kirjoitti (todiste); signer_name
 [labels.fi.model.sign_request.field.consent_version]
 label = "Suostumuksen versio"
 description = "Suostumustekstin tunniste: sen versio, lähetyksen kieli (lomakkeen lang, jos se nimeää yhden seitsemästä; jos lomakkeessa ei ole lang-kenttää lainkaan, osoitteen; muuten selaimen, instanssin ja lopuksi englanti; ei todiste näytetystä sivusta) ja tämän kielen tekstien tiivisteen 8 ensimmäistä heksamerkkiä, esimerkiksi v1-draft/fi/a670b631"
+
+[labels.fi.model.sign_request.field.evidence_check]
+label = "Todisteiden tarkistus"
+description = "Vastaavatko linkin kautta allekirjoitetun pyynnön todisteet yhä tietoturvalokin allekirjoitushetken merkintää (Sign 0.3.0:sta alkaen myös otsikko, viesti ja pyydetty nimi): täsmää, poikkeaa (muutettu allekirjoituksen jälkeen) tai ei merkintää. Selvitetään vain get-kutsussa, tyhjä luetteloissa. Ei väärennöksiltä suojattu: tietokantaan kirjoittava voi muuttaa molempia"
+
+[labels.fi.model.sign_request.field.evidence_check.options]
+matches = "Täsmää"
+differs = "Poikkeaa"
+no_entry = "Ei merkintää"
 
 [labels.fi.model.sign_request.field.state]
 label = "Tila"

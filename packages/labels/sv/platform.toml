@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "Anpassa"
+summary = "Anpassa instansen: tema, appar, moduler och marknadsplatsen."
 
 [labels.sv.model.module]
 name = "Modul"
@@ -75,7 +76,7 @@ description = "Installera en modul från marknadsplatsen med id, med de beroende
 
 [labels.sv.model.setting]
 name = "Inställning"
-description = "Inställningar för hela instansen: tema och appstartarens layout"
+description = "Inställningar för hela instansen som ett JSON-objekt: tema, appstartarens layout, säkerhetspolicyn och annat. Varje person läser dem, administratörer skriver dem; en mobilapps token kan inte läsa dem"
 
 [labels.sv.model.setting.field.value]
 label = "Värde"

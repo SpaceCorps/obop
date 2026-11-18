@@ -1,0 +1,13 @@
+/* Expense settings (ExpenseSettings.tsx): one card, as wide as a form. */
+.exp-settings-card {
+  display: grid;
+  gap: var(--space-3);
+  max-inline-size: 40rem;
+  padding: var(--space-5);
+}
+@media (max-width: 40rem) {
+  .exp-settings .home-head,
+  .exp-settings .home-body {
+    padding-inline: var(--space-4);
+  }
+}

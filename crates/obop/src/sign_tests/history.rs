@@ -38,8 +38,23 @@ fn sha(text: &str) -> String {
 
 /// The page with the request id and the secret of its link replaced, so that the pages of two
 /// instances can be compared.
+/// The hidden field `words` that the form carries from `sign` 0.3.0 on (the wording digest, O59) is
+/// taken out, since it is not part of the history: what these pins hold is that the history adds
+/// nothing to the page of a request that does not ask for it.
 fn normalised(body: &str, rid: &str, tok: &str) -> String {
-    body.replace(rid, "RID").replace(tok, "TOK")
+    without_words(body).replace(rid, "RID").replace(tok, "TOK")
+}
+
+/// The page without its `<input type="hidden" name="words" value="...">`.
+fn without_words(body: &str) -> String {
+    let at = "<input type=\"hidden\" name=\"words\" value=\"";
+    match body.find(at) {
+        Some(i) => {
+            let end = i + body[i..].find("\">").expect("the field ends") + 2;
+            format!("{}{}", &body[..i], &body[end..])
+        }
+        None => body.to_string(),
+    }
 }
 
 /// The SHA-256 of the pages of a request that does not show the signatures so far, as the code
@@ -1257,7 +1272,16 @@ async fn a_switch_changed_between_the_reads_and_the_write_signs_nothing() {
         fired.load(Ordering::SeqCst),
         "the change landed between the reads and the write"
     );
-    assert_eq!(r.status, 409, "{}", r.text());
+    // The link still works: the form again, with the sentence and why it is shown (it was the 409
+    // of a link that "can no longer be used" before, docs/ISSUES.md O50).
+    assert_eq!(r.status, 400, "{}", r.text());
+    assert!(
+        r.text()
+            .contains("The page has changed since you opened it: it now says"),
+        "{}",
+        r.text()
+    );
+    assert!(!r.text().contains("can no longer be used"), "{}", r.text());
     let req = f.record("sign_request", &f.req);
     assert_eq!(req["state"], "sent");
     assert!(req.get("signed_name").is_none_or(J::is_null));
@@ -1279,7 +1303,14 @@ async fn a_switch_changed_between_the_reads_and_the_write_signs_nothing() {
     });
     let r = sign(&f, &m, &f.file, "Jane Test", true, 141).await;
     assert!(fired.load(Ordering::SeqCst));
-    assert_eq!(r.status, 409, "{}", r.text());
+    assert_eq!(r.status, 400, "{}", r.text());
+    assert!(
+        r.text()
+            .contains("The page has changed since you opened it. Read it again"),
+        "{}",
+        r.text()
+    );
+    assert!(!r.text().contains("can no longer be used"), "{}", r.text());
     assert_eq!(f.record("sign_request", &m.id)["state"], "sent");
     assert!(f.events_of("sign_signed").is_empty());
 }
@@ -1361,9 +1392,10 @@ async fn only_a_manager_or_an_administrator_sets_the_switch() {
             .is_none_or(J::is_null)
     );
 
-    // A manager (`mia`, `ann`, `noc`) or an administrator (`admin`, `root`) sets it in every way a
+    // A manager who can see the Document (`mia`, `ann`; `noc` cannot, so the request is not there
+    // for him, docs/ISSUES.md O4) or an administrator (`admin`, `root`) sets it in every way a
     // request is written, and takes it off.
-    for who in ["mia", "ann", "noc", "admin", "root"] {
+    for who in ["mia", "ann", "admin", "root"] {
         let [(cs, cv), (us, uv), (rs, rv), (vs, vv)] =
             write_with_the_switch(&f, who, &f.req, &json!(true)).await;
         for (s, v, way) in [
@@ -1406,8 +1438,8 @@ async fn only_a_manager_or_an_administrator_sets_the_switch() {
         .count();
     assert_eq!(
         on,
-        5 * 3,
-        "five callers made three requests each with the switch on"
+        4 * 3,
+        "four callers made three requests each with the switch on"
     );
 
     // A person with sign.user edits a request that is on, as the back office does, and the switch
@@ -1497,19 +1529,28 @@ async fn an_agent_token_sets_the_switch_only_with_the_manager_group_in_its_scope
             .get("show_history")
             .is_none_or(J::is_null)
     );
-    // The token that holds the manager group may: it is a caller with `sign.manager`, like the
-    // person whose token it is (docs/SIGN.md says so).
-    let [(cs, cv), (us, uv), (rs, rv), (vs, vv)] =
-        write_with_the_switch(&f, "agent_manager", &f.req, &json!(true)).await;
-    for (s, v, way) in [
-        (cs, &cv, "create"),
-        (us, &uv, "update"),
-        (rs, &rv, "bulk row"),
-        (vs, &vv, "csv"),
-    ] {
-        assert_eq!(s, 200, "{way}: {v}");
+    // Nor may the token that holds the manager group: the switch shows a person's name to other
+    // people, so it is a person's to set, as a link is (owner default of 2026-11-17,
+    // docs/ISSUES.md O47; it was allowed before).
+    for value in [json!(true), json!(false)] {
+        for (i, (s, v)) in write_with_the_switch(&f, "agent_manager", &f.req, &value)
+            .await
+            .iter()
+            .enumerate()
+        {
+            let way = ["create", "update", "bulk row", "csv"][i];
+            assert_eq!(*s, 400, "agent_manager {way} with {value}: {v}");
+            assert!(
+                err(v).contains("show_history") && err(v).contains("an agent"),
+                "agent_manager {way}: {v}"
+            );
+        }
     }
-    assert_eq!(f.record("sign_request", &f.req)["show_history"], true);
+    assert!(
+        f.record("sign_request", &f.req)
+            .get("show_history")
+            .is_none_or(J::is_null)
+    );
 }
 
 #[tokio::test]
@@ -1520,7 +1561,7 @@ async fn once_signed_the_switch_is_an_administrators_to_change() {
         sign(&f, &m, &f.file, "Jane Test", true, 150).await.status,
         303
     );
-    for who in ["mia", "ann", "noc"] {
+    for who in ["mia", "ann"] {
         let (s, v) = f
             .api(
                 who,
@@ -1531,6 +1572,18 @@ async fn once_signed_the_switch_is_an_administrators_to_change() {
         assert_eq!(s, 400, "{who}: {v}");
         assert!(err(&v).contains("signed request cannot be changed"), "{v}");
     }
+    // A manager who cannot see the Document is not told that the request is signed: for him it
+    // does not exist (docs/ISSUES.md O4).
+    let (s, v) = f
+        .api(
+            "noc",
+            "/api/sign_request/update",
+            json!({"id": m.id, "show_history": false}),
+        )
+        .await;
+    assert_eq!(s, 400, "noc: {v}");
+    assert!(err(&v).contains("no sign_request"), "{v}");
+    assert!(!err(&v).contains("signed"), "{v}");
     assert_eq!(f.record("sign_request", &m.id)["show_history"], true);
     let (s, v) = f
         .api(
@@ -1741,7 +1794,7 @@ async fn the_door_follows_an_update_and_a_rollback_of_the_package_for_the_switch
         .installer
         .install(&Bundled.fetch("sign").unwrap(), "marketplace", "test")
         .unwrap();
-    assert_eq!(installed_sign(&f), "0.2.4");
+    assert_eq!(installed_sign(&f), "0.3.0");
     tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
     flaky.reset_reads();
     let html = page_of(&f, &path, 171).await;
@@ -1854,15 +1907,24 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
     let new = obop_pkg::Manifest::parse(&new_text).unwrap();
     assert_eq!(
         (old.module.version.as_str(), new.module.version.as_str()),
-        ("0.2.1", "0.2.4")
+        ("0.2.1", "0.3.0")
     );
     let changes = obop_pkg::migrate::diff(&old, &new);
-    assert_eq!(changes.len(), 1, "{changes:?}");
-    let c = &changes[0];
+    // The switch, (0.2.5) the computed flag the row rule of a request without a Document reads,
+    // and (0.3.0) the evidence check, which is never stored; none breaks a record.
+    let mut seen: Vec<_> = changes
+        .iter()
+        .map(|c| (c.kind, c.model.as_str(), c.field.as_deref(), c.breaking))
+        .collect();
+    seen.sort();
     assert_eq!(
-        (c.kind, c.model.as_str(), c.field.as_deref(), c.breaking),
-        ("field_added", "sign_request", Some("show_history"), false),
-        "{c:?}"
+        seen,
+        vec![
+            ("field_added", "sign_request", Some("evidence_check"), false),
+            ("field_added", "sign_request", Some("no_document"), false),
+            ("field_added", "sign_request", Some("show_history"), false),
+        ],
+        "{changes:?}"
     );
     let field = new
         .model
@@ -1900,14 +1962,14 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
         data.blockers.is_empty() && data.steps.is_empty() && data.warnings.is_empty(),
         "{data:?}"
     );
-    assert_eq!(data.changes.len(), 1);
+    assert_eq!(data.changes.len(), 3);
 
     let out = f
         .app
         .installer
         .install_outcome(&new_text, "marketplace", "test")
         .unwrap();
-    assert_eq!(out.root.version, "0.2.4");
+    assert_eq!(out.root.version, "0.3.0");
     // Not a record was rewritten.
     let after: Vec<_> = ids.iter().map(|id| f.record("sign_request", id)).collect();
     assert_eq!(after, before);
@@ -2245,16 +2307,16 @@ async fn a_signature_made_without_the_sentence_is_listed_to_nobody_whatever_the_
         WITH_HISTORY_EN
     );
     // Dave sees Bob and not Alice. Bob's page after signing has himself, marked, and not Alice.
-    // Alice's own page, whose box is on now, has Bob and not herself.
+    // Alice's own page, whose box is on now, lists nobody: she did not sign under the sentence, so
+    // she is in nobody's list and is shown none (docs/ISSUES.md O54; it showed Bob before).
     assert_eq!(names(&page(&f, &dave, 233).await.text()), ["Bob Example"]);
     assert_eq!(
         marked(&page(&f, &bob, 234).await.text()),
         [("Bob Example".to_string(), true)]
     );
-    assert_eq!(
-        marked(&page(&f, &alice, 235).await.text()),
-        [("Bob Example".to_string(), false)]
-    );
+    let html = page(&f, &alice, 235).await.text();
+    assert!(marked(&html).is_empty(), "{html}");
+    assert!(!html.contains("Bob Example"), "{html}");
 }
 
 #[tokio::test]

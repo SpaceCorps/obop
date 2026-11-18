@@ -38,5 +38,10 @@
   "{name} ({count}):",
   "{quantity} × {price}",
   "{row}, {column}: {value}",
-  "{title}. {values}."
+  "{title}. {values}.",
+  "08:00",
+  "Host",
+  "SMTP {host}:{port}",
+  "STARTTLS",
+  "TLS"
 ]

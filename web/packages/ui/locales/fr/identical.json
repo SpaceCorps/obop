@@ -87,5 +87,10 @@
   "{h} h {m} min",
   "{minutes} min",
   "{m} min",
-  "{quantity} × {price}"
+  "{quantity} × {price}",
+  "08:00",
+  "Port",
+  "SMTP {host}:{port}",
+  "STARTTLS",
+  "TLS"
 ]

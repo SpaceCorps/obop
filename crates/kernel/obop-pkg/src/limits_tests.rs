@@ -126,12 +126,18 @@ fn a_bad_limit_is_refused_naming_the_field_and_the_key() {
         ),
         (
             "kind = \"date\"\nmin = 1",
-            "only valid for kind \"number\", \"money\" or \"decimal\"",
+            "must be a day such as \"1900-01-01\"",
         ),
+        ("kind = \"date\"\nmin = \"1900-02-30\"", "a real day"),
         (
             "min = 1",
-            "only valid for kind \"number\", \"money\" or \"decimal\"",
+            "only valid for kind \"number\", \"money\", \"decimal\" or \"date\"",
         ),
+        (
+            "kind = \"longtext\"\npattern = \"iban\"",
+            "`pattern` is only valid",
+        ),
+        ("pattern = \"regex\"", "not a known format"),
         ("kind = \"number\"\nmin = 0.5", "must be a whole number"),
         ("kind = \"number\"\nmin = \"1\"", "must be a whole number"),
         (
@@ -363,6 +369,23 @@ fn a_changed_limit_is_a_listed_change_and_never_breaking() {
     let a = Manifest::parse(&pkg(&field("qty", "kind = \"number\"\nmax = 10"))).unwrap();
     let b = Manifest::parse(&pkg(&field("qty", "kind = \"number\"\nmax = 5"))).unwrap();
     assert_eq!(kinds(&a, &b).len(), 1);
+}
+
+#[test]
+fn a_new_or_changed_pattern_is_in_the_plan() {
+    // U3: a field that gains a format holds a value to more; losing it, to less.
+    let iban = |extra: &str| field("iban", extra);
+    let d = limits_change(&iban(""), &iban("pattern = \"iban\""));
+    assert!(
+        d.contains(
+            "tighten from max_length 2048 (default) to max_length 2048 (default), pattern iban"
+        ),
+        "{d}"
+    );
+    let d = limits_change(&iban("pattern = \"iban\""), &iban(""));
+    assert!(d.contains("loosen from"), "{d}");
+    let d = limits_change(&iban("pattern = \"iban\""), &iban("pattern = \"vat_id\""));
+    assert!(d.contains("tighten and loosen from"), "{d}");
 }
 
 /// The detail of the one `field_limits` change from `old` to `new`.

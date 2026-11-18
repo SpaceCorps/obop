@@ -300,3 +300,91 @@ fn a_manager_without_the_inventory_user_group_is_told_which_group_is_missing() {
     assert!(e.contains("inventory.user"), "{e}");
     assert!(!e.contains("import"), "{e}");
 }
+
+/// Q5: an item kept in a lot is counted through a move that names the lot, and only that item
+/// changes.
+#[test]
+fn an_item_kept_in_a_lot_is_counted_and_the_other_lots_stay() {
+    let s = shelf();
+    let lot = |name: &str| {
+        id(&ok(
+            &s.app,
+            &s.keeper,
+            "inventory_item.create",
+            json!({"product_id": s.product, "location_id": s.shelf, "lot": name}),
+        ))
+    };
+    let (l1, l2) = (lot("L-1"), lot("L-2"));
+    let r = ok(
+        &s.app,
+        &s.keeper,
+        "stock_count.apply",
+        json!({"item": l2, "counted": 12}),
+    );
+    assert_eq!(r["quantity"], json!(12), "{r}");
+    let qty = |item: &str| {
+        ok(&s.app, &s.keeper, "inventory_item.get", json!({"id": item}))["quantity"]
+            .as_i64()
+            .unwrap_or(0)
+    };
+    assert_eq!((qty(&l1), qty(&l2), s.on_hand()), (0, 12, 36));
+    let mv = ok(
+        &s.app,
+        &s.keeper,
+        "inventory_move.get",
+        json!({"id": r["move_id"]}),
+    );
+    assert_eq!(mv["lot"], json!("L-2"));
+    assert_eq!(mv["state"], json!("done"));
+    // Counted down again, through the source side.
+    let r = ok(
+        &s.app,
+        &s.keeper,
+        "stock_count.apply",
+        json!({"item": l2, "counted": 5}),
+    );
+    assert_eq!(
+        (qty(&l1), qty(&l2), r["difference"].clone()),
+        (0, 5, json!(-7))
+    );
+}
+
+#[test]
+fn no_move_of_another_call_comes_between_the_steps_of_a_count() {
+    // Q12: deliveries are validated on another thread while counts are applied; every count
+    // ends at its figure and says nothing about a drift.
+    let s = std::sync::Arc::new(shelf());
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mover = {
+        let (s, stop) = (s.clone(), stop.clone());
+        std::thread::spawn(move || {
+            let mut n = 0;
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                s.moved(1, true);
+                n += 1;
+            }
+            n
+        })
+    };
+    let mut drifted = Vec::new();
+    for i in 0..60 {
+        let counted = 1000 + i;
+        let out = ok(
+            &s.app,
+            &s.keeper,
+            "stock_count.apply",
+            json!({"item": s.item, "counted": counted}),
+        );
+        if out["quantity"] != counted || !out["notes"].as_array().is_none_or(|n| n.is_empty()) {
+            drifted.push(out);
+        }
+    }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let moved = mover.join().unwrap();
+    assert!(moved > 0, "the other thread moved stock");
+    assert!(
+        drifted.is_empty(),
+        "{} counts drifted: {drifted:?}",
+        drifted.len()
+    );
+}

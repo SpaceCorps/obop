@@ -108,11 +108,12 @@ pub struct FlowCtx {
     pub preselected: Vec<String>,
     /// Whether the sign-in page offers "Sign in with Microsoft". The OAuth crate cannot see the
     /// provider (it has no HTTP client and no connectors runtime), so `obop-http` sets this after
-    /// `view`: the connectors runtime exists, the provider is configured and enabled, and the
-    /// client is a mobile app. Never set for an MCP client.
+    /// `view`: the connectors runtime exists and the provider is configured and enabled. For a
+    /// mobile app's flow and an MCP client's alike (N5).
     pub microsoft: bool,
-    /// The longest the person may hand over for, in days: the cap of a Microsoft-only account on
-    /// a mobile app's flow once somebody is signed in on it, else the general maximum.
+    /// The longest the person may hand over for, in days: the cap of a Microsoft-only account
+    /// once somebody is signed in on the flow (a phone's or an MCP client's), else the general
+    /// maximum.
     pub max_days: u32,
     /// The instance brand every page of this request shows: the one the handler read at the start
     /// of the request (docs/spec/branding.md, section 4), so that the name and the logo of a page
@@ -513,10 +514,8 @@ impl OAuth {
     pub fn view(&self, id: &str, binder: &str, brand: &Arc<Shown>) -> Result<FlowCtx, FlowError> {
         let rec = self.load(id, binder, None)?;
         let mut ctx = self.ctx(id, &rec, brand);
-        if ctx.class.is_mobile()
-            && let Some(user) = ctx.user.as_deref()
-        {
-            ctx.max_days = self.phone_cap(user)?;
+        if let Some(user) = ctx.user.as_deref() {
+            ctx.max_days = self.grant_cap(user)?;
         }
         Ok(ctx)
     }
@@ -529,9 +528,9 @@ impl OAuth {
         self.view(id, binder, &Arc::new(Shown::not_set(None)))
     }
 
-    /// The longest a phone grant of `user` may last. A refused read is not "no cap": the page is
+    /// The longest a grant of `user` may last (a phone's or an MCP client's). A refused read is not "no cap": the page is
     /// not shown, and the decision is not taken, on a guess about the kind of account.
-    fn phone_cap(&self, user: &str) -> Result<u32, FlowError> {
+    fn grant_cap(&self, user: &str) -> Result<u32, FlowError> {
         self.tokens()
             .is_microsoft_only(user)
             .map(max_days)
@@ -583,6 +582,9 @@ impl OAuth {
         }
         match self.auth.login_step(username, password) {
             Ok(out) => self.after_login(id, &mut rec, out),
+            // A refused read of the account is no wrong password: no attempt is spent, and the
+            // page says to try again (D74, N22).
+            Err(e) if obop_storage::fault::Fault::is_transient(&e) => Err(FlowError::Busy(5)),
             Err(e) => {
                 self.count_attempt(id, &mut rec)?;
                 let _ = self.flow_put(id, &rec);
@@ -782,15 +784,15 @@ impl OAuth {
         Ok(())
     }
 
-    // ---- the Microsoft step of a mobile app's sign-in (the phone leg of D91) -----------------------
+    // ---- the Microsoft step of the sign-in pages (the phone leg of D91, and MCP clients, N5) -----
 
-    /// The start of the Microsoft step for flow `id`, for the browser holding `binder`: the flow
-    /// must be a mobile app's, and nobody signed in yet. (No CSRF token: this is a link, and the
+    /// The start of the Microsoft step for flow `id`, for the browser holding `binder`: nobody
+    /// may be signed in on the flow yet. (No CSRF token: this is a link, and the
     /// binder cookie is the proof; what it starts is only a round trip to the provider.) Returns
     /// the language of the flow's pages.
     pub fn microsoft_start(&self, id: &str, binder: &str) -> Result<String, FlowError> {
         let rec = self.load(id, binder, None)?;
-        if !Class::of_record(&rec).is_mobile() || rec["user"].as_str().is_some() {
+        if rec["user"].as_str().is_some() {
             return Err(FlowError::Forbidden);
         }
         Ok(rec["lang"].as_str().unwrap_or("en").to_string())
@@ -849,9 +851,6 @@ impl OAuth {
                 .map_err(|_| FlowError::Gone)?
                 .ok_or(FlowError::Gone)?;
             let mut rec: J = serde_json::from_str(&raw).map_err(|_| FlowError::Gone)?;
-            if !Class::of_record(&rec).is_mobile() {
-                return Err(FlowError::Forbidden);
-            }
             match (&placed, &signed) {
                 (Placed::Person(who), Some(s)) => {
                     rec["pre_user"] = J::from(s.user.as_str());
@@ -907,9 +906,6 @@ impl OAuth {
         ip: &str,
     ) -> Result<LoginOut, FlowError> {
         let rec = self.load(id, binder, None)?;
-        if !Class::of_record(&rec).is_mobile() {
-            return Err(FlowError::Forbidden);
-        }
         if rec["user"].as_str().is_some() {
             return Ok(LoginOut::Consent);
         }
@@ -1046,7 +1042,7 @@ impl OAuth {
         }
         // The cap of a Microsoft-only account, again on the server: a form that was posted by
         // hand gets nothing the page did not list.
-        if class.is_mobile() && days > self.phone_cap(&user)? {
+        if days > self.grant_cap(&user)? {
             return Ok(DecideOut::Retry("err.expiry_cap"));
         }
         // Whoever deletes the flow first is the one answer.

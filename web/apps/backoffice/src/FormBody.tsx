@@ -2,7 +2,7 @@
 // columns where the panel is wide), values the person cannot write as formatted text, the sections
 // an app registers (<SectionSlot>), the lines of a document (<LinesSlot>), the messages and the
 // Save bar. Lane L7 owns what <LinesSlot> draws (LinesSection.tsx).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { rich, t } from "@obop/ui";
 import type { FieldMeta, ModelMeta, Row } from "./api.ts";
 import { useData } from "./data.tsx";
@@ -84,6 +84,8 @@ export function LinesSlot(p: LinesSlotProps) {
 }
 
 export type FormBodyProps = {
+  /** A field to bring into view and focus when the record opens (`&field=` of the address). */
+  focusField?: string;
   /** The line sections' registry (unsaved lines), shared with the panel. */
   lines?: LinesRegistry;
   model: ModelMeta;
@@ -144,6 +146,24 @@ export function FormBody(p: FormBodyProps) {
   // The person's own choice of open and closed sections, by key; else the layout's.
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const wrong = (f: FieldMeta) => !!p.invalid[f.name] || p.refused[f.name] !== undefined;
+  // A link that names a field (`&field=`, Q19) opens its section and brings it into view, focused.
+  const asked = (f: FieldMeta) => f.name === p.focusField;
+  useEffect(() => {
+    if (!p.focusField) return;
+    // After the panel has taken the focus it takes on opening (its own effects run after these).
+    const frame = requestAnimationFrame(() => {
+      const el = document.getElementById(`f-${model.name}-${p.focusField}`);
+      if (!el) return;
+      el.scrollIntoView?.({ block: "center" });
+      const input = el.matches("input, select, textarea, button, [tabindex]")
+        ? el
+        : el.querySelector<HTMLElement>("input, select, textarea, button, [tabindex]");
+      (input as HTMLElement | null)?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+    // When the record opens, and again when a link names another field of it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.focusField]);
   // A record the person may not change at all reads as a description list.
   const asList = !p.editable;
 
@@ -268,6 +288,7 @@ export function FormBody(p: FormBodyProps) {
       <FieldFormProvider
         value={{
           model,
+          record: row?.id ? String(row.id) : undefined,
           peek: (name) => {
             const f =
               fields.find((x) => x.name === name) ?? model.fields.find((x) => x.name === name);
@@ -279,7 +300,8 @@ export function FormBody(p: FormBodyProps) {
         }}
       >
         {p.sections.map((s, si) => {
-          const shown = s.fields.some(wrong) || (open[s.key] ?? !s.collapsed);
+          const shown =
+            s.fields.some(wrong) || (open[s.key] ?? (!s.collapsed || s.fields.some(asked)));
           // The note about personal data is said once, in the first section that holds some.
           const firstPersonal = p.sections.findIndex((x) => x.personal) === si;
           const Grid = asList ? "dl" : "div";

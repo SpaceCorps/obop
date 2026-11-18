@@ -2,7 +2,7 @@
 // person signed in (`hr_employee.user`), so an employee filing their own leave on a phone does not
 // have to find themselves in a list of names. The server decides whose request it is
 // (`requested_by` is filled from the employee's user); this only saves the search.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { search } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { ModelPageProps } from "../../extensions.ts";
@@ -51,13 +51,8 @@ export function LeavePage(p: ModelPageProps) {
       live = false;
     };
   }, [token, linked]);
-  // The generic page reads its starting values when it opens on a new record, so the page is drawn
-  // afresh when the route turns to one: it then starts on the person's own employee record.
-  const [gen, setGen] = useState(0);
-  const was = useRef(p.route.id);
-  useEffect(() => {
-    if (p.route.id === "new" && was.current !== "new" && me) setGen((g) => g + 1);
-    was.current = p.route.id;
-  }, [p.route.id, me]);
-  return <ModelPage key={gen} {...p} takeNewDefaults={() => (me ? { employee_id: me } : null)} />;
+  // The generic page asks for its starting values each time it opens a new record, under the values
+  // it was given (a day picked in the calendar keeps its dates): a new request starts on the
+  // person's own employee record.
+  return <ModelPage {...p} takeNewDefaults={() => (me ? { employee_id: me } : null)} />;
 }

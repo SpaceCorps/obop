@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Badge, Button, Dialog, Icon, Notice, t } from "@obop/ui";
+import { Badge, Button, Dialog, Icon, Notice, t, useWorded } from "@obop/ui";
 import { call } from "../api.ts";
 import { serverMessage } from "../serverMessage.ts";
 import { Notes } from "./UpgradeDetails.tsx";
@@ -25,7 +25,8 @@ export function UpdateAllDialog({
   onDone: (r: { updated: number; proposed: boolean }) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState("");
+  const [failureWorded, setFailure] = useWorded();
+  const failure = failureWorded ?? "";
   const [result, setResult] = useState<UpgradeAll | null>(null);
   const bodyId = useId();
   const fits = rows.filter((r) => r.update_compatible !== false);
@@ -42,7 +43,7 @@ export function UpdateAllDialog({
         onDone({ updated: (v.updated ?? []).length, proposed: false });
       else setResult({ updated: v.updated ?? [], skipped: v.skipped ?? [] });
     } else if (r.kind === "approval") onDone({ updated: 0, proposed: true });
-    else setFailure(serverMessage(r.message));
+    else setFailure(() => serverMessage(r.message));
   }
 
   return (
@@ -180,7 +181,8 @@ export function RollbackDialog({
   onDone: (o: { proposed: boolean }) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState("");
+  const [failureWorded, setFailure] = useWorded();
+  const failure = failureWorded ?? "";
   const blocked = row.rollback_available === false;
   async function go() {
     setBusy(true);
@@ -189,7 +191,7 @@ export function RollbackDialog({
     setBusy(false);
     if (r.kind === "ok") onDone({ proposed: false });
     else if (r.kind === "approval") onDone({ proposed: true });
-    else setFailure(serverMessage(r.message));
+    else setFailure(() => serverMessage(r.message));
   }
   return (
     <Dialog

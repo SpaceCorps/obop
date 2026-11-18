@@ -4,6 +4,7 @@ import { provideCatalogue, setLanguage } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta } from "./api.ts";
 import {
   dateFilters,
+  defaultFilter,
   isOn,
   openStates,
   optionFields,
@@ -163,6 +164,20 @@ describe("quick filters", () => {
     });
     expect(q.some((x) => x.label === "Odd")).toBe(false);
   });
+  it("a saved filter shows the label the package translated it with (U10)", async () => {
+    const m = {
+      ...ticket,
+      ui: {
+        filter: [
+          { label: "Not done", where: 'state != "closed"', labels: { de: "Nicht erledigt" } },
+        ],
+      },
+    };
+    expect(quickFilters(m, m.fields, ctx)[0]!.label).toBe("Not done");
+    provideCatalogue("de", {});
+    await setLanguage("de");
+    expect(quickFilters(m, m.fields, ctx)[0]!.label).toBe("Nicht erledigt");
+  });
 });
 
 describe("toggling", () => {
@@ -248,5 +263,31 @@ describe("where", () => {
     expect(w("assignee == $user")).toEqual([{ op: "is", f: "assignee", v: ["ada"] }]);
     expect(parseWhere("assignee == $user", ticket, { today: ctx.today })).toBeNull();
     expect(w("")).toBeNull();
+  });
+});
+
+describe("defaultFilter", () => {
+  const leave = model(
+    "leave",
+    [f("state", "select", { options: ["draft", "refused", "approved"] })],
+    {
+      ui: {
+        filter: [
+          { label: "Approved", where: "state = approved" },
+          { label: "Not refused", where: "state != refused" },
+        ],
+        default_filter: "Not refused",
+      },
+    },
+  );
+  it("is the saved filter the model names", () => {
+    expect(defaultFilter(leave, leave.fields, { today: "2026-11-17" })).toEqual([
+      { op: "isnot", f: "state", v: ["refused"] },
+    ]);
+  });
+  it("is nothing without the hint, or when the field is not shown", () => {
+    const plain = { ...leave, ui: { ...leave.ui, default_filter: undefined } };
+    expect(defaultFilter(plain, plain.fields, { today: "2026-11-17" })).toBeNull();
+    expect(defaultFilter(leave, [], { today: "2026-11-17" })).toBeNull();
   });
 });

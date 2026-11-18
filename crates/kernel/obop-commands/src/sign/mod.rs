@@ -27,6 +27,7 @@
 //! The security log entry written at signing carries a digest of the evidence as it stood.
 
 mod door;
+mod evidence;
 mod guards;
 mod history;
 mod link;
@@ -65,14 +66,17 @@ const MICROS_PER_DAY: i64 = 86_400 * MICROS_PER_SECOND;
 
 /// The keys of `sign_request` that are the evidence: the signer door (and, for the hash and the
 /// copy, `send_document`) write them and nobody else sets them. A field group restricts reading
-/// only, so the refusal is made by a wrapper. The two dates `sent_on` and `signed_on` are written
-/// by the same code but are not evidence (the evidence is the time and the digest) and are not
-/// guarded: a person with `sign.user` can set them (docs/ISSUES.md O34).
+/// only, so the refusal is made by a wrapper. The two dates `sent_on` and `signed_on` are not
+/// evidence (the evidence is the time and the digest), but they are written by the same code (and
+/// by the effects of `send` and `sign`), so they are guarded too: a request that was not signed
+/// cannot show a signing day (docs/ISSUES.md O34).
 ///
 /// `pub` only so that the tests of the `obop` binary can compare their own list of the keys with
 /// this one (`sign_tests/rules.rs`); nothing else reads it from outside.
 #[doc(hidden)]
-pub const DOOR_OWNED: [&str; 8] = [
+pub const DOOR_OWNED: [&str; 10] = [
+    "sent_on",
+    "signed_on",
     "document_hash",
     "document_file",
     "signed_at",
@@ -92,6 +96,9 @@ pub struct SignService {
     clock: RwLock<Clock>,
     /// `OBOP_PUBLIC_URL` without a trailing slash, when set: the link is returned with it.
     public_url: RwLock<Option<String>>,
+    /// The dispatcher's time zone settings (`OBOP_ZONE`, D72): the days of a request (`sent_on`,
+    /// `signed_on`, the last day `expires_on`) are days of the instance's zone.
+    zones: crate::engine::SharedZones,
 }
 
 impl SignService {
@@ -108,10 +115,12 @@ impl SignService {
                     .map(|u| u.trim().trim_end_matches('/').to_string())
                     .filter(|u| !u.is_empty()),
             ),
+            zones: d.zones.clone(),
         });
         guards::install(d, &svc);
         send::install(d, &svc);
         link::install(d, &svc);
+        evidence::install(d, &svc);
         svc
     }
 
@@ -132,15 +141,33 @@ impl SignService {
         (self.clock.read().unwrap())()
     }
 
-    pub(crate) fn now_text(&self) -> String {
-        Instant::from_micros(self.now_micros())
-            .map(Instant::canonical)
+    /// Today as `YYYY-MM-DD` in the instance's zone.
+    pub(crate) fn today(&self) -> String {
+        self.day_of(self.now_micros())
+    }
+
+    /// The day `YYYY-MM-DD` of the instant `us` in the instance's zone.
+    pub(crate) fn day_of(&self, us: i64) -> String {
+        Instant::from_micros(us)
+            .map(|at| self.zones.read().unwrap().today(at))
             .unwrap_or_default()
     }
 
-    /// Today as `YYYY-MM-DD` (UTC).
-    pub(crate) fn today(&self) -> String {
-        self.now_text().chars().take(10).collect()
+    /// The micros since the epoch of the end of the day `YYYY-MM-DD` in the instance's zone (the
+    /// last microsecond before the next local midnight).
+    pub(crate) fn end_of_day_micros(&self, date: &str) -> Option<i64> {
+        let utc_end = end_of_day_micros(date)?;
+        let zones = self.zones.read().unwrap().clone();
+        let zone = zones.platform();
+        // The local midnight that ends the day: UTC midnight moved by the offset in force then
+        // (looked up twice, so that a change of offset in the last hours of the day is followed).
+        let midnight = utc_end + 1;
+        let off = |us: i64| {
+            Instant::from_micros(us).map_or(0, |at| i64::from(zone.offset_secs(at)))
+                * MICROS_PER_SECOND
+        };
+        let first = midnight - off(midnight);
+        Some(midnight - off(first) - 1)
     }
 
     /// The package is installed with its link model: without it the door answers 404 for
@@ -150,12 +177,51 @@ impl SignService {
         m.contains_key("sign_link") && m.contains_key("sign_request")
     }
 
+    /// What the server says at start about the signer door (docs/ISSUES.md O29): with `sign`
+    /// installed and no `OBOP_PUBLIC_URL`, a new link is a bare path, and the door checks the
+    /// origin of a post against the `Host` header, over https only when the proxy sends
+    /// `X-Forwarded-Proto: https`; a proxy that does not would have every signature refused.
+    /// `None` when there is nothing to say.
+    pub fn start_up_note(&self) -> Option<String> {
+        if !self.registered() || self.public_url().is_some() {
+            return None;
+        }
+        Some(
+            "sign: OBOP_PUBLIC_URL is not set, so a new signing link is only a path (/sign/...) and the signer page checks where a post came from against the Host header, over https only when the proxy sends X-Forwarded-Proto: https; set OBOP_PUBLIC_URL to the public https address of this instance (docs/SIGN.md)"
+                .to_string(),
+        )
+    }
+
     pub(crate) fn public_url(&self) -> Option<String> {
         self.public_url.read().unwrap().clone()
     }
 
     pub(crate) fn get(&self, model: &str, id: &str) -> Result<Option<Fields>, String> {
         self.store.backend.get(model, id)
+    }
+
+    /// The record `id` of `model` as `p` may see it by the model's row rules (D58), or `None`:
+    /// a request about a Document the caller cannot see, and its links, do not exist for them
+    /// (docs/ISSUES.md O4). The wrappers look a record up through this, so that their refusals
+    /// never tell such a caller what the record is; the generated handler then answers "no ...".
+    pub(crate) fn visible_record(
+        &self,
+        p: &Principal,
+        model: &str,
+        id: &str,
+    ) -> Result<Option<Fields>, String> {
+        let models = self.models.read().unwrap();
+        let Some(def) = models.get(model).map(|m| m.def.clone()) else {
+            return self.get(model, id);
+        };
+        let lookup = |n: &str| models.get(n).map(|m| m.def.clone());
+        let reads = crate::engine::unit::Plain(&*self.store.backend);
+        let actor = crate::engine::Actor::of(p);
+        let gate = crate::engine::access::Gate::new(&reads, &lookup, &actor);
+        match self.get(model, id)? {
+            Some(rec) if gate.visible(&def, &rec) => Ok(Some(rec)),
+            _ => Ok(None),
+        }
     }
 }
 
@@ -197,8 +263,9 @@ pub(crate) fn is_admin(p: &Principal) -> bool {
     p.is_person() && p.allows(crate::ADMIN_GROUP)
 }
 
-/// The micros since the epoch of the end of the day `YYYY-MM-DD` (23:59:59.999999 UTC).
-pub(crate) fn end_of_day_micros(date: &str) -> Option<i64> {
+/// The micros since the epoch of the end of the day `YYYY-MM-DD` (23:59:59.999999 UTC); the
+/// rules use [`SignService::end_of_day_micros`], the end in the instance's zone.
+fn end_of_day_micros(date: &str) -> Option<i64> {
     let (y, m, d) = obop_values::datetime::parse_date(date)?;
     let days = obop_values::datetime::days_from_civil(y, m, d);
     Some(days * MICROS_PER_DAY + MICROS_PER_DAY - 1)

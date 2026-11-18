@@ -230,86 +230,187 @@ fn a_dry_run_writes_nothing_and_an_agent_may_only_dry_run() {
     ));
 }
 
-impl Fx {
-    /// Approved billable entries of at most a day (1440 minutes) each, summing to `total`.
-    fn fill(&self, total: i64) {
-        let (mut left, mut day) = (total, 1);
-        while left > 0 {
-            let m = left.min(1440);
-            self.entry(&format!("2026-09-{day:02}"), m, true, true);
-            left -= m;
-            day += 1;
-        }
-    }
-}
-
-fn with(input: J, extra: J) -> J {
-    let mut m = input.as_object().unwrap().clone();
-    m.extend(extra.as_object().unwrap().clone());
-    J::Object(m)
+/// K62: one link per entry, keyed by the entry (a second link for an entry is refused by the
+/// store, so two runs cannot bill it twice), and `get` says whether an entry is billed.
+#[test]
+fn an_entry_is_linked_once_under_its_own_id_and_get_reads_it() {
+    let f = fixture();
+    let billed = f.entry("2026-09-02", 90, true, true);
+    let open = f.entry("2026-10-02", 30, true, true);
+    let r = f.run(f.input(false)).unwrap();
+    let links = rows(&f.app, "time_billing");
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].0, billed, "the link's id is the entry's id");
+    let got = call(
+        &f.app,
+        &admin(),
+        "time_billing.get",
+        json!({"entry": billed}),
+    )
+    .unwrap();
+    assert_eq!(got["billed"], json!(true));
+    assert_eq!(got["invoice_id"], r["invoice_id"]);
+    let got = call(&f.app, &admin(), "time_billing.get", json!({"entry": open})).unwrap();
+    assert_eq!(got["billed"], json!(false));
+    // The store refuses a second link of the entry.
+    let mut f2 = obop_storage::Fields::new();
+    f2.insert("entry_id".into(), json!(billed));
+    assert!(
+        f.app
+            .store
+            .backend()
+            .insert("time_billing", &billed, &f2)
+            .is_err()
+    );
 }
 
 #[test]
-fn round_hours_bills_one_line_rounded_up_and_links_every_entry_once() {
+fn the_project_gives_the_customer_and_the_rate_and_lines_can_be_per_task() {
+    // K62: a project names its customer and hourly rate; the call may leave both out, the
+    // invoice is in the instance currency, and per=task gives one line per task.
     let f = fixture();
-    f.fill(5759); // 95.98 h in four entries
-    let r = f
-        .run(with(f.input(false), json!({"round_hours": true})))
+    let acme = rows(&f.app, "party")
+        .into_iter()
+        .find(|(_, p)| p["name"] == "Acme AB")
+        .unwrap()
+        .0;
+    let project = rows(&f.app, "projects_project")[0].0.clone();
+    call(
+        &f.app,
+        &admin(),
+        "projects_project.update",
+        json!({"id": project, "customer_id": acme, "hourly_rate": 60_000}),
+    )
+    .unwrap();
+    let other = create(
+        &f.app,
+        "projects_task",
+        json!({"title": "Build", "project_id": project}),
+    );
+    f.entry("2026-09-02", 90, true, true);
+    f.entry("2026-09-03", 45, true, true);
+    let e = create(
+        &f.app,
+        "timesheets_entry",
+        json!({"task_id": other, "worker": "ann", "worked_on": "2026-09-04", "minutes": 30,
+               "billable": true, "state": "draft"}),
+    );
+    for a in ["submit", "approve"] {
+        call(
+            &f.app,
+            &admin(),
+            &format!("timesheets_entry.{a}"),
+            json!({"id": e}),
+        )
         .unwrap();
-    assert_eq!(r["entries"], json!(1));
-    assert_eq!(r["minutes"], json!(5759));
-    assert_eq!(r["net"], json!(96 * 90_000));
-    let lines = rows(&f.app, "invoice_line");
-    assert_eq!(lines.len(), 1);
-    assert_eq!(lines[0].1["quantity"], json!(96));
-    assert_eq!(lines[0].1["unit_price_minor"], json!(90_000));
+    }
+    let input = json!({"project": "WEB", "from": "2026-09-01", "to": "2026-09-30", "per": "task"});
+    let r = f.run(input).unwrap();
+    assert_eq!(r["entries"], json!(3));
+    assert_eq!(r["lines"].as_array().unwrap().len(), 2, "{r}");
+    // 135 minutes of Design and 30 of Build at 600.00 an hour.
+    assert_eq!(r["lines"][0]["amount"], json!(135_000));
+    assert_eq!(r["lines"][1]["amount"], json!(30_000));
     assert_eq!(
-        lines[0].1["description"],
+        r["lines"][0]["description"],
+        json!("Design: 2.25 h (2 entries)")
+    );
+    let inv = rows(&f.app, "invoice");
+    assert_eq!(inv[0].1["party_id"], json!(acme));
+    assert_eq!(inv[0].1["currency"], json!("EUR"), "the instance currency");
+    assert_eq!(rows(&f.app, "time_billing").len(), 3);
+    // Without a rate anywhere it says where to set one.
+    call(
+        &f.app,
+        &admin(),
+        "projects_project.update",
+        json!({"id": project, "hourly_rate": null}),
+    )
+    .unwrap();
+    let m = refusal(f.run(json!({"project": "WEB", "from": "2026-09-01", "to": "2026-09-30"})));
+    assert!(m.contains("set the project's hourly rate"), "{m}");
+    let m = refusal(f.run(
+        json!({"project": "WEB", "from": "2026-09-01", "to": "2026-09-30",
+        "hourly_rate_minor": 100, "per": "week"}),
+    ));
+    assert!(m.contains("per must be entry, task or hours"), "{m}");
+}
+
+#[test]
+fn the_project_rate_is_not_billed_in_another_currency() {
+    // The project's hourly rate is a money field of the instance currency (EUR here): a call that
+    // takes it and asks for SEK would bill the same number as crowns.
+    let f = fixture();
+    let project = rows(&f.app, "projects_project")[0].0.clone();
+    call(
+        &f.app,
+        &admin(),
+        "projects_project.update",
+        json!({"id": project, "hourly_rate": 60_000}),
+    )
+    .unwrap();
+    f.entry("2026-09-02", 60, true, true);
+    let base = json!({"project": "WEB", "customer": "Acme AB", "from": "2026-09-01",
+                      "to": "2026-09-30", "dry_run": true});
+    let mut sek = base.clone();
+    sek["currency"] = json!("SEK");
+    let m = refusal(f.run(sek.clone()));
+    assert!(m.contains("instance currency EUR"), "{m}");
+    assert!(m.contains("hourly_rate_minor"), "{m}");
+    // The instance currency named, or a rate in the call, is fine.
+    let mut eur = base.clone();
+    eur["currency"] = json!("EUR");
+    assert_eq!(f.run(eur).unwrap()["net"], json!(60_000));
+    sek["hourly_rate_minor"] = json!(70_000);
+    assert_eq!(f.run(sek).unwrap()["net"], json!(70_000));
+}
+
+#[test]
+fn per_hours_bills_one_line_of_whole_hours_and_links_every_entry_once() {
+    let f = fixture();
+    // 95 h 59 min over four days (an entry is capped at 24 h).
+    for (d, m) in [
+        ("2026-09-02", 1_440),
+        ("2026-09-03", 1_440),
+        ("2026-09-04", 1_440),
+        ("2026-09-05", 1_439),
+    ] {
+        f.entry(d, m, true, true);
+    }
+    let mut input = f.input(false);
+    input["per"] = json!("hours");
+    let r = f.run(input.clone()).unwrap();
+    assert_eq!(r["lines"].as_array().unwrap().len(), 1, "{r}");
+    assert_eq!(r["entries"], json!(4));
+    // 96 whole hours at 900.00.
+    assert_eq!(r["net"], json!(96 * 90_000));
+    assert_eq!(
+        r["lines"][0]["description"],
         json!("Datakonsult - Website, 2026-09-01 till 2026-09-30")
     );
-    assert_eq!(rows(&f.app, "time_billing").len(), 4, "every entry linked");
-    let m = refusal(f.run(f.input(false)));
-    assert!(m.contains("no approved, billable, unbilled"), "{m}");
-    assert_eq!(rows(&f.app, "invoice").len(), 1);
-}
-
-#[test]
-fn round_hours_keeps_exact_hours_and_uses_the_description() {
-    let f = fixture();
-    f.fill(5760); // exactly 96 h
-    let r = f
-        .run(with(
-            f.input(false),
-            json!({"round_hours": true, "description": "Konsulttjänster september"}),
-        ))
-        .unwrap();
-    assert_eq!(r["net"], json!(96 * 90_000));
+    let inv = rows(&f.app, "invoice");
+    assert_eq!(inv.len(), 1);
     let lines = rows(&f.app, "invoice_line");
     assert_eq!(lines[0].1["quantity"], json!(96));
+    assert_eq!(lines[0].1["unit_price_minor"], json!(90_000));
+    assert_eq!(rows(&f.app, "time_billing").len(), 4);
+    // Nothing is left to bill a second time.
+    assert!(refusal(f.run(input)).contains("no approved, billable, unbilled"));
+}
+
+#[test]
+fn per_hours_keeps_exact_hours_and_uses_a_given_description() {
+    let f = fixture();
+    f.entry("2026-09-02", 480, true, true);
+    let mut input = f.input(true);
+    input["per"] = json!("hours");
+    input["description"] = json!("Datakonsult - Utveckla plattformen");
+    let r = f.run(input).unwrap();
+    assert_eq!(r["net"], json!(8 * 90_000));
     assert_eq!(
-        lines[0].1["description"],
-        json!("Konsulttjänster september")
+        r["lines"][0]["description"],
+        json!("Datakonsult - Utveckla plattformen")
     );
-}
-
-#[test]
-fn round_hours_rounds_one_minute_over_up() {
-    let f = fixture();
-    f.fill(5761);
-    let r = f
-        .run(with(f.input(true), json!({"round_hours": true})))
-        .unwrap();
-    assert_eq!(r["net"], json!(97 * 90_000));
-    assert!(rows(&f.app, "invoice").is_empty(), "dry run writes nothing");
-}
-
-#[test]
-fn without_the_new_options_each_entry_stays_its_own_line() {
-    let f = fixture();
-    f.entry("2026-09-02", 90, true, true);
-    f.entry("2026-09-03", 7, true, true);
-    f.run(f.input(false)).unwrap();
-    let lines = rows(&f.app, "invoice_line");
-    assert_eq!(lines.len(), 2);
-    assert!(lines.iter().all(|(_, l)| l["quantity"] == json!(1)));
+    // A dry run writes nothing.
+    assert!(rows(&f.app, "invoice").is_empty());
 }

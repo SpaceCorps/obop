@@ -26,5 +26,11 @@
   "{field} ≥ {from}",
   "{minutes} min",
   "{m} min",
-  "{quantity} × {price}"
+  "{quantity} × {price}",
+  "08:00",
+  "Host",
+  "Port",
+  "SMTP {host}:{port}",
+  "STARTTLS",
+  "TLS"
 ]

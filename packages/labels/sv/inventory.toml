@@ -148,3 +148,7 @@ production = "Tillverkning"
 [labels.sv.model.inventory_move.field.origin]
 label = "Ursprung"
 description = "Dokumentet som rörelsen kommer från, till exempel ett inköpsordernummer som PO-00042 eller en tillverkningsorder"
+
+[labels.sv.model.inventory_move.field.lot]
+label = "Parti"
+description = "Partiet som flyttas, när produkten spåras i partier; valideringen ändrar lagerposten för det partiet (den skapas om den saknas)"

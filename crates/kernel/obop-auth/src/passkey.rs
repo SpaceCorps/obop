@@ -110,8 +110,13 @@ impl Auth {
     }
 
     /// A second factor of any kind: an authenticator app or a passkey.
-    pub fn has_second_factor(&self, name: &str) -> bool {
-        self.mfa_enabled(name) || !self.passkeys_of(name).is_empty()
+    /// A read the store refused is the error, never "none" (N22).
+    pub fn has_second_factor(&self, name: &str) -> Result<bool, String> {
+        Ok(self.account_flag(name, "mfa_enabled")?
+            || !self
+                .backend
+                .find(PASSKEY_TABLE, "user", &J::from(name))?
+                .is_empty())
     }
 
     /// Remove every passkey of the person (the break-glass reset and the administrator's reset).
@@ -158,12 +163,17 @@ impl Auth {
         Ok(h.to_vec())
     }
 
-    fn handle_of(&self, name: &str) -> Option<Vec<u8>> {
-        self.user_record(name)
-            .ok()?
-            .get("webauthn_handle")?
-            .as_str()
-            .and_then(b64url_decode)
+    /// The user handle of the person; a read the store refused is the store's error (K19), never
+    /// "no handle" (which is answered as a passkey of another account and counted).
+    fn handle_of(&self, name: &str) -> Result<Option<Vec<u8>>, MfaError> {
+        match self.user_record(name) {
+            Ok(u) => Ok(u
+                .get("webauthn_handle")
+                .and_then(J::as_str)
+                .and_then(b64url_decode)),
+            Err(MfaError::NotFound) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     fn site(&self, ctx: &WebauthnCtx) -> Result<(), MfaError> {
@@ -230,8 +240,13 @@ impl Auth {
         ctx: &WebauthnCtx,
     ) -> Result<J, MfaError> {
         let key = challenge_key(challenge);
-        let raw = self.backend.kv_get(&key).ok().flatten();
-        let used = self.backend.kv_delete(&key).unwrap_or(false);
+        // A read or a delete the store refused is the store's error (K19): answered as "expired",
+        // it was counted as a failed attempt, and a few in a row locked the person out.
+        let raw = self.backend.kv_get(&key).map_err(MfaError::Unavailable)?;
+        let used = self
+            .backend
+            .kv_delete(&key)
+            .map_err(MfaError::Unavailable)?;
         let gone = || denied("this request has expired or was already used; start again");
         let (Some(raw), true) = (raw, used) else {
             return Err(gone());
@@ -268,7 +283,10 @@ impl Auth {
             );
             return Err(MfaError::BadPassword);
         }
-        if self.has_second_factor(name) {
+        if self
+            .has_second_factor(name)
+            .map_err(MfaError::Unavailable)?
+        {
             self.check_second_factor(name, r.code, r.recovery_code)?;
         }
         Ok(())
@@ -306,8 +324,7 @@ impl Auth {
         let stored = self
             .backend
             .get(PASSKEY_TABLE, &id)
-            .ok()
-            .flatten()
+            .map_err(MfaError::Unavailable)?
             .map(J::Object)
             .ok_or_else(|| denied("this passkey is not registered here"))?;
         let owner = stored["user"].as_str().unwrap_or("").to_string();
@@ -347,7 +364,7 @@ impl Auth {
                 ));
             }
             epoch = account.as_ref().and_then(epoch_of);
-            if self.is_disabled(&owner) {
+            if self.is_disabled(&owner).map_err(MfaError::Unavailable)? {
                 self.event(&owner, "login_refused", &owner, "the account is disabled");
                 return Err(denied("this passkey cannot be used to sign in"));
             }
@@ -378,7 +395,7 @@ impl Auth {
         }
         // The user handle, when the authenticator sends one, must be this person's. A usernameless
         // sign-in cannot do without it.
-        match (&a.user_handle, self.handle_of(&owner)) {
+        match (&a.user_handle, self.handle_of(&owner)?) {
             (Some(h), Some(want)) if *h == want => {}
             (None, Some(_)) if rec["user"].as_str().is_some() => {}
             _ => return Err(denied("the passkey names a different account")),
@@ -531,7 +548,7 @@ impl Auth {
     ) -> Result<LoginOutcome, MfaError> {
         let (name, _, epoch) = self.verify_assertion(ctx, "login", credential, true)?;
         // An account that signs in with Microsoft only (D91) has no passkey sign-in of its own.
-        if self.is_sso_only(&name) {
+        if self.is_sso_only(&name).map_err(MfaError::Unavailable)? {
             self.event(
                 &name,
                 "login_refused",
@@ -850,7 +867,7 @@ impl PasskeyApi for Auth {
         patch.extend(self.owed_patch(name, &op, Some(&keep))?);
         // The credential epoch changes in the same batch, so a passwordless sign-in that used the
         // passkey cannot hand out a session that the revocation below would miss.
-        bump_epoch(&mut patch);
+        bump_epoch(&mut patch, self.now());
         self.backend
             .apply(&[
                 Op::Delete {

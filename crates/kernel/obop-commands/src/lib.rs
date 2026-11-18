@@ -9,8 +9,8 @@ mod shared;
 pub use shared::Shared;
 use shared::{Pending, Plans};
 
-use obop_masking::mode_for;
 pub use obop_masking::{PrincipalKind, RestoreError, Vault};
+use obop_masking::{Restored, mode_for};
 pub use obop_registry::Bound;
 use obop_registry::labels::Texts;
 use obop_registry::{FieldDef, Module, Transition, Translations};
@@ -221,6 +221,10 @@ pub struct Pre {
 /// have changed since.
 pub type Guard = Box<dyn Fn(&Principal, &Value) -> Result<Verdict, String> + Send + Sync>;
 
+/// A check on one command that, unlike a [`Guard`], survives the command being registered again
+/// (see [`Dispatcher::screen`]). It may refuse, or hand back the input to use instead.
+pub type Screen = dyn Fn(&Principal, &Value) -> Result<Option<Value>, String> + Send + Sync;
+
 struct Guarded {
     module: String,
     /// Mutating guards run under the dispatcher's transaction lock, so the check and the write
@@ -298,6 +302,10 @@ pub struct Dispatcher {
     brand: std::sync::OnceLock<Arc<brand::Reader>>,
     /// Wrappers around a command's handler, by command id (see `around`).
     around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
+    /// Checks of the person approving a plan, by command id (see `before_approve`).
+    before_approve: std::sync::RwLock<HashMap<String, Arc<BeforeApprove>>>,
+    /// Screens by command id (see `screen`).
+    screens: std::sync::RwLock<HashMap<String, Arc<Screen>>>,
     /// Models whose writes run under the transaction lock because a rule needs it: a unique
     /// field, a sequence, an effect, or being the target of one (D56, D57).
     lock_models: std::sync::RwLock<HashSet<String>>,
@@ -313,6 +321,14 @@ pub struct Dispatcher {
     /// Commands a module refuses for everyone (`refuse_always`): the metadata says the caller
     /// cannot do them (`can_delete: false`), so the interface agrees with the server.
     never: std::sync::RwLock<HashMap<String, String>>,
+    /// The ids of the modules that the package installer registered (`as_package`): nothing else
+    /// may register under them (K57), since the package's uninstall removes all that the id holds.
+    packages: std::sync::RwLock<HashSet<String>>,
+}
+
+thread_local! {
+    /// The package whose registration runs on this thread (`Dispatcher::as_package`).
+    static PACKAGE_SCOPE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 /// The instance currency when none is configured (the first target is Germany, OR-7).
@@ -334,6 +350,10 @@ impl Default for SharedClock {
 pub type Around = dyn Fn(&Principal, &Value, &dyn Fn(&Value) -> Result<Value, String>) -> Result<Value, String>
     + Send
     + Sync;
+
+/// A check of the person who approves a plan of a command (`Dispatcher::before_approve`): it sees
+/// the approver and the plan's input, and its refusal leaves the plan as it is.
+pub type BeforeApprove = dyn Fn(&Principal, &Value) -> Result<(), String> + Send + Sync;
 
 /// What an observer sees of a command that succeeded: its id, who ran it, the input the handler
 /// received and the raw output, before it was shaped for the caller.
@@ -415,6 +435,9 @@ pub struct FieldInfo {
     /// an exact decimal at the scale of the field.
     pub min: Option<Bound>,
     pub max: Option<Bound>,
+    /// `text` (K45, U3): the named format every written value has (`currency_code`, `iban`,
+    /// `vat_id`): the declared `pattern`, or `currency_code` for a text field named `currency`.
+    pub pattern: Option<&'static str>,
     /// The limits the field declares as a parenthesised sentence for a description (OpenAPI, MCP),
     /// `(at most 2000 characters)` or `(from 0 to 100)`; empty when it declares none (the default
     /// of its kind is in `max_length`, not in the description).
@@ -492,6 +515,8 @@ pub struct ModelInfo {
     pub guard: Option<obop_registry::Guard>,
     /// The message of the guard per language (D52), empty when untranslated.
     pub guard_messages: Texts,
+    /// The label of each filter the package declares, by its English label, per language (U10).
+    pub filter_labels: BTreeMap<String, Texts>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -564,6 +589,16 @@ impl Dispatcher {
         shared::txn_lock(self.shared.get(), &self.txn).map_err(CallError::Handler)
     }
 
+    /// Run `f` under the transaction lock that every write of a locked model takes (one with a
+    /// unique field, a sequence or an effect), so that no such write of another call comes
+    /// between the steps of `f`; the calls `f` makes on this thread run under the same lock and
+    /// do not wait for it. A handler that reads, works out and writes in several commands uses it
+    /// (`stock_count.apply`, Q12). Across server processes the lock is the shared one.
+    pub fn serialized<T>(&self, f: impl FnOnce() -> T) -> Result<T, String> {
+        let _txn = shared::txn_lock(self.shared.get(), &self.txn)?;
+        Ok(f())
+    }
+
     /// What `tools/list`, `GET /api/commands` and CLI help show for this principal.
     pub fn catalog(&self, surface: Surface, p: &Principal) -> Vec<CommandInfo> {
         self.sync();
@@ -585,6 +620,43 @@ impl Dispatcher {
             .collect()
     }
 
+    /// The commands this principal may call on `surface` that [`Dispatcher::meta`] does not
+    /// describe: every command of a model without a visible `list` (the settings, the import map,
+    /// the instance update, a module plan ...), sorted by id. A command that a module refuses for
+    /// everyone (`refuse_always`) is left out. `obop openapi` and `GET /api/openapi.json` describe
+    /// these from here (K26), so the document names every command the token can run.
+    pub fn commands_outside_meta(&self, surface: Surface, p: &Principal) -> Vec<CommandInfo> {
+        self.sync();
+        let cmds = self.commands.read().unwrap();
+        let never = self.never.read().unwrap();
+        let visible =
+            |c: &Registered| on_surface(c.surfaces, surface) && p.allows(c.permission_group);
+        // A command of group `*` that the kind of token can never use is left out, as from the
+        // catalogues (L17).
+        let listed = |model: &str| {
+            let id = format!("{model}.list");
+            devices::usable(&id, p) && cmds.get(&id).is_some_and(|l| visible(l))
+        };
+        let mut out: Vec<CommandInfo> = cmds
+            .iter()
+            .filter(|(id, c)| {
+                visible(c) && devices::usable(id, p) && !never.contains_key(*id) && !listed(c.model)
+            })
+            .map(|(id, c)| CommandInfo {
+                id: id.clone(),
+                description: c.description,
+                permission_group: c.permission_group,
+                needs_approval: c.needs_approval,
+                transition: c.transition,
+                labels: Texts::new(),
+                descriptions: Texts::new(),
+                ui: None,
+            })
+            .collect();
+        out.sort_by(|a, b| a.id.cmp(&b.id));
+        out
+    }
+
     /// What the UI renders from: the modules, models, readable fields and actions this principal
     /// can see. A model appears only if its `list` command is visible, and a field only if the
     /// principal may read it, so metadata never reveals what data would not.
@@ -596,6 +668,16 @@ impl Dispatcher {
         let order = self.order.read().unwrap();
         let visible =
             |c: &Registered| on_surface(c.surfaces, surface) && p.allows(c.permission_group);
+        // Whether the caller may see the target of a `shows_option_of` (K27).
+        let sees_target = |s: &obop_registry::ShowsOption| {
+            cmds.get(&format!("{}.list", s.model))
+                .is_some_and(|r| visible(r))
+                && models.get(&s.model).is_some_and(|tm| {
+                    tm.fields
+                        .iter()
+                        .any(|tf| tf.name == s.field.as_str() && p.allows(tf.permission_group))
+                })
+        };
         let mut out = Vec::new();
         for module in order.iter() {
             let mut infos = Vec::new();
@@ -611,13 +693,15 @@ impl Dispatcher {
                 let Some(list) = cmds.get(&format!("{name}.list")) else {
                     continue;
                 };
-                if !visible(list) {
+                if !visible(list) || !devices::usable(&format!("{name}.list"), p) {
                     continue;
                 }
                 let never = self.never.read().unwrap();
                 let can = |c: &str| {
                     let id = format!("{name}.{c}");
-                    !never.contains_key(&id) && cmds.get(&id).is_some_and(|r| visible(r))
+                    !never.contains_key(&id)
+                        && devices::usable(&id, p)
+                        && cmds.get(&id).is_some_and(|r| visible(r))
                 };
                 let mut actions: Vec<CommandInfo> = cmds
                     .iter()
@@ -626,6 +710,7 @@ impl Dispatcher {
                             && id.starts_with(&format!("{name}."))
                             && !m.def.is_generated_command(&id[name.len() + 1..])
                             && visible(c)
+                            && devices::usable(id, p)
                     })
                     .map(|(id, c)| {
                         let tr = m
@@ -662,6 +747,17 @@ impl Dispatcher {
                 };
                 actions.sort_by(|a, b| (place(&a.id), &a.id).cmp(&(place(&b.id), &b.id)));
                 let mtr = m.translations.models.get(name.as_str());
+                // Whether anything takes this model's fields as input: the generated `create` and
+                // `update` (where the field limits are checked, D90), or a `create` or `update` of
+                // its own. A model with neither (the module list, the security log) is output
+                // only, and states no limit that nothing would hold (K44 b).
+                // A command refused for everyone (`refuse_always`) holds no limit either: a model
+                // whose create and update are both refused (the deliveries of `mail`) is output
+                // only too.
+                let written = ["create", "update"].iter().any(|c| {
+                    let id = format!("{name}.{c}");
+                    cmds.contains_key(&id) && !never.contains_key(&id)
+                });
                 infos.push(ModelInfo {
                     ui: m.def.ext.ui.clone(),
                     children: {
@@ -678,6 +774,20 @@ impl Dispatcher {
                     plurals: mtr.map(|t| t.plurals.clone()).unwrap_or_default(),
                     guard: m.def.ext.guard.clone(),
                     guard_messages: mtr.map(|t| t.guard.clone()).unwrap_or_default(),
+                    filter_labels: m
+                        .def
+                        .ui()
+                        .map(|u| {
+                            u.filters
+                                .iter()
+                                .filter_map(|f| {
+                                    let key = obop_registry::labels::filter_key(&f.label);
+                                    let t = mtr.and_then(|t| t.filters.get(&key))?;
+                                    Some((f.label.clone(), t.clone()))
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     name: name.clone(),
                     description: m.description,
                     labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
@@ -717,17 +827,36 @@ impl Dispatcher {
                                 unique: f.unique.is_some() || f.sequence.is_some(),
                                 sequence: f.sequence.is_some(),
                                 gapless: f.sequence.as_ref().is_some_and(|s| s.gapless),
-                                shows_option_of: f.shows_option.as_ref().map(|s| s.target()),
+                                // Named only to a caller who may list the target model and
+                                // read the select field, so the attribute does not tell
+                                // anybody else that the field exists (K27).
+                                shows_option_of: f
+                                    .shows_option
+                                    .as_ref()
+                                    .filter(|s| sees_target(s))
+                                    .map(|s| s.target()),
                                 shows_option_when: f
                                     .shows_option
                                     .as_ref()
+                                    .filter(|s| sees_target(s))
                                     .and_then(|s| s.when.as_ref())
                                     .map(|w| w.source.clone()),
-                                max_length: f.effective_max_length(),
-                                min_length: f.effective_min_length(),
-                                min: f.lower_bound(),
-                                max: f.upper_bound(),
-                                limits_note: f.limits_note(),
+                                // The limits are those `create` and `update` hold; a model
+                                // written only by handlers of its own (the module list, the
+                                // security log) states none it does not enforce (K44 b).
+                                max_length: f.effective_max_length().filter(|_| written),
+                                min_length: f.effective_min_length().filter(|_| written),
+                                min: f.lower_bound().filter(|_| written),
+                                max: f.upper_bound().filter(|_| written),
+                                pattern: f
+                                    .effective_pattern()
+                                    .map(|p| p.name())
+                                    .filter(|_| written),
+                                limits_note: if written {
+                                    f.limits_note()
+                                } else {
+                                    String::new()
+                                },
                                 hints: f.hints.clone(),
                             }
                         })
@@ -792,6 +921,37 @@ impl Dispatcher {
         out
     }
 
+    /// Run `f`, which registers the package module `id` (its generated commands, transitions,
+    /// guards and public entries): the id is the package's from now on, until the module is
+    /// unregistered, and only registrations made inside such a call may use it. A module of the
+    /// program that is registered under the id of a package is a programming error and panics
+    /// (K57): the package's uninstall would take its commands with it.
+    pub fn as_package<T>(&self, id: &str, f: impl FnOnce() -> T) -> T {
+        self.packages.write().unwrap().insert(id.to_string());
+        let previous = PACKAGE_SCOPE.with(|s| s.borrow_mut().replace(id.to_string()));
+        struct Restore(Option<String>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let p = self.0.take();
+                PACKAGE_SCOPE.with(|s| *s.borrow_mut() = p);
+            }
+        }
+        let _restore = Restore(previous);
+        f()
+    }
+
+    /// Refuse a registration under `module` when a package holds that id and the registration is
+    /// not the package's own (`as_package`).
+    fn claim(&self, module: &str) {
+        if self.packages.read().unwrap().contains(module)
+            && PACKAGE_SCOPE.with(|s| s.borrow().as_deref() != Some(module))
+        {
+            panic!(
+                "{module} is the id of an installed package: a module of the program cannot be registered under it"
+            );
+        }
+    }
+
     /// Bind a handler to a command declared in `module`'s registry metadata. A handler for an
     /// undeclared command is a programming error: the surface is generated from the registry.
     pub fn register(&self, module: &Module, model: &str, command: &str, handler: Handler) {
@@ -831,6 +991,7 @@ impl Dispatcher {
         actor: bool,
         generated: bool,
     ) {
+        self.claim(&module.id);
         // The generated `create` and `update` are what lets an effect write the model.
         let generated_write = generated && matches!(command, "create" | "update");
         let (index, m) = module
@@ -902,6 +1063,7 @@ impl Dispatcher {
     /// Attach a guard to the command `id` (`model.command`) of `module`. It is removed with the
     /// module. `serialize` makes the call hold the transaction lock from guard to handler.
     pub fn register_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        self.claim(module);
         self.guards.write().unwrap().insert(
             id.to_string(),
             Arc::new(Guarded {
@@ -917,6 +1079,7 @@ impl Dispatcher {
     /// A module uses this to add rules that need the caller (ownership of a record) without
     /// replacing what the registry metadata implies.
     pub fn add_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        self.claim(module);
         let mut guards = self.guards.write().unwrap();
         let inner = guards.get(id).cloned();
         let combined: Guard = match inner {
@@ -949,6 +1112,7 @@ impl Dispatcher {
     /// answer as a record that does not exist, which the generated guard would otherwise refuse
     /// in its own words (it names the state, the referrers, the group).
     pub fn prepend_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        self.claim(module);
         let mut guards = self.guards.write().unwrap();
         let inner = guards.get(id).cloned();
         let combined: Guard = match inner {
@@ -975,6 +1139,17 @@ impl Dispatcher {
         );
     }
 
+    /// Check the person who approves a plan of command `id` before the plan is spent (U7): a rule
+    /// about the approver (a claimant may not approve their own claim) refuses there, so the plan
+    /// stays for someone else to approve. Like a wrapper it survives the command being registered
+    /// again; the wrapper should still hold the rule for a direct call.
+    pub fn before_approve(&self, id: &str, check: Box<BeforeApprove>) {
+        self.before_approve
+            .write()
+            .unwrap()
+            .insert(id.to_string(), Arc::from(check));
+    }
+
     /// Wrap the handler of command `id` (`model.command`). The wrapper survives the command being
     /// registered again, which happens when a package is reinstalled. Used where a command has
     /// to do something outside the store that must succeed or fail with it, such as returning
@@ -987,10 +1162,33 @@ impl Dispatcher {
             .insert(id.to_string(), Arc::from(wrapper));
     }
 
+    /// Check command `id` after its guard, in `call` and, for an agent's proposal, in `approve`
+    /// **before the plan is spent**: a screen that refuses at approval leaves the plan in place for
+    /// another approver. The input carries the approver's stamp there (`stamp_approver`), and what
+    /// a screen hands back at the call is what a proposal stores. Like `around`, it survives the
+    /// command being registered again; a second screen for the same id replaces the first.
+    pub fn screen(&self, id: &str, screen: Box<Screen>) {
+        self.screens
+            .write()
+            .unwrap()
+            .insert(id.to_string(), Arc::from(screen));
+    }
+
+    fn run_screen(&self, id: &str, p: &Principal, input: &mut Value) -> Result<(), CallError> {
+        let screen = self.screens.read().unwrap().get(id).cloned();
+        if let Some(s) = screen
+            && let Some(i) = s(p, input).map_err(|m| refusal(m, input))?
+        {
+            *input = i;
+        }
+        Ok(())
+    }
+
     /// Be told about every command that succeeds, with the module that owns the observer (removed
     /// with it). Observers run inside the call, under the dispatcher's locks: they must be quick
     /// and must not call the dispatcher; hand the work to another thread.
     pub fn observe(&self, module: &str, observer: Box<Observer>) {
+        self.claim(module);
         self.observers
             .write()
             .unwrap()
@@ -1041,6 +1239,7 @@ impl Dispatcher {
         }
         self.order.write().unwrap().retain(|x| x != module);
         self.never.write().unwrap().retain(|_, m| m != module);
+        self.packages.write().unwrap().remove(module);
         self.refresh_lock_models();
     }
 
@@ -1079,12 +1278,12 @@ impl Dispatcher {
         self.zones.read().unwrap().clone()
     }
 
-    /// Set the instance currency (D95): three capital letters (ISO 4217). The server sets it from
-    /// `OBOP_CURRENCY` at start.
+    /// Set the instance currency (D95): a code of the ISO 4217 list, the one a field that holds a
+    /// currency checks too (U5). The server sets it from `OBOP_CURRENCY` at start.
     pub fn set_currency(&self, code: &str) -> Result<(), String> {
-        if code.len() != 3 || !code.bytes().all(|b| b.is_ascii_uppercase()) {
+        if !obop_registry::limits::is_currency_code(code) {
             return Err(format!(
-                "the currency {code:?} must be three capital letters (ISO 4217), such as EUR or SEK"
+                "the currency {code:?} is not a currency code of ISO 4217, such as EUR or SEK"
             ));
         }
         *self.currency.write().unwrap() = code.to_string();
@@ -1153,16 +1352,33 @@ impl Dispatcher {
         names
     }
 
-    /// The ids of the modules that have a command registered right now, sorted. The installer
-    /// takes them when it starts, beside [`Dispatcher::model_names`]: every module that exists
-    /// before any package is registered is the program's, and no package may take its id (a
-    /// package called `sie` would be unregistered together with the commands of the module `sie`).
-    /// It asks again when it registers a package, for a module that something else registered
-    /// since.
+    /// The ids of the modules that hold anything right now, sorted: a command, and also only an
+    /// observer, a guard, a public entry or a command refused for everyone (K58), since an
+    /// uninstall under the id would remove those too. The installer takes them when it starts,
+    /// beside [`Dispatcher::model_names`]: every module that exists before any package is
+    /// registered is the program's, and no package may take its id (a package called `sie` would
+    /// be unregistered together with the commands of the module `sie`). It asks again when it
+    /// registers a package, for a module that something else registered since.
     pub fn module_ids(&self) -> Vec<String> {
-        let mut ids = self.order.read().unwrap().clone();
-        ids.sort();
-        ids
+        let mut ids: std::collections::BTreeSet<String> =
+            self.order.read().unwrap().iter().cloned().collect();
+        ids.extend(
+            self.observers
+                .read()
+                .unwrap()
+                .iter()
+                .map(|(m, _)| m.clone()),
+        );
+        ids.extend(
+            self.guards
+                .read()
+                .unwrap()
+                .values()
+                .map(|g| g.module.clone()),
+        );
+        ids.extend(self.public.read().unwrap().values().map(|(m, _)| m.clone()));
+        ids.extend(self.never.read().unwrap().values().cloned());
+        ids.into_iter().collect()
     }
 
     /// The id of the module that registered `model` (the last one to register a command of it),
@@ -1186,11 +1402,16 @@ impl Dispatcher {
     }
 
     /// Command ids the principal may call on `surface`: what MCP `tools/list` and CLI help show.
+    /// A command of group `*` that the kind of token can never use is left out (L17).
     pub fn visible(&self, surface: Surface, p: &Principal) -> Vec<String> {
         let cmds = self.commands.read().unwrap();
         let mut v: Vec<_> = cmds
             .iter()
-            .filter(|(_, c)| on_surface(c.surfaces, surface) && p.allows(c.permission_group))
+            .filter(|(id, c)| {
+                on_surface(c.surfaces, surface)
+                    && p.allows(c.permission_group)
+                    && devices::usable(id, p)
+            })
             .map(|(id, _)| id.clone())
             .collect();
         v.sort();
@@ -1216,9 +1437,24 @@ impl Dispatcher {
         if !on_surface(c.surfaces, surface) {
             return Err(CallError::NotOnSurface(id.into()));
         }
-        // Same answer for "no such group" and "scope too narrow": do not leak which.
-        if !p.allows(c.permission_group) {
+        // Same answer for "no such group" and "scope too narrow": do not leak which. A command a
+        // mobile app's token is refused whatever its groups is answered the same (L20).
+        if !p.allows(c.permission_group) || devices::refused(id, p) {
             return Err(CallError::Forbidden(id.into()));
+        }
+        // The fields an agent sent in clear although it is shown them masked count as changed in
+        // this call, whatever their value (K63; `engine::frozen::sent_clear`).
+        let clear = self.sent_in_clear(&c, p, vault, input);
+        let _clear = engine::frozen::ClearScope::enter(clear.clone());
+        if let Some(field) = self.token_into_clear(&c, p, vault, input) {
+            return Err(refusal(
+                format!(
+                    "{field} is shown to agents in clear, so a mask token cannot be written into \
+                     it: send the value itself, or write the token into a field that is masked \
+                     for agents"
+                ),
+                input,
+            ));
         }
         let mut input = self.restore(p, vault, input)?;
         if let Value::Map(m) = &mut input {
@@ -1243,6 +1479,7 @@ impl Dispatcher {
                 input = i;
             }
         }
+        self.run_screen(id, p, &mut input)?;
         if (c.needs_approval || guard_approval) && p.kind == PrincipalKind::Agent {
             // A call that mixes what cannot be stored as a whole gets no plan: the plan would
             // be refused when a person approves it, and spent by that. The agent hears it now.
@@ -1259,6 +1496,7 @@ impl Dispatcher {
                         principal: p.clone(),
                         id: id.into(),
                         input,
+                        clear,
                     },
                 )
                 .map_err(CallError::Handler)?;
@@ -1297,6 +1535,8 @@ impl Dispatcher {
         // The record may have changed since the proposal, so the guard runs again, and the
         // approver must hold the groups of any transition the call implicitly runs (D48).
         let mut input = plan.input.clone();
+        // What the agent sent in clear for a field it is shown masked counts as changed now too.
+        let _clear = engine::frozen::ClearScope::enter(plan.clear.clone());
         // The guard sees who is approving, so that it can refuse before the plan is spent.
         stamp_approver(&mut input, approver);
         let mut pre = Vec::new();
@@ -1311,6 +1551,11 @@ impl Dispatcher {
                 input = i;
             }
         }
+        self.run_screen(&plan.id, &plan.principal, &mut input)?;
+        let check = self.before_approve.read().unwrap().get(&plan.id).cloned();
+        if let Some(check) = check {
+            check(approver, &input).map_err(|m| refusal(m, &input))?;
+        }
         // Taken out first, so it runs once; if it is still there the plan would run again.
         self.plans
             .remove(self.shared.get(), plan_id)
@@ -1319,6 +1564,21 @@ impl Dispatcher {
         // that proposed it as the caller. Stamped again after the guard, which may have rewritten
         // the input.
         stamp_approver(&mut input, approver);
+        // The write context of the run names the approving person (N15): the security log line
+        // of whatever the plan does says who approved it (`audit::event_record`), next to the
+        // agent that proposed it as the actor.
+        let mut ctx = obop_storage::ctx::current().unwrap_or_else(|| {
+            let owner = plan.principal.id.strip_suffix("/agent");
+            obop_storage::WriteCtx::new(owner.unwrap_or(&plan.principal.id), "", &plan.id)
+        });
+        ctx.via.approver = Some(approver.id.clone());
+        ctx.via.agent = plan.principal.kind == PrincipalKind::Agent;
+        let _approved = obop_storage::ctx::scope(ctx);
+        // The actions the call implies (D48) are calls of their own, through their wrappers:
+        // they see the approver as a direct call of the action does (docs/ISSUES.md O5).
+        for step in &mut pre {
+            stamp_approver(&mut step.input, approver);
+        }
         let result = self.run(&c, &plan.principal, vault, input, pre);
         // The store refused before the call changed anything: the plan goes back, or the
         // approver's retry (the 503 says to retry) would meet "not found" and the proposal would
@@ -1546,12 +1806,91 @@ impl Dispatcher {
         Ok(Response { value, denied })
     }
 
+    /// `model.field` for every field of the input of a writing command that the caller is shown
+    /// masked or not at all (D40) and sent as anything but a token of its vault: a value in clear,
+    /// which may be a guess of the stored one (K63). Empty for a person, who sees every value.
+    fn sent_in_clear(
+        &self,
+        c: &Registered,
+        p: &Principal,
+        vault: &Vault,
+        input: &Value,
+    ) -> Vec<String> {
+        let (true, PrincipalKind::Agent, Value::Map(m)) = (c.writes, p.kind, input) else {
+            return Vec::new();
+        };
+        let models = self.models.read().unwrap();
+        let Some(meta) = models.get(c.model) else {
+            return Vec::new();
+        };
+        m.iter()
+            .filter(|(k, v)| {
+                let Some(f) = meta.fields.iter().find(|f| f.name == k.as_str()) else {
+                    return false;
+                };
+                let class = f.class.unwrap_or(obop_types::DataClass::Secret);
+                let hidden = !matches!(mode_for(p.kind, class, f.personal_data), MaskMode::Allow);
+                let token = matches!(v, Value::Text(t) if vault.restore(t, |_| true).is_ok());
+                hidden && !token
+            })
+            .map(|(k, _)| format!("{}.{k}", c.model))
+            .collect()
+    }
+
+    /// O37: the first field of a writing command's input that an agent is shown in clear and that
+    /// it sent a mask token of its vault for, as `model.field`. Restoring that token would store the
+    /// value the token hides where the agent (and everyone who reads the field) reads it in clear,
+    /// so the call is refused instead. A token in a field the agent is shown masked or not at all
+    /// is restored as before (D40: an agent copies personal data without seeing it). Checked: the
+    /// top-level fields of the command's model and the fields of each row of `bulk_create`.
+    fn token_into_clear(
+        &self,
+        c: &Registered,
+        p: &Principal,
+        vault: &Vault,
+        input: &Value,
+    ) -> Option<String> {
+        let (true, PrincipalKind::Agent, Value::Map(m)) = (c.writes, p.kind, input) else {
+            return None;
+        };
+        let models = self.models.read().unwrap();
+        let meta = models.get(c.model)?;
+        let is_token = |v: &Value| match v {
+            Value::Text(t) => vault.restore(t, |_| true).is_ok(),
+            Value::List(l) => l
+                .iter()
+                .any(|x| matches!(x, Value::Text(t) if vault.restore(t, |_| true).is_ok())),
+            _ => false,
+        };
+        let check = |row: &BTreeMap<String, Value>| {
+            row.iter().find_map(|(k, v)| {
+                let f = meta.fields.iter().find(|f| f.name == k.as_str())?;
+                let class = f.class.unwrap_or(obop_types::DataClass::Secret);
+                let clear = matches!(mode_for(p.kind, class, f.personal_data), MaskMode::Allow);
+                (clear && is_token(v)).then(|| format!("{}.{k}", c.model))
+            })
+        };
+        if let Some(hit) = check(m) {
+            return Some(hit);
+        }
+        match m.get("rows") {
+            Some(Value::List(rows)) if c.id.ends_with(".bulk_create") => {
+                rows.iter().find_map(|r| match r {
+                    Value::Map(r) => check(r),
+                    _ => None,
+                })
+            }
+            _ => None,
+        }
+    }
+
     /// Replace tokens in input text with the values they stand for, if the principal could read
     /// the record they came from (D10).
     fn restore(&self, p: &Principal, vault: &Vault, v: &Value) -> Result<Value, CallError> {
         Ok(match v {
-            Value::Text(t) => match vault.restore(t, |_| p.allows_any_read()) {
-                Ok(real) => Value::Text(real.into()),
+            Value::Text(t) => match vault.restore_typed(t, |_| p.allows_any_read()) {
+                Ok(Restored::Text(real)) => Value::Text(real.into()),
+                Ok(Restored::Json(real)) => Value::from_json(&real),
                 Err(RestoreError::UnknownToken(_)) => v.clone(), // ordinary text
                 Err(e) => return Err(CallError::Restore(e)),
             },
@@ -1627,9 +1966,16 @@ impl Dispatcher {
                             shaped.insert(k, v);
                         }
                         MaskMode::Mask => {
+                            // A null is not a secret and stays null; a value that is not text
+                            // gets a token that restores to the same typed value (O39).
                             let masked = match &v {
+                                Value::Null => Value::Null,
                                 Value::Text(t) => Value::Text(vault.mask(&label(&k), &record, t)),
-                                _ => Value::text("[masked]"),
+                                other => Value::Text(vault.mask_json(
+                                    &label(&k),
+                                    &record,
+                                    &other.to_json(),
+                                )),
                             };
                             shaped.insert(k, masked);
                         }
@@ -1766,6 +2112,9 @@ pub struct AgentTokenInfo {
     pub scopes: Vec<String>,
     /// Unix seconds.
     pub created_at: u64,
+    /// Unix seconds; `None` when the token has no end of its own (one made by an account bound to
+    /// a Microsoft identity ends after 90 days, N18).
+    pub expires_at: Option<u64>,
 }
 
 /// The few identity operations the OAuth authorization server (D64) needs. Tokens it issues are
@@ -2135,6 +2484,8 @@ pub mod names {
 }
 
 #[cfg(test)]
+mod action_rules_tests;
+#[cfg(test)]
 mod assert_lang_tests;
 #[cfg(test)]
 mod engine_tests;
@@ -2152,6 +2503,10 @@ mod keyexpr_parity;
 mod kinds_tests;
 #[cfg(test)]
 mod limits_tests;
+#[cfg(test)]
+mod mask_restore_tests;
+#[cfg(test)]
+mod masked_guess_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]

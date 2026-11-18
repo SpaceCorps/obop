@@ -1270,6 +1270,7 @@ dependencies = [
  "obop-connectors",
  "obop-http",
  "obop-keys",
+ "obop-mail",
  "obop-masking",
  "obop-mcp",
  "obop-media",
@@ -1296,6 +1297,7 @@ dependencies = [
  "tower",
  "ureq",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -1406,6 +1408,8 @@ dependencies = [
  "axum",
  "getrandom 0.4.3",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "mime_guess",
  "obop-brand",
  "obop-commands",
@@ -1438,6 +1442,26 @@ dependencies = [
  "obop-storage",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "obop-mail"
+version = "0.2.2"
+dependencies = [
+ "base64 0.22.1",
+ "obop-commands",
+ "obop-connectors",
+ "obop-registry",
+ "obop-storage",
+ "obop-types",
+ "obop-values",
+ "ring",
+ "rustls",
+ "serde_json",
+ "sha2",
+ "url",
+ "uuid",
+ "webpki-roots",
 ]
 
 [[package]]

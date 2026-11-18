@@ -17,7 +17,7 @@
  * A generated filter is plain conditions of query.ts, so the URL, favourites, the server query
  * (D49) and the chips need nothing new. A range is stored with the days it means when it is picked.
  */
-import { msg, t } from "@obop/ui";
+import { getLang, labelFor, msg, t } from "@obop/ui";
 import type { FieldMeta, ModelMeta } from "./api.ts";
 import { optionLabel } from "./format.ts";
 import { fieldTitle } from "./labels.ts";
@@ -263,7 +263,13 @@ export function quickFilters(model: ModelMeta, fields: FieldMeta[], ctx: QuickCt
   (model.ui?.filter ?? []).forEach((s, i) => {
     const conds = parseWhere(s.where, model, ctx);
     if (conds?.length && conds.every((c) => !("f" in c) || shown.has(c.f)))
-      out.push({ key: `saved:${i}`, label: s.label, conds, kind: "saved" });
+      out.push({
+        key: `saved:${i}`,
+        // The package's own translation of the label (U10), else its English label.
+        label: labelFor({ labels: s.labels ?? {} }, getLang(), s.label),
+        conds,
+        kind: "saved",
+      });
   });
   const open = openStates(model);
   const openCond: Cond | undefined =
@@ -304,6 +310,19 @@ export function quickFilters(model: ModelMeta, fields: FieldMeta[], ctx: QuickCt
       kind: "archived",
     });
   return withoutCovered(out);
+}
+
+/**
+ * The conditions a list of `model` starts with when it is opened without a search of its own: the
+ * saved filter that `ui.default_filter` names, if the browser can read it over the fields shown;
+ * `null` otherwise. The person removes it like any filter.
+ */
+export function defaultFilter(model: ModelMeta, fields: FieldMeta[], ctx: QuickCtx): Cond[] | null {
+  const label = model.ui?.default_filter;
+  if (!label) return null;
+  const i = (model.ui?.filter ?? []).findIndex((s) => s.label === label);
+  const q = quickFilters(model, fields, ctx).find((x) => x.key === `saved:${i}`);
+  return q ? q.conds : null;
 }
 
 /**

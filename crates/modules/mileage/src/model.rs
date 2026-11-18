@@ -41,6 +41,21 @@ pub fn module() -> Module {
     ])
 }
 
+// What the back office shows read-only on a saved trip (`ui.readonly_when`, R6), so that a person
+// sees the rule the guards hold (`policy::writable_fields`): the server answers as it always did,
+// and the phone app, which sends these fields on create, is not touched by a hint. `$user` is the
+// person viewing the trip (M2), so an administrator or a reviewer is not offered the driver's inputs.
+
+/// The fields the server takes only when the trip is created.
+const FIXED: &str = "true";
+/// The driver's fields: written by the driver alone while the trip is recording, ended or rejected.
+const DRIVER_LOCKED: &str =
+    "driver != $user || state == \"in_review\" || state == \"confirmed\" || state == \"discarded\"";
+/// The reviewer's field: written while the trip is in review, by a reviewer who is not its driver.
+/// (The browser does not know the viewer's groups: an administrator who is no reviewer still sees
+/// it as an input on a trip in review, and the server refuses the save.)
+const REVIEW_LOCKED: &str = "state != \"in_review\" || driver == $user";
+
 fn trip() -> ModelDef {
     ModelDef {
         name: TRIP,
@@ -65,7 +80,8 @@ fn trip() -> ModelDef {
                 DRIVER,
             )
             .required()
-            .unique_with(&["driver"]),
+            .unique_with(&["driver"])
+            .readonly_when(FIXED),
             F::new(
                 "driver",
                 "Login of the person who recorded the trip; set by the server to the caller",
@@ -73,14 +89,16 @@ fn trip() -> ModelDef {
                 true,
                 DRIVER,
             )
-            .required(),
+            .required()
+            .readonly_when(FIXED),
             F::new(
                 "vehicle",
                 "The vehicle the trip was made with, as the driver names it (a plate or a name)",
                 Internal,
                 true,
                 DRIVER,
-            ),
+            )
+            .readonly_when(DRIVER_LOCKED),
             F::new(
                 "purpose",
                 "What the trip was for: business, private or commute",
@@ -88,7 +106,8 @@ fn trip() -> ModelDef {
                 true,
                 DRIVER,
             )
-            .select(&["business", "private", "commute"]),
+            .select(&["business", "private", "commute"])
+            .readonly_when(DRIVER_LOCKED),
             F::new(
                 "started_at",
                 "When the driver pressed Start, by the phone's clock",
@@ -97,7 +116,8 @@ fn trip() -> ModelDef {
                 DRIVER,
             )
             .datetime()
-            .required(),
+            .required()
+            .readonly_when(DRIVER_LOCKED),
             F::new(
                 "ended_at",
                 "When the driver pressed Stop; taken from the last accepted fix when the app sent none",
@@ -105,7 +125,8 @@ fn trip() -> ModelDef {
                 true,
                 DRIVER,
             )
-            .datetime(),
+            .datetime()
+            .readonly_when(DRIVER_LOCKED),
             F::new(
                 "distance_m",
                 "Distance in metres, computed by the server from the accepted points when the trip ends; never taken from the client",
@@ -123,7 +144,8 @@ fn trip() -> ModelDef {
                 false,
                 DRIVER,
             )
-            .kind(FieldKind::Number),
+            .kind(FieldKind::Number)
+            .readonly_when(DRIVER_LOCKED),
             F::new(
                 "last_seq",
                 "The sequence number of the last point the device recorded; the driver sets it before ending the trip",
@@ -131,7 +153,8 @@ fn trip() -> ModelDef {
                 false,
                 DRIVER,
             )
-            .kind(FieldKind::Number),
+            .kind(FieldKind::Number)
+            .readonly_when(DRIVER_LOCKED),
             F::new(
                 "point_count",
                 "How many points are stored for this trip",
@@ -152,7 +175,7 @@ fn trip() -> ModelDef {
             .computed("max(mileage_point.seq)"),
             F::new(
                 "integrity",
-                "Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean",
+                "Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean",
                 Internal,
                 false,
                 DRIVER,
@@ -201,7 +224,8 @@ fn trip() -> ModelDef {
                 true,
                 DRIVER,
             )
-            .kind(FieldKind::LongText),
+            .kind(FieldKind::LongText)
+            .readonly_when(DRIVER_LOCKED),
             F::new(
                 "reject_reason",
                 "Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again",
@@ -209,7 +233,8 @@ fn trip() -> ModelDef {
                 true,
                 DRIVER,
             )
-            .kind(FieldKind::LongText),
+            .kind(FieldKind::LongText)
+            .readonly_when(REVIEW_LOCKED),
             F::new(
                 "reviewed_by",
                 "Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so",
@@ -229,13 +254,13 @@ fn trip() -> ModelDef {
             .readonly(),
             F::new(
                 "reviewable",
-                "True while the trip is in review, confirmed or rejected: the states a reviewer reads",
+                "True while the trip is in review, confirmed or rejected and its purpose is not private: the trips a reviewer reads",
                 Internal,
-                false,
+                true,
                 DRIVER,
             )
             .kind(FieldKind::Bool)
-            .computed("state == \"in_review\" || state == \"confirmed\" || state == \"rejected\""),
+            .computed("(state == \"in_review\" || state == \"confirmed\" || state == \"rejected\") && purpose != \"private\""),
             F::new(
                 "state",
                 "Lifecycle: recording, ended, in_review, confirmed, rejected or discarded; it moves only through the actions",

@@ -117,6 +117,20 @@ pub(crate) fn code(secret: &[u8], at: u64) -> String {
     totp::code_for_step(secret, totp::step_at(at))
 }
 
+/// A well-formed code that is the code of none of the steps within ten of the one at `at`: a fixed
+/// "000000" is the right code of about one random secret in 333,000 (K49), and a test that expects
+/// a refusal of it then fails for no reason of its own.
+pub(crate) fn wrong_code(secret: &[u8], at: u64) -> String {
+    let cur = totp::step_at(at);
+    let valid: Vec<String> = (cur.saturating_sub(10)..=cur + 10)
+        .map(|s| totp::code_for_step(secret, s))
+        .collect();
+    (0u32..)
+        .map(|n| format!("{n:06}"))
+        .find(|c| !valid.contains(c))
+        .expect("a million codes and a handful of valid ones")
+}
+
 #[tokio::test]
 async fn sign_in_is_two_steps_once_two_factor_is_on() {
     let rig = rig(false);
@@ -140,7 +154,7 @@ async fn sign_in_is_two_steps_once_two_factor_is_on() {
         &rig.r,
         None,
         "/api/auth/login/mfa",
-        json!({"mfa_token": mt, "code": "000000"}),
+        json!({"mfa_token": mt, "code": wrong_code(&secret, T0 + 30)}),
     )
     .await;
     assert_eq!((s, b["code"].as_str()), (401, Some("invalid_code")));
@@ -224,7 +238,7 @@ async fn repeated_wrong_codes_lock_the_account_out_with_429() {
             &rig.r,
             None,
             "/api/auth/login/mfa",
-            json!({"mfa_token": mt, "code": "000000"}),
+            json!({"mfa_token": mt, "code": wrong_code(&secret, T0 + 30)}),
         )
         .await
         .0;
@@ -303,7 +317,7 @@ async fn an_admin_without_two_factor_is_held_to_enrolment_everywhere() {
         &rig.r,
         Some(&t),
         "/api/auth/mfa/confirm",
-        json!({"code": "000000"}),
+        json!({"code": wrong_code(&secret, T0)}),
     )
     .await;
     assert_eq!(s, 401);
@@ -648,7 +662,7 @@ async fn control_plane_accounts_can_opt_in_to_two_factor() {
         &r,
         None,
         "/api/platform/login/mfa",
-        json!({"mfa_token": mt, "code": "000000"}),
+        json!({"mfa_token": mt, "code": wrong_code(&secret, T0 + 30)}),
     )
     .await;
     assert_eq!(s, 401);

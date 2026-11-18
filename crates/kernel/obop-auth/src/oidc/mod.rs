@@ -55,6 +55,39 @@ const THROTTLE_MS: u64 = 10 * 60 * 1000;
 /// three groups of [`AnonLine::group`] (`audit_throttled`). Past it one summary line is written
 /// and the rest are counted.
 pub const ANON_LINES_PER_HOUR: u64 = 60;
+
+/// How long an agent token of an account bound to a Microsoft identity lives (N18; the owner's
+/// choice, ratified with D91 by OR-38: 90 days).
+pub const MICROSOFT_AGENT_TOKEN_SECS: u64 = 90 * 86_400;
+
+/// How long the `oidc_*` lines of the security log are kept, in days (N12; the owner's default of
+/// 2026-11-17: twelve months). They name Microsoft object ids, which are personal data. A whole
+/// number of days in `OBOP_OIDC_LOG_RETENTION_DAYS` changes it.
+pub const OIDC_LOG_RETENTION_DAYS: u64 = 365;
+
+/// The kinds of line that Microsoft sign-in writes: what the retention of N12 removes.
+pub const OIDC_KINDS: &[&str] = &[
+    "oidc_provider_configured",
+    "oidc_provider_cleared",
+    "oidc_bind",
+    "oidc_unbind",
+    "oidc_sso_only",
+    "oidc_start",
+    "oidc_login",
+    "oidc_refused",
+    "oidc_cancelled",
+    "oidc_error",
+];
+
+/// The retention of the `oidc_*` lines: `OBOP_OIDC_LOG_RETENTION_DAYS` when it is a whole number
+/// of days of at least one, else [`OIDC_LOG_RETENTION_DAYS`].
+pub fn oidc_log_retention_days() -> u64 {
+    std::env::var("OBOP_OIDC_LOG_RETENTION_DAYS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|d| *d >= 1)
+        .unwrap_or(OIDC_LOG_RETENTION_DAYS)
+}
 const ANON_WINDOW_MS: u64 = 60 * 60 * 1000;
 /// How long the number of lines that were left out is kept to be reported by the first line of
 /// the next hour.
@@ -212,16 +245,52 @@ impl Auth {
     }
 
     /// Whether the account signs in with Microsoft only.
-    pub(crate) fn is_sso_only(&self, name: &str) -> bool {
-        self.backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .is_some_and(|u| u.get("sso_only").and_then(J::as_bool) == Some(true))
+    /// Remove the `oidc_*` lines of the security log that are older than the retention (N12). Runs
+    /// at most once a day across all server processes (with the purge of ended tokens); a read or
+    /// a delete the store refuses leaves the line for the next day. Returns how many went.
+    pub(crate) fn purge_old_sso_lines(&self) -> usize {
+        let first = self
+            .backend
+            .counter_add("auth.oidc_retention", 86_400_000, false)
+            .is_ok_and(|n| n == 1);
+        if !first {
+            return 0;
+        }
+        self.purge_sso_lines_before(
+            self.now()
+                .saturating_sub(oidc_log_retention_days().saturating_mul(86_400)),
+        )
+    }
+
+    /// The work of [`Auth::purge_old_sso_lines`]: the lines written before `cutoff` (seconds).
+    /// The id of a line begins with the second it was written (`audit::event_record`).
+    pub(crate) fn purge_sso_lines_before(&self, cutoff: u64) -> usize {
+        let table = obop_commands::audit::EVENT_TABLE;
+        let mut n = 0;
+        for kind in OIDC_KINDS {
+            for (id, _) in self
+                .backend
+                .find(table, "kind", &J::from(*kind))
+                .unwrap_or_default()
+            {
+                let at = id.get(..12).and_then(|s| s.parse::<u64>().ok());
+                if at.is_some_and(|at| at < cutoff) && self.backend.delete(table, &id).is_ok() {
+                    n += 1;
+                }
+            }
+        }
+        if n > 0 {
+            eprintln!("security log: removed {n} Microsoft sign-in lines past their retention");
+        }
+        n
+    }
+
+    pub(crate) fn is_sso_only(&self, name: &str) -> Result<bool, String> {
+        self.account_flag(name, "sso_only")
     }
 
     /// The binding of an account as `(link id, record)`, with a lookup that reports a refusal.
-    fn link_of(&self, user: &str) -> Result<Option<(String, J)>, SsoError> {
+    pub(crate) fn link_of(&self, user: &str) -> Result<Option<(String, J)>, SsoError> {
         Ok(self
             .backend
             .find(LINK_TABLE, "user", &J::from(user))
@@ -229,6 +298,43 @@ impl Auth {
             .into_iter()
             .next()
             .map(|(k, f)| (k, J::Object(f))))
+    }
+
+    /// N18 for the agent tokens a person made before their account was bound: each live one that
+    /// has no end, or a later one, ends `MICROSOFT_AGENT_TOKEN_SECS` from now (an earlier end is
+    /// kept, so a repeat changes nothing). The tokens of phone apps and of the OAuth sign-in keep
+    /// their own short lives. Answers how many tokens got an end.
+    pub(crate) fn end_agent_tokens_of(&self, user: &str) -> Result<usize, String> {
+        let now = self.now();
+        let end = now + MICROSOFT_AGENT_TOKEN_SECS;
+        let mut n = 0;
+        for (id, t) in self.backend.find("auth_token", "owner", &J::from(user))? {
+            if !crate::plain_agent_token(&t, now)
+                || t.get("expires_at")
+                    .and_then(J::as_u64)
+                    .is_some_and(|e| e <= end)
+            {
+                continue;
+            }
+            let mut p = Fields::new();
+            p.insert("expires_at".into(), J::from(end));
+            if self.backend.update("auth_token", &id, &p)? {
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
+
+    /// The same for every bound account, at the start of a server: a binding made by a build
+    /// before N18 left the tokens of the account without an end. Answers how many got one.
+    pub fn end_agent_tokens_of_bound_accounts(&self) -> Result<usize, String> {
+        let mut n = 0;
+        for (_, link) in self.backend.list(LINK_TABLE)? {
+            if let Some(user) = link.get("user").and_then(J::as_str) {
+                n += self.end_agent_tokens_of(user)?;
+            }
+        }
+        Ok(n)
     }
 
     /// A working second factor: a passkey, or an authenticator app whose secret the key ring
@@ -636,11 +742,25 @@ impl Auth {
                 unavailable(e)
             }
         })?;
+        // The agent tokens the account made before it was bound end as the ones it makes from now
+        // on do (N18). A token issued after the binding was written gets its end when it is made.
+        // When the store refuses, the binding is taken back and the repeat finishes it; if that
+        // is refused too, the pass at the next start ends the tokens.
+        let ended = match self.end_agent_tokens_of(&user) {
+            Ok(n) => n,
+            Err(e) => {
+                let _ = self.backend.delete(LINK_TABLE, &id);
+                return Err(unavailable(e));
+            }
+        };
         self.sso_event(
             &user,
             "oidc_bind",
             actor,
-            &format!("bound to object id {oid} in tenant {tenant}"),
+            &format!(
+                "bound to object id {oid} in tenant {tenant}; {ended} agent token(s) now end in {} days",
+                MICROSOFT_AGENT_TOKEN_SECS / 86_400
+            ),
         );
         Ok(json!({"user": user, "oid": oid, "tenant": tenant}))
     }
@@ -686,7 +806,7 @@ impl Auth {
             .map_err(|e| unavailable(format!("{e:?}")))?;
         let before = obop_storage::fault::change_count();
         let mut p = Fields::new();
-        bump_epoch(&mut p);
+        bump_epoch(&mut p, self.now());
         if let Err(e) = self.put(&user, &p) {
             self.retract_owed(&user, "sso_unbind", &e, before, previous);
             return Err(unavailable(format!("{e:?}")));
@@ -747,7 +867,7 @@ impl Auth {
             // A password that has been unused since the account was made Microsoft-only is not
             // handed back as it was: the person has to choose a new one.
             p.insert("must_change_password".into(), J::Bool(true));
-            bump_epoch(&mut p);
+            bump_epoch(&mut p, self.now());
             self.put(&user, &p)
                 .map_err(|e| unavailable(format!("{e:?}")))?;
             self.sso_event(
@@ -816,7 +936,7 @@ impl Auth {
         // A temporary password the person can no longer use would limit every session to a
         // password change.
         p.insert("must_change_password".into(), J::Bool(false));
-        bump_epoch(&mut p);
+        bump_epoch(&mut p, self.now());
         if let Err(e) = self.put(&user, &p) {
             self.retract_owed(&user, "sso_only", &e, before, previous);
             return Err(unavailable(format!("{e:?}")));
@@ -863,6 +983,7 @@ impl Auth {
             "provider": provider.map(|p| json!({
                 "kind": p.kind, "tenant": p.tenant, "client_id": p.client_id,
                 "enabled": p.enabled, "secret_set": p.secret_set,
+                "updated_at": p.updated_at, "updated_by": p.updated_by,
             })),
             "accounts": rows,
             "break_glass": bg,
@@ -1239,7 +1360,10 @@ impl SsoApi for Auth {
             self.event(&name, "oidc_refused", "-", why);
             return Err(MfaError::Expired);
         }
-        if !self.has_second_factor(&name) {
+        if !self
+            .has_second_factor(&name)
+            .map_err(MfaError::Unavailable)?
+        {
             return Err(MfaError::Expired);
         }
         match self.after_first_factor(&name, &pending) {

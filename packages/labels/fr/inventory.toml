@@ -148,3 +148,7 @@ production = "Fabrication"
 [labels.fr.model.inventory_move.field.origin]
 label = "Origine"
 description = "Le document d’origine du mouvement, par exemple un numéro de commande fournisseur comme PO-00042 ou un ordre de fabrication"
+
+[labels.fr.model.inventory_move.field.lot]
+label = "Lot"
+description = "Le lot déplacé, quand le produit est suivi par lots ; la validation modifie l'article de stock de ce lot (créé s'il manque)"

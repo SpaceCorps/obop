@@ -41,6 +41,10 @@ description = "Le modèle de document à envoyer ; vide pour une demande portant
 label = "Document à signer"
 description = "Le PDF de Documents que le signataire lit et signe ; l'envoi de la demande en prend l'empreinte SHA-256 et en garde une copie exacte"
 
+[labels.fr.model.sign_request.field.no_document]
+label = "Sans document"
+description = "Indique si la demande ne porte pas sur un document de Documents ; une telle demande est visible par toute personne qui lit les demandes, et une demande portant sur un document seulement par celles qui peuvent voir ce document"
+
 [labels.fr.model.sign_request.field.title]
 label = "Titre"
 description = "Objet affiché au signataire"
@@ -104,6 +108,15 @@ description = "Le nom complet saisi par le signataire (preuve) ; signer_name res
 [labels.fr.model.sign_request.field.consent_version]
 label = "Version du consentement"
 description = "Identifiant du texte de consentement : sa version, la langue de l'envoi (le lang du formulaire s'il désigne l'une des sept ; si le formulaire n'a aucun champ lang, celle de l'adresse ; sinon celle du navigateur, de l'instance, puis l'anglais ; pas une preuve de la page affichée) et les 8 premiers caractères hexadécimaux d'une empreinte des textes de la langue, par exemple v1-draft/fr/31aa87b0"
+
+[labels.fr.model.sign_request.field.evidence_check]
+label = "Contrôle des preuves"
+description = "Indique si les preuves d'une demande signée par lien correspondent encore à l'entrée du journal de sécurité écrite à la signature (depuis Sign 0.3.0, aussi le titre, le message et le nom demandé) : conforme, différent (modifié après la signature) ou aucune entrée. Calculé par get seulement, vide dans les listes. Pas infalsifiable : qui écrit dans la base peut changer les deux"
+
+[labels.fr.model.sign_request.field.evidence_check.options]
+matches = "Conforme"
+differs = "Différent"
+no_entry = "Aucune entrée"
 
 [labels.fr.model.sign_request.field.state]
 label = "Statut"

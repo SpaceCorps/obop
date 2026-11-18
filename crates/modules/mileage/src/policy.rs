@@ -283,7 +283,24 @@ pub fn owns(who: &Who, trip: &Fields) -> bool {
 /// group see a reviewable trip (its `public_field`), so the narrowing for a plain driver is made
 /// here, in every guard that reads a trip.
 pub fn may_see_trip(who: &Who, trip: &Fields) -> bool {
-    who.admin || owns(who, trip) || (who.reviewer && reviewable(state(trip)))
+    who.admin || owns(who, trip) || (who.reviewer && reviewable_trip(trip))
+}
+
+/// Whether a reviewer reads this trip: it is in a state a reviewer reads and its purpose is not
+/// private (M6: a private trip stays out of a reviewer's view; its driver and an administrator
+/// read it). The same rule as the computed field `reviewable`, the row rule of the model.
+pub fn reviewable_trip(trip: &Fields) -> bool {
+    reviewable(state(trip)) && text(trip, "purpose") != PRIVATE
+}
+
+/// The purpose of a trip that a reviewer does not read.
+pub const PRIVATE: &str = "private";
+
+/// Whether `who` reads the start and the end of this trip in the clear: its driver and an
+/// administrator do (an administrator's read is logged, `audit.rs`); a reviewer, who needs only
+/// the distance, does not (M6).
+pub fn reads_positions(who: &Who, trip_driver: &str) -> bool {
+    who.admin || (!who.id.is_empty() && trip_driver == who.id)
 }
 
 /// The refusal for a record the caller may not see: the words of a record that does not exist.
@@ -347,6 +364,11 @@ pub fn check_action(
         ));
     }
     match action {
+        // A reviewer does not read a private trip (M6), so one in review would wait for a
+        // reviewer who is also an administrator: it is kept out of review instead.
+        "submit" if text(trip, "purpose") == PRIVATE => {
+            Err("a private trip is not reviewed: change its purpose to submit it for review".into())
+        }
         "reject" if text(trip, "reject_reason").trim().is_empty() => {
             Err("reject needs a reason: write reject_reason with update first".into())
         }
@@ -538,6 +560,85 @@ mod tests {
             writable_fields(&reviewer, &trip(ENDED, "rob")).unwrap(),
             &DRIVER_FIELDS
         );
+    }
+
+    /// R6, M2: the form's `readonly_when` hints say what `writable_fields` holds for the person
+    /// viewing the trip (`$user`). A field is shown editable to a viewer in a state exactly when
+    /// that viewer may write it there, and the fields taken only at creation are never editable on
+    /// a saved trip. The one difference: the browser does not know the viewer's groups, so an
+    /// administrator who is no reviewer is shown `reject_reason` as an input on a trip in review.
+    #[test]
+    fn the_readonly_hints_of_the_trip_follow_the_writable_fields() {
+        use obop_registry::expr::{self, AggFn, Env, Expr, V};
+        struct Seen<'a> {
+            state: &'a str,
+            user: &'a str,
+        }
+        impl Env for Seen<'_> {
+            fn field(&self, name: &str) -> Result<V, String> {
+                Ok(match name {
+                    "state" => V::Text(self.state.into()),
+                    "driver" => V::Text("ann".into()),
+                    _ => V::Null,
+                })
+            }
+            fn aggregate(
+                &self,
+                _: AggFn,
+                _: &str,
+                _: Option<&str>,
+                _: Option<&str>,
+                _: Option<&Expr>,
+            ) -> Result<V, String> {
+                Err("none".into())
+            }
+            fn user(&self) -> Result<V, String> {
+                Ok(V::Text(self.user.into()))
+            }
+        }
+        let module = crate::model::module();
+        let def = module.models.iter().find(|m| m.name == TRIP).unwrap();
+        let hint = |f: &str| {
+            def.fields
+                .iter()
+                .find(|x| x.name == f)
+                .and_then(|x| x.hints.as_ref())
+                .and_then(|h| h.ui.readonly_when.clone())
+        };
+        let viewers = [
+            who("ann", false, false), // the driver
+            who("ann", true, true),   // the driver, a reviewer and an administrator too
+            who("rob", true, false),  // a reviewer
+            who("ada", true, true),   // an administrator who reviews
+            who("adm", false, true),  // an administrator who does not
+        ];
+        for st in STATES {
+            let t = trip(st, "ann");
+            for w in viewers.iter().filter(|w| may_see_trip(w, &t)) {
+                let writable = writable_fields(w, &t)
+                    .map(|f| f.to_vec())
+                    .unwrap_or_default();
+                for f in DRIVER_FIELDS.iter().chain(&REVIEWER_FIELDS) {
+                    let src = hint(f).unwrap_or_else(|| panic!("{f} has no readonly_when"));
+                    let seen = Seen {
+                        state: st,
+                        user: &w.id,
+                    };
+                    let held = expr::eval(&Expr::parse_viewer(&src).unwrap(), &seen).unwrap();
+                    let known_gap =
+                        !w.reviewer && !owns(w, &t) && st == IN_REVIEW && *f == "reject_reason";
+                    assert_eq!(
+                        held == V::Bool(true),
+                        !writable.contains(f) && !known_gap,
+                        "{f} in {st} seen by {}: `{src}`",
+                        w.id
+                    );
+                }
+            }
+        }
+        for f in CREATE_FIELDS.iter().filter(|f| !DRIVER_FIELDS.contains(f)) {
+            assert_eq!(hint(f).as_deref(), Some("true"), "{f}");
+        }
     }
 
     #[test]

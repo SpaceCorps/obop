@@ -500,10 +500,22 @@ pub(crate) fn set_cookie(name: &str, value: &str, max_age: u64, secure: bool) ->
 
 /// The redirect of every failure: the root of this origin and a fixed word.
 pub(crate) fn back(s: &HttpState, error: &str, cookies: &[String]) -> Response {
+    let error = under_fault(error);
     with_cookies(
         see_other(&format!("{}#oidc_error={error}", s.sso_return())),
         cookies,
     )
+}
+
+/// The word of a failure of a request in which the store refused a call: `busy`, whatever step
+/// gave up on it (the layer of D74 keeps the redirect of these navigations, N19, so the word is
+/// what tells the person to try again). A cancellation stays one.
+pub(crate) fn under_fault(word: &str) -> &str {
+    if word != "cancelled" && obop_storage::fault::noted().is_some() {
+        "busy"
+    } else {
+        word
+    }
 }
 
 pub(crate) fn secure_of(redirect_uri: &str) -> bool {
@@ -537,8 +549,20 @@ pub(crate) fn is_flow_id(s: &str) -> bool {
 
 // ---- GET /api/auth/sso ----------------------------------------------------------------------
 
-pub(crate) async fn status(State(s): Shared) -> Response {
+/// Reads of whether Microsoft sign-in is offered, per client address and minute (N19: the route
+/// had no limit of its own). The sign-in page reads it once per load.
+pub(crate) const STATUS_PER_MIN: u64 = 60;
+
+pub(crate) async fn status(State(s): Shared, parts: Parts) -> Response {
     blocking(move || {
+        if limited(&s, "status", &client_ip(&s, &parts), STATUS_PER_MIN) {
+            return api_error(
+                StatusCode::TOO_MANY_REQUESTS,
+                "too many requests, try again in a minute",
+                "rate_limited",
+                "Wait a minute and reload the sign-in page.",
+            );
+        }
         let enabled = s.connectors.get().is_some() && s.auth.sso().is_some_and(|a| a.offered());
         let mut r = axum::Json(json!({"enabled": enabled})).into_response();
         r.headers_mut()
@@ -913,6 +937,20 @@ pub(crate) async fn callback(State(s): Shared, parts: Parts) -> Response {
     blocking(move || callback_blocking(&s, &parts)).await
 }
 
+/// A page for a callback the store refused before its round trip was known (the layer of D74
+/// replaces it with its 503 page, which says to try again).
+fn busy_page() -> Response {
+    let mut r = (
+        StatusCode::SERVICE_UNAVAILABLE,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        "<!doctype html><meta charset=\"utf-8\"><title>Try again in a moment</title><p>The service is busy right now. Try again in a moment.</p>",
+    )
+        .into_response();
+    r.headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    r
+}
+
 /// Spend the flow: read it and delete it, and trust it only if the delete was ours.
 pub(crate) fn take_flow(s: &HttpState, flow: &str) -> Option<J> {
     take_flow_from(&*s.shared.backend, flow)
@@ -958,6 +996,7 @@ impl Ending<'_> {
                     // A flow that is gone is found out at the return address. A write that lost
                     // its three tries leaves the record as it was, and the return address shows
                     // that.
+                    let word = under_fault(word);
                     let _ = o.microsoft_done(flow, MicrosoftOutcome::Failed(word.to_string()));
                 }
                 with_cookies(see_other(&return_address(flow)), cookies)
@@ -990,6 +1029,12 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
     let clear_flow = set_cookie(&flow_cookie(state), "", 0, false);
     // One try per flow: spent before anything else is looked at.
     let Some(flow) = take_flow(s, state) else {
+        // The store refused the read or the claim: nothing says whose round trip this is (the
+        // back office's or an app's), so there is no failure address to send the browser to.
+        // A page, which the layer of D74 answers with its own page of a 503 (N19).
+        if obop_storage::fault::noted().is_some() {
+            return busy_page();
+        }
         // A well-formed state that is not a flow of ours costs a read and a delete: counted, with
         // a ceiling of its own (a real callback counts against the lower one below).
         if limited(s, "cbx", &ip, 120) {

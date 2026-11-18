@@ -24,7 +24,7 @@
 
 use crate::manifest::{FieldM, Manifest, MigrationM, probe};
 use crate::semver::{Req, Version};
-use obop_registry::Bound;
+use obop_registry::{Bound, Pattern};
 use obop_storage::{Backend, Fields, Op};
 use serde_json::{Value as J, json};
 use std::cmp::Ordering;
@@ -56,6 +56,9 @@ struct Held {
     max_length: Option<(u32, bool)>,
     min: Option<Bound>,
     max: Option<Bound>,
+    /// The named format (U3): the declared `pattern`, or a currency code for a text field named
+    /// `currency`.
+    pattern: Option<Pattern>,
 }
 
 impl Held {
@@ -67,6 +70,7 @@ impl Held {
                 max_length: f.max_length.map(|n| (n, false)),
                 min: None,
                 max: None,
+                pattern: f.pattern.as_deref().and_then(Pattern::parse),
             };
         };
         // A computed or numbered field is never written: it has no default length.
@@ -82,6 +86,7 @@ impl Held {
             },
             min: l.min,
             max: l.max,
+            pattern: def.effective_pattern(),
         }
     }
 
@@ -93,11 +98,13 @@ impl Held {
             self.max_length.map(|m| m.0),
             self.min,
             self.max,
+            self.pattern,
         ) == (
             other.min_length,
             other.max_length.map(|m| m.0),
             other.min,
             other.max,
+            other.pattern,
         )
     }
 
@@ -107,6 +114,7 @@ impl Held {
             && self.max_length.is_none()
             && self.min.is_none()
             && self.max.is_none()
+            && self.pattern.is_none()
     }
 
     fn text(&self) -> String {
@@ -127,6 +135,9 @@ impl Held {
         }
         if let Some(b) = self.max {
             parts.push(format!("max {b}"));
+        }
+        if let Some(p) = self.pattern {
+            parts.push(format!("pattern {}", p.name()));
         }
         parts.join(", ")
     }
@@ -150,6 +161,13 @@ impl Held {
         }));
         note(tighter_upper(self.max, new.max, cmp_bound));
         note(tighter_lower(self.min, new.min, cmp_bound));
+        // A format where there was none holds a value to more; another format is both.
+        match (self.pattern, new.pattern) {
+            (None, Some(_)) => tighter = true,
+            (Some(_), None) => looser = true,
+            (Some(a), Some(b)) if a != b => (tighter, looser) = (true, true),
+            _ => {}
+        }
         match (tighter, looser) {
             (true, false) => "tighten",
             (false, true) => "loosen",
@@ -414,6 +432,33 @@ impl Step {
                 "rewrite the values of {}.{} in the form of its current shape",
                 self.model, self.field
             ),
+            "fill_from" => format!(
+                "fill empty {}.{} from {}.{}",
+                self.model,
+                self.field,
+                self.value
+                    .as_ref()
+                    .and_then(|v| v["via"].as_str())
+                    .unwrap_or("?"),
+                self.value
+                    .as_ref()
+                    .and_then(|v| v["field"].as_str())
+                    .unwrap_or("?"),
+            ),
+            "link_by_name" => format!(
+                "set empty {}.{} to the {} whose name is {}.{} (left empty when no name or several match)",
+                self.model,
+                self.field,
+                self.value
+                    .as_ref()
+                    .and_then(|v| v["model"].as_str())
+                    .unwrap_or("?"),
+                self.model,
+                self.value
+                    .as_ref()
+                    .and_then(|v| v["source"].as_str())
+                    .unwrap_or("?"),
+            ),
             other => other.to_string(),
         }
     }
@@ -457,6 +502,24 @@ fn step_of(m: &MigrationM) -> Step {
     }
 }
 
+/// `fill_from` and `link_by_name`: what `build_ops` needs besides the step, carried in `value`
+/// (the model the ref points at, and the field read there or the text field matched).
+fn carry_link(new: &Manifest, m: &MigrationM, s: &mut Step) {
+    let source = m.source.clone().unwrap_or_default();
+    match s.op.as_str() {
+        "fill_from" => {
+            let (via, field) = source.split_once('.').unwrap_or((&source, ""));
+            let model = field_of(new, &s.model, via).and_then(|f| f.to.clone());
+            s.value = Some(json!({"via": via, "model": model, "field": field}));
+        }
+        "link_by_name" => {
+            let model = field_of(new, &s.model, &s.field).and_then(|f| f.to.clone());
+            s.value = Some(json!({"source": source, "model": model, "by": "name"}));
+        }
+        _ => {}
+    }
+}
+
 /// The steps of `new` that apply when upgrading from `from`, in declaration order.
 pub fn steps_for(new: &Manifest, from: &Version) -> Vec<Step> {
     new.migration
@@ -466,6 +529,7 @@ pub fn steps_for(new: &Manifest, from: &Version) -> Vec<Step> {
             let mut s = step_of(m);
             canonical_default(new, &mut s);
             carry_shape(new, &mut s);
+            carry_link(new, m, &mut s);
             s
         })
         .collect()
@@ -941,6 +1005,36 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
             .filter(|v| v["reset"].as_str().is_none_or(|r| r == "never"))
             .and_then(|v| v["format"].as_str());
         let mut highest = 0u64;
+        // `fill_from` reads the record each ref points at; `link_by_name` looks a name up among
+        // the records of the target, and a name that is no record's, or several records', links
+        // nothing (it is never guessed).
+        let link_arg = |k: &str| {
+            s.value
+                .as_ref()
+                .and_then(|v| v[k].as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        let mut targets: BTreeMap<String, Fields> = BTreeMap::new();
+        let mut names: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        if matches!(s.op.as_str(), "fill_from" | "link_by_name") {
+            let model = link_arg("model");
+            if model.is_empty() {
+                return Err(format!("{}: the ref {} names no model", s.op, s.field));
+            }
+            for (tid, f) in backend
+                .list(&model)
+                .map_err(|e| format!("reading {model}: {e}"))?
+            {
+                if let Some(n) = f.get("name").and_then(J::as_str) {
+                    names
+                        .entry(n.trim().to_string())
+                        .or_default()
+                        .push(tid.clone());
+                }
+                targets.insert(tid, f);
+            }
+        }
         for (id, orig) in rows {
             let rec_id = id.clone();
             let key = (s.model.clone(), id);
@@ -998,6 +1092,23 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
                 "drop_field" => {
                     if e.cur.get(&s.field).is_some_and(|v| !v.is_null()) {
                         set(e, &s.field, J::Null);
+                    }
+                }
+                "fill_from" => {
+                    if is_empty(e.cur.get(&s.field))
+                        && let Some(J::String(via)) = e.cur.get(&link_arg("via")).cloned()
+                        && let Some(v) = targets.get(&via).and_then(|t| t.get(&link_arg("field")))
+                        && !is_empty(Some(v))
+                    {
+                        set(e, &s.field, v.clone());
+                    }
+                }
+                "link_by_name" => {
+                    if is_empty(e.cur.get(&s.field))
+                        && let Some(J::String(name)) = e.cur.get(&link_arg("source")).cloned()
+                        && let Some([one]) = names.get(name.trim()).map(Vec::as_slice)
+                    {
+                        set(e, &s.field, J::from(one.as_str()));
                     }
                 }
                 other => return Err(format!("unknown migration op {other}")),
@@ -1576,6 +1687,23 @@ mod tests {
         assert!(build_ops(&*b, &steps[1..]).unwrap().is_empty());
     }
 
+    /// A field that became computed keeps no stored value of its own, so its old values may
+    /// move to a new stored field; a field still stored may not be renamed away.
+    #[test]
+    fn the_stored_values_of_a_field_that_became_computed_can_be_renamed() {
+        let num = "kind = \"number\"";
+        let parse = |fields: String| {
+            Manifest::parse(&format!(
+                "[module]\nid = \"mig\"\nversion = \"0.2.0\"\nname = \"M\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\n[[model]]\nname = \"mig_item\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{fields}\n{}",
+                step_to("<0.2.0", "rename_field", "total", Some("kept"))
+            ))
+        };
+        let computed = format!("{num}\ncomputed = \"if(is_set(kept), kept, 1)\"");
+        assert!(parse(field("total", &computed) + &field("kept", num)).is_ok());
+        let e = parse(field("total", num) + &field("kept", num)).unwrap_err();
+        assert!(e.contains("still a stored field"), "{e}");
+    }
+
     #[test]
     fn a_record_edited_meanwhile_fails_the_batch_and_changes_nothing() {
         let b = obop_storage::open("memory:").unwrap();
@@ -1671,5 +1799,164 @@ mod tests {
         );
         assert!(bad("[[migration]]\nfrom = \"nope\"\nop = \"drop_field\"\nmodel = \"mig_item\"\nfield = \"q\"\n").contains("from"));
         assert!(bad("[[migration]]\nfrom = \"<1\"\nop = \"drop_field\"\nmodel = \"other\"\nfield = \"q\"\n").contains("declares no model"));
+    }
+
+    /// Two models: `mig_kind` (a name and a product) and `mig_item` (a ref to a kind, a product
+    /// copied from it, a free-text head and its ref), with `migrations` added.
+    fn linked(version: &str, migrations: &str) -> Manifest {
+        let f = |name: &str, extra: &str| field(name, extra);
+        Manifest::parse(&format!(
+            "[module]\nid = \"mig\"\nversion = \"{version}\"\nname = \"M\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\n\
+             [[model]]\nname = \"mig_kind\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{}{}\
+             [[model]]\nname = \"mig_item\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{}{}{}{}\n{migrations}",
+            f("name", ""),
+            f("product", "kind = \"ref\"\nto = \"product\""),
+            f("kind_id", "kind = \"ref\"\nto = \"mig_kind\""),
+            f("product", "kind = \"ref\"\nto = \"product\"\nfill_from = \"kind_id.product\""),
+            f("head", ""),
+            f("head_id", "kind = \"ref\"\nto = \"mig_kind\""),
+        ))
+        .unwrap()
+    }
+
+    const FILL: &str = "[[migration]]\nfrom = \"<0.2.0\"\nop = \"fill_from\"\nmodel = \"mig_item\"\nfield = \"product\"\nsource = \"kind_id.product\"\n";
+    const LINK: &str = "[[migration]]\nfrom = \"<0.2.0\"\nop = \"link_by_name\"\nmodel = \"mig_item\"\nfield = \"head_id\"\nsource = \"head\"\n";
+
+    /// Q8: records made before a field had its `fill_from` get the value through the ref, and a
+    /// value already there is kept.
+    #[test]
+    fn fill_from_copies_a_value_through_a_ref_into_empty_fields_only() {
+        let b = obop_storage::open("memory:").unwrap();
+        b.insert(
+            "mig_kind",
+            "k1",
+            &rec(&[("name", json!("Drill")), ("product", json!("p1"))]),
+        )
+        .unwrap();
+        b.insert("mig_kind", "k2", &rec(&[("name", json!("Saw"))]))
+            .unwrap();
+        b.insert("mig_item", "a", &rec(&[("kind_id", json!("k1"))]))
+            .unwrap();
+        b.insert(
+            "mig_item",
+            "b",
+            &rec(&[("kind_id", json!("k1")), ("product", json!("p9"))]),
+        )
+        .unwrap();
+        b.insert("mig_item", "c", &rec(&[("kind_id", json!("k2"))]))
+            .unwrap();
+        b.insert("mig_item", "d", &rec(&[])).unwrap();
+        let new = linked("0.2.0", FILL);
+        let steps = steps_for(&new, &Version::parse("0.1.0").unwrap());
+        assert_eq!(steps.len(), 1);
+        assert_eq!(
+            steps[0].summary(),
+            "fill empty mig_item.product from kind_id.product"
+        );
+        b.apply(&build_ops(&*b, &steps).unwrap()).unwrap();
+        let product = |id: &str| {
+            b.get("mig_item", id)
+                .unwrap()
+                .unwrap()
+                .get("product")
+                .cloned()
+        };
+        assert_eq!(product("a"), Some(json!("p1")));
+        assert_eq!(
+            product("b"),
+            Some(json!("p9")),
+            "a value is never overwritten"
+        );
+        assert_eq!(product("c"), None, "the kind has no product");
+        assert_eq!(product("d"), None, "no kind");
+        // Run again: nothing left to do.
+        assert!(build_ops(&*b, &steps).unwrap().is_empty());
+        // Nothing to undo: a filled value stays.
+        assert!(inverse(&steps).0.is_empty() && inverse(&steps).1.is_empty());
+    }
+
+    /// R8: a ref set from the text that names its record; a name that matches no record or
+    /// several is left alone.
+    #[test]
+    fn link_by_name_sets_a_ref_from_a_unique_name_and_never_guesses() {
+        let b = obop_storage::open("memory:").unwrap();
+        for (id, name) in [("k1", "Anna Berg"), ("k2", "Ola Lind"), ("k3", "Ola Lind")] {
+            b.insert("mig_kind", id, &rec(&[("name", json!(name))]))
+                .unwrap();
+        }
+        b.insert("mig_item", "a", &rec(&[("head", json!(" Anna Berg "))]))
+            .unwrap();
+        b.insert("mig_item", "b", &rec(&[("head", json!("Ola Lind"))]))
+            .unwrap();
+        b.insert("mig_item", "c", &rec(&[("head", json!("Nobody"))]))
+            .unwrap();
+        b.insert(
+            "mig_item",
+            "d",
+            &rec(&[("head", json!("Anna Berg")), ("head_id", json!("k2"))]),
+        )
+        .unwrap();
+        let new = linked("0.2.0", LINK);
+        let steps = steps_for(&new, &Version::parse("0.1.0").unwrap());
+        assert!(steps[0].summary().contains("whose name is mig_item.head"));
+        b.apply(&build_ops(&*b, &steps).unwrap()).unwrap();
+        let head = |id: &str| {
+            b.get("mig_item", id)
+                .unwrap()
+                .unwrap()
+                .get("head_id")
+                .cloned()
+        };
+        assert_eq!(head("a"), Some(json!("k1")), "trimmed, exact");
+        assert_eq!(head("b"), None, "two records have that name");
+        assert_eq!(head("c"), None, "no record has that name");
+        assert_eq!(head("d"), Some(json!("k2")), "a ref already set is kept");
+        assert_eq!(
+            b.get("mig_item", "a").unwrap().unwrap().get("head"),
+            Some(&json!(" Anna Berg ")),
+            "the text stays"
+        );
+    }
+
+    #[test]
+    fn fill_from_and_link_by_name_are_checked_when_the_package_is_read() {
+        let bad = |steps: &str| {
+            let f = |name: &str, extra: &str| field(name, extra);
+            Manifest::parse(&format!(
+                "[module]\nid = \"mig\"\nversion = \"0.2.0\"\nname = \"M\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\n\
+                 [[model]]\nname = \"mig_kind\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{}{}\
+                 [[model]]\nname = \"mig_item\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{}{}{}{}\n{steps}",
+                f("name", ""),
+                f("product", "kind = \"ref\"\nto = \"product\""),
+                f("kind_id", "kind = \"ref\"\nto = \"mig_kind\""),
+                f("product", "kind = \"ref\"\nto = \"product\""),
+                f("head", ""),
+                f("head_id", "kind = \"ref\"\nto = \"mig_kind\""),
+            ))
+            .unwrap_err()
+        };
+        let step = |op: &str, field: &str, source: Option<&str>| {
+            format!(
+                "[[migration]]\nfrom = \"<0.2.0\"\nop = \"{op}\"\nmodel = \"mig_item\"\nfield = \"{field}\"\n{}",
+                source.map_or(String::new(), |s| format!("source = \"{s}\"\n"))
+            )
+        };
+        assert!(bad(&step("fill_from", "product", None)).contains("needs `source"));
+        assert!(bad(&step("fill_from", "product", Some("head.product"))).contains("not a ref"));
+        assert!(bad(&step("fill_from", "product", Some("kind_id.nope"))).contains("not a field"));
+        assert!(bad(&step("fill_from", "head", Some("kind_id.product"))).contains("kinds must"));
+        assert!(bad(&step("link_by_name", "head", Some("head"))).contains("not a ref field"));
+        assert!(bad(&step("link_by_name", "head_id", Some("nope"))).contains("needs `source`"));
+        assert!(
+            bad(&format!(
+                "{}value = 1\n",
+                step("link_by_name", "head_id", Some("head"))
+            ))
+            .contains("takes only `source`")
+        );
+        assert!(
+            bad("[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"mig_item\"\nfield = \"head\"\nvalue = \"x\"\nsource = \"head\"\n")
+                .contains("`source` belongs to")
+        );
     }
 }

@@ -7,6 +7,8 @@ mod app;
 #[cfg(test)]
 mod app_ids_tests;
 #[cfg(test)]
+mod appointments_capacity_tests;
+#[cfg(test)]
 mod assert_lang_tests;
 mod backup_cli;
 #[cfg(test)]
@@ -34,6 +36,7 @@ mod build_commit;
 mod build_commit_tests;
 #[cfg(test)]
 mod bulk_tests;
+mod company_settings;
 #[cfg(test)]
 mod connectors_tests;
 #[cfg(test)]
@@ -45,6 +48,9 @@ mod drive_source;
 mod drive_tests;
 #[cfg(test)]
 mod error_seam_tests;
+mod expense_policy;
+#[cfg(test)]
+mod expense_policy_tests;
 #[cfg(test)]
 mod finance_supply_tests;
 #[cfg(test)]
@@ -58,6 +64,9 @@ mod import_oas_tests;
 mod import_timeline;
 #[cfg(test)]
 mod internal_tables_scan_tests;
+mod invoice_credit;
+#[cfg(test)]
+mod invoice_credit_tests;
 mod invoice_posting;
 #[cfg(test)]
 mod invoice_posting_tests;
@@ -89,6 +98,9 @@ mod passkey_tests;
 mod payments_tests;
 #[cfg(test)]
 mod people_collab_hints_tests;
+mod pos_cash;
+#[cfg(test)]
+mod pos_cash_tests;
 #[cfg(test)]
 mod public_site_tests;
 #[cfg(test)]
@@ -102,6 +114,8 @@ mod shell_tests;
 mod sie;
 #[cfg(test)]
 mod sie_tests;
+#[cfg(test)]
+mod sign_observer_tests;
 #[cfg(test)]
 mod sign_tests;
 mod time_billing;
@@ -1278,6 +1292,29 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
     Ok(())
 }
 
+/// The kind `obop call` types a `field=value` by: the field in the caller's metadata, else (a
+/// model with typed commands only, such as `bank_matching`, has no `list` and so is not in the
+/// metadata) the field as its module registered it (Q9). Anything unknown is text.
+fn cli_kind(
+    d: &obop_commands::Dispatcher,
+    meta: &[obop_commands::ModuleInfo],
+    model: &str,
+    field: &str,
+) -> &'static str {
+    meta.iter()
+        .flat_map(|m| &m.models)
+        .find(|m| m.name == model)
+        .and_then(|m| m.fields.iter().find(|f| f.name == field))
+        .map(|f| f.kind)
+        .or_else(|| {
+            d.model_fields(model)?
+                .into_iter()
+                .find(|f| f.name == field)
+                .map(|f| f.kind.name())
+        })
+        .unwrap_or("text")
+}
+
 /// `obop call`: the answer as JSON and the names of the fields withheld from it.
 fn call_json(
     o: &Opts,
@@ -1291,13 +1328,7 @@ fn call_json(
     // Command-line values are all text; give number, money and bool fields their JSON types so
     // typed fields (D47) validate the same way as over REST. Anything else stays a string.
     let meta = app.dispatcher.meta(Surface::Cli, &p);
-    let kind_of = |field: &str| {
-        meta.iter()
-            .flat_map(|m| &m.models)
-            .find(|m| m.name == model)
-            .and_then(|m| m.fields.iter().find(|f| f.name == field))
-            .map_or("text", |f| f.kind)
-    };
+    let kind_of = |field: &str| cli_kind(&app.dispatcher, &meta, model, field);
     let input = Value::Map(
         kv.iter()
             .filter_map(|p| p.split_once('='))
@@ -1385,13 +1416,35 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let default_language =
         obop_http::shell::from_env().map_err(|e| fail(&format!("error: {e}")))?;
     let app = open_app(o)?;
+    // With `sign` installed and no OBOP_PUBLIC_URL the signer page may refuse every post behind
+    // a TLS proxy (docs/ISSUES.md O29).
+    if let Some(note) = app
+        .dispatcher
+        .sign_service()
+        .and_then(|s| s.start_up_note())
+    {
+        eprintln!("{note}");
+    }
     let auth = authenticator(&app, o);
     if !o.dev_auth && Auth::new(app.store.backend()).user_count() == 0 {
         eprintln!(
             "no users yet: create one with `obop admin create NAME --all-groups` (or try --dev-auth on localhost)"
         );
     }
-    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    // The agent tokens of accounts bound to Microsoft end within 90 days (N18); a binding made by
+    // an older build left them without an end. A store that refuses this stops the start, as a
+    // token that should end is not left working on a guess.
+    if !o.dev_auth {
+        let n = Auth::new(app.store.backend())
+            .end_agent_tokens_of_bound_accounts()
+            .map_err(|e| fail(&format!("cannot read the agent tokens: {e}")))?;
+        if n > 0 {
+            eprintln!(
+                "{n} agent token(s) of accounts bound to Microsoft now end within 90 days (N18)"
+            );
+        }
+    }
+    let state = obop_http::HttpState::from_env(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());
     match obop_blob_gdrive::DriveBrowser::from_env() {
@@ -1439,6 +1492,7 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
         state.set_server_info(Arc::new(obop_ops::pgadmin::Reconnecting::new(&url)));
     }
     app.connectors.start();
+    app.mail.start();
     // Scheduled backups with an off-host copy and retention, when OBOP_BACKUP_SCHEDULE is set.
     backup_cli::start_scheduler(scheduler, app.store.backend(), app.store.blobs());
     // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
@@ -3595,6 +3649,13 @@ mod bundled_packages {
                             _ => Value::Text(s),
                         }
                     }
+                    // A field with a format (K45): a currency field holds a currency code and an
+                    // IBAN field an IBAN.
+                    "text" if f.pattern == Some("currency_code") => Value::text("EUR"),
+                    "text" if f.pattern == Some("vat_id") => Value::text("SE559412783801"),
+                    "text" if f.pattern == Some("iban") || f.name.ends_with("iban") => {
+                        Value::text("DE89370400440532013000")
+                    }
                     "text" => {
                         let max = f.max_length.map_or(usize::MAX, |m| m as usize);
                         Value::Text("sample".chars().take(max).collect())
@@ -3756,6 +3817,15 @@ mod bundled_packages {
         let manifests = install_order(&app, all_manifests());
         assert!(manifests.len() >= 22);
         let admin = Principal::user("root", &[ADMIN_GROUP]);
+        // One person walks every workflow here, so the expense claim the tester submits is
+        // approved by the tester too (U7 refuses that unless the company allows it).
+        call(
+            &app,
+            &admin,
+            "expenses_setting.update",
+            Value::map([("allow_self_approval", Value::Bool(true))]),
+        )
+        .unwrap();
         let mut seen_special = false;
         let mut seen_financial = false;
 
@@ -4533,7 +4603,7 @@ mod bundled_packages {
                 }
             }
         }
-        assert_eq!(files.len(), 6 * 32);
+        assert_eq!(files.len(), 6 * 33);
         let refs: Vec<&str> = files.iter().map(String::as_str).collect();
         assert!(modules_check_files(&refs, true).is_ok());
     }

@@ -516,13 +516,13 @@ fn the_gate_refuses_keys_on_the_wrong_kind() {
     );
     has(
         gate(with(
-            f("a").kind(FieldKind::Date),
+            f("a").kind(FieldKind::Bool),
             Limits {
                 min: Some(Bound::Int(1)),
                 ..Default::default()
             },
         )),
-        "only valid for kind \"number\", \"money\" or \"decimal\"",
+        "only valid for kind \"number\", \"money\", \"decimal\" or \"date\"",
     );
     has(
         gate(with(
@@ -636,4 +636,208 @@ fn check_module_runs_the_gate_so_install_and_start_both_refuse() {
             .any(|v| v.path.contains("t_doc.title") && v.problem.contains("max_length")),
         "{v:?}"
     );
+}
+
+// ---- named patterns and date bounds (K45) ----------------------------------------------------
+
+fn patterned(p: Pattern) -> FieldDef {
+    with(
+        f("code"),
+        Limits {
+            pattern: Some(p),
+            ..Default::default()
+        },
+    )
+}
+
+#[test]
+fn the_iso_4217_list_is_sorted_three_capital_letters_and_holds_the_seed_currencies() {
+    let list = ISO_4217;
+    assert!(list.windows(2).all(|w| w[0] < w[1]), "sorted, no duplicate");
+    assert!(
+        list.iter()
+            .all(|c| c.len() == 3 && c.bytes().all(|b| b.is_ascii_uppercase()))
+    );
+    for c in [
+        "EUR", "SEK", "USD", "GBP", "NOK", "DKK", "CHF", "PLN", "JPY", "XCG",
+    ] {
+        assert!(is_currency_code(c), "{c}");
+    }
+}
+
+#[test]
+fn a_currency_code_is_three_capital_letters() {
+    let c = patterned(Pattern::CurrencyCode);
+    for ok in ["EUR", "SEK", "USD", ""] {
+        assert_eq!(c.check_text(ok), Ok(()), "{ok}");
+    }
+    // U5, #103: the code must be on the ISO 4217 list, not only have its shape.
+    for bad in [
+        "12y12", "eur", "EU", "EURO", "E1R", "ZZZ", "ABC", "XXX", "XTS",
+    ] {
+        assert_eq!(
+            c.check_text(bad),
+            Err(Breach::Format(Pattern::CurrencyCode)),
+            "{bad}"
+        );
+    }
+    assert_eq!(
+        Breach::Format(Pattern::CurrencyCode).message("m", "currency", "12y12"),
+        "m.currency must be a currency code of ISO 4217, such as EUR"
+    );
+}
+
+#[test]
+fn an_iban_has_the_length_of_its_country_and_its_check_digits() {
+    let c = patterned(Pattern::Iban);
+    for ok in [
+        "DE89370400440532013000",
+        "DE89 3704 0044 0532 0130 00",
+        "de89 3704 0044 0532 0130 00",
+        "GB82WEST12345698765432",
+        "SE4550000000058398257466",
+        "NO9386011117947",
+        "FR1420041010050500013M02606",
+    ] {
+        assert_eq!(c.check_text(ok), Ok(()), "{ok}");
+    }
+    for bad in [
+        "123123",
+        "DE88370400440532013000",
+        "DE8937040044053201300",
+        "XX89370400440532013000",
+        "DE89-3704-0044-0532-0130-00",
+    ] {
+        assert_eq!(
+            c.check_text(bad),
+            Err(Breach::Format(Pattern::Iban)),
+            "{bad}"
+        );
+    }
+}
+
+#[test]
+fn a_vat_number_has_the_shape_of_its_country() {
+    let c = patterned(Pattern::VatId);
+    for ok in [
+        "DE123456789",
+        "ATU12345678",
+        "NL123456789B01",
+        "FRXX123456789",
+        "SE556677889901",
+        "ESX1234567X",
+        "GB123456789",
+        "CHE123456789",
+    ] {
+        assert_eq!(c.check_text(ok), Ok(()), "{ok}");
+    }
+    for bad in [
+        "DE12345678",
+        "123456789",
+        "de123456789",
+        "AT12345678",
+        "NL123456789X01",
+    ] {
+        assert_eq!(
+            c.check_text(bad),
+            Err(Breach::Format(Pattern::VatId)),
+            "{bad}"
+        );
+    }
+}
+
+#[test]
+fn a_date_field_takes_bounds_as_days() {
+    assert_eq!(day_number("2026-02-28"), Some(20_260_228));
+    assert_eq!(day_number("2024-02-29"), Some(20_240_229));
+    for bad in [
+        "2026-02-29",
+        "2026-13-01",
+        "26-01-01",
+        "2026-1-01",
+        "0000-01-01",
+    ] {
+        assert_eq!(day_number(bad), None, "{bad}");
+    }
+    let d = with(
+        f("start_on").kind(FieldKind::Date),
+        Limits {
+            min: Bound::date("1900-01-01"),
+            max: Bound::date("2199-12-31"),
+            ..Default::default()
+        },
+    );
+    assert_eq!(d.check_date("2026-01-01"), Ok(()));
+    let below = d.check_date("0313-12-13").unwrap_err();
+    assert_eq!(
+        below.message("m", "start_on", "0313-12-13"),
+        "m.start_on must be at least 1900-01-01; this is 0313-12-13"
+    );
+    assert!(d.check_date("2200-01-01").is_err());
+    assert_eq!(problems(&d), Vec::<String>::new());
+    assert_eq!(d.limits_note(), " (from 1900-01-01 to 2199-12-31)");
+}
+
+#[test]
+fn the_gate_refuses_a_pattern_or_a_bound_on_the_wrong_kind() {
+    let p = |field: FieldDef, l: Limits| problems(&with(field, l)).join("; ");
+    let num_on_date = p(
+        f("d").kind(FieldKind::Date),
+        Limits {
+            min: Some(Bound::Int(1)),
+            ..Default::default()
+        },
+    );
+    assert!(num_on_date.contains("YYYY-MM-DD"), "{num_on_date}");
+    let day_on_number = p(
+        f("n").kind(FieldKind::Number),
+        Limits {
+            max: Bound::date("2000-01-01"),
+            ..Default::default()
+        },
+    );
+    assert!(day_on_number.contains("not a day"), "{day_on_number}");
+    let pattern_on_longtext = p(
+        f("t").kind(FieldKind::LongText),
+        Limits {
+            pattern: Some(Pattern::Iban),
+            ..Default::default()
+        },
+    );
+    assert!(
+        pattern_on_longtext.contains("`pattern`"),
+        "{pattern_on_longtext}"
+    );
+    let upside_down = p(
+        f("d").kind(FieldKind::Date),
+        Limits {
+            min: Bound::date("2000-01-02"),
+            max: Bound::date("2000-01-01"),
+            ..Default::default()
+        },
+    );
+    assert!(upside_down.contains("no value fits"), "{upside_down}");
+}
+
+#[test]
+fn a_text_field_named_currency_holds_a_currency_code() {
+    let c = f("currency");
+    assert_eq!(c.effective_pattern(), Some(Pattern::CurrencyCode));
+    assert_eq!(c.check_text("EUR"), Ok(()));
+    assert_eq!(
+        c.check_text("12y12"),
+        Err(Breach::Format(Pattern::CurrencyCode))
+    );
+    assert_eq!(
+        c.limits_note(),
+        "",
+        "the generated descriptions do not change"
+    );
+    // Another name, another kind, or a computed field: nothing implied.
+    assert_eq!(f("currency_note").effective_pattern(), None);
+    assert_eq!(
+        f("currency").kind(FieldKind::LongText).effective_pattern(),
+        None
+    );
+    assert_eq!(f("currency").computed("\"EUR\"").effective_pattern(), None);
 }

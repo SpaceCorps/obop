@@ -42,6 +42,7 @@ webhook_in = "Webhook empfangen"
 rest_pull = "REST-Abruf"
 csv_export = "CSV-Export"
 browse = "Lesen auf Abruf"
+mail = "E-Mail senden"
 none = "Keine"
 
 [labels.de.model.connector_provider.field.auth_kind]
@@ -704,3 +705,48 @@ description = "Jedes Feld mit Klasse und Behandlung, als JSON; wird nie gespeich
 [labels.de.model.privacy_preview.action.render]
 label = "Darstellen"
 description = "Einen Beispieldatensatz nach Maskierung und Pseudonymisierung darstellen"
+
+# The providers of the catalogue, offered where a setting or a connection picks one (GitHub issue 108).
+# Machine-drafted; the native-speaker review is the gate.
+
+[labels.de.model.provider_policy.field.provider.options]
+webhook_out = "Webhook (senden)"
+webhook_in = "Webhook (empfangen)"
+rest_api_pull = "REST-API (Abruf)"
+csv_export = "CSV-Export"
+slack_webhook = "Slack (eingehender Webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (E-Signatur)"
+github_webhook = "GitHub (Webhook)"
+google_drive = "Google Drive (Dokumente durchsuchen und hinzufügen)"
+postmark = "Postmark (E-Mail senden)"
+sendgrid = "SendGrid (E-Mail senden)"
+mailgun = "Mailgun (E-Mail senden)"
+microsoft_graph_mail = "Microsoft 365 (E-Mail über Graph senden)"
+gmail_send = "Gmail oder Google Workspace (E-Mail über die Gmail-API senden)"
+google_oauth = "Google (Kalender und Kontakte, lesen)"
+microsoft_oauth = "Microsoft (Kalender und Kontakte, lesen)"
+zapier = "Zapier (Automatisierung)"
+make = "Make (Automatisierung)"
+n8n = "n8n (Automatisierung)"
+
+[labels.de.model.connection.field.provider.options]
+webhook_out = "Webhook (senden)"
+webhook_in = "Webhook (empfangen)"
+rest_api_pull = "REST-API (Abruf)"
+csv_export = "CSV-Export"
+slack_webhook = "Slack (eingehender Webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (E-Signatur)"
+github_webhook = "GitHub (Webhook)"
+google_drive = "Google Drive (Dokumente durchsuchen und hinzufügen)"
+postmark = "Postmark (E-Mail senden)"
+sendgrid = "SendGrid (E-Mail senden)"
+mailgun = "Mailgun (E-Mail senden)"
+microsoft_graph_mail = "Microsoft 365 (E-Mail über Graph senden)"
+gmail_send = "Gmail oder Google Workspace (E-Mail über die Gmail-API senden)"
+google_oauth = "Google (Kalender und Kontakte, lesen)"
+microsoft_oauth = "Microsoft (Kalender und Kontakte, lesen)"
+zapier = "Zapier (Automatisierung)"
+make = "Make (Automatisierung)"
+n8n = "n8n (Automatisierung)"

@@ -814,6 +814,35 @@ fn a_refused_lookup_never_ends_a_grant_and_a_refused_follow_up_never_loses_the_n
     assert!(t3["access_token"].as_str().is_some());
 }
 
+/// N22: a refused read of the account on the sign-in page is no wrong password. The page answers
+/// "busy, try again" (a 429 with a Retry-After), spends no attempt of the flow, and the same flow
+/// signs in once the store answers.
+#[test]
+fn a_refused_account_read_on_the_sign_in_page_is_busy_and_spends_no_attempt() {
+    use obop_storage::testing::Mode;
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let c = r.client();
+    let p = r.params(&c, REDIRECT);
+    let v = r.o.validate_authorize(BASE, &p).unwrap();
+    let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
+    // As many refusals as the flow allows attempts (8): counted, they would have ended it.
+    for _ in 0..8 {
+        flaky.refuse_model("auth_user", Mode::Reads);
+        let e =
+            r.o.login(&id, &binder, &csrf, "10.0.0.2", "ada", PW)
+                .unwrap_err();
+        flaky.allow_models();
+        assert!(matches!(e, FlowError::Busy(_)), "{e:?}");
+    }
+    assert_eq!(
+        r.o.login(&id, &binder, &csrf, "10.0.0.2", "ada", PW)
+            .unwrap(),
+        LoginOut::Consent
+    );
+}
+
 /// The access tokens of connected applications that still work.
 fn live_oauth_tokens(r: &Rig) -> usize {
     r.backend

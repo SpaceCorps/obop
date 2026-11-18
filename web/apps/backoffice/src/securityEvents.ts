@@ -55,4 +55,9 @@ export const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   mileage_discard_stuck: msg("Stuck trip discarded"),
   brand_configured: msg("The identity of the instance changed"),
   brand_cleared: msg("The identity of the instance was removed"),
+  sign_link_issued: msg("Signing link made"),
+  sign_link_revoked: msg("Signing link revoked"),
+  sign_link_restored: msg("Signing link made to work again by an administrator"),
+  sign_signed: msg("Signed through a signing link"),
+  sign_refused: msg("Signing link refused"),
 };

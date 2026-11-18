@@ -732,19 +732,29 @@ impl Shell {
     /// Says at start-up when the build cannot take the tag, so a missing default language is not
     /// a mystery later. The server still starts: the build may be copied in afterwards.
     fn check_shell(dir: &str) {
+        if let Some(w) = Self::shell_warning(dir) {
+            eprintln!("{w}");
+        }
+    }
+
+    /// The warning `check_shell` writes, if any: a shell that cannot be read, one larger than the
+    /// limit (served as it is, without the tag, K25), or one without a `<head>`.
+    fn shell_warning(dir: &str) -> Option<String> {
         match std::fs::read(format!("{dir}/index.html")) {
-            Ok(html) => {
-                if inject(&html, "en").is_none()
-                    && !contains_ignore_case(&html, META_NAME.as_bytes())
-                {
-                    eprintln!(
-                        "warning: {dir}/index.html has no <head>: {ENV} cannot be added to the sign-in screens"
-                    );
-                }
-            }
-            Err(e) => eprintln!(
+            Ok(html) if html.len() > MAX_SHELL_BYTES => Some(format!(
+                "warning: {dir}/index.html is larger than {} MiB: it is served as it is, so {ENV} is not added to the sign-in screens",
+                MAX_SHELL_BYTES / (1024 * 1024)
+            )),
+            Ok(html) => (inject(&html, "en").is_none()
+                && !contains_ignore_case(&html, META_NAME.as_bytes()))
+            .then(|| {
+                format!(
+                    "warning: {dir}/index.html has no <head>: {ENV} cannot be added to the sign-in screens"
+                )
+            }),
+            Err(e) => Some(format!(
                 "warning: cannot read {dir}/index.html ({e}): the back office is not served until it exists"
-            ),
+            )),
         }
     }
 
@@ -880,8 +890,10 @@ impl Shell {
         let bytes = match read_limited(body, self.limit).await {
             Ok(b) => b,
             Err(Unread::TooLarge) => {
-                // No length was declared and the document is too large to rewrite: send it as it
-                // is, from a fresh answer because the first was partly read.
+                // The file service declares the length it read from the file's metadata, and that
+                // was within the limit, so this is a file that grew between that look and the read
+                // (no test reaches it without a race). Too large to rewrite: send it as it is,
+                // from a fresh answer because the first was partly read.
                 return for_method(no_cache(self.ask(asked.plain()).await), &asked);
             }
             Err(Unread::Failed(e)) => {
@@ -1037,6 +1049,33 @@ mod tests {
     }
 
     /// A build directory that is removed when the guard goes out of scope.
+    /// K25 (a): a shell larger than the limit, a shell without a head and a missing one each get a
+    /// warning at start-up; a real shell gets none.
+    #[test]
+    fn the_start_up_check_warns_about_a_shell_it_will_not_rewrite() {
+        let build = Build::new("warn");
+        assert_eq!(Shell::shell_warning(build.path()), None);
+        let big = format!(
+            "<html><head></head><body>{}</body></html>",
+            "x".repeat(MAX_SHELL_BYTES)
+        );
+        std::fs::write(build.0.join("index.html"), &big).unwrap();
+        let w = Shell::shell_warning(build.path()).unwrap();
+        assert!(w.contains("is larger than 4 MiB") && w.contains(ENV), "{w}");
+        std::fs::write(build.0.join("index.html"), "<p>no head</p>").unwrap();
+        assert!(
+            Shell::shell_warning(build.path())
+                .unwrap()
+                .contains("has no <head>")
+        );
+        std::fs::remove_file(build.0.join("index.html")).unwrap();
+        assert!(
+            Shell::shell_warning(build.path())
+                .unwrap()
+                .contains("cannot read")
+        );
+    }
+
     struct Build(std::path::PathBuf);
     impl Build {
         fn new(name: &str) -> Self {

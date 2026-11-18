@@ -278,6 +278,7 @@ fn form_page(c: &Ctx<'_>, data: &ViewData) -> Response {
                 signer_name: &data.signer_name,
                 document_title: &data.document_title,
                 document_hash: &data.document_hash,
+                wording: &data.wording,
                 typed: c.typed,
                 error: c.error,
                 history: data.history.as_ref(),
@@ -399,6 +400,8 @@ pub(crate) async fn submit(
             consent_version_history: txt::consent_version_with_history_for(lang),
             // The hidden field of the page that carried the sentence about it.
             saw_history: pair(&pairs, "hist") == Some("1"),
+            // The wording digest of the page the form came from (O59).
+            words: pair(&pairs, "words").unwrap_or("").to_string(),
         };
         let c = client(&s, &parts);
         match svc.submit(&rid, &tok, &form, &c) {
@@ -421,6 +424,7 @@ pub(crate) async fn submit(
                         Invalid::Name => "err_name",
                         Invalid::Agree => "err_agree",
                         Invalid::History => "err_history",
+                        Invalid::Changed => "err_changed",
                     }),
                     status: StatusCode::BAD_REQUEST,
                 },
@@ -533,6 +537,11 @@ mod tests {
                 StatusCode::BAD_REQUEST,
                 "err_name",
             ),
+            (
+                DoorError::Invalid(Invalid::Changed),
+                StatusCode::BAD_REQUEST,
+                "err_name",
+            ),
             (DoorError::Refused, StatusCode::CONFLICT, "gone_revoked"),
         ];
         for (e, status, key) in table {
@@ -572,6 +581,7 @@ mod tests {
             DoorError::Invalid(Invalid::Name),
             DoorError::Invalid(Invalid::Agree),
             DoorError::Invalid(Invalid::History),
+            DoorError::Invalid(Invalid::Changed),
             DoorError::Refused,
         ] {
             assert_eq!(wait(e.clone()), None, "{e:?}");
@@ -722,6 +732,7 @@ mod tests {
             DoorError::Invalid(Invalid::Name),
             DoorError::Invalid(Invalid::Agree),
             DoorError::Invalid(Invalid::History),
+            DoorError::Invalid(Invalid::Changed),
             DoorError::Refused,
         ] {
             let (_, key) = refusal_parts(&e);

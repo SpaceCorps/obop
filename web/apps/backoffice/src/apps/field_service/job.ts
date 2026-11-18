@@ -28,7 +28,7 @@ export function nextStep(job: Row): Step | null {
 }
 
 /** The job is in progress and needs the customer's sign-off before it can be completed. */
-export const needsSignature = (job: Row): boolean =>
+export const needsSignature = (job: Record<string, unknown>): boolean =>
   job.state === "in_progress" &&
   job.signature_required === true &&
   (!str(job.signed_by) || !str(job.signed_on));

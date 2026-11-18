@@ -23,7 +23,7 @@
 //! row, the parent, the lock date) are done by the small functions around them.
 
 use super::unit::{R, Reads, Unit};
-use crate::errors::{code, coded};
+use crate::errors::{self, code, coded};
 use obop_registry::guard::{CLOSED_OPTION, MAX_GUARD_DEPTH, closed_field};
 use obop_registry::{Guard, LockDate, ModelDef, is_valid_date};
 use obop_storage::Fields;
@@ -214,22 +214,62 @@ fn frozen_sentence(def: &ModelDef, id: &str, why: &Frozen) -> String {
         Frozen::State(Some(s)) => format!("{} {id} is {s}", def.name),
         Frozen::State(None) => format!("{} {id} is in a state that is final", def.name),
         Frozen::Locked => format!("{} {id} is dated in a locked period", def.name),
-        Frozen::Created => format!("{} {id} keeps what it was created with", def.name),
+        Frozen::Created => format!("{} {id} {}", def.name, errors::FIXED_ONCE_CREATED),
         Frozen::Parent(pm, pid) => {
             format!("{} {id} belongs to {pm} {pid}, which is locked", def.name)
         }
     }
 }
 
+// ---- what the caller sent in clear (K63) ----------------------------------------------------
+
+thread_local! {
+    /// `model.field` of the fields the call in progress sent in clear although its caller is shown
+    /// them masked (or not at all): set by the dispatcher for the call (`ClearScope`).
+    static SENT_CLEAR: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// For the duration of a call: the fields its caller sent in clear although it is shown them
+/// masked. Such a value counts as a change whatever it is (K63), so that whether a guess equals
+/// the stored value is never told by the answer; only a token the vault restores stands for an
+/// unchanged value. Restores what was there before when dropped (calls nest).
+pub(crate) struct ClearScope(Vec<String>);
+
+impl ClearScope {
+    pub(crate) fn enter(keys: Vec<String>) -> Self {
+        Self(SENT_CLEAR.with(|s| std::mem::replace(&mut *s.borrow_mut(), keys)))
+    }
+}
+
+impl Drop for ClearScope {
+    fn drop(&mut self) {
+        let before = std::mem::take(&mut self.0);
+        SENT_CLEAR.with(|s| *s.borrow_mut() = before);
+    }
+}
+
+/// Whether the call in progress sent `model.field` in clear to a caller shown it masked.
+pub(crate) fn sent_clear(model: &str, field: &str) -> bool {
+    SENT_CLEAR.with(|s| {
+        s.borrow()
+            .iter()
+            .any(|k| k.split_once('.') == Some((model, field)))
+    })
+}
+
 // ---- the decisions --------------------------------------------------------------------------
 
-/// The fields a merge changes: the keys of `patch` whose value differs from `cur`.
-fn changed_keys<'a>(cur: &Fields, patch: &'a Fields) -> Vec<&'a str> {
+/// The fields a merge changes: the keys of `patch` whose value differs from `cur`, and those the
+/// caller sent in clear although it is shown them masked (`sent_clear`), whatever their value.
+fn changed_keys<'a>(model: &str, cur: &Fields, patch: &'a Fields) -> Vec<&'a str> {
     patch
         .iter()
-        .filter(|(k, v)| match cur.get(*k) {
-            Some(c) => c != *v,
-            None => !v.is_null(),
+        .filter(|(k, v)| {
+            sent_clear(model, k)
+                || match cur.get(*k) {
+                    Some(c) => c != *v,
+                    None => !v.is_null(),
+                }
         })
         .map(|(k, _)| k.as_str())
         .collect()
@@ -355,7 +395,7 @@ pub(crate) fn on_merge(
     let Some(g) = def.guard() else {
         return Ok(());
     };
-    let changed = changed_keys(cur, patch);
+    let changed = changed_keys(def.name, cur, patch);
     if changed.is_empty() {
         return Ok(());
     }

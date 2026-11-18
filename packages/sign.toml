@@ -1,6 +1,6 @@
 [module]
 id = "sign"
-version = "0.2.4"
+version = "0.3.0"
 name = "Sign"
 description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence. A request can point at a PDF in Documents: sending it takes the SHA-256 of the file and keeps an exact copy, and a person with the manager role creates a one-time signing link that the signer opens without an account to read that copy, type their full name and agree. This is a simple electronic signature only: a typed name does not prove who typed it, the time is the server clock, and the address is the one the proxy chain reports. At signing the evidence is stored on the request and an entry is written to the security log (the log has only read commands, so no caller can write or change an entry through a command; the server writes the entries, and the database does not stop someone who can write it). A manager can switch on a history for files that several named people sign together: the signer then sees the typed names and the times of the others who signed the same file. A signed request can be changed or deleted only by an administrator, who can still change any record. Sending and recording a signature need a human approval for agents, and agents cannot create signing links."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["productivity"]
 maturity = "experimental"
 requires_core = "^0.2.2"
 home = "sign_request"
-changelog = "Clearer screens: the app opens on Signature requests, with business names, list columns, saved filters, status colours and the evidence and sent file in their own folded sections, shown once a request is sent or signed. Signing links stay on their request. A new template can be used at once, sending a request from a template stamps the day it was sent, and marking a request signed by hand stamps the day it was signed."
+changelog = "Evidence check: a signed request shows whether its evidence still equals what the security log recorded at signing, and the log entry of a new signature also records the title, message and requested name the signer read. A revoke of a link by an administrator is written to the security log too."
 
 [module.dependencies]
 documents = ">=0.3, <1"
@@ -73,6 +73,10 @@ description = "A request for one person to sign one document"
 read_group = "sign.user"
 write_group = "sign.user"
 
+  [model.access]
+  via = "document_id"
+  public_field = "no_document"
+
   [model.ui]
   title = "{title}"
   subtitle = "{signer_name}"
@@ -130,6 +134,16 @@ write_group = "sign.user"
   class = "none"
   kind = "ref"
   to = "documents_document"
+
+  [[model.field]]
+  name = "no_document"
+  description = "Whether the request is not about a Document in Documents; such a request is visible to every reader of requests, and one about a Document only to those who can see that Document"
+  class = "none"
+  kind = "bool"
+  computed = '!is_set(document_id)'
+
+    [model.field.ui]
+    hidden = true
 
   [[model.field]]
   name = "title"
@@ -242,6 +256,20 @@ write_group = "sign.user"
   group = "sign.manager"
 
   [[model.field]]
+  name = "evidence_check"
+  description = "Whether the evidence of a request signed through a link still equals what the security log recorded at signing (from Sign 0.3.0 also the title, message and requested name): matches, differs (changed after signing) or no_entry (no log entry). Worked out on get only, empty in lists. Not tamper-proof: whoever can write the database can change both"
+  class = "none"
+  kind = "select"
+  options = ["matches", "differs", "no_entry"]
+  group = "sign.manager"
+  readonly = true
+
+    [model.field.ui]
+    tones = { matches = "ok", differs = "bad", no_entry = "warn" }
+    # Shown by the panel of a signed request (it asks get, which works it out), not as a form field.
+    hidden = true
+
+  [[model.field]]
   name = "state"
   description = "Request status: draft, sent, signed, declined, expired"
   class = "none"
@@ -293,6 +321,8 @@ write_group = "sign.user"
   field = "state"
   from = "sent"
   to = "declined"
+  group = "sign.manager"
+  approval = true
 
     [model.action.ui]
     danger = true
@@ -305,6 +335,8 @@ write_group = "sign.user"
   field = "state"
   from = "sent"
   to = "expired"
+  group = "sign.manager"
+  approval = true
 
     [model.action.ui]
     danger = true
@@ -327,6 +359,9 @@ name = "sign_link"
 description = "A one-time link that lets one person sign one request; only a hash of the secret is kept, so the link is shown once when it is created"
 read_group = "sign.user"
 write_group = "sign.manager"
+
+  [model.access]
+  via = "request_id"
 
   [model.ui]
   title = "{request_id}"

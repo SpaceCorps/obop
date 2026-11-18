@@ -10,6 +10,7 @@ import {
   Spinner,
   fmt,
   t,
+  useWorded,
 } from "@obop/ui";
 import { call } from "../api.ts";
 import { serverMessage } from "../serverMessage.ts";
@@ -286,7 +287,8 @@ export function UpdatesPage({
   notify: (text: string, tone?: "ok" | "error" | "info") => void;
 }) {
   const [u, setU] = useState<InstanceUpdate | null>(null);
-  const [error, setError] = useState("");
+  const [errorWorded, setError] = useWorded();
+  const error = errorWorded ?? "";
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState<"start" | "rollback" | null>(null);
   const live = useRef(true);
@@ -299,7 +301,7 @@ export function UpdatesPage({
     if (r.kind === "ok") {
       setU(r.value as InstanceUpdate);
       setError("");
-    } else if (r.kind === "error") setError(serverMessage(r.message));
+    } else if (r.kind === "error") setError(() => serverMessage(r.message));
   }, [token]);
 
   useEffect(() => {
@@ -573,7 +575,8 @@ function StartDialog({
   onDone: (r: { proposed: boolean; status?: Partial<InstanceUpdate> }) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState("");
+  const [failureWorded, setFailure] = useWorded();
+  const failure = failureWorded ?? "";
   const [own, setOwn] = useState(false);
   const bodyId = useId();
   const needsConfirm = !u.backup_dir;
@@ -587,7 +590,7 @@ function StartDialog({
     setBusy(false);
     if (r.kind === "ok") onDone({ proposed: false, status: r.value as Partial<InstanceUpdate> });
     else if (r.kind === "approval") onDone({ proposed: true });
-    else setFailure(serverMessage(r.message));
+    else setFailure(() => serverMessage(r.message));
   }
   return (
     <Dialog
@@ -675,7 +678,8 @@ function RollbackDialog({
   onDone: (r: { proposed: boolean }) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState("");
+  const [failureWorded, setFailure] = useWorded();
+  const failure = failureWorded ?? "";
   async function go() {
     setBusy(true);
     setFailure("");
@@ -683,7 +687,7 @@ function RollbackDialog({
     setBusy(false);
     if (r.kind === "ok") onDone({ proposed: false });
     else if (r.kind === "approval") onDone({ proposed: true });
-    else setFailure(serverMessage(r.message));
+    else setFailure(() => serverMessage(r.message));
   }
   return (
     <Dialog

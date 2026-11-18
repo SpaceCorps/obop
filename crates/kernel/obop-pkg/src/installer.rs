@@ -146,7 +146,10 @@ pub struct Installer {
     /// a change made through another process can be told from this process's own (sync.rs).
     pub(crate) registered: Mutex<std::collections::BTreeMap<String, String>>,
     pub(crate) seen_version: std::sync::atomic::AtomicU64,
+    /// When this process last looked at the shared counter, on [`Installer::clock_ms`].
     pub(crate) last_check_ms: std::sync::atomic::AtomicU64,
+    /// When this installer was made: the start of [`Installer::clock_ms`].
+    pub(crate) made: std::time::Instant,
     /// The backup gate of updates that rewrite records (see [`MigrationGate`]).
     gate: Mutex<Option<Arc<dyn MigrationGate>>>,
 }
@@ -326,6 +329,7 @@ impl Installer {
             registered: Mutex::default(),
             seen_version: Default::default(),
             last_check_ms: Default::default(),
+            made: std::time::Instant::now(),
             gate: Mutex::new(None),
         })
     }
@@ -661,19 +665,24 @@ impl Installer {
             return Err(owned_model_refusal(x.name, &owner));
         }
         // Registers the generated commands and, from the transitions declared in the registry
-        // metadata, the guards that govern state fields (D48).
-        d.register_crud(module, &self.store);
-        self.ours
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(module.id.clone());
-        for model in &m.model {
-            for a in &model.action {
-                d.register_transition(module, intern(&model.name), &a.name, &self.store);
+        // metadata, the guards that govern state fields (D48). The id is the package's from here
+        // on: a module of the program can no longer register under it (K57).
+        let public = d.as_package(&module.id, || {
+            d.register_crud(module, &self.store);
+            self.ours
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(module.id.clone());
+            for model in &m.model {
+                for a in &model.action {
+                    d.register_transition(module, intern(&model.name), &a.name, &self.store);
+                }
             }
-        }
-        // Public exposure (D50) takes effect only once the models exist; the gate runs again.
-        if let Err(e) = d.register_public(&m.module.id, m.public_specs()?) {
+            // Public exposure (D50) takes effect only once the models exist; the gate runs again.
+            m.public_specs()
+                .and_then(|specs| d.register_public(&m.module.id, specs))
+        });
+        if let Err(e) = public {
             self.unregister(&d, &m.module.id);
             return Err(e);
         }
@@ -2721,7 +2730,7 @@ pub fn admin_module() -> Module {
             },
             ModelDef {
                 name: "setting",
-                description: "Instance-wide interface settings: theme and the app launcher layout",
+                description: "Instance-wide settings as one JSON object: the theme, the app launcher layout, the security policy and others. Every person reads them, administrators write them; the token of a mobile app cannot read them",
                 read_group: ANY_GROUP,
                 write_group: ADMIN_GROUP,
                 access: None,
@@ -2746,13 +2755,21 @@ pub fn admin_module() -> Module {
                     f("user", "The account the event is about"),
                     f(
                         "kind",
-                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_link_revoked, sign_link_restored, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
                     ),
                     f(
                         "actor",
                         "Who did it: the user, an administrator or the operator",
                     ),
-                    f("detail", "A short note without any code or secret"),
+                    // Personal: it may repeat a network address, a peer or forwarded lines (the
+                    // sign door's entries), so an agent reads it as a token (O36, D40).
+                    FieldDef::new(
+                        "detail",
+                        "A short note without any code or secret",
+                        DataClass::Internal,
+                        true,
+                        ADMIN_GROUP,
+                    ),
                     f("at", "When it happened, in UTC (RFC 3339)"),
                 ],
                 commands: vec![],
@@ -2991,6 +3008,39 @@ mod tests {
         (d, inst)
     }
 
+    /// `setup` with a stand-in for the built-in Contacts module (`base`, the model `party`), for a
+    /// package that depends on it (projects 0.6.0 names a customer).
+    fn setup_with_base(store: &Store) -> (Arc<Dispatcher>, Arc<Installer>) {
+        let d = Arc::new(Dispatcher::new());
+        let base = Module {
+            id: "base".into(),
+            name: "Contacts".into(),
+            models: vec![ModelDef {
+                name: "party",
+                description: "p",
+                read_group: "base.user",
+                write_group: "base.user",
+                access: None,
+                fields: vec![],
+                commands: vec![],
+                ext: Default::default(),
+            }],
+            network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
+            meta: ModuleMeta::first_party("Contacts", &["sales"], &["contacts"], "contacts", &[]),
+        };
+        d.register_crud(&base, store);
+        let inst = Installer::new(
+            store.clone(),
+            &d,
+            vec![admin_module(), base],
+            Arc::new(Bundled),
+        );
+        register_admin(&d, &inst);
+        (d, inst)
+    }
+
     fn admin() -> Principal {
         Principal::user("root", &[ADMIN_GROUP])
     }
@@ -3127,10 +3177,11 @@ mod tests {
     #[test]
     fn the_security_event_log_is_readable_by_admins_and_never_writable() {
         let store = Store::new();
-        let (d, _) = setup(&store);
+        let (d, inst) = setup(&store);
         let mut f = Fields::new();
         f.insert("user".into(), J::from("ada"));
-        f.insert("kind".into(), J::from("enrol_confirm"));
+        f.insert("kind".into(), J::from("sign_signed"));
+        f.insert("detail".into(), J::from("address 203.0.113.9"));
         store.backend().insert("security_event", "001", &f).unwrap();
         let rows =
             |p: &Principal| call(&d, p, "security_event.list", Value::Map(Default::default()));
@@ -3155,10 +3206,40 @@ mod tests {
             );
         }
         let agent = Principal::agent("ada/agent", &[ADMIN_GROUP], &[ADMIN_GROUP]);
-        assert!(
-            rows(&agent).is_ok(),
-            "an agent scoped to the admin group may read it"
-        );
+        let Ok(r) = rows(&agent) else {
+            panic!("an agent scoped to the admin group may read it")
+        };
+        // ...but the detail, which may hold an address, only as a token (O36); a person reads it.
+        let Value::List(l) = r.value else { panic!() };
+        let Value::Map(row) = &l[0] else { panic!() };
+        let Some(Value::Text(detail)) = row.get("detail") else {
+            panic!("{row:?}")
+        };
+        assert!(detail.starts_with("DETAIL_"), "{detail}");
+        assert_eq!(row.get("kind"), Some(&Value::text("sign_signed")));
+        let Ok(r) = rows(&admin()) else { panic!() };
+        let Value::List(l) = r.value else { panic!() };
+        let Value::Map(row) = &l[0] else { panic!() };
+        assert_eq!(row.get("detail"), Some(&Value::text("address 203.0.113.9")));
+        // Nothing writes it through `create` or `update`, so the metadata states no limit for it
+        // (K44 b), nor for the long list of a module's contents; a stored model keeps its limits.
+        let limit = |model: &str, field: &str| {
+            d.meta(Surface::Rest, &admin())
+                .into_iter()
+                .flat_map(|m| m.models)
+                .find(|m| m.name == model)
+                .and_then(|m| m.fields.into_iter().find(|f| f.name == field))
+                .map(|f| f.max_length)
+        };
+        assert_eq!(limit("security_event", "detail"), Some(None));
+        assert_eq!(limit("module", "contents"), Some(None));
+        inst.install(
+            include_str!("../../../../packages/fleet.toml"),
+            "upload",
+            "root",
+        )
+        .unwrap();
+        assert_eq!(limit("fleet_vehicle", "plate"), Some(Some(2048)));
     }
 
     #[test]
@@ -3284,6 +3365,26 @@ mod tests {
         let bot = Principal::agent("bot", &["base.user"], &["base.user"]);
         assert!(read(&bot).is_ok());
         assert!(matches!(set(&bot, "{}"), Err(CallError::Forbidden(_))));
+        // The token of a mobile app reads nothing of them (L20): not by id, not by list or search.
+        let mut app = Principal::user("u", &["base.user"]);
+        app.device = Some("dev_1".into());
+        app.scopes = Some(["base.user".to_string()].into_iter().collect());
+        assert!(matches!(read(&app), Err(CallError::Forbidden(_))));
+        for id in ["setting.list", "setting.search"] {
+            let r = call(&d, &app, id, Value::map([]));
+            assert!(
+                matches!(
+                    r,
+                    Err(CallError::Forbidden(_) | CallError::UnknownCommand(_))
+                ),
+                "{id}: {r:?}"
+            );
+        }
+        assert!(
+            !d.visible(Surface::Mcp, &app)
+                .iter()
+                .any(|c| c.starts_with("setting."))
+        );
     }
 
     #[test]
@@ -3340,7 +3441,7 @@ mod tests {
     #[test]
     fn meta_keeps_the_declared_order_of_models_and_actions() {
         let store = Store::new();
-        let (d, inst) = setup(&store);
+        let (d, inst) = setup_with_base(&store);
         inst.install(
             include_str!("../../../../packages/projects.toml"),
             "marketplace",
@@ -3950,7 +4051,7 @@ write_group = "gadget.manager"
     #[test]
     fn installed_models_validate_field_kinds_and_actions_keep_working() {
         let store = Store::new();
-        let (d, _) = setup(&store);
+        let (d, _) = setup_with_base(&store);
         call(
             &d,
             &admin(),
@@ -4433,7 +4534,8 @@ write_group = "fleetlog.manager"
             "root",
         )
         .unwrap();
-        let reader = Principal::user("m", &["fleetlog.user", "fleetlog.manager"]);
+        // The reader may see the vehicles too: the target is named only to who may (K27).
+        let reader = Principal::user("m", &["fleetlog.user", "fleetlog.manager", "fleet.user"]);
         let text = |d: &Dispatcher| {
             let m = d
                 .meta(Surface::Rest, &reader)
@@ -4613,12 +4715,17 @@ write_group = "fleetlog.manager"
                 .iter()
                 .any(|m| m.id == "fleet")
         };
-        let now = || {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64
-        };
+        // The installer's own monotonic clock, not the wall clock (O41): a stepped system clock
+        // moves nothing here.
+        let now = || b.clock_ms();
+        let wall = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        assert!(
+            now() < wall / 2,
+            "the look is timed on the installer's clock, not the milliseconds since 1970"
+        );
         a.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
             .unwrap();
         // B looked half a second ago: three looks now change nothing, and the time of the last

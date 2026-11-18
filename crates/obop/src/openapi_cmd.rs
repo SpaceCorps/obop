@@ -44,6 +44,8 @@ pub fn value() -> J {
     let caller = Principal::user("openapi-export", &groups);
     let modules = app.dispatcher.meta(Surface::Rest, &caller);
     let mut doc = obop_http::openapi::instance(BASE_URL, &modules);
+    let others = app.dispatcher.commands_outside_meta(Surface::Rest, &caller);
+    obop_http::openapi::describe_commands(&mut doc, &others);
     obop_http::openapi::describe_oauth(&mut doc, BASE_URL);
     doc
 }

@@ -7,8 +7,10 @@
 //! to whatever the stock is when someone validates it later, and the stock would not end at the
 //! counted figure. Applying a count therefore needs the group of `inventory_move.validate`
 //! (`inventory.manager`), and an agent may only dry-run it (validating a move needs a person's
-//! approval). The call reads the item again afterwards and says when the stock is not the counted
-//! figure (a move validated by someone else between the two steps).
+//! approval). The read, the create and the validate run under the dispatcher's transaction lock
+//! (`Dispatcher::serialized`, Q12), which every validated stock move takes too, so no move of
+//! another call comes between them. The call still reads the item again afterwards and says when
+//! the stock is not the counted figure, which only a write that bypasses the commands can cause.
 
 use crate::sie::Env;
 use obop_commands::{Actor, CallError, Dispatcher, Principal, Store, Surface, Value, Vault};
@@ -142,6 +144,7 @@ pub fn apply(
     }
     let row = call(env, p, "inventory_item.get", json!({ "id": item }))?;
     let (product, location) = (text(&row, "product_id"), text(&row, "location_id"));
+    let lot = text(&row, "lot");
     if product.is_empty() || location.is_empty() {
         return Err(
             "the stock item has no product or no location, so there is nothing to count".into(),
@@ -162,19 +165,24 @@ pub fn apply(
     if difference == 0 {
         return Ok(out);
     }
-    // A stock move carries no lot, so validating it must find exactly one item of this product
-    // at this location (docs/ISSUES.md Q5); say so before a move is made.
-    let same = call(
-        env,
-        p,
-        "inventory_item.search",
-        json!({"filter": [
+    // A move with a lot changes the item of that lot (inventory 0.6.0, docs/ISSUES.md Q5). A move
+    // without one must find exactly one item of this product at this location, so an item without
+    // a lot next to items with lots cannot be counted; say so before a move is made.
+    let same = if !lot.is_empty() {
+        J::Null
+    } else {
+        call(
+            env,
+            p,
+            "inventory_item.search",
+            json!({"filter": [
             {"field": "product_id", "op": "eq", "value": product},
             {"field": "location_id", "op": "eq", "value": location}
         ], "limit": 2}),
-    )?;
+        )?
+    };
     if same["rows"].as_array().is_some_and(|r| r.len() > 1) {
-        return Err("this product is kept in several lots at this location, and a stock count cannot book one lot yet (a stock move carries no lot); nothing was counted. Move the lot's stock with a stock move instead".into());
+        return Err("this stock item has no lot, and the product is also kept in lots at this location, so a move without a lot cannot tell the items apart; nothing was counted. Count the items of the lots, or move this stock with a stock move".into());
     }
     if dry_run {
         out.quantity = counted;
@@ -186,6 +194,9 @@ pub fn apply(
         "product_id": product,
         "quantity": difference.abs(),
     });
+    if !lot.is_empty() {
+        mv["lot"] = json!(lot);
+    }
     mv[if difference > 0 {
         "to_location_id"
     } else {
@@ -258,7 +269,7 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             let groups: Vec<&str> = a.groups.iter().map(String::as_str).collect();
             let p = Principal::user(&a.caller, &groups);
             let d = weak.upgrade().ok_or("the dispatcher is gone")?;
-            let c = apply(Env { d: &d, store: &st }, &p, &item, counted, dry)?;
+            let c = d.serialized(|| apply(Env { d: &d, store: &st }, &p, &item, counted, dry))??;
             let mut out = vec![
                 ("ok", Value::Bool(true)),
                 ("written", Value::Bool(c.move_id.is_some())),

@@ -1,7 +1,7 @@
 //! The commands of `sign_link`. `create` is a wrapper that does not call the generated handler:
 //! it mints the secret, so nothing but the server chooses what a link is. `update` takes one
-//! thing, the stamp of `revoked_at`; `delete` and `bulk_create` are refused (an administrator may
-//! delete). There is no listing of tokens anywhere: the record id is a hash.
+//! thing, the stamp of `revoked_at`, from a person (an agent is refused), logged as
+//! `sign_link_revoked`; `delete` and `bulk_create` are refused (an administrator may delete). There is no listing of tokens anywhere: the record id is a hash.
 //!
 //! **Observers.** `Dispatcher::run` hands the raw answer of every command to the registered
 //! observers before it is shaped, and that answer of `create` holds the link. The two observers of
@@ -92,7 +92,7 @@ impl SignService {
             ));
         }
         let req = self
-            .get("sign_request", &rid)?
+            .visible_record(p, "sign_request", &rid)?
             .ok_or_else(|| format!("there is no sign_request {rid}"))?;
         if text(&req, "state") != "sent" {
             return Err(format!(
@@ -124,7 +124,7 @@ impl SignService {
         let mut end = now + LINK_DAYS * MICROS_PER_DAY;
         let on = text(&req, "expires_on");
         if !on.is_empty() {
-            match end_of_day_micros(on) {
+            match self.end_of_day_micros(on) {
                 Some(day_end) if day_end < now => {
                     return Err(format!("sign_link: sign_request {rid} has expired ({on})"));
                 }
@@ -195,13 +195,55 @@ impl SignService {
         inner: &dyn Fn(&Value) -> Result<Value, String>,
     ) -> Result<Value, String> {
         if is_admin(p) {
-            return inner(input);
+            // An administrator may change any field, and a revoke by one is logged like any
+            // other (docs/ISSUES.md O19): the link stopped working, whoever stopped it.
+            let id = id_of(input).ok();
+            let was = match &id {
+                Some(id) => self.get("sign_link", id)?,
+                None => None,
+            };
+            // Emptying `revoked_at` again brings a link that was not used back to life, which is
+            // logged too, as `sign_link_restored`.
+            let done = inner(input)?;
+            if let (Some(id), Some(was)) = (id, was)
+                && let Some(now) = self.get("sign_link", &id)?
+            {
+                let (before, after) = (
+                    text(&was, "revoked_at").is_empty(),
+                    text(&now, "revoked_at").is_empty(),
+                );
+                let id12: String = id.chars().take(12).collect();
+                let at = u64::try_from(self.now_micros() / MICROS_PER_SECOND).unwrap_or(0);
+                let user = format!("sign_request:{}", text(&now, "request_id"));
+                let detail = format!("link {id12}; by an administrator");
+                let backend = &*self.store.backend;
+                if before && !after {
+                    crate::audit::record_event(
+                        backend,
+                        at,
+                        &user,
+                        "sign_link_revoked",
+                        &p.id,
+                        &detail,
+                    );
+                } else if !before && after {
+                    crate::audit::record_event(
+                        backend,
+                        at,
+                        &user,
+                        "sign_link_restored",
+                        &p.id,
+                        &detail,
+                    );
+                }
+            }
+            return Ok(done);
         }
         let Value::Map(m) = input else {
             return inner(input);
         };
         let id = id_of(input)?;
-        let Some(cur) = self.get("sign_link", &id)? else {
+        let Some(cur) = self.visible_record(p, "sign_link", &id)? else {
             return inner(input);
         };
         let mut out = m.clone();
@@ -244,11 +286,30 @@ impl SignService {
             }
             out.remove(k);
         }
-        if revoking {
-            out.insert("revoked_at".into(), Value::Text(self.now_text()));
-        } else {
+        if !revoking {
             out.remove("revoked_at");
+            return inner(&Value::Map(out));
         }
-        inner(&Value::Map(out))
+        // A link that was just handed over is the signer's way in: an agent (or any token) does
+        // not end it without a person (docs/ISSUES.md O19), as it does not make one.
+        if !p.is_person() {
+            return Err(
+                "sign_link: revoking a signing link is a person's decision; ask a person to revoke it"
+                    .into(),
+            );
+        }
+        let now = self.now_micros();
+        out.insert("revoked_at".into(), Value::Text(micros_text(now)));
+        let done = inner(&Value::Map(out))?;
+        let id12: String = id.chars().take(12).collect();
+        crate::audit::record_event(
+            &*self.store.backend,
+            u64::try_from(now / MICROS_PER_SECOND).unwrap_or(0),
+            &format!("sign_request:{}", text(&cur, "request_id")),
+            "sign_link_revoked",
+            &p.id,
+            &format!("link {id12}"),
+        );
+        Ok(done)
     }
 }

@@ -448,6 +448,12 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
     let base = s.mcp.base_url(&parts.headers);
     let pairs = parts.uri.query().and_then(parse_pairs).unwrap_or_default();
     let lang = lang_of(&parts.headers, pair(&pairs, "lang"));
+    // A client that asks for JSON (a mobile app that checks the instance still knows it before it
+    // opens the browser, L40) gets a machine-readable answer and no sign-in: no flow is stored and
+    // no sign-in page of the address is counted. A browser asks for HTML and gets the page.
+    if wants_json(&parts.headers) {
+        return authorize_probe(&o, &base, &pairs);
+    }
     let Ok(p) = params_of(&pairs) else {
         return html(
             StatusCode::BAD_REQUEST,
@@ -505,15 +511,58 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
     }
 }
 
+/// The request asks for JSON and not for a page: an `Accept` that names `application/json` and not
+/// `text/html`.
+fn wants_json(h: &HeaderMap) -> bool {
+    h.get(header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|a| a.contains("application/json") && !a.contains("text/html"))
+}
+
+/// What `GET /oauth/authorize` answers a client that asked for JSON (L40): whether this request
+/// would begin a sign-in, as `{"status":"ok","client_id":...}` (200) or an OAuth error object (400:
+/// `invalid_client` for a client the instance does not know, which is the one a mobile app acts on
+/// by registering again; `invalid_request` and the other codes of RFC 6749 4.1.2.1 otherwise).
+fn authorize_probe(o: &OAuth, base: &str, pairs: &[(String, String)]) -> Response {
+    let error = |code: &str, description: &str| {
+        oauth_json(
+            StatusCode::BAD_REQUEST,
+            &json!({"error": code, "error_description": description}),
+        )
+    };
+    let Ok(p) = params_of(pairs) else {
+        return error("invalid_request", "the authorization request is malformed");
+    };
+    match o.validate_authorize(base, &p) {
+        Ok(_) => oauth_json(
+            StatusCode::OK,
+            &json!({"status": "ok", "client_id": p.client_id}),
+        ),
+        Err(AuthzError::Page { key: "err.client" }) => error(
+            "invalid_client",
+            "this application is not registered with this instance, or its registration has expired: register again",
+        ),
+        Err(AuthzError::Page { .. }) => error(
+            "invalid_request",
+            "the redirect address or the parameters do not match the registration",
+        ),
+        Err(AuthzError::Redirect {
+            error: code,
+            description,
+            ..
+        }) => error(code, description),
+    }
+}
+
 /// Whether this instance can send a person to Microsoft: the connectors runtime exists and the
 /// provider is configured and enabled (the same test as `GET /api/auth/sso`).
 pub(crate) fn microsoft_offered(s: &HttpState) -> bool {
     s.connectors.get().is_some() && s.auth.sso().is_some_and(|a| a.offered())
 }
 
-/// The page context of a flow, with the Microsoft step offered when the flow is a mobile app's and
-/// the instance has it, and with the brand the handler read at the start of its request.
-/// (`obop-oauth` cannot see the provider or the reader; an MCP client is never offered the step.)
+/// The page context of a flow, with the Microsoft step offered when the instance has it (to a
+/// mobile app's flow and, since N5, to an MCP client's), and with the brand the handler read at
+/// the start of its request. (`obop-oauth` cannot see the provider or the reader.)
 fn flow_view(
     s: &HttpState,
     o: &OAuth,
@@ -522,7 +571,7 @@ fn flow_view(
     brand: &Arc<Shown>,
 ) -> Result<FlowCtx, FlowError> {
     let mut ctx = o.view(id, binder, brand)?;
-    ctx.microsoft = ctx.class.is_mobile() && microsoft_offered(s);
+    ctx.microsoft = microsoft_offered(s);
     Ok(ctx)
 }
 

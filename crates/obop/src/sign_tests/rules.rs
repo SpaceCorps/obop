@@ -6,7 +6,9 @@ use super::*;
 /// The keys of `sign_request` that only the signer door writes. Written out here
 /// on purpose, not read from the code: `the_keys_of_the_tests_are_the_keys_the_code_guards` holds the
 /// two lists equal, so a key added to one and not the other fails.
-pub(super) const DOOR_KEYS: [&str; 8] = [
+pub(super) const DOOR_KEYS: [&str; 10] = [
+    "sent_on",
+    "signed_on",
     "document_hash",
     "document_file",
     "signed_at",
@@ -224,16 +226,13 @@ async fn a_document_that_the_sender_cannot_see_cannot_be_sent() {
     // The draft is mia's, who can see the restricted Document of ann. A person who cannot see it
     // sends it through `send_document` and is refused: bob is a manager without a role that
     // lets him see a restricted Document, sam has no role in Documents at all, noc is a manager
-    // without one too.
+    // without one too. The request about it does not exist for them (O4).
     for who in ["bob", "sam", "noc"] {
         let (s, v) = f
             .api(who, "/api/sign_request/send_document", json!({"id": f.req}))
             .await;
         assert_eq!(s, 400, "{who}: {v}");
-        assert!(
-            err(&v).contains("was not found, or you may not see it"),
-            "{who}: {v}"
-        );
+        assert!(err(&v).contains("no sign_request"), "{who}: {v}");
         let rec = f.record("sign_request", &f.req);
         assert_eq!(rec["state"], "draft", "{who}");
         assert!(rec.get("document_file").is_none_or(J::is_null), "{who}");
@@ -371,14 +370,11 @@ async fn a_link_is_made_by_a_person_with_the_manager_group_for_a_sent_request() 
     // Not a person with the manager group.
     let (s, v) = f.api("sam", "/api/sign_link/create", body.clone()).await;
     assert_ne!(s, 200, "{v}");
-    // A person who cannot see the Document is told so, in the words used for an id that does not
-    // exist (the answer does not say which it is).
+    // A person who cannot see the Document is answered as for a request that does not exist
+    // (the request about it is not his to see, O4).
     let (s, v) = f.api("bob", "/api/sign_link/create", body.clone()).await;
     assert_ne!(s, 200, "{v}");
-    assert!(
-        err(&v).contains("was not found, or you may not see it"),
-        "{v}"
-    );
+    assert!(err(&v).contains("there is no sign_request"), "{v}");
 
     // An agent never gets a link, not even through a plan that a person approves.
     agent_for(&mut f, "mia").await;
@@ -630,6 +626,7 @@ async fn the_evidence_belongs_to_the_door() {
     let value = |k: &str| -> String {
         match k {
             "signed_at" => "2026-11-03T10:00:00.000000Z".to_string(),
+            "sent_on" | "signed_on" => "2026-11-03".to_string(),
             "document_hash" | "document_file" => f.file.clone(),
             "signer_ip" => "198.51.100.7".to_string(),
             other => format!("forged {other}"),
@@ -823,8 +820,18 @@ fn the_wrappers_rely_on_names_the_package_still_declares() {
         .map(|f| f.name.as_str())
         .collect();
     grouped.sort_unstable();
-    let mut owned = obop_commands::sign::DOOR_OWNED.to_vec();
+    // The two days (O34) are door-owned but readable by every reader of requests: no group.
+    let mut owned: Vec<&str> = obop_commands::sign::DOOR_OWNED
+        .iter()
+        .copied()
+        .filter(|k| !["sent_on", "signed_on"].contains(k))
+        .collect();
+    for day in ["sent_on", "signed_on"] {
+        assert!(field(day).group.is_none(), "{day}");
+    }
     owned.push(obop_commands::sign::HISTORY_FLAG);
+    // 0.3.0: the evidence check, which nobody writes (`readonly`) and only a manager reads.
+    owned.push("evidence_check");
     owned.sort_unstable();
     assert_eq!(grouped, owned);
     assert_eq!(

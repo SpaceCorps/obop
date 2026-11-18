@@ -1,5 +1,6 @@
 [labels.de.module]
 name = "Anpassen"
+summary = "Die Instanz anpassen: Design, Apps, Module und der Marktplatz."
 
 [labels.de.model.module]
 name = "Modul"
@@ -75,7 +76,7 @@ description = "Ein Modul anhand seiner ID aus dem Marktplatz installieren, samt 
 
 [labels.de.model.setting]
 name = "Einstellung"
-description = "Instanzweite Oberflächeneinstellungen: Erscheinungsbild und Anordnung des App-Launchers"
+description = "Instanzweite Einstellungen als ein JSON-Objekt: Erscheinungsbild, Anordnung des App-Launchers, Sicherheitsrichtlinie und weitere. Jede Person liest sie, Administratoren schreiben sie; das Token einer mobilen App kann sie nicht lesen"
 
 [labels.de.model.setting.field.value]
 label = "Wert"

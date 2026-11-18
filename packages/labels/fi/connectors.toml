@@ -42,6 +42,7 @@ webhook_in = "Saapuva webhook"
 rest_pull = "REST-haku"
 csv_export = "CSV-vienti"
 browse = "Luku tarvittaessa"
+mail = "Sähköpostin lähetys"
 none = "Ei mitään"
 
 [labels.fi.model.connector_provider.field.auth_kind]
@@ -704,3 +705,48 @@ description = "Jokainen kenttä luokkineen ja käsittelyineen JSON-muodossa; ei 
 [labels.fi.model.privacy_preview.action.render]
 label = "Muodosta"
 description = "Muodosta esimerkkitietue maskauksen ja pseudonymisoinnin jälkeen"
+
+# The providers of the catalogue, offered where a setting or a connection picks one (GitHub issue 108).
+# Machine-drafted; the native-speaker review is the gate.
+
+[labels.fi.model.provider_policy.field.provider.options]
+webhook_out = "Webhook (lähetys)"
+webhook_in = "Webhook (vastaanotto)"
+rest_api_pull = "REST-rajapinta (haku)"
+csv_export = "CSV-vienti"
+slack_webhook = "Slack (saapuva webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (sähköinen allekirjoitus)"
+github_webhook = "GitHub (saapuva webhook)"
+google_drive = "Google Drive (selaa ja lisää asiakirjoja)"
+postmark = "Postmark (sähköpostin lähetys)"
+sendgrid = "SendGrid (sähköpostin lähetys)"
+mailgun = "Mailgun (sähköpostin lähetys)"
+microsoft_graph_mail = "Microsoft 365 (sähköpostin lähetys Graphin kautta)"
+gmail_send = "Gmail tai Google Workspace (sähköpostin lähetys Gmail-rajapinnan kautta)"
+google_oauth = "Google (kalenteri ja yhteystiedot, luku)"
+microsoft_oauth = "Microsoft (kalenteri ja yhteystiedot, luku)"
+zapier = "Zapier (automaatio)"
+make = "Make (automaatio)"
+n8n = "n8n (automaatio)"
+
+[labels.fi.model.connection.field.provider.options]
+webhook_out = "Webhook (lähetys)"
+webhook_in = "Webhook (vastaanotto)"
+rest_api_pull = "REST-rajapinta (haku)"
+csv_export = "CSV-vienti"
+slack_webhook = "Slack (saapuva webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (sähköinen allekirjoitus)"
+github_webhook = "GitHub (saapuva webhook)"
+google_drive = "Google Drive (selaa ja lisää asiakirjoja)"
+postmark = "Postmark (sähköpostin lähetys)"
+sendgrid = "SendGrid (sähköpostin lähetys)"
+mailgun = "Mailgun (sähköpostin lähetys)"
+microsoft_graph_mail = "Microsoft 365 (sähköpostin lähetys Graphin kautta)"
+gmail_send = "Gmail tai Google Workspace (sähköpostin lähetys Gmail-rajapinnan kautta)"
+google_oauth = "Google (kalenteri ja yhteystiedot, luku)"
+microsoft_oauth = "Microsoft (kalenteri ja yhteystiedot, luku)"
+zapier = "Zapier (automaatio)"
+make = "Make (automaatio)"
+n8n = "n8n (automaatio)"

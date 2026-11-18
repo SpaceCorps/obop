@@ -2332,6 +2332,78 @@ fn what_the_dispatcher_stamps_about_the_approver_reaches_the_guard_and_is_not_th
     assert_eq!(ran["_caller"], Value::text("agt"));
 }
 
+/// docs/ISSUES.md O5: the action that an approved `update` runs implicitly (D48) sees who
+/// approved, as a direct call of the action does, so that its wrapper can hold the approver to
+/// the same rules as the caller.
+#[test]
+fn the_action_an_approved_update_implies_sees_the_approver() {
+    use crate::{Pre, Verdict};
+    use std::sync::{Arc, Mutex};
+    let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
+    d.register_crud(&m, &store);
+    let person = Principal::user("pat", &["g"]);
+    let made = d
+        .call(
+            Surface::Rest,
+            &person,
+            &mut Vault::new(),
+            "hooks_item.create",
+            &m_of(&[("name", "x"), ("owner", "o")]),
+        )
+        .unwrap();
+    let Value::Map(made) = made.value else {
+        panic!("{made:?}")
+    };
+    let id = made["id"].clone();
+    d.add_guard(
+        "hooks_t",
+        "hooks_item.update",
+        false,
+        Box::new(move |_, input| {
+            let Value::Map(m) = input else {
+                return Ok(Verdict::default());
+            };
+            Ok(Verdict {
+                approval: true,
+                pre: vec![Pre {
+                    command: "hooks_item.create".into(),
+                    input: Value::map([("id", m["id"].clone())]),
+                    field: "name",
+                }],
+                ..Default::default()
+            })
+        }),
+    );
+    let seen = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let log = seen.clone();
+    d.around(
+        "hooks_item.create",
+        Box::new(move |_, input, _| {
+            log.lock().unwrap().push(input.clone());
+            Err("stop here".into())
+        }),
+    );
+    let agent = Principal::agent("agt", &["g"], &["g"]);
+    let Err(CallError::ApprovalRequired { plan_id }) = d.call(
+        Surface::Rest,
+        &agent,
+        &mut Vault::new(),
+        "hooks_item.update",
+        &Value::map([("id", id), ("name", Value::text("y"))]),
+    ) else {
+        panic!("proposal")
+    };
+    let dan = Principal::user("dan", &["g", "extra"]);
+    let _ = d.approve(&dan, &mut Vault::new(), &plan_id);
+    let seen = seen.lock().unwrap();
+    let Some(Value::Map(step)) = seen.first() else {
+        panic!("the implied action did not run: {seen:?}")
+    };
+    assert_eq!(step["_actor_approver"], Value::text("dan"), "{step:?}");
+    assert_eq!(step["_actor_approver_admin"], Value::Bool(false));
+    assert_eq!(step["_caller"], Value::text("agt"));
+}
+
 #[test]
 fn observers_hear_about_successful_commands_only_and_go_with_their_module() {
     use std::sync::{Arc, Mutex};
@@ -2390,6 +2462,70 @@ fn the_dispatcher_lists_the_ids_of_its_modules_and_forgets_one_that_is_unregiste
     assert_eq!(d.model_owner("hooks_item"), None);
 }
 
+/// K58: a module that holds only an observer, a guard or a command refused for everyone is a module
+/// too: its id is reserved, since an uninstall under it would remove what it holds.
+#[test]
+fn a_module_with_only_an_observer_or_a_guard_is_listed() {
+    let d = Dispatcher::new();
+    d.observe("ghost", Box::new(|_, _, _, _| {}));
+    d.add_guard(
+        "warden",
+        "x.create",
+        false,
+        Box::new(|_, _| Ok(crate::Verdict::default())),
+    );
+    assert_eq!(d.module_ids(), ["ghost", "warden"]);
+    d.unregister_module("ghost");
+    d.unregister_module("warden");
+    assert!(d.module_ids().is_empty());
+}
+
+/// K57: once the installer registered a package under an id, a module of the program cannot be
+/// registered under it (the package's uninstall would remove it); the package itself registers
+/// again, and after its uninstall the id is free.
+#[test]
+fn a_module_of_the_program_cannot_take_the_id_of_a_package() {
+    let (d, store) = (Dispatcher::new(), Store::new());
+    let fleet = module("fleet");
+    d.as_package("fleet", || d.register_crud(&fleet, &store));
+    d.as_package("fleet", || d.register_crud(&fleet, &store));
+    for (what, r) in [
+        (
+            "register_crud",
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                d.register_crud(&module("fleet"), &store)
+            })),
+        ),
+        (
+            "observe",
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                d.observe("fleet", Box::new(|_, _, _, _| {}))
+            })),
+        ),
+        (
+            "add_guard",
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                d.add_guard(
+                    "fleet",
+                    "fleet_item.create",
+                    false,
+                    Box::new(|_, _| Ok(crate::Verdict::default())),
+                )
+            })),
+        ),
+    ] {
+        let e = r.expect_err(what);
+        let text = e.downcast_ref::<String>().cloned().unwrap_or_default();
+        assert!(
+            text.contains("fleet is the id of an installed package"),
+            "{what}: {text}"
+        );
+    }
+    d.unregister_module("fleet");
+    d.register_crud(&module("fleet"), &store);
+    assert_eq!(d.module_ids(), ["fleet"]);
+}
+
 #[test]
 fn read_only_registration_exposes_get_list_and_search_and_ignores_actor_keys() {
     let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
@@ -2422,4 +2558,65 @@ fn read_only_registration_exposes_get_list_and_search_and_ignores_actor_keys() {
     }
     assert!(!d.meta(Surface::Rest, &u)[0].models[0].can_create);
     assert!(d.model_fields("hooks_item").is_some() && d.model_def("hooks_item").is_some());
+}
+
+/// `register_read_only` (the security event log) guards `list` and `search` like every other
+/// registration: an agent that sees a personal field only as a token can neither group by it nor
+/// filter on it, which would hand back the clear text or answer guesses.
+#[test]
+fn a_read_only_model_refuses_an_agent_query_on_a_masked_field() {
+    let (d, store) = (Dispatcher::new(), Store::new());
+    let mut m = hooks_module();
+    m.models[0].fields[1] = F::new("owner", "Owner", DataClass::None, true, "g");
+    d.register_read_only(&m, "hooks_item", &store);
+    store
+        .insert(
+            "hooks_item",
+            [
+                ("name".to_string(), Value::text("a")),
+                ("owner".to_string(), Value::text("ann@example.com")),
+            ]
+            .into(),
+        )
+        .unwrap();
+    let agent = Principal::agent("bot", &["g"], &["g"]);
+    let call = |c: &str, v: Value| {
+        d.call(
+            Surface::Mcp,
+            &agent,
+            &mut Vault::new(),
+            &format!("hooks_item.{c}"),
+            &v,
+        )
+    };
+    let grouped = Value::map([(
+        "aggregate",
+        Value::map([("group_by", Value::List(vec![Value::text("owner")]))]),
+    )]);
+    let filtered = Value::map([(
+        "filter",
+        Value::List(vec![Value::map([
+            ("field", Value::text("owner")),
+            ("op", Value::text("contains")),
+            ("value", Value::text("ann")),
+        ])]),
+    )]);
+    for (c, input) in [
+        ("search", &grouped),
+        ("search", &filtered),
+        ("list", &filtered),
+    ] {
+        match call(c, input.clone()) {
+            Err(CallError::Handler(e)) => {
+                assert_eq!(e, "unknown field hooks_item.owner", "{c}")
+            }
+            other => panic!("{c}: {other:?}"),
+        }
+    }
+    // A field the agent reads in clear stays usable.
+    let by_name = Value::map([(
+        "aggregate",
+        Value::map([("group_by", Value::List(vec![Value::text("name")]))]),
+    )]);
+    assert!(call("search", by_name).is_ok());
 }

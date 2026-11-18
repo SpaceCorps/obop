@@ -301,15 +301,16 @@ describe("server messages use the package's own option labels", () => {
         'desk_ticket.status cannot change from "new" to "closed"; from "new" it can only go to: under_review',
       ),
     ).toContain("från Ny till Stängd; från Ny kan det bara ändras till: Under review");
-    // Models that give the same value different words: the field is unknown, not guessed.
+    // Two models agree on the field's title and give the same value different words: the title is
+    // kept, and only the option words, which cannot be chosen between, come from the generic table.
     registerMeta(
       desk(
         model("desk_ticket", [status(), owner]),
         model("desk_task", [status({ option_labels: { new: { sv: "Planerad" } } }), owner]),
       ),
     );
-    expect(serverMessage('status must be new to do this, it is "closed"')).toContain(
-      "måste vara Ny för att göra detta, det är Stängd",
+    expect(serverMessage('status must be new to do this, it is "closed"')).toBe(
+      "Läge måste vara Ny för att göra detta, det är Stängd",
     );
   });
 
@@ -364,6 +365,28 @@ describe("server messages without engine text", () => {
     expect(
       serverMessage("Payments do not cover the total (assertion sum(x) >= total failed)"),
     ).toBe("Payments do not cover the total");
+    expect(
+      serverMessage(
+        "The resource is already booked at that time: pick another time or another resource (rule no_double_booking failed)",
+      ),
+    ).toBe("The resource is already booked at that time: pick another time or another resource");
+  });
+
+  it("keeps every failing assertion of an action, each without its suffix (Q17)", async () => {
+    await setLanguage("en", false);
+    expect(
+      serverMessage(
+        "Choose the production location first (assertion is_set(location_id) failed); " +
+          "Add the components first (assertion count(lines) > 0 failed)",
+      ),
+    ).toBe("Choose the production location first; Add the components first");
+    // Through a failed step of an effect too.
+    expect(
+      serverMessage(
+        "manufacturing_order.confirm: effect 1 (run action) failed, nothing was changed: " +
+          "A (assertion is_set(a) failed); B (assertion count(lines) > 0 failed)",
+      ),
+    ).toBe("A; B");
   });
 
   it("names the field by its label in English", async () => {
@@ -371,6 +394,44 @@ describe("server messages without engine text", () => {
     registerMeta([{ id: "sales", name: "Sales", models: [order] }]);
     expect(serverMessage("sale_order.customer_id is required")).toBe("Customer is required");
     expect(serverMessage("sale_order.note is required")).toBe("Note is required");
+  });
+
+  it("says plainly who files a record for someone with their own login (R1)", async () => {
+    await setLanguage("en", false);
+    expect(
+      serverMessage(
+        "This employee has their own login, so the record would be theirs and out of your sight: ask someone with hr.manager to file it. Nothing was saved",
+      ),
+    ).toBe(
+      "This person has their own login, so the record would be theirs and you could not see it. Ask someone with hr.manager to file it. Nothing was saved.",
+    );
+    expect(
+      serverMessage(
+        "This employee has their own login, so the record would be theirs and out of your sight: ask an administrator to file it. Nothing was saved",
+      ),
+    ).toBe(
+      "This person has their own login, so the record would be theirs and you could not see it. Ask an administrator to file it. Nothing was saved.",
+    );
+  });
+
+  it("says what format or which days a field takes (K45)", async () => {
+    await setLanguage("en", false);
+    registerMeta([{ id: "sales", name: "Sales", models: [order] }]);
+    expect(
+      serverMessage("sale_order.currency must be a currency code of ISO 4217, such as EUR"),
+    ).toBe("Currency must be a currency code of ISO 4217, such as EUR");
+    expect(
+      serverMessage("sale_order.iban must be a valid IBAN, such as DE89 3704 0044 0532 0130 00"),
+    ).toBe("IBAN must be a valid IBAN, such as DE89 3704 0044 0532 0130 00");
+    expect(
+      serverMessage(
+        "sale_order.vat must be a VAT number with its country prefix, such as DE123456789",
+      ),
+    ).toBe("VAT must be a VAT number with its country prefix, such as DE123456789");
+    const below = serverMessage(
+      "sale_order.ordered_on must be at least 1900-01-01; this is 0313-12-13",
+    );
+    expect(below).toMatch(/^Ordered on must be at least .+1900; this is .+313$/);
   });
 
   it("says what was wrong inside a failed step of an action", async () => {
@@ -403,5 +464,45 @@ describe("paying an invoice that is not in the ledger", () => {
       expect(out).toContain("1400");
       expect(out).not.toContain("invoice_posting");
       expect(out).not.toMatch(/[{}]/);
+    });
+});
+
+describe("billing time without the groups it needs", () => {
+  const raw =
+    "billing time needs the invoicing.user and timesheets.manager groups (an agent needs them in its scopes)";
+  const en =
+    "Billing time needs the right to make invoices and to approve time entries. Ask an administrator.";
+
+  it("says it in words, without group ids", async () => {
+    await setLanguage("en", false);
+    expect(serverMessage(raw)).toBe(en);
+  });
+
+  for (const lang of LANGS)
+    it(`${lang}: is translated`, async () => {
+      provideCatalogue(lang, read(lang));
+      await setLanguage(lang, false);
+      const out = serverMessage(raw);
+      expect(out).not.toBe(en);
+      expect(out).not.toContain("timesheets.manager");
+    });
+});
+
+describe("billing a period without time to bill", () => {
+  const raw = "no approved, billable, unbilled time entries of this project in the period";
+  const en = "There is no approved, billable time to bill in this period.";
+
+  it("says it as a sentence", async () => {
+    await setLanguage("en", false);
+    expect(serverMessage(raw)).toBe(en);
+  });
+
+  for (const lang of LANGS)
+    it(`${lang}: is translated`, async () => {
+      provideCatalogue(lang, read(lang));
+      await setLanguage(lang, false);
+      const out = serverMessage(raw);
+      expect(out).not.toBe(en);
+      expect(out).not.toBe(raw);
     });
 });

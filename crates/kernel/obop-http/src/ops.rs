@@ -296,9 +296,23 @@ pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
         }
         return resp;
     };
+    // The two addresses of the Microsoft sign-in are reached by a navigation of the browser and
+    // answer every failure with a redirect that names it (`#oidc_error=busy`, or the return page
+    // of an app's flow): that redirect is kept, so the person lands on the sign-in page and not on
+    // a JSON body (N19). Their success needs a write that committed, so a fault without a commit
+    // always comes with a failure redirect here.
+    if is_sign_in_navigation(&path) && resp.status().is_redirection() {
+        FAULT_ANSWERS[fault_index(fault)][1].fetch_add(1, Relaxed);
+        return no_store(resp);
+    }
     let column = if applied == Applied::Partial { 2 } else { 0 };
     FAULT_ANSWERS[fault_index(fault)][column].fetch_add(1, Relaxed);
     replacement(fault, applied, &path, &resp)
+}
+
+/// The addresses of the Microsoft sign-in that a browser navigates to (D91).
+fn is_sign_in_navigation(path: &str) -> bool {
+    matches!(path, "/api/auth/oidc/start" | "/api/auth/oidc/callback")
 }
 
 fn no_store(mut r: Response) -> Response {
@@ -953,6 +967,18 @@ mod tests {
             })
             .await
         });
+        // A refused read answered with the redirect of a failed sign-in (`sso::back`).
+        let busy_redirect = get(|| async {
+            crate::blocking(|| {
+                obop_storage::fault::note(obop_storage::fault::Fault::Busy);
+                (
+                    StatusCode::SEE_OTHER,
+                    [("location", "/#oidc_error=busy")],
+                    "",
+                )
+            })
+            .await
+        });
         let router = Router::new()
             .route("/api/read", swallows)
             .route("/api/create", writes_then_reads)
@@ -963,6 +989,9 @@ mod tests {
             .route("/oauth/token", shaped.clone())
             .route("/api/shaped", shaped)
             .route("/page", page)
+            .route("/api/auth/oidc/callback", busy_redirect.clone())
+            .route("/api/auth/oidc/start", busy_redirect.clone())
+            .route("/api/redirect_busy", busy_redirect)
             .layer(axum::middleware::from_fn(storage_faults));
         (flaky, db, router)
     }
@@ -1104,6 +1133,17 @@ mod tests {
         assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
         assert!(h["content-type"].to_str().unwrap().starts_with("text/html"));
         assert!(body.contains("Try again"), "a page, not raw JSON: {body}");
+
+        // The Microsoft sign-in's callback is a navigation that answers its failure with a
+        // redirect naming it: the redirect is kept (N19), and an ordinary route's is not.
+        for path in ["/api/auth/oidc/callback", "/api/auth/oidc/start"] {
+            let (s, h, body) = call(&r, "GET", path).await;
+            assert_eq!(s, StatusCode::SEE_OTHER, "{path}: {body}");
+            assert_eq!(h["location"], "/#oidc_error=busy");
+            assert_eq!(h["cache-control"], "no-store");
+        }
+        let (s, _, _) = call(&r, "GET", "/api/redirect_busy").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
 
         // The REST shape elsewhere, and the route's own headers are kept there too.
         flaky.refuse_next(1);

@@ -47,6 +47,10 @@ mod brand_scan_tests;
 #[cfg(test)]
 mod error_tests;
 #[cfg(test)]
+mod platform_health_tests;
+#[cfg(test)]
+mod serve_tests;
+#[cfg(test)]
 mod src_scan;
 
 pub struct HttpState {
@@ -87,8 +91,23 @@ pub struct HttpState {
 }
 
 impl HttpState {
+    /// The state with the default `/mcp` configuration. It reads no environment variable, so a
+    /// test that builds its server with it behaves the same whatever the shell exports (O40);
+    /// `obop serve` uses [`HttpState::from_env`].
     pub fn new(dispatcher: Arc<Dispatcher>, auth: Arc<dyn Authenticator>) -> Arc<Self> {
-        Self::with_mcp(dispatcher, auth, mcp::McpConfig::from_env())
+        Self::with_mcp(dispatcher, auth, mcp::McpConfig::default())
+    }
+
+    /// As `new`, with the `/mcp` configuration (`OBOP_PUBLIC_URL`, `OBOP_ALLOWED_ORIGINS`,
+    /// `OBOP_MCP_RATE_PER_MINUTE`) and the authorization server's (`OBOP_OAUTH_MOBILE_SCHEMES`,
+    /// L10) read from the environment: the server's own start.
+    pub fn from_env(dispatcher: Arc<Dispatcher>, auth: Arc<dyn Authenticator>) -> Arc<Self> {
+        Self::with_configs(
+            dispatcher,
+            auth,
+            mcp::McpConfig::from_env(),
+            obop_oauth::OAuthConfig::from_env(),
+        )
     }
 
     /// As `new`, with explicit limits and origin allow-list for `/mcp` (tests, embedding).
@@ -97,12 +116,19 @@ impl HttpState {
         auth: Arc<dyn Authenticator>,
         mcp: mcp::McpConfig,
     ) -> Arc<Self> {
+        Self::with_configs(dispatcher, auth, mcp, obop_oauth::OAuthConfig::default())
+    }
+
+    /// As `with_mcp`, with the configuration of the authorization server too (L10: the operator's
+    /// list of mobile apps, `OBOP_OAUTH_MOBILE_SCHEMES`, read by `from_env`).
+    pub fn with_configs(
+        dispatcher: Arc<Dispatcher>,
+        auth: Arc<dyn Authenticator>,
+        mcp: mcp::McpConfig,
+        oauth_config: obop_oauth::OAuthConfig,
+    ) -> Arc<Self> {
         let shared = shared::SharedState::for_dispatcher(&dispatcher);
-        let oauth = obop_oauth::OAuth::new(
-            shared.backend.clone(),
-            auth.clone(),
-            obop_oauth::OAuthConfig::default(),
-        );
+        let oauth = obop_oauth::OAuth::new(shared.backend.clone(), auth.clone(), oauth_config);
         Arc::new(Self {
             dispatcher,
             auth,
@@ -487,11 +513,15 @@ fn instance_openapi_blocking(
     brand: obop_brand::Brand,
 ) -> Response {
     let base = s.mcp.base_url(&h);
-    let modules = match s.auth_api(&h) {
-        Ok((p, _)) => s.dispatcher.meta(Surface::Rest, &p),
-        Err(_) => Vec::new(),
+    let (modules, others) = match s.auth_api(&h) {
+        Ok((p, _)) => (
+            s.dispatcher.meta(Surface::Rest, &p),
+            s.dispatcher.commands_outside_meta(Surface::Rest, &p),
+        ),
+        Err(_) => (Vec::new(), Vec::new()),
     };
     let mut doc = openapi::instance(&base, &modules);
+    openapi::describe_commands(&mut doc, &others);
     if s.oauth.is_some() {
         openapi::describe_oauth(&mut doc, &base);
     }
@@ -553,6 +583,8 @@ fn login_blocking(s: Arc<HttpState>, body: J) -> Response {
         Err(e) if e.contains("too many") => {
             (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": e}))).into_response()
         }
+        // A refused read of the account is no wrong password: the client may try again (D74, N22).
+        Err(e) if obop_storage::fault::Fault::is_transient(&e) => unavailable(&e),
         Err(e) => (StatusCode::UNAUTHORIZED, Json(json!({"error": e}))).into_response(),
     }
 }
@@ -584,6 +616,8 @@ fn agent_token_blocking(s: Arc<HttpState>, h: HeaderMap, body: J) -> Response {
         &s.dispatcher.known_groups(),
     ) {
         Ok(token) => Json(json!({"token": token})).into_response(),
+        // A refused read of the store is no bad request: the client may ask again (D74).
+        Err(e) if obop_storage::fault::Fault::is_transient(&e) => unavailable(&e),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
     }
 }
@@ -619,6 +653,7 @@ fn agent_tokens_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
         .map(|t| {
             json!({
                 "id": t.id, "label": t.label, "scopes": t.scopes, "created_at": t.created_at,
+                "expires_at": t.expires_at,
             })
         })
         .collect();
@@ -926,14 +961,67 @@ pub(crate) fn classified_headers(c: &errors::Classified, r: &mut Response) {
     }
 }
 
+/// How long a client may take to send the head of a request (O38).
+pub const HEADER_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+/// How long a request body may stall between two of its pieces before the request ends (O38).
+pub const BODY_STALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub async fn serve(addr: &str, app: Router) -> std::io::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    // The peer address is what the public site keys its rate limits on.
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
-    )
-    .await
+    serve_on(listener, app, HEADER_READ_TIMEOUT, BODY_STALL_TIMEOUT).await
+}
+
+/// Serve `app` on `listener` over HTTP/1.1, with a read timeout on the head of each request and a
+/// stall timeout on its body, so a client that sends the headers of a post and then idles (or
+/// never finishes its headers) is let go instead of holding a connection forever (O38;
+/// `axum::serve` has neither). The peer address is put on every request as `ConnectInfo`: it is
+/// what the public site and the signer's door key their rate limits on.
+pub async fn serve_on(
+    listener: tokio::net::TcpListener,
+    app: Router,
+    header_timeout: std::time::Duration,
+    body_timeout: std::time::Duration,
+) -> std::io::Result<()> {
+    use tower::ServiceExt as _;
+    loop {
+        let (stream, peer) = match listener.accept().await {
+            Ok(x) => x,
+            // A connection that went away before it was accepted is the client's affair; anything
+            // else (too many open files) is waited out, as `axum::serve` does.
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::ConnectionRefused
+                        | std::io::ErrorKind::ConnectionAborted
+                        | std::io::ErrorKind::ConnectionReset
+                ) =>
+            {
+                continue;
+            }
+            Err(_) => {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                continue;
+            }
+        };
+        let app = app.clone();
+        let svc =
+            hyper::service::service_fn(move |req: axum::http::Request<hyper::body::Incoming>| {
+                let mut req = req.map(|b| {
+                    axum::body::Body::new(tower_http::timeout::TimeoutBody::new(body_timeout, b))
+                });
+                req.extensions_mut()
+                    .insert(axum::extract::ConnectInfo(peer));
+                app.clone().oneshot(req)
+            });
+        tokio::spawn(async move {
+            let _ = hyper::server::conn::http1::Builder::new()
+                .timer(hyper_util::rt::TokioTimer::new())
+                .header_read_timeout(header_timeout)
+                .serve_connection(hyper_util::rt::TokioIo::new(stream), svc)
+                .with_upgrades()
+                .await;
+        });
+    }
 }
 
 /// What the control-plane routes need from the platform (implemented by `obop-platform`).
@@ -981,6 +1069,11 @@ pub trait PlatformApi: Send + Sync {
     /// Ask to go back to the image before the last update.
     fn update_rollback(&self, _update_token: &str) -> Result<J, String> {
         Err("this control plane does not run updates".into())
+    }
+    /// Whether the control plane's database answers, for `/readyz` (I6). `Err` names the cause
+    /// for the log only; the route answers with a fixed reason.
+    fn ready(&self) -> Result<(), String> {
+        Ok(())
     }
 }
 
@@ -1048,6 +1141,9 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         .route("/api/platform/update/status", get(p_update_status))
         .route("/api/platform/update/start", post(p_update_start))
         .route("/api/platform/update/rollback", post(p_update_rollback))
+        // Health of the control plane (I6), open and as terse as an instance's (D67).
+        .route("/healthz", get(ops::healthz))
+        .route("/readyz", get(p_readyz))
         .with_state(api.clone())
         .route("/openapi.json", get(platform_openapi))
         .route("/api/openapi.json", get(platform_openapi));
@@ -1065,6 +1161,37 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
     // The control plane's database is pooled too: a refused call is a 503 here as well (D74),
     // not a 401 "invalid username or password" or a 404.
     r.layer(axum::middleware::from_fn(ops::storage_faults))
+}
+
+/// `GET /readyz` of the control plane: 200 while its database answers, else 503 with a fixed
+/// reason. A pool that is only full counts as ready, as on an instance.
+async fn p_readyz(State(api): Api) -> Response {
+    let ready = blocking(move || api.ready()).await;
+    match ready {
+        Err(e)
+            if obop_storage::fault::Fault::of_message(&e)
+                != Some(obop_storage::fault::Fault::Busy) =>
+        {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                [
+                    ("content-type", "application/json"),
+                    ("cache-control", "no-store"),
+                ],
+                "{\"status\":\"unavailable\",\"reason\":\"database unreachable\"}",
+            )
+                .into_response()
+        }
+        _ => (
+            StatusCode::OK,
+            [
+                ("content-type", "application/json"),
+                ("cache-control", "no-store"),
+            ],
+            "{\"status\":\"ready\"}",
+        )
+            .into_response(),
+    }
 }
 
 /// The release feed instances read (D63): public, cacheable for a minute.

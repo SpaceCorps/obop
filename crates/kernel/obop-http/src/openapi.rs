@@ -18,7 +18,7 @@ fn limit_keywords(f: &obop_commands::FieldInfo) -> serde_json::Map<String, J> {
     if let Some(n) = f.min_length {
         kw.insert("minLength".into(), json!(n));
     }
-    let (lo, hi) = if f.kind == "decimal" {
+    let (lo, hi) = if f.kind == "decimal" || f.kind == "date" {
         ("x-obop-minimum", "x-obop-maximum")
     } else {
         ("minimum", "maximum")
@@ -224,7 +224,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     );
     paths.insert(
         "/api/auth/agent-tokens".into(),
-        json!({"get": {"operationId": "listAgentTokens", "summary": "The agent tokens the signed-in human issued that still work, and the groups they may put on a new one", "security": sec.clone(), "responses": {"200": ok(json!({"type": "object", "properties": {"tokens": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "scopes": {"type": "array", "items": {"type": "string"}}, "created_at": {"type": "integer", "description": "Unix seconds."}}}}, "delegable": {"type": "array", "items": {"type": "string"}, "description": "Permission groups the caller may delegate: their own, and every registered group for an administrator."}}}), "The tokens (never a token itself) and the groups."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
+        json!({"get": {"operationId": "listAgentTokens", "summary": "The agent tokens the signed-in human issued that still work, and the groups they may put on a new one", "security": sec.clone(), "responses": {"200": ok(json!({"type": "object", "properties": {"tokens": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "scopes": {"type": "array", "items": {"type": "string"}}, "created_at": {"type": "integer", "description": "Unix seconds."}, "expires_at": {"type": ["integer", "null"], "description": "Unix seconds when the token ends by itself (90 days after it was made by an account bound to a Microsoft identity); null when it has no end of its own."}}}}, "delegable": {"type": "array", "items": {"type": "string"}, "description": "Permission groups the caller may delegate: their own, and every registered group for an administrator."}}}), "The tokens (never a token itself) and the groups."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
     );
     paths.insert(
         "/api/auth/agent-tokens/{id}/revoke".into(),
@@ -244,7 +244,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     );
     paths.insert(
         "/api/blobs/{id}".into(),
-        json!({"get": {"operationId": "downloadBlob", "summary": "Download a stored image or file (D60)", "description": "Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. Strong ETag; files are sent as attachments.", "security": sec.clone(), "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}, {"name": "w", "in": "query", "required": false, "schema": {"type": "integer", "enum": [320, 640, 960, 1280]}}], "responses": {"200": {"description": "The bytes."}, "304": {"description": "Not modified."}, "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
+        json!({"get": {"operationId": "downloadBlob", "summary": "Download a stored image or file (D60)", "description": "Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. `model`, `record` and `field` together name the record the download comes from: identical bytes are stored once, so the file is then named as that record holds it, when the caller can read it. Strong ETag; files are sent as attachments.", "security": sec.clone(), "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}, {"name": "w", "in": "query", "required": false, "schema": {"type": "integer", "enum": [320, 640, 960, 1280]}}, {"name": "model", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "record", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "field", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "The bytes."}, "304": {"description": "Not modified."}, "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
     );
     let mut schemas = serde_json::Map::new();
     schemas.insert("Error".into(), error_schema());
@@ -454,16 +454,19 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             if model.can_update {
                 let mut upd = json!({"type": "object", "required": ["id"], "properties": input_props.clone()});
                 upd["properties"]["id"] = json!({"type": "string"});
+                let mut summary =
+                    format!("Update a {name}; a status field only moves along a declared action");
+                // A device takes its name and nothing else (its guard says so; L6).
+                if name == obop_commands::devices::MODEL {
+                    summary = obop_commands::devices::UPDATE_SUMMARY.into();
+                    if let Some(props) = upd["properties"].as_object_mut() {
+                        props.retain(|k, _| k == "id" || k == "name");
+                    }
+                    upd["required"] = json!(["id", "name"]);
+                }
                 paths.insert(
                     format!("/api/{name}/update"),
-                    op(
-                        "update",
-                        &format!(
-                            "Update a {name}; a status field only moves along a declared action"
-                        ),
-                        Some(json_body(upd)),
-                        one.clone(),
-                    ),
+                    op("update", &summary, Some(json_body(upd)), one.clone()),
                 );
             }
             if model.can_delete {
@@ -502,6 +505,48 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
         "paths": paths,
         "components": {"securitySchemes": bearer(), "schemas": schemas}
     })
+}
+
+/// Add an operation for each command of `cmds` that the document has none for yet: the commands
+/// of a model without a `list` the caller can see, which `Dispatcher::meta` (and so `instance`)
+/// does not describe (K26; `Dispatcher::commands_outside_meta`). Their input and answer are not
+/// typed here: the body is the command's JSON object, as `GET /api/commands` describes it.
+pub fn describe_commands(doc: &mut J, cmds: &[obop_commands::CommandInfo]) {
+    let sec = json!([{"bearerAuth": []}]);
+    let mut added = serde_json::Map::new();
+    for c in cmds {
+        let Some((model, name)) = c.id.split_once('.') else {
+            continue;
+        };
+        let path = format!("/api/{model}/{name}");
+        if doc["paths"].get(&path).is_some() {
+            continue;
+        }
+        let mut o = json!({
+            "operationId": c.id,
+            "summary": c.description,
+            "tags": [model],
+            "security": sec.clone(),
+            "requestBody": json_body(json!({"type": "object", "description": format!("The input of {}; see its description in GET /api/commands.", c.id)})),
+            "responses": {
+                "200": ok(json!({"type": "object", "properties": {"value": {}, "denied": {"type": "array", "items": {"type": "string"}}}}), "The answer of the command."),
+                "202": ok(json!({"$ref": "#/components/schemas/ApprovalRequired"}), "Proposed; needs a human to approve."),
+                "400": error_responses()["400"].clone(),
+                "401": error_responses()["401"].clone(),
+                "404": error_responses()["404"].clone()
+            }
+        });
+        if c.needs_approval {
+            o["description"] = J::from(
+                "Irreversible or money-moving: an agent token only proposes this and a human approves.",
+            );
+        }
+        added.insert(path, json!({"post": o}));
+    }
+    declare_503(&mut added);
+    if let Some(paths) = doc["paths"].as_object_mut() {
+        paths.extend(added);
+    }
 }
 
 /// What an instance that runs the OAuth authorization server (D64) adds to the `x-mcp` block of its

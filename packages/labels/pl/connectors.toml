@@ -42,6 +42,7 @@ webhook_in = "Webhook przychodzący"
 rest_pull = "Pobieranie przez REST"
 csv_export = "Eksport CSV"
 browse = "Odczyt na żądanie"
+mail = "Wysyłka e-maili"
 none = "Brak"
 
 [labels.pl.model.connector_provider.field.auth_kind]
@@ -704,3 +705,48 @@ description = "Każde pole z klasą i traktowaniem, jako JSON; nigdy nie jest za
 [labels.pl.model.privacy_preview.action.render]
 label = "Renderuj"
 description = "Wyrenderuj przykładowy rekord po maskowaniu i pseudonimizacji"
+
+# The providers of the catalogue, offered where a setting or a connection picks one (GitHub issue 108).
+# Machine-drafted; the native-speaker review is the gate.
+
+[labels.pl.model.provider_policy.field.provider.options]
+webhook_out = "Webhook (wysyłanie)"
+webhook_in = "Webhook (odbieranie)"
+rest_api_pull = "REST API (pobieranie)"
+csv_export = "Eksport CSV"
+slack_webhook = "Slack (webhook przychodzący)"
+stripe = "Stripe"
+docuseal = "DocuSeal (podpis elektroniczny)"
+github_webhook = "GitHub (webhook przychodzący)"
+google_drive = "Google Drive (przeglądanie i dodawanie dokumentów)"
+postmark = "Postmark (wysyłka poczty)"
+sendgrid = "SendGrid (wysyłka poczty)"
+mailgun = "Mailgun (wysyłka poczty)"
+microsoft_graph_mail = "Microsoft 365 (wysyłka poczty przez Graph)"
+gmail_send = "Gmail lub Google Workspace (wysyłka poczty przez API Gmaila)"
+google_oauth = "Google (kalendarz i kontakty, odczyt)"
+microsoft_oauth = "Microsoft (kalendarz i kontakty, odczyt)"
+zapier = "Zapier (automatyzacja)"
+make = "Make (automatyzacja)"
+n8n = "n8n (automatyzacja)"
+
+[labels.pl.model.connection.field.provider.options]
+webhook_out = "Webhook (wysyłanie)"
+webhook_in = "Webhook (odbieranie)"
+rest_api_pull = "REST API (pobieranie)"
+csv_export = "Eksport CSV"
+slack_webhook = "Slack (webhook przychodzący)"
+stripe = "Stripe"
+docuseal = "DocuSeal (podpis elektroniczny)"
+github_webhook = "GitHub (webhook przychodzący)"
+google_drive = "Google Drive (przeglądanie i dodawanie dokumentów)"
+postmark = "Postmark (wysyłka poczty)"
+sendgrid = "SendGrid (wysyłka poczty)"
+mailgun = "Mailgun (wysyłka poczty)"
+microsoft_graph_mail = "Microsoft 365 (wysyłka poczty przez Graph)"
+gmail_send = "Gmail lub Google Workspace (wysyłka poczty przez API Gmaila)"
+google_oauth = "Google (kalendarz i kontakty, odczyt)"
+microsoft_oauth = "Microsoft (kalendarz i kontakty, odczyt)"
+zapier = "Zapier (automatyzacja)"
+make = "Make (automatyzacja)"
+n8n = "n8n (automatyzacja)"

@@ -41,6 +41,10 @@ description = "Die Dokumentvorlage zum Senden; leer bei einer Anfrage zu einem D
 label = "Dokument"
 description = "Das PDF in Dokumente, das die unterzeichnende Person liest und unterzeichnet; beim Senden der Anfrage wird sein SHA-256 genommen und eine exakte Kopie festgehalten"
 
+[labels.de.model.sign_request.field.no_document]
+label = "Ohne Dokument"
+description = "Ob die Anfrage nicht auf ein Dokument in Dokumente zeigt; eine solche Anfrage sehen alle, die Anfragen lesen dürfen, eine Anfrage zu einem Dokument nur diejenigen, die dieses Dokument sehen dürfen"
+
 [labels.de.model.sign_request.field.title]
 label = "Titel"
 description = "Betreff, der dem Unterzeichner angezeigt wird"
@@ -104,6 +108,15 @@ description = "Der vollständige Name, den die unterzeichnende Person eingegeben
 [labels.de.model.sign_request.field.consent_version]
 label = "Version der Einwilligung"
 description = "Kennung des Einwilligungstexts: Version, die Sprache der Absendung (die lang des Formulars, wenn sie eine der sieben nennt; fehlt im Formular das Feld lang ganz, die der Adresse; sonst die des Browsers, die der Instanz, dann Englisch; kein Beweis für die gezeigte Seite), und die ersten 8 Hex-Zeichen eines Hashs der Texte dieser Sprache, zum Beispiel v1-draft/de/9ebff173"
+
+[labels.de.model.sign_request.field.evidence_check]
+label = "Prüfung der Nachweise"
+description = "Ob die Nachweise einer per Link unterzeichneten Anfrage noch dem Eintrag im Sicherheitsprotokoll beim Unterzeichnen entsprechen (ab Sign 0.3.0 auch Titel, Nachricht und angefragter Name): stimmt überein, weicht ab (nach dem Unterzeichnen geändert) oder kein Eintrag. Nur bei get ermittelt, in Listen leer. Nicht fälschungssicher: Wer die Datenbank schreiben kann, kann beides ändern"
+
+[labels.de.model.sign_request.field.evidence_check.options]
+matches = "Stimmt überein"
+differs = "Weicht ab"
+no_entry = "Kein Eintrag"
 
 [labels.de.model.sign_request.field.state]
 label = "Status"
