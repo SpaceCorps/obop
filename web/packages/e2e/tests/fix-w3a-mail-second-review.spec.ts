@@ -105,4 +105,17 @@ test.describe("Mail after the second review", () => {
     await expect(page.getByRole("row").filter({ hasText: subject })).toBeVisible();
     await expect(page.getByRole("button", { name: "Edit in list" })).toHaveCount(0);
   });
+
+  test("a test message shows in Deliveries at once", async ({ page, signIn, uid }) => {
+    await signIn("root", "/customize/mail");
+    const card = page.locator(".mail-server").filter({ hasText: name });
+    await card.getByRole("button", { name: "Send test" }).click();
+    const to = `${uid("probe")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")}@example.org`;
+    await card.getByLabel("Send a test message to").fill(to);
+    await card.getByRole("button", { name: "Send test" }).last().click();
+    // No Refresh and no reload: the test row is in the table.
+    await expect(page.getByRole("row").filter({ hasText: to })).toBeVisible();
+  });
 });

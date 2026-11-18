@@ -431,7 +431,16 @@ function TestSend({
   );
 }
 
-function ServersSection({ token, notify }: { token: string; notify: Notify }) {
+function ServersSection({
+  token,
+  notify,
+  onTested,
+}: {
+  token: string;
+  notify: Notify;
+  /** A test message was sent or refused: it is a row of the deliveries log now. */
+  onTested: () => void;
+}) {
   const id = useId();
   const [rows, setRows] = useState<Server[] | null>(null);
   const [connections, setConnections] = useState<Row[]>([]);
@@ -548,7 +557,16 @@ function ServersSection({ token, notify }: { token: string; notify: Notify }) {
                   {t("Send test")}
                 </Button>
               </div>
-              {testing === r.id && <TestSend token={token} server={r} onDone={() => void load()} />}
+              {testing === r.id && (
+                <TestSend
+                  token={token}
+                  server={r}
+                  onDone={() => {
+                    void load();
+                    onTested();
+                  }}
+                />
+              )}
             </li>
           ))}
         </ul>
@@ -557,7 +575,16 @@ function ServersSection({ token, notify }: { token: string; notify: Notify }) {
   );
 }
 
-function DeliveriesSection({ token, notify }: { token: string; notify: Notify }) {
+function DeliveriesSection({
+  token,
+  notify,
+  stamp,
+}: {
+  token: string;
+  notify: Notify;
+  /** Changes when something else on the tab added a row (a test message). */
+  stamp: number;
+}) {
   const id = useId();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -574,7 +601,7 @@ function DeliveriesSection({ token, notify }: { token: string; notify: Notify })
       setRows(r.rows);
     }
   }, [token]);
-  useEffect(() => void load(), [load]);
+  useEffect(() => void load(), [load, stamp]);
 
   async function act(row: Row, command: "retry" | "cancel") {
     setBusy(row.id);
@@ -673,10 +700,11 @@ function DeliveriesSection({ token, notify }: { token: string; notify: Notify })
 
 /** The Mail tab of Customize. */
 export function MailTab({ token, notify }: { token: string; notify: Notify }) {
+  const [stamp, setStamp] = useState(0);
   return (
     <div className="stack mail-tab">
-      <ServersSection token={token} notify={notify} />
-      <DeliveriesSection token={token} notify={notify} />
+      <ServersSection token={token} notify={notify} onTested={() => setStamp((n) => n + 1)} />
+      <DeliveriesSection token={token} notify={notify} stamp={stamp} />
       <section className="stack">
         <h3 className="overline">{t("Templates")}</h3>
         <p className="hint">
