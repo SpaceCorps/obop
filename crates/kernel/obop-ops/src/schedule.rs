@@ -116,7 +116,7 @@ impl Settings {
             sinks: Vec::new(),
             every: Duration::from_secs(24 * 3600),
             retention: Retention::default(),
-            max_age: Some(retention::DEFAULT_MAX_AGE_DAYS * 86_400),
+            max_age: Some(retention::default_max_age_days(Retention::default()) * 86_400),
             keys,
             ignore_recorded_sinks: false,
             host: this_host(),

@@ -11,7 +11,8 @@
 //! operator states in a privacy notice, not an internal detail: `OBOP_BACKUP_KEEP_DAILY`,
 //! `OBOP_BACKUP_KEEP_WEEKLY`, `OBOP_BACKUP_KEEP_MONTHLY`. The counts alone count periods *that
 //! have a backup*, so a gap or a sparse schedule stretches them; `OBOP_BACKUP_MAX_AGE_DAYS`
-//! (default 400) is the bound that holds whatever the counts do: a scheduled backup is not kept
+//! (by default the reach of the counts plus four weeks: 400 days for the default policy) is the
+//! bound that holds whatever the counts do: a scheduled backup is not kept
 //! beyond it (the newest of all excepted, and nothing is removed from this host before every
 //! sink holds a verified copy).
 //!
@@ -150,11 +151,24 @@ fn month_of(t: u64) -> i64 {
 /// twelve months by the length of the gap; this is the bound that holds regardless.
 pub const DEFAULT_MAX_AGE_DAYS: u64 = 400;
 
+/// The age bound in days when `OBOP_BACKUP_MAX_AGE_DAYS` is not set: the longest reach of the
+/// three counts (31 days a month, 7 a week, 1 a day) plus four weeks of grace. For the default
+/// policy (12 monthly) that is the [`DEFAULT_MAX_AGE_DAYS`] of the requirement; a policy that
+/// keeps more months or weeks is not cut short by a bound it did not ask for (K5), and one that
+/// keeps fewer gets a bound that fits it.
+pub fn default_max_age_days(policy: Retention) -> u64 {
+    let reach = (31 * policy.monthly as u64)
+        .max(7 * policy.weekly as u64)
+        .max(policy.daily as u64);
+    reach + 28
+}
+
 /// `OBOP_BACKUP_MAX_AGE_DAYS`: a number of days (1 to 3650); `0` or `off` removes the bound, which
-/// leaves the promise to the counts alone.
-pub fn max_age_from_var(v: Option<&str>) -> Result<Option<u64>, String> {
+/// leaves the promise to the counts alone. Unset, the bound follows `policy`
+/// ([`default_max_age_days`]).
+pub fn max_age_from_var(v: Option<&str>, policy: Retention) -> Result<Option<u64>, String> {
     match v.map(str::trim).filter(|s| !s.is_empty()) {
-        None => Ok(Some(DEFAULT_MAX_AGE_DAYS * 86_400)),
+        None => Ok(Some(default_max_age_days(policy) * 86_400)),
         Some("0" | "off") => Ok(None),
         Some(s) => s
             .parse::<u64>()
@@ -443,13 +457,33 @@ mod tests {
 
     #[test]
     fn the_age_bound_is_400_days_unless_told_otherwise_and_a_typo_is_an_error() {
-        assert_eq!(max_age_from_var(None).unwrap(), Some(400 * DAY));
-        assert_eq!(max_age_from_var(Some("")).unwrap(), Some(400 * DAY));
-        assert_eq!(max_age_from_var(Some(" 90 ")).unwrap(), Some(90 * DAY));
-        assert_eq!(max_age_from_var(Some("0")).unwrap(), None);
-        assert_eq!(max_age_from_var(Some("off")).unwrap(), None);
+        let d = Retention::default();
+        assert_eq!(max_age_from_var(None, d).unwrap(), Some(400 * DAY));
+        assert_eq!(max_age_from_var(Some(""), d).unwrap(), Some(400 * DAY));
+        assert_eq!(max_age_from_var(Some(" 90 "), d).unwrap(), Some(90 * DAY));
+        assert_eq!(max_age_from_var(Some("0"), d).unwrap(), None);
+        assert_eq!(max_age_from_var(Some("off"), d).unwrap(), None);
+        // Unset, the bound follows the counts: 24 monthly backups are not cut at 400 days
+        // (K5), 104 weekly ones neither; a short policy gets a short bound.
+        let months = |monthly| Retention {
+            monthly,
+            ..Retention::default()
+        };
+        assert_eq!(max_age_from_var(None, months(24)).unwrap(), Some(772 * DAY));
+        let weeks = Retention {
+            daily: 7,
+            weekly: 104,
+            monthly: 0,
+        };
+        assert_eq!(max_age_from_var(None, weeks).unwrap(), Some(756 * DAY));
+        assert_eq!(max_age_from_var(None, months(3)).unwrap(), Some(121 * DAY));
+        // A value given is used as it is, whatever the counts.
+        assert_eq!(
+            max_age_from_var(Some("400"), months(24)).unwrap(),
+            Some(400 * DAY)
+        );
         for bad in ["a year", "-5", "3651", "1.5"] {
-            let e = max_age_from_var(Some(bad)).unwrap_err();
+            let e = max_age_from_var(Some(bad), Retention::default()).unwrap_err();
             assert!(e.contains("OBOP_BACKUP_MAX_AGE_DAYS"), "{e}");
         }
     }

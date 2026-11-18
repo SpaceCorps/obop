@@ -15,9 +15,14 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# One group per commit, never cancelled (K42): every commit pushed to `main` or `deploy` gets its
+# own `:<sha>` image even when a newer push follows before the build ends. A group per branch with
+# cancel-in-progress cancelled the older build, and one without it would still drop a pending run
+# when a third push arrives. The moving branch tag is moved by the last step, only while the
+# commit is still the head of its branch, so a slow older build cannot move it backwards.
 concurrency:
-  group: image-${{ github.ref }}
-  cancel-in-progress: true
+  group: image-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -48,9 +53,9 @@ jobs:
           # What `obop --version` reports after the version: the image has no .git to read it from.
           build-args: |
             OBOP_BUILD_COMMIT=${{ github.sha }}
+          # Only the immutable commit tag here; the branch tag is moved below.
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
-            ${{ env.IMAGE }}:${{ github.ref_name }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -71,3 +76,12 @@ jobs:
           echo "$line" | grep -Eq "^obop [0-9][^ ]* \(${sha:0:12}\)$"
           echo "digest: ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
           echo "image: $IMAGE:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Move the branch tag while this commit is still the head of the branch
+        run: |
+          head=$(git ls-remote origin "refs/heads/${{ github.ref_name }}" | cut -f1)
+          if [ "$head" != "${{ github.sha }}" ]; then
+            echo "The head of ${{ github.ref_name }} is now $head: :${{ github.ref_name }} is left to its build." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          docker buildx imagetools create -t "$IMAGE:${{ github.ref_name }}" "$IMAGE:${{ github.sha }}"
+          echo "moved: $IMAGE:${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"

@@ -16,7 +16,13 @@ struct MemHistory {
 }
 
 impl MemHistory {
-    fn append(&mut self, rows: &[ChangeRow]) {
+    /// Number and keep `rows`. Refused, with nothing kept, when the numbers are used up (a
+    /// restored entry numbered `i64::MAX`; K24): the batch fails as on the other backends.
+    fn append(&mut self, rows: &[ChangeRow]) -> Result<()> {
+        let n = i64::try_from(rows.len()).unwrap_or(i64::MAX);
+        if self.last_seq.checked_add(n).is_none() {
+            return Err("the numbers of the change history are used up".into());
+        }
         for r in rows {
             self.last_seq += 1;
             self.rows.push(ChangeRow {
@@ -25,6 +31,7 @@ impl MemHistory {
                 ..r.clone()
             });
         }
+        Ok(())
     }
 }
 
@@ -202,8 +209,7 @@ impl Backend for Memory {
                 Ok(self.clock.tick())
             }
             fn tx_history(&mut self, rows: &[ChangeRow]) -> Result<()> {
-                self.history.append(rows);
-                Ok(())
+                self.history.append(rows)
             }
             fn tx_scrub(
                 &mut self,
@@ -244,7 +250,7 @@ impl Backend for Memory {
                     batch_id: None,
                     run_id: None,
                     txid: 0,
-                }]);
+                }])?;
                 Ok(entries as u64)
             }
         }
