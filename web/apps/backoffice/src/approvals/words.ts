@@ -60,6 +60,9 @@ export function thingOf(row: PlanRow, n: Names): string {
         : t("Change {model}", { model });
     default: {
       const action = n.action(row.command);
+      // "Approve claim" already names the model: "Approve claim “X”", not "Approve claim claim".
+      const named = action.toLocaleLowerCase().includes(model.toLocaleLowerCase());
+      if (named) return record ? t("{action} “{record}”", { action, record }) : action;
       return record
         ? t("{action} {model} “{record}”", { action, model, record })
         : t("{action} {model}", { action, model });

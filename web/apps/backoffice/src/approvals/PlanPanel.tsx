@@ -10,6 +10,7 @@ import {
   Skeleton,
   Textarea,
   fmt,
+  inSentence,
   t,
   useFocusTrap,
 } from "@obop/ui";
@@ -305,7 +306,7 @@ export function PlanPanel({
               </section>
               <p className="appr-who">
                 {t("Proposed by {who}, {when}.", {
-                  who: whoOf(plan),
+                  who: inSentence(whoOf(plan)),
                   when: whenOf(plan.created_at),
                 })}
                 {plan.status === "waiting" && plan.expires_at && (
@@ -326,7 +327,9 @@ export function PlanPanel({
               )}
               {recordHref && (
                 <p>
-                  <a href={recordHref}>{t("Open the record")}</a>
+                  <a className="appr-record" href={recordHref}>
+                    {t("Open the record")}
+                  </a>
                 </p>
               )}
             </>

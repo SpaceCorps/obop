@@ -440,6 +440,12 @@ describe("the detail", () => {
     expect(document.querySelector("[data-testid=plan-approve]")).toBeNull();
   });
 
+  it("names the person's own agent inside the sentence in lower case", async () => {
+    plans.set("p-update", detail({ own_agent: true }));
+    await mount("#/approvals?id=p-update");
+    expect(flat(panel())).toContain("Proposed by your own agent,");
+  });
+
   it("has no record line when record_id is null", async () => {
     plans.set("p-update", detail({ record_id: null, record_title: null }));
     await mount("#/approvals?id=p-update");

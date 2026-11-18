@@ -176,6 +176,11 @@ describe("the words", () => {
     expect(thingOf(row({ kind: "create", record_id: null, record_title: null }), names)).toBe(
       "Create invoice",
     );
+    // An action whose label names the model already does not name it twice.
+    const approveInvoice: Names = { ...names, action: () => "Approve invoice" };
+    expect(thingOf(row({ kind: "action", command: "invoice.approve" }), approveInvoice)).toBe(
+      "Approve invoice “INV-0042”",
+    );
     // A title without a record id is not shown (the record line is null).
     expect(thingOf(row({ record_id: null }), names)).toBe("Change invoice");
   });

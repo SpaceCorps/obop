@@ -31,6 +31,10 @@
 .appr-table > tbody > tr[aria-current="true"] {
   background: var(--accent-soft);
 }
+/* Every cell starts at the row's first line, so a column's words sit beside the request's. */
+.appr-table > tbody > tr > td {
+  vertical-align: top;
+}
 .appr-table .cell-main {
   inline-size: 55%;
 }
@@ -81,6 +85,19 @@
   margin-block-start: 0.35rem;
 }
 
+/* One plan. The heading may take four lines on a narrow phone: it is the answer to "what will
+   happen", and cutting it would hide the record's name. */
+aside.record.appr-panel h2 {
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+.appr-record {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  color: var(--accent-ink);
+  font-weight: var(--weight-medium);
+}
 /* One plan. */
 .appr-body {
   display: flex;
