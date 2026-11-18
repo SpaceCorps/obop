@@ -774,3 +774,48 @@ fn the_settings_say_the_receivable_is_the_total_plus_vat() {
     );
     assert!(page.contains("invoice total plus VAT"), "the hint");
 }
+
+/// U6: the entry goes through the checks of `accounting_move.create`, so an invoice whose
+/// customer record is gone is refused with the reference named, and nothing is written (the
+/// batch written straight to the store kept a dangling `partner_id`).
+#[test]
+fn the_entry_is_checked_like_accounting_move_create() {
+    let f = fixture(2500);
+    let inv = invoice_with_dates(&f, &[10_000]);
+    call(&f.app, &admin(), "invoice.post", json!({"id": inv})).unwrap();
+    let party = rows(&f.app, "invoice")
+        .into_iter()
+        .find(|(id, _)| *id == inv)
+        .map(|(_, r)| r["party_id"].as_str().unwrap().to_string())
+        .unwrap();
+    assert!(f.app.store.backend().delete("party", &party).unwrap());
+    let m = refusal(f.run(&inv, false));
+    assert!(m.contains("partner_id"), "{m}");
+    assert!(m.contains("nothing was written"), "{m}");
+    assert!(rows(&f.app, "accounting_move").is_empty());
+    assert!(rows(&f.app, "accounting_move_line").is_empty());
+    assert!(rows(&f.app, "invoice_posting").is_empty());
+}
+
+/// U6: booking on post makes the entry as the person who posted with the `accounting.user` group
+/// lent for that write, so a poster who holds only the invoicing groups is booked as well.
+#[test]
+fn a_post_by_an_invoicing_clerk_is_booked() {
+    let f = fixture(2500);
+    configure(&f, json!({}));
+    let inv = invoice_with_dates(&f, &[10_000]);
+    let clerk = Principal::user(
+        "clerk",
+        &["base.user", "invoicing.user", "invoicing.manager"],
+    );
+    call(&f.app, &clerk, "invoice.post", json!({"id": inv})).unwrap();
+    let link = call(
+        &f.app,
+        &admin(),
+        "invoice_posting.get",
+        json!({"invoice": inv}),
+    )
+    .unwrap();
+    assert_eq!(link["booked"], json!(true), "{link}");
+    assert_eq!(rows(&f.app, "accounting_move_line").len(), 3);
+}
