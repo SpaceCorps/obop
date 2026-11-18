@@ -43,6 +43,22 @@ struct Entry {
     label: String,
     value: String,
     record: String,
+    /// `value` is the JSON text of a value that is not text (a number, a bool, a list), so that
+    /// the token restores to the same typed value (O39).
+    json: bool,
+}
+
+/// What a token stands for: a text, or a value of another JSON type (O39).
+#[derive(Debug, PartialEq)]
+pub enum Restored<'a> {
+    Text(&'a str),
+    Json(serde_json::Value),
+}
+
+/// The key under which a value that is not text is remembered, apart from a text of the same
+/// letters (`12` the number is not `"12"` the text).
+fn json_key(text: &str) -> String {
+    format!("\u{0}json:{text}")
 }
 
 /// Reversible tokens, stable inside one vault (one business and principal session).
@@ -63,7 +79,27 @@ impl Vault {
     /// Replace `value` with a stable token such as `PERSON_1`. `record` names the underlying
     /// record so a later restore can be permission-checked.
     pub fn mask(&mut self, label: &str, record: &str, value: &str) -> String {
-        let key = (label.to_string(), value.to_string());
+        self.mask_entry(label, record, value.to_string(), false)
+    }
+
+    /// As `mask`, for a value that is not text: the token restores to the same JSON value (O39).
+    /// A text passed here is masked as a text.
+    pub fn mask_json(&mut self, label: &str, record: &str, value: &serde_json::Value) -> String {
+        match value {
+            serde_json::Value::String(t) => self.mask(label, record, t),
+            other => self.mask_entry(label, record, other.to_string(), true),
+        }
+    }
+
+    fn mask_entry(&mut self, label: &str, record: &str, value: String, json: bool) -> String {
+        let key = (
+            label.to_string(),
+            if json {
+                json_key(&value)
+            } else {
+                value.clone()
+            },
+        );
         if let Some(t) = self.by_value.get(&key) {
             return t.clone();
         }
@@ -75,11 +111,30 @@ impl Vault {
             token.clone(),
             Entry {
                 label: label.into(),
-                value: value.into(),
+                value,
                 record: record.into(),
+                json,
             },
         );
         token
+    }
+
+    /// As `restore`, with the type of the value: a token of a value that is not text gives that
+    /// value back as JSON (O39).
+    pub fn restore_typed(
+        &self,
+        token: &str,
+        can_read: impl Fn(&str) -> bool,
+    ) -> Result<Restored<'_>, RestoreError> {
+        let text = self.restore(token, can_read)?;
+        let json = self.by_token.get(token).is_some_and(|e| e.json);
+        Ok(match json {
+            true => match serde_json::from_str(text) {
+                Ok(v) => Restored::Json(v),
+                Err(_) => Restored::Text(text),
+            },
+            false => Restored::Text(text),
+        })
     }
 
     /// Resolve a token back to its value, only if `can_read(record)` allows it (D10).
@@ -114,9 +169,15 @@ impl Vault {
         entries.sort_by(|a, b| a.0.cmp(b.0));
         serde_json::json!({
             "next": self.next,
-            "entries": entries.into_iter().map(|(t, e)| serde_json::json!({
-                "token": t, "label": e.label, "value": e.value, "record": e.record,
-            })).collect::<Vec<_>>(),
+            "entries": entries.into_iter().map(|(t, e)| {
+                let mut j = serde_json::json!({
+                    "token": t, "label": e.label, "value": e.value, "record": e.record,
+                });
+                if e.json {
+                    j["json"] = serde_json::Value::Bool(true);
+                }
+                j
+            }).collect::<Vec<_>>(),
         })
     }
 
@@ -133,14 +194,21 @@ impl Vault {
             ) else {
                 continue;
             };
+            let json = e["json"].as_bool().unwrap_or(false);
+            let key = if json {
+                json_key(value)
+            } else {
+                value.to_string()
+            };
             v.by_value
-                .insert((label.to_string(), value.to_string()), token.to_string());
+                .insert((label.to_string(), key), token.to_string());
             v.by_token.insert(
                 token.to_string(),
                 Entry {
                     label: label.into(),
                     value: value.into(),
                     record: record.into(),
+                    json,
                 },
             );
         }
@@ -226,6 +294,33 @@ mod tests {
         assert_eq!(
             Vault::from_json(&serde_json::json!("junk")).to_json()["next"],
             0
+        );
+    }
+
+    /// O39: a value that is not text gets a token that restores to the same typed value, apart
+    /// from a text of the same letters, and survives the shared store.
+    #[test]
+    fn a_value_that_is_not_text_restores_to_the_same_type() {
+        use serde_json::json;
+        let mut v = Vault::new();
+        let n = v.mask_json("AGE", "party:1", &json!(36));
+        let s = v.mask("AGE", "party:1", "36");
+        let b = v.mask_json("VIP", "party:1", &json!(true));
+        assert_ne!(n, s, "the number and the text are two values");
+        assert_eq!(v.mask_json("AGE", "party:1", &json!(36)), n, "stable");
+        assert_eq!(v.restore_typed(&n, |_| true), Ok(Restored::Json(json!(36))));
+        assert_eq!(v.restore_typed(&s, |_| true), Ok(Restored::Text("36")));
+        assert_eq!(
+            v.restore_typed(&b, |_| true),
+            Ok(Restored::Json(json!(true)))
+        );
+        let w = Vault::from_json(&v.to_json());
+        assert_eq!(w.restore_typed(&n, |_| true), Ok(Restored::Json(json!(36))));
+        assert_eq!(w.restore_typed(&s, |_| true), Ok(Restored::Text("36")));
+        assert_eq!(
+            v.mask_json("NAME", "party:1", &json!("Ada")),
+            v.mask("NAME", "party:1", "Ada"),
+            "a text is masked as a text"
         );
     }
 

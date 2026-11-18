@@ -472,6 +472,9 @@ impl obop_http::PlatformApi for Api {
     fn update_rollback(&self, t: &str) -> Result<J, String> {
         Platform::update_rollback(&self.0, t)
     }
+    fn ready(&self) -> Result<(), String> {
+        self.0.backend.counter_get("health.ping").map(|_| ())
+    }
 }
 
 #[cfg(test)]

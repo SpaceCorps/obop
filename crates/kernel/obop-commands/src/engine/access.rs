@@ -2,8 +2,8 @@
 //! the group checks of the model.
 //!
 //! A record is visible when any declared rule grants it: the caller is the `own` of the record,
-//! the record's `via` parent is visible, the `public_field` is true, or the caller is listed in
-//! `shared_with`. The holders of the `see_all` groups and the instance administrator see every record.
+//! the record's `via` parent is visible (and of a model the caller may read), the `public_field`
+//! is true, or the caller is listed in `shared_with`. The holders of the `see_all` groups and the instance administrator see every record.
 //! A model without `[model.access]` is not restricted. A record the caller cannot see is treated
 //! exactly like a record that does not exist, in every command and in every error message.
 
@@ -123,6 +123,13 @@ impl<'a> Gate<'a> {
                 .and_then(|d| d.kind.target())
                 .and_then(|t| (self.lookup)(t))
         {
+            // A parent of a model the caller may not read at all is not visible to them, whatever
+            // its own rules say (a Document open to every reader of Documents is not open to a
+            // reader of signature requests who holds no role in Documents). Where the parent has
+            // the child's read group the command has checked it already, so this changes nothing.
+            if parent.read_group != def.read_group && !self.actor.holds(parent.read_group) {
+                return false;
+            }
             return self.visible_at(&parent, pid, hops + 1);
         }
         false
@@ -179,6 +186,9 @@ pub(crate) fn creator_blocked(gate: &Gate<'_>, def: &ModelDef, rec: &Fields) -> 
         return None;
     }
     let a = def.access.as_ref()?;
+    if let Some(msg) = owner_from_link(def, a, rec) {
+        return Some(msg);
+    }
     let how = match (a.own, a.via) {
         (Some(o), _) => format!("set {o} to yourself"),
         (None, Some(v)) => format!("set {v} to a record you can see"),
@@ -187,6 +197,25 @@ pub(crate) fn creator_blocked(gate: &Gate<'_>, def: &ModelDef, rec: &Fields) -> 
     Some(format!(
         "{} would not be visible to you ({how}), so it was not saved",
         def.name
+    ))
+}
+
+/// R1: the owner is a `readonly` field the server fills from a linked record (leave is the
+/// employee's login), so the caller could not have chosen it: the refusal says whose the record
+/// would be and who may file it, instead of naming a field the caller cannot write.
+fn owner_from_link(def: &ModelDef, a: &Access, rec: &Fields) -> Option<String> {
+    let own = def.fields.iter().find(|f| Some(f.name) == a.own)?;
+    let hints = own.hints.as_ref().filter(|h| h.readonly)?;
+    let via = hints.fill_from.as_ref()?.via.as_deref()?;
+    text(rec, via)?;
+    let who = via.strip_suffix("_id").unwrap_or(via).replace('_', " ");
+    let by = if a.see_all.is_empty() {
+        "an administrator".to_string()
+    } else {
+        format!("someone with {}", a.see_all.join(" or "))
+    };
+    Some(format!(
+        "This {who} has their own login, so the record would be theirs and out of your sight: ask {by} to file it. Nothing was saved"
     ))
 }
 

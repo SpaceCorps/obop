@@ -288,6 +288,7 @@ export function FormBody(p: FormBodyProps) {
       <FieldFormProvider
         value={{
           model,
+          record: row?.id ? String(row.id) : undefined,
           peek: (name) => {
             const f =
               fields.find((x) => x.name === name) ?? model.fields.find((x) => x.name === name);

@@ -9,6 +9,7 @@ import {
   createTwoFactorApi,
   fmt,
   t,
+  useWorded,
 } from "@obop/ui";
 import { Icon } from "./ui.tsx";
 import { passkeyMessage } from "./Passkeys.tsx";
@@ -86,7 +87,7 @@ export function PasswordSection({
   const [proved, setProved] = useState(false);
   const [proving, setProving] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const mismatch = again !== "" && again !== next;
   const tooShort = next !== "" && [...next].length < MIN_PASSWORD;
   return (
@@ -122,7 +123,8 @@ export function PasswordSection({
             onDone?.();
           } else {
             setError(
-              reason(r) ||
+              () =>
+                reason(r) ||
                 t("Choose a different password of at least {n} characters.", { n: MIN_PASSWORD }),
             );
           }
@@ -185,7 +187,7 @@ export function PasswordSection({
                 const p = await proveWithPasskey(token);
                 setProving(false);
                 if (p.ok) setProved(true);
-                else setError(passkeyMessage(p));
+                else setError(() => passkeyMessage(p));
               }}
             >
               {t("Confirm with a passkey")}
@@ -446,7 +448,7 @@ export function DevicesSection({
   const id = useId();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [total, setTotal] = useState(0);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useWorded();
   const [absent, setAbsent] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
@@ -461,11 +463,11 @@ export function DevicesSection({
       // not "no devices", D74).
       if (r.status === 404 || r.status === 501) setAbsent(true);
       else if (r.status === 503 || r.status === 0)
-        setProblem(
+        setProblem(() =>
           t("The devices could not be loaded because the server is busy. Try again in a moment."),
         );
-      else if (r.status === 403) setProblem(t("You are not allowed to see devices."));
-      else setProblem(t("The devices could not be loaded. Try again."));
+      else if (r.status === 403) setProblem(() => t("You are not allowed to see devices."));
+      else setProblem(() => t("The devices could not be loaded. Try again."));
       return;
     }
     setProblem(null);

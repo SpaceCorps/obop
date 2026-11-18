@@ -440,6 +440,7 @@ fn create_row(
     kinds::canonicalise(def, &mut f, Path::Import)?;
     default_governed(def, &mut f);
     own_default(def, &mut f, actor);
+    crate::blobs::check_write_groups(def, &mut f.keys(), actor)?;
     check_fields(unit, look, actor, def, &f, true)?;
     {
         let today = super::hints::today(eng);

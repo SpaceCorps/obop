@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { t } from "@obop/ui";
 import type { Command, FieldMeta } from "../../api.ts";
+import type { Edit } from "../../edit.ts";
 import { ActionDialog } from "../../ActionDialog.tsx";
 import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
@@ -15,9 +16,9 @@ import { Button } from "../../ui.tsx";
 
 export const REJECT = "mileage_trip.reject";
 
-export function RejectAction({ model, row, busy }: RecordExtProps) {
+export function RejectAction({ model, row, busy, value, saveFirst }: RecordExtProps) {
   const d = useData();
-  const [asking, setAsking] = useState(false);
+  const [asking, setAsking] = useState<Record<string, Edit> | null>(null);
   const [running, setRunning] = useState(false);
   const reject: Command | undefined = model.actions.find((a) => a.id === REJECT);
   if (!reject || row.state !== "in_review") return null;
@@ -25,9 +26,18 @@ export function RejectAction({ model, row, busy }: RecordExtProps) {
     .map((n) => model.fields.find((f) => f.name === n))
     .filter((f): f is FieldMeta => !!f);
   const label = t("Reject");
+  // What the reviewer typed in the form (a reason) starts the dialog; the form is saved first, as
+  // the action row saves before an action, so nothing typed is lost (R9).
+  async function ask() {
+    const typed = value ? Object.fromEntries(needs.map((f) => [f.name, value(f)])) : {};
+    setRunning(true);
+    const saved = saveFirst ? await saveFirst() : true;
+    setRunning(false);
+    if (saved) setAsking(typed);
+  }
 
   async function run(values: Record<string, unknown>) {
-    setAsking(false);
+    setAsking(null);
     setRunning(true);
     const r = await d.run(REJECT, { id: row.id, ...values });
     setRunning(false);
@@ -48,7 +58,7 @@ export function RejectAction({ model, row, busy }: RecordExtProps) {
         icon="close"
         loading={running}
         disabled={busy}
-        onClick={() => setAsking(true)}
+        onClick={() => void ask()}
       >
         {label}
       </Button>
@@ -60,7 +70,8 @@ export function RejectAction({ model, row, busy }: RecordExtProps) {
           question={t("Reject this trip? The driver sees the reason and can correct the trip.")}
           danger
           currency={undefined}
-          onCancel={() => setAsking(false)}
+          initial={asking}
+          onCancel={() => setAsking(null)}
           onConfirm={(values) => void run(values)}
         />
       )}

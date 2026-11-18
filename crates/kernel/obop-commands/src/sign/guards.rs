@@ -5,10 +5,14 @@
 //! against someone with the database.
 //!
 //! The switch `show_history` (the signer's page lists the others who signed the same file) is
-//! not evidence but it shows a person's name to other people, so it is set by a caller who holds
-//! `sign.manager` (a person, or a token whose scopes name the group) or by an administrator only:
-//! the same refusal, whatever the value, in `create`, `update`, the rows of a bulk create and a
-//! CSV column.
+//! not evidence but it shows a person's name to other people, so it is set by a person who holds
+//! `sign.manager` or by an administrator only, never by an agent, scoped or mobile token (the rule
+//! of `sign_link.create`; owner default of 2026-11-17, docs/ISSUES.md O47): the same refusal,
+//! whatever the value, in `create`, `update`, the rows of a bulk create and a CSV column.
+//!
+//! A request that has left draft (sent, declined, expired) is changed by someone with
+//! `sign.manager` only, and deleted by them only: its title, message and requested name are what
+//! the signer reads (docs/ISSUES.md O19).
 
 use super::*;
 use crate::Value;
@@ -46,10 +50,14 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
         Box::new(move |p, input, inner| {
             if !is_admin(p)
                 && let Ok(id) = id_of(input)
-                && let Some(cur) = s.get("sign_request", &id)?
-                && text(&cur, "state") == "signed"
+                && let Some(cur) = s.visible_record(p, "sign_request", &id)?
             {
-                return Err(SIGNED.into());
+                match text(&cur, "state") {
+                    "signed" => return Err(SIGNED.into()),
+                    "" | "draft" => {}
+                    _ if !p.allows("sign.manager") => return Err(SENT_IS_A_MANAGERS_DELETE.into()),
+                    _ => {}
+                }
             }
             inner(input)
         }),
@@ -73,19 +81,30 @@ const DOCUMENT_FIXED: &str =
 const SIGNED: &str =
     "sign_request: a signed request cannot be changed or deleted; ask an administrator";
 
+const SENT_IS_A_MANAGERS: &str = "sign_request: a request that was sent can be changed only by someone with sign.manager; the signer reads its title, message and name";
+
+const SENT_IS_A_MANAGERS_DELETE: &str =
+    "sign_request: a request that was sent can be deleted only by someone with sign.manager";
+
 fn history_message() -> String {
     format!(
-        "sign_request.{HISTORY_FLAG} can be changed only by someone with sign.manager, or by an administrator"
+        "sign_request.{HISTORY_FLAG} can be changed only by a person with sign.manager, or by an administrator; an agent or a token cannot set it"
     )
 }
 
-/// Refuse the key `show_history` to a caller who does not hold `sign.manager` (a scoped token
-/// holds it only when its scopes name it), whatever the value: the field has the group, so such a
-/// caller is never shown it and has nothing to send back. An administrator who is a person never
-/// gets here (the wrappers skip them).
+/// Whether `p` may set `show_history`: a person (no agent, scoped or mobile token) who holds
+/// `sign.manager`. An administrator who is a person never gets here (the wrappers skip them).
+fn may_set_history(p: &Principal) -> bool {
+    p.is_person() && p.allows("sign.manager")
+}
+
+/// Refuse the key `show_history` to a caller who may not set it, whatever the value: a caller
+/// without the group is never shown it and has nothing to send back, and a token that holds the
+/// group is refused for the value it was shown too (it would otherwise answer 200 for the stored
+/// value and 400 for the other one, which tells it nothing it could not read).
 fn refuse_history_flag(p: &Principal, input: &Value) -> Result<(), String> {
     match input {
-        Value::Map(m) if m.contains_key(HISTORY_FLAG) && !p.allows("sign.manager") => {
+        Value::Map(m) if m.contains_key(HISTORY_FLAG) && !may_set_history(p) => {
             Err(history_message())
         }
         _ => Ok(()),
@@ -97,7 +116,7 @@ fn refuse_history_flag_in_rows(p: &Principal, input: &Value) -> Result<(), Strin
     let Value::Map(m) = input else {
         return Ok(());
     };
-    if p.allows("sign.manager") {
+    if may_set_history(p) {
         return Ok(());
     }
     if let Some(Value::List(rows)) = m.get("rows")
@@ -192,13 +211,12 @@ impl SignService {
         let Ok(id) = id_of(input) else {
             return Ok(());
         };
-        let Some(cur) = self.get("sign_request", &id)? else {
+        let Some(cur) = self.visible_record(p, "sign_request", &id)? else {
             return Ok(());
         };
         self.refuse_door_fields(p, input, Some(&cur))?;
-        if text(&cur, "state") == "signed"
-            && m.iter().any(|(k, v)| !is_meta(k) && !same(cur.get(k), v))
-        {
+        let changes = m.iter().any(|(k, v)| !is_meta(k) && !same(cur.get(k), v));
+        if text(&cur, "state") == "signed" && changes {
             return Err(SIGNED.into());
         }
         // Once a request has left draft, staff cannot swap, clear or add its Document: the
@@ -211,6 +229,9 @@ impl SignService {
             && !same(cur.get("document_id"), v)
         {
             return Err(DOCUMENT_FIXED.into());
+        }
+        if !matches!(text(&cur, "state"), "" | "draft") && changes && !p.allows("sign.manager") {
+            return Err(SENT_IS_A_MANAGERS.into());
         }
         Ok(())
     }

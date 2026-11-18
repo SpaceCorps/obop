@@ -733,6 +733,47 @@ fn a_role_that_may_not_create_is_refused_with_the_reason_and_its_request_goes_on
 }
 
 #[test]
+fn an_install_the_server_rolls_back_for_a_deadlock_is_run_again() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let pg = Arc::new(Pg::connect_options(db.url(), Some(pool(1)), Ddl::IfMissing).unwrap());
+    // The first DDL statement of the install is chosen as the victim of a deadlock, as a batch
+    // that writes history and takes the same tables in the other order makes it (K22).
+    db.connect()
+        .batch_execute(
+            "CREATE SEQUENCE zz_ddl;
+             CREATE FUNCTION zz_deadlock() RETURNS event_trigger LANGUAGE plpgsql AS $f$
+               BEGIN
+                 IF nextval('zz_ddl') = 1 THEN
+                   RAISE EXCEPTION 'deadlock detected' USING ERRCODE = '40P01';
+                 END IF;
+               END $f$;
+             CREATE EVENT TRIGGER zz_deadlock ON ddl_command_start
+               EXECUTE FUNCTION zz_deadlock();",
+        )
+        .unwrap();
+    pg.hist.install_on_demand(&pg.main);
+    assert_eq!(
+        pg.hist.install_problem(),
+        None,
+        "the install was not run again"
+    );
+    let mut c = db.connect();
+    let calls: i64 = c
+        .query_one("SELECT last_value FROM zz_ddl", &[])
+        .unwrap()
+        .get(0);
+    assert!(calls >= 2, "refused once, then made: {calls}");
+    let made: bool = c
+        .query_one("SELECT to_regclass('obop_record_change') IS NOT NULL", &[])
+        .unwrap()
+        .get(0);
+    assert!(made);
+    c.batch_execute("DROP EVENT TRIGGER zz_deadlock").unwrap();
+}
+
+#[test]
 fn a_failure_of_the_install_that_is_a_fault_is_isolated_from_the_attempt_and_refuses_the_write_with_its_code()
  {
     let Some(db) = TestDb::new() else {

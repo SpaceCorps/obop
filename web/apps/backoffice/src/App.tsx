@@ -63,6 +63,8 @@ import {
   type ToastItem,
 } from "./ui.tsx";
 import { applyTheme, resolveTheme } from "./theme.ts";
+import { applyBrandToPage } from "./brandPage.ts";
+import { clearInstanceTheme, sessionCounter } from "./sessionGuard.ts";
 
 // The big screens load on demand, so the first paint is small and a route shows a skeleton while its
 // code arrives.
@@ -128,6 +130,8 @@ export function App() {
   const toastId = useRef(0);
   // When each toast was shown, so a change of page clears the old ones and keeps a fresh one.
   const toastAt = useRef(new Map<number, number>());
+  // A read that began before a sign-out must not apply what it read afterwards (K25).
+  const sessions = useRef(sessionCounter()).current;
 
   // A return from Microsoft in a tab that already holds a session has nobody to handle it.
   useEffect(() => {
@@ -135,10 +139,17 @@ export function App() {
   }, [token]);
 
   const signOut = useCallback(() => {
+    sessions.next();
     write("obop-token", "");
     write("obop-user", "");
     setTokenState("");
     setReady(false);
+    // What the instance's metadata, settings and theme put on the page goes with the session, so
+    // the sign-in screen that follows looks as one after a reload (K25).
+    setModules([]);
+    setSettings({});
+    clearInstanceTheme(document.documentElement);
+    applyBrandToPage();
     setLimited(false);
     setMustChange(false);
     // The switch belonged to the instance the person signed in to; the next sign-in reads it again.
@@ -146,15 +157,18 @@ export function App() {
     // The settings belonged to the person who signed in: the sign-in screen that follows speaks the
     // language of the server's default (or the browser's), not the one an administrator set.
     void setInstanceDefaults({});
-  }, []);
+  }, [sessions]);
 
   const refresh = useCallback(async () => {
     if (!token) return;
+    const at = sessions.current();
     const [m, s, hideDocs] = await Promise.all([
       meta(token),
       loadSettings(token),
       readProductDocsHidden(token),
     ]);
+    // Signed out while the read ran: what it read belongs to the session that ended.
+    if (!sessions.live(at)) return;
     if (m === null) return signOut();
     if (m === "failed") {
       // Keep what is on screen after a failed refresh; show the recovery screen on a first load.
@@ -171,11 +185,16 @@ export function App() {
     // The instance language is loaded before the first screen, so it is drawn in that language and
     // not first in the browser's (D12). A catalogue that fails to load leaves the language as it is.
     await setInstanceDefaults({ language: s.language, currency: s.currency }).catch(() => {});
+    if (!sessions.live(at)) {
+      // Put back the defaults of the sign-in screen that the stale read just replaced.
+      await setInstanceDefaults({}).catch(() => {});
+      return;
+    }
     setModules(m);
     setSettings(s);
     applyTheme(resolveTheme(s.theme));
     setReady(true);
-  }, [token, signOut]);
+  }, [token, signOut, sessions]);
 
   useEffect(() => void refresh(), [refresh]);
 

@@ -115,6 +115,8 @@ mod sie;
 #[cfg(test)]
 mod sie_tests;
 #[cfg(test)]
+mod sign_observer_tests;
+#[cfg(test)]
 mod sign_tests;
 mod time_billing;
 #[cfg(test)]
@@ -1420,7 +1422,20 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
             "no users yet: create one with `obop admin create NAME --all-groups` (or try --dev-auth on localhost)"
         );
     }
-    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    // The agent tokens of accounts bound to Microsoft end within 90 days (N18); a binding made by
+    // an older build left them without an end. A store that refuses this stops the start, as a
+    // token that should end is not left working on a guess.
+    if !o.dev_auth {
+        let n = Auth::new(app.store.backend())
+            .end_agent_tokens_of_bound_accounts()
+            .map_err(|e| fail(&format!("cannot read the agent tokens: {e}")))?;
+        if n > 0 {
+            eprintln!(
+                "{n} agent token(s) of accounts bound to Microsoft now end within 90 days (N18)"
+            );
+        }
+    }
+    let state = obop_http::HttpState::from_env(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());
     match obop_blob_gdrive::DriveBrowser::from_env() {
@@ -3626,8 +3641,11 @@ mod bundled_packages {
                     }
                     // A field with a format (K45): a currency field holds a currency code and an
                     // IBAN field an IBAN.
-                    "text" if f.name == "currency" => Value::text("EUR"),
-                    "text" if f.name.ends_with("iban") => Value::text("DE89370400440532013000"),
+                    "text" if f.pattern == Some("currency_code") => Value::text("EUR"),
+                    "text" if f.pattern == Some("vat_id") => Value::text("SE559412783801"),
+                    "text" if f.pattern == Some("iban") || f.name.ends_with("iban") => {
+                        Value::text("DE89370400440532013000")
+                    }
                     "text" => {
                         let max = f.max_length.map_or(usize::MAX, |m| m as usize);
                         Value::Text("sample".chars().take(max).collect())
@@ -3789,6 +3807,15 @@ mod bundled_packages {
         let manifests = install_order(&app, all_manifests());
         assert!(manifests.len() >= 22);
         let admin = Principal::user("root", &[ADMIN_GROUP]);
+        // One person walks every workflow here, so the expense claim the tester submits is
+        // approved by the tester too (U7 refuses that unless the company allows it).
+        call(
+            &app,
+            &admin,
+            "expenses_setting.update",
+            Value::map([("allow_self_approval", Value::Bool(true))]),
+        )
+        .unwrap();
         let mut seen_special = false;
         let mut seen_financial = false;
 

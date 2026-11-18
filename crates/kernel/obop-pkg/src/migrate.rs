@@ -24,7 +24,7 @@
 
 use crate::manifest::{FieldM, Manifest, MigrationM, probe};
 use crate::semver::{Req, Version};
-use obop_registry::Bound;
+use obop_registry::{Bound, Pattern};
 use obop_storage::{Backend, Fields, Op};
 use serde_json::{Value as J, json};
 use std::cmp::Ordering;
@@ -56,6 +56,9 @@ struct Held {
     max_length: Option<(u32, bool)>,
     min: Option<Bound>,
     max: Option<Bound>,
+    /// The named format (U3): the declared `pattern`, or a currency code for a text field named
+    /// `currency`.
+    pattern: Option<Pattern>,
 }
 
 impl Held {
@@ -67,6 +70,7 @@ impl Held {
                 max_length: f.max_length.map(|n| (n, false)),
                 min: None,
                 max: None,
+                pattern: f.pattern.as_deref().and_then(Pattern::parse),
             };
         };
         // A computed or numbered field is never written: it has no default length.
@@ -82,6 +86,7 @@ impl Held {
             },
             min: l.min,
             max: l.max,
+            pattern: def.effective_pattern(),
         }
     }
 
@@ -93,11 +98,13 @@ impl Held {
             self.max_length.map(|m| m.0),
             self.min,
             self.max,
+            self.pattern,
         ) == (
             other.min_length,
             other.max_length.map(|m| m.0),
             other.min,
             other.max,
+            other.pattern,
         )
     }
 
@@ -107,6 +114,7 @@ impl Held {
             && self.max_length.is_none()
             && self.min.is_none()
             && self.max.is_none()
+            && self.pattern.is_none()
     }
 
     fn text(&self) -> String {
@@ -127,6 +135,9 @@ impl Held {
         }
         if let Some(b) = self.max {
             parts.push(format!("max {b}"));
+        }
+        if let Some(p) = self.pattern {
+            parts.push(format!("pattern {}", p.name()));
         }
         parts.join(", ")
     }
@@ -150,6 +161,13 @@ impl Held {
         }));
         note(tighter_upper(self.max, new.max, cmp_bound));
         note(tighter_lower(self.min, new.min, cmp_bound));
+        // A format where there was none holds a value to more; another format is both.
+        match (self.pattern, new.pattern) {
+            (None, Some(_)) => tighter = true,
+            (Some(_), None) => looser = true,
+            (Some(a), Some(b)) if a != b => (tighter, looser) = (true, true),
+            _ => {}
+        }
         match (tighter, looser) {
             (true, false) => "tighten",
             (false, true) => "loosen",

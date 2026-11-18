@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AppIcon as TileIcon,
   Avatar,
@@ -28,6 +28,7 @@ import {
 import { call, search, type ModelMeta, type ModuleMeta, type Row, type Settings } from "./api.ts";
 import type { useData } from "./data.tsx";
 import { appColor } from "./theme.ts";
+import { seamedName } from "./brandName.ts";
 import { modulesHref } from "./modules/route.ts";
 import { href, nav, type Route } from "./route.ts";
 import { appHomeOf } from "./extensions.ts";
@@ -53,6 +54,52 @@ const NO_ESCAPE_QUERY = "(max-width: 40rem), (hover: none) and (pointer: coarse)
 /** Whether a media query matches as a dialog opens; false where it cannot be asked (tests). */
 function matchesNow(query: string): boolean {
   return typeof matchMedia === "function" && matchMedia(query).matches;
+}
+
+/** The width at which the top bar is a phone's (style.css): the app's name may take two lines. */
+const NARROW_BAR = "(max-width: 40rem)";
+
+/** Whether the top bar is a phone's, following a turn of the phone or a resized window. */
+function useNarrowBar(): boolean {
+  const [narrow, setNarrow] = useState(() => matchesNow(NARROW_BAR));
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return;
+    const mq = matchMedia(NARROW_BAR);
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
+
+/**
+ * Keep a phone's app name whole: when two lines at the bar's size still cut it ("E-post-" /
+ * "marknads-" left "föring" out at 320 px, Q18), the name gets the class `tight`, a smaller size on
+ * up to three lines. Measured, so it holds for any language and any name a package gives.
+ */
+function useWholeName(name: string | undefined, narrow: boolean) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.classList.remove("tight");
+      if (narrow && el.scrollHeight > el.clientHeight + 1) el.classList.add("tight");
+    };
+    fit();
+    // The web font arrives after the first paint and is wider than the fallback.
+    const fonts = typeof document.fonts === "object" ? document.fonts : undefined;
+    let live = true;
+    void fonts?.ready.then(() => live && fit());
+    fonts?.addEventListener("loadingdone", fit);
+    addEventListener("resize", fit);
+    return () => {
+      live = false;
+      fonts?.removeEventListener("loadingdone", fit);
+      removeEventListener("resize", fit);
+    };
+  }, [name, narrow]);
+  return ref;
 }
 
 /** Apply the instance's launcher layout: order, hidden apps, renamed apps and chosen colours. */
@@ -141,6 +188,8 @@ export function TopBar(props: {
 }) {
   const { current } = props;
   const i18n = useI18n();
+  const narrow = useNarrowBar();
+  const appName = useWholeName(current?.name, narrow);
   const docs = productDocsVisible();
   const languages: MenuItem = {
     label: t("Language"),
@@ -178,7 +227,10 @@ export function TopBar(props: {
             <span className="brand-sep" aria-hidden="true">
               /
             </span>
-            <span className="brand-app">{current.name}</span>
+            <span className="brand-app" ref={appName}>
+              {/* On a phone a long compound breaks at its seams instead of being cut (Q18). */}
+              {narrow ? seamedName(current.name) : current.name}
+            </span>
           </>
         ) : (
           <>

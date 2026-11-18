@@ -196,7 +196,7 @@ description = "Foto av personen (PNG, JPEG, WebP eller GIF; metadata som plats t
 
 [labels.sv.model.hr_leave_request.field.requested_by]
 label = "Begärd av"
-description = "Användarnamnet som ansökan tillhör, satt av servern när det lämnas tomt (och på nytt när en ändring flyttar ansökan till en annan anställd): den anställdas obop-användare om hen har en, annars personen som lämnar in ansökan. Bara den personen och hr.manager ser ansökan"
+description = "Användarnamnet som ansökan tillhör, satt endast av servern (ett skickat värde avvisas): den anställdas obop-användare om hen har en, annars personen som lämnar in ansökan, och på nytt när en ändring flyttar ansökan till en annan anställd. Bara den personen och hr.manager ser ansökan"
 
 [labels.sv.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Ledighetens sista dag ligger före dess första dag"
@@ -217,3 +217,21 @@ description = "Den anställda som leder avdelningen"
 [labels.sv.model.hr_employee.field.user]
 label = "obop-användare"
 description = "Personens användarnamn (inloggning) i obop, om hen har ett: ledighet som lämnas in för den anställda tillhör den användaren, och en ny ledighetsansökan från den användaren börjar på den anställda"
+
+[labels.sv.model.hr_employee.filter.active]
+label = "Aktiva"
+
+[labels.sv.model.hr_employee.filter.onboarding]
+label = "Under introduktion"
+
+[labels.sv.model.hr_leave_request.filter.to_approve]
+label = "Att godkänna"
+
+[labels.sv.model.hr_leave_request.filter.away_today]
+label = "Borta i dag"
+
+[labels.sv.model.hr_leave_request.filter.upcoming]
+label = "Kommande"
+
+[labels.sv.model.hr_leave_request.filter.not_refused]
+label = "Inte avslagna"

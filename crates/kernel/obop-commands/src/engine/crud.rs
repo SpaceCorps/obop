@@ -384,6 +384,7 @@ pub(crate) fn system_error(def: &ModelDef, name: &str) -> String {
 pub(crate) fn create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Value> {
     let actor = Actor::from_input(input);
     let given = declared_fields(def, input)?;
+    crate::blobs::check_write_groups(def, &mut given.keys(), &actor)?;
     if let Some(k) = given.keys().find(|k| def.is_system_field(k)) {
         return Err(system_error(def, k));
     }
@@ -414,7 +415,7 @@ pub(crate) fn create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     unit.insert(def.name, &id, f)?;
     seq::check_unique(&unit, &look)?;
     commit(eng, unit)?;
-    crate::blobs::hold_created(&eng.store, def, &id, &held);
+    crate::blobs::hold_created(&eng.store, def, &id, &held, &actor.caller);
     row_after_commit(eng, def, &id, &held)
 }
 
@@ -442,6 +443,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     let look = lookup_fn(eng);
     let mut unit = eng.unit();
     let cur = Gate::new(&unit, &look, &actor).load(def, &id)?;
+    crate::blobs::check_write_groups(def, &mut given.keys(), &actor)?;
     let mut patch = to_fields(&given);
     if implied::asking() {
         // The dispatcher only asks whether the call is mixed (`implied::ask`): before it stores
@@ -507,7 +509,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
             actor: &actor,
             today: &today,
         };
-        if let Some((k, v)) = hints::refill_owner(&cx, def, &patch, &changed, &after)?
+        if let Some((k, v)) = hints::refill_owner(&cx, def, &changed, &after)?
             && cur.get(&k) != Some(&v)
         {
             after.insert(k.clone(), v.clone());
@@ -518,7 +520,21 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         if let Some(why) = creator_blocked(&Gate::new(&unit, &look, &actor), def, &after) {
             return Err(why);
         }
+        // Records whose owner is filled from this one follow a changed source (R12).
+        let models: Vec<Arc<ModelDef>> = eng
+            .models
+            .read()
+            .unwrap()
+            .values()
+            .map(|m| m.def.clone())
+            .collect();
+        let follow = hints::follow_owner(&cx, &models, def, &id, &changed)?;
         unit.merge(def.name, &id, changed)?;
+        for (model, rid, own, value) in follow {
+            let mut f = Fields::new();
+            f.insert(own.to_string(), value);
+            unit.merge(model, &rid, f)?;
+        }
         seq::check_unique(&unit, &look)?;
     }
     if steps.is_empty() {
@@ -555,7 +571,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         }
     }
     if edited {
-        crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after);
+        crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after, &actor.caller);
     }
     row_after_commit(eng, def, &id, &after)
 }

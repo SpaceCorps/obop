@@ -1407,6 +1407,8 @@ dependencies = [
  "axum",
  "getrandom 0.4.3",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "mime_guess",
  "obop-brand",
  "obop-commands",

@@ -59,14 +59,18 @@ describe("the count of a trip from its stored points", () => {
     });
   });
 
-  test("a first point far away: 0 m and the note", () => {
+  test("a first point far away: 0 m and the note, until three later points agree", () => {
     const first: StoredPoint = { ...point(1, 0, 0, "20.00"), lat: "40.0000000", lon: "-3.0000000" };
-    const later = Array.from({ length: 4 }, (_, i) => point(i + 2, 5 + i * 10, i * 10, "6.00"));
-    expect(progressFrom([first, ...later])).toMatchObject({
-      points: 5,
+    const later = Array.from({ length: 3 }, (_, i) => point(i + 2, 10 + i * 20, i * 10, "6.00"));
+    expect(progressFrom([first, ...later.slice(0, 2)])).toMatchObject({
+      points: 3,
       metres: 0,
-      signal: { kind: "jumpy", dropped: 4, stored: 5 },
+      signal: { kind: "jumpy", dropped: 2, stored: 3 },
     });
+    // The third agrees with the two before it: the track re-anchors on them (5.4).
+    const all = progressFrom([first, ...later]);
+    expect(all.signal).toBeNull();
+    expect(all.metres).toBeGreaterThan(19);
   });
 
   test("two good points at one place among imprecise ones: 0 m and no note", () => {
@@ -218,14 +222,14 @@ describe("the kind of the note follows the newest stored point (the highest seq)
   });
 
   test("then good points: jumpy from the first good point on, although more were imprecise", () => {
-    const progress = progressFrom(coldStartWrongFirst(12, 7));
+    const progress = progressFrom(coldStartWrongFirst(12, 2));
     const analysis = vi.mocked(analyseTrack).mock.results[0]!.value as ReturnType<
       typeof analyseTrack
     >;
     // The older rule (the larger counter) said weak here, for a phone that was already outside.
     expect(analysis.skippedAccuracy).toBe(12);
-    expect(analysis.skippedSpeed).toBe(7);
-    expect(progress.signal).toEqual({ kind: "jumpy", dropped: 19, stored: 20 });
+    expect(analysis.skippedSpeed).toBe(2);
+    expect(progress.signal).toEqual({ kind: "jumpy", dropped: 14, stored: 15 });
     expect(progressFrom(coldStartWrongFirst(12, 1)).signal).toEqual({
       kind: "jumpy",
       dropped: 13,
@@ -233,11 +237,12 @@ describe("the kind of the note follows the newest stored point (the highest seq)
     });
   });
 
-  test("point by point, from the stored texts: weak at 30 s, jumpy at the first good point", () => {
+  test("point by point, from the stored texts: weak at 30 s, jumpy at the first good point, none at the third", () => {
     const kinds = kindsAlong(coldStartWrongFirst(12, 8));
     expect(kinds.slice(0, 6)).toEqual(Array(6).fill("none")); // up to 25 s
     expect(kinds.slice(6, 13)).toEqual(Array(7).fill("weak")); // 30 s to 60 s
-    expect(kinds.slice(13)).toEqual(Array(8).fill("jumpy")); // 65 s on
+    expect(kinds.slice(13, 15)).toEqual(Array(2).fill("jumpy")); // 65 s and 70 s
+    expect(kinds.slice(15)).toEqual(Array(6).fill("none")); // 75 s on: re-anchored (5.4)
   });
 
   test("imprecise points, then good ones at the right place: weak, then nothing", () => {
@@ -270,21 +275,20 @@ describe("the kind of the note follows the newest stored point (the highest seq)
 
   test("the newest is by seq, not by time: a later seq with an earlier time stamp", () => {
     // seq 5 was stored last but carries an early time stamp (the clock went back).
+    // (Two good points only: a third that agrees with them would re-anchor the track, 5.4.)
     const stored = [
       wrong(1, 0, "20.00"),
       point(2, 20, 0, "6.00"),
       point(3, 40, 0, "6.00"),
-      point(4, 60, 0, "6.00"),
-      point(5, 10, 0, "200.00"),
+      point(4, 10, 0, "200.00"),
     ];
     expect(progressFrom(stored).signal).toMatchObject({ kind: "weak", accuracyM: 200 });
     // With the radii swapped the newest by time is the imprecise one and the newest by seq is good.
     const swapped = [
       wrong(1, 0, "20.00"),
       point(2, 20, 0, "6.00"),
-      point(3, 40, 0, "6.00"),
-      point(4, 60, 0, "200.00"),
-      point(5, 10, 0, "6.00"),
+      point(3, 40, 0, "200.00"),
+      point(4, 10, 0, "6.00"),
     ];
     expect(progressFrom(swapped).signal).toMatchObject({ kind: "jumpy" });
   });

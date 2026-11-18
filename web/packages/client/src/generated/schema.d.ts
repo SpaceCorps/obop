@@ -305,7 +305,7 @@ export interface paths {
         };
         /**
          * Download a stored image or file (D60)
-         * @description Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. Strong ETag; files are sent as attachments.
+         * @description Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. `model`, `record` and `field` together name the record the download comes from: identical bytes are stored once, so the file is then named as that record holds it, when the caller can read it. Strong ETag; files are sent as attachments.
          */
         get: operations["downloadBlob"];
         put?: never;
@@ -910,7 +910,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Update a device; a status field only moves along a declared action */
+        /** Rename a device: give id and name; nothing else of a device can be changed */
         post: operations["device.update"];
         delete?: never;
         options?: never;
@@ -3437,7 +3437,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer at hourly_rate_minor; one line per entry. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post */
+        /** Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer (customer, else the project's) at hourly_rate_minor (else the project's hourly rate); one line per entry, or per task with per=task. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post */
         post: operations["time_billing.create_invoice"];
         delete?: never;
         options?: never;
@@ -4182,7 +4182,7 @@ export interface components {
             ended_at?: string;
             /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
             expected_points?: number;
-            /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+            /** @description Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean */
             integrity?: string;
             /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
             last_seq?: number;
@@ -4197,7 +4197,7 @@ export interface components {
             purpose?: "business" | "private" | "commute";
             /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again (personal data: agents see it masked) */
             reject_reason?: string;
-            /** @description True while the trip is in review, confirmed or rejected: the states a reviewer reads (computed when read; read-only) */
+            /** @description True while the trip is in review, confirmed or rejected and its purpose is not private: the trips a reviewer reads (personal data: agents see it masked) (computed when read; read-only) */
             readonly reviewable?: boolean;
             /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
             reviewed_by?: string;
@@ -4476,9 +4476,9 @@ export interface components {
             actor?: string;
             /** @description When it happened, in UTC (RFC 3339) */
             at?: string;
-            /** @description A short note without any code or secret */
+            /** @description A short note without any code or secret (personal data: agents see it masked) */
             detail?: string;
-            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared */
+            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_link_revoked, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared */
             kind?: string;
             /** @description The account the event is about */
             user?: string;
@@ -4693,6 +4693,8 @@ export interface operations {
                         tokens?: {
                             /** @description Unix seconds. */
                             created_at?: number;
+                            /** @description Unix seconds when the token ends by itself (90 days after it was made by an account bound to a Microsoft identity); null when it has no end of its own. */
+                            expires_at?: number | null;
                             id?: string;
                             label?: string;
                             scopes?: string[];
@@ -5549,6 +5551,9 @@ export interface operations {
         parameters: {
             query?: {
                 w?: 320 | 640 | 960 | 1280;
+                model?: string;
+                record?: string;
+                field?: string;
             };
             header?: never;
             path: {
@@ -8691,50 +8696,9 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description The version of the app, as it reported it at sign-in and at each refresh */
-                    app_version?: string;
-                    /** @description The mobile app that signed in, as it called itself */
-                    client_name?: string;
-                    /**
-                     * Format: date-time
-                     * @description When the sign-in of the device ends unless it is renewed (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    expires_at?: string;
-                    /** @description The refresh-token family the device is bound to (an identifier, not a token) */
-                    grant?: string;
                     id: string;
-                    /**
-                     * Format: date-time
-                     * @description When the device last refreshed its sign-in (the time of the last refresh, not of every request) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    last_seen?: string;
                     /** @description What the device is called; the person can rename it (personal data: agents see it masked) */
-                    name?: string;
-                    /** @description The platform the app reported, such as android or ios */
-                    platform?: string;
-                    /** @description The address of the push service for this device. Never shown to anyone and not written in this version: push is not part of the first mobile slice */
-                    push_token?: string;
-                    /**
-                     * Format: date-time
-                     * @description When the app signed in on this device (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    registered_at?: string;
-                    /**
-                     * Format: date-time
-                     * @description When the device was ended (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    revoked_at?: string;
-                    /**
-                     * @description active while the device may sign in; revoked once it was ended (moves only through the model's actions)
-                     * @enum {string}
-                     */
-                    state?: "active" | "revoked";
-                    /** @description The account the device belongs to (personal data: agents see it masked) */
-                    user?: string;
+                    name: string;
                 };
             };
         };
@@ -13960,7 +13924,7 @@ export interface operations {
                         ended_at?: string;
                         /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
                         expected_points?: number;
-                        /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+                        /** @description Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean */
                         integrity?: string;
                         /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
                         last_seq?: number;
@@ -14202,7 +14166,7 @@ export interface operations {
                     ended_at?: string;
                     /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
                     expected_points?: number;
-                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean */
                     integrity?: string;
                     /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
                     last_seq?: number;
@@ -15097,7 +15061,7 @@ export interface operations {
                     /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
                     expected_points?: number;
                     id: string;
-                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump, low_accuracy, before_start and reanchor with their counts; empty when the track was clean */
                     integrity?: string;
                     /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
                     last_seq?: number;

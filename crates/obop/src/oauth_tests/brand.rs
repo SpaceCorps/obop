@@ -1703,7 +1703,10 @@ async fn the_second_factor_pages_of_the_flow_show_the_brand() {
                 .post(
                     r,
                     "/oauth/authorize/mfa",
-                    &[("mfa_token", &token), ("code", "000000")],
+                    &[
+                        ("mfa_token", &token),
+                        ("code", &crate::mfa_tests::wrong_code(&secret, T0 + 30)),
+                    ],
                 )
                 .await;
             let html = wrong.text();

@@ -14,13 +14,15 @@ import vectors from "./track.fixtures.json";
 // through the Rust function that computes the distance that counts (docs/spec/mobile.md 5.4).
 interface Case {
   name: string;
-  options?: { maxSpeedMps?: number; maxAccuracyM?: number };
+  options?: { maxSpeedMps?: number; maxAccuracyM?: number; startedAt?: number };
   points: Fix[];
   expect: {
     distance_m: string;
     accepted: number;
     skipped_accuracy: number;
     skipped_speed: number;
+    skipped_early: number;
+    reanchors: number;
     seq_gaps: number;
     integrity: string;
     first_seq: number | null;
@@ -44,6 +46,8 @@ describe("the shared track vectors", () => {
       accepted: a.accepted,
       skipped_accuracy: a.skippedAccuracy,
       skipped_speed: a.skippedSpeed,
+      skipped_early: a.skippedEarly,
+      reanchors: a.reanchors,
       seq_gaps: a.seqGaps,
       integrity: integrityFlags(a),
       first_seq: a.first?.seq ?? null,

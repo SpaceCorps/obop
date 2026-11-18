@@ -19,6 +19,10 @@ description = "Na co wydano pieniądze"
 label = "Pracownik"
 description = "Nazwa użytkownika osoby składającej wniosek o zwrot wydatku; domyślnie osoba tworząca wniosek"
 
+[labels.pl.model.expenses_expense.field.submitted_by]
+label = "Złożony przez"
+description = "Nazwa użytkownika osoby, która złożyła wniosek, zapisana przez akcję Złóż; ona również nie może go zatwierdzić, chyba że samodzielne zatwierdzanie jest dozwolone"
+
 [labels.pl.model.expenses_expense.field.spent_on]
 label = "Data wydatku"
 description = "Data zakupu (YYYY-MM-DD)"

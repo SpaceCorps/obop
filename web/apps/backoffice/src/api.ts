@@ -89,8 +89,11 @@ export type UiSection = {
   /** Shown only while the record's state is one of these. */
   show_in?: string[];
 };
-/** `[[model.ui.filter]]`: a saved filter offered by the control panel. */
-export type UiFilter = { label: string; where: string };
+/**
+ * `[[model.ui.filter]]`: a saved filter offered by the control panel; `labels` is its label per
+ * language from the package's label files (U10), absent when none translates it.
+ */
+export type UiFilter = { label: string; where: string; labels?: Record<string, string> };
 
 /** `[model.ui]`. */
 export type ModelUi = {
@@ -225,6 +228,8 @@ export type FieldMeta = {
    */
   max_length?: number;
   min_length?: number;
+  /** Only for `text` (K45, U3): the named format a written value has. */
+  pattern?: "currency_code" | "iban" | "vat_id";
   /**
    * Only for `number`, `money` (minor units) and `decimal` (a canonical string at the scale of the
    * field) (D90): the inclusive bounds the package declares.
@@ -672,6 +677,22 @@ export function login(username: string, password: string): Promise<LoginResult> 
 }
 
 /**
+ * The login the server signed in with `token`, from the two-factor status (`user`), or null when
+ * it cannot be read. A password sign-in's answer does not name the login, and `$user` of a filter
+ * or a read-only hint compares with the server's (docs/ISSUES.md U11).
+ */
+export async function signedInLogin(token: string): Promise<string | null> {
+  try {
+    const res = await fetch("/api/auth/mfa", { headers: { authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { user?: unknown };
+    return typeof json.user === "string" && json.user ? json.user : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * What the address says after the browser came back from Microsoft (D91): `#oidc=<one-time code>`
  * or `#oidc_error=<word>`. The server sends the browser to these two fragments and nothing else;
  * a fragment is not sent to any server, and it is cleared from the address as soon as it is read.
@@ -755,15 +776,28 @@ export function restorePlace(): void {
   }
 }
 
+/**
+ * The waits, in milliseconds, before the sign-in page asks again whether Microsoft is offered
+ * after the answer 429 (the read is limited per address and minute, N19: an office behind one
+ * address could hit it, and a Microsoft-only person would see no button). Tests set them to 0.
+ */
+export const ssoRetry = { delays: [15_000, 20_000, 30_000] };
+
 /** Whether the sign-in page offers Sign in with Microsoft. Nothing is offered on any doubt. */
 export async function ssoEnabled(): Promise<boolean> {
-  try {
-    const res = await fetch("/api/auth/sso");
-    if (!res.ok) return false;
-    const json = (await res.json().catch(() => ({}))) as { enabled?: boolean };
-    return json.enabled === true;
-  } catch {
-    return false;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch("/api/auth/sso");
+      if (res.status === 429 && attempt < ssoRetry.delays.length) {
+        await new Promise((done) => setTimeout(done, ssoRetry.delays[attempt]));
+        continue;
+      }
+      if (!res.ok) return false;
+      const json = (await res.json().catch(() => ({}))) as { enabled?: boolean };
+      return json.enabled === true;
+    } catch {
+      return false;
+    }
   }
 }
 

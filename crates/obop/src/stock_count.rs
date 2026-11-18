@@ -7,8 +7,10 @@
 //! to whatever the stock is when someone validates it later, and the stock would not end at the
 //! counted figure. Applying a count therefore needs the group of `inventory_move.validate`
 //! (`inventory.manager`), and an agent may only dry-run it (validating a move needs a person's
-//! approval). The call reads the item again afterwards and says when the stock is not the counted
-//! figure (a move validated by someone else between the two steps).
+//! approval). The read, the create and the validate run under the dispatcher's transaction lock
+//! (`Dispatcher::serialized`, Q12), which every validated stock move takes too, so no move of
+//! another call comes between them. The call still reads the item again afterwards and says when
+//! the stock is not the counted figure, which only a write that bypasses the commands can cause.
 
 use crate::sie::Env;
 use obop_commands::{Actor, CallError, Dispatcher, Principal, Store, Surface, Value, Vault};
@@ -267,7 +269,7 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             let groups: Vec<&str> = a.groups.iter().map(String::as_str).collect();
             let p = Principal::user(&a.caller, &groups);
             let d = weak.upgrade().ok_or("the dispatcher is gone")?;
-            let c = apply(Env { d: &d, store: &st }, &p, &item, counted, dry)?;
+            let c = d.serialized(|| apply(Env { d: &d, store: &st }, &p, &item, counted, dry))??;
             let mut out = vec![
                 ("ok", Value::Bool(true)),
                 ("written", Value::Bool(c.move_id.is_some())),

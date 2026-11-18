@@ -569,6 +569,12 @@ fn resolve_out(out: &Path, sealed: bool, at: u64) -> Result<PathBuf, String> {
             "{name} would hold a sealed backup (format 2), which gzip cannot read. Name the file .obbk, give a directory, or pass --plain for an unencrypted .gz"
         ));
     }
+    // The extension is the sign people and scripts read: `.obbk` is a sealed backup (K5).
+    if !sealed && name.ends_with(".obbk") {
+        return Err(format!(
+            "{name} would hold a plain (unencrypted) backup, and .obbk is the name of a sealed one. Name the file .gz, or give a directory"
+        ));
+    }
     Ok(out.to_path_buf())
 }
 
