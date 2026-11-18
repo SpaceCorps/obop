@@ -188,10 +188,14 @@ pub struct RuleM {
 pub struct NoOverlapM {
     /// The rule key: `assert_key` of a refusal and the label slot `rule.<key>`.
     pub rule: String,
-    /// The fields two records share to clash, such as `["resource_id", "day"]`.
+    /// The fields two records share to clash, such as `["resource_id", "day"]`; empty (`[]`):
+    /// every record of the model is compared with every other (fiscal years).
     pub key: Vec<String>,
     pub start: String,
     pub end: String,
+    /// U9: the end is the last day (or number) of the interval, not the first after it.
+    #[serde(default)]
+    pub inclusive_end: bool,
     /// The select field `ignore_states` names options of; `state` when absent.
     pub state_field: Option<String>,
     #[serde(default)]
@@ -965,6 +969,12 @@ impl Manifest {
                                 .iter()
                                 .map(|r| r.key.clone())
                                 .chain(m.no_overlap.iter().map(|n| n.rule.clone()))
+                                .collect(),
+                            filters: m
+                                .ui
+                                .iter()
+                                .flat_map(|u| &u.filter)
+                                .map(|f| obop_registry::labels::filter_key(&f.label))
                                 .collect(),
                         },
                     )
@@ -2561,7 +2571,8 @@ impl Manifest {
                     Some(c) => o.with_capacity(c),
                     None => o,
                 },
-            );
+            )
+            .map(|o| o.inclusive(m.no_overlap.as_ref().is_some_and(|n| n.inclusive_end)));
         Ok((rules, overlap))
     }
 

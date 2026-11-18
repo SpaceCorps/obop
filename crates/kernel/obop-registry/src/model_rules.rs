@@ -106,8 +106,9 @@ fn failure(message: &str, key: &str) -> String {
 }
 
 /// `[model.no_overlap]`: two records with the same `key` fields may not have overlapping
-/// intervals `[start, end)`. A record with an empty key field, an empty start or end, or a state
-/// in `ignore_states` takes part in no comparison.
+/// intervals `[start, end)`, or `[start, end]` with `inclusive_end` (U9: a fiscal year's last
+/// day). An empty `key` compares every record with every other. A record with an empty key
+/// field, an empty start or end, or a state in `ignore_states` takes part in no comparison.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoOverlap {
     /// The rule key (`assert_key`, label slot), as for a `[[model.rule]]`.
@@ -126,9 +127,17 @@ pub struct NoOverlap {
     pub message: String,
     /// The message per language (`attach_messages`).
     pub messages: BTreeMap<String, String>,
+    /// The end is part of the interval (a last day), so a record may start only after it.
+    pub inclusive_end: bool,
 }
 
 impl NoOverlap {
+    /// This rule with the end inside the interval (`inclusive_end = true`).
+    pub fn inclusive(mut self, yes: bool) -> Self {
+        self.inclusive_end = yes;
+        self
+    }
+
     /// This rule with a capacity path `<ref field>.<number field>` (checked by the install gate).
     pub fn with_capacity(mut self, path: &str) -> Self {
         let (r, f) = path.split_once('.').unwrap_or((path, ""));
@@ -220,6 +229,7 @@ pub fn no_overlap(
         capacity: None,
         message: message.to_string(),
         messages: BTreeMap::new(),
+        inclusive_end: false,
     }
 }
 
@@ -342,9 +352,6 @@ pub fn problems(m: &ModelDef, lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>) ->
     if let Some(n) = &m.ext.no_overlap {
         let mut p = Vec::new();
         check_key_and_message(&n.rule, &n.message, &mut seen, &mut p);
-        if n.key.is_empty() {
-            p.push("`key` names at least one field".into());
-        }
         let kind_of = |name: &str| m.fields.iter().find(|f| f.name == name).map(|f| &f.kind);
         for k in &n.key {
             if let Some(why) = unreadable(m, k, true) {

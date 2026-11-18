@@ -291,6 +291,93 @@ fn a_posted_entry_its_lines_and_a_closed_period_are_frozen() {
 }
 
 #[test]
+fn fiscal_years_and_periods_never_cover_the_same_day() {
+    let app = app_with(&["accounting"]);
+    let ann = user("ann", ACCOUNTANT);
+    let year = |name: &str, from: &str, to: &str| {
+        run(
+            &app,
+            &ann,
+            "accounting_fiscal_year.create",
+            json!({"name": name, "start_on": from, "end_on": to}),
+        )
+    };
+    let fy = id(&year("FY2026", "2026-01-01", "2026-12-31").unwrap());
+    // The last day belongs to the year (U9): a year that starts on it overlaps.
+    for (from, to) in [
+        ("2026-12-31", "2027-12-30"),
+        ("2025-01-01", "2026-01-01"),
+        ("2026-03-01", "2026-03-31"),
+    ] {
+        let e = year("Other", from, to).unwrap_err();
+        assert!(
+            e.contains("rule no_overlapping_years failed"),
+            "{from}: {e}"
+        );
+    }
+    let next = id(&year("FY2027", "2027-01-01", "2027-12-31").unwrap());
+    let e = run(
+        &app,
+        &ann,
+        "accounting_fiscal_year.update",
+        json!({"id": next, "start_on": "2026-12-01"}),
+    )
+    .unwrap_err();
+    assert!(e.contains("Another fiscal year already covers"), "{e}");
+    let period = |name: &str, from: &str, to: &str| {
+        run(
+            &app,
+            &ann,
+            "accounting_period.create",
+            json!({"fiscal_year_id": fy, "name": name, "start_on": from, "end_on": to}),
+        )
+    };
+    period("2026-03", "2026-03-01", "2026-03-31").unwrap();
+    period("2026-04", "2026-04-01", "2026-04-30").unwrap();
+    let e = period("2026-03b", "2026-03-31", "2026-04-01").unwrap_err();
+    assert!(e.contains("rule no_overlapping_periods failed"), "{e}");
+}
+
+#[test]
+fn bank_accounts_and_the_swedish_vat_number_must_have_their_format() {
+    // U4: the vendor's and the employee's IBAN, the company's VAT number.
+    let app = app_with(&["accounting", "accounting_se", "inventory", "purchase", "hr"]);
+    let root = admin();
+    let party = id(&ok(
+        &app,
+        &root,
+        "party.create",
+        json!({"name": "Bosch Werkzeug AG"}),
+    ));
+    for (cmd, body, field) in [
+        ("purchase_vendor.create", json!({"party_id": party}), "iban"),
+        (
+            "hr_employee.create",
+            json!({"name": "Ann Example"}),
+            "bank_iban",
+        ),
+        (
+            "accounting_se_company.create",
+            json!({"name": "Nordlicht Sverige AB", "vat_period": "quarterly"}),
+            "vat_number",
+        ),
+    ] {
+        let mut bad = body.clone();
+        bad[field] = json!("123123");
+        let e = refused(&app, &root, cmd, bad, "");
+        assert!(e.contains(&format!(".{field} must be a")), "{cmd}: {e}");
+        let good = if field == "vat_number" {
+            "SE559412783801"
+        } else {
+            "SE45 5000 0000 0583 9825 7466"
+        };
+        let mut b = body;
+        b[field] = json!(good);
+        ok(&app, &root, cmd, b);
+    }
+}
+
+#[test]
 fn an_expense_claim_defaults_to_me_today_and_freezes_once_approved() {
     let app = app_with(&["expenses"]);
     let ann = user("ann", &["expenses.user"]);

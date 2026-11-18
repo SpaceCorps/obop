@@ -74,8 +74,11 @@ fn ensure_history(conn: &Connection) -> Result<()> {
     conn.execute_batch(HISTORY_SCHEMA).map_err(e)
 }
 
-/// The records that have no usable `row_version`: what the backfill stamps.
-const UNSTAMPED: &str = "(json_type(data, '$.row_version') IS NOT 'integer'
+/// The records that have no usable `row_version`: what the backfill stamps. The same rule as
+/// `sysfields::row_version` (an integer of at least 1 that fits in an i64): `json_type` says
+/// `integer` for a number above `i64::MAX` too, while `json_extract` gives it as a real, so the
+/// type of the extracted value is asked (K24).
+const UNSTAMPED: &str = "(typeof(json_extract(data, '$.row_version')) IS NOT 'integer'
                           OR json_extract(data, '$.row_version') < 1)";
 
 /// The columns of an entry of the change history, in the order [`read_change`] reads them.

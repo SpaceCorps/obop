@@ -20,6 +20,8 @@ import { isEmpty } from "../format.ts";
 export type FieldFormApi = {
   /** The model of the record being edited. */
   model: ModelMeta;
+  /** The id of the saved record, absent while it is being created. */
+  record?: string;
   /** The current value of another field of the record, as its input holds it. */
   peek: (name: string) => Edit | undefined;
   /** Set other fields as if the person had typed them (several at once, in one update). */

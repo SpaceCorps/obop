@@ -8,7 +8,9 @@ import {
   t,
   twoFactorMessage,
   useI18n,
+  useWorded,
   type Factor,
+  type Wording,
 } from "@obop/ui";
 import {
   SSO_START,
@@ -17,6 +19,7 @@ import {
   loginMfa,
   rememberPlace,
   setupStatus,
+  signedInLogin,
   ssoEnabled,
   ssoExchange,
   takeSsoReturn,
@@ -63,7 +66,8 @@ export function SignIn({
   /** `enrolment`: the session may only set up two-factor authentication. */
   onDone: (token: string, user: string, enrolment: boolean) => void;
 }) {
-  const [error, setError] = useState<string | null>(null);
+  // Kept as how to word it, so a switch of the language below words it again (D9).
+  const [error, setError] = useWorded();
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<{ mfaToken: string; user: string; methods: string[] } | null>(
     null,
@@ -118,7 +122,7 @@ export function SignIn({
     if (!back) return;
     if ("error" in back) {
       forgetPlace();
-      setError(ssoMessage(back.error));
+      setError(() => ssoMessage(back.error));
       return;
     }
     setBusy(true);
@@ -130,26 +134,39 @@ export function SignIn({
       else {
         // The round trip failed: the place kept for it is not for a later password sign-in.
         forgetPlace();
-        if (r.status === 429) setError(ssoMessage("busy"));
-        else if (r.status === 0 || r.status >= 500) setError(ssoMessage("unavailable"));
-        else setError(ssoMessage("failed"));
+        if (r.status === 429) setError(() => ssoMessage("busy"));
+        else if (r.status === 0 || r.status >= 500) setError(() => ssoMessage("unavailable"));
+        else setError(() => ssoMessage("failed"));
       }
     });
   }, [onDone]);
 
+  /** Signed in: the login kept is the one the server names for the session (U11), else `fallback`. */
+  async function finish(token: string, fallback: string, enrolment: boolean) {
+    onDone(token, (await signedInLogin(token)) ?? fallback, enrolment);
+  }
+
   async function password(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
-    const user = String(f.get("username"));
+    const typed = String(f.get("username"));
     setBusy(true);
     setError(null);
-    const r = await login(user, String(f.get("password")));
+    const r = await login(typed, String(f.get("password")));
+    // The login the server signed in (`$user` of a filter or a read-only hint compares with it,
+    // U11): its answer's when it names one, else what was typed as the server reads a login,
+    // trimmed and in lower case (" Sam" is "sam"), until the session says (finish).
+    const user = (r.kind !== "error" && r.user) || typed.trim().toLowerCase();
+    if (r.kind === "session") {
+      await finish(r.token, user, r.enrolment);
+    }
     setBusy(false);
-    if (r.kind === "session") onDone(r.token, user, r.enrolment);
-    else if (r.kind === "mfa") setStep({ mfaToken: r.mfaToken, user, methods: r.methods });
-    else if (r.status === 429) setError(twoFactorMessage({ status: 429, code: "rate_limited" }));
-    else if (r.status === 0) setError(twoFactorMessage({ status: 0, code: "network" }));
-    else setError(storageFaultMessage(r.status, r.code) ?? t("Invalid username or password"));
+    if (r.kind === "session") return;
+    if (r.kind === "mfa") setStep({ mfaToken: r.mfaToken, user, methods: r.methods });
+    else if (r.status === 429)
+      setError(() => twoFactorMessage({ status: 429, code: "rate_limited" }));
+    else if (r.status === 0) setError(() => twoFactorMessage({ status: 0, code: "network" }));
+    else setError(() => storageFaultMessage(r.status, r.code) ?? t("Invalid username or password"));
   }
 
   /** Sign in with a passkey alone (the person allowed it in Security). */
@@ -159,12 +176,12 @@ export function SignIn({
     const r = await signInWithPasskey();
     setAsking(false);
     if (r.ok) onDone(r.value.token, r.value.user ?? "", !!r.value.mfa_enrolment_required);
-    else if (r.kind === "cancelled") setError(passkeyMessage(r));
-    else if (r.kind === "server" && r.status === 429) setError(passkeyMessage(r));
+    else if (r.kind === "cancelled") setError(() => passkeyMessage(r));
+    else if (r.kind === "server" && r.status === 429) setError(() => passkeyMessage(r));
     else if (r.kind === "server" && storageFaultMessage(r.status, r.code))
-      setError(storageFaultMessage(r.status, r.code));
+      setError(() => storageFaultMessage(r.status, r.code) ?? "");
     else
-      setError(
+      setError(() =>
         r.kind === "server"
           ? t(
               "That passkey could not be used to sign in. It may not be set up for signing in without a password. Use your password instead.",
@@ -174,42 +191,42 @@ export function SignIn({
   }
 
   /** The second step with a passkey. */
-  async function passkeyStep(): Promise<string | null> {
+  async function passkeyStep(): Promise<Wording | null> {
     if (!step) return null;
     const r = await signInWithPasskey(step.mfaToken);
     if (r.ok) {
-      onDone(r.value.token, step.user, !!r.value.mfa_enrolment_required);
+      await finish(r.value.token, step.user, !!r.value.mfa_enrolment_required);
       return null;
     }
     if (r.kind === "server" && r.code === "mfa_expired") {
       setStep(null);
-      setError(twoFactorMessage(r));
+      setError(() => twoFactorMessage(r));
       return null;
     }
     if (r.kind === "server") {
-      const busy = storageFaultMessage(r.status, r.code);
-      if (busy) return busy;
+      if (storageFaultMessage(r.status, r.code))
+        return () => storageFaultMessage(r.status, r.code)!;
     }
-    return passkeyMessage(r);
+    return () => passkeyMessage(r);
   }
 
-  async function code(factor: Factor): Promise<string | null> {
+  async function code(factor: Factor): Promise<Wording | null> {
     if (!step) return null;
     const r = await loginMfa(step.mfaToken, factor);
     if (r.kind === "session") {
-      onDone(r.token, step.user, r.enrolment);
+      await finish(r.token, step.user, r.enrolment);
       return null;
     }
     if (r.kind === "error" && r.code === "mfa_expired") {
       setStep(null);
-      setError(twoFactorMessage(r));
+      setError(() => twoFactorMessage(r));
       return null;
     }
     if (r.kind === "error") {
-      const busy = storageFaultMessage(r.status, r.code);
-      if (busy) return busy;
+      if (storageFaultMessage(r.status, r.code))
+        return () => storageFaultMessage(r.status, r.code)!;
     }
-    return twoFactorMessage(r.kind === "error" ? r : { status: 0, code: "" });
+    return () => twoFactorMessage(r.kind === "error" ? r : { status: 0, code: "" });
   }
 
   return (

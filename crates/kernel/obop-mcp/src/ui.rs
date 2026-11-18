@@ -136,7 +136,16 @@ fn model_ui(u: &ModelUi) -> J {
 /// `ui`, `children`, `plural` and `plural_labels` of a model.
 pub fn model_hints(o: &mut J, x: &ModelInfo) {
     if let Some(u) = &x.ui {
-        let ui = model_ui(u);
+        let mut ui = model_ui(u);
+        // The label of a declared filter per language (U10), beside its English label.
+        if let Some(fs) = ui.get_mut("filter").and_then(J::as_array_mut) {
+            for f in fs {
+                let texts = f["label"].as_str().and_then(|l| x.filter_labels.get(l));
+                if let Some(t) = texts.filter(|t| !t.is_empty()) {
+                    f["labels"] = json!(t);
+                }
+            }
+        }
         if ui.as_object().is_some_and(|m| !m.is_empty()) {
             o["ui"] = ui;
         }

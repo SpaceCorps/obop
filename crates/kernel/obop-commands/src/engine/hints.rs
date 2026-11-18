@@ -12,6 +12,9 @@
 //!   in the answer the same way), so a record an agent files is the linked person's.
 //! - A `fill_from` into the model's `access.own` field is applied again by an update that moves
 //!   the record to another source and leaves the owner out (`refill_owner`): the record follows.
+//! - The records whose owner is filled from a record follow it when the source field of that
+//!   record changes to a new value (`follow_owner`, R12): leave filed before an employee's login
+//!   was set or corrected becomes the login's.
 //! - `readonly` refuses a value on create and a changed value on update (code `readonly_field`);
 //!   the record sent back as it is passes. Defaults, `fill_from` and effects still write it.
 
@@ -112,13 +115,13 @@ pub(crate) fn fill_in(cx: &FillCtx<'_>, def: &ModelDef, f: &mut Fields) -> R<()>
 }
 
 /// The owner (the model's `access.own` field) that its `fill_from` gives again when an update
-/// moves the record to another source (the `via` ref changes) and does not name the owner itself:
-/// leave moved to another employee becomes that employee's. When nothing can be copied the
-/// caller owns it, as on create (`own_default`).
+/// moves the record to another source (the `via` ref changes) and does not change the owner
+/// itself (a form that sends the stored owner back still moves it): leave moved to another
+/// employee becomes that employee's. When nothing can be copied the caller owns it, as on create
+/// (`own_default`).
 pub(crate) fn refill_owner(
     cx: &FillCtx<'_>,
     def: &ModelDef,
-    patch: &Fields,
     changed: &Fields,
     after: &Fields,
 ) -> R<Option<(String, J)>> {
@@ -137,7 +140,7 @@ pub(crate) fn refill_owner(
     let Some(via) = &p.via else {
         return Ok(None);
     };
-    if patch.contains_key(own) || !changed.contains_key(via.as_str()) {
+    if changed.contains_key(own) || !changed.contains_key(via.as_str()) {
         return Ok(None);
     }
     let copied = if is_unset(after.get(via.as_str())) {
@@ -147,6 +150,72 @@ pub(crate) fn refill_owner(
     };
     let v = copied.or_else(|| (!cx.actor.id.is_empty()).then(|| J::from(cx.actor.id.clone())));
     Ok(v.map(|v| (own.to_string(), v)))
+}
+
+/// R12: an update of `def` record `id` changed `changed`; every record of another model whose
+/// `access.own` field is filled from `<ref to def>.<a changed field>` gets the new value as its
+/// owner (an employee's `user` and the leave filed for the employee). A value that becomes empty
+/// moves nothing: the records keep the owner they have. The caller must hold the write group of
+/// the model whose records move; the records are found whatever the caller sees of them, since
+/// the owner is the server's to keep. Returns the writes to make: (model, id, owner field, value).
+pub(crate) fn follow_owner(
+    cx: &FillCtx<'_>,
+    models: &[Arc<ModelDef>],
+    def: &ModelDef,
+    id: &str,
+    changed: &Fields,
+) -> R<Vec<(&'static str, String, &'static str, J)>> {
+    let mut out = Vec::new();
+    for m in models {
+        let Some(own) = m.access.as_ref().and_then(|a| a.own) else {
+            continue;
+        };
+        let Some(p) = m
+            .fields
+            .iter()
+            .find(|f| f.name == own)
+            .and_then(|f| f.hints.as_ref())
+            .and_then(|h| h.fill_from.as_ref())
+        else {
+            continue;
+        };
+        let Some(via) = p.via.as_deref() else {
+            continue;
+        };
+        let points_here = m
+            .fields
+            .iter()
+            .any(|f| f.name == via && f.kind.target() == Some(def.name));
+        let Some(value) = changed.get(p.field.as_str()).filter(|_| points_here) else {
+            continue;
+        };
+        if is_unset(Some(value)) {
+            continue;
+        }
+        let rows = cx.reads.find(m.name, via, &J::from(id))?;
+        let moved: Vec<String> = rows
+            .into_iter()
+            .filter(|(_, r)| r.get(own) != Some(value))
+            .map(|(rid, _)| rid)
+            .collect();
+        if moved.is_empty() {
+            continue;
+        }
+        if !cx.actor.holds(m.write_group) {
+            return Err(format!(
+                "changing {}.{} also gives {} {} record(s) of it to the new value, which needs the {} group; nothing was changed",
+                def.name,
+                p.field,
+                moved.len(),
+                m.name,
+                m.write_group
+            ));
+        }
+        for rid in moved {
+            out.push((m.name, rid, own, value.clone()));
+        }
+    }
+    Ok(out)
 }
 
 fn default_value(cx: &FillCtx<'_>, fd: &FieldDef, d: &DefaultSpec) -> R<Option<J>> {

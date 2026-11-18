@@ -1498,7 +1498,7 @@
             "type": "string"
           },
           "detail": {
-            "description": "A short note without any code or secret",
+            "description": "A short note without any code or secret (personal data: agents see it masked)",
             "type": "string"
           },
           "kind": {
@@ -3409,7 +3409,7 @@
     },
     "/api/blobs/{id}": {
       "get": {
-        "description": "Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. Strong ETag; files are sent as attachments.",
+        "description": "Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. `model`, `record` and `field` together name the record the download comes from: identical bytes are stored once, so the file is then named as that record holds it, when the caller can read it. Strong ETag; files are sent as attachments.",
         "operationId": "downloadBlob",
         "parameters": [
           {
@@ -3433,6 +3433,30 @@
                 1280
               ],
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "record",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "field",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -31777,7 +31801,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer at hourly_rate_minor; one line per entry. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post",
+        "summary": "Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer (customer, else the project's) at hourly_rate_minor (else the project's hourly rate); one line per entry, or per task with per=task. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post",
         "tags": [
           "time_billing"
         ]

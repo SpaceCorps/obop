@@ -66,7 +66,7 @@ description = "Espèces comptées dans le tiroir à l'ouverture (plus petite uni
 
 [labels.fr.model.pos_session.field.expected_cash]
 label = "Caisse théorique"
-description = "Espèces que le tiroir devrait contenir à la fermeture : le fonds d'ouverture plus les paiements en espèces des ventes payées de la session"
+description = "Espèces que le tiroir doit contenir à la clôture : le fonds de caisse plus les paiements en espèces des ventes payées de la session, moins les espèces des ventes de sessions clôturées remboursées pendant celle-ci ; une fois la session clôturée, le montant de sa clôture"
 
 [labels.fr.model.pos_session.field.closing_cash]
 label = "Caisse à la clôture"
@@ -250,3 +250,7 @@ description = "D'où sortent du stock les marchandises vendues pendant cette ses
 [labels.fr.model.pos_order.field.cash_paid]
 label = "Payé en espèces"
 description = "La part des paiements faite en espèces (plus petite unité monétaire)"
+
+[labels.fr.model.pos_order.field.refund_session_id]
+label = "Remboursée dans la session"
+description = "La session dont le tiroir a versé l’espèce d’un remboursement, fixée par le serveur quand une vente d’une session clôturée est remboursée : la session alors ouverte à la caisse de la vente ; vide si la session de la vente était encore ouverte"

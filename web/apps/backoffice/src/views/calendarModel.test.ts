@@ -3,12 +3,15 @@ import type { Command, FieldMeta, ModelMeta, Row } from "../api.ts";
 import {
   calendarSpec,
   clockOf,
+  dateFields,
   eventOf,
   hhmm,
   isGone,
   movable,
   movePatch,
+  newOnDay,
   placeDay,
+  timed,
   visibleHours,
   weekSegments,
   type CalEvent,
@@ -52,6 +55,8 @@ describe("which fields place a record", () => {
     expect(s.end?.name).toBe("end_on");
     expect(s.startMinute).toBeUndefined();
     expect(s.color?.name).toBe("state");
+    // A leave made from a day starts and ends that day (its end does not keep today).
+    expect(newOnDay(s, "2026-12-03")).toEqual({ start_on: "2026-12-03", end_on: "2026-12-03" });
   });
 
   it("a day with a start and an end time", () => {
@@ -67,6 +72,7 @@ describe("which fields place a record", () => {
       "end_minute",
     ]);
     expect(movable(s)).toBe(true);
+    expect(newOnDay(s, "2026-12-03")).toEqual({ day: "2026-12-03" });
   });
 
   it("a day with a start time and a duration; another date field has no times", () => {
@@ -83,6 +89,42 @@ describe("which fields place a record", () => {
     const other = calendarSpec(model(fields), fields, "signed_on")!;
     expect(other.start.name).toBe("signed_on");
     expect(other.startMinute).toBeUndefined();
+  });
+
+  it("instants: a trip on the day and at the time of the instance's clock (K1)", () => {
+    const fields = [
+      f("driver"),
+      f("started_at", { kind: "datetime", required: true }),
+      f("ended_at", { kind: "datetime" }),
+    ];
+    expect(dateFields(fields).map((x) => x.name)).toEqual(["started_at", "ended_at"]);
+    const s = calendarSpec(model(fields), fields)!;
+    expect([s.start.name, s.end?.name]).toEqual(["started_at", "ended_at"]);
+    expect(timed(s)).toBe(true);
+    expect(movable(s)).toBe(false);
+    // 23:30 UTC on 31 October is 00:30 on 1 November in Berlin.
+    const row = { id: "t", started_at: "2026-10-31T23:30:00Z", ended_at: "2026-11-01T01:00:00Z" };
+    expect(eventOf(s, row, "Europe/Berlin")).toMatchObject({
+      start: "2026-11-01",
+      end: "2026-11-01",
+      startMin: 30,
+      endMin: 120,
+    });
+    expect(eventOf(s, row, "UTC")).toMatchObject({ start: "2026-10-31", end: "2026-11-01" });
+    // A new one made from a day starts at nine on that day.
+    expect(newOnDay(s, "2026-12-03", "Europe/Berlin")).toEqual({
+      started_at: "2026-12-03T08:00:00.000000Z",
+    });
+    // One made from a slot of the week grid keeps the slot's time, not only its day.
+    expect(movePatch(s, "2026-11-18", 600, 630, "Europe/Berlin")).toEqual({
+      started_at: "2026-11-18T09:00:00.000000Z",
+      ended_at: "2026-11-18T09:30:00.000000Z",
+    });
+    // A slot that ends at midnight ends at the start of the next day.
+    expect(movePatch(s, "2026-11-18", 1410, 1440, "UTC")).toEqual({
+      started_at: "2026-11-18T23:30:00.000000Z",
+      ended_at: "2026-11-19T00:00:00.000000Z",
+    });
   });
 
   it("the package's ui.calendar wins", () => {
@@ -137,9 +179,9 @@ describe("events", () => {
     expect(hhmm(0)).toBe("00:00");
     expect(hhmm(570)).toBe("09:30");
     expect(hhmm(1440)).toBe("24:00");
-    expect(clockOf(870, "de-DE")).toBe("14:30");
-    expect(clockOf(870, "en-US")).toMatch(/^2:30\sPM$/);
-    expect(clockOf(1440, "en-US")).toBe("24:00");
+    // One clock in every language: an English browser does not get "2:30 PM" here (S5).
+    expect(clockOf(870)).toBe("14:30");
+    expect(clockOf(1440)).toBe("24:00");
   });
 
   it("a move writes the date, the start and the end or the duration", () => {

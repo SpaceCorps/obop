@@ -230,11 +230,18 @@ pub async fn download(
         let Some(svc) = s.dispatcher.blob_service() else {
             return error(StatusCode::NOT_FOUND, "not found");
         };
-        match svc.get(&p, &id, width) {
-            // Content addressed, so the URL never changes meaning; `private` keeps shared caches
-            // from handing it to someone else.
+        // The record the download comes from names the file (K55): `model`, `record`, `field`.
+        let from = match (q.get("model"), q.get("record"), q.get("field")) {
+            (Some(m), Some(r), Some(f)) => Some((m.as_str(), r.as_str(), f.as_str())),
+            _ => None,
+        };
+        match svc.get_from(&p, &id, width, from) {
+            // Content addressed, so the URL never changes meaning, but who may read it does (the
+            // row rules of the record that holds it, K53): `no-cache` makes the browser ask again
+            // on every use, and the read gate above runs before a 304 is answered, so a person
+            // who lost the record loses the file. `private` keeps shared caches out of it.
             Ok(served) => {
-                let mut r = blob_response(served, &headers, "private, max-age=31536000, immutable");
+                let mut r = blob_response(served, &headers, "private, no-cache");
                 r.headers_mut()
                     .insert(header::VARY, HeaderValue::from_static("Authorization"));
                 r

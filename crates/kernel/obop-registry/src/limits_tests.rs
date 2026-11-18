@@ -651,12 +651,30 @@ fn patterned(p: Pattern) -> FieldDef {
 }
 
 #[test]
+fn the_iso_4217_list_is_sorted_three_capital_letters_and_holds_the_seed_currencies() {
+    let list = ISO_4217;
+    assert!(list.windows(2).all(|w| w[0] < w[1]), "sorted, no duplicate");
+    assert!(
+        list.iter()
+            .all(|c| c.len() == 3 && c.bytes().all(|b| b.is_ascii_uppercase()))
+    );
+    for c in [
+        "EUR", "SEK", "USD", "GBP", "NOK", "DKK", "CHF", "PLN", "JPY", "XCG",
+    ] {
+        assert!(is_currency_code(c), "{c}");
+    }
+}
+
+#[test]
 fn a_currency_code_is_three_capital_letters() {
     let c = patterned(Pattern::CurrencyCode);
     for ok in ["EUR", "SEK", "USD", ""] {
         assert_eq!(c.check_text(ok), Ok(()), "{ok}");
     }
-    for bad in ["12y12", "eur", "EU", "EURO", "E1R"] {
+    // U5, #103: the code must be on the ISO 4217 list, not only have its shape.
+    for bad in [
+        "12y12", "eur", "EU", "EURO", "E1R", "ZZZ", "ABC", "XXX", "XTS",
+    ] {
         assert_eq!(
             c.check_text(bad),
             Err(Breach::Format(Pattern::CurrencyCode)),
@@ -665,7 +683,7 @@ fn a_currency_code_is_three_capital_letters() {
     }
     assert_eq!(
         Breach::Format(Pattern::CurrencyCode).message("m", "currency", "12y12"),
-        "m.currency must be a currency code of three capital letters (ISO 4217), such as EUR"
+        "m.currency must be a currency code of ISO 4217, such as EUR"
     );
 }
 

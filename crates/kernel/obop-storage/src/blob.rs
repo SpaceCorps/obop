@@ -105,12 +105,13 @@ pub struct BlobInfo {
     pub height: Option<u32>,
     pub created: u64,
     pub owners: Vec<Owner>,
-    /// Uploaders who have not attached it yet: (principal id, unix time, file name).
+    /// Uploaders who have not attached it yet (see [`Claim`]).
     pub pending: Vec<Claim>,
 }
 
-/// An upload not attached yet: (principal id, unix time, file name).
-pub type Claim = (String, u64, String);
+/// An upload not attached yet: (principal id, unix time, file name, the `model.field` it was
+/// made for). The target is empty for a claim stored before uploads named it (K55).
+pub type Claim = (String, u64, String, String);
 
 /// What the caller says about bytes it hands to [`Blobs::put`].
 #[derive(Debug, Clone, Default)]
@@ -599,8 +600,15 @@ pub trait Blobs: Send + Sync {
         }
         Ok(Some(out))
     }
+    /// As `put`, with the `model.field` the upload is made for: the claim names it, and only
+    /// that field takes the upload on the uploader's word (K55).
+    fn put_for(&self, bytes: &[u8], meta: NewBlob, target: &str) -> Result<BlobInfo>;
     /// Record that `owner` holds the blob and drop the uploaders' claims on it.
     fn attach(&self, id: &str, owner: &Owner) -> Result<()>;
+    /// Record that `owner` holds the blob and drop only the claim of `uploader` for that field
+    /// (and an older claim of theirs that names no field): another person who uploaded the same
+    /// bytes keeps their claim (K55).
+    fn attach_by(&self, id: &str, owner: &Owner, uploader: &str) -> Result<()>;
     /// Remove `owner`'s hold. The blob is deleted when nobody holds it and no upload is pending.
     fn detach(&self, id: &str, owner: &Owner) -> Result<()>;
     /// Remove every hold of one record (it was deleted or erased); returns the blobs it held.
@@ -666,6 +674,7 @@ impl Catalog {
                                 .and_then(J::as_str)
                                 .unwrap_or("")
                                 .to_string(),
+                            p.get("for").and_then(J::as_str).unwrap_or("").to_string(),
                         ))
                     })
                     .collect()
@@ -708,7 +717,9 @@ impl Catalog {
             J::Array(
                 pending
                     .iter()
-                    .map(|(by, at, filename)| json!({"by": by, "at": at, "filename": filename}))
+                    .map(|(by, at, filename, target)| {
+                        json!({"by": by, "at": at, "filename": filename, "for": target})
+                    })
                     .collect(),
             ),
         );
@@ -794,11 +805,20 @@ impl Catalog {
 
 impl Blobs for Catalog {
     fn put(&self, bytes: &[u8], meta: NewBlob) -> Result<BlobInfo> {
+        self.put_for(bytes, meta, "")
+    }
+
+    fn put_for(&self, bytes: &[u8], meta: NewBlob, target: &str) -> Result<BlobInfo> {
         if let Some(s) = &self.scanner {
             s.scan(bytes, &meta.content_type)?;
         }
         let id = id_of(bytes);
-        let claim = (meta.uploader.clone(), now(), meta.filename.clone());
+        let claim = (
+            meta.uploader.clone(),
+            now(),
+            meta.filename.clone(),
+            target.to_string(),
+        );
         // Bytes first, then the metadata that points at them.
         if self.meta.get(MODEL, &id)?.is_none() || self.bytes.open(&id)?.is_none() {
             self.bytes.put(&id, bytes)?;
@@ -816,9 +836,9 @@ impl Blobs for Catalog {
         match self.meta.insert(MODEL, &id, &Self::fields(&info)) {
             Ok(()) => Ok(info),
             Err(_) => {
-                // Already there (same content): add this uploader's claim.
+                // Already there (same content): add this uploader's claim for this field.
                 self.mutate(&id, &|_, pending| {
-                    pending.retain(|p| p.0 != claim.0);
+                    pending.retain(|p| !(p.0 == claim.0 && p.3 == claim.3));
                     pending.push(claim.clone());
                     true
                 })?;
@@ -851,6 +871,25 @@ impl Blobs for Catalog {
                 owners.push(owner.clone());
             }
             pending.clear();
+            true
+        })?;
+        if found {
+            Ok(())
+        } else {
+            Err("no such blob".into())
+        }
+    }
+
+    fn attach_by(&self, id: &str, owner: &Owner, uploader: &str) -> Result<()> {
+        if !valid_id(id) {
+            return Err("invalid blob id".into());
+        }
+        let target = format!("{}.{}", owner.model, owner.field);
+        let found = self.mutate(id, &|owners, pending| {
+            if !owners.iter().any(|o| o.same(owner)) {
+                owners.push(owner.clone());
+            }
+            pending.retain(|c| !(c.0 == uploader && (c.3 == target || c.3.is_empty())));
             true
         })?;
         if found {

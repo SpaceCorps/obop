@@ -66,7 +66,7 @@ description = "Avattaessa laatikosta laskettu käteinen (valuutan pienin yksikk�
 
 [labels.fi.model.pos_session.field.expected_cash]
 label = "Odotettu kassa"
-description = "Käteinen, joka laatikossa pitäisi olla sulkemishetkellä: alkukassa plus istunnon maksettujen myyntien käteismaksut"
+description = "Käteinen, joka laatikossa pitäisi olla suljettaessa: alkukassa plus istunnon maksettujen myyntien käteismaksut, miinus siinä palautettujen suljettujen istuntojen myyntien käteinen; suljetun istunnon osalta summa, jolla se suljettiin"
 
 [labels.fi.model.pos_session.field.closing_cash]
 label = "Loppukassa"
@@ -250,3 +250,7 @@ description = "Mistä tässä istunnossa myydyt tavarat lähtevät varastosta; e
 [labels.fi.model.pos_order.field.cash_paid]
 label = "Maksettu käteisellä"
 description = "Käteisellä maksettu osuus maksuista (valuutan pienin yksikkö)"
+
+[labels.fi.model.pos_order.field.refund_session_id]
+label = "Palautettu istunnossa"
+description = "Istunto, jonka laatikosta palautuksen käteinen maksettiin, palvelimen asettama, kun suljetun istunnon myynti palautetaan: myynnin kassalla silloin avoinna oleva istunto; tyhjä, jos myynnin oma istunto oli vielä auki"

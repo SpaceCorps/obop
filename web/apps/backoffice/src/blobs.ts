@@ -95,10 +95,27 @@ export function blobUrl(token: string, id: string, width?: number): Promise<stri
   return p;
 }
 
+/** The record a download comes from: identical bytes are stored once, so it names the file (K55). */
+export type BlobFrom = { model: string; record: string; field: string };
+
+/** The URL of a download, with the record it comes from when that is known. */
+export function downloadPath(id: string, from?: BlobFrom): string {
+  if (!from) return `/api/blobs/${id}`;
+  const q = new URLSearchParams({ model: from.model, record: from.record, field: from.field });
+  return `/api/blobs/${id}?${q}`;
+}
+
 /** Download a file: the bytes need the session token, so a plain link would not work. */
-export async function saveBlob(token: string, id: string, fallbackName: string): Promise<boolean> {
+export async function saveBlob(
+  token: string,
+  id: string,
+  fallbackName: string,
+  from?: BlobFrom,
+): Promise<boolean> {
   try {
-    const r = await fetch(`/api/blobs/${id}`, { headers: { authorization: `Bearer ${token}` } });
+    const r = await fetch(downloadPath(id, from), {
+      headers: { authorization: `Bearer ${token}` },
+    });
     if (!r.ok) return false;
     const cd = r.headers.get("content-disposition") ?? "";
     const star = /filename\*=UTF-8''([^;]+)/i.exec(cd)?.[1];

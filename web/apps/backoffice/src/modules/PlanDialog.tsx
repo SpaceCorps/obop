@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Badge, Button, Dialog, Icon, Notice, Skeleton, t } from "@obop/ui";
+import { Badge, Button, Dialog, Icon, Notice, Skeleton, t, useWorded } from "@obop/ui";
 import { call } from "../api.ts";
 import { serverMessage } from "../serverMessage.ts";
 import { LicenseBadge } from "./badges.tsx";
@@ -170,7 +170,8 @@ export function PlanDialog({
 }) {
   const [state, setState] = useState<{ plan: Plan } | { error: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState("");
+  const [failureWorded, setFailure] = useWorded();
+  const failure = failureWorded ?? "";
   const bodyId = useId();
   const key = JSON.stringify(request);
   const asked = useRef(request);
@@ -205,7 +206,7 @@ export function PlanDialog({
     const rootName = root ? nameOf(root.id) || root.name : "";
     if (r.kind === "ok") onDone({ installed: work.map((s) => s.id), proposed: false, rootName });
     else if (r.kind === "approval") onDone({ installed: [], proposed: true, rootName });
-    else setFailure(serverMessage(r.message));
+    else setFailure(() => serverMessage(r.message));
   }
 
   return (
@@ -300,7 +301,8 @@ export function UninstallDialog({
   onDone: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState("");
+  const [failureWorded, setFailure] = useWorded();
+  const failure = failureWorded ?? "";
   const blocked = (row.uninstall_blockers ?? []).length > 0 || row.uninstallable === false;
   async function go() {
     setBusy(true);
@@ -308,7 +310,7 @@ export function UninstallDialog({
     setBusy(false);
     if (r.kind === "ok") onDone();
     else if (r.kind === "approval") onDone();
-    else setFailure(serverMessage(r.message));
+    else setFailure(() => serverMessage(r.message));
   }
   return (
     <Dialog

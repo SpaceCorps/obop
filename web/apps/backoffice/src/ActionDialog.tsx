@@ -19,6 +19,8 @@ export type ActionDialogProps = {
   question?: string;
   danger: boolean;
   currency: string | undefined;
+  /** What the form holds for the fields asked for (typed before the action), to start from. */
+  initial?: Record<string, Edit>;
   onCancel: () => void;
   /** The values typed, as the server takes them. */
   onConfirm: (values: Record<string, unknown>) => void;
@@ -26,7 +28,9 @@ export type ActionDialogProps = {
 
 export function ActionDialog(p: ActionDialogProps) {
   const [values, setValues] = useState<Record<string, Edit>>(() =>
-    Object.fromEntries(p.needs.map((f) => [f.name, toEdit(f, undefined, p.currency)])),
+    Object.fromEntries(
+      p.needs.map((f) => [f.name, p.initial?.[f.name] ?? toEdit(f, undefined, p.currency)]),
+    ),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const submit = () => {
