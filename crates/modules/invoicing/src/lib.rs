@@ -143,6 +143,27 @@ pub fn module() -> Module {
                 card: vec!["number".into(), "party_id".into(), "total_minor".into()],
                 card_sum: Some("total_minor".into()),
                 quick_create: vec!["party_id".into()],
+                // One open group of every field: with the references the form has more than seven
+                // fields, and the generated grouping would hide the number in a closed group.
+                sections: vec![obop_registry::ui::UiSection {
+                    label: "Invoice".into(),
+                    fields: [
+                        "party_id",
+                        "number",
+                        "state",
+                        "issue_date",
+                        "due_date",
+                        "currency",
+                        "total_minor",
+                        "our_reference",
+                        "their_reference",
+                        "sale_order_id",
+                    ]
+                    .map(String::from)
+                    .to_vec(),
+                    collapsed: false,
+                    show_in: vec![],
+                }],
                 order: Some("number desc".into()),
                 default_view: Some("list".into()),
                 ..Default::default()
