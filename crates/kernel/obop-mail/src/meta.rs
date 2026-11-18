@@ -116,9 +116,11 @@ fn outbound() -> ModelDef {
             p("requested_by", "Who queued it", ADMIN).readonly(),
             t("lease_until", "Worker lease, in seconds since 1970", SYSTEM)
                 .kind(FieldKind::Number)
+                .display("epoch_seconds")
                 .hidden(),
             t("due", "When it is due, in seconds since 1970", SYSTEM)
                 .kind(FieldKind::Number)
+                .display("epoch_seconds")
                 .hidden(),
         ],
         commands: vec![
@@ -128,11 +130,15 @@ fn outbound() -> ModelDef {
                 SENDER,
             )
             .approval(),
+            // Declared as moves of `status`, so every surface offers each one only in the state
+            // it starts from; the handlers do the work.
             CommandDef::new("retry", "Queue a failed message again, attempts from zero", ADMIN)
+                .transition("status", Some("failed"), "queued")
                 .approval()
                 .primary()
                 .done("Queued again"),
             CommandDef::new("cancel", "Cancel a queued message; its body is erased", ADMIN)
+                .transition("status", Some("queued"), "cancelled")
                 .danger()
                 .done("Cancelled"),
             CommandDef::new("process", "Send the messages that are due now (the worker does this every few seconds)", ADMIN),

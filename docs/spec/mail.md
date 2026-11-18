@@ -25,11 +25,11 @@ Module `mail`, built in (`crates/kernel/obop-mail`). Permission groups (Proposed
 | Command | Group | What it does |
 |---|---|---|
 | `outbound_mail.send` | `mail.sender` | Checks the addresses, renders the template (or takes `subject` and `body`), picks the server, queues the message. Returns the id. Never sends inside the call |
-| `outbound_mail.retry` | `mail.admin` | `failed` to `queued`, attempts from zero; refused for a test message (its text is not stored: use Send test again) |
-| `outbound_mail.cancel` | `mail.admin` | `queued` to `cancelled`, body erased |
+| `outbound_mail.retry` | `mail.admin` | `failed` to `queued` (declared as a move of `status`, so it is offered on a failed message only), attempts from zero; refused for a test message (its text is not stored: use Send test again) |
+| `outbound_mail.cancel` | `mail.admin` | `queued` to `cancelled` (a move of `status` too), body erased |
 | `outbound_mail.process` | `mail.admin` | Runs the due part of the queue now (what the worker does every few seconds); answers one row per message it tried, `id` and the new `status` (`sent`, `queued` for a later attempt, `failed`) |
 | `mail_server.test_send` | `mail.admin` | Sends a test message to `test_recipient` through this server now and records the answer on the server and in the log |
-| generated `get`, `list`, `search`, `create`, `update`, `delete` | read `mail.admin`; `outbound_mail` has no generated `create`, `update` or `bulk_create` (only `send` queues) | |
+| generated `get`, `list`, `search`, `create`, `update`, `delete` | read `mail.admin`; `outbound_mail` has no generated `create`, `update` or `bulk_create`: they are refused for everyone and left out of `/api/meta` (`can_create` and `can_update` false) and the OpenAPI document (only `send` queues) | |
 
 CLI: `obop call outbound_mail send to=a@example.com subject=Hi body=Text`; REST `POST /api/outbound_mail/send`; MCP tool `outbound_mail.send`.
 

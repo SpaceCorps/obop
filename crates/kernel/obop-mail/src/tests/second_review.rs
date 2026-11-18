@@ -51,3 +51,66 @@ fn an_agent_never_reads_a_recipient_in_the_reason_of_a_failure() {
     assert_ne!(bot["last_test_result"], person["last_test_result"], "{bot}");
     assert!(!bot.to_string().contains("hans.private"), "{bot}");
 }
+
+#[test]
+fn the_metadata_offers_no_edit_of_a_delivery_and_each_action_only_where_it_starts() {
+    let r = rig();
+    let meta = r.d.meta(Surface::Rest, &admin());
+    let model = meta
+        .iter()
+        .flat_map(|m| m.models.iter())
+        .find(|m| m.name == OUTBOUND)
+        .unwrap();
+    // Only `send` queues a message: no screen offers New, Import, Save or Edit in list.
+    assert!(!model.can_create && !model.can_bulk_create && !model.can_update);
+    let from = |c: &str| {
+        model
+            .actions
+            .iter()
+            .find(|a| a.id == format!("{OUTBOUND}.{c}"))
+            .and_then(|a| a.transition)
+            .map(|t| (t.field, t.from))
+    };
+    assert_eq!(from("retry"), Some(("status", Some("failed"))));
+    assert_eq!(from("cancel"), Some(("status", Some("queued"))));
+    // The worker's numbers read as times where a holder of every group sees them.
+    for f in ["lease_until", "due"] {
+        let def = crate::meta::module()
+            .models
+            .iter()
+            .find(|m| m.name == OUTBOUND)
+            .unwrap()
+            .fields
+            .iter()
+            .find(|x| x.name == f)
+            .unwrap()
+            .clone();
+        assert_eq!(
+            def.hints.as_ref().and_then(|h| h.ui.display.as_deref()),
+            Some("epoch_seconds"),
+            "{f}"
+        );
+    }
+    // The server holds the same: a sent message is not queued again, nor an update taken.
+    let s = smtp(Script::default());
+    r.server(&[("port", J::from(s.port))]);
+    let id = r.send(&[]).unwrap();
+    assert_eq!(r.mail.process(T0).unwrap().sent, 1);
+    assert!(
+        r.call(
+            &admin(),
+            "outbound_mail.retry",
+            v(&[("id", id.clone().into())])
+        )
+        .is_err()
+    );
+    assert!(
+        r.call(
+            &admin(),
+            "outbound_mail.update",
+            v(&[("id", id.clone().into()), ("subject", "x".into())]),
+        )
+        .is_err()
+    );
+    assert_eq!(text(&r.msg(&id), "status"), "sent");
+}

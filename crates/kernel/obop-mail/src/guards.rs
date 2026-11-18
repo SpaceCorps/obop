@@ -226,12 +226,13 @@ pub fn install(d: &Arc<Dispatcher>, mail: &Arc<Mail>) {
         false,
         refuse("mail servers are added one at a time"),
     );
+    // Refused for everyone, and said so in the metadata (`can_create`, `can_update` false), so no
+    // screen offers an edit of a delivery that the server refuses.
     for c in ["create", "update", "bulk_create"] {
-        d.add_guard(
+        d.refuse_always(
             "mail",
             &format!("{OUTBOUND}.{c}"),
-            false,
-            refuse("messages are queued with outbound_mail.send"),
+            "messages are queued with outbound_mail.send",
         );
     }
     d.add_guard("mail", "mail_template.create", false, template_input());
