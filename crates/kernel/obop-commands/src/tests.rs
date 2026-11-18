@@ -2390,6 +2390,70 @@ fn the_dispatcher_lists_the_ids_of_its_modules_and_forgets_one_that_is_unregiste
     assert_eq!(d.model_owner("hooks_item"), None);
 }
 
+/// K58: a module that holds only an observer, a guard or a command refused for everyone is a module
+/// too: its id is reserved, since an uninstall under it would remove what it holds.
+#[test]
+fn a_module_with_only_an_observer_or_a_guard_is_listed() {
+    let d = Dispatcher::new();
+    d.observe("ghost", Box::new(|_, _, _, _| {}));
+    d.add_guard(
+        "warden",
+        "x.create",
+        false,
+        Box::new(|_, _| Ok(crate::Verdict::default())),
+    );
+    assert_eq!(d.module_ids(), ["ghost", "warden"]);
+    d.unregister_module("ghost");
+    d.unregister_module("warden");
+    assert!(d.module_ids().is_empty());
+}
+
+/// K57: once the installer registered a package under an id, a module of the program cannot be
+/// registered under it (the package's uninstall would remove it); the package itself registers
+/// again, and after its uninstall the id is free.
+#[test]
+fn a_module_of_the_program_cannot_take_the_id_of_a_package() {
+    let (d, store) = (Dispatcher::new(), Store::new());
+    let fleet = module("fleet");
+    d.as_package("fleet", || d.register_crud(&fleet, &store));
+    d.as_package("fleet", || d.register_crud(&fleet, &store));
+    for (what, r) in [
+        (
+            "register_crud",
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                d.register_crud(&module("fleet"), &store)
+            })),
+        ),
+        (
+            "observe",
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                d.observe("fleet", Box::new(|_, _, _, _| {}))
+            })),
+        ),
+        (
+            "add_guard",
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                d.add_guard(
+                    "fleet",
+                    "fleet_item.create",
+                    false,
+                    Box::new(|_, _| Ok(crate::Verdict::default())),
+                )
+            })),
+        ),
+    ] {
+        let e = r.expect_err(what);
+        let text = e.downcast_ref::<String>().cloned().unwrap_or_default();
+        assert!(
+            text.contains("fleet is the id of an installed package"),
+            "{what}: {text}"
+        );
+    }
+    d.unregister_module("fleet");
+    d.register_crud(&module("fleet"), &store);
+    assert_eq!(d.module_ids(), ["fleet"]);
+}
+
 #[test]
 fn read_only_registration_exposes_get_list_and_search_and_ignores_actor_keys() {
     let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());

@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Comptabilité Suède"
 description = "Localisation suédoise de la comptabilité : données de l'entreprise, séries de pièces, codes et cases de TVA, et un rapport de TVA par période que le groupe accounting.approver approuve. NON VÉRIFIÉ : rien n'a été contrôlé auprès de Skatteverket (SKV 4700) ni de SIE. Aucun plan comptable BAS inclus ; l'utilisateur choisit les comptes. Montants en öre, taux en points de base."
+summary = "Données de l'entreprise suédoise, séries de pièces, codes, cases et rapport de TVA. Toutes les correspondances de TVA NON VÉRIFIÉES."
 
 [labels.fr.model.accounting_se_company]
 name = "Entreprise"

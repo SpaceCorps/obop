@@ -176,6 +176,10 @@ pub enum Expr {
     Bin(BinOp, Box<Expr>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Concat(Vec<Expr>),
+    /// `$user`: the login of the person viewing the record. Only a condition the browser
+    /// evaluates for that person may read it (`readonly_when`, parsed by `Expr::parse_viewer`); the
+    /// server never evaluates one, and every other expression refuses it when it is parsed.
+    User,
 }
 
 // ---- lexing and parsing -------------------------------------------------------------------
@@ -187,6 +191,8 @@ enum Tok {
     Str(String),
     Ident(String),
     Op(&'static str),
+    /// `$user` (see `Expr::User`).
+    User,
 }
 
 fn lex(src: &str) -> Result<Vec<(Tok, usize)>, String> {
@@ -283,6 +289,14 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize)>, String> {
                 }
             }
             out.push((Tok::Str(s), at));
+        } else if c == '$'
+            && chars[i + 1..].starts_with(&['u', 's', 'e', 'r'])
+            && !chars
+                .get(i + 5)
+                .is_some_and(|d| d.is_ascii_lowercase() || d.is_ascii_digit() || *d == '_')
+        {
+            i += 5;
+            out.push((Tok::User, at));
         } else if c.is_ascii_lowercase() || c == '_' {
             let mut s = String::new();
             while i < chars.len()
@@ -330,6 +344,8 @@ struct Parser {
     pos: usize,
     nodes: usize,
     depth: usize,
+    /// Whether `$user` may be read (`Expr::parse_viewer`).
+    viewer: bool,
 }
 
 impl Parser {
@@ -492,6 +508,14 @@ impl Parser {
                 self.pos += 1;
                 Ok(Expr::Text(s))
             }
+            Some(Tok::User) if self.viewer => {
+                self.pos += 1;
+                Ok(Expr::User)
+            }
+            Some(Tok::User) => Err(format!(
+                "`$user` at position {} names the person viewing the record; only readonly_when may read it",
+                self.here()
+            )),
             Some(Tok::Op("(")) => {
                 self.pos += 1;
                 let e = self.or()?;
@@ -589,12 +613,23 @@ fn show(t: &Tok) -> String {
         Tok::Str(s) => format!("{s:?}"),
         Tok::Ident(s) => format!("`{s}`"),
         Tok::Op(o) => format!("`{o}`"),
+        Tok::User => "`$user`".into(),
     }
 }
 
 impl Expr {
     /// Parse the source text. Syntax only; `check` does the types.
     pub fn parse(src: &str) -> Result<Expr, String> {
+        Self::parse_with(src, false)
+    }
+
+    /// `parse`, where `$user` (the login of the person viewing the record) may be read: for a
+    /// condition the browser evaluates for that person (`readonly_when`).
+    pub fn parse_viewer(src: &str) -> Result<Expr, String> {
+        Self::parse_with(src, true)
+    }
+
+    fn parse_with(src: &str, viewer: bool) -> Result<Expr, String> {
         if src.trim().is_empty() {
             return Err("the expression is empty".into());
         }
@@ -609,6 +644,7 @@ impl Expr {
             pos: 0,
             nodes: 0,
             depth: 0,
+            viewer,
         };
         let e = p.or()?;
         if p.pos < p.toks.len() {
@@ -777,6 +813,7 @@ pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
         Expr::Bool(_) => Ok(Ty::Bool),
         Expr::Field(f) => scope.field_ty(f),
         Expr::IsSet(f) => scope.field_ty(f).map(|_| Ty::Bool),
+        Expr::User => Ok(Ty::Text),
         Expr::Neg(a) => {
             let t = check(a, scope)?;
             number(t, "the operand of `-`")?;
@@ -923,6 +960,7 @@ pub fn check_display_subset(e: &Expr, model: &ModelDef) -> Result<(), String> {
         Expr::Int(_) => Ok(()),
         Expr::Dec(d) => refuse(&format!("the decimal number {d}")),
         Expr::Field(f) | Expr::IsSet(f) => field(f),
+        Expr::User => Ok(()),
         Expr::Neg(_) => refuse("a minus sign"),
         Expr::Not(a) => check_display_subset(a, model),
         Expr::Bin(op, a, b) => match op {
@@ -1017,6 +1055,11 @@ pub trait Env {
         field: Option<&str>,
         filter: Option<&Expr>,
     ) -> Result<V, String>;
+    /// `$user`, the login of the person viewing the record. The server evaluates no expression
+    /// that reads it (only `Expr::parse_viewer` lets it through), so the default refuses.
+    fn user(&self) -> Result<V, String> {
+        Err("`$user` is only known to the browser".into())
+    }
 }
 
 fn big(n: i128) -> Result<i64, String> {
@@ -1048,6 +1091,7 @@ pub fn eval_in(e: &Expr, env: &dyn Env, ctx: DecCtx) -> Result<V, String> {
         Expr::Text(s) => V::Text(s.clone()),
         Expr::Bool(b) => V::Bool(*b),
         Expr::Field(f) => env.field(f)?,
+        Expr::User => env.user()?,
         Expr::IsSet(f) => V::Bool(match env.field(f)? {
             V::Null => false,
             V::Text(s) => !s.is_empty(),
@@ -1497,5 +1541,44 @@ mod tests {
             w.fields().is_empty(),
             "a child's fields are not fields of the record"
         );
+    }
+
+    /// M2: `$user` is the person viewing the record, read only by a condition the browser
+    /// evaluates for them (`readonly_when`); every other expression refuses it when parsed.
+    #[test]
+    fn user_is_read_only_by_a_viewer_condition() {
+        let src = "driver != $user || state == \"done\"";
+        let e = Expr::parse(src).unwrap_err();
+        assert!(e.contains("`$user` at position 11"), "{e}");
+        let e = Expr::parse_viewer(src).unwrap();
+        assert_eq!(e.fields(), vec!["driver", "state"]);
+        struct Viewer(&'static str);
+        impl Env for Viewer {
+            fn field(&self, name: &str) -> Result<V, String> {
+                Ok(V::Text(
+                    if name == "driver" { "ann" } else { "open" }.into(),
+                ))
+            }
+            fn aggregate(
+                &self,
+                _: AggFn,
+                _: &str,
+                _: Option<&str>,
+                _: Option<&str>,
+                _: Option<&Expr>,
+            ) -> Result<V, String> {
+                Err("none".into())
+            }
+            fn user(&self) -> Result<V, String> {
+                Ok(V::Text(self.0.into()))
+            }
+        }
+        assert_eq!(eval(&e, &Viewer("ann")), Ok(V::Bool(false)));
+        assert_eq!(eval(&e, &Viewer("bob")), Ok(V::Bool(true)));
+        // An environment of the server knows no viewer.
+        assert!(eval(&e, &rec()).is_err());
+        // `$users` and `$use` are not `$user`.
+        assert!(Expr::parse_viewer("$users == \"a\"").is_err());
+        assert!(Expr::parse_viewer("$use == \"a\"").is_err());
     }
 }

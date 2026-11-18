@@ -61,11 +61,14 @@ export function formatMoney(minor: unknown, currency: string, locale: string): s
   if (n === null) return "—";
   const exp = currencyExponent(currency, locale);
   try {
-    return nf(locale, { style: "currency", currency }).format(
-      minorToDecimal(Math.trunc(n), exp) as unknown as number,
-    );
+    // The true minus sign (U+2212) for a negative amount in every locale, as the tables write it,
+    // not the hyphen most locales format with (Q14); parseMoney reads both.
+    return nf(locale, { style: "currency", currency })
+      .formatToParts(minorToDecimal(Math.trunc(n), exp) as unknown as number)
+      .map((p) => (p.type === "minusSign" ? "−" : p.value))
+      .join("");
   } catch {
-    return `${minorToDecimal(Math.trunc(n), exp)} ${currency}`;
+    return `${minorToDecimal(Math.trunc(n), exp).replace(/^-/, "−")} ${currency}`;
   }
 }
 

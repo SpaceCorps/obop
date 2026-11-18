@@ -274,6 +274,8 @@ pub(crate) fn check_unique_keys(
     lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
     keys: &[(String, String)],
 ) -> R<()> {
+    // The model rules (D88) first: a rule refuses before a duplicate does.
+    super::model_rules::check(unit, lookup, keys)?;
     for (model, id) in keys.iter().cloned() {
         let Some(def) = lookup(&model) else { continue };
         let specs = unique_specs(&def);

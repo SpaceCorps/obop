@@ -5,6 +5,7 @@ import { isEmpty, majorString, optionLabel, parseMoney, validDate } from "./form
 import { fromZonedInput, toZonedInput } from "./instants.ts";
 import { fieldTitle } from "./labels.ts";
 import { rangeError, textLimitError } from "./limits.ts";
+import { displayOf } from "./presentation.ts";
 
 /** What a form control holds: text for everything, a boolean for checkboxes. */
 export type Edit = string | boolean;
@@ -16,6 +17,36 @@ export function toEdit(f: FieldMeta, v: unknown, currency?: string): Edit {
   if (f.kind === "decimal") return decimalInput(v, fmt.separators().decimal);
   if (f.kind === "datetime") return toZonedInput(v, getTime().zone);
   return String(v);
+}
+
+/**
+ * Whether an edit leaves the stored value as it is. A switch that was never set shows No, but No is
+ * still a change from "not set": saving it writes an explicit false.
+ */
+export function sameAsStored(f: FieldMeta, stored: unknown, e: Edit, currency?: string): boolean {
+  if (f.kind === "bool") return stored === e;
+  return toEdit(f, stored, currency) === e;
+}
+
+/**
+ * A number typed under one language's separators, written again with another's (D11): `1,234.5`
+ * typed in English reads `1.234,5` once the form is in German, so Save reads what was meant. Only
+ * text made of digits, signs, spaces and the two old marks is rewritten; anything else is left as
+ * typed for the check at Save to name.
+ */
+export function relocaleNumber(
+  text: string,
+  from: { decimal: string; group: string },
+  to: { decimal: string; group: string },
+): string {
+  if (from.decimal === to.decimal && from.group === to.group) return text;
+  const marks = new Set([from.decimal, from.group]);
+  if (![...text].every((c) => /[\d\s+\-−  ]/.test(c) || marks.has(c))) return text;
+  const at = text.lastIndexOf(from.decimal);
+  const whole = at >= 0 ? text.slice(0, at) : text;
+  const frac = at >= 0 ? text.slice(at + 1) : null;
+  const ints = whole.split(from.group).join(to.group);
+  return frac === null ? ints : `${ints}${to.decimal}${frac}`;
 }
 
 /**
@@ -37,7 +68,13 @@ export function fromEdit(
   }
   switch (f.kind) {
     case "number": {
-      if (!/^-?\d+$/.test(s)) return { error: t("{field} must be a whole number", { field }) };
+      if (!/^-?\d+$/.test(s))
+        return {
+          error:
+            displayOf(f) === "time_of_day"
+              ? t("{field} must be a time like 14:30", { field })
+              : t("{field} must be a whole number", { field }),
+        };
       const n = parseInt(s, 10);
       const out = unchanged ? null : rangeError(field, f, n);
       return out ? { error: out } : { value: n };

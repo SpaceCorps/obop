@@ -126,12 +126,18 @@ fn a_bad_limit_is_refused_naming_the_field_and_the_key() {
         ),
         (
             "kind = \"date\"\nmin = 1",
-            "only valid for kind \"number\", \"money\" or \"decimal\"",
+            "must be a day such as \"1900-01-01\"",
         ),
+        ("kind = \"date\"\nmin = \"1900-02-30\"", "a real day"),
         (
             "min = 1",
-            "only valid for kind \"number\", \"money\" or \"decimal\"",
+            "only valid for kind \"number\", \"money\", \"decimal\" or \"date\"",
         ),
+        (
+            "kind = \"longtext\"\npattern = \"iban\"",
+            "`pattern` is only valid",
+        ),
+        ("pattern = \"regex\"", "not a known format"),
         ("kind = \"number\"\nmin = 0.5", "must be a whole number"),
         ("kind = \"number\"\nmin = \"1\"", "must be a whole number"),
         (

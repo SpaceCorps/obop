@@ -704,3 +704,38 @@ description = "Cada campo con su clase y tratamiento, como JSON; nunca se guarda
 [labels.es.model.privacy_preview.action.render]
 label = "Generar"
 description = "Generar un registro de ejemplo tras el enmascaramiento y la seudonimización"
+
+# The providers of the catalogue, offered where a setting or a connection picks one (GitHub issue 108).
+# Machine-drafted; the native-speaker review is the gate.
+
+[labels.es.model.provider_policy.field.provider.options]
+webhook_out = "Webhook (envío)"
+webhook_in = "Webhook (recepción)"
+rest_api_pull = "API REST (consulta)"
+csv_export = "Exportación CSV"
+slack_webhook = "Slack (webhook entrante)"
+stripe = "Stripe"
+docuseal = "DocuSeal (firma electrónica)"
+github_webhook = "GitHub (webhook entrante)"
+google_drive = "Google Drive (explorar y añadir documentos)"
+google_oauth = "Google (calendario y contactos, lectura)"
+microsoft_oauth = "Microsoft (calendario y contactos, lectura)"
+zapier = "Zapier (automatización)"
+make = "Make (automatización)"
+n8n = "n8n (automatización)"
+
+[labels.es.model.connection.field.provider.options]
+webhook_out = "Webhook (envío)"
+webhook_in = "Webhook (recepción)"
+rest_api_pull = "API REST (consulta)"
+csv_export = "Exportación CSV"
+slack_webhook = "Slack (webhook entrante)"
+stripe = "Stripe"
+docuseal = "DocuSeal (firma electrónica)"
+github_webhook = "GitHub (webhook entrante)"
+google_drive = "Google Drive (explorar y añadir documentos)"
+google_oauth = "Google (calendario y contactos, lectura)"
+microsoft_oauth = "Microsoft (calendario y contactos, lectura)"
+zapier = "Zapier (automatización)"
+make = "Make (automatización)"
+n8n = "n8n (automatización)"

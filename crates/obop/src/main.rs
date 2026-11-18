@@ -7,6 +7,8 @@ mod app;
 #[cfg(test)]
 mod app_ids_tests;
 #[cfg(test)]
+mod appointments_capacity_tests;
+#[cfg(test)]
 mod assert_lang_tests;
 mod backup_cli;
 #[cfg(test)]
@@ -34,6 +36,7 @@ mod build_commit;
 mod build_commit_tests;
 #[cfg(test)]
 mod bulk_tests;
+mod company_settings;
 #[cfg(test)]
 mod connectors_tests;
 #[cfg(test)]
@@ -45,6 +48,9 @@ mod drive_source;
 mod drive_tests;
 #[cfg(test)]
 mod error_seam_tests;
+mod expense_policy;
+#[cfg(test)]
+mod expense_policy_tests;
 #[cfg(test)]
 mod finance_supply_tests;
 #[cfg(test)]
@@ -58,6 +64,9 @@ mod import_oas_tests;
 mod import_timeline;
 #[cfg(test)]
 mod internal_tables_scan_tests;
+mod invoice_credit;
+#[cfg(test)]
+mod invoice_credit_tests;
 mod invoice_posting;
 #[cfg(test)]
 mod invoice_posting_tests;
@@ -89,6 +98,9 @@ mod passkey_tests;
 mod payments_tests;
 #[cfg(test)]
 mod people_collab_hints_tests;
+mod pos_cash;
+#[cfg(test)]
+mod pos_cash_tests;
 #[cfg(test)]
 mod public_site_tests;
 #[cfg(test)]
@@ -1278,6 +1290,29 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
     Ok(())
 }
 
+/// The kind `obop call` types a `field=value` by: the field in the caller's metadata, else (a
+/// model with typed commands only, such as `bank_matching`, has no `list` and so is not in the
+/// metadata) the field as its module registered it (Q9). Anything unknown is text.
+fn cli_kind(
+    d: &obop_commands::Dispatcher,
+    meta: &[obop_commands::ModuleInfo],
+    model: &str,
+    field: &str,
+) -> &'static str {
+    meta.iter()
+        .flat_map(|m| &m.models)
+        .find(|m| m.name == model)
+        .and_then(|m| m.fields.iter().find(|f| f.name == field))
+        .map(|f| f.kind)
+        .or_else(|| {
+            d.model_fields(model)?
+                .into_iter()
+                .find(|f| f.name == field)
+                .map(|f| f.kind.name())
+        })
+        .unwrap_or("text")
+}
+
 /// `obop call`: the answer as JSON and the names of the fields withheld from it.
 fn call_json(
     o: &Opts,
@@ -1291,13 +1326,7 @@ fn call_json(
     // Command-line values are all text; give number, money and bool fields their JSON types so
     // typed fields (D47) validate the same way as over REST. Anything else stays a string.
     let meta = app.dispatcher.meta(Surface::Cli, &p);
-    let kind_of = |field: &str| {
-        meta.iter()
-            .flat_map(|m| &m.models)
-            .find(|m| m.name == model)
-            .and_then(|m| m.fields.iter().find(|f| f.name == field))
-            .map_or("text", |f| f.kind)
-    };
+    let kind_of = |field: &str| cli_kind(&app.dispatcher, &meta, model, field);
     let input = Value::Map(
         kv.iter()
             .filter_map(|p| p.split_once('='))
@@ -3595,6 +3624,10 @@ mod bundled_packages {
                             _ => Value::Text(s),
                         }
                     }
+                    // A field with a format (K45): a currency field holds a currency code and an
+                    // IBAN field an IBAN.
+                    "text" if f.name == "currency" => Value::text("EUR"),
+                    "text" if f.name.ends_with("iban") => Value::text("DE89370400440532013000"),
                     "text" => {
                         let max = f.max_length.map_or(usize::MAX, |m| m as usize);
                         Value::Text("sample".chars().take(max).collect())

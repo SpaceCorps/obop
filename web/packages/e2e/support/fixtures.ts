@@ -15,9 +15,12 @@ export type Reply = { status: number; json: any };
 /** A thin client for the REST API, used to arrange data and to check what the server enforces. */
 export class Api {
   private tokens = new Map<UserName, string>();
+  /** When the test itself last uninstalled a module (null: never). The console guard reads it. */
+  uninstalledAt: number | null = null;
   constructor(private request: APIRequestContext) {}
 
   async post(path: string, body: object = {}, token?: string): Promise<Reply> {
+    if (path === "/api/module/uninstall") this.uninstalledAt = Date.now();
     const res = await this.request.post(path, {
       data: body,
       headers: token ? { authorization: `Bearer ${token}` } : {},
@@ -169,14 +172,25 @@ export const test = base.extend<Fixtures & Options>({
   },
 
   consoleGuard: [
-    async ({ page }, use, info) => {
+    async ({ page, api }, use, info) => {
       const problems: string[] = [];
       const failedLoads: { status: number; text: string }[] = [];
+      const badResponses: { status: number; line: string; path: string; at: number }[] = [];
       allowed.length = 0;
       allowedConsole.length = 0;
       page.on("pageerror", (e) => {
         if (!allowedConsole.some((p) => p.test(e.message)))
           problems.push(`page error: ${e.message}`);
+      });
+      // Chrome's console line names no address; the response event does, so a failure can say which one.
+      page.on("response", (r) => {
+        if (r.status() >= 400)
+          badResponses.push({
+            status: r.status(),
+            line: `${r.status()} ${r.request().method()} ${r.url()}`,
+            path: new URL(r.url()).pathname,
+            at: Date.now(),
+          });
       });
       page.on("console", (m: ConsoleMessage) => {
         if (m.type() !== "error") return;
@@ -190,8 +204,26 @@ export const test = base.extend<Fixtures & Options>({
       });
       await use();
       if (info.status !== info.expectedStatus) return; // the test already failed for its own reason
-      for (const f of failedLoads)
+      // A page may still refresh after the test removed the module it shows (the try/finally of the
+      // specs that install a package): its search then answers 404 once the model is gone. Those answers
+      // are not a fault of the page; every other 404 still fails the test.
+      let afterUninstall =
+        api.uninstalledAt === null
+          ? 0
+          : badResponses.filter(
+              (r) => r.status === 404 && r.path.startsWith("/api/") && r.at >= api.uninstalledAt!,
+            ).length;
+      for (const f of failedLoads) {
+        if (f.status === 404 && afterUninstall > 0) {
+          afterUninstall--;
+          continue;
+        }
         if (!allowed.includes(f.status)) problems.push(`unexpected ${f.text}`);
+      }
+      if (problems.some((p) => p.startsWith("unexpected ")))
+        problems.push(
+          `responses with a status of 400 or more: ${badResponses.map((r) => r.line).join("; ") || "none seen"}`,
+        );
       expect(problems, "console errors and page errors").toEqual([]);
     },
     { auto: true },

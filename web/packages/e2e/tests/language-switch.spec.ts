@@ -796,13 +796,18 @@ write_group = "base.user"
       await route.continue();
     });
     const asked = page.waitForRequest((r) => isCommand(r.url(), model, "get"));
+    const answered = page.waitForResponse((r) => isCommand(r.url(), model, "get"));
     await page.goBack();
     await asked;
     // Nothing is known of it: not the row that was in the panel when it was deleted.
     await expect(panelOf(page)).toHaveCount(0);
     release();
-    // and the `get` finds nothing, so there is still no panel
+    // and the `get` finds nothing (D15a: waited for, so the checks below come after its answer and
+    // the test does not end while it is in flight), so there is still no panel
+    expect((await answered).status()).toBe(400);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0))));
     await expect(panelOf(page)).toHaveCount(0);
     await expect(titles).toHaveCount(25);
+    await expect(titles.first()).toHaveText("Item 01");
   });
 });

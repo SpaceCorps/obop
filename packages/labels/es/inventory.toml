@@ -148,3 +148,7 @@ production = "Producción"
 [labels.es.model.inventory_move.field.origin]
 label = "Origen"
 description = "El documento del que procede el movimiento, por ejemplo un número de pedido de compra como PO-00042 o una orden de fabricación"
+
+[labels.es.model.inventory_move.field.lot]
+label = "Lote"
+description = "El lote que se mueve, cuando el producto se controla por lotes; al validar cambia el artículo de stock de ese lote (se crea si falta)"

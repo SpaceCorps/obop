@@ -90,3 +90,9 @@ description = "Eine veröffentlichte Schicht wieder auf offen setzen"
 [labels.de.model.planning_shift.action.confirm]
 label = "Bestätigen"
 description = "Der Mitarbeiter bestätigt, dass er die Schicht arbeitet"
+
+[labels.de.model.planning_shift.rule.ends_after_start]
+message = "Die Schicht endet, bevor sie beginnt: Legen Sie ein Ende nach dem Beginn fest"
+
+[labels.de.model.planning_shift.rule.no_double_shift]
+message = "Der Mitarbeiter hat zu dieser Zeit bereits eine Schicht: Wählen Sie eine andere Zeit oder einen anderen Mitarbeiter"

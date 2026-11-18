@@ -307,6 +307,19 @@ export function quickFilters(model: ModelMeta, fields: FieldMeta[], ctx: QuickCt
 }
 
 /**
+ * The conditions a list of `model` starts with when it is opened without a search of its own: the
+ * saved filter that `ui.default_filter` names, if the browser can read it over the fields shown;
+ * `null` otherwise. The person removes it like any filter.
+ */
+export function defaultFilter(model: ModelMeta, fields: FieldMeta[], ctx: QuickCtx): Cond[] | null {
+  const label = model.ui?.default_filter;
+  if (!label) return null;
+  const i = (model.ui?.filter ?? []).findIndex((s) => s.label === label);
+  const q = quickFilters(model, fields, ctx).find((x) => x.key === `saved:${i}`);
+  return q ? q.conds : null;
+}
+
+/**
  * Generated filters the package already saves are left out: one with the same conditions, or
  * whose name starts a saved one's ("Mine" beside a saved "Mine", "Open" beside "Open shifts").
  */

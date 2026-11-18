@@ -320,7 +320,7 @@ description = "Nombre del ordenante o del beneficiario tal como lo informa el ba
 
 [labels.es.model.accounting_bank_statement_line.field.counterparty_iban]
 label = "IBAN de la contraparte"
-description = "Cuenta bancaria del ordenante o del beneficiario"
+description = "IBAN del ordenante o del beneficiario"
 
 [labels.es.model.accounting_bank_statement_line.field.move_line_id]
 label = "Línea de movimiento"
@@ -367,3 +367,13 @@ message = "El asiento no cuadra: el total del debe y el total del haber deben se
 
 [labels.es.model.accounting_bank_statement_line.action.match.assert.has_line]
 message = "Elige la línea de asiento a la que corresponde esta transacción bancaria"
+
+[labels.es.model.accounting_fiscal_year.rule.ends_after_start]
+message = "El ejercicio termina antes de empezar: indique un último día igual o posterior al primer día"
+
+[labels.es.model.accounting_period.rule.ends_after_start]
+message = "El período termina antes de empezar: indique un último día igual o posterior al primer día"
+
+[labels.es.model.accounting_move_line.field.settled]
+label = "Liquidado"
+description = "Si una transacción bancaria liquida esta partida a cobrar o a pagar (su settles_line_id la indica); calculado, así que también una línea contabilizada lo muestra"

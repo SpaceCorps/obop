@@ -62,11 +62,11 @@ description = "Jour de clôture de la session (YYYY-MM-DD)"
 
 [labels.fr.model.pos_session.field.opening_cash]
 label = "Fond de caisse"
-description = "Espèces comptées dans le tiroir à l’ouverture (plus petite unité monétaire)"
+description = "Espèces comptées dans le tiroir à l'ouverture (plus petite unité monétaire) ; à défaut, le montant compté à la dernière fermeture de la caisse, sinon le fonds de caisse habituel"
 
 [labels.fr.model.pos_session.field.expected_cash]
 label = "Caisse théorique"
-description = "Espèces que le tiroir devrait contenir à la clôture : fond de caisse plus paiements en espèces (saisi, pas calculé)"
+description = "Espèces que le tiroir devrait contenir à la fermeture : le fonds d'ouverture plus les paiements en espèces des ventes payées de la session"
 
 [labels.fr.model.pos_session.field.closing_cash]
 label = "Caisse à la clôture"
@@ -74,7 +74,7 @@ description = "Espèces réellement comptées dans le tiroir à la clôture"
 
 [labels.fr.model.pos_session.field.cash_difference]
 label = "Écart de caisse"
-description = "Caisse à la clôture moins caisse théorique ; négatif signifie qu’il manque de l’argent"
+description = "Espèces de fermeture moins espèces attendues, une fois les espèces de fermeture comptées ; négatif signifie qu'il manque de l'argent"
 
 [labels.fr.model.pos_session.field.note]
 label = "Note"
@@ -226,7 +226,27 @@ description = "Référence du terminal de paiement ou du prestataire de paiement
 
 [labels.fr.model.pos_order.field.stock_location_id]
 label = "Emplacement de stock"
-description = "D’où les marchandises sortent du stock ; le paiement crée les mouvements de stock depuis cet emplacement"
+description = "D'où les marchandises sortent du stock ; le paiement crée les mouvements de stock depuis cet emplacement ; à défaut, l'emplacement de la session"
 
 [labels.fr.model.pos_order.action.pay.assert.covered]
 message = "Les paiements ne couvrent pas le total de la vente : ajoutez un paiement pour le reste"
+
+[labels.fr.model.pos_config.field.stock_location_id]
+label = "Emplacement de stock"
+description = "D'où sortent du stock les marchandises vendues à cette caisse ; ses sessions et ses ventes le reprennent, et le paiement d'une vente crée alors les mouvements de stock"
+
+[labels.fr.model.pos_session.field.closed_expected_cash]
+label = "Caisse théorique à la fermeture"
+description = "La caisse théorique au moment de la fermeture, conservée par l'action Fermer ; la caisse théorique et l'écart de caisse d'une session fermée en sont lus"
+
+[labels.fr.model.pos_session.field.closed_at]
+label = "Fermée le"
+description = "Moment de la fermeture de la session (UTC) ; la dernière session fermée d'une caisse propose le prochain fonds d'ouverture"
+
+[labels.fr.model.pos_session.field.stock_location_id]
+label = "Emplacement de stock"
+description = "D'où sortent du stock les marchandises vendues pendant cette session ; à défaut, l'emplacement de la caisse"
+
+[labels.fr.model.pos_order.field.cash_paid]
+label = "Payé en espèces"
+description = "La part des paiements faite en espèces (plus petite unité monétaire)"
