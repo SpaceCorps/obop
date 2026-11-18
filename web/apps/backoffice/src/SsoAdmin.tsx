@@ -365,7 +365,11 @@ export function MicrosoftSignInSection({
     setBusy(false);
     if (r.kind === "ok")
       notify(on ? t("Microsoft sign-in is on.") : t("Microsoft sign-in is off."));
-    else notify(refusal(r, () => t("Could not save the Microsoft sign-in.")), "error");
+    else
+      notify(
+        refusal(r, () => t("Could not save the Microsoft sign-in.")),
+        "error",
+      );
     await load();
     if (r.kind === "ok") onChanged?.();
   }
