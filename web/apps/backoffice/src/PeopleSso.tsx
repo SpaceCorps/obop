@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type FocusEvent } from "react";
-import { Button, Checkbox, ConfirmDialog, Dialog, Input, t } from "@obop/ui";
+import { Button, Checkbox, ConfirmDialog, Dialog, Input, t, useWorded } from "@obop/ui";
 import { call } from "./api.ts";
 import type { Notify } from "./SecurityAccount.tsx";
+import { serverMessage } from "./serverMessage.ts";
 import { isGuid, type SsoState } from "./SsoAdmin.tsx";
 
 /* People: one person's Microsoft sign-in (D91). Bind the account to the person's object id at
@@ -13,8 +14,9 @@ import { isGuid, type SsoState } from "./SsoAdmin.tsx";
 /** What the People list knows of a person's Microsoft binding. */
 export type PersonSso = { name: string; sso_only?: boolean; sso_oid?: string | null };
 
-function refusal(r: { kind: string; message?: string }, fallback: string): string {
-  return (r.kind === "error" && r.message) || fallback;
+/** The server's refusal worded in the language shown now (D9), or the fallback when it said nothing. */
+function refusal(r: { kind: string; message?: string }, fallback: () => string): string {
+  return (r.kind === "error" && r.message && serverMessage(r.message)) || fallback();
 }
 
 export function MicrosoftDialog({
@@ -44,7 +46,8 @@ export function MicrosoftDialog({
   const [left, setLeft] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Kept as how to word it, so a switch of the language words it again (D9).
+  const [error, setError] = useWorded();
   // The question before a change that ends the person's sessions.
   const [confirm, setConfirm] = useState<"only" | "unbind" | null>(null);
   const form = useRef<HTMLFormElement>(null);
@@ -83,7 +86,7 @@ export function MicrosoftDialog({
     command: string,
     body: object,
     done: string,
-    failed: string,
+    failed: () => string,
     endsOwnSessions = false,
   ): Promise<boolean> {
     // A second Enter in the same moment must not send a second request.
@@ -102,7 +105,7 @@ export function MicrosoftDialog({
       else onDone();
       return true;
     }
-    setError(refusal(r, failed));
+    setError(() => refusal(r, failed));
     return false;
   }
 
@@ -116,7 +119,7 @@ export function MicrosoftDialog({
       "bind_sso",
       { oid: oid.trim() },
       t("{user} is bound to Microsoft.", { user: person.name }),
-      t("Could not bind the account."),
+      () => t("Could not bind the account."),
     );
     if (ok) onClose();
   }
@@ -126,7 +129,7 @@ export function MicrosoftDialog({
       "unbind_sso",
       {},
       t("The Microsoft binding of {user} was removed.", { user: person.name }),
-      t("Could not remove the binding."),
+      () => t("Could not remove the binding."),
       true,
     );
     if (ok) onClose();
@@ -141,7 +144,7 @@ export function MicrosoftDialog({
         : t("{user} can use the password again and must choose a new one at the next sign-in.", {
             user: person.name,
           }),
-      t("Could not save."),
+      () => t("Could not save."),
       on,
     );
     setConfirm(null);

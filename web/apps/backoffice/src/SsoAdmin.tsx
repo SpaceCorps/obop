@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useId, useRef, useState, type FocusEvent } from "react";
-import { Badge, Button, ConfirmDialog, Dialog, Input, Notice, Switch, Textarea, t } from "@obop/ui";
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  Dialog,
+  Input,
+  Notice,
+  Switch,
+  Textarea,
+  t,
+  useWorded,
+} from "@obop/ui";
 import { call } from "./api.ts";
 import { account, type Notify } from "./SecurityAccount.tsx";
+import { serverMessage } from "./serverMessage.ts";
 import { copyText } from "./signLinks.ts";
 
 /* Customize > Security: "Sign in with Microsoft" for administrators (D91). One Microsoft Entra
@@ -74,9 +86,13 @@ export const onlyPeople = (count: number) =>
     { count },
   );
 
-/** The server's refusal as it words it, or a plain sentence when it said nothing. */
-function refusal(r: { kind: string; message?: string }, fallback: string): string {
-  return (r.kind === "error" && r.message) || fallback;
+/**
+ * The server's refusal, worded in the language shown now (a message the server sent in English
+ * that the interface knows is translated, D9), or the fallback sentence when it said nothing.
+ * Called when the message is drawn, not when it was made: keep it as `() => refusal(...)`.
+ */
+function refusal(r: { kind: string; message?: string }, fallback: () => string): string {
+  return (r.kind === "error" && r.message && serverMessage(r.message)) || fallback();
 }
 
 /** The set-up and change form. */
@@ -99,7 +115,8 @@ function SsoFormDialog({
   const [left, setLeft] = useState({ tenant: false, client: false });
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Kept as how to word it, so a switch of the language words it again (D9).
+  const [error, setError] = useWorded();
   const address = useRef<HTMLTextAreaElement>(null);
   const addressHint = useId();
   const form = useRef<HTMLFormElement>(null);
@@ -156,7 +173,7 @@ function SsoFormDialog({
       setSecret("");
       onSaved();
       onClose();
-    } else setError(refusal(r, t("Could not save the Microsoft sign-in.")));
+    } else setError(() => refusal(r, () => t("Could not save the Microsoft sign-in.")));
   }
 
   async function copy() {
@@ -303,7 +320,7 @@ export function MicrosoftSignInSection({
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useWorded();
   // How many accounts sign in with Microsoft only (null: not known).
   const [onlyCount, setOnlyCount] = useState<number | null>(null);
   // The question before the switch is turned off; `people` is null when that could not be read.
@@ -348,7 +365,7 @@ export function MicrosoftSignInSection({
     setBusy(false);
     if (r.kind === "ok")
       notify(on ? t("Microsoft sign-in is on.") : t("Microsoft sign-in is off."));
-    else notify(refusal(r, t("Could not save the Microsoft sign-in.")), "error");
+    else notify(refusal(r, () => t("Could not save the Microsoft sign-in.")), "error");
     await load();
     if (r.kind === "ok") onChanged?.();
   }
@@ -364,7 +381,7 @@ export function MicrosoftSignInSection({
       await load();
       setFocusHeading((k) => k + 1);
       onChanged?.();
-    } else setRemoveError(refusal(r, t("Could not remove the Microsoft sign-in.")));
+    } else setRemoveError(() => refusal(r, () => t("Could not remove the Microsoft sign-in.")));
   }
 
   return (
