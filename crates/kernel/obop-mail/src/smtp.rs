@@ -356,11 +356,8 @@ pub fn send(
     }
     s.command(&format!("MAIL FROM:<{}>", msg.from), &[250], "MAIL FROM")?;
     for r in msg.recipients() {
-        s.command(
-            &format!("RCPT TO:<{r}>"),
-            &[250, 251],
-            &format!("RCPT TO {r}"),
-        )?;
+        // The step names no address: the reason is stored and read by agents (masked there).
+        s.command(&format!("RCPT TO:<{r}>"), &[250, 251], "RCPT TO")?;
     }
     s.command("DATA", &[354], "DATA")?;
     let mut out = Vec::with_capacity(body.len() + 16);

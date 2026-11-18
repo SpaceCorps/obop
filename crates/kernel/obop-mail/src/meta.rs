@@ -61,7 +61,7 @@ fn server() -> ModelDef {
             p("footer", "Text added under every message, such as the company's details or how to stop these messages", ADMIN)
                 .kind(FieldKind::LongText),
             t("last_test_at", "When the last test message was sent", ADMIN).datetime().readonly(),
-            t("last_test_result", "What the server answered to the last test message", ADMIN).readonly(),
+            p("last_test_result", "What the server answered to the last test message", ADMIN).readonly(),
             p("test_recipient", "Input of test_send: the address the test message goes to; never stored", ADMIN),
         ],
         commands: vec![
@@ -108,8 +108,8 @@ fn outbound() -> ModelDef {
             t("next_attempt_at", "When it is tried next", ADMIN).datetime().readonly(),
             t("queued_at", "When it was queued", ADMIN).datetime().readonly(),
             t("sent_at", "When the server or provider accepted it", ADMIN).datetime().readonly(),
-            t("last_error", "Why the last attempt failed, without the body or credentials", ADMIN).readonly(),
-            t("server_reply", "The server's or provider's answer to the accepted message", ADMIN).readonly(),
+            p("last_error", "Why the last attempt failed, without the body or credentials", ADMIN).readonly(),
+            p("server_reply", "The server's or provider's answer to the accepted message", ADMIN).readonly(),
             t("message_id", "The Message-ID header, the same on every attempt", ADMIN).readonly(),
             t("related_model", "The model of the record the message is about", ADMIN),
             t("related_id", "The id of that record", ADMIN),

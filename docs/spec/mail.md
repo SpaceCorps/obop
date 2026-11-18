@@ -19,7 +19,7 @@ Module `mail`, built in (`crates/kernel/obop-mail`). Permission groups (Proposed
 | Model | Purpose | Notes |
 |---|---|---|
 | `mail_server` | A way out: SMTP relay or provider connection | `password` is data class `secret`: write-only, sealed with the instance key (`OBOP_SECRET_KEY` ring, purpose `mail-server-password`), never returned on any surface |
-| `outbound_mail` | The queue and the deliveries log | the body is sealed (purpose `outbound-mail:<id>`) in a field of group `mail.system` and erased once the message is sent or cancelled; no screen shows it, and only `platform.admin` (which holds every group) can read the sealed text through the API, never the plain text |
+| `outbound_mail` | The queue and the deliveries log | the body is sealed (purpose `outbound-mail:<id>`) in a field of group `mail.system` and erased once the message is sent or cancelled; no screen shows it, and only `platform.admin` (which holds every group) can read the sealed text through the API, never the plain text. `last_error` and `server_reply` (like `mail_server.last_test_result`) are personal data of class `internal`, as the addresses are: a relay's answer often repeats the recipient, so an agent reads them masked |
 | `mail_template` | Subject and text per key and language | unique per key and language |
 
 | Command | Group | What it does |
