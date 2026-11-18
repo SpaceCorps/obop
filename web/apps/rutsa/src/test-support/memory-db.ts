@@ -1,8 +1,13 @@
 import { DatabaseSync } from "node:sqlite";
 import { createSqlDb, type RawDb, type SqlDb, type SqlValue } from "../core/sql.ts";
 
-/** The `SqlDb` the phone uses, over an open `node:sqlite` connection (in memory or a file). */
+/**
+ * The `SqlDb` the phone uses, over an open `node:sqlite` connection (in memory or a file). Foreign
+ * keys are switched on, as on the phone (`core/schema.ts`): SQLite has them off on every new
+ * connection.
+ */
 export function sqlDbOver(sqlite: DatabaseSync): SqlDb {
+  sqlite.exec("PRAGMA foreign_keys = ON");
   const raw: RawDb = {
     exec: async (sql) => {
       sqlite.exec(sql);

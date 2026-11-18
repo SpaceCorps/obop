@@ -68,8 +68,10 @@ Checkpoint: `vp check` and `vp test` pass.
       note; point: time, lat, lon, accuracy, speed, segment)
 - [x] B2 `feat(rutsa): SQL layer`: `core/sql.ts` (from `mileage-app`) and its tests (queue,
       commit, rollback), a test database on `node:sqlite` (`test-support/memory-db.ts`)
-- [ ] B3 `feat(rutsa): database schema`: `core/schema.ts` (`trip`, `point`, `meta` with the schema
-      version) and tests
+- [x] B3 `feat(rutsa): database schema`: `core/schema.ts` (`trip`, `point`; the version in
+      `PRAGMA user_version`, ordered migrations in one transaction, a newer file refused; STRICT
+      tables with CHECK rules, one active trip, points deleted with their trip) and tests; foreign
+      keys switched on in `test-support/memory-db.ts`
 - [ ] B4 `feat(rutsa): fix conversion and thinning`: `core/fix.ts`, `core/thin.ts` (from
       `mileage-app`; `thin.ts` uses `@obop/trip-core`) and tests
 - [ ] B5 `feat(rutsa): trip repository`: `core/repository.ts`, one interface (start, add points,
@@ -91,7 +93,8 @@ Before C: JDK 17, the Android SDK and the emulator installed (list in `docs/spec
 
 - [ ] C1 `feat(rutsa): encrypted database on the phone`: `native/keychain.ts`,
       `native/database.ts` (32 random bytes in the Keystore or Keychain, SQLCipher),
-      `native/store.ts` (the one store of the process); the database file name and the key name in
+      `native/store.ts` (the one store of the process; `PRAGMA foreign_keys = ON` and `migrate` at
+      open); the database file name and the key name in
       `config/identity.ts`, pinned by a test (renaming either loses the trips of an installed
       app); plugins of `expo-sqlite` (SQLCipher) and
       `expo-secure-store` (no Face ID text). After `mileage-app` without the session and the
@@ -194,3 +197,6 @@ D23).
 - 2026-11-18: B1 has `from` and `to` (D7 types them); latitude and longitude are numbers, not the
   texts `mileage-app` sends to its server.
 - 2026-11-18: B2 has a test of its own (`mileage-app` tests `sql.ts` only through its store).
+- 2026-11-18: B3 keeps the version in `PRAGMA user_version` instead of a `meta` table; the other
+  tables (vehicle, recipient, report, setting, place, rule, odometer) come with their stages as
+  new migrations.
