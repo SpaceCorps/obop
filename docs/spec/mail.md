@@ -37,7 +37,7 @@ CLI: `obop call outbound_mail send to=a@example.com subject=Hi body=Text`; REST 
 
 **Retiring a server.** A server is switched off (`enabled` false), not deleted: the generated `delete` is refused while any message of the log names the server ("still referenced by outbound_mail"), and the log keeps finished messages for the retention period (90 days by default).
 
-**Choosing the server.** The server named in the call; else an enabled server whose kinds list the message kind; else the enabled default server; else the one enabled server when there is exactly one; else the call is refused ("no mail server is set up"). The server is fixed on the message when it is queued.
+**Choosing the server.** The server named in the call; else an enabled server whose kinds list the message kind; else the enabled default server; else the one enabled server that lists no kinds, when there is exactly one such server (an enabled server that lists kinds only ever sends those kinds); else the call is refused ("no mail server is set up"). The server is fixed on the message when it is queued.
 
 **Templates.** `template=<key>` with `language` and `vars` (a JSON object of texts and numbers). The template of that language is used, else English, else none (refused). A placeholder without a value refuses the call, so a message never leaves with `{{name}}` in it. The text is plain text (no HTML part yet).
 
