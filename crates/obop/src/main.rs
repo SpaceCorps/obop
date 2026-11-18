@@ -1768,8 +1768,15 @@ fn platform_serve(
         ),
         std::time::Duration::from_secs(interval),
     );
-    let router = obop_http::platform_router(Arc::new(obop_platform::Api(platform)), static_dir)
-        .merge(obop_http::community::router(community));
+    // /metrics of the control plane: the same rule as an instance (I6, D67).
+    let metrics =
+        obop_http::ops::MetricsAccess::from_env(is_loopback(addr)).map_err(|e| fail(&e))?;
+    let router = obop_http::platform_router_with_metrics(
+        Arc::new(obop_platform::Api(platform)),
+        static_dir,
+        metrics,
+    )
+    .merge(obop_http::community::router(community));
     eprintln!("obop platform listening on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     rt.block_on(obop_http::serve(addr, router))
