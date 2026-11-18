@@ -610,7 +610,7 @@ function DeliveriesSection({ token, notify }: { token: string; notify: Notify })
           <thead>
             <tr>
               <th scope="col">{t("Queued")}</th>
-              <th scope="col">{t("To")}</th>
+              <th scope="col">{t("Recipient")}</th>
               <th scope="col">{t("Subject")}</th>
               <th scope="col">{t("Status")}</th>
               <th scope="col">{t("Attempts")}</th>
@@ -627,7 +627,7 @@ function DeliveriesSection({ token, notify }: { token: string; notify: Notify })
                   <td data-label={t("Queued")}>
                     {r.queued_at ? fmt.dateTime(Date.parse(s(r.queued_at))) : ""}
                   </td>
-                  <td className="cell-main mail-to" data-label={t("To")}>
+                  <td className="cell-main mail-to" data-label={t("Recipient")}>
                     {s(r.to)}
                   </td>
                   <td data-label={t("Subject")}>
@@ -636,7 +636,7 @@ function DeliveriesSection({ token, notify }: { token: string; notify: Notify })
                       <span className="hint block mail-error">{s(r.last_error)}</span>
                     )}
                   </td>
-                  <td data-label={t("Status")}>
+                  <td className="mail-status" data-label={t("Status")}>
                     <Badge tone={statusTone(st)}>{statusLabel(st)}</Badge>
                   </td>
                   <td data-label={t("Attempts")}>{s(r.attempts)}</td>

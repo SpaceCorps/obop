@@ -57,6 +57,13 @@
 .mail-to {
   overflow-wrap: anywhere;
 }
+/* A stacked row on a phone: the status badge does not wrap, so its cell takes the badge's width
+   (a long word such as "Fehlgeschlagen" ran past the card in a 6rem cell). */
+@media (max-width: 40rem) {
+  .table.stack-sm > tbody > tr > td.mail-status {
+    flex: 0 0 auto;
+  }
+}
 .mail-switches {
   display: flex;
   gap: 24px;
