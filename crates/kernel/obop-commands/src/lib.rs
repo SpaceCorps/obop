@@ -1783,8 +1783,19 @@ impl Dispatcher {
             .iter()
             .map(|(_, o)| o.clone())
             .collect();
-        for o in observers {
-            o(&c.id, p, &input, &out);
+        if !observers.is_empty() {
+            // Never a secret or a value shown once: an observer may forward what it sees (U46).
+            let fields = self
+                .models
+                .read()
+                .unwrap()
+                .get(c.model)
+                .map(|m| m.fields.clone())
+                .unwrap_or_default();
+            let (seen_in, seen_out) = observe::for_observers(&c.id, &fields, &input, &out);
+            for o in observers {
+                o(&c.id, p, &seen_in, &seen_out);
+            }
         }
         let mut denied = Vec::new();
         let value = match out {
@@ -2435,6 +2446,7 @@ pub mod import_map;
 pub mod inline_pdf;
 pub mod json;
 mod kinds;
+mod observe;
 pub mod pay;
 pub mod public;
 pub mod query;
@@ -2507,6 +2519,8 @@ mod limits_tests;
 mod mask_restore_tests;
 #[cfg(test)]
 mod masked_guess_tests;
+#[cfg(test)]
+mod observe_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]
