@@ -115,14 +115,17 @@ description = "Zakończ trwający przejazd, gdy dotarły wszystkie punkty: serwe
 [labels.pl.model.mileage_trip.action.submit]
 label = "Prześlij"
 description = "Wyślij zakończony przejazd do sprawdzenia"
+done = "Wysłano do weryfikacji"
 
 [labels.pl.model.mileage_trip.action.confirm]
 label = "Potwierdź"
 description = "Potwierdź przejazd w sprawdzaniu; od teraz się liczy. Recenzent nie może potwierdzić własnego przejazdu"
+done = "Przejazd potwierdzony"
 
 [labels.pl.model.mileage_trip.action.reject]
 label = "Odrzuć"
 description = "Odrzuć przejazd w sprawdzaniu; najpierw wpisz powód odrzucenia. Recenzent nie może odrzucić własnego przejazdu"
+done = "Przejazd odrzucony"
 
 [labels.pl.model.mileage_trip.action.reopen]
 label = "Otwórz ponownie"
@@ -131,10 +134,13 @@ description = "Przywróć odrzucony przejazd do zakończonego, aby kierowca móg
 [labels.pl.model.mileage_trip.action.discard]
 label = "Anuluj"
 description = "Anuluj własny przejazd trwający, zakończony lub odrzucony; najpierw wpisz powód. Anulowany przejazd nigdy się nie liczy"
+done = "Przejazd odrzucony"
 
 [labels.pl.model.mileage_trip.action.discard_stuck]
 label = "Anuluj zawieszony"
 description = "Anuluj jako administrator przejazd zawieszony w nagrywaniu lub zakończeniu"
+confirm = "Odrzucić ten zablokowany przejazd? Nigdy nie zostanie policzony."
+done = "Przejazd odrzucony"
 
 [labels.pl.model.mileage_point]
 name = "Punkt"
@@ -171,3 +177,15 @@ description = "Prędkość względem ziemi w metrach na sekundę, jeśli telefon
 [labels.pl.model.mileage_point.field.driver]
 label = "Kierowca"
 description = "Login kierowcy przejazdu; serwer ustawia go z przejazdu"
+
+[labels.pl.model.mileage_trip.section.trip]
+label = "Przejazd"
+
+[labels.pl.model.mileage_trip.section.review]
+label = "Weryfikacja"
+
+[labels.pl.model.mileage_trip.section.discard]
+label = "Odrzucenie"
+
+[labels.pl.model.mileage_trip.section.recorded_by_the_app]
+label = "Zapisane przez aplikację"

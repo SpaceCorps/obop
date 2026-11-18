@@ -147,10 +147,14 @@ closed = "Suljettu"
 [labels.fi.model.accounting_fiscal_year.action.close]
 label = "Sulje"
 description = "Sulje tilikausi, jotta siihen ei kirjata enää mitään (vain hyväksyjä)"
+confirm = "Suljetaanko tämä tilikausi? Sitä ei voi muuttaa ennen kuin se avataan uudelleen."
+done = "Tilikausi suljettu"
 
 [labels.fi.model.accounting_fiscal_year.action.reopen]
 label = "Avaa uudelleen"
 description = "Avaa suljettu tilikausi uudelleen korjausta varten (vain hyväksyjä)"
+confirm = "Avataanko tämä suljettu tilikausi uudelleen?"
+done = "Tilikausi avattu uudelleen"
 
 [labels.fi.model.accounting_period]
 name = "Jakso"
@@ -187,10 +191,14 @@ closed = "Suljettu"
 [labels.fi.model.accounting_period.action.close]
 label = "Sulje"
 description = "Sulje jakso, jotta siihen ei kirjata enää (vain hyväksyjä)"
+confirm = "Suljetaanko tämä jakso? Siihen päivättyjä vientejä ei voi enää kirjata tai muuttaa."
+done = "Jakso suljettu"
 
 [labels.fi.model.accounting_period.action.reopen]
 label = "Avaa uudelleen"
 description = "Avaa suljettu jakso uudelleen (vain hyväksyjä)"
+confirm = "Avataanko tämä jakso uudelleen? Siihen päivättyjä luonnosvientejä voi taas muuttaa ja kirjata."
+done = "Jakso avattu uudelleen"
 
 [labels.fi.model.accounting_move]
 name = "Kirjaus"
@@ -237,14 +245,20 @@ reversed = "Vastakirjattu"
 [labels.fi.model.accounting_move.action.post]
 label = "Kirjaa"
 description = "Kirjaa luonnoksen pääkirjaan ja numeroi sen (vain hyväksyjä; evätään ilman summaa tai ellei debet ole yhtä suuri kuin kredit)"
+confirm = "Kirjataanko tämä vienti? Se saa numeronsa eikä sitä voi enää muuttaa."
+done = "Vienti kirjattu"
 
 [labels.fi.model.accounting_move.action.cancel]
 label = "Peruuta"
 description = "Peruuta luonnos, jota ei ole koskaan kirjattu"
+confirm = "Perutaanko tämä luonnosvienti?"
+done = "Vienti peruttu"
 
 [labels.fi.model.accounting_move.action.reverse]
 label = "Vastakirjaa"
 description = "Merkitse kirjattu kirjaus vastakirjatuksi; vastakirjaus tehdään erikseen (vain hyväksyjä)"
+confirm = "Merkitäänkö tämä vienti käännetyksi? Kirjaa vastakkainen vienti erikseen."
+done = "Vienti merkitty käännetyksi"
 
 [labels.fi.model.accounting_move_line]
 name = "Kirjausrivi"
@@ -342,18 +356,25 @@ reconciled = "Täsmäytetty"
 [labels.fi.model.accounting_bank_statement_line.action.match]
 label = "Kohdista"
 description = "Merkitse, että rivi vastaa kentässä move_line_id annettua kirjausriviä"
+done = "Kohdistettu"
 
 [labels.fi.model.accounting_bank_statement_line.action.reconcile]
 label = "Täsmäytä"
 description = "Täsmäytä kohdistettu rivi (vain esihenkilö)"
+confirm = "Täsmäytetäänkö tämä pankkitapahtuma? Sitä ei voi muuttaa ennen kuin esihenkilö peruu täsmäytyksen."
+done = "Täsmäytetty"
 
 [labels.fi.model.accounting_bank_statement_line.action.unmatch]
 label = "Poista kohdistus"
 description = "Peruuta virheellinen kohdistus"
+confirm = "Perutaanko tämä kohdistus?"
+done = "Kohdistus peruttu"
 
 [labels.fi.model.accounting_bank_statement_line.action.unreconcile]
 label = "Peru täsmäytys"
 description = "Peruu virheellisen täsmäytyksen; rivi palaa kohdistetuksi ja sitä voi taas muuttaa (vain esihenkilöt)"
+confirm = "Perutaanko tämän pankkitapahtuman täsmäytys? Se palaa kohdistetuksi ja sitä voi taas muuttaa."
+done = "Täsmäytys peruttu"
 
 [labels.fi.model.accounting_move.field.total_debit]
 label = "Debet yhteensä"

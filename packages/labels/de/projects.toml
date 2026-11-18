@@ -60,6 +60,7 @@ description = "Ein geplantes Projekt auf aktiv setzen"
 [labels.de.model.projects_project.action.finish]
 label = "Fertigstellen"
 description = "Ein aktives Projekt als erledigt markieren"
+done = "Projekt erledigt"
 
 [labels.de.model.projects_project.action.reopen]
 label = "Wieder öffnen"
@@ -102,6 +103,7 @@ description = "Einen ausstehenden Meilenstein als erreicht markieren"
 [labels.de.model.projects_milestone.action.miss]
 label = "Als verfehlt markieren"
 description = "Festhalten, dass ein ausstehender Meilenstein verfehlt wurde"
+confirm = "Diesen Meilenstein als verpasst festhalten?"
 
 [labels.de.model.projects_task]
 name = "Aufgabe"
@@ -166,6 +168,7 @@ description = "Eine Aufgabe in Arbeit als erledigt markieren"
 [labels.de.model.projects_task.action.cancel]
 label = "Stornieren"
 description = "Eine Aufgabe verwerfen, die nie begonnen wurde"
+confirm = "Diese Aufgabe abbrechen?"
 
 [labels.de.model.projects_project.field.estimate_minutes]
 label = "Geschätzte Minuten"

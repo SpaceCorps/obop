@@ -146,6 +146,15 @@ pub fn model_hints(o: &mut J, x: &ModelInfo) {
                 }
             }
         }
+        // The same for a declared form section (R17).
+        if let Some(ss) = ui.get_mut("section").and_then(J::as_array_mut) {
+            for s in ss {
+                let texts = s["label"].as_str().and_then(|l| x.section_labels.get(l));
+                if let Some(t) = texts.filter(|t| !t.is_empty()) {
+                    s["labels"] = json!(t);
+                }
+            }
+        }
         if ui.as_object().is_some_and(|m| !m.is_empty()) {
             o["ui"] = ui;
         }

@@ -115,14 +115,17 @@ description = "Avsluta en pågående resa när alla punkter har kommit: servern 
 [labels.sv.model.mileage_trip.action.submit]
 label = "Skicka in"
 description = "Skicka en avslutad resa till granskning"
+done = "Skickad för granskning"
 
 [labels.sv.model.mileage_trip.action.confirm]
 label = "Bekräfta"
 description = "Bekräfta en resa under granskning; från nu räknas den. En granskare kan inte bekräfta sin egen resa"
+done = "Resan bekräftad"
 
 [labels.sv.model.mileage_trip.action.reject]
 label = "Avvisa"
 description = "Avvisa en resa under granskning; skriv orsaken till avslaget först. En granskare kan inte avvisa sin egen resa"
+done = "Resan avvisad"
 
 [labels.sv.model.mileage_trip.action.reopen]
 label = "Öppna igen"
@@ -131,10 +134,13 @@ description = "Återställ en avvisad resa till avslutad så att föraren kan r�
 [labels.sv.model.mileage_trip.action.discard]
 label = "Kassera"
 description = "Kassera din egen pågående, avslutade eller avvisade resa; skriv orsaken först. En kasserad resa räknas aldrig"
+done = "Resan kasserad"
 
 [labels.sv.model.mileage_trip.action.discard_stuck]
 label = "Kassera fastnad"
 description = "Kassera som administratör en resa som fastnat i pågår eller avslutad"
+confirm = "Kassera den här fastnade resan? Den räknas aldrig."
+done = "Resan kasserad"
 
 [labels.sv.model.mileage_point]
 name = "Punkt"
@@ -171,3 +177,15 @@ description = "Hastighet över mark i meter per sekund, när telefonen angav den
 [labels.sv.model.mileage_point.field.driver]
 label = "Förare"
 description = "Inloggning för resans förare; servern sätter den från resan"
+
+[labels.sv.model.mileage_trip.section.trip]
+label = "Resa"
+
+[labels.sv.model.mileage_trip.section.review]
+label = "Granskning"
+
+[labels.sv.model.mileage_trip.section.discard]
+label = "Kassering"
+
+[labels.sv.model.mileage_trip.section.recorded_by_the_app]
+label = "Registrerat av appen"

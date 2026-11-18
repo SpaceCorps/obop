@@ -129,10 +129,12 @@ description = "Köa ett meddelande: to, subject och body, eller template med lan
 [labels.sv.model.outbound_mail.action.retry]
 label = "Skicka igen"
 description = "Köa ett misslyckat meddelande igen, försök från noll"
+done = "Köad igen"
 
 [labels.sv.model.outbound_mail.action.cancel]
 label = "Avbryt"
 description = "Avbryt ett köat meddelande; dess text raderas"
+done = "Avbruten"
 
 [labels.sv.model.outbound_mail.action.process]
 label = "Skicka förfallna"
@@ -231,6 +233,7 @@ description = "Indata till test_send: adressen testmeddelandet går till; sparas
 [labels.sv.model.mail_server.action.test_send]
 label = "Skicka test"
 description = "Skicka nu ett kort testmeddelande via servern till test_recipient och spara svaret"
+done = "Testmeddelandet skickat"
 
 [labels.sv.model.mail_template]
 name = "E-postmall"

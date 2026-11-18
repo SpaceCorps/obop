@@ -129,10 +129,12 @@ description = "Dodaj wiadomość do kolejki: to, subject i body albo template z 
 [labels.pl.model.outbound_mail.action.retry]
 label = "Wyślij ponownie"
 description = "Ponownie dodaj nieudaną wiadomość do kolejki, próby od zera"
+done = "Ponownie w kolejce"
 
 [labels.pl.model.outbound_mail.action.cancel]
 label = "Anuluj"
 description = "Anuluj wiadomość w kolejce; jej treść zostaje usunięta"
+done = "Anulowano"
 
 [labels.pl.model.outbound_mail.action.process]
 label = "Wyślij zaległe"
@@ -231,6 +233,7 @@ description = "Dane wejściowe test_send: adres wiadomości testowej; nigdy nie 
 [labels.pl.model.mail_server.action.test_send]
 label = "Wyślij test"
 description = "Wyślij teraz krótką wiadomość testową przez ten serwer do test_recipient i zapisz odpowiedź"
+done = "Wysłano wiadomość testową"
 
 [labels.pl.model.mail_template]
 name = "Szablon wiadomości"

@@ -42,10 +42,14 @@ description = "Date à laquelle le paiement est dû (YYYY-MM-DD) ; pas avant la
 [labels.fr.model.invoice.action.post]
 label = "Comptabiliser"
 description = "Comptabilise une facture en brouillon et lui attribue le numéro suivant de la série"
+confirm = "Valider cette facture ? Elle reçoit son numéro et ne pourra plus être modifiée."
+done = "Facture validée"
 
 [labels.fr.model.invoice.action.cancel]
 label = "Annuler"
 description = "Annule une facture en brouillon"
+confirm = "Annuler ce brouillon de facture ?"
+done = "Facture annulée"
 
 [labels.fr.model.invoice.field.party_id]
 label = "Tiers"

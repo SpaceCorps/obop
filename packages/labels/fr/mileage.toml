@@ -115,14 +115,17 @@ description = "Terminer un trajet en cours dès que tous les points sont arrivé
 [labels.fr.model.mileage_trip.action.submit]
 label = "Soumettre"
 description = "Envoyer un trajet terminé en vérification"
+done = "Envoyé pour vérification"
 
 [labels.fr.model.mileage_trip.action.confirm]
 label = "Confirmer"
 description = "Confirmer un trajet en vérification ; il compte dès lors. Un vérificateur ne peut pas confirmer son propre trajet"
+done = "Trajet confirmé"
 
 [labels.fr.model.mileage_trip.action.reject]
 label = "Rejeter"
 description = "Rejeter un trajet en vérification ; écrire d'abord le motif de rejet. Un vérificateur ne peut pas rejeter son propre trajet"
+done = "Trajet refusé"
 
 [labels.fr.model.mileage_trip.action.reopen]
 label = "Rouvrir"
@@ -131,10 +134,13 @@ description = "Remettre un trajet rejeté à terminé pour que le conducteur le 
 [labels.fr.model.mileage_trip.action.discard]
 label = "Abandonner"
 description = "Abandonner son propre trajet en cours, terminé ou rejeté ; écrire d'abord le motif. Un trajet abandonné ne compte jamais"
+done = "Trajet abandonné"
 
 [labels.fr.model.mileage_trip.action.discard_stuck]
 label = "Abandonner un bloqué"
 description = "Abandonner, en administrateur, un trajet bloqué en cours ou terminé"
+confirm = "Abandonner ce trajet bloqué ? Il ne comptera jamais."
+done = "Trajet abandonné"
 
 [labels.fr.model.mileage_point]
 name = "Point GPS"
@@ -171,3 +177,15 @@ description = "Vitesse sol en mètres par seconde, quand le téléphone l'a indi
 [labels.fr.model.mileage_point.field.driver]
 label = "Conducteur"
 description = "Identifiant du conducteur du trajet ; fixé par le serveur d'après le trajet"
+
+[labels.fr.model.mileage_trip.section.trip]
+label = "Trajet"
+
+[labels.fr.model.mileage_trip.section.review]
+label = "Vérification"
+
+[labels.fr.model.mileage_trip.section.discard]
+label = "Abandon"
+
+[labels.fr.model.mileage_trip.section.recorded_by_the_app]
+label = "Enregistré par l'application"

@@ -132,10 +132,13 @@ expired = "Expirée"
 [labels.fr.model.sign_request.action.send]
 label = "Envoyer"
 description = "Envoie la demande au signataire"
+done = "Envoyée au signataire"
 
 [labels.fr.model.sign_request.action.sign]
 label = "Signer"
 description = "Enregistre à la main que le signataire a signé ; seulement pour une demande sans document, car une demande portant sur un document est signée par le signataire au moyen du lien"
+confirm = "Enregistrer que le signataire a signé ? Une demande portant sur un document se signe plutôt par son lien de signature."
+done = "Marquée comme signée"
 
 [labels.fr.model.sign_request.action.sign.assert.document_request]
 message = "Une demande portant sur un document est signée par le signataire au moyen du lien ; elle ne peut pas être marquée signée à la main"
@@ -143,14 +146,19 @@ message = "Une demande portant sur un document est signée par le signataire au 
 [labels.fr.model.sign_request.action.decline]
 label = "Décliner"
 description = "Enregistre que le signataire a décliné"
+confirm = "Enregistrer que le signataire a refusé ?"
+done = "Marquée comme refusée"
 
 [labels.fr.model.sign_request.action.expire]
 label = "Marquer expiré"
 description = "Enregistre que la demande est arrivée à échéance sans signature"
+confirm = "Enregistrer que la demande a expiré sans signature ?"
+done = "Marquée comme expirée"
 
 [labels.fr.model.sign_request.action.send_document]
 label = "Envoyer le document"
 description = "Envoyer une demande portant sur un document de Documents : prend l'empreinte SHA-256 du PDF, en garde une copie exacte et passe la demande à envoyée ; créez ensuite le lien de signature"
+done = "Envoyée. Créez ensuite le lien de signature."
 
 [labels.fr.model.sign_link]
 name = "Lien de signature"
@@ -176,3 +184,15 @@ description = "Quand le lien a été révoqué (UTC) ; renseignez-le pour révoq
 [labels.fr.model.sign_link.field.link]
 label = "Lien"
 description = "Le lien lui-même : uniquement dans la réponse de create, affiché une fois, jamais conservé et jamais renvoyé par get, list ou search"
+
+[labels.fr.model.sign_request.section.request]
+label = "Demande"
+
+[labels.fr.model.sign_request.section.options]
+label = "Réglages"
+
+[labels.fr.model.sign_request.section.sent_file]
+label = "Fichier envoyé"
+
+[labels.fr.model.sign_request.section.evidence]
+label = "Preuves"

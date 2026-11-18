@@ -25,6 +25,8 @@ description = "Vapaamuotoiset sisäiset muistiinpanot"
 [labels.fi.model.party.action.erase]
 label = "Poista tiedot"
 description = "Anonymisoi osapuoli paikallaan ja kirjaa poiston"
+confirm = "Poistetaanko tämän yhteystiedon henkilötiedot? Tätä ei voi perua."
+done = "Henkilötiedot poistettu"
 
 [labels.fi.model.party.field.photo]
 label = "Kuva"

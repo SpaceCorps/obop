@@ -51,11 +51,15 @@ approved = "Zatwierdzone"
 [labels.pl.model.timesheets_entry.action.submit]
 label = "Prześlij"
 description = "Przesyła wpis do zatwierdzenia"
+done = "Przesłano do zatwierdzenia"
 
 [labels.pl.model.timesheets_entry.action.approve]
 label = "Zatwierdź"
 description = "Zatwierdza przesłany wpis (tylko kierownik)"
+confirm = "Zatwierdzić ten wpis czasu? Potem nie będzie można go zmienić."
+done = "Zatwierdzono"
 
 [labels.pl.model.timesheets_entry.action.reject]
 label = "Zwróć do poprawy"
 description = "Zwraca przesłany wpis do wersji roboczej (tylko kierownik)"
+done = "Odesłano do szkicu"

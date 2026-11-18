@@ -12,7 +12,7 @@ import { fromEdit, relocaleNumber, sameAsStored, toEdit, validate, type Edit } f
 import { recordExtensionOf, withoutOverridden } from "./extensions.ts";
 import { FormBody, flushLines, linesDirty, newLinesRegistry } from "./FormBody.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
-import { actionTitle, fieldTitle } from "./labels.ts";
+import { actionConfirm, actionDone, actionTitle, fieldTitle } from "./labels.ts";
 import { extendTrail, trailStore } from "./lastRecord.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
@@ -489,7 +489,7 @@ export function RecordPanel({
       const f = a.field ? model.fields.find((x) => x.name === a.field) : undefined;
       const now = { ...row, ...after } as Row;
       d.notify(
-        a.ui?.done ??
+        actionDone(a) ??
           (f && a.to
             ? t("{model} {name} is now {state}", {
                 model: title,
@@ -658,13 +658,15 @@ export function RecordPanel({
             label={actionLabelFor(asking, inSentence(title))}
             needs={needsOf(asking)}
             question={
-              questionOf(model, asking) ??
+              // The package's question; for a danger action without one, the one that names the
+              // record; else the question of a step with no way back (#102).
+              actionConfirm(asking) ??
               (actions.danger.some((x) => x.id === asking.id)
                 ? t("{action} “{name}”?", {
                     action: actionLabelFor(asking, inSentence(title)),
                     name: label,
                   })
-                : undefined)
+                : questionOf(model, asking))
             }
             danger={actions.danger.some((x) => x.id === asking.id)}
             currency={currency}

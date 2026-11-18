@@ -129,10 +129,12 @@ description = "Lisää viesti jonoon: to, subject ja body tai template sekä lan
 [labels.fi.model.outbound_mail.action.retry]
 label = "Lähetä uudelleen"
 description = "Lisää epäonnistunut viesti uudelleen jonoon, yritykset nollasta"
+done = "Jonossa uudelleen"
 
 [labels.fi.model.outbound_mail.action.cancel]
 label = "Peru"
 description = "Peru jonossa oleva viesti; sen teksti poistetaan"
+done = "Peruttu"
 
 [labels.fi.model.outbound_mail.action.process]
 label = "Lähetä erääntyneet"
@@ -231,6 +233,7 @@ description = "test_send-komennon syöte: testiviestin osoite; ei tallenneta"
 [labels.fi.model.mail_server.action.test_send]
 label = "Lähetä testi"
 description = "Lähetä nyt lyhyt testiviesti tämän palvelimen kautta osoitteeseen test_recipient ja tallenna vastaus"
+done = "Testiviesti lähetetty"
 
 [labels.fi.model.mail_template]
 name = "Viestipohja"

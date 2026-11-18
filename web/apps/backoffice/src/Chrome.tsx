@@ -35,7 +35,7 @@ import { appHomeOf } from "./extensions.ts";
 import { hostMenuItems } from "./host/menu.ts";
 import "./registrations.ts";
 import { productDocsVisible } from "./productDocs.ts";
-import { actionTitle, appTitle, modelTitle } from "./labels.ts";
+import { actionConfirm, actionTitle, appTitle, modelTitle } from "./labels.ts";
 import { appMenu, groupApps, homeHref, onLauncher, pluralTitle } from "./nav.ts";
 import { nextActions, searchFieldsOf, titleOf } from "./presentation.ts";
 import { recentRecords } from "./recent.ts";
@@ -535,7 +535,7 @@ export function Palette({
       data.notify(t("You have unsaved changes. Save or discard them first."), "info");
       return;
     }
-    const question = openModel ? questionOf(openModel, a) : a.ui?.confirm;
+    const question = openModel ? questionOf(openModel, a) : actionConfirm(a);
     if (question && !(await data.confirm(question, name, t("Cancel")))) return;
     const r = await data.run(a.id, { id: openRow.id });
     if (r.kind === "ok") data.notify(t("{name} done", { name }));

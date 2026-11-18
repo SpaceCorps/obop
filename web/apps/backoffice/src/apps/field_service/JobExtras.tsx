@@ -12,7 +12,7 @@ import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
 import { formatDate, isoDate, money, optionLabel } from "../../format.ts";
 import { clockText, shownNumber } from "../../inputs/display.ts";
-import { actionTitle } from "../../labels.ts";
+import { actionConfirm, actionDone, actionTitle } from "../../labels.ts";
 import { serverMessage } from "../../serverMessage.ts";
 import { PrintSheet } from "../sales/PrintSheet.tsx";
 import { JOB, PART, needsSignature, siteText } from "./job.ts";
@@ -128,11 +128,12 @@ export function CompleteJob({ model, row, busy }: RecordExtProps) {
   if (!cmd || row.state !== "in_progress" || needsSignature(row)) return null;
   const label = actionTitle(cmd);
   const complete = async () => {
-    if (cmd.ui?.confirm && !(await d.confirm(cmd.ui.confirm, label, t("Cancel")))) return;
+    const question = actionConfirm(cmd);
+    if (question && !(await d.confirm(question, label, t("Cancel")))) return;
     setWorking(true);
     try {
       const r = await d.run(cmd.id, { id: row.id });
-      if (r.kind === "ok") d.notify(cmd.ui?.done || t("Job done"), "ok");
+      if (r.kind === "ok") d.notify(actionDone(cmd) || t("Job done"), "ok");
       else if (r.kind === "approval") d.notify(t("Sent for approval"), "info");
       else d.notify(serverMessage(r.message), "error");
     } finally {

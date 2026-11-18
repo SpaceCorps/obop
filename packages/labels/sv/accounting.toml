@@ -147,10 +147,14 @@ closed = "Stängt"
 [labels.sv.model.accounting_fiscal_year.action.close]
 label = "Stäng"
 description = "Stäng räkenskapsåret så att inget mer bokförs i det (endast godkännare)"
+confirm = "Stänga det här räkenskapsåret? Det kan inte ändras förrän det öppnas igen."
+done = "Räkenskapsåret stängt"
 
 [labels.sv.model.accounting_fiscal_year.action.reopen]
 label = "Öppna igen"
 description = "Öppna ett stängt räkenskapsår för att rätta det (endast godkännare)"
+confirm = "Öppna det här stängda räkenskapsåret igen?"
+done = "Räkenskapsåret öppnat igen"
 
 [labels.sv.model.accounting_period]
 name = "Period"
@@ -187,10 +191,14 @@ closed = "Stängd"
 [labels.sv.model.accounting_period.action.close]
 label = "Stäng"
 description = "Stäng perioden för vidare bokföring (endast godkännare)"
+confirm = "Stänga den här perioden? Verifikationer daterade i den kan inte längre bokföras eller ändras."
+done = "Perioden stängd"
 
 [labels.sv.model.accounting_period.action.reopen]
 label = "Öppna igen"
 description = "Öppna en stängd period (endast godkännare)"
+confirm = "Öppna den här perioden igen? Verifikationsutkast daterade i den kan ändras och bokföras igen."
+done = "Perioden öppnad igen"
 
 [labels.sv.model.accounting_move]
 name = "Verifikation"
@@ -237,14 +245,20 @@ reversed = "Återförd"
 [labels.sv.model.accounting_move.action.post]
 label = "Bokför"
 description = "Bokför en verifikation i utkast i huvudboken och ge den ett nummer (endast godkännare; nekas utan belopp eller om debet och kredit inte är lika)"
+confirm = "Bokföra den här verifikationen? Den får sitt nummer och kan inte längre ändras."
+done = "Verifikation bokförd"
 
 [labels.sv.model.accounting_move.action.cancel]
 label = "Annullera"
 description = "Annullera en verifikation i utkast som aldrig bokförts"
+confirm = "Makulera det här verifikationsutkastet?"
+done = "Verifikation makulerad"
 
 [labels.sv.model.accounting_move.action.reverse]
 label = "Återför"
 description = "Markera en bokförd verifikation som återförd; motverifikationen bokförs separat (endast godkännare)"
+confirm = "Markera den här verifikationen som vänd? Bokför den motsatta verifikationen separat."
+done = "Verifikation markerad som vänd"
 
 [labels.sv.model.accounting_move_line]
 name = "Verifikationsrad"
@@ -342,18 +356,25 @@ reconciled = "Avstämd"
 [labels.sv.model.accounting_bank_statement_line.action.match]
 label = "Matcha"
 description = "Registrera att raden motsvarar verifikationsraden som anges i move_line_id"
+done = "Matchad"
 
 [labels.sv.model.accounting_bank_statement_line.action.reconcile]
 label = "Stäm av"
 description = "Stäm av en matchad rad (endast chef)"
+confirm = "Stämma av den här banktransaktionen? Den kan inte ändras förrän en chef ångrar avstämningen."
+done = "Avstämd"
 
 [labels.sv.model.accounting_bank_statement_line.action.unmatch]
 label = "Ta bort matchning"
 description = "Ångra en matchning som blev fel"
+confirm = "Ångra den här matchningen?"
+done = "Matchningen ångrad"
 
 [labels.sv.model.accounting_bank_statement_line.action.unreconcile]
 label = "Ångra avstämning"
 description = "Ångra en avstämning som blev fel; raden blir matchad igen och kan ändras (endast chefer)"
+confirm = "Ångra avstämningen av den här banktransaktionen? Den blir matchad igen och kan ändras igen."
+done = "Avstämningen ångrad"
 
 [labels.sv.model.accounting_move.field.total_debit]
 label = "Totalt debet"

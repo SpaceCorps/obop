@@ -1,7 +1,7 @@
 import { inSentence, t } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta, Reply } from "./api.ts";
 import { isEmpty, optionLabel } from "./format.ts";
-import { actionTitle } from "./labels.ts";
+import { actionConfirm, actionTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { JOB, needsSignature } from "./apps/field_service/job.ts";
 
@@ -203,7 +203,8 @@ export function oneWay(model: ModelMeta, a: Command): boolean {
  * else none.
  */
 export function questionOf(model: ModelMeta, a: Command): string | undefined {
-  if (a.ui?.confirm) return a.ui.confirm;
+  const asked = actionConfirm(a);
+  if (asked) return asked;
   if (!oneWay(model, a)) return undefined;
   const f = model.fields.find((x) => x.name === a.field);
   return t("{action}? There is no way back: afterwards no action moves it out of {state}.", {

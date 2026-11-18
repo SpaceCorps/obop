@@ -47,15 +47,22 @@ lost = "Perdida"
 [labels.es.model.lead.action.qualify]
 label = "Cualificar"
 description = "Pasar una oportunidad nueva a la etapa cualificada"
+done = "Oportunidad calificada"
 
 [labels.es.model.lead.action.mark_won]
 label = "Marcar como ganada"
 description = "Pasar la oportunidad a la etapa ganada"
+done = "Marcada como ganada"
 
 [labels.es.model.lead.action.mark_lost]
 label = "Marcar como perdida"
 description = "Pasar la oportunidad a la etapa perdida"
+confirm = "¿Marcar esta oportunidad como perdida?"
+done = "Marcada como perdida"
 
 [labels.es.model.lead.action.reopen]
 label = "Reabrir"
 description = "Devolver la oportunidad a la etapa nueva"
+
+[labels.es.model.lead.section.why_it_was_lost]
+label = "Por qué se perdió"

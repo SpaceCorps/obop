@@ -15,7 +15,7 @@ import { useData } from "../data.tsx";
 import { fromEdit, toEdit, type Edit } from "../edit.ts";
 import { readPref, writePref } from "../favorites.ts";
 import { isEmpty, isState } from "../format.ts";
-import { actionTitle, fieldTitle } from "../labels.ts";
+import { actionDone, actionTitle, fieldTitle } from "../labels.ts";
 import { PHONE_QUERY, useMedia } from "../media.ts";
 import { currencyOf, newDefaults, nextActions } from "../presentation.ts";
 import { domainOf, groupDomain, groupKey, groupLabel, groupable } from "../query.ts";
@@ -428,13 +428,13 @@ export function KanbanView(p: ViewProps) {
           if (a.field === gf.name && a.to) {
             const out = await moveRecord(d.run, model, gf, r, a.to, noun);
             setBusyId(null);
-            if (out.kind === "ok") d.notify(a.ui?.done ?? t("{name} done", { name }));
+            if (out.kind === "ok") d.notify(actionDone(a) ?? t("{name} done", { name }));
             else d.notify(out.message, out.kind === "approval" ? "info" : "error");
             return;
           }
           const reply = await d.run(a.id, { id: r.id });
           setBusyId(null);
-          if (reply.kind === "ok") d.notify(a.ui?.done ?? t("{name} done", { name }));
+          if (reply.kind === "ok") d.notify(actionDone(a) ?? t("{name} done", { name }));
           else if (reply.kind === "approval")
             d.notify(
               t(
@@ -898,7 +898,7 @@ export function KanbanView(p: ViewProps) {
     setBusyId(row.id);
     const reply = await d.run(action.id, { id: row.id, ...values });
     setBusyId(null);
-    if (reply.kind === "ok") d.notify(action.ui?.done ?? t("{name} done", { name }));
+    if (reply.kind === "ok") d.notify(actionDone(action) ?? t("{name} done", { name }));
     else if (reply.kind === "approval")
       d.notify(
         t(

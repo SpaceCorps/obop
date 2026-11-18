@@ -82,18 +82,25 @@ cancelled = "Storniert"
 [labels.de.model.purchase_order.action.send]
 label = "Senden"
 description = "Eine Bestellung im Entwurf als Angebotsanfrage an den Lieferanten senden"
+done = "Als gesendet markiert"
 
 [labels.de.model.purchase_order.action.confirm]
 label = "Bestätigen"
 description = "Die Bestellung beim Lieferanten verbindlich machen (nur Führungskräfte)"
+confirm = "Diese Bestellung beim Lieferanten bestätigen?"
+done = "Bestellung bestätigt"
 
 [labels.de.model.purchase_order.action.receive]
 label = "Eingang erfassen"
 description = "Erfassen, dass die Ware angekommen ist: je Position wird eine Lagerbewegung als Entwurf angelegt, die das Lager validiert (braucht die Gruppe inventory.user)"
+confirm = "Die Ware annehmen? Ist ein Eingangsort gesetzt, entsteht für jede Position ein Entwurf einer Lagerbewegung, den das Lager bestätigt, und die Bestellung kann nicht mehr geändert werden."
+done = "Bestellung eingegangen"
 
 [labels.de.model.purchase_order.action.cancel]
 label = "Stornieren"
 description = "Eine noch nicht gesendete Bestellung stornieren"
+confirm = "Diesen Auftrag stornieren?"
+done = "Auftrag storniert"
 
 [labels.de.model.purchase_order_line]
 name = "Bestellposition"

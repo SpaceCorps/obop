@@ -115,14 +115,17 @@ description = "Päätä käynnissä oleva matka, kun kaikki pisteet ovat perill�
 [labels.fi.model.mileage_trip.action.submit]
 label = "Lähetä tarkastettavaksi"
 description = "Lähetä päättynyt matka tarkastettavaksi"
+done = "Lähetetty tarkastettavaksi"
 
 [labels.fi.model.mileage_trip.action.confirm]
 label = "Vahvista"
 description = "Vahvista tarkastuksessa oleva matka; siitä lähtien se lasketaan. Tarkastaja ei voi vahvistaa omaa matkaansa"
+done = "Matka vahvistettu"
 
 [labels.fi.model.mileage_trip.action.reject]
 label = "Hylkää"
 description = "Hylkää tarkastuksessa oleva matka; kirjoita ensin hylkäyksen syy. Tarkastaja ei voi hylätä omaa matkaansa"
+done = "Matka hylätty"
 
 [labels.fi.model.mileage_trip.action.reopen]
 label = "Avaa uudelleen"
@@ -131,10 +134,13 @@ description = "Palauta hylätty matka päättyneeksi, jotta kuljettaja voi korja
 [labels.fi.model.mileage_trip.action.discard]
 label = "Mitätöi"
 description = "Mitätöi oma käynnissä oleva, päättynyt tai hylätty matka; kirjoita ensin syy. Mitätöityä matkaa ei lasketa koskaan"
+done = "Matka hylätty"
 
 [labels.fi.model.mileage_trip.action.discard_stuck]
 label = "Mitätöi jumiin jäänyt"
 description = "Mitätöi ylläpitäjänä matka, joka on jumissa tilassa tallennetaan tai päättynyt"
+confirm = "Hylätäänkö tämä jumiin jäänyt matka? Sitä ei koskaan lasketa."
+done = "Matka hylätty"
 
 [labels.fi.model.mileage_point]
 name = "Piste"
@@ -171,3 +177,15 @@ description = "Maanopeus metreinä sekunnissa, jos puhelin ilmoitti sen"
 [labels.fi.model.mileage_point.field.driver]
 label = "Kuljettaja"
 description = "Matkan kuljettajan tunnus; palvelin asettaa sen matkasta"
+
+[labels.fi.model.mileage_trip.section.trip]
+label = "Matka"
+
+[labels.fi.model.mileage_trip.section.review]
+label = "Tarkastus"
+
+[labels.fi.model.mileage_trip.section.discard]
+label = "Hylkäys"
+
+[labels.fi.model.mileage_trip.section.recorded_by_the_app]
+label = "Sovelluksen tallentama"
