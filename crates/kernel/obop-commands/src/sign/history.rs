@@ -98,9 +98,11 @@ impl SignService {
     /// (`ended`), and only while `revoked_at` is empty, which can matter for the link that
     /// signed alone (an administrator can write it on a link that was used; the page stays). A
     /// link that is over, or a used link that was revoked, is shown the page it was always shown,
-    /// with nobody's name on it, not even its own signer's, and no query is made for it.
+    /// with nobody's name on it, not even its own signer's, and no query is made for it. A signer
+    /// whose own signature was not made under the sentence (its consent id has no mark: the box
+    /// was ticked after signing) is in nobody's list and is shown none either (docs/ISSUES.md O54).
     pub(super) fn history_for_end_page(&self, f: &Found) -> Result<Option<History>, DoorError> {
-        if !self.history_on(&f.req) {
+        if !self.history_on(&f.req) || !consent_names_the_history(text(&f.req, "consent_version")) {
             return Ok(None);
         }
         if !text(&f.link, "revoked_at").is_empty() || self.ended(f) {

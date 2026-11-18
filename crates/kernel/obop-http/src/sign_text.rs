@@ -28,7 +28,8 @@
 //! eight texts and then over that sentence ([`HISTORY_WORDING_KEYS`]). The id of any other request
 //! is unchanged. The heading (`history_title`), the line for an empty list (`history_none`), the
 //! mark of the signer's own entry (`history_you`), the line that says the list is cut
-//! (`history_more`) and the message of a page that changed under the signer (`err_history`) are not
+//! (`history_more`) and the messages of a page that changed under the signer (`err_history`, and
+//! `err_changed` when the switch was cleared) are not
 //! texts the signer relies on and are not covered, like the title and the refusal pages.
 //!
 //! **Placeholders.** `{title}`, `{name}`, `{hash}` and `{time}` are the only ones. Every column of
@@ -254,7 +255,7 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("gone_revoked", ["This link can no longer be used. Ask the sender for a new one.", "Dieser Link kann nicht mehr verwendet werden. Bitten Sie den Absender um einen neuen.", "Ce lien ne peut plus être utilisé. Demandez-en un nouveau à l'expéditeur.", "Tego linku nie można już użyć. Poproś nadawcę o nowy.", "Tätä linkkiä ei voi enää käyttää. Pyydä lähettäjältä uusi.", "Länken kan inte längre användas. Be avsändaren om en ny.", "Este enlace ya no se puede usar. Pida uno nuevo al remitente."]),
     ("changed", ["The document changed after this request was sent, so it cannot be signed here. Do not sign. Tell the sender.", "Das Dokument wurde nach dem Versand dieser Anfrage geändert und kann hier nicht unterschrieben werden. Bitte nicht unterschreiben. Informieren Sie den Absender.", "Le document a été modifié après l'envoi de cette demande ; il ne peut pas être signé ici. Ne signez pas. Prévenez l'expéditeur.", "Dokument zmieniono po wysłaniu tej prośby, więc nie można go tu podpisać. Nie podpisuj. Powiadom nadawcę.", "Asiakirjaa on muutettu pyynnön lähettämisen jälkeen, joten sitä ei voi allekirjoittaa täällä. Älä allekirjoita. Kerro asiasta lähettäjälle.", "Dokumentet har ändrats efter att begäran skickades och kan inte signeras här. Signera inte. Berätta för avsändaren.", "El documento cambió después de enviarse esta solicitud, así que no se puede firmar aquí. No firme. Avise al remitente."]),
     ("unknown", ["This page was not found. Check that you copied the whole link.", "Diese Seite wurde nicht gefunden. Prüfen Sie, ob Sie den ganzen Link kopiert haben.", "Cette page est introuvable. Vérifiez que vous avez copié le lien en entier.", "Nie znaleziono tej strony. Sprawdź, czy skopiowano cały link.", "Sivua ei löytynyt. Tarkista, että kopioit koko linkin.", "Sidan hittades inte. Kontrollera att du kopierade hela länken.", "No se encontró esta página. Compruebe que copió el enlace completo."]),
-    ("busy", ["Too many attempts. Wait a minute and try again.", "Zu viele Versuche. Warten Sie eine Minute und versuchen Sie es erneut.", "Trop de tentatives. Attendez une minute et réessayez.", "Zbyt wiele prób. Poczekaj minutę i spróbuj ponownie.", "Liian monta yritystä. Odota minuutti ja yritä uudelleen.", "För många försök. Vänta en minut och försök igen.", "Demasiados intentos. Espere un minuto e inténtelo de nuevo."]),
+    ("busy", ["Too many attempts. Wait up to an hour and try again.", "Zu viele Versuche. Warten Sie bis zu einer Stunde und versuchen Sie es dann erneut.", "Trop de tentatives. Attendez jusqu'à une heure, puis réessayez.", "Zbyt wiele prób. Odczekaj do godziny i spróbuj ponownie.", "Liian monta yritystä. Odota enintään tunti ja yritä uudelleen.", "För många försök. Vänta upp till en timme och försök igen.", "Demasiados intentos. Espere hasta una hora e inténtelo de nuevo."]),
     ("unavailable", ["This page is temporarily unavailable. Try again in a few minutes.", "Diese Seite ist vorübergehend nicht verfügbar. Versuchen Sie es in einigen Minuten erneut.", "Cette page est temporairement indisponible. Réessayez dans quelques minutes.", "Ta strona jest tymczasowo niedostępna. Spróbuj ponownie za kilka minut.", "Sivu ei ole tilapäisesti käytettävissä. Yritä uudelleen muutaman minuutin kuluttua.", "Sidan är tillfälligt otillgänglig. Försök igen om några minuter.", "Esta página no está disponible temporalmente. Inténtelo de nuevo en unos minutos."]),
     ("forbidden", ["This request could not be checked. Open the link again and sign from that page.", "Diese Anfrage konnte nicht überprüft werden. Öffnen Sie den Link erneut und unterschreiben Sie auf dieser Seite.", "Cette demande n'a pas pu être vérifiée. Rouvrez le lien et signez depuis cette page.", "Nie udało się zweryfikować tego żądania. Otwórz link ponownie i podpisz z tej strony.", "Tätä pyyntöä ei voitu tarkistaa. Avaa linkki uudelleen ja allekirjoita siltä sivulta.", "Den här begäran kunde inte kontrolleras. Öppna länken igen och signera från den sidan.", "No se pudo comprobar esta solicitud. Abra el enlace de nuevo y firme desde esa página."]),
     ("closed", ["This request is closed. It was declined or has expired, or it no longer needs your signature. Ask the sender if you think this is a mistake.", "Diese Anfrage ist geschlossen. Sie wurde abgelehnt oder ist abgelaufen oder braucht Ihre Unterschrift nicht mehr. Fragen Sie den Absender, wenn Sie glauben, dass es sich um einen Fehler handelt.", "Cette demande est clôturée. Elle a été refusée ou a expiré, ou elle n'a plus besoin de votre signature. Demandez à l'expéditeur si vous pensez qu'il s'agit d'une erreur.", "Ta prośba jest zamknięta. Została odrzucona lub wygasła albo nie wymaga już Twojego podpisu. Zapytaj nadawcę, jeśli uważasz, że to pomyłka.", "Tämä pyyntö on suljettu. Se on hylätty tai vanhentunut, tai se ei enää tarvitse allekirjoitustasi. Kysy lähettäjältä, jos luulet, että tämä on virhe.", "Den här begäran är stängd. Den har avslagits eller gått ut, eller behöver inte längre din signatur. Fråga avsändaren om du tror att det är ett misstag.", "Esta solicitud está cerrada. Fue rechazada o ha caducado, o ya no necesita su firma. Pregunte al remitente si cree que es un error."]),
@@ -264,6 +265,7 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("history_more", ["Only the earliest signatures are listed here.", "Hier sind nur die frühesten Unterschriften aufgeführt.", "Seules les premières signatures sont listées ici.", "Wymieniono tu tylko najwcześniejsze podpisy.", "Tässä on lueteltu vain varhaisimmat allekirjoitukset.", "Bara de tidigaste signaturerna visas här.", "Aquí solo se muestran las primeras firmas."]),
     ("history_notice", ["Your name, as you type it, and the time you sign are shown to the other people who sign this file.", "Ihr Name, wie Sie ihn eingeben, und der Zeitpunkt Ihrer Unterschrift werden den anderen Personen angezeigt, die diese Datei unterschreiben.", "Votre nom, tel que vous le saisissez, et l'heure de votre signature sont montrés aux autres personnes qui signent ce fichier.", "Twoje imię i nazwisko, w brzmieniu, jakie wpiszesz, oraz czas podpisu są pokazywane innym osobom, które podpisują ten plik.", "Nimesi sellaisena kuin kirjoitat sen ja allekirjoitusaikasi näytetään muille tämän tiedoston allekirjoittaville.", "Ditt namn, så som du skriver det, och tiden du signerar visas för de andra som signerar den här filen.", "Su nombre, tal como lo escribe, y la hora de su firma se muestran a las demás personas que firman este archivo."]),
     ("err_history", ["The page has changed since you opened it: it now says that your name and the time you sign are shown to the other people who sign this file. Read the notice below, then press Sign again.", "Die Seite hat sich seit dem Öffnen geändert: Sie weist jetzt darauf hin, dass Ihr Name und der Zeitpunkt Ihrer Unterschrift den anderen Personen angezeigt werden, die diese Datei unterschreiben. Lesen Sie den Hinweis unten und klicken Sie erneut auf Unterschreiben.", "La page a changé depuis son ouverture : elle indique maintenant que votre nom et l'heure de votre signature sont montrés aux autres personnes qui signent ce fichier. Lisez l'avis ci-dessous, puis cliquez de nouveau sur Signer.", "Strona zmieniła się od jej otwarcia: teraz informuje, że Twoje imię i nazwisko oraz czas podpisu są pokazywane innym osobom, które podpisują ten plik. Przeczytaj uwagę poniżej, a potem kliknij Podpisz jeszcze raz.", "Sivu on muuttunut sen avaamisen jälkeen: nyt siinä kerrotaan, että nimesi ja allekirjoitusaikasi näytetään muille tämän tiedoston allekirjoittaville. Lue alla oleva huomautus ja paina sitten Allekirjoita uudelleen.", "Sidan har ändrats sedan du öppnade den: den säger nu att ditt namn och tiden du signerar visas för de andra som signerar den här filen. Läs meddelandet nedan och tryck sedan på Signera igen.", "La página ha cambiado desde que la abrió: ahora indica que su nombre y la hora de su firma se muestran a las demás personas que firman este archivo. Lea el aviso de abajo y vuelva a pulsar Firmar."]),
+    ("err_changed", ["The page has changed since you opened it. Read it again, then press Sign again.", "Die Seite hat sich seit dem Öffnen geändert. Lesen Sie sie erneut und klicken Sie dann noch einmal auf Unterschreiben.", "La page a changé depuis son ouverture. Relisez-la, puis cliquez de nouveau sur Signer.", "Strona zmieniła się od jej otwarcia. Przeczytaj ją ponownie, a potem kliknij Podpisz jeszcze raz.", "Sivu on muuttunut sen avaamisen jälkeen. Lue se uudelleen ja paina sitten Allekirjoita uudelleen.", "Sidan har ändrats sedan du öppnade den. Läs den igen och tryck sedan på Signera igen.", "La página ha cambiado desde que la abrió. Léala de nuevo y vuelva a pulsar Firmar."]),
 ];
 
 #[cfg(test)]
@@ -273,7 +275,7 @@ mod tests {
 
     /// The keys the signer door and its page may ask for (D92, section 4.1), in the design's
     /// order. A key outside the list, or one missing from it, fails here.
-    const KEYS: [&str; 30] = [
+    const KEYS: [&str; 31] = [
         "title",
         "document",
         "open_full",
@@ -304,6 +306,7 @@ mod tests {
         "history_more",
         "history_notice",
         "err_history",
+        "err_changed",
     ];
 
     /// The `{placeholders}` of a text, in order of appearance.
@@ -753,6 +756,22 @@ mod tests {
         for key in ["title", "done_body", "gone_expired", "busy"] {
             let cat = edit(key, 0);
             assert_eq!(wording_id(&cat, 0), base[0], "{key} moved the id");
+        }
+    }
+
+    #[test]
+    fn the_busy_page_does_not_promise_a_minute_when_the_wait_can_be_an_hour() {
+        // The window of one link is an hour, of a source ten minutes (docs/ISSUES.md O30): the
+        // page names the longest wait; `Retry-After` carries the exact seconds.
+        let en = text("en", "busy");
+        assert!(!en.contains("minute"), "{en}");
+        assert!(en.contains("an hour"), "{en}");
+        for (i, lang) in LANGS.iter().enumerate() {
+            let t = text(lang, "busy");
+            assert!(!t.is_empty(), "{lang}");
+            if i > 0 {
+                assert_ne!(t, en, "{lang} is not translated");
+            }
         }
     }
 
