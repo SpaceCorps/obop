@@ -2595,23 +2595,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/outbound_mail/bulk_create": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create up to 1000 outbound_mail records in one call; all or nothing unless mode is partial */
-        post: operations["outbound_mail.bulk_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/outbound_mail/cancel": {
         parameters: {
             query?: never;
@@ -2623,23 +2606,6 @@ export interface paths {
         put?: never;
         /** Cancel a queued message; its body is erased */
         post: operations["outbound_mail.cancel"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/outbound_mail/create": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create a outbound_mail */
-        post: operations["outbound_mail.create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2765,23 +2731,6 @@ export interface paths {
          * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
          */
         post: operations["outbound_mail.send"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/outbound_mail/update": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Update a outbound_mail; a status field only moves along a declared action */
-        post: operations["outbound_mail.update"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4521,7 +4470,7 @@ export interface components {
              * @example 2026-03-29T01:30:00.000000Z
              */
             last_test_at?: string;
-            /** @description What the server answered to the last test message */
+            /** @description What the server answered to the last test message (personal data: agents see it masked) */
             last_test_result?: string;
             /** @description A name that tells the servers apart */
             name?: string;
@@ -4851,7 +4800,7 @@ export interface components {
              * @enum {string}
              */
             language?: "en" | "de" | "fr" | "pl" | "fi" | "sv" | "es";
-            /** @description Why the last attempt failed, without the body or credentials */
+            /** @description Why the last attempt failed, without the body or credentials (personal data: agents see it masked) */
             last_error?: string;
             /** @description Worker lease, in seconds since 1970 */
             lease_until?: number;
@@ -4885,10 +4834,10 @@ export interface components {
             sent_at?: string;
             /** @description The mail server that sends it */
             server?: string;
-            /** @description The server's or provider's answer to the accepted message */
+            /** @description The server's or provider's answer to the accepted message (personal data: agents see it masked) */
             server_reply?: string;
             /**
-             * @description queued, sending, sent, failed or cancelled
+             * @description queued, sending, sent, failed or cancelled (moves only through the model's actions)
              * @enum {string}
              */
             status?: "queued" | "sending" | "sent" | "failed" | "cancelled";
@@ -13586,7 +13535,7 @@ export interface operations {
                          * @example 2026-03-29T01:30:00.000000Z
                          */
                         last_test_at?: string;
-                        /** @description What the server answered to the last test message */
+                        /** @description What the server answered to the last test message (personal data: agents see it masked) */
                         last_test_result?: string;
                         /** @description A name that tells the servers apart */
                         name: string;
@@ -13727,7 +13676,7 @@ export interface operations {
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     last_test_at?: string;
-                    /** @description What the server answered to the last test message */
+                    /** @description What the server answered to the last test message (personal data: agents see it masked) */
                     last_test_result?: string;
                     /** @description A name that tells the servers apart */
                     name: string;
@@ -14284,7 +14233,7 @@ export interface operations {
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     last_test_at?: string;
-                    /** @description What the server answered to the last test message */
+                    /** @description What the server answered to the last test message (personal data: agents see it masked) */
                     last_test_result?: string;
                     /** @description A name that tells the servers apart */
                     name?: string;
@@ -17964,172 +17913,6 @@ export interface operations {
             };
         };
     };
-    "outbound_mail.bulk_create": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB). Number fields take whole numbers, money minor units; a decimal is written with a point and a datetime with an offset or Z; a decimal field that rounds on import takes extra digits */
-                    csv?: string;
-                    dry_run?: boolean;
-                    idempotency_key?: string;
-                    /** @enum {string} */
-                    mode?: "all_or_nothing" | "partial";
-                    rows?: {
-                        /** @description Delivery attempts so far */
-                        attempts?: number;
-                        /** @description Blind copy recipients, comma separated; never in a header (personal data: agents see it masked) */
-                        bcc?: string;
-                        /** @description The text, sealed; erased once the message is sent or cancelled (personal data: agents see it masked) */
-                        body?: string;
-                        /** @description Copy recipients, comma separated (personal data: agents see it masked) */
-                        cc?: string;
-                        /** @description When it is due, in seconds since 1970 */
-                        due?: number;
-                        /** @description What the message is for, such as invoice or password_reset; general when not given */
-                        kind?: string;
-                        /**
-                         * @description Input of send: the template language
-                         * @enum {string}
-                         */
-                        language?: "en" | "de" | "fr" | "pl" | "fi" | "sv" | "es";
-                        /** @description Why the last attempt failed, without the body or credentials */
-                        last_error?: string;
-                        /** @description Worker lease, in seconds since 1970 */
-                        lease_until?: number;
-                        /** @description The Message-ID header, the same on every attempt */
-                        message_id?: string;
-                        /**
-                         * Format: date-time
-                         * @description When it is tried next (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                         * @example 2026-03-29T01:30:00.000000Z
-                         */
-                        next_attempt_at?: string;
-                        /**
-                         * Format: date-time
-                         * @description When it was queued (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                         * @example 2026-03-29T01:30:00.000000Z
-                         */
-                        queued_at?: string;
-                        /** @description The id of that record */
-                        related_id?: string;
-                        /** @description The model of the record the message is about */
-                        related_model?: string;
-                        /** @description Where replies go; empty means the server's setting (personal data: agents see it masked) */
-                        reply_to?: string;
-                        /** @description Who queued it (personal data: agents see it masked) */
-                        requested_by?: string;
-                        /**
-                         * Format: date-time
-                         * @description When the server or provider accepted it (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                         * @example 2026-03-29T01:30:00.000000Z
-                         */
-                        sent_at?: string;
-                        /** @description The mail server that sends it */
-                        server?: string;
-                        /** @description The server's or provider's answer to the accepted message */
-                        server_reply?: string;
-                        /**
-                         * @description queued, sending, sent, failed or cancelled
-                         * @enum {string}
-                         */
-                        status?: "queued" | "sending" | "sent" | "failed" | "cancelled";
-                        /** @description Subject line (personal data: agents see it masked) */
-                        subject?: string;
-                        /** @description Input of send: the template key to render; recorded */
-                        template?: string;
-                        /** @description Recipients, comma separated (personal data: agents see it masked) */
-                        to: string;
-                        /** @description Input of send: the template values as a JSON object; never stored (personal data: agents see it masked) */
-                        vars?: string;
-                    }[];
-                };
-            };
-        };
-        responses: {
-            /** @description The report of the call. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        value?: {
-                            created?: number;
-                            dry_run?: boolean;
-                            errors?: {
-                                error?: string;
-                                line?: number;
-                                row?: number;
-                            }[];
-                            failed?: number;
-                            ids?: (string | null)[];
-                            mode?: string;
-                            ok?: boolean;
-                            replayed?: boolean;
-                            total?: number;
-                            /** @description With dry_run: rows that would be created */
-                            valid?: number;
-                        };
-                    };
-                };
-            };
-            /** @description Proposed; needs a human to approve. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalRequired"];
-                };
-            };
-            /** @description The input was rejected; the error says which field and why. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing, expired or revoked bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description No such command or record, or it is hidden from this token. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
-            503: {
-                headers: {
-                    /** @description Seconds to wait before trying again. */
-                    "Retry-After"?: number;
-                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
-                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     "outbound_mail.cancel": {
         parameters: {
             query?: never;
@@ -18141,149 +17924,6 @@ export interface operations {
             content: {
                 "application/json": {
                     id: string;
-                };
-            };
-        };
-        responses: {
-            /** @description A record. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        denied?: string[];
-                        value?: components["schemas"]["outbound_mail"];
-                    };
-                };
-            };
-            /** @description Proposed; needs a human to approve. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalRequired"];
-                };
-            };
-            /** @description The input was rejected; the error says which field and why. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing, expired or revoked bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description No such command or record, or it is hidden from this token. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
-            503: {
-                headers: {
-                    /** @description Seconds to wait before trying again. */
-                    "Retry-After"?: number;
-                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
-                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    "outbound_mail.create": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Delivery attempts so far */
-                    attempts?: number;
-                    /** @description Blind copy recipients, comma separated; never in a header (personal data: agents see it masked) */
-                    bcc?: string;
-                    /** @description The text, sealed; erased once the message is sent or cancelled (personal data: agents see it masked) */
-                    body?: string;
-                    /** @description Copy recipients, comma separated (personal data: agents see it masked) */
-                    cc?: string;
-                    /** @description When it is due, in seconds since 1970 */
-                    due?: number;
-                    /** @description What the message is for, such as invoice or password_reset; general when not given */
-                    kind?: string;
-                    /**
-                     * @description Input of send: the template language
-                     * @enum {string}
-                     */
-                    language?: "en" | "de" | "fr" | "pl" | "fi" | "sv" | "es";
-                    /** @description Why the last attempt failed, without the body or credentials */
-                    last_error?: string;
-                    /** @description Worker lease, in seconds since 1970 */
-                    lease_until?: number;
-                    /** @description The Message-ID header, the same on every attempt */
-                    message_id?: string;
-                    /**
-                     * Format: date-time
-                     * @description When it is tried next (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    next_attempt_at?: string;
-                    /**
-                     * Format: date-time
-                     * @description When it was queued (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    queued_at?: string;
-                    /** @description The id of that record */
-                    related_id?: string;
-                    /** @description The model of the record the message is about */
-                    related_model?: string;
-                    /** @description Where replies go; empty means the server's setting (personal data: agents see it masked) */
-                    reply_to?: string;
-                    /** @description Who queued it (personal data: agents see it masked) */
-                    requested_by?: string;
-                    /**
-                     * Format: date-time
-                     * @description When the server or provider accepted it (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    sent_at?: string;
-                    /** @description The mail server that sends it */
-                    server?: string;
-                    /** @description The server's or provider's answer to the accepted message */
-                    server_reply?: string;
-                    /**
-                     * @description queued, sending, sent, failed or cancelled
-                     * @enum {string}
-                     */
-                    status?: "queued" | "sending" | "sent" | "failed" | "cancelled";
-                    /** @description Subject line (personal data: agents see it masked) */
-                    subject?: string;
-                    /** @description Input of send: the template key to render; recorded */
-                    template?: string;
-                    /** @description Recipients, comma separated (personal data: agents see it masked) */
-                    to: string;
-                    /** @description Input of send: the template values as a JSON object; never stored (personal data: agents see it masked) */
-                    vars?: string;
                 };
             };
         };
@@ -18871,150 +18511,6 @@ export interface operations {
             content: {
                 "application/json": {
                     id: string;
-                };
-            };
-        };
-        responses: {
-            /** @description A record. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        denied?: string[];
-                        value?: components["schemas"]["outbound_mail"];
-                    };
-                };
-            };
-            /** @description Proposed; needs a human to approve. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalRequired"];
-                };
-            };
-            /** @description The input was rejected; the error says which field and why. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing, expired or revoked bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description No such command or record, or it is hidden from this token. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
-            503: {
-                headers: {
-                    /** @description Seconds to wait before trying again. */
-                    "Retry-After"?: number;
-                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
-                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    "outbound_mail.update": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Delivery attempts so far */
-                    attempts?: number;
-                    /** @description Blind copy recipients, comma separated; never in a header (personal data: agents see it masked) */
-                    bcc?: string;
-                    /** @description The text, sealed; erased once the message is sent or cancelled (personal data: agents see it masked) */
-                    body?: string;
-                    /** @description Copy recipients, comma separated (personal data: agents see it masked) */
-                    cc?: string;
-                    /** @description When it is due, in seconds since 1970 */
-                    due?: number;
-                    id: string;
-                    /** @description What the message is for, such as invoice or password_reset; general when not given */
-                    kind?: string;
-                    /**
-                     * @description Input of send: the template language
-                     * @enum {string}
-                     */
-                    language?: "en" | "de" | "fr" | "pl" | "fi" | "sv" | "es";
-                    /** @description Why the last attempt failed, without the body or credentials */
-                    last_error?: string;
-                    /** @description Worker lease, in seconds since 1970 */
-                    lease_until?: number;
-                    /** @description The Message-ID header, the same on every attempt */
-                    message_id?: string;
-                    /**
-                     * Format: date-time
-                     * @description When it is tried next (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    next_attempt_at?: string;
-                    /**
-                     * Format: date-time
-                     * @description When it was queued (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    queued_at?: string;
-                    /** @description The id of that record */
-                    related_id?: string;
-                    /** @description The model of the record the message is about */
-                    related_model?: string;
-                    /** @description Where replies go; empty means the server's setting (personal data: agents see it masked) */
-                    reply_to?: string;
-                    /** @description Who queued it (personal data: agents see it masked) */
-                    requested_by?: string;
-                    /**
-                     * Format: date-time
-                     * @description When the server or provider accepted it (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    sent_at?: string;
-                    /** @description The mail server that sends it */
-                    server?: string;
-                    /** @description The server's or provider's answer to the accepted message */
-                    server_reply?: string;
-                    /**
-                     * @description queued, sending, sent, failed or cancelled
-                     * @enum {string}
-                     */
-                    status?: "queued" | "sending" | "sent" | "failed" | "cancelled";
-                    /** @description Subject line (personal data: agents see it masked) */
-                    subject?: string;
-                    /** @description Input of send: the template key to render; recorded */
-                    template?: string;
-                    /** @description Recipients, comma separated (personal data: agents see it masked) */
-                    to?: string;
-                    /** @description Input of send: the template values as a JSON object; never stored (personal data: agents see it masked) */
-                    vars?: string;
                 };
             };
         };
