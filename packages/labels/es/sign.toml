@@ -41,6 +41,10 @@ description = "La plantilla de documento que se envía; vacía en una solicitud 
 label = "Documento"
 description = "El PDF de Documentos que quien firma lee y firma; al enviar la solicitud se toma su SHA-256 y se guarda una copia exacta"
 
+[labels.es.model.sign_request.field.no_document]
+label = "Sin documento"
+description = "Indica si la solicitud no se refiere a un documento de Documentos; esa solicitud la ve cualquiera que lea solicitudes, y una solicitud sobre un documento solo quienes pueden ver ese documento"
+
 [labels.es.model.sign_request.field.title]
 label = "Título"
 description = "Asunto que ve el firmante"

@@ -28,7 +28,11 @@ const hooks = vi.hoisted(() => ({
   /** The time `useNow` gives. */
   now: 0,
   outbox: { active: null, loaded: true } as {
-    active: { clientTripId: string; startedAt: string } | null;
+    active: {
+      clientTripId: string;
+      startedAt: string;
+      problem?: { code: string; message: string } | null;
+    } | null;
     loaded: boolean;
   },
   listeners: [] as Array<() => void>,
@@ -157,9 +161,9 @@ function render(points: StoredPoint[] = weakPoints) {
   hooks.effects.length = 0;
   const stored = vi.fn(async (_id: string) => points);
   const rt = { store: { points: stored } } as unknown as Runtime;
-  const nav = { home: vi.fn(), replace: vi.fn() } as unknown as Nav;
+  const nav = { home: vi.fn(), replace: vi.fn(), push: vi.fn() } as unknown as Nav;
   const root = Recording({ rt, nav }) as ReactElement<{ children?: ReactNode }>;
-  return { rt, stored, root };
+  return { rt, stored, root, nav };
 }
 
 /** The elements among some children, in order, without the `false` and `null` of the conditions. */
@@ -408,5 +412,43 @@ describe("what the Recording screen says of a trip before and after the first re
     }
     const points = elements(after.props.children).find((child) => child.props.testID === "points");
     expect(points!.props.children).toBe(tp("recording.points", 7));
+  });
+});
+
+describe("the Recording screen says when the server discarded or lost the open trip (L41)", () => {
+  const lostBanner = (root: ReactElement<{ children?: ReactNode }>) =>
+    elements(root.props.children).find((child) => child.props.testID === "lost-banner");
+
+  test.each([
+    ["gone", "trip.problem.gone"],
+    ["discarded", "trip.problem.discarded"],
+  ] as const)(
+    "a trip flagged %s: a danger banner that leads to the trip's Discard",
+    (code, key) => {
+      hooks.outbox.active = {
+        ...hooks.outbox.active!,
+        problem: { code, message: "no mileage_trip x" },
+      };
+      const { root, nav } = render();
+      const banner = lostBanner(root);
+      expect(banner).toBeDefined();
+      expect(banner!.type).toBe(Banner);
+      expect(banner!.props.tone).toBe("danger");
+      expect(banner!.props.title).toBe(t("recording.lost.title"));
+      expect(banner!.props.message).toBe(t(key));
+      const action = banner!.props.action as { label: string; onPress: () => void };
+      expect(action.label).toBe(t("recording.lost.action"));
+      action.onPress();
+      expect(nav.push).toHaveBeenCalledWith({ name: "trip", id: TRIP });
+    },
+  );
+
+  test("another problem, or none, draws no such banner", () => {
+    expect(lostBanner(render().root)).toBeUndefined();
+    hooks.outbox.active = {
+      ...hooks.outbox.active!,
+      problem: { code: "incomplete", message: "4 of 5 points" },
+    };
+    expect(lostBanner(render().root)).toBeUndefined();
   });
 });

@@ -583,6 +583,9 @@ impl OAuth {
         }
         match self.auth.login_step(username, password) {
             Ok(out) => self.after_login(id, &mut rec, out),
+            // A refused read of the account is no wrong password: no attempt is spent, and the
+            // page says to try again (D74, N22).
+            Err(e) if obop_storage::fault::Fault::is_transient(&e) => Err(FlowError::Busy(5)),
             Err(e) => {
                 self.count_attempt(id, &mut rec)?;
                 let _ = self.flow_put(id, &rec);

@@ -856,7 +856,7 @@ fn removing_the_last_passkey_of_an_ordinary_user_ends_their_two_factor_state() {
     let opts = r.a.proof_options(&p, &ctx()).unwrap();
     r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
     r.a.remove(&p, &token, &id, &pw()).unwrap();
-    assert!(!r.a.has_second_factor("ada"));
+    assert!(!r.a.has_second_factor("ada").unwrap());
     assert!(r.b.get("auth_user", "ada").unwrap().unwrap()["recovery"].is_null());
     // Password sign-in works again.
     assert!(matches!(
@@ -990,7 +990,7 @@ fn the_break_glass_reset_and_the_administrators_reset_clear_passkeys_too() {
     r.b.update("auth_user", "ada", &f).unwrap();
     r.a.operator_reset_mfa("ada").unwrap();
     assert_eq!(r.a.passkey_count("ada"), 0);
-    assert!(!r.a.has_second_factor("ada"));
+    assert!(!r.a.has_second_factor("ada").unwrap());
     assert!(r.b.get("auth_user", "ada").unwrap().unwrap()["passkey_login"] == false);
     assert!(matches!(
         r.a.login_step("ada", PW).unwrap(),
@@ -1233,7 +1233,7 @@ fn totp_and_passkeys_coexist_and_either_completes_the_second_step() {
     let opts = r.a.proof_options(&p, &ctx()).unwrap();
     r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
     r.a.disable(&p, PW, None, None).unwrap();
-    assert!(!r.a.mfa_enabled("ada") && r.a.has_second_factor("ada"));
+    assert!(!r.a.mfa_enabled("ada") && r.a.has_second_factor("ada").unwrap());
     assert!(!r.b.get("auth_user", "ada").unwrap().unwrap()["recovery"].is_null());
 }
 
@@ -1318,4 +1318,41 @@ fn passkeys_work_on_postgres_when_available() {
     assert!(matches!(e, Err(MfaError::Denied(m)) if m.contains("cloned")));
     a.operator_reset_mfa(&user).unwrap();
     assert_eq!(a.passkey_count(&user), 0);
+}
+
+/// K19: a good passkey answer that meets a refused read of the store (the challenge, the passkey
+/// row, the person's handle) is the store's error, never a "denied" counted toward the lockout of a
+/// person who did nothing wrong.
+#[test]
+fn a_refused_read_never_turns_a_good_passkey_answer_into_a_counted_failure() {
+    use crate::admin_tests::flaky_rig;
+    let mut refused_runs = 0;
+    for skip in 0..30 {
+        let (r, flaky) = flaky_rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        let (mine, p) = session(&r.a, "ada");
+        let mut auth = SoftAuthenticator::es256();
+        add(&r, &mine, &p, &mut auth, "k").unwrap();
+        let opts = r.a.proof_options(&p, &ctx()).unwrap();
+        let answer = auth.get(&opts, ORIGIN);
+        flaky.refuse_call_after(skip);
+        let before = flaky.refused();
+        let got = r.a.proof(&p, &ctx(), &answer);
+        let hit = flaky.refused() > before;
+        flaky.refuse_call_after(-1);
+        flaky.allow_models();
+        if hit {
+            refused_runs += 1;
+        }
+        assert!(
+            !matches!(got, Err(MfaError::Denied(_))),
+            "refusal after {skip} calls: {got:?}"
+        );
+        let failures = r.b.counter_get(&Auth::failure_key("ada")).unwrap();
+        assert_eq!(failures, 0, "refusal after {skip} calls was counted");
+    }
+    assert!(
+        refused_runs > 3,
+        "the sweep met a refusal in {refused_runs} runs only"
+    );
 }

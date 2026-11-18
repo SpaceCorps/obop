@@ -413,16 +413,14 @@ fn documents_tiles_and_templates_start_with_sensible_values() {
     ));
     assert_eq!(act(&app, &sm, "sign_request.send", &r)["sent_on"], TODAY);
     assert_eq!(act(&app, &sm, "sign_request.sign", &r)["signed_on"], TODAY);
-    // A day typed by hand is kept.
-    let r = id(&ok(
+    // A day typed by hand is refused: the days are set by the system (docs/ISSUES.md O34).
+    let e = run(
         &app,
         &sm,
         "sign_request.create",
         json!({"title": "NDA for Joe", "template_id": id(&t), "signer_name": "Joe Test",
                "signer_email": "joe@example.test", "sent_on": "2026-09-01"}),
-    ));
-    assert_eq!(
-        act(&app, &sm, "sign_request.send", &r)["sent_on"],
-        "2026-09-01"
-    );
+    )
+    .unwrap_err();
+    assert!(e.contains("cannot be set by hand"), "{e}");
 }

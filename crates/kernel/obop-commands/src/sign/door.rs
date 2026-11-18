@@ -102,6 +102,9 @@ pub enum Invalid {
     /// that did not say so: the staff switch was turned on after the signer opened the page. Nothing
     /// was written; the page is shown again with the notice.
     History,
+    /// The switch was cleared between the door's read and its write (docs/ISSUES.md O50): nothing
+    /// was written, and the page is shown again as it is now.
+    Changed,
 }
 
 /// What the page shows for a link that works.
@@ -289,11 +292,17 @@ impl SignService {
     /// and belongs to a signed request, `status` does not look at it at all (the page after
     /// signing is given whatever the end) and only the list on that page stops with it.
     pub(super) fn ended(&self, f: &Found) -> bool {
+        self.ended_at(f, self.now_micros())
+    }
+
+    /// As [`Self::ended`], at the time `now`. A clock that reads before 1970 (the system clock
+    /// answers 0 then) has ended every link: a wrong clock never lets one work longer.
+    fn ended_at(&self, f: &Found, now: i64) -> bool {
         let mut end = instant_micros(text(&f.link, "expires_at")).unwrap_or(i64::MIN);
-        if let Some(day_end) = end_of_day_micros(text(&f.req, "expires_on")) {
+        if let Some(day_end) = self.end_of_day_micros(text(&f.req, "expires_on")) {
             end = end.min(day_end);
         }
-        self.now_micros() > end
+        now <= 0 || now > end
     }
 
     /// What a link shows, by the first of these that holds (docs/SIGN.md, "When the list is
@@ -527,9 +536,15 @@ impl SignService {
             }
         }
 
+        // The time of the signature is taken after the held copy was read and hashed, so the end
+        // is looked at again with it: a signature never carries a time after the link's end.
         let at = self.now_micros();
+        if self.ended_at(&f, at) {
+            self.refused(&f, "gone_post", client);
+            return Err(DoorError::Gone(Gone::Expired));
+        }
         let signed_at = micros_text(at);
-        let signed_on: String = signed_at.chars().take(10).collect();
+        let signed_on = self.day_of(at);
         let ip = client.ip();
         let agent = clean(&client.user_agent, 300);
         let reference = format!("typed:{name}");
@@ -621,6 +636,16 @@ impl SignService {
         )
         .primary("sign_request", &f.rid)
         .ticket("sign_request", &f.rid, "sign");
+        // Under the dispatcher's write lock, which every write command of `sign_request` takes
+        // around its read and its write (the model has effects, so it is a locked model): a staff
+        // `decline`, `expire` or `update` that read the request as sent can no longer write over
+        // a signature that committed in between (docs/ISSUES.md O21). The batch's own conditions
+        // cover the other order.
+        let _txn = self
+            .store
+            .backend
+            .lock(crate::shared::TXN_KEY)
+            .map_err(|e| unavailable(e.to_string()))?;
         match self.store.backend.apply_ctx(&ctx, &ops) {
             Ok(()) => Ok(Done { already: false }),
             Err(ApplyError::Conflict { .. }) => self.after_conflict(&f, client),
@@ -638,6 +663,18 @@ impl SignService {
             && text(r, "state") == "signed"
         {
             return Ok(Done { already: true });
+        }
+        if let Some(r) = &req
+            && text(r, "state") == "sent"
+            && r.get(HISTORY_FLAG) != f.req.get(HISTORY_FLAG)
+        {
+            // A manager ticked or cleared the box in that instant: the link still works, and the
+            // page now says something else. Show it again, with what changed.
+            return Err(DoorError::Invalid(if self.history_on(r) {
+                Invalid::History
+            } else {
+                Invalid::Changed
+            }));
         }
         if let Some(r) = req {
             let again = Found {

@@ -98,6 +98,11 @@ describe("what the driver may do", () => {
     expect(canSubmit({ ...ended, serverState: "rejected" })).toBe(false);
   });
 
+  test("a private trip is not submitted: the server refuses it, no reviewer reads it", () => {
+    expect(canSubmit({ ...ended, purpose: "private" })).toBe(false);
+    expect(canSubmit({ ...ended, purpose: "commute" })).toBe(true);
+  });
+
   test("discard while the server allows it", () => {
     expect(canDiscard(trip())).toBe(true);
     expect(canDiscard(ended)).toBe(true);

@@ -58,7 +58,7 @@ description = "Najwyższy numer kolejny wśród zapisanych punktów"
 
 [labels.pl.model.mileage_trip.field.integrity]
 label = "Integralność"
-description = "Znaczniki ustawione przy zakończeniu: seq_gap, speed_jump i low_accuracy z liczbą; puste, gdy ślad jest czysty"
+description = "Znaczniki ustawione przy zakończeniu: seq_gap, speed_jump, low_accuracy, before_start i reanchor z liczbą; puste, gdy ślad jest czysty"
 
 [labels.pl.model.mileage_trip.field.start_lat]
 label = "Start (szer.)"
@@ -94,7 +94,7 @@ description = "Kiedy przejazd potwierdzono, ustawiane przez Potwierdź; miesiąc
 
 [labels.pl.model.mileage_trip.field.reviewable]
 label = "Do sprawdzenia"
-description = "Prawda, gdy przejazd jest w sprawdzaniu, potwierdzony lub odrzucony: stany, które widzi recenzent"
+description = "Prawda, gdy przejazd jest w sprawdzaniu, potwierdzony lub odrzucony, a jego cel nie jest prywatny: przejazdy, które widzi recenzent"
 
 [labels.pl.model.mileage_trip.field.state]
 label = "Stan"

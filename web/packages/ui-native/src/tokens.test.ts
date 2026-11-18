@@ -34,6 +34,50 @@ function hexOf(value: string): string {
   if (!m) throw new Error(`not an oklch literal: ${value}`);
   return oklchToHex({ l: +m[1]!, c: +m[2]!, h: +m[3]! });
 }
+/**
+ * `color-mix(in oklab, A p%, B)` worked out here from the two sRGB colours, independently of the
+ * generator (L36): sRGB to linear light, to OKLab (Bjorn Ottosson's matrices), the weighted mean,
+ * and back. The tints are compared with this channel by channel, not by the share that the
+ * generator was given.
+ */
+function mixOklab(a: string, b: string, share: number): [number, number, number] {
+  const toLab = (hex: string) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => {
+      const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    }) as [number, number, number];
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * bl);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * bl);
+    const q = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * bl);
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * q,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * q,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * q,
+    ];
+  };
+  const [x, y] = [toLab(a), toLab(b)];
+  const [L, A, B] = x.map((v, i) => v * share + y[i]! * (1 - share)) as [number, number, number];
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const q = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  const lin = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * q,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * q,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * q,
+  ];
+  return lin.map((v) => {
+    const c = Math.min(1, Math.max(0, v));
+    return 255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+  }) as [number, number, number];
+}
+
+/** The largest difference of one channel between a hex colour and a mix, in steps of 1/255. */
+function channelGap(hex: string, mix: [number, number, number]): number {
+  return Math.max(
+    ...[1, 3, 5].map((i, k) => Math.abs(parseInt(hex.slice(i, i + 2), 16) - mix[k]!)),
+  );
+}
+
 /** `--signal-600` lives in the primitives, which only the light block (:root) declares. */
 const primitive = (name: string) => hexOf(decl(blocks.light, name));
 
@@ -71,6 +115,25 @@ describe("tokens.native.ts", () => {
         expect(t[name].ink, `${name} ink`).toBe(primitive(`${name}-${steps.ink}`));
         expect(t[name].fill).toBe(ramp(SIGNALS[name].hue, SIGNALS[name].chroma)[steps.fill]);
       }
+    });
+
+    test("each soft tint is the oklab mix of its colour and the surface, worked out here (L36)", () => {
+      for (const [name, pct] of Object.entries(SOFT_PERCENT)) {
+        if (!(name in SIGNALS)) continue;
+        const signal = t[name as keyof typeof SIGNALS];
+        const gap = channelGap(signal.soft, mixOklab(signal.fill, t.surface, pct / 100));
+        expect(gap, `${name}-soft`).toBeLessThanOrEqual(1);
+      }
+      expect(channelGap(t.accentSoft, mixOklab(t.accentFill, t.surface, 0.12))).toBeLessThanOrEqual(
+        1,
+      );
+    });
+
+    test("a tint off by two steps in one channel is caught by that comparison", () => {
+      const right = mixOklab(t.success.fill, t.surface, SOFT_PERCENT.success / 100);
+      const off = [Math.round(right[0]) + 2, Math.round(right[1]), Math.round(right[2])];
+      const hex = `#${off.map((v) => Math.min(255, v).toString(16).padStart(2, "0")).join("")}`;
+      expect(channelGap(hex, right)).toBeGreaterThan(1);
     });
 
     test("accent fill, ink and the text on it", () => {
