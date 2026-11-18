@@ -12,6 +12,7 @@ import {
   t,
   twoFactorMessage,
   tx,
+  useWorded,
 } from "@obop/ui";
 import { AccessPicker, useAccess, useAccessData, type AccessData } from "./AccessPicker.tsx";
 import { levelWord } from "./accessText.ts";
@@ -126,7 +127,8 @@ function NewPersonDialog({
   const [picked, setPicked] = useState<string[]>([]);
   const access = useAccess(data, apps, picked);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Kept as how to word it, so a switch of the language words it again (D9).
+  const [error, setError] = useWorded();
   const [temp, setTemp] = useState<string | null>(null);
   const tooShort = password !== "" && [...password].length < MIN_PASSWORD;
 
@@ -140,7 +142,7 @@ function NewPersonDialog({
       { username: name.trim(), groups: picked, ...(password ? { password } : {}) },
     );
     setBusy(false);
-    if (!r.ok) return setError(failed(r));
+    if (!r.ok) return setError(() => failed(r));
     onDone();
     if (r.value.temporary_password) setTemp(r.value.temporary_password);
     else onClose();
@@ -256,7 +258,7 @@ function AccessDialog({
   const [picked, setPicked] = useState<string[]>(person.groups);
   const access = useAccess(data, apps, person.groups);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const same = useMemo(
     () => picked.length === person.groups.length && picked.every((g) => person.groups.includes(g)),
     [picked, person.groups],
@@ -271,7 +273,7 @@ function AccessDialog({
     if (r.ok) {
       onDone();
       onClose();
-    } else setError(failed(r));
+    } else setError(() => failed(r));
   }
   return (
     <Dialog
@@ -388,7 +390,7 @@ export function PeopleSection({
   const [editing, setEditing] = useState<Person | null>(null);
   const [offboarding, setOffboarding] = useState<Person | null>(null);
   const [mfaReset, setMfaReset] = useState<Person | null>(null);
-  const [mfaError, setMfaError] = useState<string | null>(null);
+  const [mfaError, setMfaError] = useWorded();
   const data = useAccessData(token);
   const access = useAccess(data, apps);
   const [note, setNote] = useState("");
@@ -463,7 +465,7 @@ export function PeopleSection({
       void load();
       onTwoFactorReset?.();
     } else
-      setMfaError(
+      setMfaError(() =>
         r.status === 400
           ? t("There is no such person, or they have no two-factor to reset.")
           : twoFactorMessage({ status: r.status, code: r.code }),

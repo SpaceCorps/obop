@@ -75,6 +75,8 @@ let server: {
   refuseGroups: string;
   /** A status makes the second-factor reset answer with it. */
   mfaStatus: number;
+  /** A status makes saving groups and creating a person answer with it and no sentence. */
+  failStatus: number;
   /** The module list and the group list both fail. */
   failLists: boolean;
 };
@@ -105,13 +107,15 @@ function fakeServer() {
       const body = init?.body ? (JSON.parse(String(init.body)) as Call["body"]) : undefined;
       calls.push({ method, path, body });
       if (path === "/api/auth/users" && method === "GET") return json({ users: server.users });
-      if (path === "/api/auth/users" && method === "POST") return json({ user: body?.username });
+      if (path === "/api/auth/users" && method === "POST")
+        return server.failStatus ? json({ error: "no" }, server.failStatus) : json({ user: body?.username });
       if (server.failLists && (path === "/api/auth/groups" || path === "/api/module/list"))
         return json({ error: "down" }, 500);
       if (path === "/api/auth/groups") return json({ groups: KNOWN });
       if (path === "/api/module/list") return json({ value: server.modules });
       const groups = /^\/api\/auth\/users\/([^/]+)\/groups$/.exec(path);
       if (groups) {
+        if (server.failStatus) return json({ error: "no" }, server.failStatus);
         if (server.refuseGroups) return json({ error: server.refuseGroups }, 400);
         const u = server.users.find((x) => x.name === decodeURIComponent(groups[1]!));
         if (u) u.groups = body!.groups as string[];
@@ -203,6 +207,7 @@ beforeEach(async () => {
     modules: MODULES,
     refuseGroups: "",
     mfaStatus: 0,
+    failStatus: 0,
     failLists: false,
   };
   fakeServer();
@@ -759,5 +764,69 @@ describe("the folds of the picker", () => {
     expect(more).toContain("Privacy: Officer");
     expect(more).toContain("Exporter");
     expect(more).not.toContain("CRM: Exporter");
+  });
+});
+
+// A refusal kept on the screen is worded when it is drawn, so a switch of the language words it
+// again (docs/ISSUES.md D9).
+describe("a refusal kept in a dialog follows a switch of the language (D9)", () => {
+  const WAIT = "Too many attempts. Wait a minute and try again.";
+  const WAIT_DE = "Zu viele Versuche. Bitte eine Minute warten.";
+  const NO_SUCH = "There is no such person, or they have no two-factor to reset.";
+  const NO_SUCH_DE = "Diese Person gibt es nicht, oder sie hat keine Zwei-Faktor-Anmeldung.";
+  beforeEach(() => provideCatalogue("de", { [WAIT]: WAIT_DE, [NO_SUCH]: NO_SUCH_DE }));
+  const alertText = () => dialog()!.querySelector('[role="alert"]')?.textContent;
+  const german = () => act(async () => void (await setLanguage("de", false)));
+
+  it("Reset two-factor", async () => {
+    server.mfaStatus = 400;
+    await mount("root");
+    await press(rowButton("ada@example.test", "More"));
+    await click(
+      [...document.body.querySelectorAll('[role="menuitem"]')].find(
+        (i) => i.textContent === "Reset two-factor",
+      ),
+    );
+    await click(
+      [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Reset two-factor"),
+    );
+    expect(alertText()).toBe(NO_SUCH);
+    await german();
+    expect(alertText()).toBe(NO_SUCH_DE);
+  });
+
+  it("the Access dialog", async () => {
+    server.failStatus = 429;
+    await mount("root");
+    await press(rowButton("ada@example.test", "Access"));
+    await click(
+      document.body.querySelector<HTMLInputElement>('input[role="switch"][aria-describedby]'),
+    );
+    await click(save()!);
+    expect(alertText()).toBe(WAIT);
+    await german();
+    expect(alertText()).toBe(WAIT_DE);
+  });
+
+  it("New person", async () => {
+    server.failStatus = 429;
+    await mount();
+    await press(
+      [...container.querySelectorAll("button")].find((b) => b.textContent === "New person"),
+    );
+    const name = dialog()!.querySelector<HTMLInputElement>('input[autocomplete="off"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+        name,
+        "fay@example.test",
+      );
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click(
+      [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Create person"),
+    );
+    expect(alertText()).toBe(WAIT);
+    await german();
+    expect(alertText()).toBe(WAIT_DE);
   });
 });
