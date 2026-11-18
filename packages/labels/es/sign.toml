@@ -109,6 +109,15 @@ description = "El nombre completo que escribió quien firma (prueba); signer_nam
 label = "Versión del consentimiento"
 description = "Identificador del texto de consentimiento: su versión, el idioma del envío (el lang del formulario si indica uno de los siete; si el formulario no tiene ningún campo lang, el de la dirección; si no, el del navegador, el de la instancia y el inglés; no prueba de la página mostrada) y los 8 primeros caracteres hexadecimales de un hash de los textos de ese idioma, por ejemplo v1-draft/es/08f87264"
 
+[labels.es.model.sign_request.field.evidence_check]
+label = "Comprobación de las pruebas"
+description = "Si las pruebas de una solicitud firmada mediante enlace siguen coincidiendo con la entrada del registro de seguridad escrita al firmar (desde Sign 0.3.0 también el título, el mensaje y el nombre solicitado): coincide, difiere (cambiada tras la firma) o sin entrada. Solo se calcula en get, vacío en las listas. No es a prueba de manipulación: quien escribe en la base puede cambiar ambos"
+
+[labels.es.model.sign_request.field.evidence_check.options]
+matches = "Coincide"
+differs = "Difiere"
+no_entry = "Sin entrada"
+
 [labels.es.model.sign_request.field.state]
 label = "Estado"
 description = "Estado de la solicitud: borrador, enviada, firmada, rechazada, caducada"

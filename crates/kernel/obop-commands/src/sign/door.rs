@@ -570,6 +570,10 @@ impl SignService {
             ("signature_reference", reference.as_str()),
         ]);
 
+        // What the signer read of the request (its title, message and requested name), so that
+        // `evidence_check` can tell a later edit of them (docs/ISSUES.md O19).
+        let shown = super::evidence::wording_digest(&f.req);
+
         let mut link_patch = Fields::new();
         link_patch.insert("used_at".into(), J::from(signed_at.clone()));
         let mut req_patch = Fields::new();
@@ -622,7 +626,7 @@ impl SignService {
                 "sign_signed",
                 &format!("signer:link:{id12}"),
                 &format!(
-                    "request {}; link {id12}; document {hash}; consent {consent}; digest {digest}; address {ip}; peer {}; forwarded {}",
+                    "request {}; link {id12}; document {hash}; consent {consent}; digest {digest}; wording {shown}; address {ip}; peer {}; forwarded {}",
                     f.rid,
                     logged(&client.peer, 64),
                     logged(&client.forwarded, 200)
@@ -692,7 +696,7 @@ impl SignService {
 }
 
 /// SHA-256 of the sorted `key=value` lines: what the log entry vouches for.
-fn evidence_digest(pairs: &[(&str, &str)]) -> String {
+pub(super) fn evidence_digest(pairs: &[(&str, &str)]) -> String {
     let sorted: BTreeMap<&str, &str> = pairs.iter().copied().collect();
     let mut s = String::new();
     for (k, v) in sorted {

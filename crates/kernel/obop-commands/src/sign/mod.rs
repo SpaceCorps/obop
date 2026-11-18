@@ -27,6 +27,7 @@
 //! The security log entry written at signing carries a digest of the evidence as it stood.
 
 mod door;
+mod evidence;
 mod guards;
 mod history;
 mod link;
@@ -119,6 +120,7 @@ impl SignService {
         guards::install(d, &svc);
         send::install(d, &svc);
         link::install(d, &svc);
+        evidence::install(d, &svc);
         svc
     }
 

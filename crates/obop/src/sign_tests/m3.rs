@@ -175,3 +175,155 @@ async fn two_links_with_two_names_at_once_sign_the_request_once_under_one_of_the
         }
     }
 }
+
+// ---- O3, O10, O19: the reader of the sign_signed entry -----------------------------------------
+
+/// `evidence_check` of `sign_request.get`, as `who` reads it.
+async fn check_of(f: &Fx, who: &str) -> J {
+    let (s, v) = f
+        .api(who, "/api/sign_request/get", json!({"id": f.req}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    v["value"].get("evidence_check").cloned().unwrap_or(J::Null)
+}
+
+#[tokio::test]
+async fn a_signed_request_says_whether_its_evidence_still_equals_the_log_entry() {
+    let (f, _, path, _) = sent().await;
+    // Not signed yet: nothing to compare.
+    assert_eq!(check_of(&f, "mia").await, J::Null);
+    let r = f
+        .post(
+            &path,
+            &ip(171),
+            &[("name", "Jane Test"), ("agree", "1"), ("doc", &f.file)],
+        )
+        .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    // The entry vouches for the evidence and, from 0.3.0, for what the signer read.
+    let detail = f.events_of("sign_signed")[0]["detail"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(detail.contains("; wording "), "{detail}");
+    assert_eq!(check_of(&f, "mia").await, "matches");
+    assert_eq!(check_of(&f, "admin").await, "matches");
+    // Never stored, and nobody sets it: it is the server's.
+    assert!(
+        f.record("sign_request", &f.req)
+            .get("evidence_check")
+            .is_none()
+    );
+    for body in [
+        json!({"id": f.req, "evidence_check": "matches"}),
+        json!({"title": "x", "signer_name": "Jane Test", "evidence_check": "matches"}),
+    ] {
+        let cmd = if body.get("id").is_some() {
+            "/api/sign_request/update"
+        } else {
+            "/api/sign_request/create"
+        };
+        let (s, v) = f.api("admin", cmd, body).await;
+        assert_ne!(s, 200, "{cmd}: {v}");
+    }
+    // An administrator's edit of the evidence shows.
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_request/update",
+            json!({"id": f.req, "signed_name": "Someone Else"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(check_of(&f, "mia").await, "differs");
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_request/update",
+            json!({"id": f.req, "signed_name": "Jane Test"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(check_of(&f, "mia").await, "matches", "back as it was");
+    // So does an edit of what the signer read (O19): the title, the message, the requested name.
+    for (k, v) in [
+        ("title", "Another title"),
+        ("message", "Another message"),
+        ("signer_name", "Another Name"),
+    ] {
+        let was = f.record("sign_request", &f.req).get(k).cloned();
+        let (s, a) = f
+            .api(
+                "admin",
+                "/api/sign_request/update",
+                json!({"id": f.req, k: v}),
+            )
+            .await;
+        assert_eq!(s, 200, "{a}");
+        assert_eq!(check_of(&f, "mia").await, "differs", "{k}");
+        let (s, a) = f
+            .api(
+                "admin",
+                "/api/sign_request/update",
+                json!({"id": f.req, k: was.unwrap_or(J::Null)}),
+            )
+            .await;
+        assert_eq!(s, 200, "{a}");
+        assert_eq!(check_of(&f, "mia").await, "matches", "{k} back");
+    }
+    // An entry of 0.2.x carries no wording digest: the evidence alone is compared.
+    let (eid, mut e) = f
+        .app
+        .store
+        .backend()
+        .find("security_event", "kind", &J::from("sign_signed"))
+        .unwrap()
+        .remove(0);
+    let old: String = {
+        let d = e["detail"].as_str().unwrap();
+        let (head, tail) = d.split_once("; wording ").unwrap();
+        let tail = tail.split_once("; ").unwrap().1;
+        format!("{head}; {tail}")
+    };
+    e.insert("detail".into(), J::from(old));
+    f.app
+        .store
+        .backend()
+        .apply(&[obop_storage::Op::Delete {
+            model: "security_event".into(),
+            id: eid.clone(),
+        }])
+        .unwrap();
+    f.app
+        .store
+        .backend()
+        .apply(&[obop_storage::Op::Insert {
+            model: "security_event".into(),
+            id: eid.clone(),
+            fields: e,
+        }])
+        .unwrap();
+    let (s, _) = f
+        .api(
+            "admin",
+            "/api/sign_request/update",
+            json!({"id": f.req, "title": "Changed after an old signature"}),
+        )
+        .await;
+    assert_eq!(s, 200);
+    assert_eq!(check_of(&f, "mia").await, "matches");
+    // Without the entry there is nothing to compare with.
+    f.app
+        .store
+        .backend()
+        .apply(&[obop_storage::Op::Delete {
+            model: "security_event".into(),
+            id: eid,
+        }])
+        .unwrap();
+    assert_eq!(check_of(&f, "mia").await, "no_entry");
+    // The list leaves it empty.
+    let (s, v) = f.api("mia", "/api/sign_request/list", json!({})).await;
+    assert_eq!(s, 200, "{v}");
+    assert!(!v.to_string().contains("evidence_check\":\""), "{v}");
+}

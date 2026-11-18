@@ -1,5 +1,5 @@
 //! Upgrading `sign` from the version that is deployed today (0.2.0) to the one with the signer
-//! door (0.2.1; the bundled package is 0.2.5, see `history.rs` and `brand_words.rs`), on an
+//! door (0.2.1; the bundled package is 0.3.0, see `history.rs` and `brand_words.rs`), on an
 //! instance that already has records in every state. The two fixtures are copies of
 //! `packages/sign.toml` and `packages/documents.toml` as they were on `main` before D92; they are
 //! not edited.
@@ -170,10 +170,10 @@ async fn the_upgrade_from_0_2_0_is_additive_and_keeps_every_record() {
         .installer
         .install_outcome(&new_text, "marketplace", "test")
         .unwrap();
-    // The bundled package is 0.2.5 (0.2.2 added the switch `show_history`, 0.2.3 rewords one help,
-    // 0.2.4 adds the D95 hints, 0.2.5 the row rule and the manager's decline and expiry); the
+    // The bundled package is 0.3.0 (0.2.2 added the switch `show_history`, 0.2.3 rewords one help,
+    // 0.2.4 adds the D95 hints, 0.2.5 the row rule and the manager's decline and expiry, 0.3.0 the evidence check); the
     // upgrade from 0.2.0 still goes in one step.
-    assert_eq!(out.root.version, "0.2.5");
+    assert_eq!(out.root.version, "0.3.0");
 
     // Nothing was rewritten.
     assert_eq!(snapshot(&f, &requests), before);
@@ -750,7 +750,7 @@ async fn module_upgrade_moves_sign_to_the_bundled_version_with_sign_docuseal_ins
             .module
             .version
     };
-    assert_eq!(version("sign"), "0.2.5");
+    assert_eq!(version("sign"), "0.3.0");
     assert_eq!(
         version("sign_docuseal"),
         obop_pkg::manifest::Manifest::parse(&Bundled.fetch("sign_docuseal").unwrap())
