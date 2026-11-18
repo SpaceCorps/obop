@@ -64,7 +64,15 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: IOS_BUNDLE_ID,
   },
-  plugins: ["expo-dev-client"],
+  plugins: [
+    "expo-dev-client",
+    // The key of the database is stored without a fingerprint or Face ID, so the plugin writes no
+    // Face ID text on iOS. An app lock with Face ID (docs/spec/rutsa.md, BR-35) would turn it on.
+    ["expo-secure-store", { faceIDPermission: false }],
+    // SQLCipher: the routes are encrypted on the phone. `core/open-db.ts` checks
+    // `PRAGMA cipher_version` at every start and refuses to run on plain SQLite.
+    ["expo-sqlite", { useSQLCipher: true }],
+  ],
 };
 
 export default withIosPlistCleanup(withMinSdk(config));

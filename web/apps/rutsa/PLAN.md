@@ -18,8 +18,9 @@ Not in this stage: classification, rates, the report and mail, Swedish (stage 2)
 learning, odometer, calendar (stage 3); automatic start and stop (OR-34 c), Live Activity,
 widget, the obop design (stage 4); deleting old points (the 7 days of rutsa.md 5.4 are a rule
 of the server version; Rutsa needs the points for the map in the report, decided in stage 2);
-moving trips to a new phone (stage 2, with the export). Known limit until then: the database key
-stays on the device, so a new phone or a restore starts with no trips.
+moving trips to a new Android phone (stage 2, with the export). Known limit until then: on
+Android the database key never leaves the phone, so a new phone starts with no trips; on iOS the
+key goes with the database into an encrypted iCloud backup or a transfer, so a restore keeps them.
 
 ## How it is tested
 
@@ -96,7 +97,10 @@ Checkpoint: `vp test` passes.
 Before C: JDK 17, the Android SDK and the emulator installed (list in `docs/spec/mobile.md`,
 "Android build on Windows").
 
-- [ ] C1 `feat(rutsa): encrypted database on the phone`: `native/keychain.ts`,
+- [x] C1 `feat(rutsa): encrypted database on the phone`: `core/open-db.ts` (the key and the file:
+      first start, a key without a file, a key that does not fit, a stale file, a pending key,
+      plain SQLite refused) with `test-support/fake-file.ts` and tests; `native/keychain.ts` (iOS
+      class `AFTER_FIRST_UNLOCK`, so a restore keeps the trips),
       `native/database.ts` (32 random bytes in the Keystore or Keychain, SQLCipher),
       `native/store.ts` (the one store of the process; `PRAGMA foreign_keys = ON` and `migrate` at
       open); the database file name and the key name in
@@ -219,3 +223,10 @@ D23).
 - 2026-11-18: B8 is the mechanism and the sentences known now; the screens of D add theirs, so the
   catalogue has no unused key. Not taken yet: the Swedish catalogue, the language choice and the
   translation checks of `mileage-app` (stage 2).
+- 2026-11-18: the skeleton built (`android:build:release`, 14 min the first time) and ran on the
+  Android 16 emulator on Windows.
+- 2026-11-18: C1 takes the open procedure of `mileage-app` (`core/open-outbox.ts`) into
+  `core/open-db.ts`, which the plan had left out; the stale file is recovered on both systems; the
+  iOS Keychain class is `AFTER_FIRST_UNLOCK`, not "this device only", because the phone holds the
+  only copy; `App.tsx` shows a line with the number of trips and the SQLCipher version until the
+  screens of D replace it.

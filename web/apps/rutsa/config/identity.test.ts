@@ -15,4 +15,15 @@ describe("the identity of the build", () => {
   test("the version is major.minor.patch", () => {
     expect(identity.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
+
+  test("the storage names stay as an installed app has them", () => {
+    // Changing one of these loses the trips of every installed app: the file is another one, or
+    // the key is not found. They are written out here on purpose.
+    expect(identity.storage).toEqual({
+      databaseFile: "rutsa.db",
+      databaseKey: "org.obop.rutsa.database-key",
+    });
+    // expo-secure-store takes only letters, digits, ".", "-" and "_" in a key name.
+    expect(identity.storage.databaseKey).toMatch(/^[A-Za-z0-9._-]+$/);
+  });
 });
