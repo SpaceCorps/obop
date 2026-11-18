@@ -8,6 +8,7 @@ import {
   Dialog,
   IconButton,
   Skeleton,
+  inSentence,
   Textarea,
   t,
   useFocusTrap,
@@ -78,6 +79,7 @@ export function PlanPanel({
   // A second press before React has drawn the busy button is dropped here (one call per decision).
   const inFlight = useRef(false);
   const panel = useRef<HTMLElement>(null);
+  const foot = useRef<HTMLElement>(null);
   const noteRef = useRef<HTMLDivElement>(null);
   const sheet = useMedia(SHEET_QUERY);
   const phone = useMedia(PHONE_QUERY);
@@ -204,11 +206,7 @@ export function PlanPanel({
     }
     setNote({
       tone: "danger",
-      text:
-        serverMessage(r.error) ||
-        t("The server refused it (status {status}).", {
-          status: r.status,
-        }),
+      text: serverMessage(r.error) || t("The server refused it. Reload the page and try again."),
     });
   }
 
@@ -261,6 +259,23 @@ export function PlanPanel({
   }
 
   const waiting = !!plan && plan.status === "waiting" && !closed;
+  // The sticky header and footer hide what is focused unless the scroll leaves room as high as each
+  // is (WCAG 2.4.11): their heights are measured and handed to the stylesheet.
+  const hasFoot = !!plan && waiting && ((plan.can_approve && !unseen(plan)) || plan.can_reject);
+  useEffect(() => {
+    const el = panel.current;
+    if (!el || typeof ResizeObserver !== "function") return;
+    const head = el.querySelector<HTMLElement>(":scope > header");
+    const set = () => {
+      el.style.setProperty("--appr-head", `${head?.offsetHeight ?? 0}px`);
+      el.style.setProperty("--appr-foot", `${foot.current?.offsetHeight ?? 0}px`);
+    };
+    set();
+    const watch = new ResizeObserver(set);
+    if (head) watch.observe(head);
+    if (foot.current) watch.observe(foot.current);
+    return () => watch.disconnect();
+  }, [hasFoot, phone, sheet]);
   const record = plan?.record_id ? plan.record_title || "" : "";
   const recordHref =
     plan?.record_id && plan.kind !== "delete" ? d.linkTo(plan.model, { id: plan.record_id }) : null;
@@ -271,7 +286,7 @@ export function PlanPanel({
       <aside
         ref={panel}
         className={`record panel appr-panel${sheet ? " sheet" : ""}${phone ? " phone" : ""}`}
-        aria-label={t("Approval request")}
+        aria-labelledby={`appr-h-${id}`}
         role={sheet ? "dialog" : undefined}
         aria-modal={sheet || undefined}
         aria-busy={view.kind === "loading" || undefined}
@@ -289,7 +304,7 @@ export function PlanPanel({
             />
           )}
           <div className="rec-title">
-            <h2>{plan ? askOf(plan, names) : t("Approval request")}</h2>
+            <h2 id={`appr-h-${id}`}>{plan ? askOf(plan, names) : t("Approval request")}</h2>
           </div>
           {!phone && <IconButton icon="close" label={t("Close")} tooltip={false} onClick={close} />}
         </header>
@@ -324,7 +339,7 @@ export function PlanPanel({
                 </section>
               )}
               <p className="appr-who">
-                {proposedBy(plan, whenOf(plan.created_at))}
+                {proposedBy(plan)}
                 {plan.status === "waiting" && plan.expires_at && (
                   <> {t("Expires on {date}.", { date: dateOf(plan.expires_at) })}</>
                 )}
@@ -362,7 +377,7 @@ export function PlanPanel({
           )}
         </div>
         {plan && waiting && ((plan.can_approve && !unseen(plan)) || plan.can_reject) && (
-          <footer className="appr-foot">
+          <footer className="appr-foot" ref={foot}>
             {plan.can_reject && (
               <Button
                 size="lg"
@@ -410,12 +425,21 @@ export function PlanPanel({
   );
 }
 
-/** "Proposed by Ada's agent, 2 hours ago." One sentence for each who, so each language can inflect it. */
-function proposedBy(plan: PlanDetail, when: string): string {
-  if (plan.own_agent) return t("Proposed by your own agent, {when}.", { when });
-  return plan.owner
-    ? t("Proposed by {name}'s agent, {when}.", { name: plan.owner, when })
-    : t("Proposed by an agent, {when}.", { when });
+/**
+ * "Proposed by Ada's agent, 2 hours ago." One sentence for each who, so each language can inflect
+ * it; a plan from before receipts has no time, and its sentence has none either.
+ */
+function proposedBy(plan: PlanDetail): string {
+  const when = plan.created_at ? whenOf(plan.created_at) : "";
+  if (plan.own_agent)
+    return when
+      ? t("Proposed by your own agent, {when}.", { when })
+      : t("Proposed by your own agent.");
+  if (plan.owner)
+    return when
+      ? t("Proposed by {name}'s agent, {when}.", { name: plan.owner, when })
+      : t("Proposed by {name}'s agent.", { name: plan.owner });
+  return when ? t("Proposed by an agent, {when}.", { when }) : t("Proposed by an agent.");
 }
 
 /**
@@ -446,7 +470,7 @@ function confirmQuestion(plan: PlanDetail, names: Names, record: string): string
     return record
       ? t("Delete “{record}” for good? This cannot be undone.", { record })
       : t("Delete this {model} for good? This cannot be undone.", {
-          model: names.model(plan.model),
+          model: inSentence(names.model(plan.model)),
         });
   return t("{do}? This cannot be undone.", { do: thingOf(plan, names) });
 }
@@ -459,8 +483,8 @@ function WhatChanges({ plan, names, record }: { plan: PlanDetail; names: Names; 
     return (
       <p className="appr-delete">
         {record
-          ? t("This deletes {record} for good.", { record: `“${record}”` })
-          : t("This deletes the {model} for good.", { model: names.model(plan.model) })}
+          ? t("This deletes “{record}” for good.", { record })
+          : t("This deletes the {model} for good.", { model: inSentence(names.model(plan.model)) })}
       </p>
     );
   const changes = plan.changes ?? [];

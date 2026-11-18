@@ -36,6 +36,13 @@ export function namesFrom(models: Map<string, ModelInfo>): Names {
   };
 }
 
+/** Whether `word` stands in `text` as a whole word (not inside another one), in any case. */
+export function hasWord(text: string, word: string): boolean {
+  if (!word) return false;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "iu").test(text);
+}
+
 /** The record's own title, only when the server gave one and the record line is not null. */
 const recordOf = (row: Pick<PlanRow, "record_id" | "record_title">): string =>
   row.record_id && row.record_title ? row.record_title : "";
@@ -63,7 +70,7 @@ export function thingOf(row: PlanRow, n: Names): string {
     default: {
       const action = n.action(row.command);
       // "Approve claim" already names the model: "Approve claim “X”", not "Approve claim claim".
-      const named = action.toLocaleLowerCase().includes(model.toLocaleLowerCase());
+      const named = hasWord(action, model);
       if (named) return record ? t("{action} “{record}”", { action, record }) : action;
       return record
         ? t("{action} {model} “{record}”", { action, model, record })

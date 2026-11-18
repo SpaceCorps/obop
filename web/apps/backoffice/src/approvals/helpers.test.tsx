@@ -10,7 +10,7 @@ import type { PlanCount, PlanRow } from "./planApi.ts";
 import { reasonLength } from "./planApi.ts";
 import { APPROVALS, approvalsHref, isApprovals, tabOf } from "./route.ts";
 import { badgeText, plansChanged, showsApprovals, usePlanCount } from "./usePlanCount.ts";
-import { approveLabel, decidedSentence, thingOf, whoOf, type Names } from "./words.ts";
+import { approveLabel, decidedSentence, endSentence, thingOf, whoOf, type Names } from "./words.ts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -185,6 +185,15 @@ describe("the words", () => {
     expect(thingOf(row({ kind: "action", command: "invoice.approve" }), approveInvoice)).toBe(
       "Approve invoice “INV-0042”",
     );
+    // The model is matched as a whole word, not inside another one ("Multitask" is not "Task").
+    const multi: Names = { ...names, model: () => "Task", action: () => "Multitask" };
+    expect(thingOf(row({ kind: "action", command: "task.multi" }), multi)).toBe(
+      "Multitask task “INV-0042”",
+    );
+    const tasks: Names = { ...names, model: () => "Task", action: () => "Close task now" };
+    expect(thingOf(row({ kind: "action", command: "task.close" }), tasks)).toBe(
+      "Close task now “INV-0042”",
+    );
     // A title without a record id is not shown (the record line is null).
     expect(thingOf(row({ record_id: null }), names)).toBe("Change invoice");
   });
@@ -199,6 +208,15 @@ describe("the words", () => {
     expect(decidedSentence({ status: "expired" })).toBe(
       "This request expired. Nothing was changed. Ask the agent to propose it again.",
     );
+  });
+
+  it("brings a server's message to exactly one closing mark", () => {
+    expect(endSentence("Add a line.")).toBe("Add a line.");
+    expect(endSentence("Add a line")).toBe("Add a line.");
+    expect(endSentence("  Add a line  ")).toBe("Add a line.");
+    expect(endSentence("Really?")).toBe("Really?");
+    expect(endSentence("Done!")).toBe("Done!");
+    expect(endSentence("Wait…")).toBe("Wait…");
   });
 
   it("counts a reason in characters, as the server does", () => {

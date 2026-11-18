@@ -377,6 +377,29 @@ describe("the list", () => {
     expect(flat(document.querySelector(".appr-thing"))).toBe("Change invoice");
   });
 
+  it("a decided row that expired says Expired and when, and names nobody", async () => {
+    server.decided = [
+      row({
+        id: "p-exp",
+        status: "expired",
+        decided_by: null,
+        decided_at: iso(now - 3 * 24 * HOUR),
+      }),
+      row({ id: "p-no", status: "rejected", decided_by: null, decided_at: iso(now - HOUR) }),
+    ];
+    await mount("#/approvals?view=decided");
+    const rows = [...document.querySelectorAll("tbody tr")];
+    expect(flat(rows[0]!.querySelector(".appr-sub"))).toBe("Expired · 3 days ago");
+    expect([...rows[0]!.querySelectorAll(".appr-col")].map(flat)).toEqual([
+      "ada's agent",
+      "Expired",
+      "3 days ago",
+    ]);
+    expect(flat(document.querySelector("tbody"))).not.toMatch(/Nobody/);
+    // a person who is not known still has a word
+    expect(flat(rows[1]!.querySelector(".appr-sub"))).toBe("Rejected · Somebody · 1 hour ago");
+  });
+
   it("lists the decided requests on their own tab, with the outcome", async () => {
     await mount();
     await click(button("Decided"));
@@ -460,6 +483,54 @@ describe("the detail", () => {
     plans.set("p-update", detail({ own_agent: true }));
     await mount("#/approvals?id=p-update");
     expect(flat(panel())).toContain("Proposed by your own agent,");
+  });
+
+  it("says who proposed it without a time when the time is unknown", async () => {
+    plans.set("p-update", detail({ created_at: null }));
+    await mount("#/approvals?id=p-update");
+    const who = flat(panel()?.querySelector(".appr-who"));
+    expect(who).toMatch(/^Proposed by ada's agent\./);
+    expect(who).not.toMatch(/unknown|, \./);
+    plans.set("p-update", detail({ created_at: null, own_agent: true }));
+    await mount("#/approvals?id=p-update");
+    expect(flat(panel()?.querySelector(".appr-who"))).toMatch(/^Proposed by your own agent\./);
+    plans.set("p-update", detail({ created_at: null, owner: null }));
+    await mount("#/approvals?id=p-update");
+    expect(flat(panel()?.querySelector(".appr-who"))).toMatch(/^Proposed by an agent\./);
+  });
+
+  it("is named by its own heading, which is not cut short", async () => {
+    await mount("#/approvals?id=p-update");
+    const p = panel()!;
+    expect(p.hasAttribute("aria-label")).toBe(false);
+    const h = document.getElementById(p.getAttribute("aria-labelledby") ?? "")!;
+    expect(h.tagName).toBe("H2");
+    expect(flat(h)).toBe("An agent asks to change invoice “INV-0042”.");
+  });
+
+  it("names a delete's record and model inside the sentence, with the quotes in the key", async () => {
+    provideCatalogue("de", {
+      "This deletes “{record}” for good.": "Dies löscht „{record}“ endgültig.",
+    });
+    await setLanguage("de", false);
+    await mount("#/approvals?id=p-delete");
+    expect(flat(document.querySelector(".appr-delete"))).toBe("Dies löscht „INV-0007“ endgültig.");
+    provideCatalogue("en", {});
+    await setLanguage("en", false);
+    plans.set(
+      "p-delete",
+      detail({
+        ...plans.get("p-delete")!,
+        record_id: null,
+        record_title: null,
+      }),
+    );
+    await mount("#/approvals?id=p-delete");
+    expect(flat(document.querySelector(".appr-delete"))).toBe("This deletes the invoice for good.");
+    await click(button("Approve and delete"));
+    expect(flat(document.querySelector('[role="alertdialog"]'))).toContain(
+      "Delete this invoice for good? This cannot be undone.",
+    );
   });
 
   it("has no record line when record_id is null", async () => {
@@ -800,6 +871,15 @@ describe("approve", () => {
       "The system refused it: the record moved on. The request is still waiting.",
     );
     expect(document.querySelector("[data-testid=plan-approve]")).not.toBeNull();
+  });
+
+  it("a refusal nobody has a sentence for says so without a number", async () => {
+    server.approve = () => fail(403, { code: "forbidden" });
+    await mount("#/approvals?id=p-update");
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    const text = flat(document.querySelector("[data-testid=plan-note]"));
+    expect(text).toBe("The server refused it. Reload the page and try again.");
+    expect(text).not.toMatch(/\d/);
   });
 
   it("503 or a lost connection: asks to check before trying again, and reads the plan again", async () => {

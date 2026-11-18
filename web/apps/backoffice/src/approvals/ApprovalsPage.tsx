@@ -258,11 +258,7 @@ function PlanTable({
                 onClick={() => onOpen(row.id)}
               >
                 <span className="appr-thing">{thingOf(row, names)}</span>
-                <span className="appr-sub">
-                  {waiting
-                    ? waitingLine(row)
-                    : `${statusWord(row.status)} · ${decidedBy(row)} · ${whenOf(row.decided_at)}`}
-                </span>
+                <span className="appr-sub">{waiting ? waitingLine(row) : decidedLine(row)}</span>
               </button>
               {row.destructive && waiting && (
                 <Badge tone="danger" dot={false} className="appr-chip">
@@ -270,18 +266,20 @@ function PlanTable({
                 </Badge>
               )}
             </td>
-            <td className="appr-col">{whoOf(row)}</td>
+            <td className="appr-col appr-who-col">
+              <span className="appr-who-text">{whoOf(row)}</span>
+            </td>
             {waiting ? (
               <>
-                <td className="appr-col">{whenOf(row.created_at)}</td>
-                <td className="appr-col">{row.expires_at ? whenOf(row.expires_at) : "—"}</td>
+                <td className="appr-col appr-nowrap">{whenOf(row.created_at)}</td>
+                <td className="appr-col appr-nowrap">
+                  {row.expires_at ? whenOf(row.expires_at) : "—"}
+                </td>
               </>
             ) : (
               <>
                 <td className="appr-col">{statusWord(row.status)}</td>
-                <td className="appr-col">
-                  {decidedBy(row)} · {whenOf(row.decided_at)}
-                </td>
+                <td className="appr-col">{decidedWho(row)}</td>
               </>
             )}
           </tr>
@@ -291,6 +289,14 @@ function PlanTable({
   );
 }
 
-/** Who decided a plan; nobody for one that expired. */
-const decidedBy = (row: PlanRow): string =>
-  row.decided_by || (row.status === "expired" ? t("Nobody") : t("Somebody"));
+/**
+ * Who decided a plan and when: "Ada · 3 days ago". A plan that expired was decided by nobody, so
+ * it has only the time: the word "Expired" says the rest.
+ */
+const decidedWho = (row: PlanRow): string => {
+  if (row.status === "expired") return whenOf(row.decided_at ?? row.expires_at);
+  return `${row.decided_by || t("Somebody")} · ${whenOf(row.decided_at)}`;
+};
+
+/** The second line of a decided row on a phone: "Rejected · Ada · 3 days ago", "Expired · 3 days ago". */
+const decidedLine = (row: PlanRow): string => `${statusWord(row.status)} · ${decidedWho(row)}`;
