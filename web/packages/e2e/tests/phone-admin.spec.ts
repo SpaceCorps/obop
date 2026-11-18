@@ -325,8 +325,27 @@ for (const size of SIZES) {
       for (const caption of ["Your sessions", "Agent tokens", "Devices"]) {
         const t = table(a, caption);
         expect.soft(t.scrolls, `${caption} scrolls sideways`).toBe(0);
-        expect.soft(t.stacked, `${caption} is stacked`).toBe(size.name === "phone");
+        // Devices has eight columns: as a table at 768 px its name ran four lines and each date
+        // three, so it is cards up to 60rem (stack-md); the other two keep their columns there.
+        expect
+          .soft(t.stacked, `${caption} is stacked`)
+          .toBe(size.name === "phone" || caption === "Devices");
         expect.soft(await brokenWords(page, caption), `${caption}: broken words`).toEqual([]);
+      }
+      if (size.name === "tablet") {
+        // As cards on a tablet the six labelled cells of a device stand three to a line, as on a
+        // phone: with the kit's 6rem cells five shared a line and Status stood alone under them.
+        const perLine = await page
+          .getByRole("table", { name: "Devices" })
+          .locator("tbody tr")
+          .first()
+          .evaluate((tr) => {
+            const tops = [...tr.querySelectorAll<HTMLElement>("td[data-label]")].map((td) =>
+              Math.round(td.getBoundingClientRect().top),
+            );
+            return [...new Set(tops)].map((y) => tops.filter((top) => top === y).length);
+          });
+        expect(perLine, "labelled cells of a device per line").toEqual([3, 3]);
       }
     });
 
