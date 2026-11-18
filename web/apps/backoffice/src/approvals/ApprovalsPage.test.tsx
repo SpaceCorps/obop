@@ -547,11 +547,22 @@ const afterFrames = async () => {
   });
 };
 const heading = () => document.querySelector<HTMLElement>("#appr-title");
+/**
+ * Press the control that decides, and let the list's new answer arrive right after the decision,
+ * before the next frame: that is the order in a browser on a fast connection, and the one that
+ * made a frame waiting to move focus go away.
+ */
+const decideThenListAnswers = async (control: Element | null | undefined) => {
+  expect(control, "the control that decides").toBeTruthy();
+  const release = holdBack("list");
+  await act(async () => (control as HTMLElement).click());
+  await act(async () => release());
+};
 
 describe("focus after a decision", () => {
   it("lands on the heading after Approve", async () => {
     await mount("#/approvals?id=p-update");
-    await click(document.querySelector("[data-testid=plan-approve]"));
+    await decideThenListAnswers(document.querySelector("[data-testid=plan-approve]"));
     await afterFrames();
     expect(panel()).toBeNull();
     expect(heading()?.textContent).toBe("Approvals");
@@ -561,7 +572,7 @@ describe("focus after a decision", () => {
   it("lands on the heading after Approve through the confirmation dialog", async () => {
     await mount("#/approvals?id=p-delete");
     await click(button("Approve and delete"));
-    await click(button("Delete for good"));
+    await decideThenListAnswers(button("Delete for good"));
     await afterFrames();
     expect(sent("approve")).toHaveLength(1);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
@@ -572,7 +583,7 @@ describe("focus after a decision", () => {
     await mount("#/approvals?id=p-update");
     await click(button("Reject", panel()!));
     await type(document.querySelector("textarea")!, "Wrong amount");
-    await click(button("Reject request"));
+    await decideThenListAnswers(button("Reject request"));
     await afterFrames();
     expect(sent("reject")).toHaveLength(1);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
