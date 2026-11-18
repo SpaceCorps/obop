@@ -386,7 +386,9 @@ export function ConnectedAppsSection({ token, notify }: { token: string; notify:
                   <strong>{g.client_name}</strong>
                   <div className="hint">{g.redirect_host}</div>
                 </td>
-                <td data-label={t("Can act with")}>{g.scopes.join(", ")}</td>
+                <td className="cell-wide" data-label={t("Can act with")}>
+                  {g.scopes.join(", ")}
+                </td>
                 <td data-label={t("Connected")}>
                   {g.created_at ? fmt.dateTime(g.created_at) : ""}
                 </td>

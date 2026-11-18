@@ -1357,6 +1357,11 @@ button.avatar {
     order: 1;
     flex-basis: 100%;
   }
+  /* A cell of long unbreakable words (permission groups such as platform.admin) takes its own line:
+     three cells of a token's row on one line left it about 100 px, and the word broke inside. */
+  .table.stack-sm > tbody > tr > .cell-wide {
+    flex-basis: 100%;
+  }
   /* A cell with nothing in it takes no line (a folder has no size). */
   .table.stack-sm > tbody > tr > td:empty {
     display: none;
@@ -1421,6 +1426,11 @@ button.avatar {
   }
   .table.stack-md > tbody > tr > .cell-actions {
     order: 1;
+    flex-basis: 100%;
+  }
+  /* A cell of long unbreakable words (permission groups such as platform.admin) takes its own line:
+     three cells of a token's row on one line left it about 100 px, and the word broke inside. */
+  .table.stack-md > tbody > tr > .cell-wide {
     flex-basis: 100%;
   }
   /* A cell with nothing in it takes no line (a folder has no size). */

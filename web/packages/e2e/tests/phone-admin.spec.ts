@@ -344,7 +344,7 @@ for (const size of SIZES) {
       test.setTimeout(120_000);
       await api.post(
         "/api/auth/agent-token",
-        { scopes: ["base.user"], label: "phone token with a rather long label" },
+        { scopes: ["base.user", "platform.admin"], label: "phone token with a rather long label" },
         await api.token("root"),
       );
       const other = await browser.newContext({ baseURL });
@@ -373,6 +373,16 @@ for (const size of SIZES) {
           .soft(t.stacked, `${caption} is stacked`)
           .toBe(size.name === "phone" || caption === "Devices");
         expect.soft(await brokenWords(page, caption), `${caption}: broken words`).toEqual([]);
+      }
+      if (size.name === "phone") {
+        // A token's permission groups are long unbreakable words (platform.admin): with Created and
+        // Ends (a token without an end says "Until revoked") on the same line each cell was about
+        // 100 px and the word broke inside. The cell takes its own line.
+        const tokens = await labelled(page, "Agent tokens");
+        const scopes = tokens.filter((c) => c.label === "Can act with");
+        expect(scopes.length, "agent tokens listed").toBeGreaterThan(0);
+        for (const c of scopes)
+          expect.soft(c.width, "Can act with spans its card").toBeGreaterThanOrEqual(c.row - 1);
       }
       if (size.name === "tablet") {
         // As cards on a tablet the six labelled cells of a device stand three to a line, as on a
