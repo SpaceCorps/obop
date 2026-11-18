@@ -184,7 +184,9 @@ impl SignService {
         if !previous.is_empty() && previous != file {
             obop_storage::fault::needed(|| blobs.detach(&previous, &owner))?;
         }
-        obop_storage::fault::needed(|| blobs.attach(&file, &owner))?;
+        // The copy spends nobody's upload claim: a person who uploaded the same bytes and has
+        // not saved yet keeps theirs (K55 d). No uploader is named, so no claim matches.
+        obop_storage::fault::needed(|| blobs.attach_by(&file, &owner, ""))?;
         let mut patch = Fields::new();
         patch.insert("document_file".into(), J::from(file.clone()));
         patch.insert("document_hash".into(), J::from(file.clone()));

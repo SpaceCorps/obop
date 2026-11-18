@@ -274,3 +274,82 @@ fn a_condition_cannot_read_a_field_the_browser_is_never_sent() {
             .any(|v| v.problem.contains("which has class secret"))
     );
 }
+
+/// K27 (a): `/api/meta` and the MCP schema (built from the same meta) name the select a text
+/// field shows the option of only to a caller who may list its model and read that select.
+#[test]
+fn meta_names_the_target_of_shows_option_of_only_to_who_may_see_it() {
+    use crate::{Dispatcher, Principal, Store, Surface};
+    let select = |name: &'static str, group: &'static str| {
+        FieldDef::new(name, "d", DataClass::None, false, group).select(&["diesel", "electric"])
+    };
+    let text = |name: &'static str, target: &str| {
+        FieldDef::new(name, "d", DataClass::None, false, "so.log").shows_option_of(target)
+    };
+    let model = |name: &'static str, group: &'static str, fields| ModelDef {
+        name,
+        description: "d",
+        read_group: group,
+        write_group: group,
+        access: None,
+        fields,
+        commands: vec![],
+        ext: Default::default(),
+    };
+    let module = obop_registry::Module {
+        id: "so".into(),
+        name: "So".into(),
+        models: vec![
+            model(
+                "so_vehicle",
+                "so.fleet",
+                vec![select("fuel", "so.fleet"), select("hidden", "so.boss")],
+            ),
+            model(
+                "so_log",
+                "so.log",
+                vec![
+                    text("fuel_text", "so_vehicle.fuel"),
+                    text("hidden_text", "so_vehicle.hidden"),
+                ],
+            ),
+        ],
+        ..Default::default()
+    };
+    let problems = obop_registry::check_module(&module);
+    assert!(problems.is_empty(), "{problems:?}");
+    let d = Dispatcher::new();
+    d.register_crud(&module, &Store::new());
+    let targets = |groups: &[&str]| -> Vec<(String, Option<String>)> {
+        d.meta(Surface::Rest, &Principal::user("u", groups))
+            .into_iter()
+            .flat_map(|m| m.models)
+            .filter(|m| m.name == "so_log")
+            .flat_map(|m| m.fields)
+            .map(|f| (f.name.to_string(), f.shows_option_of))
+            .collect()
+    };
+    let none = vec![
+        ("fuel_text".to_string(), None),
+        ("hidden_text".to_string(), None),
+    ];
+    assert_eq!(targets(&["so.log"]), none, "cannot list the vehicles");
+    assert_eq!(
+        targets(&["so.log", "so.fleet"]),
+        vec![
+            ("fuel_text".to_string(), Some("so_vehicle.fuel".to_string())),
+            ("hidden_text".to_string(), None),
+        ],
+        "cannot read the hidden select"
+    );
+    assert_eq!(
+        targets(&["so.log", "so.fleet", "so.boss"]),
+        vec![
+            ("fuel_text".to_string(), Some("so_vehicle.fuel".to_string())),
+            (
+                "hidden_text".to_string(),
+                Some("so_vehicle.hidden".to_string())
+            ),
+        ]
+    );
+}

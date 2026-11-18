@@ -453,6 +453,30 @@ pub fn plan_install(world: &World<'_>, root: &Manifest, root_source: &'static st
         }
     }
 
+    // K27 (b): an installed package outside the plan whose `ref` or `shows_option_of` points into
+    // what an upgrade takes away keeps working (it draws the value as stored), but its own next
+    // install or upgrade is refused. The plan names it.
+    for cid in &changing {
+        if let Some(old) = world.installed.get(cid) {
+            let others: BTreeMap<String, Manifest> = world
+                .installed
+                .iter()
+                .filter(|(o, _)| {
+                    !run.chosen
+                        .get(*o)
+                        .is_some_and(|c| c.action != StepAction::Skip)
+                })
+                .map(|(o, m)| (o.clone(), m.clone()))
+                .collect();
+            warnings.extend(vanishing_targets(
+                &others,
+                cid,
+                old,
+                Some(&run.chosen[cid].manifest),
+            ));
+        }
+    }
+
     let order = topological(&run.chosen);
     // References to models must be satisfied by what is there or comes earlier in the plan.
     let mut provided: BTreeSet<String> = world.builtin.values().flatten().cloned().collect();
@@ -580,11 +604,84 @@ pub fn dependents(installed: &BTreeMap<String, Manifest>, id: &str) -> Vec<Depen
     out
 }
 
+/// K27 (b): what the installed packages other than `id` point at in `old` (the installed manifest
+/// of `id`) through a `ref` or a `shows_option_of` that `new` (the manifest that replaces it, or
+/// `None` when it is removed) no longer has: a model, or the select field a text shows the option
+/// of. One sentence per pointer, naming the package.
+pub fn vanishing_targets(
+    installed: &BTreeMap<String, Manifest>,
+    id: &str,
+    old: &Manifest,
+    new: Option<&Manifest>,
+) -> Vec<String> {
+    let verb = if new.is_some() {
+        "the new version no longer has"
+    } else {
+        "goes with the module"
+    };
+    let has_model =
+        |m: Option<&Manifest>, t: &str| m.is_some_and(|m| m.model.iter().any(|x| x.name == t));
+    let has_select = |m: Option<&Manifest>, t: &str, f: &str| {
+        m.is_some_and(|m| {
+            m.model
+                .iter()
+                .filter(|x| x.name == t)
+                .flat_map(|x| x.field.iter())
+                .any(|x| x.name == f && x.kind == "select")
+        })
+    };
+    let mut out = Vec::new();
+    for (other, m) in installed {
+        if other == id {
+            continue;
+        }
+        for model in &m.model {
+            for f in &model.field {
+                let at = format!("{}.{}", model.name, f.name);
+                if f.kind == "ref"
+                    && let Some(to) = &f.to
+                    && has_model(Some(old), to)
+                    && !has_model(new, to)
+                {
+                    out.push(format!(
+                        "{other}: {at} refers to model {to}, which {verb} ({id}); {other} keeps working, but its next install or upgrade is refused until the field is changed"
+                    ));
+                }
+                if let Some((to, field)) =
+                    f.shows_option_of.as_deref().and_then(|s| s.split_once('.'))
+                    && has_select(Some(old), to, field)
+                    && !has_select(new, to, field)
+                {
+                    out.push(format!(
+                        "{other}: {at} shows the option of {to}.{field}, which {verb} ({id}); the stored text is shown as it is, and the next install or upgrade of {other} is refused until the attribute is changed"
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The message that stops an uninstall, or `None` when nothing depends on the module.
 pub fn uninstall_blocker(installed: &BTreeMap<String, Manifest>, id: &str) -> Option<Blocker> {
     let deps = dependents(installed, id);
     if deps.is_empty() {
-        return None;
+        // A package installed live may point into this one without declaring it (K27 b).
+        let pointing = installed
+            .get(id)
+            .map(|old| vanishing_targets(installed, id, old, None))
+            .unwrap_or_default();
+        if pointing.is_empty() {
+            return None;
+        }
+        return Some(Blocker {
+            module: id.into(),
+            kind: "refs",
+            message: format!(
+                "{id} is pointed at by installed packages: {}; uninstall or change those first",
+                pointing.join("; ")
+            ),
+        });
     }
     let direct: Vec<&str> = deps
         .iter()
@@ -896,5 +993,77 @@ mod tests {
         );
         assert!(uninstall_blocker(&inst, "other").is_none());
         assert!(uninstall_blocker(&inst, "billing").is_none());
+    }
+
+    /// K27 (b): an upgrade that takes away a model or the select that an installed package points
+    /// at through `ref` or `shows_option_of` names that package in the plan, and an uninstall of a
+    /// module that such a package points into without declaring it is refused with its name.
+    #[test]
+    fn a_plan_names_the_installed_packages_whose_targets_would_vanish() {
+        let fleet = |version: &str, fuel_kind: &str, keep_model: bool| {
+            let mut t = format!(
+                "[module]\nid = \"fleet\"\nversion = \"{version}\"\nname = \"Fleet\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"*\"\n"
+            );
+            if keep_model {
+                t.push_str(&format!(
+                    "[[model]]\nname = \"fleet_vehicle\"\ndescription = \"d\"\nread_group = \"fleet.user\"\nwrite_group = \"fleet.user\"\n\n  [[model.field]]\n  name = \"fuel\"\n  description = \"d\"\n  class = \"none\"\n  kind = \"{fuel_kind}\"\n{}",
+                    if fuel_kind == "select" {
+                        "  options = [\"diesel\", \"electric\"]\n"
+                    } else {
+                        ""
+                    }
+                ));
+            }
+            Manifest::parse(&t).unwrap()
+        };
+        // Installed live, without declaring fleet among its dependencies.
+        let log = Manifest::parse(
+            "[module]\nid = \"fleetlog\"\nversion = \"0.1.0\"\nname = \"Log\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"*\"\n\
+             [[model]]\nname = \"fleetlog_entry\"\ndescription = \"d\"\nread_group = \"fleet.user\"\nwrite_group = \"fleet.user\"\n\n\
+               [[model.field]]\n  name = \"vehicle\"\n  description = \"d\"\n  class = \"none\"\n  kind = \"ref\"\n  to = \"fleet_vehicle\"\n\n\
+               [[model.field]]\n  name = \"text\"\n  description = \"d\"\n  class = \"none\"\n  shows_option_of = \"fleet_vehicle.fuel\"\n",
+        )
+        .unwrap();
+        let f = Fixture::new()
+            .have(fleet("0.1.0", "select", true))
+            .have(log.clone());
+        // The select becomes a text: the shows_option_of loses its target, the ref does not.
+        let p = f.plan(&fleet("0.2.0", "text", true));
+        let named: Vec<&String> = p
+            .warnings
+            .iter()
+            .filter(|w| w.starts_with("fleetlog:"))
+            .collect();
+        assert_eq!(named.len(), 1, "{:?}", p.warnings);
+        assert!(named[0].contains("fleetlog_entry.text shows the option of fleet_vehicle.fuel"));
+        // The model goes: both pointers are named.
+        let p = f.plan(&fleet("0.2.0", "select", false));
+        let named: Vec<&String> = p
+            .warnings
+            .iter()
+            .filter(|w| w.starts_with("fleetlog:"))
+            .collect();
+        assert_eq!(named.len(), 2, "{:?}", p.warnings);
+        assert!(
+            named
+                .iter()
+                .any(|w| w.contains("fleetlog_entry.vehicle refers to model fleet_vehicle"))
+        );
+        // An upgrade that keeps both names nobody.
+        let p = f.plan(&fleet("0.2.0", "select", true));
+        assert!(
+            !p.warnings.iter().any(|w| w.starts_with("fleetlog:")),
+            "{:?}",
+            p.warnings
+        );
+        // Uninstalling fleet is refused and names fleetlog; nothing points into fleetlog.
+        let b = uninstall_blocker(&f.installed, "fleet").expect("refused");
+        assert_eq!(b.kind, "refs");
+        assert!(
+            b.message.contains("fleetlog: fleetlog_entry.vehicle"),
+            "{}",
+            b.message
+        );
+        assert!(uninstall_blocker(&f.installed, "fleetlog").is_none());
     }
 }

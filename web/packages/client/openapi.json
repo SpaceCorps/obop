@@ -1498,7 +1498,7 @@
             "type": "string"
           },
           "detail": {
-            "description": "A short note without any code or secret",
+            "description": "A short note without any code or secret (personal data: agents see it masked)",
             "type": "string"
           },
           "kind": {

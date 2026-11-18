@@ -115,6 +115,8 @@ mod sie;
 #[cfg(test)]
 mod sie_tests;
 #[cfg(test)]
+mod sign_observer_tests;
+#[cfg(test)]
 mod sign_tests;
 mod time_billing;
 #[cfg(test)]
@@ -1420,7 +1422,7 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
             "no users yet: create one with `obop admin create NAME --all-groups` (or try --dev-auth on localhost)"
         );
     }
-    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    let state = obop_http::HttpState::from_env(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());
     match obop_blob_gdrive::DriveBrowser::from_env() {
