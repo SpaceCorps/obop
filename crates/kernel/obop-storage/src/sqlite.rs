@@ -625,6 +625,28 @@ impl Backend for Sqlite {
             .execute_batch(&sql)
             .map_err(|e| e.to_string())
     }
+    fn unique_indexes(&self) -> Result<Vec<String>> {
+        let g = self.conn.lock().unwrap();
+        let mut st = g
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'obop_record' \
+                 AND name LIKE 'obop\\_uq\\_%' ESCAPE '\\' ORDER BY name",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = st
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+    fn drop_unique_index(&self, name: &str) -> Result<()> {
+        let name = crate::unique_index_ident(name)?;
+        self.conn
+            .lock()
+            .unwrap()
+            .execute_batch(&format!("DROP INDEX IF EXISTS {name}"))
+            .map_err(|e| e.to_string())
+    }
     fn kind(&self) -> &'static str {
         "sqlite"
     }

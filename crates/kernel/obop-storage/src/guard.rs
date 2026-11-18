@@ -220,6 +220,17 @@ impl Backend for Guarded {
     ) -> Result<Vec<(String, Fields)>> {
         self.inner.find_unique(model, fields, values)
     }
+    fn unique_indexes(&self) -> Result<Vec<String>> {
+        self.inner.unique_indexes()
+    }
+    fn drop_unique_index(&self, name: &str) -> Result<()> {
+        fault::before_write()?;
+        let r = self.inner.drop_unique_index(name);
+        if r.is_ok() {
+            fault::wrote();
+        }
+        r
+    }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         fault::before_write()?;
         let r = self.inner.ensure_unique(name, model, fields);

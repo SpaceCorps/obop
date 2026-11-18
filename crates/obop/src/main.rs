@@ -302,6 +302,8 @@ const USAGE: &str = "usage: obop <command>
                                                 configured). A lent scratch database is emptied again, uploaded files included.
                                                 --record-later keeps the result for a script that has one more check to make;
                                                 --record-from adds that check and records it
+  storage prune-indexes [--db URL] [--yes]     list the unique indexes (obop_uq_*) that no installed model declares, and
+                                                drop them with --yes (each logged as storage_index_dropped)
   storage check [--db URL] [--plane NAME] [--strict]
                                                 WAL archiving, TLS and durability settings of the PostgreSQL host; age of the last
                                                 verified backup, its off-host copy and its drill; the storage-encryption attestation

@@ -716,6 +716,27 @@ impl Backend for Pg {
             Ok(())
         })
     }
+    fn unique_indexes(&self) -> Result<Vec<String>> {
+        self.main.read(Class::List, |c| {
+            Ok(c.query(
+                "SELECT indexname::text FROM pg_indexes WHERE schemaname = current_schema() \
+                 AND tablename = 'obop_record' AND indexname LIKE 'obop\\_uq\\_%' \
+                 ORDER BY indexname",
+                &[],
+            )?
+            .iter()
+            .map(|r| r.get::<_, String>(0))
+            .collect())
+        })
+    }
+    fn drop_unique_index(&self, name: &str) -> Result<()> {
+        let name = crate::unique_index_ident(name)?;
+        let sql = format!("DROP INDEX IF EXISTS {name}");
+        self.main.run(Class::Batch, |c| {
+            c.batch_execute(&sql)?;
+            Ok(())
+        })
+    }
     fn kind(&self) -> &'static str {
         "postgres"
     }

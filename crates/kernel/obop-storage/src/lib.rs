@@ -377,6 +377,16 @@ pub trait Backend: Send + Sync {
     fn ensure_unique(&self, _name: &str, _model: &str, _fields: &[&str]) -> Result<()> {
         Ok(())
     }
+    /// The names of the unique indexes of the records table (`obop_uq_...`), sorted, for the
+    /// prune of orphans (docs/ISSUES.md K41, D78). Backends without indexes have none.
+    fn unique_indexes(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    /// Drop the unique index `name` (an `obop_uq_...` name; anything else is refused). Only the
+    /// explicit command of an administrator calls it, never a start or an install.
+    fn drop_unique_index(&self, _name: &str) -> Result<()> {
+        Ok(())
+    }
     /// Short name for logs: `memory`, `sqlite` or `postgres`.
     fn kind(&self) -> &'static str;
 
@@ -601,6 +611,18 @@ impl LocalLocks {
             locks: self.clone(),
             key: key.to_string(),
         })
+    }
+}
+
+/// A name [`Backend::drop_unique_index`] may drop: an identifier that starts with `obop_uq_`.
+pub(crate) fn unique_index_ident(name: &str) -> Result<&str> {
+    let n = ident(name)?;
+    if n.starts_with("obop_uq_") {
+        Ok(n)
+    } else {
+        Err(format!(
+            "{name:?} is not the name of a unique index of obop"
+        ))
     }
 }
 
