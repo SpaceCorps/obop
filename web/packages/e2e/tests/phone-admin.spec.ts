@@ -5,7 +5,7 @@ import type { APIRequestContext, Page } from "@playwright/test";
 import { listenForCallback } from "../support/callback.ts";
 import { users } from "../support/env.ts";
 import { expect, open, test, type Api } from "../support/fixtures.ts";
-import { audit, type Audit, type TableFinding } from "../support/touch.ts";
+import { audit, brokenWords, type Audit, type TableFinding } from "../support/touch.ts";
 
 // The administration screens on a phone (390 px) and on a small tablet (768 px), both touch screens.
 // Each screen is measured from element boxes after it has settled: the page may not scroll sideways,
@@ -45,7 +45,87 @@ async function fits(page: Page, what: string): Promise<Audit> {
   expect.soft(a.coarse, `${what}: the browser reports a touch pointer`).toBe(true);
   expect.soft(a.pageOverflow, `${what}: the page scrolls sideways`).toBe(0);
   expect.soft(small(a), `${what}: controls under 44 px`).toEqual([]);
+  // A table that fits its box can still be unreadable: no word of a header, a label or a cell may
+  // be cut by a line break (words of 20 characters or more are exempt).
+  for (const caption of new Set(a.tables.map((t) => t.caption).filter(Boolean)))
+    expect.soft(await brokenWords(page, caption), `${what}: broken words`).toEqual([]);
   return a;
+}
+
+type Cells = { label: string; width: number; row: number }[];
+
+/** The labelled cells of a table: each cell's width against the inner width of its row. */
+async function labelled(page: Page, caption: string): Promise<Cells> {
+  return page.evaluate((cap) => {
+    const table = [...document.querySelectorAll("table")].find(
+      (t) => t.querySelector("caption")?.textContent?.trim() === cap,
+    );
+    const out: { label: string; width: number; row: number }[] = [];
+    for (const cell of table?.querySelectorAll<HTMLElement>("tbody > tr > td[data-label]") ?? []) {
+      if (getComputedStyle(cell).display === "none") continue;
+      const tr = cell.parentElement!;
+      const st = getComputedStyle(tr);
+      out.push({
+        label: cell.getAttribute("data-label")!,
+        width: cell.getBoundingClientRect().width,
+        row: tr.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight),
+      });
+    }
+    return out;
+  }, caption);
+}
+
+/** The declarations that make a stacked row what it is, read from the browser's computed style. */
+async function stackStyle(page: Page, caption: string) {
+  return page.evaluate((cap) => {
+    const table = [...document.querySelectorAll("table")].find(
+      (t) => t.querySelector("caption")?.textContent?.trim() === cap,
+    )!;
+    const pick = (el: Element, props: string[]) => {
+      const st = getComputedStyle(el);
+      return Object.fromEntries(props.map((p) => [p, st.getPropertyValue(p)]));
+    };
+    const tr = table.querySelector("tbody > tr")!;
+    return {
+      table: pick(table, ["display"]),
+      tbody: pick(table.querySelector("tbody")!, ["display"]),
+      thead: pick(table.querySelector("thead")!, ["position", "clip-path", "overflow", "width"]),
+      tr: pick(tr, [
+        "display",
+        "flex-wrap",
+        "align-items",
+        "row-gap",
+        "column-gap",
+        "padding",
+        "border-bottom-width",
+      ]),
+      th: pick(tr.querySelector("th")!, [
+        "display",
+        "order",
+        "flex-basis",
+        "flex-grow",
+        "padding",
+        "border-top-width",
+        "white-space",
+        "font-weight",
+        "font-size",
+        "text-align",
+      ]),
+      td: pick(tr.querySelector("td[data-label]")!, [
+        "display",
+        "order",
+        "flex-grow",
+        "flex-shrink",
+        "min-inline-size",
+        "padding",
+        "border-top-width",
+        "white-space",
+        "overflow-wrap",
+        "text-wrap-style",
+        "text-align",
+      ]),
+    };
+  }, caption);
 }
 
 async function receiver(): Promise<{ url: string; close: () => Promise<void> }> {
@@ -72,7 +152,7 @@ async function install(api: Api, request: APIRequestContext, id: string) {
 }
 
 /** A connection that has run twice, so the detail has runs and flows to show. */
-async function connectionWithRuns(api: Api, hook: string, name: string) {
+async function connectionWithRuns(api: Api, hook: string, name: string, syncs = 2) {
   const policies = await api.run("root", "provider_policy.list");
   const body = {
     enabled: true,
@@ -98,7 +178,7 @@ async function connectionWithRuns(api: Api, hook: string, name: string) {
     legal_basis: "contract",
   });
   await api.run("root", "connection.connect", { id: made.id });
-  for (let i = 0; i < 2; i++)
+  for (let i = 0; i < syncs; i++)
     await api.post("/api/connection/sync", { id: made.id }, await api.token("root"));
 }
 
@@ -170,6 +250,17 @@ for (const size of SIZES) {
       await page.goto("/");
       await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
       await fits(page, "sign-in");
+      // The link sits under the password field, right-aligned: its text ends where the field ends
+      // (no padding of its own pushes it inside), and it is still a finger high.
+      const link = await page.getByRole("button", { name: "Forgot your password?" }).boundingBox();
+      const field = await page.getByLabel("Password").boundingBox();
+      expect(link, "the link has a box").not.toBeNull();
+      expect(field, "the password field has a box").not.toBeNull();
+      expect(
+        Math.abs(link!.x + link!.width - (field!.x + field!.width)),
+        "the right edge of Forgot your password? against the password field's",
+      ).toBeLessThanOrEqual(1);
+      expect(link!.height, "Forgot your password? is a finger high").toBeGreaterThanOrEqual(43.5);
       await page.getByRole("button", { name: "Forgot your password?" }).click();
       await fits(page, "sign-in, forgot");
     });
@@ -228,6 +319,7 @@ for (const size of SIZES) {
         const t = table(a, caption);
         expect.soft(t.scrolls, `${caption} scrolls sideways`).toBe(0);
         expect.soft(t.stacked, `${caption} is stacked`).toBe(size.name === "phone");
+        expect.soft(await brokenWords(page, caption), `${caption}: broken words`).toEqual([]);
       }
     });
 
@@ -287,9 +379,40 @@ for (const size of SIZES) {
       try {
         const name = uid("Phone hook");
         await connectionWithRuns(api, rx.url, name);
+        // Two runs that failed: the receiver's host does not resolve, and the failure text names it.
+        await connectionWithRuns(
+          api,
+          "https://a-receiver-with-a-rather-long-host-name.example.test/hook",
+          uid("Phone failing hook"),
+        );
         await signIn("root", "/connectors/overview");
         await settle(page);
-        await fits(page, "connectors overview");
+        const o = await fits(page, "connectors overview");
+        // The Status cell carries the failure text: on a phone it has the row to itself.
+        const runs = await page.evaluate(() => {
+          const table = [...document.querySelectorAll("table")].find(
+            (t) => t.querySelector("caption")?.textContent?.trim() === "Latest runs",
+          )!;
+          return [...table.querySelectorAll<HTMLElement>("tbody > tr")].map((tr) => {
+            const cell = tr.querySelectorAll<HTMLElement>("td")[2]!;
+            const st = getComputedStyle(tr);
+            return {
+              text: cell.textContent ?? "",
+              width: cell.getBoundingClientRect().width,
+              row: tr.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight),
+            };
+          });
+        });
+        expect(
+          runs.filter((r) => r.text.includes("could not be resolved")).length,
+          "failed runs in Latest runs",
+        ).toBeGreaterThanOrEqual(2);
+        expect.soft(table(o, "Latest runs").scrolls, "Latest runs scrolls sideways").toBe(0);
+        if (size.name === "phone")
+          for (const r of runs)
+            expect
+              .soft(r.width, `the Status cell of "${r.text.slice(0, 30)}" spans its row`)
+              .toBeGreaterThanOrEqual(r.row - 1);
         await page
           .locator(".cx-card", { hasText: name })
           .getByRole("button", { name: "Open" })
@@ -310,7 +433,24 @@ for (const size of SIZES) {
         const r = await fits(page, "processing register");
         const reg = table(r, "Processing register");
         expect.soft(reg.scrolls, "the register scrolls sideways").toBe(0);
-        expect.soft(reg.stacked, "the register is stacked").toBe(size.name === "phone");
+        // Cards up to 60rem: one card per connection on a phone and on a tablet.
+        expect.soft(reg.stacked, "the register is stacked").toBe(true);
+        const cells = await labelled(page, "Processing register");
+        expect(cells.length, "labelled cells of the register").toBeGreaterThanOrEqual(7);
+        for (const c of cells) {
+          if (size.name === "phone")
+            expect.soft(c.width, `${c.label} spans its card`).toBeGreaterThanOrEqual(c.row - 1);
+          else expect.soft(c.width, `${c.label} is at least 14rem`).toBeGreaterThanOrEqual(223.5);
+        }
+        if (size.name === "tablet") {
+          // The two ranges of the kit's stacked layout are one layout: a stack-md row at 768 px
+          // computes what a stack-sm row computes at 390 px (the register's own cell width aside).
+          const wide = await stackStyle(page, "Processing register");
+          await page.setViewportSize({ width: 390, height: 844 });
+          await page.waitForTimeout(250);
+          const narrow = await stackStyle(page, "Processing register");
+          expect(wide, "stack-md at 768 px against stack-sm at 390 px").toEqual(narrow);
+        }
       } finally {
         await rx.close();
       }
@@ -379,11 +519,21 @@ for (const size of SIZES) {
   });
 }
 
-test("the Brand book's type scale fits a tablet", async ({ page, signIn }) => {
-  await page.setViewportSize({ width: 768, height: 1024 });
-  await signIn("root", "/customize/brand?tab=brand");
-  await settle(page);
-  await expect(page.getByRole("table", { name: "Type scale" })).toBeVisible();
-  const a = await fits(page, "brand foundations");
-  expect.soft(table(a, "Type scale").scrolls).toBe(0);
-});
+for (const size of SIZES) {
+  test(`the Brand book's type scale reads at ${size.width} px`, async ({ page, signIn }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await signIn("root", "/customize/brand?tab=brand");
+    await settle(page);
+    await expect(page.getByRole("table", { name: "Type scale" })).toBeVisible();
+    const a = await fits(page, "brand foundations");
+    expect.soft(table(a, "Type scale").scrolls, "the Type scale scrolls sideways").toBe(0);
+    expect(await brokenWords(page, "Type scale"), "words broken in the Type scale").toEqual([]);
+    // No sample ends in an ellipsis: a stacked sample wraps, a tablet's fits its column.
+    const cut = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>(".scale-sample")]
+        .filter((e) => e.scrollWidth > e.clientWidth + 1)
+        .map((e) => e.textContent),
+    );
+    expect(cut, "type scale samples cut by an ellipsis").toEqual([]);
+  });
+}

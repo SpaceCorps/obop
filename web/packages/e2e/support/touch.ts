@@ -144,3 +144,85 @@ export async function audit(page: Page): Promise<Audit> {
     [CONTROLS],
   );
 }
+
+/** A word of this many characters or more may break (a file name, an address, a token). */
+const LONG_WORD = 20;
+
+/**
+ * The words of one table that a line break cuts in two, as `caption: "word"`. A table that "fits its
+ * box" can still be unreadable: a column crushed to a letter or two breaks "Legal basis" into
+ * "Leg / al / bas / is". Every word of every visible cell is measured with a `Range` (more than one
+ * line box = broken); a stacked cell's label (generated from `data-label`) is measured by its
+ * longest word against the cell's width. Words of 20 characters or more are exempt.
+ */
+export async function brokenWords(page: Page, caption: string): Promise<string[]> {
+  return page.evaluate(
+    ([cap, limit]) => {
+      const table = [...document.querySelectorAll("table")].find(
+        (t) => t.querySelector("caption")?.textContent?.trim() === cap,
+      );
+      if (!table) return [`${cap}: no such table`];
+      const hidden = (el: Element) => {
+        for (let e: Element | null = el; e; e = e.parentElement) {
+          const s = getComputedStyle(e);
+          if (s.display === "none" || s.visibility === "hidden" || s.clipPath === "inset(50%)")
+            return true;
+        }
+        return false;
+      };
+      const broken: string[] = [];
+      const ruler = document.createElement("span");
+      ruler.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap";
+      document.body.append(ruler);
+      for (const cell of table.querySelectorAll<HTMLElement>("th, td")) {
+        if (hidden(cell)) continue;
+        // The words of the whole cell, across its text nodes (a framework may split "--text-" and
+        // "display" into two nodes of one element).
+        const nodes: { node: Text; start: number }[] = [];
+        let all = "";
+        const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          // Text of two elements is two words, even when no space lies between them.
+          if (nodes.length && nodes[nodes.length - 1]!.node.parentElement !== n.parentElement)
+            all += " ";
+          nodes.push({ node: n as Text, start: all.length });
+          all += n.textContent ?? "";
+        }
+        const at = (pos: number, end: boolean) => {
+          for (let i = nodes.length - 1; i >= 0; i--) {
+            const { node, start } = nodes[i]!;
+            if (pos > start || (pos === start && !end)) return [node, pos - start] as const;
+          }
+          return [nodes[0]!.node, 0] as const;
+        };
+        for (const m of all.matchAll(/\S+/g)) {
+          if (m[0].length >= (limit as number)) continue;
+          const range = document.createRange();
+          range.setStart(...at(m.index!, false));
+          range.setEnd(...at(m.index! + m[0].length, true));
+          const tops = [...range.getClientRects()]
+            .filter((r) => r.width > 0)
+            .map((r) => Math.round(r.top));
+          if (tops.length && Math.max(...tops) - Math.min(...tops) > 2)
+            broken.push(`${cap}: "${m[0]}"`);
+        }
+        const label = cell.getAttribute("data-label");
+        if (label && getComputedStyle(cell, "::before").content !== "none") {
+          const st = getComputedStyle(cell, "::before");
+          ruler.style.font = st.font;
+          for (const w of label.split(/\s+/)) {
+            ruler.textContent = w;
+            if (
+              w.length < (limit as number) &&
+              ruler.getBoundingClientRect().width > cell.clientWidth
+            )
+              broken.push(`${cap}: label "${w}"`);
+          }
+        }
+      }
+      ruler.remove();
+      return broken;
+    },
+    [caption, LONG_WORD] as const,
+  );
+}
