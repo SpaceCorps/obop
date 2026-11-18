@@ -1,7 +1,7 @@
 //! The registry metadata of the `mail` module (docs/spec/mail.md 2): every field with a data class
 //! and a permission group, the commands, and the labels in seven languages.
 
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, ModelUi, Module, ModuleMeta};
 use obop_types::DataClass::{Internal, None as NoClass, Secret};
 
 /// Mail servers, templates, the deliveries log, retry, cancel and the test message.
@@ -145,6 +145,11 @@ fn outbound() -> ModelDef {
         ],
         ext: Default::default(),
     }
+    // A log: the list, newest first. The moves of `status` would otherwise open it as a board.
+    .with_ui(ModelUi {
+        default_view: Some("list".into()),
+        ..Default::default()
+    })
 }
 
 fn template() -> ModelDef {

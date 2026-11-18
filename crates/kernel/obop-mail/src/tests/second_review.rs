@@ -73,6 +73,11 @@ fn the_metadata_offers_no_edit_of_a_delivery_and_each_action_only_where_it_start
     };
     assert_eq!(from("retry"), Some(("status", Some("failed"))));
     assert_eq!(from("cancel"), Some(("status", Some("queued"))));
+    // The log opens as a list, not as a board of its states.
+    assert_eq!(
+        model.ui.as_ref().and_then(|u| u.default_view.as_deref()),
+        Some("list")
+    );
     // The worker's numbers read as times where a holder of every group sees them.
     for f in ["lease_until", "due"] {
         let def = crate::meta::module()
