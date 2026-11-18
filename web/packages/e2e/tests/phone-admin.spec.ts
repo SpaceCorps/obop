@@ -450,12 +450,26 @@ for (const size of SIZES) {
           else expect.soft(c.width, `${c.label} is at least 14rem`).toBeGreaterThanOrEqual(223.5);
         }
         if (size.name === "tablet") {
-          // The two ranges of the kit's stacked layout are one layout: a stack-md row at 768 px
-          // computes what a stack-sm row computes at 390 px (the register's own cell width aside).
-          const wide = await stackStyle(page, "Processing register");
+          // The two ranges of the kit's stacked layout are one layout. The register carries both
+          // classes, so it cannot show drift between the blocks (at 390 px the later one wins):
+          // two fixture tables do, one with only stack-md (measured at 768 px), one with only
+          // stack-sm (measured at 390 px). Everything stackStyle reads must be equal.
+          await page.evaluate(() => {
+            for (const cls of ["stack-md", "stack-sm"]) {
+              const t = document.createElement("table");
+              t.className = `table ${cls}`;
+              t.setAttribute("role", "table");
+              t.innerHTML =
+                `<caption>Fixture ${cls}</caption><thead><tr><th scope="col">Name</th>` +
+                `<th scope="col">Note</th></tr></thead><tbody><tr><th scope="row">One</th>` +
+                `<td data-label="Note">A note</td></tr></tbody>`;
+              document.body.append(t);
+            }
+          });
+          const wide = await stackStyle(page, "Fixture stack-md");
           await page.setViewportSize({ width: 390, height: 844 });
           await page.waitForTimeout(250);
-          const narrow = await stackStyle(page, "Processing register");
+          const narrow = await stackStyle(page, "Fixture stack-sm");
           expect(wide, "stack-md at 768 px against stack-sm at 390 px").toEqual(narrow);
         }
       } finally {
