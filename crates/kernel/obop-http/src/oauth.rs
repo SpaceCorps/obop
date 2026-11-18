@@ -560,9 +560,9 @@ pub(crate) fn microsoft_offered(s: &HttpState) -> bool {
     s.connectors.get().is_some() && s.auth.sso().is_some_and(|a| a.offered())
 }
 
-/// The page context of a flow, with the Microsoft step offered when the flow is a mobile app's and
-/// the instance has it, and with the brand the handler read at the start of its request.
-/// (`obop-oauth` cannot see the provider or the reader; an MCP client is never offered the step.)
+/// The page context of a flow, with the Microsoft step offered when the instance has it (to a
+/// mobile app's flow and, since N5, to an MCP client's), and with the brand the handler read at
+/// the start of its request. (`obop-oauth` cannot see the provider or the reader.)
 fn flow_view(
     s: &HttpState,
     o: &OAuth,
@@ -571,7 +571,7 @@ fn flow_view(
     brand: &Arc<Shown>,
 ) -> Result<FlowCtx, FlowError> {
     let mut ctx = o.view(id, binder, brand)?;
-    ctx.microsoft = ctx.class.is_mobile() && microsoft_offered(s);
+    ctx.microsoft = microsoft_offered(s);
     Ok(ctx)
 }
 
