@@ -6,6 +6,7 @@ import { ModulesPage } from "./modules/ModulesPage.tsx";
 import type { ModulesRoute } from "./modules/types.ts";
 import { useModulesView } from "./modules/view.ts";
 import { IdentityTab } from "./Identity.tsx";
+import { MailTab } from "./mail/MailTab.tsx";
 import { BuildTab } from "./ModuleBuilder.tsx";
 import { SecurityTab } from "./Security.tsx";
 import { UpdatesPage } from "./updates/UpdatesPage.tsx";
@@ -75,6 +76,7 @@ const TABS = [
   { id: "updates", label: msg("Updates"), icon: "arrow-up" },
   { id: "build", label: msg("Build a module"), icon: "edit" },
   { id: "security", label: msg("Security"), icon: "shield-check" },
+  { id: "mail", label: msg("Mail"), icon: "mail" },
   { id: "brand", label: msg("Brand book"), icon: "sparkle" },
   { id: "guide", label: msg("Guide"), icon: "help" },
 ] as const;
@@ -183,6 +185,7 @@ export function Customize(p: Props) {
           {tab === "updates" && <UpdatesPage token={p.token} notify={p.notify} />}
           {tab === "build" && <BuildTab {...p} />}
           {tab === "security" && <SecurityTab {...p} />}
+          {tab === "mail" && <MailTab token={p.token} notify={p.notify} />}
           {tab === "guide" && (
             <Suspense fallback={<Skeleton rows={6} cols={3} />}>
               <GuidePage anchor={p.anchor} goAnchor={p.goAnchor} notify={p.notify} />
