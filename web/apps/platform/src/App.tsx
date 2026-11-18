@@ -17,7 +17,9 @@ import {
   rich,
   t,
   twoFactorMessage,
+  useWorded,
   type Factor,
+  type Wording,
 } from "@obop/ui";
 import { create, list, login, loginMfa, remove, signup, type Instance } from "./api.ts";
 import { clock, phaseText, serverMessage } from "./serverMessage.ts";
@@ -41,11 +43,12 @@ function remember(token: string) {
 
 function Auth({ onToken }: { onToken: (token: string) => void }) {
   const [mode, setMode] = useState<"signup" | "login">("signup");
-  const [error, setError] = useState<string | null>(null);
+  // Kept as a wording, so a switch of language rewords a shown error (D9).
+  const [error, setError] = useWorded();
   const [busy, setBusy] = useState(false);
   // Set after the password of an account that has two-factor authentication on.
   const [step, setStep] = useState<string | null>(null);
-  async function code(factor: Factor): Promise<string | null> {
+  async function code(factor: Factor): Promise<Wording | null> {
     if (!step) return null;
     const r = await loginMfa(step, factor);
     if (r.ok && r.value.token) {
@@ -55,10 +58,11 @@ function Auth({ onToken }: { onToken: (token: string) => void }) {
     const failed = r.ok ? "" : r.code;
     if (failed === "mfa_expired") {
       setStep(null);
-      setError(twoFactorMessage({ status: 401, code: failed }));
+      setError(() => twoFactorMessage({ status: 401, code: failed }));
       return null;
     }
-    return twoFactorMessage({ status: r.ok ? 0 : r.status, code: failed });
+    const status = r.ok ? 0 : r.status;
+    return () => twoFactorMessage({ status, code: failed });
   }
   return (
     <main className="auth-wrap">
@@ -109,7 +113,7 @@ function Auth({ onToken }: { onToken: (token: string) => void }) {
             const r =
               mode === "signup" ? await signup(email, password) : await login(email, password);
             setBusy(false);
-            if (!r.ok) return setError(serverMessage(r.error));
+            if (!r.ok) return setError(() => serverMessage(r.error));
             if ("mfa_required" in r.value && r.value.mfa_required && r.value.mfa_token)
               return setStep(r.value.mfa_token);
             if (r.value.token) onToken(r.value.token);
@@ -233,7 +237,7 @@ const STATUS = {
 export function App() {
   const [token, setTokenState] = useState(stored);
   const [instances, setInstances] = useState<Instance[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const [toDelete, setToDelete] = useState<Instance | null>(null);
   const [security, setSecurity] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -336,7 +340,7 @@ export function App() {
             if (r.ok) {
               setError(null);
               form.reset();
-            } else setError(serverMessage(r.error));
+            } else setError(() => serverMessage(r.error));
             await refresh();
           }}
         >
@@ -382,7 +386,7 @@ export function App() {
             );
             void (async () => {
               const r = await remove(token, i.id);
-              if (!r.ok) setError(serverMessage(r.error));
+              if (!r.ok) setError(() => serverMessage(r.error));
               await refresh();
             })();
           }}
