@@ -1488,7 +1488,6 @@ a.kpi.ov-kpi:hover {
   }
   .linklike {
     min-block-size: 2.75rem;
-    padding-inline: var(--space-2);
   }
   .theme-tab .swatch {
     inline-size: 2.75rem;

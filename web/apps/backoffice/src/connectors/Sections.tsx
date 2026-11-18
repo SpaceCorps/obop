@@ -132,7 +132,7 @@ export function Register() {
           hint={t("Connections appear here as soon as they exist.")}
         />
       ) : (
-        <Table caption={t("Processing register")} stack className="wrap-md">
+        <Table caption={t("Processing register")} stack className="stack-md cx-register">
           <thead>
             <tr>
               <th scope="col">{t("Connection")}</th>
@@ -365,7 +365,7 @@ export function Overview(props: {
         ) : (
           // One block per run on a phone, the connection on top (stack). The explicit roles keep
           // it a table for Safari, which drops the semantics once display changes.
-          <Table dense stack role="table" caption={t("Latest runs")}>
+          <Table dense stack role="table" className="cx-runs" caption={t("Latest runs")}>
             <thead>
               <tr role="row">
                 <th scope="col" role="columnheader">

@@ -679,11 +679,25 @@
 .scale td {
   vertical-align: middle;
 }
+/* A token name is one word: a tablet's narrow first column may not cut it at its hyphen. */
+.table.scale th code {
+  white-space: nowrap;
+}
 .scale-sample {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* A sample wraps onto a second line instead of ending in an ellipsis. On a tablet it also keeps
+   the sample column's minimum width at its longest word, so the nowrap token name beside it does not
+   push the table past its box. */
+@media (max-width: 60rem) {
+  .table.scale .scale-sample {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
 }
 
 /* Space, radius, depth */

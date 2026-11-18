@@ -36,6 +36,21 @@
 .cx-page section > h2 {
   margin-block-end: var(--space-2);
 }
+/* The processing register is one card per connection up to 60rem (stack-md). Its cells are
+   sentences, not short values, so a labelled cell is at least 14rem wide: a phone shows one per
+   line, a tablet two or three. The selector carries a third class to beat the kit's stacked cell. */
+@media (max-width: 60rem) {
+  .table.cx-register > tbody > tr > td[data-label] {
+    flex: 1 1 14rem;
+  }
+}
+/* Latest runs: the Status cell may carry the failure text of a run ("failed" and a sentence with a
+   host name), so on a phone it takes the row to itself instead of a third of it. */
+@media (max-width: 40rem) {
+  .table.cx-runs > tbody > tr > td:nth-child(4) {
+    flex-basis: 100%;
+  }
+}
 @media (max-width: 56rem) {
   .cx-split {
     grid-template-columns: minmax(0, 1fr);
