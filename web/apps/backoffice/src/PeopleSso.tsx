@@ -208,6 +208,14 @@ export function MicrosoftDialog({
             spellCheck={false}
             required
           />
+          {/* A binding gives every agent token of the account an end (N18): the server sets it
+              on the tokens there are now and on each one made later. */}
+          <p className="hint">
+            {t(
+              "Once bound, the agent tokens of {user} end after 90 days at the latest: the ones they have now 90 days from today, each new one 90 days after it is made.",
+              { user: person.name },
+            )}
+          </p>
           {error && (
             <div className="confirm-error" role="alert">
               {error}
@@ -297,7 +305,7 @@ export function MicrosoftDialog({
           <div className="stack">
             <p>
               {t(
-                "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid. Their password still works.",
+                "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid; an agent token still ends on the date it got while the account was bound. Their password still works.",
               )}
             </p>
             {own && <p>{t("This is your own account: you are signed out at once.")}</p>}

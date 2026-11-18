@@ -427,6 +427,10 @@ describe("People: Microsoft", () => {
     expect(dialog()?.textContent).toContain(
       "Copy it from the person's page in the Microsoft Entra admin centre (Users, the person, Object ID). It looks like 00000000-0000-0000-0000-000000000000.",
     );
+    // A binding gives the person's agent tokens an end (N18): the dialog says so before Bind.
+    expect(dialog()?.textContent).toContain(
+      "Once bound, the agent tokens of ada end after 90 days at the latest: the ones they have now 90 days from today, each new one 90 days after it is made.",
+    );
     await type(field("Object ID"), "ada@example.test");
     await click(button("Bind", dialog()!));
     expect(dialog()?.textContent).toContain("This is an e-mail address, not an object ID.");
@@ -1118,8 +1122,11 @@ describe("People: Microsoft, the questions and the rules", () => {
     const ask = alertDialog()!;
     expect(ask.textContent).toContain("Remove the Microsoft binding of ada?");
     expect(ask.textContent).toContain(
-      "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid. Their password still works.",
+      "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid; an agent token still ends on the date it got while the account was bound. Their password still works.",
     );
+    // Since N18 every agent token of a bound account has an end, which an unbinding keeps: the
+    // question must not read as if the tokens became valid for ever.
+    expect(ask.textContent).not.toContain("connected apps stay valid. Their password");
     expect(sent("/api/user_account/unbind_sso")).toHaveLength(0);
     await click(button("Cancel", ask));
     expect(sent("/api/user_account/unbind_sso")).toHaveLength(0);
