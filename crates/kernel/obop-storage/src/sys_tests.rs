@@ -1363,6 +1363,61 @@ fn the_backfill_stamps_old_records_in_passes_and_nothing_else() {
     });
 }
 
+#[test]
+fn a_version_above_the_largest_integer_is_stamped_by_the_backfill_and_counted() {
+    // `sysfields::row_version` reads it as no version; the database must agree (K24).
+    each(|fx| {
+        fx.b.insert(
+            "deal",
+            "big",
+            &f(json!({"row_version": 9_223_372_036_854_775_808_u64})),
+        )
+        .unwrap();
+        let models = ["deal".to_string()];
+        let fallback = fmt_micros(T0 - 1_000_000);
+        assert_eq!(
+            fx.b.backfill_sysfields(&models, &fallback, 10).unwrap(),
+            Backfilled {
+                stamped: 1,
+                remaining: 0
+            },
+            "{}",
+            fx.name
+        );
+        assert_eq!(fx.get("deal", "big")["row_version"], 1, "{}", fx.name);
+    });
+}
+
+#[test]
+fn a_restored_history_numbered_at_the_end_refuses_the_next_entry_instead_of_overflowing() {
+    let src = Fx::memory();
+    src.track_plain("deal", &["n"]);
+    src.ok("ann", &[ins("deal", "d1", json!({"n": 1}))]);
+    let rows: Vec<Row> = src
+        .rows()
+        .into_iter()
+        .map(|(m, id, data)| {
+            if sysfields::is_entry_row(&m, &data) {
+                (m, i64::MAX.to_string(), data)
+            } else {
+                (m, id, data)
+            }
+        })
+        .collect();
+    let db = Fx::memory();
+    db.track_plain("deal", &["n"]);
+    let mut feed = Some(rows);
+    assert_eq!(db.b.import(true, &mut || Ok(feed.take())).unwrap(), 2);
+    let r = db.by("bob", &[merge("deal", "d1", json!({"n": 2}))]);
+    assert!(r.is_err(), "{r:?}");
+    assert_eq!(
+        db.get("deal", "d1")["n"],
+        1,
+        "nothing of the batch was kept"
+    );
+    assert_eq!(db.hist("deal", "d1").len(), 1);
+}
+
 // ---- a batch that fails, batches that mix --------------------------------------------------------
 
 #[test]
@@ -2060,12 +2115,52 @@ fn a_database_from_before_the_history_opens_without_a_schema_change_and_gets_the
         ("update", 2)
     );
     assert_eq!(db.b.total().unwrap(), 4, "three records, one entry");
-    // A refused batch leaves no table behind that it made (the creation is part of it).
-    let fresh = Fx::sqlite_file();
+    // A refused batch leaves no table behind that it made (the creation is part of it). The
+    // batch fails after its history was written (K24): the erasure that follows the entries
+    // reads a record whose stored text is not an object.
+    let fresh_dir = TempDir::new();
+    let fresh_path = fresh_dir.0.path().join("fresh.db");
+    let (fresh_now, fresh_clock) = self::clock();
+    let fresh = Fx {
+        b: Tracked::new(Arc::new(
+            Sqlite::open_with_clock(&fresh_path.display().to_string(), fresh_clock).unwrap(),
+        )),
+        now: fresh_now,
+        name: "a fresh file",
+        _dir: None,
+        _db: None,
+    };
+    rusqlite::Connection::open(&fresh_path)
+        .unwrap()
+        .execute(
+            "INSERT INTO obop_record (model, id, data) VALUES ('deal', 'broken', '[1]')",
+            (),
+        )
+        .unwrap();
+    let tables = |path: &std::path::Path| -> Vec<String> {
+        let c = rusqlite::Connection::open(path).unwrap();
+        let mut st = c
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            .unwrap();
+        st.query_map((), |r| r.get::<_, String>(0))
+            .unwrap()
+            .map(|n| n.unwrap())
+            .collect()
+    };
+    let fresh_before = tables(&fresh_path);
+    assert!(!fresh_before.contains(&"obop_record_change".to_string()));
     fresh.track_plain("deal", &["n"]);
-    let r = fresh.by("ann", &[ins("deal", "d1", json!({})), del("deal", "ghost")]);
-    assert!(r.is_err());
-    assert_eq!(fresh.b.total().unwrap(), 0);
+    let r = fresh.by(
+        "ann",
+        &[ins("deal", "d1", json!({})), erase("deal", "broken")],
+    );
+    assert!(format!("{r:?}").contains("not an object"), "{r:?}");
+    assert_eq!(
+        tables(&fresh_path),
+        fresh_before,
+        "the table the batch made went with it"
+    );
+    assert!(fresh.b.get("deal", "d1").unwrap().is_none());
     assert!(fresh.hist("deal", "d1").is_empty());
     // A restore that carries entries creates it too; one that carries none and wipes does not
     // need it.
