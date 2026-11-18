@@ -485,3 +485,113 @@ async fn rule1_a_phone_token_over_rest_and_an_oauth_token_over_mcp_are_no_person
     let (_, b) = post(r, Some(&ada), "/api/plan/list", json!({})).await;
     assert_eq!(b["value"]["total"], 1);
 }
+
+/// Main's L17 (the catalogues show a token only the device commands it can use) and L20 (a mobile
+/// app's token is refused the setting record) filter the same lists as rule 1 of D97: after both,
+/// each kind of principal still sees exactly the plan commands D97 gives it, in the catalogue of
+/// `GET /api/commands` and in its OpenAPI document alike: a person all five, an agent's token and
+/// a phone's token `plan.get` alone (the MCP side is `mcp_an_agent_is_shown_plan_get_only...` and
+/// `rule1_a_phone_token_over_rest...`).
+#[tokio::test]
+async fn rule1_the_catalogue_and_the_openapi_document_of_each_principal_agree_after_l17_and_l20() {
+    use obop_commands::OAuthTokens;
+    let w = world();
+    let r = &w.r;
+    let ada = token(r, "ada").await;
+    let agent = agent_token(r, &ada).await;
+    let device = "phone-2";
+    let mut rec = obop_storage::Fields::new();
+    rec.insert("state".into(), json!("active"));
+    rec.insert("grant".into(), json!("grant-phone-2"));
+    rec.insert("registered_at".into(), json!("2026-11-18T10:00:00Z"));
+    w.app
+        .store
+        .backend()
+        .insert("device", device, &rec)
+        .unwrap();
+    let (phone, _) = w
+        .auth
+        .issue_mobile_access(
+            "ada",
+            &["base.user".to_string()],
+            "phone",
+            3600,
+            &obop_oauth::api_resource("http://localhost"),
+            "grant-phone-2",
+            device,
+        )
+        .unwrap();
+    let all = [
+        "plan.approve",
+        "plan.count",
+        "plan.get",
+        "plan.list",
+        "plan.reject",
+    ];
+    for (who, tok, want) in [
+        ("person", &ada, &all[..]),
+        ("agent", &agent, &["plan.get"][..]),
+        ("phone", &phone, &["plan.get"][..]),
+    ] {
+        let (s, b) = send(r, "GET", Some(tok), "/api/commands", json!({})).await;
+        assert_eq!(s, 200, "{who}: {b}");
+        let mut listed: Vec<&str> = b["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|c| c["id"].as_str())
+            .filter(|id| id.starts_with("plan."))
+            .collect();
+        listed.sort();
+        assert_eq!(listed, want, "{who}: the catalogue");
+        let (s, doc) = send(r, "GET", Some(tok), "/api/openapi.json", json!({})).await;
+        assert_eq!(s, 200, "{who}");
+        let mut ops: Vec<String> = doc["paths"]
+            .as_object()
+            .unwrap()
+            .values()
+            .filter_map(|item| item["post"]["operationId"].as_str())
+            .filter(|o| o.starts_with("plan."))
+            .map(String::from)
+            .collect();
+        ops.sort();
+        assert_eq!(ops, want, "{who}: the OpenAPI document");
+    }
+    // L20 still holds beside it: the phone's token is refused the setting record.
+    let (s, _) = post(r, Some(&phone), "/api/setting/get", json!({"id": "ui"})).await;
+    assert_ne!(s, 200, "the phone reads no setting (L20)");
+}
+
+/// ISSUES V16, unchanged by main's N18, K19 and L16 (which end more agent tokens: on an unbinding,
+/// on "Microsoft only", after 90 days, and those made during a revocation): a waiting plan names
+/// its agent `{owner}/agent`, not the token, so ending the token that proposed it leaves the plan
+/// to be decided by a person. The token itself can no longer read it. When V16 is closed this
+/// test is the one to turn around.
+#[tokio::test]
+async fn v16_a_revoked_agent_token_leaves_its_waiting_plan_to_a_person() {
+    let w = world();
+    let r = &w.r;
+    let ada = token(r, "ada").await;
+    let agent = agent_token(r, &ada).await;
+    let plan = propose(r, &agent).await;
+    let (s, b) = send(r, "GET", Some(&ada), "/api/auth/agent-tokens", json!({})).await;
+    assert_eq!(s, 200, "{b}");
+    let id = b["tokens"][0]["id"].as_str().unwrap().to_string();
+    let (s, b) = post(
+        r,
+        Some(&ada),
+        &format!("/api/auth/agent-tokens/{id}/revoke"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    let (s, _) = post(r, Some(&agent), "/api/plan/get", json!({"id": plan})).await;
+    assert_eq!(s, 401, "the ended token reads nothing");
+    let (_, b) = post(r, Some(&ada), "/api/plan/list", json!({})).await;
+    assert_eq!(b["value"]["total"], 1, "the plan still waits: {b}");
+    // A person approves it and the erase it proposed runs (the answer is the command's own).
+    let (s, b) = post(r, Some(&ada), "/api/plan/approve", json!({"id": plan})).await;
+    assert_eq!(s, 200, "{b}");
+    let (_, b) = post(r, Some(&ada), "/api/plan/list", json!({})).await;
+    assert_eq!(b["value"]["total"], 0, "nothing waits any more: {b}");
+}
