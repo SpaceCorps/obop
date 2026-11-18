@@ -50,12 +50,13 @@ pub const CATEGORIES: [&str; 6] = [
     "automation",
 ];
 pub const MATURITY: [&str; 3] = ["working", "generic_adapter", "definition_only"];
-pub const ENGINES: [&str; 6] = [
+pub const ENGINES: [&str; 7] = [
     "webhook_out",
     "webhook_in",
     "rest_pull",
     "csv_export",
     "browse",
+    "mail",
     "none",
 ];
 pub const AUTH_KINDS: [&str; 7] = [

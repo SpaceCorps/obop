@@ -1,0 +1,53 @@
+// @vitest-environment jsdom
+// Customize > Mail for a holder of mail.admin who may not list the Connectors connections: the tab
+// does not ask for them (the server answers 404, a console error on every visit), and it still
+// loads the mail servers and the deliveries.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { MailTab } from "./MailTab.tsx";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+let container: HTMLDivElement;
+let root: Root;
+let asked: string[];
+
+beforeEach(() => {
+  asked = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const path = new URL(url, "http://localhost").pathname;
+      asked.push(path);
+      return new Response(JSON.stringify({ value: { rows: [] }, denied: [] }), { status: 200 });
+    }),
+  );
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  vi.unstubAllGlobals();
+});
+
+async function settle() {
+  for (let i = 0; i < 6; i++) await act(async () => await new Promise((r) => setTimeout(r, 0)));
+}
+
+it("asks for the connections only of a person who may list them", async () => {
+  act(() => root.render(<MailTab token="tok" notify={() => {}} readsConnections={false} />));
+  await settle();
+  expect(asked).toContain("/api/mail_server/search");
+  expect(asked).toContain("/api/outbound_mail/search");
+  expect(asked).not.toContain("/api/connection/search");
+
+  act(() => root.unmount());
+  root = createRoot(container);
+  asked = [];
+  act(() => root.render(<MailTab token="tok" notify={() => {}} readsConnections />));
+  await settle();
+  expect(asked).toContain("/api/connection/search");
+});

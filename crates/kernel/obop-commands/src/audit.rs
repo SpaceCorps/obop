@@ -57,11 +57,24 @@ pub fn record_event(
     }
 }
 
+/// The person who approved the plan this write belongs to, when it is not the actor itself: an
+/// approved proposal runs as the agent that made it, and its log line names the approver too
+/// (N15). Read from the write context that `Dispatcher::approve` opens around the run.
+fn approver_of(actor: &str) -> Option<String> {
+    obop_storage::ctx::current()
+        .and_then(|c| c.via.approver)
+        .filter(|a| a != actor)
+}
+
 fn event_record(at: u64, user: &str, kind: &str, actor: &str, detail: &str) -> (String, Fields) {
     let mut f = Fields::new();
     f.insert("user".into(), J::from(user));
     f.insert("kind".into(), J::from(kind));
     f.insert("actor".into(), J::from(actor));
+    let detail = match approver_of(actor) {
+        Some(a) => format!("{detail} (approved by {a})"),
+        None => detail.to_string(),
+    };
     f.insert("detail".into(), J::from(detail));
     f.insert("at".into(), J::from(rfc3339(at)));
     // Sortable by time, unique by suffix.
