@@ -807,6 +807,33 @@ enum Shape {
     Caller,
 }
 
+/// Whether a constant an effect writes is within the limits of its target field (the kind is
+/// already known to fit, `shape_ok`).
+fn const_within_limits(f: &FieldDef, lit: &Lit) -> Result<(), crate::limits::Breach> {
+    match (&f.kind, lit) {
+        (FieldKind::Text | FieldKind::LongText, Lit::Text(t)) => f.check_text(t),
+        (FieldKind::Date, Lit::Text(t)) => f.check_date(t),
+        (FieldKind::Number | FieldKind::Money, Lit::Int(n)) => f.check_int(*n),
+        (
+            FieldKind::Decimal {
+                precision, scale, ..
+            },
+            Lit::Int(_) | Lit::Text(_),
+        ) => {
+            let text = match lit {
+                Lit::Int(n) => n.to_string(),
+                Lit::Text(t) => t.clone(),
+                _ => return Ok(()),
+            };
+            match obop_values::Decimal::parse_for(&text, *precision, *scale, None) {
+                Ok(d) => f.check_decimal(d),
+                Err(_) => Ok(()),
+            }
+        }
+        _ => Ok(()),
+    }
+}
+
 fn shape_ok(target: &FieldKind, s: &Shape) -> bool {
     match s {
         Shape::Kind(k) => kind_class_ok(target, k),
@@ -935,6 +962,17 @@ impl Ctx<'_> {
                     "{what}: {}.{k} must be {}; that value does not fit",
                     target.name,
                     f.kind.describe()
+                ));
+            }
+            // A constant is known now: one outside the field's limits would be refused each
+            // time the action runs (D90, K44 c). A copied value is checked when it is written.
+            if let Shape::Lit(lit) = &shape
+                && let Err(b) = const_within_limits(f, lit)
+            {
+                return Err(format!(
+                    "{what}: {}.{k} must be {}; that value is outside the field's limits",
+                    target.name,
+                    b.requirement()
                 ));
             }
         }
