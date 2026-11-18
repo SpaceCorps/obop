@@ -103,6 +103,9 @@ pub const ATTESTATION_MAX_AGE: u64 = 365 * 86_400;
 pub const ARCHIVE_LAG_MAX: u64 = 300;
 /// `archive_timeout` the recovery point of 5 minutes needs.
 pub const ARCHIVE_TIMEOUT_MAX: u64 = 60;
+/// How far the change feed may lag behind the oldest open transaction before it is a warning
+/// (K31): a minute.
+pub const HORIZON_LAG_MAX_MS: i64 = 60_000;
 
 pub struct Inputs<'a> {
     pub backend: &'a dyn Backend,
@@ -149,6 +152,9 @@ pub fn check(i: &Inputs) -> Result<Report, String> {
                 i.backend.kind()
             ),
         );
+    }
+    if production {
+        history_feed(&mut r, i.backend);
     }
     let stats = schedule::stats(i.backend, i.now)?;
     match stats.backup_age_seconds {
@@ -457,6 +463,7 @@ fn host(r: &mut Report, s: &dyn ServerInfo, i: &Inputs) -> Result<(), String> {
             "data checksums are off: silent disk corruption would be read as data (initdb --data-checksums)",
         );
     }
+    history_owner(r, s)?;
     let ssl = get("ssl")?;
     let mode = i.sslmode.unwrap_or("disable");
     let encrypted_client = matches!(mode, "require" | "verify-ca" | "verify-full");
@@ -475,6 +482,76 @@ fn host(r: &mut Report, s: &dyn ServerInfo, i: &Inputs) -> Result<(), String> {
         r.add("tls", "D66", Level::Warn, "sslmode=require encrypts but does not prove the server's identity: verify-full with sslrootcert is stronger");
     } else {
         r.add("tls", "D66", Level::Pass, format!("sslmode={mode}"));
+    }
+    Ok(())
+}
+
+/// The change feed shows an entry only once every transaction that was open when it was written
+/// has ended, on the whole server (K31): one session left in a write transaction holds it back
+/// for every reader, and the lag is the only sign of it.
+fn history_feed(r: &mut Report, backend: &dyn Backend) {
+    match backend.history_stats() {
+        Ok(st) if st.horizon_lag_ms > HORIZON_LAG_MAX_MS => r.add(
+            "history_feed",
+            "D75",
+            Level::Warn,
+            format!(
+                "the change feed is held back {} by a transaction left open on this server (any database of it): find it with SELECT pid, datname, xact_start FROM pg_stat_activity WHERE backend_xid IS NOT NULL ORDER BY xact_start, and in pg_prepared_xacts",
+                human((st.horizon_lag_ms / 1000) as u64)
+            ),
+        ),
+        Ok(st) => r.add(
+            "history_feed",
+            "D75",
+            Level::Pass,
+            format!("held back {} ms", st.horizon_lag_ms),
+        ),
+        Err(e) => r.add(
+            "history_feed",
+            "D75",
+            Level::Warn,
+            format!("the change history could not be read: {e}"),
+        ),
+    }
+}
+
+/// The maintenance functions of the history must belong to the owner of its table, or its guard
+/// refuses them as "append-only" (K32; docs/DEPLOY.md "If the table changes owner").
+fn history_owner(r: &mut Report, s: &dyn ServerInfo) -> Result<(), String> {
+    let Some(o) = s.history_owners()? else {
+        return Ok(());
+    };
+    let wrong: Vec<&(String, String)> = o
+        .functions
+        .iter()
+        .filter(|(_, owner)| *owner != o.table)
+        .collect();
+    if wrong.is_empty() {
+        r.add(
+            "history_owner",
+            "D77",
+            Level::Pass,
+            format!(
+                "the history table and its maintenance functions belong to {}",
+                o.table
+            ),
+        );
+    } else {
+        let fix: Vec<String> = wrong
+            .iter()
+            .map(|(f, _)| format!("ALTER FUNCTION {f} OWNER TO {};", o.table))
+            .collect();
+        r.add(
+            "history_owner",
+            "D77",
+            Level::Fail,
+            format!(
+                "the history table belongs to {} but {} of its maintenance functions do not, so its guard refuses them as append-only: {}",
+                o.table,
+                wrong.len(),
+                fix.join(" ")
+            ),
+        );
     }
     Ok(())
 }

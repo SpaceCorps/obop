@@ -36,7 +36,31 @@ pub trait ServerInfo: Send + Sync {
     fn database_bytes(&self) -> Result<u64, String>;
     /// The server version string (`PostgreSQL 17.2 ...`).
     fn version(&self) -> Result<String, String>;
+    /// The owner of the change history table and of its maintenance functions (D75, D77;
+    /// K32); `None` when the history part is not made yet.
+    fn history_owners(&self) -> Result<Option<HistoryOwners>, String> {
+        Ok(None)
+    }
 }
+
+/// Who owns the change history: the table, and each `SECURITY DEFINER` maintenance function by
+/// its signature. The guard of the table lets maintenance through only when the function runs as
+/// the owner of the table, so the two must be one role.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HistoryOwners {
+    pub table: String,
+    pub functions: Vec<(String, String)>,
+}
+
+/// The table's owner, then one row per maintenance function in the table's schema.
+const HISTORY_OWNERS: &str =
+    "SELECT c.relowner::regrole::text, p.oid::regprocedure::text, p.proowner::regrole::text
+       FROM pg_class c
+       LEFT JOIN pg_proc p ON p.pronamespace = c.relnamespace
+        AND p.proname IN ('obop_history_ensure_partition', 'obop_history_erase',
+                          'obop_history_drop_partition')
+      WHERE c.oid = to_regclass('obop_record_change')
+      ORDER BY 2";
 
 /// A connection to a PostgreSQL server.
 pub struct Pg {
@@ -64,6 +88,27 @@ impl Pg {
 }
 
 impl ServerInfo for Pg {
+    fn history_owners(&self) -> Result<Option<HistoryOwners>, String> {
+        let rows = self
+            .client
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .query(HISTORY_OWNERS, &[])
+            .map_err(|e| e.to_string())?;
+        let Some(first) = rows.first() else {
+            return Ok(None);
+        };
+        let mut o = HistoryOwners {
+            table: first.get(0),
+            functions: Vec::new(),
+        };
+        for r in &rows {
+            if let (Some(f), Some(owner)) = (r.get::<_, Option<String>>(1), r.get(2)) {
+                o.functions.push((f, owner));
+            }
+        }
+        Ok(Some(o))
+    }
     fn setting(&self, name: &str) -> Result<Option<String>, String> {
         Ok(self
             .one("SELECT current_setting($1, true)", &[&name])?
@@ -164,6 +209,9 @@ impl ServerInfo for Reconnecting {
     fn version(&self) -> Result<String, String> {
         self.with(|p| p.version())
     }
+    fn history_owners(&self) -> Result<Option<HistoryOwners>, String> {
+        self.with(|p| p.history_owners())
+    }
 }
 
 /// A server that answers from a table, for tests.
@@ -178,6 +226,7 @@ pub struct FakeServer {
     /// `SHOW` and the size of the database answer this error (the server cannot be asked).
     pub setting_error: Option<String>,
     pub bytes_error: Option<String>,
+    pub history_owners: Option<HistoryOwners>,
 }
 
 impl FakeServer {
@@ -244,6 +293,9 @@ impl ServerInfo for FakeServer {
     }
     fn version(&self) -> Result<String, String> {
         Ok("PostgreSQL 17.0 (fake)".into())
+    }
+    fn history_owners(&self) -> Result<Option<HistoryOwners>, String> {
+        Ok(self.history_owners.clone())
     }
 }
 

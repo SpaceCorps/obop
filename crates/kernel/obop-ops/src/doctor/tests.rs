@@ -1,6 +1,6 @@
 use super::*;
 use crate::catalog::{Attestation, BackupRecord, Catalog, Copy, DrillRecord};
-use crate::pgadmin::{ArchiverStatus, FakeServer};
+use crate::pgadmin::{ArchiverStatus, FakeServer, HistoryOwners, ServerInfo};
 
 const NOW: u64 = 1_800_000_000;
 
@@ -93,6 +93,122 @@ fn level(r: &Report, name: &str) -> Level {
     r.find(name)
         .unwrap_or_else(|| panic!("no check {name}: {}", r.render()))
         .level
+}
+
+#[test]
+fn the_history_functions_must_belong_to_the_owner_of_the_table() {
+    let b = healthy();
+    let mut s = FakeServer::well_configured();
+    // No history part yet: nothing to check.
+    assert!(
+        run(&*b, Some(&s), Some("verify-full"), false)
+            .find("history_owner")
+            .is_none()
+    );
+    let fns = |owner: &str| {
+        [
+            "obop_history_drop_partition(date,interval)",
+            "obop_history_ensure_partition(date)",
+        ]
+        .iter()
+        .map(|f| (f.to_string(), owner.to_string()))
+        .collect::<Vec<_>>()
+    };
+    s.history_owners = Some(HistoryOwners {
+        table: "obop_owner".into(),
+        functions: fns("obop_owner"),
+    });
+    let r = run(&*b, Some(&s), Some("verify-full"), false);
+    assert_eq!(level(&r, "history_owner"), Level::Pass, "{}", r.render());
+    // The table was given to another role and the functions were not (K32).
+    s.history_owners = Some(HistoryOwners {
+        table: "new_owner".into(),
+        functions: fns("obop_owner"),
+    });
+    let r = run(&*b, Some(&s), Some("verify-full"), false);
+    assert_eq!(level(&r, "history_owner"), Level::Fail, "{}", r.render());
+    let d = &r.find("history_owner").unwrap().detail;
+    assert!(
+        d.contains("ALTER FUNCTION obop_history_ensure_partition(date) OWNER TO new_owner;"),
+        "{d}"
+    );
+    assert!(r.failed());
+}
+
+#[test]
+fn the_owners_of_the_history_are_read_from_a_real_server() {
+    let Some(db) = obop_storage::testing::TestDb::new() else {
+        return;
+    };
+    let pg = crate::pgadmin::Pg::connect(db.url()).unwrap();
+    obop_storage::schema::owner_install(db.url()).unwrap();
+    let o = pg
+        .history_owners()
+        .unwrap()
+        .expect("the history part was made");
+    assert_eq!(o.functions.len(), 3, "{o:?}");
+    assert!(
+        o.functions.iter().all(|(_, owner)| *owner == o.table),
+        "{o:?}"
+    );
+    // Give the table to another role, as docs/DEPLOY.md "If the table changes owner" describes.
+    let role = format!("obop_k32_{}", std::process::id());
+    let mut c = db.connect();
+    c.batch_execute(&format!(
+        "CREATE ROLE {role}; ALTER TABLE obop_record_change OWNER TO {role}"
+    ))
+    .unwrap();
+    let o = pg.history_owners().unwrap().unwrap();
+    assert_eq!(o.table, role);
+    assert!(o.functions.iter().all(|(_, owner)| *owner != role), "{o:?}");
+    c.batch_execute(&format!(
+        "REASSIGN OWNED BY {role} TO CURRENT_USER; DROP ROLE {role}"
+    ))
+    .unwrap();
+}
+
+#[test]
+fn a_change_feed_held_back_by_an_open_transaction_is_a_warning() {
+    let Some(db) = obop_storage::testing::TestDb::new() else {
+        return;
+    };
+    let b = obop_storage::open(db.url()).unwrap();
+    obop_storage::schema::owner_install(db.url()).unwrap();
+    let report = |b: &dyn Backend| {
+        check(&Inputs {
+            backend: b,
+            production: true,
+            server: None,
+            sslmode: None,
+            host_is_local: true,
+            plane: "main",
+            now: NOW,
+            sink_strays: &[],
+        })
+        .unwrap()
+    };
+    assert_eq!(level(&report(&*b), "history_feed"), Level::Pass);
+    // A session that holds a transaction number and stays open holds back every entry written
+    // after it; the lag is measured from the `at` of the oldest of them (an hour ago here).
+    let mut holder = db.connect();
+    holder
+        .batch_execute("BEGIN; SELECT pg_current_xact_id()")
+        .unwrap();
+    db.connect()
+        .batch_execute(
+            "INSERT INTO obop_record_change (at, model, record_id, op, actor, via, row_version, changed)
+               VALUES (now() - interval '1 hour', 'deal', 'd1', 'create', 'ann', '{}', 1, '{}')",
+        )
+        .unwrap();
+    let r = report(&*b);
+    assert_eq!(level(&r, "history_feed"), Level::Warn, "{}", r.render());
+    assert!(
+        r.find("history_feed")
+            .unwrap()
+            .detail
+            .contains("pg_stat_activity")
+    );
+    holder.batch_execute("ROLLBACK").unwrap();
 }
 
 #[test]
