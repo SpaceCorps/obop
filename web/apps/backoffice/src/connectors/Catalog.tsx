@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Badge, t } from "@obop/ui";
 import type { App } from "../Chrome.tsx";
+import { sentText } from "../approvals/sent.ts";
 import { useData, useRows } from "../data.tsx";
 import { serverMessage } from "../serverMessage.ts";
 import {
@@ -80,7 +81,7 @@ function PolicyDialog({
       await d.store.load("connector_provider");
       return onClose();
     }
-    setError(r.kind === "approval" ? t("Approval needed.") : serverMessage(r.message));
+    setError(r.kind === "approval" ? sentText() : serverMessage(r.message));
   }
   return (
     <Dialog

@@ -10,6 +10,21 @@ type Notify = (text: string, tone?: "info", opts?: { action?: ToastAction }) => 
 /** The sentence, for a place that has no toast (an inline message). */
 export const sentText = (): string => t("Sent for approval.");
 
+/**
+ * Several plans from one act (five deletes at once): one toast that says how many and links to the
+ * list, not to the first of them. A toast only links; it never decides (rule 10).
+ */
+export function notifySentMany(notify: Notify, count: number): void {
+  notify(
+    t("{count, plural, one {# request sent for approval.} other {# requests sent for approval.}}", {
+      count,
+    }),
+    "info",
+    { action: { label: t("Open Approvals"), href: approvalsHref() } },
+  );
+  plansChanged();
+}
+
 /** The toast: the sentence and "Open Approvals", a link to the plan. */
 export function notifySent(notify: Notify, planId: string): void {
   notify(sentText(), "info", {

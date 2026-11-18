@@ -191,7 +191,7 @@ export function Wizard(props: Props) {
       });
       if (r.kind !== "ok") {
         setBusy(false);
-        return setError(r.kind === "approval" ? t("Approval needed.") : serverMessage(r.message));
+        return setError(r.kind === "approval" ? sentText() : serverMessage(r.message));
       }
       setConsentDone(true);
     }

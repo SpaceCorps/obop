@@ -198,7 +198,12 @@ export function BulkDialog(p: Props) {
                     {r.status === "approval" ? (
                       <span>
                         {r.planId ? (
-                          <a href={approvalsHref({ id: r.planId })}>{t("waiting for approval")}</a>
+                          <a
+                            href={approvalsHref({ id: r.planId })}
+                            aria-label={t("{label}, waiting for approval", { label: r.label })}
+                          >
+                            {t("waiting for approval")}
+                          </a>
                         ) : (
                           t("waiting for approval")
                         )}

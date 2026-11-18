@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ConfirmDialog, getLang, t } from "@obop/ui";
 import { approvalsHref } from "./approvals/route.ts";
-import { notifySent } from "./approvals/sent.ts";
+import { notifySent, notifySentMany } from "./approvals/sent.ts";
 import type { ModelMeta } from "./api.ts";
 import { useData } from "./data.tsx";
 import { modelTitle } from "./labels.ts";
@@ -88,7 +88,8 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
       return onClose();
     }
     if (out.every((r) => r.status === "approval")) {
-      notifySent(d.notify, approvals[0]!.planId!);
+      if (approvals.length > 1) notifySentMany(d.notify, approvals.length);
+      else notifySent(d.notify, approvals[0]!.planId!);
       return onClose();
     }
     setResults(out);
@@ -131,7 +132,12 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
                   {r.status === "approval" && (
                     <span>
                       {r.planId ? (
-                        <a href={approvalsHref({ id: r.planId })}>{t("waiting for approval")}</a>
+                        <a
+                          href={approvalsHref({ id: r.planId })}
+                          aria-label={t("{label}, waiting for approval", { label: r.label })}
+                        >
+                          {t("waiting for approval")}
+                        </a>
                       ) : (
                         t("waiting for approval")
                       )}
