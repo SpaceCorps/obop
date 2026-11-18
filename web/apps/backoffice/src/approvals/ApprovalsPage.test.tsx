@@ -717,6 +717,26 @@ describe("approve", () => {
     expect(panel()!.querySelector(".appr-foot")).toBeNull();
   });
 
+  it("a refusal whose message ends in a full stop gets one, and one without gets it added", async () => {
+    server.approve = () => {
+      plans.set("p-update", detail({ status: "failed", failure: "bad_request", decided_by: "me" }));
+      return fail(400, { error: "Add at least one line with an amount.", code: "bad_request" });
+    };
+    await mount("#/approvals?id=p-update");
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    expect(flat(document.querySelector("[data-testid=plan-note]"))).toBe(
+      "The system refused it: Add at least one line with an amount. This request is closed. The agent can propose it again.",
+    );
+    // a guard that leaves the plan waiting, with a message that ends in a question mark
+    plans.set("p-update", detail());
+    server.approve = () => fail(400, { error: "Is the record posted?", code: "bad_request" });
+    await mount("#/approvals?id=p-update");
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    expect(flat(document.querySelector("[data-testid=plan-note]"))).toBe(
+      "The system refused it: Is the record posted? The request is still waiting.",
+    );
+  });
+
   it("400 from a guard: the request is still waiting and can be decided", async () => {
     server.approve = () => fail(400, { error: "the record moved on", code: "bad_request" });
     await mount("#/approvals?id=p-update");

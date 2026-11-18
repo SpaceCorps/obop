@@ -33,6 +33,7 @@ import {
   askOf,
   dateOf,
   decidedSentence,
+  endSentence,
   goneSentence,
   thingOf,
   valueText,
@@ -185,18 +186,19 @@ export function PlanPanel({
       // The command's own refusal: the plan is spent (failed), or a guard refused it and it waits.
       setBusy("reload");
       const now = await reload();
-      const message = serverMessage(r.error) || t("no reason was given");
+      // The message ends in exactly one sentence mark, and the keys add none after it.
+      const message = endSentence(serverMessage(r.error) || t("no reason was given"));
       setNote({
         tone: "danger",
         text:
           now?.status === "failed"
             ? t(
-                "The system refused it: {message}. This request is closed. The agent can propose it again.",
+                "The system refused it: {message} This request is closed. The agent can propose it again.",
                 { message },
               )
             : now?.status === "waiting"
-              ? t("The system refused it: {message}. The request is still waiting.", { message })
-              : t("The system refused it: {message}.", { message }),
+              ? t("The system refused it: {message} The request is still waiting.", { message })
+              : t("The system refused it: {message}", { message }),
       });
       return;
     }

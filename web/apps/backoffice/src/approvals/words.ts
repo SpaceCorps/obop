@@ -173,6 +173,15 @@ export function decidedSentence(d: {
   }
 }
 
+/**
+ * A sentence of the server's, brought to exactly one closing mark, so that the page can put more
+ * words after it: it keeps a `.`, `!`, `?` or `…` it ends in and adds a full stop otherwise.
+ */
+export function endSentence(message: string): string {
+  const text = message.trim();
+  return /[.!?…]$/.test(text) ? text : `${text}.`;
+}
+
 /** The same sentence for hidden, unknown, decided long ago and not yours (no leak). */
 export const goneSentence = (): string =>
   t("This request is not waiting any more. It may have been decided or it expired.");
