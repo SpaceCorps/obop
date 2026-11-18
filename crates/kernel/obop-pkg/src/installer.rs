@@ -4462,7 +4462,8 @@ write_group = "fleetlog.manager"
             "root",
         )
         .unwrap();
-        let reader = Principal::user("m", &["fleetlog.user", "fleetlog.manager"]);
+        // The reader may see the vehicles too: the target is named only to who may (K27).
+        let reader = Principal::user("m", &["fleetlog.user", "fleetlog.manager", "fleet.user"]);
         let text = |d: &Dispatcher| {
             let m = d
                 .meta(Surface::Rest, &reader)

@@ -637,6 +637,16 @@ impl Dispatcher {
         let order = self.order.read().unwrap();
         let visible =
             |c: &Registered| on_surface(c.surfaces, surface) && p.allows(c.permission_group);
+        // Whether the caller may see the target of a `shows_option_of` (K27).
+        let sees_target = |s: &obop_registry::ShowsOption| {
+            cmds.get(&format!("{}.list", s.model))
+                .is_some_and(|r| visible(r))
+                && models.get(&s.model).is_some_and(|tm| {
+                    tm.fields
+                        .iter()
+                        .any(|tf| tf.name == s.field.as_str() && p.allows(tf.permission_group))
+                })
+        };
         let mut out = Vec::new();
         for module in order.iter() {
             let mut infos = Vec::new();
@@ -758,10 +768,18 @@ impl Dispatcher {
                                 unique: f.unique.is_some() || f.sequence.is_some(),
                                 sequence: f.sequence.is_some(),
                                 gapless: f.sequence.as_ref().is_some_and(|s| s.gapless),
-                                shows_option_of: f.shows_option.as_ref().map(|s| s.target()),
+                                // Named only to a caller who may list the target model and
+                                // read the select field, so the attribute does not tell
+                                // anybody else that the field exists (K27).
+                                shows_option_of: f
+                                    .shows_option
+                                    .as_ref()
+                                    .filter(|s| sees_target(s))
+                                    .map(|s| s.target()),
                                 shows_option_when: f
                                     .shows_option
                                     .as_ref()
+                                    .filter(|s| sees_target(s))
                                     .and_then(|s| s.when.as_ref())
                                     .map(|w| w.source.clone()),
                                 max_length: f.effective_max_length(),
