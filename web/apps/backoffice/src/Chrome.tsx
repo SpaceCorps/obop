@@ -715,7 +715,11 @@ export function Palette({
               e.preventDefault();
               setSel((s) => Math.max(s - 1, 0));
             }
-            if (e.key === "Enter") go(hits[sel]);
+            // Its default would press the Cancel of a question the action opens (and focuses).
+            if (e.key === "Enter") {
+              e.preventDefault();
+              go(hits[sel]);
+            }
           }}
         />
         {waiting && <Spinner size={16} label={t("Searching records")} />}
