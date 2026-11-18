@@ -128,7 +128,10 @@ Components from `@obop/ui-native`.
 
 - [ ] D1 `feat(rutsa): navigation and data hooks`: `ui/router.ts`, `ui/hooks.ts`
 - [ ] D2 `feat(rutsa): permissions screen`: why location is needed, what is stored and where (on
-      the phone only)
+      the phone only), then the system dialog of location and of notifications; without location
+      (BR-36, US-18) a screen for each case (refused for good, approximate only, location off on
+      the phone) with Open Settings and Close, and a new check when the app comes back to the
+      front, which goes on by itself; the rest of the app works without location
 - [ ] D3 `feat(rutsa): home screen`: Start; km today and this month
 - [ ] D4 `feat(rutsa): recording screen`: elapsed time, km so far, Pause, Resume, Stop; a note
       when no position has come for a while (C5)
@@ -232,3 +235,5 @@ D23).
   screens of D replace it.
 - 2026-11-18: outside the plan, `docs/spec/rutsa.md` gained BR-35 and US-17 (an app lock with a PIN
   or a password, before the release); not built in this stage.
+- 2026-11-18: `docs/spec/rutsa.md` gained BR-36 and US-18 (the app without location: a reason for
+  each case, Open Settings and Close, a new check on coming back); D2 builds them.

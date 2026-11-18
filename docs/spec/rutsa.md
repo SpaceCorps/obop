@@ -1,7 +1,7 @@
 # Rutsa: product requirements (PROPOSED)
 
 - **Status:** Draft 0.2. PROPOSED. This is the product view of Rutsa (working name, 1.2), the phone app built on the `mileage` module: the problem, who it is for, what it must do, how it competes and what is still to decide. The technical design of the `mileage` package and the app stays in [mobile.md](mobile.md), which this document does not replace. Nothing here is ratified unless it cites an owner ruling (OR-n) in [DECISIONS.md](../DECISIONS.md). Section 11.1 lists product positions discussed with the owner on 2026-11-10 to 2026-11-12; they are relayed, not quoted, unconfirmed, and PROPOSED until each is recorded as an owner ruling (OR-n).
-- **Date:** 2026-11-18 (first draft 2026-11-11; 1.2 added 2026-11-14; BR-35 and US-17 added 2026-11-18)
+- **Date:** 2026-11-18 (first draft 2026-11-11; 1.2 added 2026-11-14; BR-35, BR-36, US-17 and US-18 added 2026-11-18)
 - **Scope:** Rutsa as a product built on obop and its `mileage` module: automatic recording of business trips, sorting them into business and private, approval, turning approved kilometres into money for the employee, and the logbook a tax authority accepts. Country rules are data, not code.
 
 **Reading notes.** Decisions are cited by ID and owner rulings as OR-n. Facts are marked as in [mobile.md](mobile.md): **verified** means a page was read on the date above; **search** means it comes from a search result summary and the page itself was not opened; **general knowledge** means no source was checked and it must be verified before anything depends on it. Nothing here is legal or tax advice. Prices of other products come from third-party comparison sites, disagree with each other and must be checked on each vendor's site.
@@ -202,6 +202,7 @@ The system chooses the presentation; the app has no switch for it.
 | BR-33 | The report has two variants: an employee's claim to the employer (no VAT) and a sole trader's document (VAT, the F-skatt statement, the organisation number) | Must for the employee; the sole trader later (11.1) |
 | BR-34 | The driver keeps a list of recipients (name, email, company) and sends the report from the phone's own mail app, with the PDF and a CSV of the same trips (one row per trip) attached; the app sends nothing itself | Must |
 | BR-35 | The driver can lock the app with a PIN (4 to 6 digits) or a password. It is offered on the first start, with "Set up later", and can be turned on, changed or turned off in Settings. A locked app asks for the PIN or the password when it comes back from the background after the time the driver chose (at once, 1 minute, 5 minutes); Face ID or a fingerprint can unlock it instead where the phone has one. The lock never stops a recording that runs: positions are stored while the app is locked | Should, before the release |
+| BR-36 | Without location access the app stays usable: the trips, the trips added by hand and the settings work. Where a position is needed (Start, later a map of where the driver is) the app says why it cannot go on, in plain words for each case (not asked yet or refused once; refused for good; only an approximate location allowed; location switched off on the phone), with "Open Settings" (the app's own page in the system settings) and "Close" (back to where the driver was). When the driver comes back from the settings, the app checks again and goes on by itself | Must |
 
 ## 7. User stories
 
@@ -276,6 +277,13 @@ Each story has acceptance criteria (AC). "Built" marks what exists today.
 - AC2: In Settings I can turn the lock on, change the PIN or the password, choose when it locks, or turn it off.
 - AC3: With the lock on, after the chosen time in the background the app asks for the PIN, the password or Face ID before it shows a trip.
 - AC4: A recording that runs goes on while the app is locked.
+
+**US-18 Location turned off.** As a driver who has not allowed location, I want to know why a trip cannot start and how to fix it, and still use the rest of the app.
+- AC1: With location refused I can still see my trips and add one by hand. (BR-36)
+- AC2: When I press Start without location, I see why, with Open Settings and Close; Close takes me back to where I was.
+- AC3: Open Settings opens the page of Rutsa in the system settings.
+- AC4: With only an approximate location allowed, I am told that the distance cannot be measured with it.
+- AC5: When I come back from the settings with location allowed, the trip starts without another tap.
 
 ## 8. Countries and rates
 
