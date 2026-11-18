@@ -903,6 +903,26 @@ describe("after the review", () => {
     expect(page()).not.toContain("Show more");
   });
 
+  it("tells the count to read again whenever the page has read its list (a plan may have arrived)", async () => {
+    const all = Array.from({ length: 70 }, (_, i) => row({ id: `p${i}`, record_title: `R${i}` }));
+    server.list = (_s, body) => {
+      const at = Number(body.offset ?? 0);
+      return ok({ rows: all.slice(at, at + 50), total: 70 });
+    };
+    await mount();
+    expect(sent("list")).toHaveLength(1);
+    expect(plansChanged).toHaveBeenCalledTimes(1);
+    await click(button("Show more"));
+    expect(sent("list")).toHaveLength(2);
+    expect(plansChanged).toHaveBeenCalledTimes(2);
+    await click(button("Decided"));
+    expect(sent("list")).toHaveLength(3);
+    expect(plansChanged).toHaveBeenCalledTimes(3);
+    // a count told to read again does not read the list: nothing but a list read calls it here
+    await settle(5);
+    expect(sent("list")).toHaveLength(3);
+  });
+
   it("reads the list again after a decision, and tells the count", async () => {
     await mount("#/approvals?id=p-update");
     const before = sent("list").length;

@@ -8,6 +8,7 @@ import type { Go, Route } from "../route.ts";
 import { planList, type PlanRow } from "./planApi.ts";
 import { PlanPanel } from "./PlanPanel.tsx";
 import { APPROVALS, tabOf, type ApprovalsTab } from "./route.ts";
+import { plansChanged } from "./usePlanCount.ts";
 import { namesFrom, statusWord, thingOf, waitingLine, whenOf, whoOf, type Names } from "./words.ts";
 import "./approvals.css";
 
@@ -30,6 +31,9 @@ export function ApprovalsPage({ route, go }: { route: Route; go: Go }) {
     async (quiet = false) => {
       if (!quiet) setList({ kind: "loading" });
       const r = await planList(d.token, tab);
+      // The bar's count reads again whenever the list was read: a plan may have arrived since.
+      // (The count's own read never reads the list, so this does not loop.)
+      plansChanged();
       setList((was) =>
         r.ok
           ? { kind: "ok", rows: r.value.rows, total: r.value.total }
@@ -46,6 +50,7 @@ export function ApprovalsPage({ route, go }: { route: Route; go: Go }) {
     const have = list.rows;
     setList({ ...list, more: "busy" });
     const r = await planList(d.token, tab, have.length);
+    plansChanged();
     setList((was) => {
       if (was.kind !== "ok") return was;
       if (!r.ok) return { ...was, more: "failed" };
