@@ -35,7 +35,8 @@ export function ConnectionDetail({ id, onClose }: { id: string; onClose: () => v
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState<{
     tone: "success" | "danger" | "info";
-    text: string;
+    /** Worded when it is drawn, so a switch of the language words it again (D9). */
+    text: () => string;
   } | null>(null);
 
   const c = (conns.rows as unknown as Connection[]).find((x) => x.id === id);
@@ -67,30 +68,32 @@ export function ConnectionDetail({ id, onClose }: { id: string; onClose: () => v
     if (r.kind === "approval")
       return setMessage({
         tone: "info",
-        text: sentText(),
+        text: sentText,
       });
-    if (r.kind === "error") return setMessage({ tone: "danger", text: serverMessage(r.message) });
+    if (r.kind === "error")
+      return setMessage({ tone: "danger", text: () => serverMessage(r.message) });
     const result = parseJson<Record<string, unknown>>((r.value as { result?: string }).result, {});
     if (typeof result.csv === "string") {
       // Inside the phone host app no file was saved, and the app's notice has said so.
       if (!downloadText(String(result.filename ?? "export.csv"), result.csv)) return;
       return setMessage({
         tone: "success",
-        text: t("The file was downloaded: {count, plural, one {# record} other {# records}}.", {
-          count: Number(result.records ?? 0),
-        }),
+        text: () =>
+          t("The file was downloaded: {count, plural, one {# record} other {# records}}.", {
+            count: Number(result.records ?? 0),
+          }),
       });
     }
     if (Array.isArray(result.checks))
-      return setMessage({ tone: "success", text: (result.checks as string[]).join(". ") });
+      return setMessage({ tone: "success", text: () => (result.checks as string[]).join(". ") });
     if (typeof result.url === "string") {
       window.open(result.url, "_blank", "noopener,noreferrer");
       return setMessage({
         tone: "info",
-        text: t("The authorisation page opened in a new window."),
+        text: () => t("The authorisation page opened in a new window."),
       });
     }
-    setMessage({ tone: "success", text: t("Done.") });
+    setMessage({ tone: "success", text: () => t("Done.") });
   }
 
   async function withdraw() {
@@ -126,7 +129,7 @@ export function ConnectionDetail({ id, onClose }: { id: string; onClose: () => v
             tone={message.tone}
             title={message.tone === "danger" ? t("This did not work") : undefined}
           >
-            {message.text}
+            {message.text()}
           </Notice>
         )}
         {c.last_error && (

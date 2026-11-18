@@ -670,6 +670,8 @@ function ChildSection(props: SectionProps) {
       fields={fields.filter(
         (f) =>
           f.name !== via &&
+          // The line's form leaves out what the package keeps out of forms (`ui.hidden`).
+          !f.ui?.hidden &&
           // An image's place is set by dragging it, not typed.
           !(shape === "images" && POSITION.test(f.name)) &&
           !(freshKey(sheetKey) && (f.computed || f.sequence)),

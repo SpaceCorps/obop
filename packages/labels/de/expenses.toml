@@ -19,6 +19,10 @@ description = "Wofür das Geld ausgegeben wurde"
 label = "Mitarbeiter"
 description = "Benutzername der Person, die die Spesen geltend macht; standardmäßig die Person, die die Abrechnung anlegt"
 
+[labels.de.model.expenses_expense.field.submitted_by]
+label = "Eingereicht von"
+description = "Benutzername der Person, die die Abrechnung eingereicht hat, von der Aktion Einreichen festgehalten; auch sie darf sie nicht genehmigen, außer die Selbstgenehmigung ist erlaubt"
+
 [labels.de.model.expenses_expense.field.spent_on]
 label = "Ausgegeben am"
 description = "Datum des Kaufs (YYYY-MM-DD)"

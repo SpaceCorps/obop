@@ -637,6 +637,7 @@ fn rule8_a_plan_without_a_receipt_lists_as_time_unknown_and_is_approvable() {
                 principal: agent(),
                 id: format!("{M}.post"),
                 input: m(&[("id", t(&id))]),
+                clear: vec![],
             },
         )
         .unwrap();

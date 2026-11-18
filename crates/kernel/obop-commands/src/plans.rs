@@ -1405,6 +1405,9 @@ impl Dispatcher {
         // The record may have changed since the proposal, so the guard runs again, and the
         // approver must hold the groups of any transition the call implicitly runs (D48).
         let mut input = plan.input.clone();
+        // What the agent sent in clear for a field it is shown masked counts as changed now too
+        // (K63).
+        let _clear = crate::engine::frozen::ClearScope::enter(plan.clear.clone());
         // The guard sees who is approving, so that it can refuse before the plan is spent.
         crate::stamp_approver(&mut input, approver);
         let mut pre = Vec::new();
@@ -1423,6 +1426,12 @@ impl Dispatcher {
         // spent, so a refusal leaves the plan for another approver; it sees the principal the
         // plan runs as, as the guard does.
         self.run_screen(&plan.id, &proposer, &mut input)?;
+        // A module's check of the person approving (`Dispatcher::before_approve`, U7), also
+        // before the plan is spent, so a refusal leaves the plan for another approver.
+        let check = self.before_approve.read().unwrap().get(&plan.id).cloned();
+        if let Some(check) = check {
+            check(approver, &input).map_err(|m| crate::refusal(m, &input))?;
+        }
         // Taken out first, so it runs once; if it is still there the plan would run again.
         self.plans
             .remove(self.shared.get(), plan_id)

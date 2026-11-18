@@ -299,9 +299,13 @@ fn retention(args: &mut Vec<String>) -> Result<Retention, ExitCode> {
 
 /// `--max-age-days N` (or `OBOP_BACKUP_MAX_AGE_DAYS`): the age no scheduled backup outlives; 0 or
 /// `off` removes the bound.
-fn max_age(args: &mut Vec<String>) -> Result<Option<u64>, ExitCode> {
+fn max_age(
+    args: &mut Vec<String>,
+    policy: obop_ops::retention::Retention,
+) -> Result<Option<u64>, ExitCode> {
     let v = take(args, "--max-age-days").or_else(|| std::env::var("OBOP_BACKUP_MAX_AGE_DAYS").ok());
-    obop_ops::retention::max_age_from_var(v.as_deref()).map_err(|e| fail(&format!("error: {e}")))
+    obop_ops::retention::max_age_from_var(v.as_deref(), policy)
+        .map_err(|e| fail(&format!("error: {e}")))
 }
 
 /// What a scheduled backup is made of, from the environment (the server's timer).
@@ -325,6 +329,7 @@ pub fn settings_from_env(keys: Keys) -> Result<Option<(Settings, Duration)>, Str
     s.retention = Retention::from_env()?;
     s.max_age = obop_ops::retention::max_age_from_var(
         std::env::var("OBOP_BACKUP_MAX_AGE_DAYS").ok().as_deref(),
+        s.retention,
     )?;
     let mut none: Vec<String> = Vec::new();
     s.sinks = sinks(&mut none);
@@ -659,7 +664,7 @@ fn run_job(args: &mut Vec<String>) -> Exit {
         ));
     }
     let retention = retention(args)?;
-    let max_age = max_age(args)?;
+    let max_age = max_age(args, retention)?;
     let sinks = sinks(args);
     let plain = has(args, "--plain");
     if !args.is_empty() {
@@ -795,7 +800,7 @@ fn prune(args: &mut Vec<String>) -> Exit {
     let dry = has(args, "--dry-run");
     let no_sinks = has(args, "--no-sinks");
     let retention = retention(args)?;
-    let max_age = max_age(args)?;
+    let max_age = max_age(args, retention)?;
     let sinks = sinks(args);
     if !args.is_empty() {
         return Err(usage());

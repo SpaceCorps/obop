@@ -87,16 +87,55 @@ fn same_content(to: &Path, want: &str, name: &str, sink: &str) -> Result<(), Str
 /// Whether copying `src` to `to` (in `dir`) would copy a file onto itself: the same directory,
 /// or the same file reached by another name (a symlink, a bind mount, another spelling).
 fn is_same_place(src: &Path, to: &Path, dir: &Path) -> bool {
-    let canon = |p: &Path| std::fs::canonicalize(p).ok();
+    is_same_place_with(src, to, dir, &|p: &Path| std::fs::canonicalize(p).ok())
+}
+
+/// [`is_same_place`] with the path resolution given. Paths cannot tell everything: one host
+/// directory mounted at two paths of a container canonicalises to two paths (K5). So when the
+/// paths differ, a probe file is made in the backup's directory and looked for in `dir`: found,
+/// the two are one place.
+fn is_same_place_with(
+    src: &Path,
+    to: &Path,
+    dir: &Path,
+    canon: &dyn Fn(&Path) -> Option<PathBuf>,
+) -> bool {
     if let (Some(s), Some(t)) = (canon(src), canon(to))
         && s == t
     {
         return true;
     }
-    match (src.parent().and_then(canon), canon(dir)) {
-        (Some(a), Some(b)) => a == b,
-        _ => false,
+    if let (Some(a), Some(b)) = (src.parent().and_then(canon), canon(dir))
+        && a == b
+    {
+        return true;
     }
+    src.parent().is_some_and(|parent| probe_finds(parent, dir))
+}
+
+/// Does a file made in `here` show up in `there`? A name nobody else uses, removed again.
+fn probe_finds(here: &Path, there: &Path) -> bool {
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let name = format!(
+        ".obop-place-probe-{}-{nanos}-{}",
+        std::process::id(),
+        N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    );
+    let mine = here.join(&name);
+    if std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&mine)
+        .is_err()
+    {
+        return false;
+    }
+    let seen = there.join(&name).exists();
+    let _ = std::fs::remove_file(&mine);
+    seen
 }
 
 /// A directory as a sink.
@@ -310,6 +349,39 @@ mod tests {
     /// A directory of this run's own, removed when the guard is dropped (a failing test included).
     fn tmp(tag: &str) -> obop_storage::testing::TempPath {
         obop_storage::testing::TempPath::dir(&format!("obop-sink-{tag}"))
+    }
+
+    #[test]
+    fn one_directory_under_two_names_the_paths_cannot_resolve_is_found_by_a_probe() {
+        let _guard = tmp("place");
+        let d = _guard.path().to_path_buf();
+        std::fs::create_dir_all(d.join("backups/sub")).unwrap();
+        std::fs::create_dir_all(d.join("offsite")).unwrap();
+        let src = d.join("backups").join("b.obbk");
+        std::fs::write(&src, b"x").unwrap();
+        // Paths taken as they are: what a second mount of the same host directory looks like
+        // to `canonicalize` (K5). `backups/sub/..` is `backups` under another name.
+        let as_is = |p: &Path| Some(p.to_path_buf());
+        let alias = d.join("backups").join("sub").join("..");
+        assert!(is_same_place_with(
+            &src,
+            &alias.join("b.obbk"),
+            &alias,
+            &as_is
+        ));
+        // Another directory is not the same place, and the probe leaves nothing behind.
+        let other = d.join("offsite");
+        assert!(!is_same_place_with(
+            &src,
+            &other.join("b.obbk"),
+            &other,
+            &as_is
+        ));
+        let left: Vec<_> = std::fs::read_dir(d.join("backups"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(left.len(), 2, "{left:?}");
     }
 
     #[test]

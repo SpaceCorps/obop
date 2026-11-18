@@ -2,6 +2,8 @@ import {
   Fragment,
   cloneElement,
   isValidElement,
+  useCallback,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -58,6 +60,25 @@ export function useI18n() {
     setRegion,
     resetLanguage,
   };
+}
+
+/** How to word a message: called each time it is drawn, so it follows a language switch. */
+export type Wording = () => string;
+
+/**
+ * A message kept as how to word it, not as a finished sentence (D9): a sentence made in the old
+ * language stays in it after a switch, a wording is called again in the new one. Set it with a
+ * function (`setError(() => t(message))`, with `message` the English text) or null; read the
+ * sentence.
+ */
+export function useWorded(): [string | null, (w: Wording | string | null) => void] {
+  useSyncExternalStore(subscribe, getVersion);
+  const [w, setW] = useState<{ word: Wording } | null>(null);
+  const set = useCallback((next: Wording | string | null) => {
+    if (next === null) setW(null);
+    else setW({ word: typeof next === "string" ? () => next : next });
+  }, []);
+  return [w ? w.word() : null, set];
 }
 
 /* ================= Rich text ================= */

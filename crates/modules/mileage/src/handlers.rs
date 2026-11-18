@@ -238,6 +238,9 @@ pub(crate) fn run(
             patch.insert("reject_reason".into(), J::Null);
         }
         "confirm" => {
+            // A reason typed for a reject that was cancelled (the form saved it) is not part of a
+            // confirmed trip.
+            patch.insert("reject_reason".into(), J::Null);
             patch.insert("confirmed_at".into(), J::from(now_canonical(clock)?));
             patch.insert("reviewed_by".into(), J::from(decider.clone()));
         }

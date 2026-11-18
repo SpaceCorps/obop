@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Badge, t } from "@obop/ui";
+import { Badge, t, useWorded } from "@obop/ui";
 import { sentText, notifySent } from "../approvals/sent.ts";
 import { useData } from "../data.tsx";
 import { modelTitle } from "../labels.ts";
@@ -63,7 +63,7 @@ export function Wizard(props: Props) {
   const [note, setNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const [connection, setConnection] = useState<string | null>(null);
   const [consentDone, setConsentDone] = useState(false);
   const [checks, setChecks] = useState<string[] | null>(null);
@@ -177,7 +177,7 @@ export function Wizard(props: Props) {
       });
       if (r.kind !== "ok") {
         setBusy(false);
-        return setError(r.kind === "approval" ? sentText() : serverMessage(r.message));
+        return setError(() => (r.kind === "approval" ? sentText() : serverMessage(r.message)));
       }
       id = (r.value as { id: string }).id;
       setConnection(id);
@@ -191,7 +191,7 @@ export function Wizard(props: Props) {
       });
       if (r.kind !== "ok") {
         setBusy(false);
-        return setError(r.kind === "approval" ? sentText() : serverMessage(r.message));
+        return setError(() => (r.kind === "approval" ? sentText() : serverMessage(r.message)));
       }
       setConsentDone(true);
     }
@@ -207,7 +207,7 @@ export function Wizard(props: Props) {
     const r = await d.run("connection.test", { id: connection });
     setBusy(false);
     if (r.kind !== "ok")
-      return setError(r.kind === "error" ? serverMessage(r.message) : t("Needs approval"));
+      return setError(() => (r.kind === "error" ? serverMessage(r.message) : t("Needs approval")));
     const res = parseJson<{ checks?: string[] }>((r.value as { result: string }).result, {});
     setChecks(res.checks ?? []);
   }
@@ -226,14 +226,14 @@ export function Wizard(props: Props) {
       notifySent(d.notify, r.planId);
       return props.onDone(connection);
     }
-    setError(serverMessage(r.message));
+    setError(() => serverMessage(r.message));
   }
 
   async function authorise() {
     if (!connection) return;
     const r = await d.run("connection.oauth_start", { id: connection });
     if (r.kind !== "ok")
-      return setError(r.kind === "error" ? serverMessage(r.message) : t("Needs approval"));
+      return setError(() => (r.kind === "error" ? serverMessage(r.message) : t("Needs approval")));
     const url = parseJson<{ url?: string }>((r.value as { result: string }).result, {}).url;
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }

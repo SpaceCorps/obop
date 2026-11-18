@@ -557,6 +557,7 @@ export function RecordPanel({
           setStatus={(s) => void setStatus(s)}
           actions={actions}
           runAction={requestAction}
+          saveFirst={async () => !dirtyRef.current || (await save()) !== null}
           extensions={ext}
           onDelete={mayDelete ? () => setDeleting(true) : undefined}
           onDuplicate={
@@ -653,6 +654,7 @@ export function RecordPanel({
             }
             danger={actions.danger.some((x) => x.id === asking.id)}
             currency={currency}
+            initial={Object.fromEntries(needsOf(asking).map((f) => [f.name, value(f)]))}
             onCancel={() => setAsking(null)}
             onConfirm={(values) => void runAction(asking, values)}
           />

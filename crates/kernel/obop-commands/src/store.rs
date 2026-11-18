@@ -287,14 +287,15 @@ impl Dispatcher {
 
     /// Register only `get`, `list` and `search` for one model, so records that other code writes
     /// (the security event log, D53) can be read on every surface and never changed through it.
+    /// `list` and `search` get the query guard, so a field the caller cannot read in clear is
+    /// neither a filter nor a group (O36).
     pub fn register_read_only(&self, module: &Module, model: &str, store: &Store) {
-        let def = module
-            .models
-            .iter()
-            .find(|m| m.name == model)
-            .unwrap_or_else(|| panic!("{}: no model {model}", module.id));
-        let eng = self.engine(store);
-        self.register_reads(module, def, &eng);
+        assert!(
+            module.models.iter().any(|m| m.name == model),
+            "{}: no model {model}",
+            module.id
+        );
+        self.register_read_only_models(module, store, &[model]);
     }
 
     /// Register `get`, `list`, `search`, `create`, `update` and `delete` for every model of

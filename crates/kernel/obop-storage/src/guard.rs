@@ -13,7 +13,12 @@
 //! - The security log is append-only with unique ids, so appending to it is never refused for an
 //!   earlier fault: the entry of a change that committed must not be lost.
 //!
-//! Outside a request scope (the connector worker, provisioning threads, the CLI) the guard does
+//! A request scope is opened by the HTTP server for each handler and by
+//! `obop_commands::errors::requested`, which the command line uses for `obop call`, `obop import`,
+//! `obop upload` and the lookup of the caller's token, and the stdio MCP server (`obop mcp`) for
+//! each message. Outside a request scope (the connector worker, provisioning threads, and the other
+//! CLI commands, such as `obop admin`, `obop sequences`, `obop modules`, `obop backup` and
+//! `obop migrate`, which call the dispatcher, the backend or `Auth` directly) the guard does
 //! nothing but delegate.
 
 use crate::{

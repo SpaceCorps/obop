@@ -450,6 +450,7 @@ mod tests {
             shows_option_when: None,
             max_length: None,
             min_length: None,
+            pattern: None,
             min: None,
             max: None,
             limits_note: String::new(),
@@ -545,6 +546,7 @@ mod tests {
             shows_option_when: None,
             max_length: None,
             min_length: None,
+            pattern: None,
             min: None,
             max: None,
             limits_note: String::new(),
@@ -587,6 +589,7 @@ mod tests {
             plurals: Default::default(),
             guard: None,
             guard_messages: Default::default(),
+            filter_labels: Default::default(),
         }
     }
 

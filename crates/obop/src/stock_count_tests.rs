@@ -348,3 +348,43 @@ fn an_item_kept_in_a_lot_is_counted_and_the_other_lots_stay() {
         (0, 5, json!(-7))
     );
 }
+
+#[test]
+fn no_move_of_another_call_comes_between_the_steps_of_a_count() {
+    // Q12: deliveries are validated on another thread while counts are applied; every count
+    // ends at its figure and says nothing about a drift.
+    let s = std::sync::Arc::new(shelf());
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mover = {
+        let (s, stop) = (s.clone(), stop.clone());
+        std::thread::spawn(move || {
+            let mut n = 0;
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                s.moved(1, true);
+                n += 1;
+            }
+            n
+        })
+    };
+    let mut drifted = Vec::new();
+    for i in 0..60 {
+        let counted = 1000 + i;
+        let out = ok(
+            &s.app,
+            &s.keeper,
+            "stock_count.apply",
+            json!({"item": s.item, "counted": counted}),
+        );
+        if out["quantity"] != counted || !out["notes"].as_array().is_none_or(|n| n.is_empty()) {
+            drifted.push(out);
+        }
+    }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let moved = mover.join().unwrap();
+    assert!(moved > 0, "the other thread moved stock");
+    assert!(
+        drifted.is_empty(),
+        "{} counts drifted: {drifted:?}",
+        drifted.len()
+    );
+}

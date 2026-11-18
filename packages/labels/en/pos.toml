@@ -44,3 +44,6 @@ plural = "Payments"
 
 [labels.en.model.pos_payment.field.order_id]
 label = "Sale"
+
+[labels.en.model.pos_order.field.refund_session_id]
+label = "Refunded in session"

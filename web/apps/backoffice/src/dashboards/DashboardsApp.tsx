@@ -17,6 +17,7 @@ import {
   rich,
   t,
   useI18n,
+  useWorded,
 } from "@obop/ui";
 import { sentText } from "../approvals/sent.ts";
 import type { ModelMeta, Reply, Row } from "../api.ts";
@@ -109,14 +110,14 @@ function DashboardForm(p: {
   const [title, setTitle] = useState(p.initial?.title ?? "");
   const [description, setDescription] = useState(p.initial?.description ?? "");
   const [shared, setShared] = useState(p.initial?.shared ?? true);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useWorded();
   const [busy, setBusy] = useState(false);
   async function save() {
-    if (!title.trim()) return setErr(t("Give the dashboard a title"));
+    if (!title.trim()) return setErr(() => t("Give the dashboard a title"));
     setBusy(true);
     const e = await p.onSave({ title: title.trim(), description: description.trim(), shared });
     setBusy(false);
-    if (e) setErr(e);
+    if (e) setErr(() => e);
   }
   return (
     <Dialog
@@ -196,7 +197,7 @@ export function DashboardsApp({
   const [removing, setRemoving] = useState<Widget | null>(null);
   const [removingBoard, setRemovingBoard] = useState<Dashboard | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useWorded();
 
   const visible = useMemo(
     () =>
@@ -230,7 +231,7 @@ export function DashboardsApp({
     });
     if (made.kind !== "ok") {
       setBusy(false);
-      return setFailure(message(made));
+      return setFailure(() => message(made) ?? "");
     }
     const id = (made.value as Row).id;
     const list = starterWidgets(d.apps);
@@ -241,7 +242,7 @@ export function DashboardsApp({
         position: (i + 1) * 10,
       });
       if (r.kind !== "ok") {
-        setFailure(message(r));
+        setFailure(() => message(r) ?? "");
         break;
       }
     }
@@ -293,7 +294,7 @@ export function DashboardsApp({
     const r = await d.run("dashboards_widget.delete", { id: removing.id });
     setBusy(false);
     const m = message(r);
-    if (m) setFailure(m);
+    if (m) setFailure(() => message(r) ?? m);
     else {
       d.notify(t("Removed “{title}”", { title: removing.title }));
       setRemoving(null);
@@ -332,13 +333,13 @@ export function DashboardsApp({
       const r = await d.run("dashboards_widget.delete", { id: w.id });
       if (r.kind !== "ok") {
         setBusy(false);
-        return setFailure(message(r));
+        return setFailure(() => message(r) ?? "");
       }
     }
     const r = await d.run("dashboards_dashboard.delete", { id: removingBoard.id });
     setBusy(false);
     const m = message(r);
-    if (m) return setFailure(m);
+    if (m) return setFailure(() => message(r) ?? m);
     d.notify(t("Deleted “{title}”", { title: removingBoard.title }));
     setRemovingBoard(null);
     go({ app: app.id, model: BOARD });

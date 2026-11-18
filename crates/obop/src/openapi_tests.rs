@@ -336,12 +336,15 @@ async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_
 // of the scopes of `issueAgentToken`, and two more kinds in the description of `security_event.kind`.
 // Again on `feat/ui-L9` (D95, 2026-11-15), on purpose: `info.version` 0.2.2 and the `message` key of
 // the error schema. Again on `fix/w2b-h2` (N18, 2026-11-17), on purpose: the `expires_at` of a row of
-// `listAgentTokens`. Again on `feat/approvals-inbox` (D97, 2026-11-17; main merged in 2026-11-18), on
-// purpose: the description of the `ApprovalRequired` schema names the Approvals page and `/api/plan/*`.
+// `listAgentTokens`. Again on `fix/issues-w2c` (K55, second review), on purpose: the query parameters
+// `model`, `record` and `field` of `downloadBlob` and its description; repinned when main (PR 151)
+// was merged in, as the document now carries both changes. Again on `feat/approvals-inbox` (D97,
+// 2026-11-17; main merged in 2026-11-18, twice), on purpose: the description of the
+// `ApprovalRequired` schema names the Approvals page and `/api/plan/*`.
 #[rustfmt::skip]
 const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
-    ("dev/openapi", "34e6c386c2c2e2a2b37115864795715609350da33edc5ec7f25afd1eefdc775c"),
-    ("auth/openapi", "43610b4b9d4a7de11f5013cf69caee44b969d32c9de5279c8ddfa28e8f908396"),
+    ("dev/openapi", "179195a60fe0a3046e0cfe72d9154be67aa4eadd51af9c3c1c74255b62a26542"),
+    ("auth/openapi", "c5745cf19a1c8338eb640b9d9d2666f6e7283835cf5e1b26b85caea4ad771097"),
 ];
 
 /// With a brand row in the store the anonymous document is the one an instance with no row sends,

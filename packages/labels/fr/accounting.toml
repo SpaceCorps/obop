@@ -374,6 +374,12 @@ message = "L'exercice se termine avant de commencer : choisissez un dernier jour
 [labels.fr.model.accounting_period.rule.ends_after_start]
 message = "La période se termine avant de commencer : choisissez un dernier jour égal ou postérieur au premier jour"
 
+[labels.fr.model.accounting_fiscal_year.rule.no_overlapping_years]
+message = "Un autre exercice couvre déjà certains de ces jours : commencez celui-ci après son dernier jour"
+
+[labels.fr.model.accounting_period.rule.no_overlapping_periods]
+message = "Une autre période couvre déjà certains de ces jours : commencez celle-ci après son dernier jour"
+
 [labels.fr.model.accounting_move_line.field.settled]
 label = "Réglé"
 description = "Si une transaction bancaire règle ce poste client ou fournisseur (son settles_line_id le désigne) ; calculé, donc une ligne comptabilisée l'affiche aussi"

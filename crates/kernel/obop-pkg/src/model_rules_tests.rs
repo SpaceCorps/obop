@@ -126,9 +126,13 @@ fn the_bundled_packages_hold_their_times_with_rules() {
         (
             "accounting",
             "accounting_fiscal_year",
-            &["ends_after_start"],
+            &["ends_after_start", "no_overlapping_years"],
         ),
-        ("accounting", "accounting_period", &["ends_after_start"]),
+        (
+            "accounting",
+            "accounting_period",
+            &["ends_after_start", "no_overlapping_periods"],
+        ),
     ];
     for (id, model, keys) in want {
         let text = Bundled.fetch(id).unwrap();

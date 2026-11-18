@@ -481,6 +481,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             if let Some(b) = f.max {
                                 o["max"] = schema::bound_json(b);
                             }
+                            if let Some(p) = f.pattern {
+                                o["pattern"] = json!(p);
+                            }
                             if f.kind == "decimal" {
                                 o["precision"] = json!(f.precision);
                                 o["scale"] = json!(f.scale);

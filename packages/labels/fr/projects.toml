@@ -32,6 +32,14 @@ description = "Date à laquelle le projet doit être terminé (YYYY-MM-DD)"
 label = "Budget"
 description = "Budget convenu pour le projet (plus petite unité monétaire, par exemple en centimes)"
 
+[labels.fr.model.projects_project.field.customer_id]
+label = "Client"
+description = "Le client à qui le temps facturable du projet est facturé"
+
+[labels.fr.model.projects_project.field.hourly_rate]
+label = "Taux horaire"
+description = "Prix d’une heure de temps facturable lorsque le temps du projet est facturé (plus petite unité monétaire, par ex. centimes)"
+
 [labels.fr.model.projects_project.field.description]
 label = "Description"
 description = "Objectif et périmètre du projet"

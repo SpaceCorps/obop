@@ -513,6 +513,21 @@ fn format_one_backups_still_restore_and_are_never_called_authenticated() {
     );
 }
 
+#[test]
+fn a_plain_backup_is_never_given_the_name_of_a_sealed_one() {
+    let dir = Dir::new();
+    let src = dir.sqlite("src.db");
+    seed(&src);
+    // `.obbk` is the sign of a sealed backup (K5): a plain one under that name is refused, and
+    // nothing is written.
+    let e = create(&src, 2, &dir.path("plain.obbk"), &mut |_| {}).unwrap_err();
+    assert!(e.contains(".obbk is the name of a sealed one"), "{e}");
+    assert!(!dir.path("plain.obbk").exists());
+    // The sealed one keeps the name, and a plain one is written as .gz.
+    sealed(&src, &dir, "b.obbk", &keys(KA));
+    make_plain(&src, &dir);
+}
+
 fn make_plain(src: &Arc<dyn Backend>, dir: &Dir) -> Created {
     create(src, 2, &dir.path("plain.jsonl.gz"), &mut |_| {}).unwrap()
 }
