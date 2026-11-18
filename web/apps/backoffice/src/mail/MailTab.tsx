@@ -591,7 +591,11 @@ function DeliveriesSection({
   const [busy, setBusy] = useState<string | null>(null);
   const load = useCallback(async () => {
     const r = await search(token, "outbound_mail", {
-      order: [{ field: "queued_at", dir: "desc" }],
+      // queued_at has whole seconds; the ids (UUIDv7) keep the order of a burst within one.
+      order: [
+        { field: "queued_at", dir: "desc" },
+        { field: "id", dir: "desc" },
+      ],
       limit: 50,
     });
     if ("error" in r)

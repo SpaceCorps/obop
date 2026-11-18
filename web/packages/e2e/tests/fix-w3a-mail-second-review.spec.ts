@@ -118,4 +118,36 @@ test.describe("Mail after the second review", () => {
     // No Refresh and no reload: the test row is in the table.
     await expect(page.getByRole("row").filter({ hasText: to })).toBeVisible();
   });
+
+  test("a burst within one second lists the last queued first", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const tag = uid("burst");
+    // queued_at has whole seconds: queued together, the five share one or two of them.
+    await Promise.all(
+      [0, 1, 2, 3, 4].map((i) =>
+        api.run("root", "outbound_mail.send", {
+          to: `burst${i}@example.org`,
+          subject: `${tag} ${i}`,
+          body: "x",
+          server: id,
+        }),
+      ),
+    );
+    // The order the ids (UUIDv7) give, newest first.
+    const found = await api.run("root", "outbound_mail.search", {
+      order: [{ field: "id", dir: "desc" }],
+      limit: 50,
+    });
+    const newest = (found.rows as { subject: string }[]).filter((r) => r.subject.startsWith(tag));
+    expect(newest).toHaveLength(5);
+    await signIn("root", "/customize/mail");
+    const shown = page.getByRole("row").filter({ hasText: tag });
+    await expect(shown).toHaveCount(5);
+    await expect(shown.first()).toContainText(newest[0]!.subject);
+    await expect(shown.last()).toContainText(newest[4]!.subject);
+  });
 });
