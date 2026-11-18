@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -156,6 +156,9 @@ function ServerForm({
   onCancel: () => void;
 }) {
   const [d, setD] = useState<Draft>(draft);
+  const form = useRef<HTMLFormElement>(null);
+  // The button that opened the form is gone or below it: the keyboard starts at the first field.
+  useEffect(() => form.current?.querySelector<HTMLInputElement>("input")?.focus(), []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
@@ -194,6 +197,7 @@ function ServerForm({
 
   return (
     <form
+      ref={form}
       className="stack mail-form"
       aria-label={d.id ? t("Edit mail server") : t("Add mail server")}
       onSubmit={(e) => {
@@ -442,11 +446,27 @@ function ServersSection({
   onTested: () => void;
 }) {
   const id = useId();
+  const section = useRef<HTMLElement>(null);
   const [rows, setRows] = useState<Server[] | null>(null);
   const [connections, setConnections] = useState<Row[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   const [editing, setEditing] = useState<Draft | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
+  // Which button opened the form ("add" or a server's id), to hand the keyboard back to it.
+  const opener = useRef<string | null>(null);
+  const open = (draft: Draft, from: string) => {
+    opener.current = from;
+    setEditing(draft);
+  };
+  const close = () => {
+    setEditing(null);
+    const from = opener.current;
+    opener.current = null;
+    // After the render that brings the button back.
+    requestAnimationFrame(() =>
+      section.current?.querySelector<HTMLElement>(`[data-mail-opener="${from ?? "add"}"]`)?.focus(),
+    );
+  };
 
   const load = useCallback(async () => {
     const r = await search(token, "mail_server", {
@@ -465,13 +485,18 @@ function ServersSection({
   useEffect(() => void load(), [load]);
 
   return (
-    <section className="stack" aria-labelledby={`${id}-h`}>
+    <section ref={section} className="stack" aria-labelledby={`${id}-h`}>
       <div className="mail-head">
         <h3 id={`${id}-h`} className="overline">
           {t("Mail servers")}
         </h3>
         {editing === null && (
-          <Button size="sm" variant="primary" onClick={() => setEditing({ ...EMPTY })}>
+          <Button
+            size="sm"
+            variant="primary"
+            data-mail-opener="add"
+            onClick={() => open({ ...EMPTY }, "add")}
+          >
             {t("Add mail server")}
           </Button>
         )}
@@ -495,9 +520,9 @@ function ServersSection({
           token={token}
           draft={editing}
           connections={connections}
-          onCancel={() => setEditing(null)}
+          onCancel={close}
           onDone={(text) => {
-            setEditing(null);
+            close();
             notify(text);
             void load();
           }}
@@ -546,7 +571,7 @@ function ServersSection({
                 </div>
               )}
               <div className="actionrow">
-                <Button size="sm" onClick={() => setEditing(draftOf(r))}>
+                <Button size="sm" data-mail-opener={r.id} onClick={() => open(draftOf(r), r.id)}>
                   {t("Edit")}
                 </Button>
                 <Button

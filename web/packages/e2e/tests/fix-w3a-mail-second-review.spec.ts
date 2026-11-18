@@ -150,4 +150,22 @@ test.describe("Mail after the second review", () => {
     await expect(shown.first()).toContainText(newest[0]!.subject);
     await expect(shown.last()).toContainText(newest[4]!.subject);
   });
+
+  test("the server form takes the keyboard and gives it back", async ({ page, signIn }) => {
+    await signIn("root", "/customize/mail");
+    const add = page.getByRole("button", { name: "Add mail server" });
+    await add.focus();
+    await page.keyboard.press("Enter");
+    const form = page.getByRole("form", { name: "Add mail server" });
+    await expect(form.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
+    await form.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("button", { name: "Add mail server" })).toBeFocused();
+
+    const card = page.locator(".mail-server").filter({ hasText: name });
+    await card.getByRole("button", { name: "Edit" }).click();
+    const edit = page.getByRole("form", { name: "Edit mail server" });
+    await expect(edit.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
+    await edit.getByRole("button", { name: "Cancel" }).click();
+    await expect(card.getByRole("button", { name: "Edit" })).toBeFocused();
+  });
 });
