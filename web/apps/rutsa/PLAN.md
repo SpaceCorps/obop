@@ -63,9 +63,9 @@ Checkpoint: `vp check` and `vp test` pass.
 
 ### B. Logic without a phone (`vp test`)
 
-- [ ] B1 `feat(rutsa): trip and point types`: `core/types.ts` (trip: id, start, end, state
-      `recording`, `paused` or `ended`, distance, source `recorded` or `manual`, note; point: time, lat,
-      lon, accuracy, speed, segment)
+- [x] B1 `feat(rutsa): trip and point types`: `core/types.ts` (trip: id, start, end, state
+      `recording`, `paused` or `ended`, distance, source `recorded` or `manual`, segment, from, to,
+      note; point: time, lat, lon, accuracy, speed, segment)
 - [ ] B2 `feat(rutsa): SQL layer`: `core/sql.ts` (from `mileage-app`), a test database on
       `node:sqlite`
 - [ ] B3 `feat(rutsa): database schema`: `core/schema.ts` (`trip`, `point`, `meta` with the schema
@@ -191,3 +191,5 @@ D23).
   emulator route fed by `drive.mjs` (E1), Start and Stop pressed in the app (E2).
 - 2026-11-16: A3 without `scripts/ios/env.sh` (the tool paths of the owner's Mac and the Mileage
   UI test folder) and with the test of `xcode-lib.mjs`.
+- 2026-11-18: B1 has `from` and `to` (D7 types them); latitude and longitude are numbers, not the
+  texts `mileage-app` sends to its server.
