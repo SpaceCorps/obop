@@ -35,6 +35,8 @@ CLI: `obop call outbound_mail send to=a@example.com subject=Hi body=Text`; REST 
 
 **Agents and mail servers.** A mail server names where every later message and the relay's stored password go, so an agent (an agent token, also one scoped to `mail.admin`) only proposes `mail_server.create`, `update` and `delete`, and a person approves the plan; the same holds for `mail_template.create`, `update` and `delete`, since a template decides the text of every later message of its kind; `test_send`, `send` and `retry` need approval too. A change of the host without a new password forgets the stored password (`password_set` becomes false), so a password is never sent to a relay it was not entered for.
 
+**Retiring a server.** A server is switched off (`enabled` false), not deleted: the generated `delete` is refused while any message of the log names the server ("still referenced by outbound_mail"), and the log keeps finished messages for the retention period (90 days by default).
+
 **Choosing the server.** The server named in the call; else an enabled server whose kinds list the message kind; else the enabled default server; else the one enabled server when there is exactly one; else the call is refused ("no mail server is set up"). The server is fixed on the message when it is queued.
 
 **Templates.** `template=<key>` with `language` and `vars` (a JSON object of texts and numbers). The template of that language is used, else English, else none (refused). A placeholder without a value refuses the call, so a message never leaves with `{{name}}` in it. The text is plain text (no HTML part yet).

@@ -516,6 +516,7 @@ The built-in `mail` module ([spec/mail.md](spec/mail.md)) sends mail through mai
 - `OBOP_MAIL_RETENTION_DAYS` (default 90): sent, cancelled and failed messages are removed after this many days, once a day.
 - `OBOP_PUBLIC_URL`: its host is the name given in `EHLO` (else `localhost`).
 - Changing a relay's host without entering the password again forgets the stored password. An agent token only proposes a change to a mail server; a person approves it.
+- A mail server that a message in the deliveries log still names cannot be deleted (`mail_server.delete` answers "still referenced by outbound_mail"), and the log keeps sent, failed and cancelled messages for the retention period. Switch the server off instead (Enabled off): nothing is sent through it, and the log keeps saying which server sent each message.
 - The relay's host passes the same checks as every outbound request: the operator's host allow-list and a public address. A relay on a loopback address works only with `OBOP_CONNECTORS_ALLOW_LOOPBACK=1` (tests and local development); a relay on a private address is refused (an open question for the owner, spec/mail.md 6).
 
 Send a test message from the server's card in Customize, Mail, or `obop call mail_server test_send id=<server> test_recipient=<address>`. Nothing in obop queues mail by itself yet; the command `outbound_mail.send` is there for the modules that will.
