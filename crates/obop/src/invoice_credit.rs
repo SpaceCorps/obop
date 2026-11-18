@@ -7,9 +7,8 @@
 //! Representation: `invoice_line.quantity` is a whole number and `invoice.total_minor` is the sum
 //! of the line amounts, so the credit invoice keeps each line's description and quantity and
 //! carries a NEGATIVE `unit_price_minor` (amount = quantity times unit price, so negative). The
-//! credit invoice's total is therefore negative. NOTE: `invoice.post` asserts `total_minor > 0`,
-//! so the credit invoice cannot be posted until the invoicing module accepts a credit note
-//! (docs/ISSUES.md K64). The reversing move swaps debit and credit of every line of the original
+//! credit invoice's total is therefore negative. `invoice.post` accepts a
+//! negative total, so the credit invoice can be posted (docs/ISSUES.md K64). The reversing move swaps debit and credit of every line of the original
 //! `invoice_posting` move (account, label, tax kept) and stays a draft: posting it is
 //! `accounting_move.post`. A row of `invoice_credit` (original, credit invoice, move) is the link;
 //! one invoice gets one credit, a credit invoice cannot be credited, a non-posted invoice cannot

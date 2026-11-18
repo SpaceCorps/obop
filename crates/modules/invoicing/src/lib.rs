@@ -111,8 +111,8 @@ pub fn module() -> Module {
                     )
                     .transition("state", Some("draft"), "posted")
                     .assertion_msg(
-                        "total_minor > 0",
-                        "Add at least one line with an amount before posting the invoice.",
+                        "total_minor != 0",
+                        "Add at least one line with an amount before posting the invoice (a credit invoice has a negative total).",
                     )
                     .assertion_msg(
                         "!is_set(due_date) || !is_set(issue_date) || due_date >= issue_date",
