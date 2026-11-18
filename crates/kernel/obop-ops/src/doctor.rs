@@ -491,6 +491,14 @@ fn host(r: &mut Report, s: &dyn ServerInfo, i: &Inputs) -> Result<(), String> {
 /// for every reader, and the lag is the only sign of it.
 fn history_feed(r: &mut Report, backend: &dyn Backend) {
     match backend.history_stats() {
+        // The table is made on first use (D75): before that there is no feed to hold back, and
+        // "held back 0 ms" would claim a measurement that was not made.
+        Ok(st) if st.partitions.is_empty() => r.add(
+            "history_feed",
+            "D75",
+            Level::Pass,
+            "no change history yet",
+        ),
         Ok(st) if st.horizon_lag_ms > HORIZON_LAG_MAX_MS => r.add(
             "history_feed",
             "D75",

@@ -1,5 +1,5 @@
 # cargo-deny (K9): the licences of every crate in the build graph and the security advisories,
-# checked in CI (.github/workflows/ci.yml, job `deny`). Run it here with
+# checked in CI (.github/workflows/ci.yml, jobs `licences` and `advisories`). Run it here with
 #   cargo deny check licenses advisories
 #
 # obop is Apache-2.0 (OR-1): every dependency must be under a licence compatible with it, with no

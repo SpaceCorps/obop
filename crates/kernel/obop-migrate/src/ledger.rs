@@ -16,9 +16,10 @@
 //! (drift) stops the server from starting and names the step, because an edited migration means
 //! the database in front of the operator was not produced by the code in front of them.
 //!
-//! Rows are append-only by convention here (a step's row moves `partial` to `applied` once, in the
-//! transaction that completes it; attempts that failed are separate rows). Making that a database
-//! guarantee is D77.
+//! Rows are append-only by convention here, with two exceptions: a step's row moves `partial` to
+//! `applied` once, in the transaction that completes it, and a failed attempt's row is rewritten
+//! when the same step fails again for the same reason (its `attempts` counts up; a new reason is a
+//! new row). Making the rest a database guarantee is D77, which must leave both rewrites allowed.
 
 use obop_storage::{Backend, Fields, Op};
 use serde_json::Value as J;

@@ -168,6 +168,28 @@ fn the_owners_of_the_history_are_read_from_a_real_server() {
 }
 
 #[test]
+fn a_database_without_change_history_says_so_and_claims_no_lag() {
+    let Some(db) = obop_storage::testing::TestDb::new() else {
+        return;
+    };
+    let b = obop_storage::open(db.url()).unwrap();
+    let r = check(&Inputs {
+        backend: &*b,
+        production: true,
+        server: None,
+        sslmode: None,
+        host_is_local: true,
+        plane: "main",
+        now: NOW,
+        sink_strays: &[],
+    })
+    .unwrap();
+    let line = r.find("history_feed").unwrap();
+    assert_eq!(line.level, Level::Pass, "{}", r.render());
+    assert_eq!(line.detail, "no change history yet", "{}", r.render());
+}
+
+#[test]
 fn a_change_feed_held_back_by_an_open_transaction_is_a_warning() {
     let Some(db) = obop_storage::testing::TestDb::new() else {
         return;
