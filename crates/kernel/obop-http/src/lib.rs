@@ -1130,15 +1130,18 @@ async fn platform_openapi(headers: HeaderMap) -> Response {
 
 /// Routes of the control plane: sign up, sign in and manage your instances.
 pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> Router {
-    platform_router_with_metrics(api, static_dir, ops::MetricsAccess::Disabled)
+    platform_router_with_metrics(api, static_dir, ops::MetricsAccess::Disabled, Router::new())
 }
 
 /// [`platform_router`] with `/metrics` open to `metrics` (I6): `obop platform serve` passes
 /// `MetricsAccess::from_env`, the same rule as an instance (D67). Disabled answers 404.
+/// `extra` (the forum and status routes of `platform serve`) is merged before the layers, so
+/// its requests are counted in `/metrics` too.
 pub fn platform_router_with_metrics(
     api: Arc<dyn PlatformApi>,
     static_dir: Option<&str>,
     metrics: ops::MetricsAccess,
+    extra: Router,
 ) -> Router {
     let plane = ops::PlaneOps::new(metrics);
     let ready_api = api.clone();
@@ -1163,7 +1166,8 @@ pub fn platform_router_with_metrics(
             get(ops::plane_metrics).with_state((plane.clone(), ready)),
         )
         .route("/openapi.json", get(platform_openapi))
-        .route("/api/openapi.json", get(platform_openapi));
+        .route("/api/openapi.json", get(platform_openapi))
+        .merge(extra);
     // Optional TOTP for the owner's own account (D53): same routes as an instance, not enforced.
     let r = match api.authenticator() {
         Some(a) => r.merge(mfa::routes("/api/platform", a)),

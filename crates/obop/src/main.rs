@@ -1778,8 +1778,8 @@ fn platform_serve(
         Arc::new(obop_platform::Api(platform)),
         static_dir,
         metrics,
-    )
-    .merge(obop_http::community::router(community));
+        obop_http::community::router(community),
+    );
     eprintln!("obop platform listening on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     rt.block_on(obop_http::serve(addr, router))

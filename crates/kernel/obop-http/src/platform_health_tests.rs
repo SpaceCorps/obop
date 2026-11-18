@@ -100,7 +100,10 @@ async fn the_control_plane_serves_metrics_to_whoever_the_operator_opened_them_to
         StatusCode::NOT_FOUND
     );
     let token = "plane-metrics-token-0123456789";
-    let r = platform_router_with_metrics(plane.clone(), None, ops::MetricsAccess::token(token));
+    // `platform serve` passes the forum and status routes as `extra`: they are counted too.
+    let extra = Router::new().route("/forum-probe", axum::routing::get(|| async { "ok" }));
+    let r =
+        platform_router_with_metrics(plane.clone(), None, ops::MetricsAccess::token(token), extra);
     assert_eq!(
         get_with(&r, "/metrics", None).await.0,
         StatusCode::UNAUTHORIZED
@@ -111,9 +114,10 @@ async fn the_control_plane_serves_metrics_to_whoever_the_operator_opened_them_to
             .0,
         StatusCode::UNAUTHORIZED
     );
-    // Two answered requests before the scrape are counted.
+    // Three answered requests before the scrape are counted, the merged route's one included.
     get_text(&r, "/healthz").await;
     get_text(&r, "/readyz").await;
+    get_text(&r, "/forum-probe").await;
     let (s, body) = get_with(&r, "/metrics", Some(token)).await;
     assert_eq!(s, StatusCode::OK, "{body}");
     for series in [
@@ -130,7 +134,7 @@ async fn the_control_plane_serves_metrics_to_whoever_the_operator_opened_them_to
         .find_map(|l| l.strip_prefix("obop_http_requests_total{class=\"2xx\"} "))
         .and_then(|n| n.parse().ok())
         .unwrap();
-    assert!(twoxx >= 2, "{body}");
+    assert_eq!(twoxx, 3, "{body}");
     plane.down.store(true, Ordering::Relaxed);
     let (_, body) = get_with(&r, "/metrics", Some(token)).await;
     assert!(body.contains("obop_db_up 0"), "{body}");
