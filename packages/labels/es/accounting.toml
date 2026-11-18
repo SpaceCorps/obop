@@ -296,7 +296,7 @@ plural = "Líneas de extracto bancario"
 description = "Una línea de extracto bancario pendiente de cruzar con asientos"
 
 [labels.es.model.accounting_bank_statement_line.guard]
-message = "Una transacción bancaria conciliada no se puede modificar."
+message = "Una transacción bancaria conciliada no se puede modificar. Un responsable puede deshacer antes la conciliación."
 
 [labels.es.model.accounting_bank_statement_line.field.journal_id]
 label = "Diario"
@@ -350,6 +350,10 @@ description = "Conciliar una línea cruzada (solo responsables)"
 [labels.es.model.accounting_bank_statement_line.action.unmatch]
 label = "Desemparejar"
 description = "Deshacer un cruce que era erróneo"
+
+[labels.es.model.accounting_bank_statement_line.action.unreconcile]
+label = "Deshacer conciliación"
+description = "Deshace una conciliación errónea; la línea vuelve a estar emparejada y se puede modificar de nuevo (solo responsables)"
 
 [labels.es.model.accounting_move.field.total_debit]
 label = "Total debe"

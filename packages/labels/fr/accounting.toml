@@ -296,7 +296,7 @@ plural = "Lignes de relevé bancaire"
 description = "Une ligne de relevé bancaire en attente d’association à des écritures"
 
 [labels.fr.model.accounting_bank_statement_line.guard]
-message = "Une transaction bancaire rapprochée ne peut pas être modifiée."
+message = "Une transaction bancaire rapprochée ne peut pas être modifiée. Un responsable peut d'abord annuler le rapprochement."
 
 [labels.fr.model.accounting_bank_statement_line.field.journal_id]
 label = "Journal"
@@ -350,6 +350,10 @@ description = "Rapproche une ligne associée (responsable uniquement)"
 [labels.fr.model.accounting_bank_statement_line.action.unmatch]
 label = "Dissocier"
 description = "Annule une association erronée"
+
+[labels.fr.model.accounting_bank_statement_line.action.unreconcile]
+label = "Annuler le rapprochement"
+description = "Annule un rapprochement erroné ; la ligne redevient associée et peut de nouveau être modifiée (responsables uniquement)"
 
 [labels.fr.model.accounting_move.field.total_debit]
 label = "Total débit"

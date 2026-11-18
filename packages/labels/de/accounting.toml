@@ -296,7 +296,7 @@ plural = "Kontoauszugszeilen"
 description = "Eine Zeile eines Kontoauszugs, die auf die Zuordnung zu Buchungen wartet"
 
 [labels.de.model.accounting_bank_statement_line.guard]
-message = "Eine abgeglichene Banktransaktion kann nicht geändert werden."
+message = "Eine abgeglichene Banktransaktion kann nicht geändert werden. Eine Führungskraft kann den Abgleich zuerst rückgängig machen."
 
 [labels.de.model.accounting_bank_statement_line.field.journal_id]
 label = "Journal"
@@ -350,6 +350,10 @@ description = "Eine zugeordnete Zeile abgleichen (nur Führungskräfte)"
 [labels.de.model.accounting_bank_statement_line.action.unmatch]
 label = "Zuordnung aufheben"
 description = "Eine falsche Zuordnung rückgängig machen"
+
+[labels.de.model.accounting_bank_statement_line.action.unreconcile]
+label = "Abgleich aufheben"
+description = "Einen falschen Abgleich rückgängig machen; die Zeile ist wieder zugeordnet und kann geändert werden (nur Führungskräfte)"
 
 [labels.de.model.accounting_move.field.total_debit]
 label = "Summe Soll"

@@ -44,7 +44,7 @@ import { RecordHeader } from "./RecordHeader.tsx";
 import { RelatedChips } from "./RelatedChips.tsx";
 import { nav, useRoute } from "./route.ts";
 import "./registrations.ts";
-import { canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
+import { canMove, initialOption, isGoverned, moveRecord, questionOf } from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -466,7 +466,7 @@ export function RecordPanel({
 
   /** An action button was pressed: ask first when it needs words or a confirm, else run it. */
   const asks = (a: Command) =>
-    needsOf(a).length > 0 || !!a.ui?.confirm || actions.danger.some((x) => x.id === a.id);
+    needsOf(a).length > 0 || !!questionOf(model, a) || actions.danger.some((x) => x.id === a.id);
   function requestAction(a: Command) {
     if (!row || busy) return;
     if (asks(a)) setAsking(a);
@@ -658,7 +658,7 @@ export function RecordPanel({
             label={actionLabelFor(asking, inSentence(title))}
             needs={needsOf(asking)}
             question={
-              asking.ui?.confirm ??
+              questionOf(model, asking) ??
               (actions.danger.some((x) => x.id === asking.id)
                 ? t("{action} “{name}”?", {
                     action: actionLabelFor(asking, inSentence(title)),

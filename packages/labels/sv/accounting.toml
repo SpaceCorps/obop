@@ -296,7 +296,7 @@ plural = "Kontoutdragsrader"
 description = "En rad i ett kontoutdrag som väntar på att matchas mot verifikationer"
 
 [labels.sv.model.accounting_bank_statement_line.guard]
-message = "En avstämd banktransaktion kan inte ändras."
+message = "En avstämd banktransaktion kan inte ändras. En chef kan först ångra avstämningen."
 
 [labels.sv.model.accounting_bank_statement_line.field.journal_id]
 label = "Verifikationsserie"
@@ -350,6 +350,10 @@ description = "Stäm av en matchad rad (endast chef)"
 [labels.sv.model.accounting_bank_statement_line.action.unmatch]
 label = "Ta bort matchning"
 description = "Ångra en matchning som blev fel"
+
+[labels.sv.model.accounting_bank_statement_line.action.unreconcile]
+label = "Ångra avstämning"
+description = "Ångra en avstämning som blev fel; raden blir matchad igen och kan ändras (endast chefer)"
 
 [labels.sv.model.accounting_move.field.total_debit]
 label = "Totalt debet"

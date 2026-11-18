@@ -296,7 +296,7 @@ plural = "Tiliotteen rivit"
 description = "Tiliotteen rivi, joka odottaa kohdistamista kirjauksiin"
 
 [labels.fi.model.accounting_bank_statement_line.guard]
-message = "Täsmäytettyä pankkitapahtumaa ei voi muuttaa."
+message = "Täsmäytettyä pankkitapahtumaa ei voi muuttaa. Esihenkilö voi ensin perua täsmäytyksen."
 
 [labels.fi.model.accounting_bank_statement_line.field.journal_id]
 label = "Päiväkirja"
@@ -350,6 +350,10 @@ description = "Täsmäytä kohdistettu rivi (vain esihenkilö)"
 [labels.fi.model.accounting_bank_statement_line.action.unmatch]
 label = "Poista kohdistus"
 description = "Peruuta virheellinen kohdistus"
+
+[labels.fi.model.accounting_bank_statement_line.action.unreconcile]
+label = "Peru täsmäytys"
+description = "Peruu virheellisen täsmäytyksen; rivi palaa kohdistetuksi ja sitä voi taas muuttaa (vain esihenkilöt)"
 
 [labels.fi.model.accounting_move.field.total_debit]
 label = "Debet yhteensä"

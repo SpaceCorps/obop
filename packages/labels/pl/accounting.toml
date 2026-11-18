@@ -296,7 +296,7 @@ plural = "Pozycje wyciągu bankowego"
 description = "Pozycja wyciągu bankowego oczekująca na dopasowanie do operacji"
 
 [labels.pl.model.accounting_bank_statement_line.guard]
-message = "Uzgodnionej transakcji bankowej nie można zmienić."
+message = "Uzgodnionej transakcji bankowej nie można zmienić. Kierownik może najpierw cofnąć uzgodnienie."
 
 [labels.pl.model.accounting_bank_statement_line.field.journal_id]
 label = "Dziennik"
@@ -350,6 +350,10 @@ description = "Uzgadnia dopasowaną pozycję (tylko kierownik)"
 [labels.pl.model.accounting_bank_statement_line.action.unmatch]
 label = "Cofnij dopasowanie"
 description = "Cofa błędne dopasowanie"
+
+[labels.pl.model.accounting_bank_statement_line.action.unreconcile]
+label = "Cofnij uzgodnienie"
+description = "Cofa błędne uzgodnienie; wiersz wraca do stanu dopasowanego i można go znowu zmienić (tylko kierownicy)"
 
 [labels.pl.model.accounting_move.field.total_debit]
 label = "Suma winien"

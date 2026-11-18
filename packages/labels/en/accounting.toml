@@ -136,3 +136,6 @@ reconciled = "Reconciled"
 
 [labels.en.model.accounting_bank_statement_line.action.unmatch]
 label = "Undo match"
+
+[labels.en.model.accounting_bank_statement_line.action.unreconcile]
+label = "Undo reconciliation"
