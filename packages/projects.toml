@@ -1,6 +1,6 @@
 [module]
 id = "projects"
-version = "0.5.1"
+version = "0.6.0"
 name = "Projects"
 description = "Projects, milestones and tasks with assignees, deadlines and status flows. A project shows its progress, the share of its tasks that are done, and the time estimated for them."
 author = "SpaceCorps"
@@ -12,8 +12,11 @@ keywords = ["projects", "tasks", "milestones"]
 categories = ["services", "productivity"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "Refused since 0.5.1: a task added to a project that is done (pick an open project). The app opens on Projects, which show their progress as a percentage and their estimate as a duration, with their milestones and tasks inside. A task picks only milestones of its own project, can be completed straight from To do, and a done or cancelled task can be reopened; a reached or missed milestone can be set back to pending."
+changelog = "Refused since 0.5.1: a task added to a project that is done (pick an open project). 0.6.0: a project can name its customer and its hourly rate, and Bill time on a project turns its approved, billable time into a draft invoice for that customer at that rate (one line per entry or per task). The app opens on Projects, which show their progress as a percentage and their estimate as a duration, with their milestones and tasks inside. A task picks only milestones of its own project, can be completed straight from To do, and a done or cancelled task can be reopened; a reached or missed milestone can be set back to pending."
 home = "projects_project"
+
+[module.dependencies]
+base = "^0.2"
 
 [[model]]
 name = "projects_project"
@@ -79,6 +82,20 @@ write_group = "projects.manager"
   description = "Agreed budget for the project (minor currency units, e.g. cents)"
   class = "none"
   kind = "money"
+
+  [[model.field]]
+  name = "customer_id"
+  description = "The customer the project's billable time is invoiced to"
+  class = "none"
+  kind = "ref"
+  to = "party"
+
+  [[model.field]]
+  name = "hourly_rate"
+  description = "Price of one hour of billable time when the project's time is invoiced (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+  min = 0
 
   [[model.field]]
   name = "description"

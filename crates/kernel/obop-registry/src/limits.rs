@@ -114,7 +114,7 @@ impl fmt::Display for Bound {
 /// written so that matching it takes long.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pattern {
-    /// Three capital letters (ISO 4217), such as EUR: the rule of the instance currency.
+    /// A code of the ISO 4217 list (`ISO_4217`), such as EUR: the rule of the instance currency.
     CurrencyCode,
     /// An IBAN: country, check digits and account, the length of its country and the mod-97 check
     /// (ISO 13616). Spaces between the groups are allowed, letters of either case.
@@ -146,9 +146,7 @@ impl Pattern {
     /// What a value must be, for a refusal and a description.
     pub fn requirement(self) -> &'static str {
         match self {
-            Self::CurrencyCode => {
-                "a currency code of three capital letters (ISO 4217), such as EUR"
-            }
+            Self::CurrencyCode => "a currency code of ISO 4217, such as EUR",
             Self::Iban => "a valid IBAN, such as DE89 3704 0044 0532 0130 00",
             Self::VatId => "a VAT number with its country prefix, such as DE123456789",
         }
@@ -160,11 +158,38 @@ impl Pattern {
             return true;
         }
         match self {
-            Self::CurrencyCode => s.len() == 3 && s.bytes().all(|b| b.is_ascii_uppercase()),
+            Self::CurrencyCode => is_currency_code(s),
             Self::Iban => iban_ok(s),
             Self::VatId => vat_ok(s),
         }
     }
+}
+
+/// The currency codes of ISO 4217 (list one, as published by SIX), sorted: the current ones, the
+/// fund and precious-metal codes, and the few withdrawn since 2020 that stored records may still
+/// hold (ANG, CUC, HRK, SLL, ZWL). Left out: XTS (for testing) and XXX (no currency). U5, #103.
+#[rustfmt::skip]
+pub const ISO_4217: &[&str] = &[
+    "AED", "AFN", "ALL", "AMD", "ANG", "AOA", "ARS", "AUD", "AWG", "AZN", "BAM", "BBD", "BDT",
+    "BGN", "BHD", "BIF", "BMD", "BND", "BOB", "BOV", "BRL", "BSD", "BTN", "BWP", "BYN", "BZD",
+    "CAD", "CDF", "CHE", "CHF", "CHW", "CLF", "CLP", "CNY", "COP", "COU", "CRC", "CUC", "CUP",
+    "CVE", "CZK", "DJF", "DKK", "DOP", "DZD", "EGP", "ERN", "ETB", "EUR", "FJD", "FKP", "GBP",
+    "GEL", "GHS", "GIP", "GMD", "GNF", "GTQ", "GYD", "HKD", "HNL", "HRK", "HTG", "HUF", "IDR",
+    "ILS", "INR", "IQD", "IRR", "ISK", "JMD", "JOD", "JPY", "KES", "KGS", "KHR", "KMF", "KPW",
+    "KRW", "KWD", "KYD", "KZT", "LAK", "LBP", "LKR", "LRD", "LSL", "LYD", "MAD", "MDL", "MGA",
+    "MKD", "MMK", "MNT", "MOP", "MRU", "MUR", "MVR", "MWK", "MXN", "MXV", "MYR", "MZN", "NAD",
+    "NGN", "NIO", "NOK", "NPR", "NZD", "OMR", "PAB", "PEN", "PGK", "PHP", "PKR", "PLN", "PYG",
+    "QAR", "RON", "RSD", "RUB", "RWF", "SAR", "SBD", "SCR", "SDG", "SEK", "SGD", "SHP", "SLE",
+    "SLL", "SOS", "SRD", "SSP", "STN", "SVC", "SYP", "SZL", "THB", "TJS", "TMT", "TND", "TOP",
+    "TRY", "TTD", "TWD", "TZS", "UAH", "UGX", "USD", "USN", "UYI", "UYU", "UYW", "UZS", "VED",
+    "VES", "VND", "VUV", "WST", "XAF", "XAG", "XAU", "XBA", "XBB", "XBC", "XBD", "XCD", "XCG",
+    "XDR", "XOF", "XPD", "XPF", "XPT", "XSU", "XUA", "YER", "ZAR", "ZMW", "ZWG", "ZWL",
+];
+
+/// Whether `s` is a code of `ISO_4217` (three capital letters on the list), for a field that holds
+/// a currency and for the instance currency alike.
+pub fn is_currency_code(s: &str) -> bool {
+    ISO_4217.binary_search(&s).is_ok()
 }
 
 /// The length of the IBAN of each country of the IBAN registry (SWIFT).

@@ -253,14 +253,76 @@ fn leave_follows_the_employee_when_hr_moves_it_to_another_one() {
         json!({"id": id(&leave), "employee_id": none}),
     );
     assert_eq!(r["requested_by"], "hanna");
-    // An owner the call names itself is the caller's.
+    // R1: the owner is the server's to set. A form that sends the stored owner back still moves
+    // the request to the new employee.
     let r = ok(
         &app,
         &hanna,
         "hr_leave_request.update",
         json!({"id": id(&leave), "employee_id": ju, "requested_by": "hanna"}),
     );
-    assert_eq!(r["requested_by"], "hanna");
+    assert_eq!(r["requested_by"], "julia");
+    let e = run(
+        &app,
+        &hanna,
+        "hr_leave_request.update",
+        json!({"id": id(&leave), "requested_by": "hanna"}),
+    )
+    .unwrap_err();
+    assert!(e.contains("is set by the server"), "{e}");
+}
+
+#[test]
+fn nobody_names_the_owner_of_leave_and_a_colleague_s_leave_is_refused_plainly() {
+    let app = app();
+    let hanna = Principal::user("hanna", &["hr.user", "hr.manager"]);
+    let ann = Principal::user("ann", &["hr.user"]);
+    let emp = |name: &str, user: &str| {
+        id(&ok(
+            &app,
+            &hanna,
+            "hr_employee.create",
+            json!({"name": name, "user": user}),
+        ))
+    };
+    let (ju, an) = (emp("Julia Brandt", "julia"), emp("Ann Example", "ann"));
+    let body = |e: &str, by: &str| {
+        let mut b =
+            json!({"employee_id": e, "start_on": "2026-10-05", "end_on": "2026-10-06", "days": 2});
+        if !by.is_empty() {
+            b["requested_by"] = json!(by);
+        }
+        b
+    };
+    // Not even hr.manager may file leave in another login's name.
+    for who in [&hanna, &ann] {
+        let e = run(
+            &app,
+            who,
+            "hr_leave_request.create",
+            body(&an, "somebody-else"),
+        )
+        .unwrap_err();
+        assert!(
+            e.contains("hr_leave_request.requested_by is set by the server"),
+            "{e}"
+        );
+    }
+    // hr.user filing for a colleague who has a login: a message of its own, no field named.
+    let e = run(&app, &ann, "hr_leave_request.create", body(&ju, "")).unwrap_err();
+    assert_eq!(
+        e,
+        "This employee has their own login, so the record would be theirs and out of your sight: ask someone with hr.manager to file it. Nothing was saved"
+    );
+    // Their own leave and leave filed by hr.manager are the employee's.
+    assert_eq!(
+        ok(&app, &ann, "hr_leave_request.create", body(&an, ""))["requested_by"],
+        "ann"
+    );
+    assert_eq!(
+        ok(&app, &hanna, "hr_leave_request.create", body(&ju, ""))["requested_by"],
+        "julia"
+    );
 }
 
 #[test]
@@ -423,4 +485,78 @@ fn documents_tiles_and_templates_start_with_sensible_values() {
     )
     .unwrap_err();
     assert!(e.contains("cannot be set by hand"), "{e}");
+}
+
+#[test]
+fn leave_follows_when_the_employee_s_login_is_set_or_corrected() {
+    // R12: leave filed before an employee had a login, or under a wrong one, becomes the login's.
+    let app = app();
+    let hanna = Principal::user("hanna", &["hr.user", "hr.manager"]);
+    let julia = Principal::user("julia", &["hr.user"]);
+    let emp = id(&ok(
+        &app,
+        &hanna,
+        "hr_employee.create",
+        json!({"name": "Julia Brandt"}),
+    ));
+    let leave = id(&ok(
+        &app,
+        &hanna,
+        "hr_leave_request.create",
+        json!({"employee_id": emp, "start_on": "2026-10-05", "end_on": "2026-10-06", "days": 2}),
+    ));
+    let owner = |app: &crate::app::App| {
+        ok(app, &hanna, "hr_leave_request.get", json!({"id": leave}))["requested_by"].clone()
+    };
+    assert_eq!(owner(&app), "hanna");
+    assert!(run(&app, &julia, "hr_leave_request.get", json!({"id": leave})).is_err());
+    ok(
+        &app,
+        &hanna,
+        "hr_employee.update",
+        json!({"id": emp, "user": "jullia"}),
+    );
+    assert_eq!(owner(&app), "jullia");
+    // Corrected: the leave moves again, and Julia sees it.
+    ok(
+        &app,
+        &hanna,
+        "hr_employee.update",
+        json!({"id": emp, "user": "julia"}),
+    );
+    assert_eq!(owner(&app), "julia");
+    ok(&app, &julia, "hr_leave_request.get", json!({"id": leave}));
+    // A login taken away moves nothing.
+    ok(
+        &app,
+        &hanna,
+        "hr_employee.update",
+        json!({"id": emp, "user": null}),
+    );
+    assert_eq!(owner(&app), "julia");
+}
+
+#[test]
+fn the_filters_hr_declares_carry_their_labels_in_each_language() {
+    // U10: `[labels.<lang>.model.<m>.filter.<key>]`, served beside the English label.
+    let app = app();
+    let hanna = Principal::user("hanna", &["hr.user", "hr.manager"]);
+    let meta = obop_mcp::meta_json(&app.dispatcher, obop_commands::Surface::Rest, &hanna);
+    let leave = meta["modules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|m| m["models"].as_array().unwrap())
+        .find(|m| m["name"] == "hr_leave_request")
+        .unwrap()
+        .clone();
+    let f = leave["ui"]["filter"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["label"] == "Not refused")
+        .unwrap()
+        .clone();
+    assert_eq!(f["labels"]["de"], "Nicht abgelehnt", "{f}");
+    assert_eq!(f["labels"]["sv"], "Inte avslagna", "{f}");
 }

@@ -374,6 +374,12 @@ message = "El ejercicio termina antes de empezar: indique un último día igual 
 [labels.es.model.accounting_period.rule.ends_after_start]
 message = "El período termina antes de empezar: indique un último día igual o posterior al primer día"
 
+[labels.es.model.accounting_fiscal_year.rule.no_overlapping_years]
+message = "Otro ejercicio ya cubre algunos de estos días: empiece este después de su último día"
+
+[labels.es.model.accounting_period.rule.no_overlapping_periods]
+message = "Otro período ya cubre algunos de estos días: empiece este después de su último día"
+
 [labels.es.model.accounting_move_line.field.settled]
 label = "Liquidado"
 description = "Si una transacción bancaria liquida esta partida a cobrar o a pagar (su settles_line_id la indica); calculado, así que también una línea contabilizada lo muestra"

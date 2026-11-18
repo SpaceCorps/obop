@@ -374,6 +374,12 @@ message = "Tilikausi päättyy ennen kuin se alkaa: aseta viimeinen päivä sama
 [labels.fi.model.accounting_period.rule.ends_after_start]
 message = "Kausi päättyy ennen kuin se alkaa: aseta viimeinen päivä samaksi tai myöhemmäksi kuin ensimmäinen päivä"
 
+[labels.fi.model.accounting_fiscal_year.rule.no_overlapping_years]
+message = "Toinen tilikausi kattaa jo osan näistä päivistä: aloita tämä sen viimeisen päivän jälkeen"
+
+[labels.fi.model.accounting_period.rule.no_overlapping_periods]
+message = "Toinen kausi kattaa jo osan näistä päivistä: aloita tämä sen viimeisen päivän jälkeen"
+
 [labels.fi.model.accounting_move_line.field.settled]
 label = "Suoritettu"
 description = "Kuittaako jokin pankkitapahtuma tämän saatava- tai velkaerän (sen settles_line_id nimeää sen); laskettu, joten myös kirjattu rivi näyttää sen"

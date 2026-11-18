@@ -1,3 +1,4 @@
+import { useWorded } from "@obop/ui";
 import { useRef, useState } from "react";
 import type { FieldMeta, Row } from "../api.ts";
 import { fromEdit, sameAsStored, toEdit, type Edit } from "../edit.ts";
@@ -22,7 +23,7 @@ export function InlineEdit(props: {
   const { field: f, row } = props;
   const currency = rowCurrency(row);
   const [value, setValue] = useState<Edit>(() => toEdit(f, row[f.name], currency));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const [busy, setBusy] = useState(false);
   // Set once the cell is done (saved, moved on): a blur that follows must not end the next cell.
   const finished = useRef(false);
@@ -31,7 +32,7 @@ export function InlineEdit(props: {
     // An unset switch shown as No is a change when saved: it writes an explicit false (#98).
     const same = sameAsStored(f, row[f.name], v, currency);
     const r = fromEdit(f, v, currency, same);
-    if ("error" in r) return setError(r.error);
+    if ("error" in r) return setError(() => r.error);
     const finish = () => {
       finished.current = true;
       then();
@@ -40,7 +41,7 @@ export function InlineEdit(props: {
     setBusy(true);
     const err = await props.update(row.id, { [f.name]: r.value });
     setBusy(false);
-    if (err) setError(err);
+    if (err) setError(() => err);
     else finish();
   }
 

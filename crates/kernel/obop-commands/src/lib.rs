@@ -302,6 +302,8 @@ pub struct Dispatcher {
     brand: std::sync::OnceLock<Arc<brand::Reader>>,
     /// Wrappers around a command's handler, by command id (see `around`).
     around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
+    /// Checks of the person approving a plan, by command id (see `before_approve`).
+    before_approve: std::sync::RwLock<HashMap<String, Arc<BeforeApprove>>>,
     /// Screens by command id (see `screen`).
     screens: std::sync::RwLock<HashMap<String, Arc<Screen>>>,
     /// Models whose writes run under the transaction lock because a rule needs it: a unique
@@ -348,6 +350,10 @@ impl Default for SharedClock {
 pub type Around = dyn Fn(&Principal, &Value, &dyn Fn(&Value) -> Result<Value, String>) -> Result<Value, String>
     + Send
     + Sync;
+
+/// A check of the person who approves a plan of a command (`Dispatcher::before_approve`): it sees
+/// the approver and the plan's input, and its refusal leaves the plan as it is.
+pub type BeforeApprove = dyn Fn(&Principal, &Value) -> Result<(), String> + Send + Sync;
 
 /// What an observer sees of a command that succeeded: its id, who ran it, the input the handler
 /// received and the raw output, before it was shaped for the caller.
@@ -429,6 +435,9 @@ pub struct FieldInfo {
     /// an exact decimal at the scale of the field.
     pub min: Option<Bound>,
     pub max: Option<Bound>,
+    /// `text` (K45, U3): the named format every written value has (`currency_code`, `iban`,
+    /// `vat_id`): the declared `pattern`, or `currency_code` for a text field named `currency`.
+    pub pattern: Option<&'static str>,
     /// The limits the field declares as a parenthesised sentence for a description (OpenAPI, MCP),
     /// `(at most 2000 characters)` or `(from 0 to 100)`; empty when it declares none (the default
     /// of its kind is in `max_length`, not in the description).
@@ -506,6 +515,8 @@ pub struct ModelInfo {
     pub guard: Option<obop_registry::Guard>,
     /// The message of the guard per language (D52), empty when untranslated.
     pub guard_messages: Texts,
+    /// The label of each filter the package declares, by its English label, per language (U10).
+    pub filter_labels: BTreeMap<String, Texts>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -576,6 +587,16 @@ impl Dispatcher {
 
     fn txn_guard(&self) -> Result<shared::TxnGuard<'_>, CallError> {
         shared::txn_lock(self.shared.get(), &self.txn).map_err(CallError::Handler)
+    }
+
+    /// Run `f` under the transaction lock that every write of a locked model takes (one with a
+    /// unique field, a sequence or an effect), so that no such write of another call comes
+    /// between the steps of `f`; the calls `f` makes on this thread run under the same lock and
+    /// do not wait for it. A handler that reads, works out and writes in several commands uses it
+    /// (`stock_count.apply`, Q12). Across server processes the lock is the shared one.
+    pub fn serialized<T>(&self, f: impl FnOnce() -> T) -> Result<T, String> {
+        let _txn = shared::txn_lock(self.shared.get(), &self.txn)?;
+        Ok(f())
     }
 
     /// What `tools/list`, `GET /api/commands` and CLI help show for this principal.
@@ -750,6 +771,20 @@ impl Dispatcher {
                     plurals: mtr.map(|t| t.plurals.clone()).unwrap_or_default(),
                     guard: m.def.ext.guard.clone(),
                     guard_messages: mtr.map(|t| t.guard.clone()).unwrap_or_default(),
+                    filter_labels: m
+                        .def
+                        .ui()
+                        .map(|u| {
+                            u.filters
+                                .iter()
+                                .filter_map(|f| {
+                                    let key = obop_registry::labels::filter_key(&f.label);
+                                    let t = mtr.and_then(|t| t.filters.get(&key))?;
+                                    Some((f.label.clone(), t.clone()))
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     name: name.clone(),
                     description: m.description,
                     labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
@@ -810,6 +845,10 @@ impl Dispatcher {
                                 min_length: f.effective_min_length().filter(|_| written),
                                 min: f.lower_bound().filter(|_| written),
                                 max: f.upper_bound().filter(|_| written),
+                                pattern: f
+                                    .effective_pattern()
+                                    .map(|p| p.name())
+                                    .filter(|_| written),
                                 limits_note: if written {
                                     f.limits_note()
                                 } else {
@@ -1097,6 +1136,17 @@ impl Dispatcher {
         );
     }
 
+    /// Check the person who approves a plan of command `id` before the plan is spent (U7): a rule
+    /// about the approver (a claimant may not approve their own claim) refuses there, so the plan
+    /// stays for someone else to approve. Like a wrapper it survives the command being registered
+    /// again; the wrapper should still hold the rule for a direct call.
+    pub fn before_approve(&self, id: &str, check: Box<BeforeApprove>) {
+        self.before_approve
+            .write()
+            .unwrap()
+            .insert(id.to_string(), Arc::from(check));
+    }
+
     /// Wrap the handler of command `id` (`model.command`). The wrapper survives the command being
     /// registered again, which happens when a package is reinstalled. Used where a command has
     /// to do something outside the store that must succeed or fail with it, such as returning
@@ -1225,12 +1275,12 @@ impl Dispatcher {
         self.zones.read().unwrap().clone()
     }
 
-    /// Set the instance currency (D95): three capital letters (ISO 4217). The server sets it from
-    /// `OBOP_CURRENCY` at start.
+    /// Set the instance currency (D95): a code of the ISO 4217 list, the one a field that holds a
+    /// currency checks too (U5). The server sets it from `OBOP_CURRENCY` at start.
     pub fn set_currency(&self, code: &str) -> Result<(), String> {
-        if code.len() != 3 || !code.bytes().all(|b| b.is_ascii_uppercase()) {
+        if !obop_registry::limits::is_currency_code(code) {
             return Err(format!(
-                "the currency {code:?} must be three capital letters (ISO 4217), such as EUR or SEK"
+                "the currency {code:?} is not a currency code of ISO 4217, such as EUR or SEK"
             ));
         }
         *self.currency.write().unwrap() = code.to_string();
@@ -1391,7 +1441,8 @@ impl Dispatcher {
         }
         // The fields an agent sent in clear although it is shown them masked count as changed in
         // this call, whatever their value (K63; `engine::frozen::sent_clear`).
-        let _clear = engine::frozen::ClearScope::enter(self.sent_in_clear(&c, p, vault, input));
+        let clear = self.sent_in_clear(&c, p, vault, input);
+        let _clear = engine::frozen::ClearScope::enter(clear.clone());
         if let Some(field) = self.token_into_clear(&c, p, vault, input) {
             return Err(refusal(
                 format!(
@@ -1442,6 +1493,7 @@ impl Dispatcher {
                         principal: p.clone(),
                         id: id.into(),
                         input,
+                        clear,
                     },
                 )
                 .map_err(CallError::Handler)?;
@@ -1480,6 +1532,8 @@ impl Dispatcher {
         // The record may have changed since the proposal, so the guard runs again, and the
         // approver must hold the groups of any transition the call implicitly runs (D48).
         let mut input = plan.input.clone();
+        // What the agent sent in clear for a field it is shown masked counts as changed now too.
+        let _clear = engine::frozen::ClearScope::enter(plan.clear.clone());
         // The guard sees who is approving, so that it can refuse before the plan is spent.
         stamp_approver(&mut input, approver);
         let mut pre = Vec::new();
@@ -1495,6 +1549,10 @@ impl Dispatcher {
             }
         }
         self.run_screen(&plan.id, &plan.principal, &mut input)?;
+        let check = self.before_approve.read().unwrap().get(&plan.id).cloned();
+        if let Some(check) = check {
+            check(approver, &input).map_err(|m| refusal(m, &input))?;
+        }
         // Taken out first, so it runs once; if it is still there the plan would run again.
         self.plans
             .remove(self.shared.get(), plan_id)

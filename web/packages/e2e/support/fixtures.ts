@@ -15,12 +15,17 @@ export type Reply = { status: number; json: any };
 /** A thin client for the REST API, used to arrange data and to check what the server enforces. */
 export class Api {
   private tokens = new Map<UserName, string>();
-  /** When the test itself last uninstalled a module (null: never). The console guard reads it. */
+  /**
+   * When the test itself first uninstalled a module (null: never). The console guard reads it. The
+   * first, not the last: a spec that removes two modules (purchase, then inventory) gets the 404s of
+   * the first one's models while it removes the second.
+   */
   uninstalledAt: number | null = null;
   constructor(private request: APIRequestContext) {}
 
   async post(path: string, body: object = {}, token?: string): Promise<Reply> {
-    if (path === "/api/module/uninstall") this.uninstalledAt = Date.now();
+    if (path === "/api/module/uninstall" && this.uninstalledAt === null)
+      this.uninstalledAt = Date.now();
     const res = await this.request.post(path, {
       data: body,
       headers: token ? { authorization: `Bearer ${token}` } : {},

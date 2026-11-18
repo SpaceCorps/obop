@@ -196,7 +196,7 @@ description = "Zdjęcie osoby (PNG, JPEG, WebP lub GIF; metadane, takie jak loka
 
 [labels.pl.model.hr_leave_request.field.requested_by]
 label = "Wnioskujący"
-description = "Nazwa użytkownika, do którego należy wniosek, ustawiana przez serwer, gdy pozostawiona pusta (i ponownie, gdy zmiana przenosi wniosek na innego pracownika): użytkownik obop pracownika, jeśli go ma, w przeciwnym razie osoba składająca wniosek. Widzą go tylko ona i hr.manager"
+description = "Nazwa użytkownika, do którego należy wniosek, ustawiana wyłącznie przez serwer (wysłana wartość jest odrzucana): użytkownik obop pracownika, jeśli go ma, w przeciwnym razie osoba składająca wniosek, i ponownie, gdy zmiana przenosi wniosek na innego pracownika. Widzą go tylko ona i hr.manager"
 
 [labels.pl.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Ostatni dzień urlopu przypada przed jego pierwszym dniem"
@@ -217,3 +217,21 @@ description = "Pracownik, który kieruje działem"
 [labels.pl.model.hr_employee.field.user]
 label = "Użytkownik obop"
 description = "Nazwa użytkownika obop (login) osoby, jeśli ją ma: urlop złożony dla tego pracownika należy do tego użytkownika, a nowy wniosek urlopowy tego użytkownika zaczyna się od tego pracownika"
+
+[labels.pl.model.hr_employee.filter.active]
+label = "Aktywni"
+
+[labels.pl.model.hr_employee.filter.onboarding]
+label = "We wdrażaniu"
+
+[labels.pl.model.hr_leave_request.filter.to_approve]
+label = "Do zatwierdzenia"
+
+[labels.pl.model.hr_leave_request.filter.away_today]
+label = "Nieobecni dziś"
+
+[labels.pl.model.hr_leave_request.filter.upcoming]
+label = "Nadchodzące"
+
+[labels.pl.model.hr_leave_request.filter.not_refused]
+label = "Nieodrzucone"

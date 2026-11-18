@@ -66,7 +66,7 @@ description = "Efectivo contado en el cajón al abrir (unidad monetaria mínima)
 
 [labels.es.model.pos_session.field.expected_cash]
 label = "Efectivo previsto"
-description = "Efectivo que el cajón debería tener al cerrar: el fondo de apertura más los pagos en efectivo de las ventas pagadas de la sesión"
+description = "Efectivo que debe haber en el cajón al cerrar: el fondo inicial más los pagos en efectivo de las ventas pagadas de la sesión, menos el efectivo de ventas de sesiones cerradas reembolsadas en ella; una vez cerrada, el importe con el que se cerró"
 
 [labels.es.model.pos_session.field.closing_cash]
 label = "Efectivo de cierre"
@@ -250,3 +250,7 @@ description = "De dónde salen del stock los productos vendidos en esta sesión;
 [labels.es.model.pos_order.field.cash_paid]
 label = "Pagado en efectivo"
 description = "La parte de los pagos hecha en efectivo (unidad monetaria mínima)"
+
+[labels.es.model.pos_order.field.refund_session_id]
+label = "Reembolsada en la sesión"
+description = "La sesión de cuyo cajón salió el efectivo de un reembolso, fijada por el servidor cuando se reembolsa una venta de una sesión cerrada: la sesión abierta entonces en la caja de la venta; vacía si la sesión de la venta seguía abierta"
