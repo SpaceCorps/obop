@@ -72,8 +72,9 @@ Checkpoint: `vp check` and `vp test` pass.
       `PRAGMA user_version`, ordered migrations in one transaction, a newer file refused; STRICT
       tables with CHECK rules, one active trip, points deleted with their trip) and tests; foreign
       keys switched on in `test-support/memory-db.ts`
-- [ ] B4 `feat(rutsa): fix conversion and thinning`: `core/fix.ts`, `core/thin.ts` (from
-      `mileage-app`; `thin.ts` uses `@obop/trip-core`) and tests
+- [x] B4 `feat(rutsa): fix conversion and thinning`: `core/fix.ts` (`toFix`, `plausible`),
+      `core/thin.ts` (`keepFix`; `acceptFixes`, the choice of the fixes of one delivery that are
+      stored) from `mileage-app`; `thin.ts` uses `@obop/trip-core`; tests
 - [ ] B5 `feat(rutsa): trip repository`: `core/repository.ts`, one interface (start, add points,
       pause, resume, stop, add by hand, list, get, delete), so a server can be added later
 - [ ] B6 `feat(rutsa): local trip store`: `core/sql-store.ts`; one active trip at most; ids from a
@@ -200,3 +201,6 @@ D23).
 - 2026-11-18: B3 keeps the version in `PRAGMA user_version` instead of a `meta` table; the other
   tables (vehicle, recipient, report, setting, place, rule, odometer) come with their stages as
   new migrations.
+- 2026-11-18: B4 takes `plausible` (in `values.ts` of `mileage-app`) into `fix.ts`, and the choice
+  of the fixes to store (inside `appendFixes` of `mileage-app`) as the pure `acceptFixes`, so B6
+  only writes what it returns; not taken: `thinningFor` (a switch of the owner's test builds).

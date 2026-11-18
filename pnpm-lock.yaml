@@ -345,6 +345,9 @@ importers:
 
   web/apps/rutsa:
     dependencies:
+      '@obop/trip-core':
+        specifier: workspace:*
+        version: link:../../packages/trip-core
       '@obop/ui-native':
         specifier: workspace:*
         version: link:../../packages/ui-native
