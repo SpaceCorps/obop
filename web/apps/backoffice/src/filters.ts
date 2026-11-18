@@ -17,7 +17,7 @@
  * A generated filter is plain conditions of query.ts, so the URL, favourites, the server query
  * (D49) and the chips need nothing new. A range is stored with the days it means when it is picked.
  */
-import { msg, t } from "@obop/ui";
+import { getLang, labelFor, msg, t } from "@obop/ui";
 import type { FieldMeta, ModelMeta } from "./api.ts";
 import { optionLabel } from "./format.ts";
 import { fieldTitle } from "./labels.ts";
@@ -263,7 +263,13 @@ export function quickFilters(model: ModelMeta, fields: FieldMeta[], ctx: QuickCt
   (model.ui?.filter ?? []).forEach((s, i) => {
     const conds = parseWhere(s.where, model, ctx);
     if (conds?.length && conds.every((c) => !("f" in c) || shown.has(c.f)))
-      out.push({ key: `saved:${i}`, label: s.label, conds, kind: "saved" });
+      out.push({
+        key: `saved:${i}`,
+        // The package's own translation of the label (U10), else its English label.
+        label: labelFor({ labels: s.labels ?? {} }, getLang(), s.label),
+        conds,
+        kind: "saved",
+      });
   });
   const open = openStates(model);
   const openCond: Cond | undefined =

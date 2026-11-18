@@ -365,6 +365,8 @@ fn formats_and_date_bounds_are_held_on_every_write() {
         for (k, bad, want) in [
             ("iban", "123123", "must be a valid IBAN"),
             ("currency", "12y12", "must be a currency code"),
+            // U5, #103: three capital letters that name no currency are refused too.
+            ("currency", "ZZZ", "must be a currency code"),
             ("paid_on", "0313-12-13", "must be at least 1900-01-01"),
             ("paid_on", "2313-12-13", "must be at most 2199-12-31"),
         ] {

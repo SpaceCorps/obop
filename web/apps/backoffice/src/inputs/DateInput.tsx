@@ -286,6 +286,40 @@ function zonedText(form: string): string {
   return `${regionDate(m[1]!)} ${m[2]}`;
 }
 
+/**
+ * The time box of the calendar's popover: the 24-hour clock the form's own boxes use (S5), not the
+ * browser's time box, which an English browser draws as "09:00 AM". Takes 14:30, 14,30, 1430 or 14
+ * when it is left or Enter is pressed.
+ */
+function ClockBox({ value, onPick }: { value: string; onPick: (hhmm: string) => void }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  const take = () => {
+    const min = parseClock(text);
+    if (min === null) setText(value);
+    else if (clockText(min) !== value) onPick(clockText(min));
+    else setText(value);
+  };
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      className="num timein"
+      title={t("Type 14:30, 1430 or 14")}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={take}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          take();
+        }
+      }}
+    />
+  );
+}
+
 /** An instant: a date and a time on the instance's wall clock, with a calendar and a time box. */
 export function DatetimeInput({ value, onChange, readOnly, common, compact }: BaseInputProps) {
   const zone = getTime().zone;
@@ -341,14 +375,9 @@ export function DatetimeInput({ value, onChange, readOnly, common, compact }: Ba
             <div className="caltime">
               <label>
                 <span>{t("Time")}</span>
-                <input
-                  type="time"
-                  step={900}
+                <ClockBox
                   value={time}
-                  onChange={(e) => {
-                    const min = parseClock(e.target.value);
-                    if (min !== null) onChange(`${day || todayIso()} ${clockText(min)}`);
-                  }}
+                  onPick={(hhmm) => onChange(`${day || todayIso()} ${hhmm}`)}
                 />
               </label>
               <button type="button" className="btn small" onClick={close}>

@@ -5,15 +5,19 @@
 //!   are decoded and re-encoded (`obop-media`), files are checked against a short list. Nothing
 //!   is public and nothing is attached yet: the blob waits as an upload of that principal.
 //! - **Reference** (a guard on `create` and `update` of models with such fields): a blob id may be
-//!   saved into a field only by the principal who uploaded it, or when the principal can already
-//!   read a record that holds it (the model's group, the field's group and the row rules, as in a
-//!   read). The `id` in the input is the caller's claim: `create` ignores it and an `update`'s
+//!   saved into a field only by the principal who uploaded it *for that field* (the claim names
+//!   the `model.field`, so the size limit and the re-encoding of an image field cannot be skipped
+//!   by uploading for a file field, K55), or when the principal can already read a record that
+//!   holds it (the model's group, the field's group and the row rules, as in a read). A field
+//!   whose group the caller does not hold cannot be set, replaced or cleared at all, as it cannot
+//!   be uploaded for (K55). The `id` in the input is the caller's claim: `create` ignores it and an `update`'s
 //!   says nothing about the caller's right to the record, so "this field already holds it" is no
 //!   reason to accept an id. Knowing a hash is not enough, and a guessed id answers like a
 //!   missing one.
 //! - **Hold** (after `create`, `update`, `delete` and erasure): saving a record attaches its
-//!   blobs, replacing a value detaches the old one, deleting a record detaches all of them; a
-//!   blob nobody holds is deleted (see `obop_storage::blob`).
+//!   blobs and spends the saver's own claim only (another person who uploaded the same bytes keeps
+//!   theirs, K55), replacing a value detaches the old one, deleting a record detaches all of them;
+//!   a blob nobody holds is deleted (see `obop_storage::blob`).
 //! - **Read** (`BlobService::get`): a signed-in user who may read a record that holds the blob:
 //!   the model's read group, the field's group and, when the model has row rules (D58), the
 //!   record itself (a record the caller cannot see answers like a missing blob). Agents are refused: they get ids and metadata through the generated commands and never the
@@ -231,7 +235,7 @@ impl BlobService {
         };
         self.store
             .blobs
-            .put(
+            .put_for(
                 &out,
                 NewBlob {
                     content_type,
@@ -240,6 +244,7 @@ impl BlobService {
                     uploader: p.id.clone(),
                     filename: clean_filename(filename),
                 },
+                &format!("{}.{}", def.name, f.name),
             )
             .map_err(BlobError::Storage)
     }
@@ -262,6 +267,19 @@ impl BlobService {
 
     /// The blob for a signed-in caller; `width` asks for a thumbnail.
     pub fn get(&self, p: &Principal, id: &str, width: Option<u32>) -> Result<Served, BlobError> {
+        self.get_from(p, id, width, None)
+    }
+
+    /// Like `get`, downloaded from one record: `from` is its model, record id and field. Identical
+    /// bytes are stored once, so the file is named as that record holds it when the caller can
+    /// read that record and it holds these bytes there; otherwise as `get` names it (K55).
+    pub fn get_from(
+        &self,
+        p: &Principal,
+        id: &str,
+        width: Option<u32>,
+        from: Option<(&str, &str, &str)>,
+    ) -> Result<Served, BlobError> {
         let info = self
             .store
             .blobs
@@ -271,7 +289,52 @@ impl BlobService {
         if !self.may_read(p, &info) {
             return Err(BlobError::NotFound);
         }
-        serve(&self.store, &info, width)
+        let mut served = serve(&self.store, &info, width)?;
+        served.filename = self.filename_for(p, &info, from);
+        Ok(served)
+    }
+
+    /// The file name `p` is served: the one the record named by `from` gave it, else the one they
+    /// gave their own upload, else the one of a record they can read. Identical bytes are stored
+    /// once, so the name another person gave the same file is never shown to someone who only
+    /// uploaded it too, nor on a record that holds it under another name (K55).
+    fn filename_for(
+        &self,
+        p: &Principal,
+        info: &BlobInfo,
+        from: Option<(&str, &str, &str)>,
+    ) -> String {
+        if let Some((model, record, field)) = from {
+            let models = self.models.read().unwrap();
+            let reads = Plain(&*self.store.backend);
+            let actor = Actor::of(p);
+            if let Some(o) = info.owners.iter().find(|o| {
+                o.model == model
+                    && o.record == record
+                    && o.field == field
+                    && !o.filename.is_empty()
+                    && can_read_owner(p, &actor, &models, &reads, o)
+            }) {
+                return o.filename.clone();
+            }
+        }
+        let own = info
+            .pending
+            .iter()
+            .filter(|c| c.0 == p.id)
+            .map(|c| c.2.as_str())
+            .find(|f| !f.is_empty());
+        if let Some(f) = own {
+            return f.to_string();
+        }
+        let models = self.models.read().unwrap();
+        let reads = Plain(&*self.store.backend);
+        let actor = Actor::of(p);
+        info.owners
+            .iter()
+            .filter(|o| !o.filename.is_empty())
+            .find(|o| can_read_owner(p, &actor, &models, &reads, o))
+            .map_or_else(|| "file".to_string(), |o| o.filename.clone())
     }
 }
 
@@ -426,7 +489,12 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
                 .transpose()?
                 .flatten()
                 .ok_or_else(none)?;
-            let by_me = info.pending.iter().any(|(by, ..)| by == &p.id);
+            // The caller's own upload, made for this very field (an older claim names none).
+            let here = format!("{}.{}", def.name, f.name);
+            let by_me = info
+                .pending
+                .iter()
+                .any(|c| c.0 == p.id && (c.3.is_empty() || c.3 == here));
             // Not "the record named in the input already holds it": that id is the caller's
             // claim, and telling a held id from any other would confirm a guess at a file by its
             // hash. A record the caller can read holds it, or the caller uploaded it.
@@ -443,6 +511,30 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
         }
         Ok(Verdict::default())
     }))
+}
+
+/// K55 (c): the group of an image or file field gates setting, replacing and clearing it, as it
+/// gates its upload, not only reading it. Run by the generated `create`, `update` and each row of
+/// `bulk_create`, after the guards (a module's own refusal of a field it owns comes first).
+pub(crate) fn check_write_groups(
+    def: &ModelDef,
+    sent: &mut dyn Iterator<Item = &String>,
+    actor: &Actor,
+) -> Result<(), String> {
+    if actor.admin {
+        return Ok(());
+    }
+    for k in sent {
+        if let Some(f) = blob_fields(def).into_iter().find(|f| f.name == k.as_str())
+            && !actor.groups.contains(f.permission_group)
+        {
+            return Err(format!(
+                "{}.{} can be changed only by a holder of {}",
+                def.name, f.name, f.permission_group
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn owner_of(def: &ModelDef, record: &str, field: &str, filename: &str) -> Owner {
@@ -474,13 +566,16 @@ fn follow_up(what: &str, mut step: impl FnMut() -> Result<(), String>) {
     }
 }
 
-/// After a record was created with blob values: hold them. The file name travels from the upload.
-pub(crate) fn hold_created(store: &Store, def: &ModelDef, id: &str, rec: &Fields) {
+/// After a record was created with blob values: hold them. The file name travels from the
+/// upload of `caller` (the principal that saved the record).
+pub(crate) fn hold_created(store: &Store, def: &ModelDef, id: &str, rec: &Fields, caller: &str) {
     for f in blob_fields(def) {
         if let Some(b) = text_of(rec.get(f.name)) {
             follow_up("hold a blob for a new record", || {
-                let name = upload_name(store, b)?;
-                store.blobs.attach(b, &owner_of(def, id, f.name, &name))
+                let name = upload_name(store, b, caller, def.name, f.name)?;
+                store
+                    .blobs
+                    .attach_by(b, &owner_of(def, id, f.name, &name), caller)
             });
         }
     }
@@ -493,6 +588,7 @@ pub(crate) fn hold_updated(
     id: &str,
     before: &Fields,
     after: &Fields,
+    caller: &str,
 ) {
     for f in blob_fields(def) {
         let (old, new) = (text_of(before.get(f.name)), text_of(after.get(f.name)));
@@ -506,8 +602,10 @@ pub(crate) fn hold_updated(
         }
         if let Some(n) = new {
             follow_up("hold a blob for an updated record", || {
-                let name = upload_name(store, n)?;
-                store.blobs.attach(n, &owner_of(def, id, f.name, &name))
+                let name = upload_name(store, n, caller, def.name, f.name)?;
+                store
+                    .blobs
+                    .attach_by(n, &owner_of(def, id, f.name, &name), caller)
             });
         }
     }
@@ -520,14 +618,24 @@ pub(crate) fn release_record(store: &Store, model: &str, id: &str) {
     });
 }
 
-fn upload_name(store: &Store, id: &str) -> Result<String, String> {
+/// The name a new hold carries: the one `caller` gave their own upload for this field, else the
+/// name of an earlier holder (the caller could read that record, or the guard refused the id).
+fn upload_name(
+    store: &Store,
+    id: &str,
+    caller: &str,
+    model: &str,
+    field: &str,
+) -> Result<String, String> {
+    let here = format!("{model}.{field}");
     Ok(store
         .blobs
         .info(id)?
         .and_then(|i| {
             i.pending
                 .iter()
-                .map(|p| p.2.clone())
+                .filter(|c| c.0 == caller && (c.3 == here || c.3.is_empty()))
+                .map(|c| c.2.clone())
                 .chain(i.owners.iter().map(|o| o.filename.clone()))
                 .find(|f| !f.is_empty())
         })

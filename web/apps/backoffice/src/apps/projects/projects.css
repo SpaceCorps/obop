@@ -254,3 +254,55 @@
     min-block-size: 2.75rem;
   }
 }
+
+/* ---------- Projects: Bill time (BillTime) ---------- */
+@media (pointer: coarse) {
+  .prj-bill-form .switcher button {
+    min-height: 44px;
+  }
+}
+.prj-bill-period {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: var(--space-3);
+}
+.prj-bill-preview {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2, var(--surface));
+}
+.prj-bill-preview ul {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  max-height: 14rem;
+  overflow: auto;
+}
+.prj-bill-preview li,
+.prj-bill-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.prj-bill-preview li {
+  padding: var(--space-1) 0;
+  color: var(--text);
+}
+.prj-bill-preview li > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.prj-bill-total {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.prj-bill-total strong {
+  color: var(--text);
+}
+.prj-bill-preview .num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

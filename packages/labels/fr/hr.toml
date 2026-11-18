@@ -196,7 +196,7 @@ description = "Photo de la personne (PNG, JPEG, WebP ou GIF ; les métadonnées 
 
 [labels.fr.model.hr_leave_request.field.requested_by]
 label = "Demandé par"
-description = "Nom d’utilisateur auquel appartient la demande, fixé par le serveur s’il est laissé vide (et de nouveau quand une modification passe la demande à un autre employé) : l’utilisateur obop de l’employé s’il en a un, sinon la personne qui dépose la demande. Seuls elle et hr.manager voient la demande"
+description = "Nom d’utilisateur auquel appartient la demande, fixé uniquement par le serveur (une valeur envoyée est refusée) : l’utilisateur obop de l’employé s’il en a un, sinon la personne qui dépose la demande, et de nouveau quand une modification passe la demande à un autre employé. Seuls elle et hr.manager voient la demande"
 
 [labels.fr.model.hr_leave_request.action.request.assert.dates_in_order]
 message = "Le dernier jour du congé est avant son premier jour"
@@ -217,3 +217,21 @@ description = "L’employé qui dirige le département"
 [labels.fr.model.hr_employee.field.user]
 label = "Utilisateur obop"
 description = "Le nom d’utilisateur obop (identifiant) de la personne, s’il existe : les congés déposés pour cet employé appartiennent à cet utilisateur, et une nouvelle demande de congé de cet utilisateur commence sur cet employé"
+
+[labels.fr.model.hr_employee.filter.active]
+label = "Actifs"
+
+[labels.fr.model.hr_employee.filter.onboarding]
+label = "En intégration"
+
+[labels.fr.model.hr_leave_request.filter.to_approve]
+label = "À approuver"
+
+[labels.fr.model.hr_leave_request.filter.away_today]
+label = "Absents aujourd’hui"
+
+[labels.fr.model.hr_leave_request.filter.upcoming]
+label = "À venir"
+
+[labels.fr.model.hr_leave_request.filter.not_refused]
+label = "Non refusées"

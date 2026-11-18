@@ -371,6 +371,23 @@ fn a_changed_limit_is_a_listed_change_and_never_breaking() {
     assert_eq!(kinds(&a, &b).len(), 1);
 }
 
+#[test]
+fn a_new_or_changed_pattern_is_in_the_plan() {
+    // U3: a field that gains a format holds a value to more; losing it, to less.
+    let iban = |extra: &str| field("iban", extra);
+    let d = limits_change(&iban(""), &iban("pattern = \"iban\""));
+    assert!(
+        d.contains(
+            "tighten from max_length 2048 (default) to max_length 2048 (default), pattern iban"
+        ),
+        "{d}"
+    );
+    let d = limits_change(&iban("pattern = \"iban\""), &iban(""));
+    assert!(d.contains("loosen from"), "{d}");
+    let d = limits_change(&iban("pattern = \"iban\""), &iban("pattern = \"vat_id\""));
+    assert!(d.contains("tighten and loosen from"), "{d}");
+}
+
 /// The detail of the one `field_limits` change from `old` to `new`.
 fn limits_change(old: &str, new: &str) -> String {
     let (a, b) = (

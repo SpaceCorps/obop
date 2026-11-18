@@ -394,6 +394,9 @@ async fn meta_says_the_limit_of_every_field_that_has_one() {
     let p = field("lim_note", "plain");
     assert_eq!(p["max_length"], 2048);
     assert!(p.get("min_length").is_none(), "{p}");
+    // U3: the named format of a field is stated too; a field without one has none.
+    assert!(p.get("pattern").is_none(), "{p}");
+    assert_eq!(field("sale_order", "currency")["pattern"], "currency_code");
     assert_eq!(field("lim_note", "body")["max_length"], 100_000);
     let q = field("lim_note", "qty");
     assert_eq!((q["min"].clone(), q["max"].clone()), (json!(0), json!(100)));
@@ -409,14 +412,17 @@ async fn meta_says_the_limit_of_every_field_that_has_one() {
         (d["min"].clone(), d["max"].clone()),
         (json!("0.1000000"), json!("0.9000000"))
     );
-    // Every writable text field of every model says its maximum; no other kind does.
+    // Every writable text field of every model says its maximum; no other kind does. A model
+    // that has no create and no update (the module list, the security log) is output only and
+    // states no limit, since nothing enforces one there (K44 b).
     let mut texts = 0;
     for m in meta["modules"].as_array().unwrap() {
         for d in m["models"].as_array().unwrap() {
+            let writable = d["can_create"] == true || d["can_update"] == true;
             for f in d["fields"].as_array().unwrap() {
                 let kind = f["kind"].as_str().unwrap();
                 let system = f["computed"] == true || f["sequence"] == true;
-                if matches!(kind, "text" | "longtext") && !system {
+                if matches!(kind, "text" | "longtext") && !system && writable {
                     texts += 1;
                     let max = f["max_length"].as_u64();
                     assert!(

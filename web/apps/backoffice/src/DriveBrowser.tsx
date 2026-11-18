@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Dialog, Icon, Input, Notice, Spinner, Table, fmt, t } from "@obop/ui";
+import { Button, Dialog, Icon, Input, Notice, Spinner, Table, fmt, t, useWorded } from "@obop/ui";
 import { request } from "./net.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { formatBytes } from "./blobs.ts";
@@ -160,7 +160,8 @@ function DriveView({
     setBusyId(v);
     onBusy?.(v !== "");
   };
-  const [error, setError] = useState("");
+  const [errorWorded, setError] = useWorded();
+  const error = errorWorded ?? "";
   const seq = useRef(0);
   const parent = trail.length > 0 ? trail[trail.length - 1]!.id : "";
   const [workspace, setWorkspace] = useState<Workspace>(null);
@@ -206,13 +207,13 @@ function DriveView({
       };
       if (mine !== seq.current) return;
       if (!res.ok) {
-        setError(serverMessage(body.error ?? `status ${res.status}`));
+        setError(() => serverMessage(body.error ?? `status ${res.status}`));
         return;
       }
       setFiles((old) => (more ? [...old, ...(body.files ?? [])] : (body.files ?? [])));
       setNext(body.next ?? null);
     } catch {
-      if (mine === seq.current) setError(serverMessage("Could not reach the server"));
+      if (mine === seq.current) setError(() => serverMessage("Could not reach the server"));
     } finally {
       if (mine === seq.current) setLoading(false);
     }
@@ -235,7 +236,7 @@ function DriveView({
       });
       const body = (await res.json().catch(() => ({}))) as Imported & { error?: string };
       if (!res.ok) {
-        setError(serverMessage(body.error ?? `status ${res.status}`));
+        setError(() => serverMessage(body.error ?? `status ${res.status}`));
         return;
       }
       onPicked({
@@ -244,7 +245,7 @@ function DriveView({
         attachment: body.id,
       });
     } catch {
-      setError(serverMessage("Could not reach the server"));
+      setError(() => serverMessage("Could not reach the server"));
     } finally {
       setBusy("");
     }
@@ -260,7 +261,7 @@ function DriveView({
   async function created(res: Response) {
     const body = (await res.json().catch(() => ({}))) as Created & { error?: string };
     if (!res.ok) {
-      setError(serverMessage(body.error ?? `status ${res.status}`));
+      setError(() => serverMessage(body.error ?? `status ${res.status}`));
       return;
     }
     setMade(body);
@@ -282,7 +283,7 @@ function DriveView({
       });
       await created(res);
     } catch {
-      setError(serverMessage("Could not reach the server"));
+      setError(() => serverMessage("Could not reach the server"));
     } finally {
       setBusy("");
     }
@@ -302,7 +303,7 @@ function DriveView({
       });
       await created(res);
     } catch {
-      setError(serverMessage("Could not reach the server"));
+      setError(() => serverMessage("Could not reach the server"));
     } finally {
       setBusy("");
       if (fileRef.current) fileRef.current.value = "";

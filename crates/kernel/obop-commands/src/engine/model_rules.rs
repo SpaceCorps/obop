@@ -114,7 +114,7 @@ fn clashes(unit: &Unit<'_>, def: &ModelDef, n: &NoOverlap, id: &str, rec: &Field
     if ignored(rec) {
         return Ok(false);
     }
-    let mut key = Vec::with_capacity(n.key.len());
+    let mut key: Vec<&J> = Vec::with_capacity(n.key.len());
     for k in &n.key {
         match present(rec.get(*k)) {
             Some(v) => key.push(v),
@@ -127,7 +127,12 @@ fn clashes(unit: &Unit<'_>, def: &ModelDef, n: &NoOverlap, id: &str, rec: &Field
     let capacity = capacity(unit, def, n, rec)?;
     // The parts of the other records' times that fall inside this one's.
     let mut inside: Vec<(J, J)> = Vec::new();
-    for (other, o) in Reads::find(unit, def.name, n.key[0], key[0])? {
+    // No key: every record of the model (a handful of fiscal years) is compared.
+    let others = match (n.key.first(), key.first()) {
+        (Some(k), Some(v)) => Reads::find(unit, def.name, k, v)?,
+        _ => Reads::all(unit, def.name)?,
+    };
+    for (other, o) in others {
         if other == id || ignored(&o) {
             continue;
         }
@@ -142,7 +147,14 @@ fn clashes(unit: &Unit<'_>, def: &ModelDef, n: &NoOverlap, id: &str, rec: &Field
         let (Some(os), Some(oe)) = (present(o.get(n.start)), present(o.get(n.end))) else {
             continue;
         };
-        if order(start, oe) == Some(Ordering::Less) && order(os, end) == Some(Ordering::Less) {
+        // `[a, b)` and `[c, d)` meet when a < d and c < b; with the ends inside, when a <= d
+        // and c <= b.
+        let before = |a: &J, b: &J| match order(a, b) {
+            Some(Ordering::Less) => true,
+            Some(Ordering::Equal) => n.inclusive_end,
+            _ => false,
+        };
+        if before(start, oe) && before(os, end) {
             if capacity <= 1 {
                 return Ok(true);
             }
@@ -152,7 +164,7 @@ fn clashes(unit: &Unit<'_>, def: &ModelDef, n: &NoOverlap, id: &str, rec: &Field
             inside.push((from.clone(), to.clone()));
         }
     }
-    Ok(most_at_once(&inside) + 1 > capacity)
+    Ok(most_at_once(&inside, n.inclusive_end) + 1 > capacity)
 }
 
 /// How many records of one key may overlap: the number field `capacity` names on the record the
@@ -175,11 +187,16 @@ fn capacity(unit: &Unit<'_>, def: &ModelDef, n: &NoOverlap, rec: &Fields) -> R<u
     Ok(if n >= 1.0 { n.floor() as u64 } else { 1 })
 }
 
-/// The largest number of the intervals `[from, to)` that hold one moment together.
-fn most_at_once(spans: &[(J, J)]) -> u64 {
-    // An end before a start at the same point: one booking may end when the next begins.
+/// The largest number of the intervals `[from, to)` (`[from, to]` when `inclusive`) that hold one
+/// moment together.
+fn most_at_once(spans: &[(J, J)], inclusive: bool) -> u64 {
+    // An end before a start at the same point: one booking may end when the next begins. With
+    // the ends inside, a start comes first: a day that ends one and starts another holds both.
     let mut points: Vec<(&J, i8)> = spans.iter().flat_map(|(a, b)| [(a, 1), (b, -1)]).collect();
-    points.sort_by(|(a, x), (b, y)| order(a, b).unwrap_or(Ordering::Equal).then(x.cmp(y)));
+    points.sort_by(|(a, x), (b, y)| {
+        let tie = if inclusive { y.cmp(x) } else { x.cmp(y) };
+        order(a, b).unwrap_or(Ordering::Equal).then(tie)
+    });
     let (mut now, mut most) = (0i64, 0i64);
     for (_, d) in points {
         now += i64::from(d);

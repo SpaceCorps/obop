@@ -37,7 +37,7 @@ use crate::history::{
 };
 use crate::keyexpr::{self, Slot};
 use crate::pg::{Pg, pg_fields};
-use crate::pgpool::{Class, PR, PgPool, describe};
+use crate::pgpool::{Class, MAX_REPEATS, PR, PgPool, describe, is_retryable_text, repeat_pause};
 use crate::schema::{self, Part};
 use crate::sysfields::{self, ChangeRow, Clock, fmt_micros, parse_micros};
 use crate::{Ddl, Fields, J, Result, RowSink};
@@ -532,10 +532,23 @@ impl State {
     /// `ensure_history_schema`: create the part under `IfMissing`, or require it under `Never`.
     pub(crate) fn ensure_schema(&self, main: &PgPool) -> Result<()> {
         let ddl = self.ddl;
-        main.run(Class::Batch, |c| {
-            schema::with_lock(c, |c| schema::ensure_strict(c, &[PART], ddl))?;
-            Ok(())
-        })?;
+        // The DDL takes locks on the history tables that a batch writing history takes too, in
+        // its own order; when the server picks this transaction as the victim of a deadlock
+        // (40P01) nothing of it was made, and it is run again like any batch (K22).
+        let mut attempt = 0;
+        loop {
+            let r = main.run(Class::Batch, |c| {
+                schema::with_lock(c, |c| schema::ensure_strict(c, &[PART], ddl))?;
+                Ok(())
+            });
+            match r {
+                Err(e) if attempt < MAX_REPEATS && is_retryable_text(&e) => {
+                    attempt += 1;
+                    repeat_pause(attempt);
+                }
+                r => break r?,
+            }
+        }
         self.ready.store(true, Ordering::Release);
         Ok(())
     }

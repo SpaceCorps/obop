@@ -1,6 +1,6 @@
 [module]
 id = "accounting"
-version = "0.5.0"
+version = "0.5.1"
 name = "Accounting"
 description = "Chart of accounts, journals, tax rates, journal entries with debit and credit lines, fiscal years and periods, and bank statement lines. Amounts are money fields in minor currency units and tax rates are numbers in basis points (2000 means 20.00 percent). An entry shows its total debit and total credit, and posting is refused unless they are equal; a posted entry gets the next number of a gapless yearly series. Tax amounts are still entered by whoever books the entry. Account and journal codes are unique. Posting an entry and closing a period or fiscal year need a human approval and the stricter accounting.approver group; agents may only propose them."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["finance"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "overview"
-changelog = "A journal item that a bank transaction settles is marked settled, and the filters Open items, Overdue and Due in 30 days leave it out, so the overdue count of the overview no longer counts paid invoices. A bank transaction that pays an open invoice or bill item records that item (settles_line_id), and no two transactions may settle the same item, so a paid item is not offered or booked twice; paying an invoice through its proposal records its receivable item too, and undoing a match empties it again. Journal entries are frozen once posted, cancelled or reversed, and so are their lines and every entry dated in a closed period; closed periods and fiscal years are frozen until they are reopened. An entry with no amount is no longer posted, and a bank transaction is matched only to a journal item that is named. English business names, list, card and form hints, and defaults (today, debit and credit 0, active). Inactive journals and taxes are no longer offered for new entries; journals and taxes whose active flag was never set become active."
+changelog = "0.5.1: two fiscal years, or two periods, can no longer cover the same day: a new or moved one that overlaps another is refused (one already stored stays until it is moved). 0.5.0: A journal item that a bank transaction settles is marked settled, and the filters Open items, Overdue and Due in 30 days leave it out, so the overdue count of the overview no longer counts paid invoices. A bank transaction that pays an open invoice or bill item records that item (settles_line_id), and no two transactions may settle the same item, so a paid item is not offered or booked twice; paying an invoice through its proposal records its receivable item too, and undoing a match empties it again. Journal entries are frozen once posted, cancelled or reversed, and so are their lines and every entry dated in a closed period; closed periods and fiscal years are frozen until they are reopened. An entry with no amount is no longer posted, and a bank transaction is matched only to a journal item that is named. English business names, list, card and form hints, and defaults (today, debit and credit 0, active). Inactive journals and taxes are no longer offered for new entries; journals and taxes whose active flag was never set become active."
 
 [module.dependencies]
 base = "^0.2"
@@ -220,6 +220,14 @@ write_group = "accounting.manager"
   expr = "end_on >= start_on"
   message = "The fiscal year ends before it starts: set a last day on or after the first day"
 
+  [model.no_overlap]
+  rule = "no_overlapping_years"
+  key = []
+  start = "start_on"
+  end = "end_on"
+  inclusive_end = true
+  message = "Another fiscal year already covers some of these days: start this one after its last day"
+
   [[model.field]]
   name = "name"
   description = "Fiscal year name, for example FY2026"
@@ -311,6 +319,14 @@ write_group = "accounting.manager"
   key = "ends_after_start"
   expr = "end_on >= start_on"
   message = "The period ends before it starts: set a last day on or after the first day"
+
+  [model.no_overlap]
+  rule = "no_overlapping_periods"
+  key = []
+  start = "start_on"
+  end = "end_on"
+  inclusive_end = true
+  message = "Another period already covers some of these days: start this one after its last day"
 
   [[model.field]]
   name = "fiscal_year_id"

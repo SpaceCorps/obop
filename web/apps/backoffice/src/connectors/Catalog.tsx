@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Badge, t } from "@obop/ui";
+import { Badge, t, useWorded } from "@obop/ui";
 import type { App } from "../Chrome.tsx";
 import { useData, useRows } from "../data.tsx";
 import { serverMessage } from "../serverMessage.ts";
@@ -60,7 +60,7 @@ function PolicyDialog({
     oauth_client_secret: "",
   });
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   async function save() {
     setBusy(true);
     setError(null);
@@ -80,7 +80,7 @@ function PolicyDialog({
       await d.store.load("connector_provider");
       return onClose();
     }
-    setError(r.kind === "approval" ? t("Approval needed.") : serverMessage(r.message));
+    setError(() => (r.kind === "approval" ? t("Approval needed.") : serverMessage(r.message)));
   }
   return (
     <Dialog

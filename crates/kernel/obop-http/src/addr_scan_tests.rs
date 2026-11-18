@@ -60,7 +60,10 @@ use std::path::Path;
 
 /// Where the address may be read: the whole path from `crates/`, the function (`<use>` is a `use`
 /// declaration), the header name (lower case) or identifier, and how many times.
-const ALLOWED: [(&str, &str, &str, usize); 11] = [
+const ALLOWED: [(&str, &str, &str, usize); 12] = [
+    // The listener puts the peer on each request for the rule above to read; it decides nothing
+    // (O38: `serve_on` replaced `axum::serve`, which did the same out of sight).
+    ("kernel/obop-http/src/lib.rs", "serve_on", "ConnectInfo", 1),
     // The rule itself.
     (
         "kernel/obop-http/src/addr.rs",

@@ -1,4 +1,4 @@
-//! Point of Sale 0.6.0 (docs/ISSUES.md Q2, Q3, Q16): a till's stock location reaches its sales,
+//! Point of Sale 0.6.0 and 0.7.0 (docs/ISSUES.md Q2, Q3, Q16, U8): a till's stock location reaches its sales,
 //! the expected cash and the difference are computed on the server, and a new session opens with
 //! the cash counted when the till last closed.
 
@@ -296,7 +296,17 @@ fn a_refund_after_closing_does_not_change_the_closed_session() {
         ),
         (json!(12_500), json!(0))
     );
-    // Refunded after closing (from another drawer): the closed session stays as it closed.
+    // U8: with no session open at the till, the cash of the refund would leave no drawer.
+    let e = run(&f.a, "pos_order.refund", json!({"id": kept})).unwrap_err();
+    assert!(e.contains("no session is open at its till"), "{e}");
+    assert_eq!(
+        ok(&f.a, "pos_order.get", json!({"id": kept}))["state"],
+        json!("paid")
+    );
+    // Refunded after closing from the next session's drawer: the closed session stays as it
+    // closed, and the open one expects that much less cash.
+    let next = ok(&f.a, "pos_session.create", json!({"config_id": f.till}));
+    assert_eq!(next["opening_cash"], json!(12_500));
     ok(&f.a, "pos_order.refund", json!({"id": kept}));
     let after = ok(&f.a, "pos_session.get", json!({"id": s}));
     assert_eq!(
@@ -306,5 +316,24 @@ fn a_refund_after_closing_does_not_change_the_closed_session() {
         ),
         (json!(12_500), json!(0)),
         "{after}"
+    );
+    let order = ok(&f.a, "pos_order.get", json!({"id": kept}));
+    assert_eq!(order["refund_session_id"], json!(id(&next)));
+    let open = ok(&f.a, "pos_session.get", json!({"id": id(&next)}));
+    assert_eq!(open["expected_cash"], json!(12_500 - 2_500), "{open}");
+    // A sale of the open session refunded in it is not subtracted twice.
+    let here = f.sale(&id(&next), 1, &[("cash", 2_500)], true);
+    ok(&f.a, "pos_order.refund", json!({"id": here}));
+    let open = ok(&f.a, "pos_session.get", json!({"id": id(&next)}));
+    assert_eq!(open["expected_cash"], json!(10_000), "{open}");
+    assert!(ok(&f.a, "pos_order.get", json!({"id": here}))["refund_session_id"].is_null());
+    // Nobody writes it by hand.
+    assert!(
+        run(
+            &f.a,
+            "pos_order.update",
+            json!({"id": here, "refund_session_id": id(&next)}),
+        )
+        .is_err()
     );
 }

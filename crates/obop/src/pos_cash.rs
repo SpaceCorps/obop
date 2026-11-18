@@ -11,6 +11,13 @@
 //! 0.6.0); a session closed before that has only its closing day, and comes after every session
 //! with an instant on an earlier day; two old sessions closed on one day are ordered by their id
 //! (the order they were opened in).
+//!
+//! A cash refund of a sale whose session is already closed (U8, pos 0.7.0) is paid out of the
+//! drawer of the session open at the sale's till at that moment: the refund records that session
+//! in `refund_session_id` once the refund has happened (chosen while the sale is still paid), and
+//! its expected cash subtracts the cash of such refunds. With no session open at the till such a refund is refused: its cash would leave no
+//! session's drawer. A sale refunded while its own session is open needs nothing: it simply stops
+//! counting as paid there.
 
 use obop_commands::{Dispatcher, Store, Value};
 use obop_registry::{CommandDef, FieldDef, FieldKind, ModelDef, Module};
@@ -119,6 +126,48 @@ fn input_text(v: &Value, k: &str) -> String {
     }
 }
 
+/// The open session of the till of a paid sale whose own session is closed, when the sale was
+/// paid partly in cash: the session whose drawer pays the refund out. `Ok(None)` when nothing has
+/// to be recorded (no cash, or the sale's session is still open).
+pub fn refund_session(b: &dyn Backend, order: &str) -> Result<Option<String>, String> {
+    let Some(o) = b.get("pos_order", order).map_err(|e| e.to_string())? else {
+        return Ok(None);
+    };
+    if text(&o, "state") != "paid" {
+        return Ok(None);
+    }
+    let cash: i64 = b
+        .find("pos_payment", "order_id", &J::from(order))
+        .map_err(|e| e.to_string())?
+        .iter()
+        .filter(|(_, p)| text(p, "method") == "cash")
+        .filter_map(|(_, p)| p.get("amount").and_then(J::as_i64))
+        .sum();
+    if cash == 0 {
+        return Ok(None);
+    }
+    let own = text(&o, "session_id");
+    let Some(session) = b.get("pos_session", &own).map_err(|e| e.to_string())? else {
+        return Ok(None);
+    };
+    if text(&session, "state") != "closed" {
+        return Ok(None);
+    }
+    let till = text(&session, "config_id");
+    let open: Vec<String> = b
+        .find("pos_session", "config_id", &J::from(till.as_str()))
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter(|(_, s)| text(s, "state") == "open")
+        .map(|(id, _)| id)
+        .collect();
+    match open.as_slice() {
+        [one] => Ok(Some(one.clone())),
+        [] => Err("This sale was paid in cash in a session that is closed, and no session is open at its till to pay the refund out of. Open a session at the till, then refund the sale.".into()),
+        _ => Err("Several sessions are open at this till, so the refund cannot tell which drawer pays it out. Close all but one, then refund the sale.".into()),
+    }
+}
+
 pub fn register(d: &Arc<Dispatcher>, store: &Store) {
     let m = module();
     let b = store.backend();
@@ -144,6 +193,31 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 ("source", Value::text(source)),
                 ("session_id", Value::text(&session)),
             ]))
+        }),
+    );
+    let b = store.backend();
+    d.around(
+        "pos_order.refund",
+        Box::new(move |_, input, inner| {
+            let id = input_text(input, "id");
+            // Which drawer pays out is decided while the sale is still paid; it is written only
+            // once the refund happened, so a refused refund leaves no session on the sale.
+            let session = if id.is_empty() {
+                None
+            } else {
+                refund_session(&*b, &id)?
+            };
+            let out = inner(input)?;
+            if let Some(session) = session
+                && b.get("pos_order", &id)
+                    .map_err(|e| e.to_string())?
+                    .is_some_and(|o| text(&o, "state") == "refunded")
+            {
+                let mut f = Fields::new();
+                f.insert("refund_session_id".into(), J::from(session));
+                b.update("pos_order", &id, &f).map_err(|e| e.to_string())?;
+            }
+            Ok(out)
         }),
     );
     let b = store.backend();

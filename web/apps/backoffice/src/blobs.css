@@ -139,4 +139,9 @@ td .blobthumb {
   .filepreview-pdf {
     display: none;
   }
+  /* The Download button of a file field is a finger's size, like Replace file and Remove beside it
+     (a chip in a list keeps its size). */
+  .blobrow .filechip {
+    min-block-size: 44px;
+  }
 }
