@@ -1450,6 +1450,19 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     if auth.setup().is_some() {
         announce_setup(&Auth::new(app.store.backend()));
     }
+    // The agent tokens of accounts bound to Microsoft end within 90 days (N18); a binding made by
+    // an older build left them without an end. A store that refuses this stops the start, as a
+    // token that should end is not left working on a guess.
+    if !o.dev_auth {
+        let n = Auth::new(app.store.backend())
+            .end_agent_tokens_of_bound_accounts()
+            .map_err(|e| fail(&format!("cannot read the agent tokens: {e}")))?;
+        if n > 0 {
+            eprintln!(
+                "{n} agent token(s) of accounts bound to Microsoft now end within 90 days (N18)"
+            );
+        }
+    }
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());

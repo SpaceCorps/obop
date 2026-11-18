@@ -366,3 +366,29 @@ fn a_second_step_finished_for_an_account_disabled_meanwhile_is_a_refused_sign_in
     assert!(matches!(done, Err(MfaError::Expired)), "{done:?}");
     assert_eq!(live_sessions(&b, "ada"), before);
 }
+
+/// K19: an agent token made while the account is being offboarded (the offboarding listed the
+/// tokens just before this one was written) is ended at once and handed to nobody.
+#[test]
+fn an_agent_token_written_after_an_offboarding_listed_the_tokens_is_not_handed_out() {
+    let (a, flaky, b) = shared(AuthConfig::insecure_dev());
+    user_with(&a, "ada", &["base.user"]);
+    let (_, p) = session_of(&a, "ada");
+    flaky.after_the_next_insert_into(
+        "auth_token",
+        Box::new(|inner| {
+            let mut patch = Fields::new();
+            patch.insert("disabled".into(), J::Bool(true));
+            inner.update("auth_user", "ada", &patch).unwrap();
+        }),
+    );
+    let got = a.issue_agent_token(&p, &["base.user".to_string()], "bot");
+    assert!(got.is_err(), "{got:?}");
+    let live = b
+        .list("auth_token")
+        .unwrap()
+        .into_iter()
+        .filter(|(_, t)| t["kind"] == "agent" && t["revoked"] != true)
+        .count();
+    assert_eq!(live, 0, "no agent token is left in force");
+}

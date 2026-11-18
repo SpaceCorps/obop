@@ -168,6 +168,10 @@ export function Recording({
   };
 
   const restart = { label: t("recording.stuck.action"), onPress: () => void ensure() };
+  // The server discarded the trip or no longer has it (L41): the phone keeps the points, and the
+  // driver learns it here and not only after Stop. The trip's page has the Discard with its reason.
+  const code = active.problem?.code;
+  const lost = code === "gone" || code === "discarded" ? code : null;
   const settings = { label: t("permission.settings"), onPress: () => void openSettings() };
 
   return (
@@ -183,6 +187,18 @@ export function Recording({
         />
       }
     >
+      {lost !== null ? (
+        <Banner
+          tone="danger"
+          title={t("recording.lost.title")}
+          message={t(lost === "discarded" ? "trip.problem.discarded" : "trip.problem.gone")}
+          action={{
+            label: t("recording.lost.action"),
+            onPress: () => nav.push({ name: "trip", id: active.clientTripId }),
+          }}
+          testID="lost-banner"
+        />
+      ) : null}
       {signedOut ? (
         <Banner
           tone="warning"

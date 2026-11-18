@@ -89,7 +89,12 @@ pub struct HttpState {
 
 impl HttpState {
     pub fn new(dispatcher: Arc<Dispatcher>, auth: Arc<dyn Authenticator>) -> Arc<Self> {
-        Self::with_mcp(dispatcher, auth, mcp::McpConfig::from_env())
+        Self::with_configs(
+            dispatcher,
+            auth,
+            mcp::McpConfig::from_env(),
+            obop_oauth::OAuthConfig::from_env(),
+        )
     }
 
     /// As `new`, with explicit limits and origin allow-list for `/mcp` (tests, embedding).
@@ -98,12 +103,19 @@ impl HttpState {
         auth: Arc<dyn Authenticator>,
         mcp: mcp::McpConfig,
     ) -> Arc<Self> {
+        Self::with_configs(dispatcher, auth, mcp, obop_oauth::OAuthConfig::default())
+    }
+
+    /// As `with_mcp`, with the configuration of the authorization server too (L10: the operator's
+    /// list of mobile apps, `OBOP_OAUTH_MOBILE_SCHEMES`, read by `new`).
+    pub fn with_configs(
+        dispatcher: Arc<Dispatcher>,
+        auth: Arc<dyn Authenticator>,
+        mcp: mcp::McpConfig,
+        oauth_config: obop_oauth::OAuthConfig,
+    ) -> Arc<Self> {
         let shared = shared::SharedState::for_dispatcher(&dispatcher);
-        let oauth = obop_oauth::OAuth::new(
-            shared.backend.clone(),
-            auth.clone(),
-            obop_oauth::OAuthConfig::default(),
-        );
+        let oauth = obop_oauth::OAuth::new(shared.backend.clone(), auth.clone(), oauth_config);
         Arc::new(Self {
             dispatcher,
             auth,
@@ -564,6 +576,8 @@ fn login_blocking(s: Arc<HttpState>, body: J) -> Response {
         Err(e) if e.contains("too many") => {
             (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": e}))).into_response()
         }
+        // A refused read of the account is no wrong password: the client may try again (D74, N22).
+        Err(e) if obop_storage::fault::Fault::is_transient(&e) => unavailable(&e),
         Err(e) => (StatusCode::UNAUTHORIZED, Json(json!({"error": e}))).into_response(),
     }
 }
@@ -595,6 +609,8 @@ fn agent_token_blocking(s: Arc<HttpState>, h: HeaderMap, body: J) -> Response {
         &s.dispatcher.known_groups(),
     ) {
         Ok(token) => Json(json!({"token": token})).into_response(),
+        // A refused read of the store is no bad request: the client may ask again (D74).
+        Err(e) if obop_storage::fault::Fault::is_transient(&e) => unavailable(&e),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
     }
 }
@@ -630,6 +646,7 @@ fn agent_tokens_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
         .map(|t| {
             json!({
                 "id": t.id, "label": t.label, "scopes": t.scopes, "created_at": t.created_at,
+                "expires_at": t.expires_at,
             })
         })
         .collect();

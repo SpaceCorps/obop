@@ -1253,7 +1253,9 @@ async fn phone_the_second_factor_is_asked_as_it_is_for_a_password_and_survives_a
     let token = hidden_of(&back.body, "mfa_token");
 
     // A wrong code is told so; the right one gives the consent step.
-    let wrong = phone.mfa(&p, &token, "000000").await;
+    let wrong = phone
+        .mfa(&p, &token, &crate::mfa_tests::wrong_code(&secret, T0 + 30))
+        .await;
     assert!(
         asks_for_the_second_step(&wrong) && wrong.body.contains("That code is not right."),
         "{}",
@@ -2550,7 +2552,9 @@ async fn phone_every_step_of_the_sign_in_pages_writes_the_flow_and_sets_no_cooki
     let p = page_of(&page.flow, &r);
     let token = hidden_of(&r.body, "mfa_token");
     // The second step, wrong and then right (the code of the minute after, as the other tests do).
-    let wrong = phone.mfa(&p, &token, "000000").await;
+    let wrong = phone
+        .mfa(&p, &token, &crate::mfa_tests::wrong_code(&secret, T0 + 30))
+        .await;
     assert!(
         asks_for_the_second_step(&wrong) && wrong.body.contains("That code is not right."),
         "{}",

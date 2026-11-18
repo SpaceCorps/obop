@@ -3021,7 +3021,7 @@ const OAUTH_CORE: &str = "kernel/obop-oauth/src/lib.rs";
 const RUNTIME: &str = "kernel/obop-connectors/src/runtime.rs";
 const BROWSE: &str = "kernel/obop-blob-gdrive/src/browse.rs";
 
-const LITERAL_ALLOWED_S3: [LiteralRow; 31] = [
+const LITERAL_ALLOWED_S3: [LiteralRow; 32] = [
     (
         MCP_HTTP,
         "from_env",
@@ -3247,6 +3247,14 @@ const LITERAL_ALLOWED_S3: [LiteralRow; 31] = [
         "the link to the documentation of the software in the metadata (service_documentation, optional \
          in RFC 8414). An instance with no brand sends it as it always has; the branded counterpart is \
          that the member is left out whenever a brand is set",
+    ),
+    (
+        OAUTH_CORE,
+        "from_env",
+        Some("OBOP_OAUTH_MOBILE_SCHEMES"),
+        1,
+        "env",
+        "the name of the environment variable that lists the redirect schemes of the mobile apps that          may register (L10): an operator's words",
     ),
     (
         RUNTIME,

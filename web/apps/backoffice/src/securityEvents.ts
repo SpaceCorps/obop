@@ -58,4 +58,8 @@ export const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   setup_open: msg("Set-up code printed"),
   setup_refused: msg("Set-up refused"),
   setup_complete: msg("First administrator created"),
+  sign_link_issued: msg("Signing link made"),
+  sign_link_revoked: msg("Signing link revoked"),
+  sign_signed: msg("Signed through a signing link"),
+  sign_refused: msg("Signing link refused"),
 };

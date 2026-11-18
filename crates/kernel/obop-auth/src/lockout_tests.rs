@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::admin_tests::{flaky_rig, request};
-use crate::mfa_tests::{PW, Rig, enrol, mfa_token, user_with};
+use crate::mfa_tests::{PW, Rig, enrol, mfa_token, user_with, wrong_code};
 use obop_commands::{Authenticator, MfaApi};
 use obop_storage::testing::Mode;
 
@@ -89,13 +89,14 @@ fn a_wrong_guess_that_could_not_be_counted_is_the_stores_trouble_and_not_a_plain
 fn the_log_says_lockout_only_for_a_count_that_was_read() {
     let (r, flaky) = flaky_rig();
     user_with(&r.a, "ada", &["base.user"]);
-    let _ = enrol(&r.a, "ada");
+    let (secret, _) = enrol(&r.a, "ada");
     let pending = mfa_token(&r.a, "ada");
     // A wrong code counts one failure; the count is then unreadable. Read as "locked" for the
     // sign-in (fail closed), it wrote "lockout: too many failed attempts" for an account with a
     // single failure.
     flaky.refuse_reads_after_the_next_write();
-    let done = r.a.login_mfa(&pending, Some("000000"), None);
+    let done =
+        r.a.login_mfa(&pending, Some(&wrong_code(&secret, r.a.now())), None);
     flaky.allow_models();
     assert!(done.is_err());
     assert_eq!(failures(&r, "ada"), 1);
@@ -103,7 +104,8 @@ fn the_log_says_lockout_only_for_a_count_that_was_read() {
     // Five failures are one, once the count can be read.
     for _ in 0..4 {
         let t = mfa_token(&r.a, "ada");
-        let _ = r.a.login_mfa(&t, Some("000000"), None);
+        let _ =
+            r.a.login_mfa(&t, Some(&wrong_code(&secret, r.a.now())), None);
     }
     assert!(lockouts(&r) >= 1);
 }

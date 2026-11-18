@@ -421,6 +421,7 @@ pub(crate) async fn submit(
                         Invalid::Name => "err_name",
                         Invalid::Agree => "err_agree",
                         Invalid::History => "err_history",
+                        Invalid::Changed => "err_changed",
                     }),
                     status: StatusCode::BAD_REQUEST,
                 },
@@ -533,6 +534,11 @@ mod tests {
                 StatusCode::BAD_REQUEST,
                 "err_name",
             ),
+            (
+                DoorError::Invalid(Invalid::Changed),
+                StatusCode::BAD_REQUEST,
+                "err_name",
+            ),
             (DoorError::Refused, StatusCode::CONFLICT, "gone_revoked"),
         ];
         for (e, status, key) in table {
@@ -572,6 +578,7 @@ mod tests {
             DoorError::Invalid(Invalid::Name),
             DoorError::Invalid(Invalid::Agree),
             DoorError::Invalid(Invalid::History),
+            DoorError::Invalid(Invalid::Changed),
             DoorError::Refused,
         ] {
             assert_eq!(wait(e.clone()), None, "{e:?}");
@@ -722,6 +729,7 @@ mod tests {
             DoorError::Invalid(Invalid::Name),
             DoorError::Invalid(Invalid::Agree),
             DoorError::Invalid(Invalid::History),
+            DoorError::Invalid(Invalid::Changed),
             DoorError::Refused,
         ] {
             let (_, key) = refusal_parts(&e);

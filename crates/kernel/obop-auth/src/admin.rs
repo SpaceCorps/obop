@@ -151,9 +151,10 @@ impl Auth {
     fn resync_limits(&self, name: &str, groups: &[String], ch: &Change) -> Result<usize, MfaError> {
         let limited = self
             .settled(|| {
-                self.must_change_password(name)
-                    || (self.enrolment_required_for(groups) && !self.has_second_factor(name))
+                Ok(self.must_change_password(name)?
+                    || (self.enrolment_required_for(groups) && !self.has_second_factor(name)?))
             })
+            .and_then(|r: Result<bool, String>| r.map_err(MfaError::Unavailable))
             .map_err(|e| match e {
                 MfaError::Unavailable(m) => self.incomplete(ch, "reading the two-factor policy", m),
                 other => other,
@@ -331,7 +332,7 @@ impl Auth {
         }
         let mut patch = Fields::new();
         patch.insert("groups".into(), json!(after));
-        crate::bump_epoch(&mut patch);
+        crate::bump_epoch(&mut patch, self.now());
         self.put(&target, &patch)?;
         let ch = Change::new(&target, "user_groups", actor, &detail);
         let relimited = self.resync_limits(&target, &after, &ch)?;
@@ -389,7 +390,7 @@ impl Auth {
         patch.insert("offboarded".into(), J::Bool(true));
         patch.insert("offboarded_at".into(), J::from(self.now()));
         patch.insert("offboarded_by".into(), J::from(actor));
-        crate::bump_epoch(&mut patch);
+        crate::bump_epoch(&mut patch, self.now());
         // Written before the account goes: if ending its tokens is then refused, enabling the
         // account later finishes that first, so no token the offboarding missed comes back.
         let previous = self.owe_revocation(&target, "user_offboard", None)?;

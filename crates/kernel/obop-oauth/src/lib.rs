@@ -61,6 +61,34 @@ pub struct OAuthConfig {
     /// refused at the consent page and at the code exchange, with a `device_limit` entry in the
     /// security log. A field here, not an environment setting: change it where the server is built.
     pub max_devices_per_user: usize,
+    /// The redirect schemes a mobile app may register with (L10), lower case: `None` lets any app
+    /// register that follows the rules of RFC 8252; a list refuses the registration of a mobile
+    /// client whose redirect has another scheme. `OBOP_OAUTH_MOBILE_SCHEMES` in [`OAuthConfig::from_env`].
+    pub mobile_schemes: Option<Vec<String>>,
+}
+
+impl OAuthConfig {
+    /// The defaults, with `OBOP_OAUTH_MOBILE_SCHEMES` (a comma-separated list of the redirect
+    /// schemes mobile apps may register with, such as `org.obop.mileage`; `http` admits a loopback
+    /// redirect) when it names at least one.
+    pub fn from_env() -> Self {
+        Self {
+            mobile_schemes: std::env::var("OBOP_OAUTH_MOBILE_SCHEMES")
+                .ok()
+                .and_then(|v| parse_schemes(&v)),
+            ..Self::default()
+        }
+    }
+}
+
+/// The schemes of a comma-separated list, lower case; `None` when it names none.
+pub fn parse_schemes(v: &str) -> Option<Vec<String>> {
+    let list: Vec<String> = v
+        .split(',')
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+    (!list.is_empty()).then_some(list)
 }
 
 impl Default for OAuthConfig {
@@ -79,6 +107,7 @@ impl Default for OAuthConfig {
             unused_client_secs: 24 * 3600,
             idle_client_secs: 180 * 24 * 3600,
             max_devices_per_user: 20,
+            mobile_schemes: None,
         }
     }
 }
