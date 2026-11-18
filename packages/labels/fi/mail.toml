@@ -1,0 +1,263 @@
+# Machine-drafted labels of the built-in Mail module (docs/spec/mail.md).
+
+[labels.fi.module]
+name = "Sähköposti"
+description = "Lähtevä sähköposti: postipalvelimet (SMTP-välityspalvelimet ja palveluntarjoajien rajapinnat liittimien kautta), pohjat seitsemällä kielellä, uudelleenyrittävä jono ja lähetysloki, joka ei koskaan näytä viestin tekstiä."
+summary = "Lähetä postia omalla SMTP-välityspalvelimella tai palveluntarjoajan kautta, pohjineen ja lähetyslokeineen."
+
+[labels.fi.model.outbound_mail]
+name = "Lähtevä viesti"
+plural = "Lähetykset"
+description = "Yksi lähtevä viesti: jono ja lähetysloki. Ei koskaan näytä tekstiä"
+
+[labels.fi.model.outbound_mail.field.kind]
+label = "Laji"
+description = "Mihin viesti liittyy, esimerkiksi invoice tai password_reset; general, jos ei annettu"
+
+[labels.fi.model.outbound_mail.field.to]
+label = "Vastaanottaja"
+description = "Vastaanottajat pilkuin eroteltuina"
+
+[labels.fi.model.outbound_mail.field.cc]
+label = "Kopio"
+description = "Kopion vastaanottajat pilkuin eroteltuina"
+
+[labels.fi.model.outbound_mail.field.bcc]
+label = "Piilokopio"
+description = "Piilokopion vastaanottajat pilkuin eroteltuina; ei koskaan otsakkeessa"
+
+[labels.fi.model.outbound_mail.field.reply_to]
+label = "Vastausosoite"
+description = "Minne vastaukset menevät; tyhjä tarkoittaa palvelimen asetusta"
+
+[labels.fi.model.outbound_mail.field.subject]
+label = "Aihe"
+description = "Aiherivi"
+
+[labels.fi.model.outbound_mail.field.body]
+label = "Teksti"
+description = "Teksti sinetöitynä; poistetaan, kun viesti on lähetetty tai peruttu"
+
+[labels.fi.model.outbound_mail.field.template]
+label = "Pohja"
+description = "send-komennon syöte: käytettävän pohjan avain; tallennetaan"
+
+[labels.fi.model.outbound_mail.field.language]
+label = "Kieli"
+description = "send-komennon syöte: pohjan kieli"
+
+[labels.fi.model.outbound_mail.field.language.options]
+en = "Englanti"
+de = "Saksa"
+fr = "Ranska"
+pl = "Puola"
+fi = "Suomi"
+sv = "Ruotsi"
+es = "Espanja"
+
+[labels.fi.model.outbound_mail.field.vars]
+label = "Arvot"
+description = "send-komennon syöte: pohjan arvot JSON-oliona; ei tallenneta"
+
+[labels.fi.model.outbound_mail.field.server]
+label = "Postipalvelin"
+description = "Postipalvelin, joka lähettää sen"
+
+[labels.fi.model.outbound_mail.field.status]
+label = "Tila"
+description = "jonossa, lähetetään, lähetetty, epäonnistui tai peruttu"
+
+[labels.fi.model.outbound_mail.field.status.options]
+queued = "Jonossa"
+sending = "Lähetetään"
+sent = "Lähetetty"
+failed = "Epäonnistui"
+cancelled = "Peruttu"
+
+[labels.fi.model.outbound_mail.field.attempts]
+label = "Yritykset"
+description = "Toimitusyritykset tähän mennessä"
+
+[labels.fi.model.outbound_mail.field.next_attempt_at]
+label = "Seuraava yritys"
+description = "Milloin seuraavaksi yritetään"
+
+[labels.fi.model.outbound_mail.field.queued_at]
+label = "Jonoon"
+description = "Milloin se lisättiin jonoon"
+
+[labels.fi.model.outbound_mail.field.sent_at]
+label = "Lähetetty"
+description = "Milloin palvelin tai palveluntarjoaja hyväksyi sen"
+
+[labels.fi.model.outbound_mail.field.last_error]
+label = "Viimeisin virhe"
+description = "Miksi viimeisin yritys epäonnistui, ilman tekstiä tai tunnuksia"
+
+[labels.fi.model.outbound_mail.field.server_reply]
+label = "Palvelimen vastaus"
+description = "Palvelimen tai palveluntarjoajan vastaus hyväksyttyyn viestiin"
+
+[labels.fi.model.outbound_mail.field.message_id]
+label = "Message-ID"
+description = "Message-ID-otsake, sama jokaisella yrityksellä"
+
+[labels.fi.model.outbound_mail.field.related_model]
+label = "Liittyvä malli"
+description = "Sen tietueen malli, jota viesti koskee"
+
+[labels.fi.model.outbound_mail.field.related_id]
+label = "Liittyvä tietue"
+description = "Kyseisen tietueen tunniste"
+
+[labels.fi.model.outbound_mail.field.requested_by]
+label = "Jonoon lisännyt"
+description = "Kuka lisäsi sen jonoon"
+
+[labels.fi.model.outbound_mail.field.lease_until]
+label = "Varattu asti"
+description = "Työprosessin varaus sekunteina vuodesta 1970"
+
+[labels.fi.model.outbound_mail.field.due]
+label = "Erääntyy"
+description = "Milloin se on vuorossa, sekunteina vuodesta 1970"
+
+[labels.fi.model.outbound_mail.action.send]
+label = "Lähetä"
+description = "Lisää viesti jonoon: to, subject ja body tai template sekä language ja vars; palauttaa sen tunnisteen. Työprosessi lähettää sen kutsun jälkeen"
+
+[labels.fi.model.outbound_mail.action.retry]
+label = "Lähetä uudelleen"
+description = "Lisää epäonnistunut viesti uudelleen jonoon, yritykset nollasta"
+
+[labels.fi.model.outbound_mail.action.cancel]
+label = "Peru"
+description = "Peru jonossa oleva viesti; sen teksti poistetaan"
+
+[labels.fi.model.outbound_mail.action.process]
+label = "Lähetä erääntyneet"
+description = "Lähetä nyt erääntyneet viestit (työprosessi tekee tämän muutaman sekunnin välein)"
+
+[labels.fi.model.mail_server]
+name = "Postipalvelin"
+plural = "Postipalvelimet"
+description = "Postin lähtöreitti: SMTP-välityspalvelin tai palveluntarjoaja liittimien yhteyden kautta"
+
+[labels.fi.model.mail_server.field.name]
+label = "Nimi"
+description = "Nimi, joka erottaa palvelimet"
+
+[labels.fi.model.mail_server.field.kind]
+label = "Lähettää kautta"
+description = "smtp (välityspalvelin) tai provider (rajapinta liittimien yhteyden kautta)"
+
+[labels.fi.model.mail_server.field.kind.options]
+smtp = "SMTP-välityspalvelin"
+provider = "Palveluntarjoaja"
+
+[labels.fi.model.mail_server.field.enabled]
+label = "Käytössä"
+description = "Posti saa lähteä tämän palvelimen kautta"
+
+[labels.fi.model.mail_server.field.is_default]
+label = "Oletuspalvelin"
+description = "Käytetään jokaiselle viestilajille, jota mikään muu palvelin ei luettele"
+
+[labels.fi.model.mail_server.field.kinds]
+label = "Viestilajit"
+description = "Palvelimen lähettämät viestilajit pilkuin eroteltuina (esim. invoice, password_reset); tyhjä tarkoittaa kaikkia"
+
+[labels.fi.model.mail_server.field.host]
+label = "Palvelin"
+description = "SMTP: välityspalvelimen nimi"
+
+[labels.fi.model.mail_server.field.port]
+label = "Portti"
+description = "SMTP: portti (587 STARTTLS:lle, 465 TLS:lle)"
+
+[labels.fi.model.mail_server.field.security]
+label = "Suojaus"
+description = "SMTP: starttls, tls tai none (none ei lähetä salasanaa)"
+
+[labels.fi.model.mail_server.field.security.options]
+starttls = "STARTTLS"
+tls = "TLS"
+none = "Ei mitään"
+
+[labels.fi.model.mail_server.field.username]
+label = "Käyttäjätunnus"
+description = "SMTP: käyttäjätunnus; tyhjä tarkoittaa, ettei kirjauduta"
+
+[labels.fi.model.mail_server.field.password]
+label = "Salasana"
+description = "SMTP: salasana; vain kirjoitettava, tallennetaan salattuna, ei koskaan palauteta"
+
+[labels.fi.model.mail_server.field.password_set]
+label = "Salasana tallennettu"
+description = "SMTP: onko salasana tallennettu"
+
+[labels.fi.model.mail_server.field.connection]
+label = "Yhteys"
+description = "Palveluntarjoaja: liittimien yhteys, joka lähettää"
+
+[labels.fi.model.mail_server.field.from_address]
+label = "Lähettäjän osoite"
+description = "Tämän palvelimen jokaisen viestin lähettäjäosoite"
+
+[labels.fi.model.mail_server.field.from_name]
+label = "Lähettäjän nimi"
+description = "Vastaanottajalle näkyvä lähettäjän nimi"
+
+[labels.fi.model.mail_server.field.reply_to]
+label = "Vastausosoite"
+description = "Minne vastaukset menevät; tyhjä tarkoittaa lähettäjän osoitetta"
+
+[labels.fi.model.mail_server.field.footer]
+label = "Alatunniste"
+description = "Jokaisen viestin alle lisättävä teksti, kuten yrityksen tiedot tai miten viestit lopetetaan"
+
+[labels.fi.model.mail_server.field.last_test_at]
+label = "Viimeisin testi"
+description = "Milloin viimeisin testiviesti lähetettiin"
+
+[labels.fi.model.mail_server.field.last_test_result]
+label = "Viimeisimmän testin tulos"
+description = "Mitä palvelin vastasi viimeisimpään testiviestiin"
+
+[labels.fi.model.mail_server.field.test_recipient]
+label = "Testin vastaanottaja"
+description = "test_send-komennon syöte: testiviestin osoite; ei tallenneta"
+
+[labels.fi.model.mail_server.action.test_send]
+label = "Lähetä testi"
+description = "Lähetä nyt lyhyt testiviesti tämän palvelimen kautta osoitteeseen test_recipient ja tallenna vastaus"
+
+[labels.fi.model.mail_template]
+name = "Viestipohja"
+plural = "Viestipohjat"
+description = "Yhden viestilajin aihe ja teksti yhdellä kielellä, paikkamerkein (nimi kaksinkertaisissa aaltosulkeissa)"
+
+[labels.fi.model.mail_template.field.key]
+label = "Avain"
+description = "Viestilaji, jota pohja koskee, esim. invoice tai password_reset"
+
+[labels.fi.model.mail_template.field.language]
+label = "Kieli"
+description = "Tekstin kieli"
+
+[labels.fi.model.mail_template.field.language.options]
+en = "Englanti"
+de = "Saksa"
+fr = "Ranska"
+pl = "Puola"
+fi = "Suomi"
+sv = "Ruotsi"
+es = "Espanja"
+
+[labels.fi.model.mail_template.field.subject]
+label = "Aihe"
+description = "Aiherivi paikkamerkein (nimi kaksinkertaisissa aaltosulkeissa)"
+
+[labels.fi.model.mail_template.field.body]
+label = "Teksti"
+description = "Teksti paikkamerkein (nimi kaksinkertaisissa aaltosulkeissa)"

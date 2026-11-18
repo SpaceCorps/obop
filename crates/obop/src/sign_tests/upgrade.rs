@@ -1,5 +1,5 @@
 //! Upgrading `sign` from the version that is deployed today (0.2.0) to the one with the signer
-//! door (0.2.1; the bundled package is 0.2.5, see `history.rs` and `brand_words.rs`), on an
+//! door (0.2.1; the bundled package is 0.3.0, see `history.rs` and `brand_words.rs`), on an
 //! instance that already has records in every state. The two fixtures are copies of
 //! `packages/sign.toml` and `packages/documents.toml` as they were on `main` before D92; they are
 //! not edited.
@@ -170,10 +170,10 @@ async fn the_upgrade_from_0_2_0_is_additive_and_keeps_every_record() {
         .installer
         .install_outcome(&new_text, "marketplace", "test")
         .unwrap();
-    // The bundled package is 0.2.5 (0.2.2 added the switch `show_history`, 0.2.3 rewords one help,
-    // 0.2.4 adds the D95 hints, 0.2.5 the row rule and the manager's decline and expiry); the
+    // The bundled package is 0.3.0 (0.2.2 added the switch `show_history`, 0.2.3 rewords one help,
+    // 0.2.4 adds the D95 hints, 0.2.5 the row rule and the manager's decline and expiry, 0.3.0 the evidence check); the
     // upgrade from 0.2.0 still goes in one step.
-    assert_eq!(out.root.version, "0.2.5");
+    assert_eq!(out.root.version, "0.3.0");
 
     // Nothing was rewritten.
     assert_eq!(snapshot(&f, &requests), before);
@@ -710,4 +710,140 @@ async fn the_door_follows_a_rollback_and_an_update_made_by_another_process() {
         r.text()
     );
     assert_eq!(f.record("sign_request", &req)["state"], "signed");
+}
+
+/// docs/ISSUES.md O31: the upgrade as the Modules page runs it, the command `module.upgrade` (its
+/// plan, the lock and the migration steps, and not `installer.install`), on an instance that also
+/// has `sign_docuseal` 0.2.1 as deployed, which depends on `sign` `^0.2` and so does not accept
+/// `sign` 0.3.0: `sign` alone is refused with the reason, `sign_docuseal` goes first (its bundled
+/// version accepts 0.2 and 0.3), then `sign` (docs/SIGN.md, "Upgrade runbook", step 4).
+#[tokio::test]
+async fn module_upgrade_moves_sign_to_the_bundled_version_with_sign_docuseal_installed() {
+    let Old {
+        f,
+        requests,
+        template,
+    } = old_instance().await;
+    // `sign_docuseal` 0.2.1, the version instances have: the bundled text with the version and
+    // the range of 0.2.1.
+    let bundled = Bundled.fetch("sign_docuseal").unwrap();
+    let deployed = bundled
+        .replacen("version = \"0.2.2\"", "version = \"0.2.1\"", 1)
+        .replacen("sign = \">=0.2, <0.4\"", "sign = \"^0.2\"", 1);
+    assert_ne!(
+        deployed, bundled,
+        "the bundled sign_docuseal moved: update this test"
+    );
+    f.app
+        .installer
+        .install(&deployed, "marketplace", "test")
+        .expect("sign_docuseal 0.2.1 installs on sign 0.2.0");
+    let before = snapshot(&f, &requests);
+    let before_template = f.record("sign_template", &template);
+    // A plain user cannot ask for one.
+    let (s, v) = f
+        .api("sam", "/api/module/upgrade", json!({"id": "sign"}))
+        .await;
+    assert_ne!(s, 200, "{v}");
+    // `sign` alone would break `sign_docuseal` 0.2.1: refused, and the plan says why.
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/module_plan/preview",
+            json!({"id": "sign", "action": "upgrade"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert!(v.to_string().contains("would break sign_docuseal"), "{v}");
+    let (s, v) = f
+        .api("admin", "/api/module/upgrade", json!({"id": "sign"}))
+        .await;
+    assert_ne!(s, 200, "{v}");
+    assert!(v.to_string().contains("would break sign_docuseal"), "{v}");
+    assert_eq!(snapshot(&f, &requests), before, "nothing was changed");
+    // `sign_docuseal` first, then `sign`.
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/module/upgrade",
+            json!({"id": "sign_docuseal"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api("admin", "/api/module/upgrade", json!({"id": "sign"}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let version = |id: &str| {
+        f.app
+            .installer
+            .installed_manifests()
+            .remove(id)
+            .unwrap_or_else(|| panic!("{id} is installed"))
+            .module
+            .version
+    };
+    assert_eq!(version("sign"), "0.3.0");
+    assert_eq!(
+        version("sign_docuseal"),
+        obop_pkg::manifest::Manifest::parse(&Bundled.fetch("sign_docuseal").unwrap())
+            .unwrap()
+            .module
+            .version
+    );
+    // Nothing was rewritten, and the dependent module's model still answers.
+    assert_eq!(snapshot(&f, &requests), before);
+    assert_eq!(f.record("sign_template", &template), before_template);
+    let (s, v) = f
+        .api("admin", "/api/sign_docuseal_event/list", json!({}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    // A second call has nothing to do.
+    let (s, v) = f
+        .api("admin", "/api/module/upgrade", json!({"id": "sign"}))
+        .await;
+    assert_ne!(s, 200, "{v}");
+    assert!(v.to_string().contains("up to date"), "{v}");
+    // The door works on the upgraded instance: a request about a Document is sent and signed.
+    let (s, v) = f
+        .upload(
+            "mia",
+            "documents_document.attachment",
+            "application/pdf",
+            pdf(5),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    let file = v["id"].as_str().unwrap().to_string();
+    let (_, v) = f
+        .api(
+            "mia",
+            "/api/documents_document/create",
+            json!({"title": "NDA (test)", "kind": "contract", "confidentiality": "internal",
+                   "owner": "mia", "attachment": file}),
+        )
+        .await;
+    let doc = v["value"]["id"].as_str().unwrap().to_string();
+    let (_, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "New", "signer_name": "Jane Test", "document_id": doc}),
+        )
+        .await;
+    let new = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api("mia", "/api/sign_request/send_document", json!({"id": new}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (_, path) = f.mint("mia", &new).await;
+    let r = f
+        .post(
+            &path,
+            &ip(155),
+            &[("name", "Jane Test"), ("agree", "1"), ("doc", &file)],
+        )
+        .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(f.record("sign_request", &new)["state"], "signed");
 }

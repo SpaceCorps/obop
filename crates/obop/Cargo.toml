@@ -28,6 +28,7 @@ obop-ops.workspace = true
 obop-keys.workspace = true
 obop-media.workspace = true
 obop-payments.workspace = true
+obop-mail.workspace = true
 obop-platform.workspace = true
 obop-update.workspace = true
 obop-mcp.workspace = true

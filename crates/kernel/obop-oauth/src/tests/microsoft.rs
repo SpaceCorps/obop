@@ -144,33 +144,68 @@ fn the_words_of_a_failed_step_are_a_closed_set() {
     assert_eq!(crate::microsoft_key("anything else"), "err.ms_failed");
 }
 
+/// N5: the flow of an MCP client has the Microsoft step too, so that an account that signs in with
+/// Microsoft only can connect one; its grant has the same cap of 30 days as a phone's, on the page,
+/// at the decision and at the exchange of the code.
 #[test]
-fn only_a_mobile_apps_flow_has_a_microsoft_step() {
+fn an_mcp_clients_flow_has_a_microsoft_step_and_the_cap_of_a_microsoft_only_account() {
     let r = rig();
-    let (id, binder) = begun(&r, false);
-    let before = record(&r, &id).unwrap();
-    assert_eq!(r.o.microsoft_start(&id, &binder), Err(FlowError::Forbidden));
-    assert_eq!(
-        r.o.microsoft_done(&id, MicrosoftOutcome::Failed("failed".into())),
-        Err(FlowError::Forbidden)
-    );
-    assert_eq!(
-        r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed_in(&r, "ada"))),
-        Err(FlowError::Forbidden)
-    );
-    assert_eq!(
-        r.o.microsoft_return(&id, &binder, "10.0.0.2"),
-        Err(FlowError::Forbidden)
-    );
-    assert_eq!(record(&r, &id).unwrap(), before, "nothing was written");
-    // A mobile flow with a person on it has no Microsoft step to start either.
-    let (id, binder) = begun(&r, true);
+    let client = r.client();
+    let v =
+        r.o.validate_authorize(BASE, &r.params(&client, REDIRECT))
+            .unwrap();
+    let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
     assert!(r.o.microsoft_start(&id, &binder).is_ok());
-    r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed_in(&r, "ada")))
+    // A step that failed leaves the word, and the page says it.
+    r.o.microsoft_done(&id, MicrosoftOutcome::Failed("cancelled".into()))
         .unwrap();
+    assert_eq!(
+        r.o.microsoft_return(&id, &binder, "10.0.0.2").unwrap(),
+        LoginOut::Failed("err.ms_cancelled")
+    );
+    // Microsoft-only: the person the sign-in compared is seated, and the consent is offered with
+    // the cap.
+    // (The stand-in session of the sign-in is made with the password first.)
+    let ms = signed_in(&r, "ada");
+    let mut only = obop_storage::Fields::new();
+    only.insert("sso_only".into(), J::Bool(true));
+    r.backend.update("auth_user", "ada", &only).unwrap();
+    r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(ms))
+        .unwrap();
+    assert_eq!(
+        r.o.microsoft_return(&id, &binder, "10.0.0.2").unwrap(),
+        LoginOut::Consent
+    );
+    let view = r.o.view_plain(&id, &binder).unwrap();
+    assert_eq!((view.user.as_deref(), view.max_days), (Some("ada"), 30));
+    // A person on the flow has no Microsoft step to start, and another browser's secret does not
+    // open it.
     assert_eq!(r.o.microsoft_start(&id, &binder), Err(FlowError::Forbidden));
-    // Another browser's secret does not open the flow.
     assert!(r.o.microsoft_start(&id, "not-the-binder").is_err());
+    // A form posted by hand for 90 days is refused, 30 is taken.
+    let csrf = view.csrf.clone();
+    let groups = vec!["sales.user".to_string()];
+    assert!(matches!(
+        r.o.decide(BASE, &id, &binder, &csrf, true, &groups, 90)
+            .unwrap(),
+        DecideOut::Retry("err.expiry_cap")
+    ));
+    let DecideOut::Redirect(loc) =
+        r.o.decide(BASE, &id, &binder, &csrf, true, &groups, 30)
+            .unwrap()
+    else {
+        panic!("no redirect");
+    };
+    let t = r
+        .exchange(&client, &query(&loc, "code"), &verifier(), REDIRECT)
+        .unwrap();
+    assert!(t["access_token"].is_string());
+    let grants = r.backend.list("oauth_grant").unwrap();
+    assert_eq!(grants.len(), 1);
+    let g = &grants[0].1;
+    assert!(g.get("class").is_none_or(|c| c == "mcp"), "{g:?}");
+    let lasts = g["expires_at"].as_u64().unwrap() - g["created_at"].as_u64().unwrap();
+    assert_eq!(lasts, 30 * 86_400);
 }
 
 #[test]

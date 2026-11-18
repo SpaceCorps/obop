@@ -1723,6 +1723,7 @@ async fn a_forged_header_cannot_start_a_field_of_the_log_line() {
             "document",
             "consent",
             "digest",
+            "wording",
             "address",
             "peer",
             "forwarded"
