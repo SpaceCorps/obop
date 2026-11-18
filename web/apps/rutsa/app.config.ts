@@ -72,6 +72,26 @@ const config: ExpoConfig = {
     // SQLCipher: the routes are encrypted on the phone. `core/open-db.ts` checks
     // `PRAGMA cipher_version` at every start and refuses to run on plain SQLite.
     ["expo-sqlite", { useSQLCipher: true }],
+    [
+      "expo-location",
+      {
+        // A trip is started with a tap (docs/spec/mobile.md 4.2): a foreground service of type
+        // location, started while the app is visible, keeps it recording with the screen off and
+        // needs no ACCESS_BACKGROUND_LOCATION. Automatic start (stage 4) would need it.
+        isAndroidForegroundServiceEnabled: true,
+        isAndroidBackgroundLocationEnabled: false,
+        // iOS: adds the background mode `location` and nothing else; it does not ask for "Always".
+        // Without the mode a recording cannot start (ERR_LOCATION_UPDATES_UNAVAILABLE).
+        isIosBackgroundLocationEnabled: true,
+        // The texts of "Always", motion and a temporary full accuracy are left out: the app asks
+        // for none of them. As in the Mileage app.
+        locationAlwaysAndWhenInUsePermission: false,
+        locationAlwaysPermission: false,
+        motionUsagePermission: false,
+        locationFullAccuracyPermission: false,
+        locationWhenInUsePermission: NATIVE_TEXTS.en.locationWhenInUse,
+      },
+    ],
   ],
 };
 

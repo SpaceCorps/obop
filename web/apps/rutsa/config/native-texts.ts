@@ -11,6 +11,11 @@ export type NativeLanguage = "en";
 export interface NativeTexts {
   /** The name under the icon: `CFBundleDisplayName` on iOS, `app_name` on Android. */
   appName: string;
+  /**
+   * `NSLocationWhenInUseUsageDescription`: the text of the iOS dialog that asks for the location.
+   * Android's dialog has a text of its own.
+   */
+  locationWhenInUse: string;
 }
 
 export const DEFAULT_LANGUAGE: NativeLanguage = "en";
@@ -18,5 +23,7 @@ export const DEFAULT_LANGUAGE: NativeLanguage = "en";
 export const NATIVE_TEXTS: Readonly<Record<NativeLanguage, NativeTexts>> = {
   en: {
     appName: "Rutsa",
+    locationWhenInUse:
+      "Rutsa records the route of a trip you start, to measure its distance. It keeps recording while the screen is off, until you stop the trip. The route stays on this phone.",
   },
 };

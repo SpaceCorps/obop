@@ -108,10 +108,12 @@ Before C: JDK 17, the Android SDK and the emulator installed (list in `docs/spec
       app); plugins of `expo-sqlite` (SQLCipher) and
       `expo-secure-store` (no Face ID text). After `mileage-app` without the session and the
       server
-- [ ] C2 `feat(rutsa): location permissions`: `core/liveness.ts` (readiness: permission, precise
-      location, location services) and its tests, `native/permissions.ts`; the text of the iOS
-      location dialog in `config/native-texts.ts`; plugin of `expo-location` (foreground service,
-      background mode `location`, "while using" only)
+- [x] C2 `feat(rutsa): location permissions`: `core/liveness.ts` (readiness: permission, precise
+      location, location services) and its tests, `native/permissions.ts` (the cases of location
+      access, the system dialog, the notification permission of Android 13 for the recording's
+      notification, the app's page in the settings); the text of the iOS location dialog in
+      `config/native-texts.ts`; plugin of `expo-location` (foreground service, background mode
+      `location`, "while using" only)
 - [ ] C3 `feat(rutsa): background location task`: `native/config.ts` (task name), `native/bus.ts`
       (change signal), `native/task.ts` imported in `index.ts` before the app is registered;
       `RECEIVE_BOOT_COMPLETED` on Android; the unused `fetch` mode removed on iOS
@@ -237,3 +239,6 @@ D23).
   or a password, before the release); not built in this stage.
 - 2026-11-18: `docs/spec/rutsa.md` gained BR-36 and US-18 (the app without location: a reason for
   each case, Open Settings and Close, a new check on coming back); D2 builds them.
+- 2026-11-18: C2 asks for the notification permission of Android 13 too (`requestNotifications`,
+  from `mileage-app`), which the plan had left out: without it the notification of BR-14 is not
+  shown.
