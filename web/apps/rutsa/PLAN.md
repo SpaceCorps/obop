@@ -78,9 +78,10 @@ Checkpoint: `vp check` and `vp test` pass.
 - [x] B5 `feat(rutsa): trip repository`: `core/repository.ts`, one interface (start, the active
       trip, add points, pause, resume, stop, add by hand, get, list, points, delete) and its
       errors (already active, not found, wrong state), so a server can be added later
-- [ ] B6 `feat(rutsa): local trip store`: `core/sql-store.ts`; one active trip at most; ids from a
-      generator the caller passes in; at Stop the distance is `analyseTrack` of `@obop/trip-core`
-      per segment (a pause starts a new segment, so the gap is not counted); tests
+- [x] B6 `feat(rutsa): local trip store`: `core/sql-store.ts` over a migrated database; one active
+      trip at most; ids from a generator the caller passes in; fixes chosen by `acceptFixes` in the
+      transaction of the write; at Stop the distance is `analyseTrack` of `@obop/trip-core` per
+      segment (a pause starts a new segment, so the gap is not counted); tests
 - [ ] B7 `feat(rutsa): totals and formatting`: `core/present.ts` (km, duration, trips by day,
       today and this month; times are stored in UTC, days follow the phone's time zone) and tests
 - [ ] B8 `feat(rutsa): English texts`: `i18n/index.ts`, `i18n/en.ts` (the notification of C4 and
@@ -207,3 +208,6 @@ D23).
   only writes what it returns; not taken: `thinningFor` (a switch of the owner's test builds).
 - 2026-11-18: B5 names the active trip and the points of a trip too; every time is given by the
   caller, so B6 tests exact times.
+- 2026-11-18: B6 refuses a typed trip that ends before it starts or has a distance below 0 with a
+  `RangeError` (D7 checks the input first); a Stop at a time before the start (a clock set back)
+  ends the trip at its start.
