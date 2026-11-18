@@ -565,7 +565,8 @@ async fn rule1_the_catalogue_and_the_openapi_document_of_each_principal_agree_af
 /// ISSUES V16, unchanged by main's N18, K19 and L16 (which end more agent tokens: on an unbinding,
 /// on "Microsoft only", after 90 days, and those made during a revocation): a waiting plan names
 /// its agent `{owner}/agent`, not the token, so ending the token that proposed it leaves the plan
-/// to be decided by a person. The token itself can no longer read it. When V16 is closed this
+/// to be decided by a person. The token itself can no longer read it; another agent token of the
+/// same person still can (V7, V17). When V16 is closed this
 /// test is the one to turn around.
 #[tokio::test]
 async fn v16_a_revoked_agent_token_leaves_its_waiting_plan_to_a_person() {
@@ -587,6 +588,12 @@ async fn v16_a_revoked_agent_token_leaves_its_waiting_plan_to_a_person() {
     assert_eq!(s, 200, "{b}");
     let (s, _) = post(r, Some(&agent), "/api/plan/get", json!({"id": plan})).await;
     assert_eq!(s, 401, "the ended token reads nothing");
+    // But every agent token of one person is the one principal `{owner}/agent` (V7, V17): another
+    // token of ada, also one made after the revocation, still reads the plan by its id.
+    let sibling = agent_token(r, &ada).await;
+    let (s, b) = post(r, Some(&sibling), "/api/plan/get", json!({"id": plan})).await;
+    assert_eq!(s, 200, "a sibling token reads it: {b}");
+    assert_eq!(b["value"]["status"], "waiting", "{b}");
     let (_, b) = post(r, Some(&ada), "/api/plan/list", json!({})).await;
     assert_eq!(b["value"]["total"], 1, "the plan still waits: {b}");
     // A person approves it and the erase it proposed runs (the answer is the command's own).
