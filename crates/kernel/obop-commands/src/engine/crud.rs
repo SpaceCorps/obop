@@ -384,6 +384,7 @@ pub(crate) fn system_error(def: &ModelDef, name: &str) -> String {
 pub(crate) fn create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Value> {
     let actor = Actor::from_input(input);
     let given = declared_fields(def, input)?;
+    crate::blobs::check_write_groups(def, &mut given.keys(), &actor)?;
     if let Some(k) = given.keys().find(|k| def.is_system_field(k)) {
         return Err(system_error(def, k));
     }
@@ -442,6 +443,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     let look = lookup_fn(eng);
     let mut unit = eng.unit();
     let cur = Gate::new(&unit, &look, &actor).load(def, &id)?;
+    crate::blobs::check_write_groups(def, &mut given.keys(), &actor)?;
     let mut patch = to_fields(&given);
     if implied::asking() {
         // The dispatcher only asks whether the call is mixed (`implied::ask`): before it stores

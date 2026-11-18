@@ -409,14 +409,17 @@ async fn meta_says_the_limit_of_every_field_that_has_one() {
         (d["min"].clone(), d["max"].clone()),
         (json!("0.1000000"), json!("0.9000000"))
     );
-    // Every writable text field of every model says its maximum; no other kind does.
+    // Every writable text field of every model says its maximum; no other kind does. A model
+    // that has no create and no update (the module list, the security log) is output only and
+    // states no limit, since nothing enforces one there (K44 b).
     let mut texts = 0;
     for m in meta["modules"].as_array().unwrap() {
         for d in m["models"].as_array().unwrap() {
+            let writable = d["can_create"] == true || d["can_update"] == true;
             for f in d["fields"].as_array().unwrap() {
                 let kind = f["kind"].as_str().unwrap();
                 let system = f["computed"] == true || f["sequence"] == true;
-                if matches!(kind, "text" | "longtext") && !system {
+                if matches!(kind, "text" | "longtext") && !system && writable {
                     texts += 1;
                     let max = f["max_length"].as_u64();
                     assert!(

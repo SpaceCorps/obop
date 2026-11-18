@@ -713,9 +713,14 @@ impl Dispatcher {
                 };
                 actions.sort_by(|a, b| (place(&a.id), &a.id).cmp(&(place(&b.id), &b.id)));
                 let mtr = m.translations.models.get(name.as_str());
-                // Whether the generated `create` and `update` write this model's fields, which is
-                // where the field limits are checked (D90).
-                let written = m.generated_writes;
+                // Whether anything takes this model's fields as input: the generated `create` and
+                // `update` (where the field limits are checked, D90), or a `create` or `update` of
+                // its own. A model with neither (the module list, the security log) is output
+                // only, and states no limit that nothing would hold (K44 b).
+                let written = m.generated_writes
+                    || ["create", "update"]
+                        .iter()
+                        .any(|c| cmds.contains_key(&format!("{name}.{c}")));
                 infos.push(ModelInfo {
                     ui: m.def.ext.ui.clone(),
                     children: {

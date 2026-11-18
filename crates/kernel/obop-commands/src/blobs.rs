@@ -447,14 +447,6 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
             return Ok(Verdict::default());
         };
         for f in blob_fields(&def) {
-            // The group of a file field gates its upload; it gates setting, replacing and
-            // clearing it too (K55), not only reading it.
-            if m.contains_key(f.name) && !p.allows(f.permission_group) {
-                return Err(format!(
-                    "{}.{} can be changed only by a holder of {}",
-                    def.name, f.name, f.permission_group
-                ));
-            }
             let Some(Value::Text(id)) = m.get(f.name) else {
                 continue;
             };
@@ -486,6 +478,30 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
         }
         Ok(Verdict::default())
     }))
+}
+
+/// K55 (c): the group of an image or file field gates setting, replacing and clearing it, as it
+/// gates its upload, not only reading it. Run by the generated `create`, `update` and each row of
+/// `bulk_create`, after the guards (a module's own refusal of a field it owns comes first).
+pub(crate) fn check_write_groups(
+    def: &ModelDef,
+    sent: &mut dyn Iterator<Item = &String>,
+    actor: &Actor,
+) -> Result<(), String> {
+    if actor.admin {
+        return Ok(());
+    }
+    for k in sent {
+        if let Some(f) = blob_fields(def).into_iter().find(|f| f.name == k.as_str())
+            && !actor.groups.contains(f.permission_group)
+        {
+            return Err(format!(
+                "{}.{} can be changed only by a holder of {}",
+                def.name, f.name, f.permission_group
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn owner_of(def: &ModelDef, record: &str, field: &str, filename: &str) -> Owner {
