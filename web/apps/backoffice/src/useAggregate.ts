@@ -340,7 +340,7 @@ export function useReportRows(opts: {
           }),
     // `version` brings the rows a `currency_from` path reads; the keys stand for the query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [opts.server, got.groups, opts.rows, dimKey, measureRef(measure), model, d.version, d.lang],
+    [opts.server, got.groups, opts.rows, dimKey, measureRef(measure), model, d.version],
   );
   if (!opts.server)
     return {

@@ -468,7 +468,7 @@ function WhatChanges({ plan, names, record }: { plan: PlanDetail; names: Names; 
       : null;
   const rows = (plan.rows ?? []) as (PlanChange[] | null)[];
   const pair = (c: PlanChange): ReactNode => {
-    const f = names.field(plan.model, c.field);
+    const f = names.fieldOf(plan.model, c.field);
     return (
       <div key={c.field} className="appr-change" data-field={c.field}>
         <dt>{f.title}</dt>
@@ -529,7 +529,7 @@ function WhatChanges({ plan, names, record }: { plan: PlanDetail; names: Names; 
     <dl className="appr-changes">
       {transition &&
         (() => {
-          const f = names.field(plan.model, transition.field ?? "");
+          const f = names.fieldOf(plan.model, transition.field ?? "");
           return (
             <div className="appr-change" data-field={transition.field}>
               <dt>{f.title}</dt>

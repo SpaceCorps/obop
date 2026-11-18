@@ -10,10 +10,12 @@ import { actionTitle, fieldTitle, fieldTitleByName, modelTitle } from "../labels
 import type { PlanFail, PlanRow } from "./planApi.ts";
 
 /** The labels the page reads from `/api/meta`; a model the person cannot open is named from its id. */
+// `fieldOf`, not `field`: the language guard (i18nGuard.ts) takes a member named like a translating
+// function declared inside another one (`d.field` of a report's dimension) for a use of it.
 export type Names = {
   model: (model: string) => string;
   action: (command: string) => string;
-  field: (model: string, field: string) => { title: string; meta?: FieldMeta };
+  fieldOf: (model: string, field: string) => { title: string; meta?: FieldMeta };
 };
 
 export function namesFrom(models: Map<string, ModelInfo>): Names {
@@ -27,7 +29,7 @@ export function namesFrom(models: Map<string, ModelInfo>): Names {
       const c = models.get(model)?.model.actions.find((a) => a.id === command);
       return c ? actionTitle(c) : actionTitle({ id: `${model}.${act}` });
     },
-    field: (model, name) => {
+    fieldOf: (model, name) => {
       const meta = models.get(model)?.model.fields.find((f) => f.name === name);
       return meta ? { title: fieldTitle(meta), meta } : { title: fieldTitleByName(name) };
     },

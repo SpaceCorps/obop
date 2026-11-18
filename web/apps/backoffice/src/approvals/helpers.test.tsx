@@ -128,7 +128,7 @@ describe("the words", () => {
   const names: Names = {
     model: (m) => (m === "invoice" ? "Invoice" : "Contact"),
     action: (c) => (c === "invoice.post" ? "Post" : "Archive"),
-    field: (_m, f) => ({ title: f }),
+    fieldOf: (_m, f) => ({ title: f }),
   };
   const row = (over: Partial<PlanRow>): PlanRow => ({
     id: "01HZX9PLANIDXYZ",
