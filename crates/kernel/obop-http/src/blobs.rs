@@ -231,10 +231,12 @@ pub async fn download(
             return error(StatusCode::NOT_FOUND, "not found");
         };
         match svc.get(&p, &id, width) {
-            // Content addressed, so the URL never changes meaning; `private` keeps shared caches
-            // from handing it to someone else.
+            // Content addressed, so the URL never changes meaning, but who may read it does (the
+            // row rules of the record that holds it, K53): `no-cache` makes the browser ask again
+            // on every use, and the read gate above runs before a 304 is answered, so a person
+            // who lost the record loses the file. `private` keeps shared caches out of it.
             Ok(served) => {
-                let mut r = blob_response(served, &headers, "private, max-age=31536000, immutable");
+                let mut r = blob_response(served, &headers, "private, no-cache");
                 r.headers_mut()
                     .insert(header::VARY, HeaderValue::from_static("Authorization"));
                 r

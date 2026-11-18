@@ -263,7 +263,7 @@ Each item is PROPOSED. Size classes are a reading of the files touched. They are
 **6.4 Blob routes for phones. Size M. Needs an owner ruling first (D64 amendment, a sentence in D60).**
 
 - Today: refused (`obop-http/src/blobs.rs:69,174`). `main:docs/DEPLOY.md:366` states the refusal as intended. PR 50 changed the command-layer blob gate (`obop-commands/src/blobs.rs`), not these routes.
-- Change: the two handlers accept the `/api` audience (`auth_api`). Decide the cache header: blobs are served with `private, max-age=31536000, immutable` (`blobs.rs:192`), so a WebView or HTTP cache could keep a file after sign-out. PROPOSED: `no-store` for phone principals.
+- Change: the two handlers accept the `/api` audience (`auth_api`). Decide the cache header: blobs are served with `private, no-cache` and an ETag (since 2026-11-18, K53), so a cache revalidates each use, but a WebView or HTTP cache still keeps the bytes after sign-out. PROPOSED: `no-store` for phone principals.
 - The Mileage module needs none of this (no files). A module that handles files, for example an attachment, would. Image handling beyond the routes is not proposed here.
 
 **6.5 Idempotency beyond `bulk_create`. No server change in the first release.**

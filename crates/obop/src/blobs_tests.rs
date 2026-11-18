@@ -172,12 +172,12 @@ async fn upload_attach_download_and_thumbnail_over_http() {
         f.app.store.blobs().info(&id).unwrap().unwrap().owners.len(),
         1
     );
-    // Download: right type, long private cache, hash validator, nosniff, sandboxed.
+    // Download: right type, a private copy that is revalidated on every use (so a reader who
+    // loses the record loses the file too: K53, O12), hash validator, nosniff, sandboxed.
     let (s, body, h) = download(&f, Some(&f.admin), &format!("/api/blobs/{id}")).await;
     assert_eq!(s, 200);
     assert_eq!(h["content-type"], "image/png");
-    assert!(h["cache-control"].to_str().unwrap().contains("private"));
-    assert!(h["cache-control"].to_str().unwrap().contains("immutable"));
+    assert_eq!(h["cache-control"], "private, no-cache");
     assert_eq!(h["x-content-type-options"], "nosniff");
     assert!(
         h["content-security-policy"]
@@ -200,8 +200,18 @@ async fn upload_attach_download_and_thumbnail_over_http() {
         .header("if-none-match", format!("\"{id}\""))
         .body(Body::empty())
         .unwrap();
-    let (s, body, _) = send(&f.router, r).await;
+    let (s, body, h) = send(&f.router, r).await;
     assert_eq!((s, body.len()), (304, 0));
+    assert_eq!(h["cache-control"], "private, no-cache");
+    // The revalidation passes the read gate first: a caller who may not read the record holding
+    // the file gets 404, never a 304 that would let a cached copy show.
+    let r = Request::get(format!("/api/blobs/{id}"))
+        .header("authorization", format!("Bearer {}", f.outsider))
+        .header("if-none-match", format!("\"{id}\""))
+        .body(Body::empty())
+        .unwrap();
+    let (s, _, _) = send(&f.router, r).await;
+    assert_eq!(s, 404);
     // Thumbnails: fixed widths only.
     let (s, small, h) = download(&f, Some(&f.admin), &format!("/api/blobs/{id}?w=320")).await;
     assert_eq!(s, 200);
