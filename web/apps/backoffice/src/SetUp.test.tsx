@@ -281,3 +281,29 @@ describe("the answers of the server", () => {
     expect(button("Create the administrator").disabled).toBe(true);
   });
 });
+
+describe("a switch of the language words the messages again (D9)", () => {
+  const WRONG =
+    "The set-up code is not right, or it has run out. Check the log of the server, or restart it to print a new code.";
+  const DIFFER = "The two passwords are not the same.";
+  beforeEach(() => provideCatalogue("de", { [WRONG]: "Code falsch (de)", [DIFFER]: "Ungleich (de)" }));
+
+  it("the refusal of the server", async () => {
+    answer = () => json(403, { code: "setup_code_invalid" });
+    await show();
+    await fill();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(WRONG);
+    await act(async () => setLanguage("de", false));
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Code falsch (de)");
+    expect(text()).not.toContain(WRONG);
+  });
+
+  it("a message under a field", async () => {
+    await show();
+    await fill({ repeat: "another long password 2" });
+    expect(text()).toContain(DIFFER);
+    await act(async () => setLanguage("de", false));
+    expect(text()).toContain("Ungleich (de)");
+    expect(text()).not.toContain(DIFFER);
+  });
+});

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { InstanceLogo, LanguageSelect, t, twoFactorMessage, useI18n } from "@obop/ui";
+import {
+  InstanceLogo,
+  LanguageSelect,
+  t,
+  twoFactorMessage,
+  useI18n,
+  type Wording,
+} from "@obop/ui";
 import { setupCreate, type LoginResult } from "./api.ts";
 import { storageFaultMessage } from "./serverMessage.ts";
 import { Button, Input, Notice } from "./ui.tsx";
@@ -12,39 +19,43 @@ type Field = "instance_name" | "username" | "password" | "repeat";
 
 /**
  * What the person is told for a refusal of the server. With `field`, the sentence belongs to that
- * field: it is shown under it and the field takes the focus.
+ * field: it is shown under it and the field takes the focus. Kept as how to word it, not as a
+ * finished sentence, so a switch of the language on this page words it again (D9).
  */
-type Failure = { text: string; closed?: boolean; needsKey?: boolean; field?: Field };
+type Failure = { word: Wording; closed?: boolean; needsKey?: boolean; field?: Field };
 
 export function setupFailure(r: Extract<LoginResult, { kind: "error" }>): Failure {
   if (r.status === 403 && r.code === "setup_code_invalid")
     return {
-      text: t(
-        "The set-up code is not right, or it has run out. Check the log of the server, or restart it to print a new code.",
-      ),
+      word: () =>
+        t(
+          "The set-up code is not right, or it has run out. Check the log of the server, or restart it to print a new code.",
+        ),
     };
-  if (r.status === 429) return { text: t("Too many attempts. Wait a few minutes and try again.") };
+  if (r.status === 429)
+    return { word: () => t("Too many attempts. Wait a few minutes and try again.") };
   if (r.status === 409 && r.code === "setup_closed")
     return {
-      text: t("This instance already has an administrator. Sign in with that account."),
+      word: () => t("This instance already has an administrator. Sign in with that account."),
       closed: true,
     };
-  if (r.code === "setup_needs_secret_key") return { text: needsKeyText(), needsKey: true };
-  const busy = storageFaultMessage(r.status, r.code);
-  if (busy) return { text: busy };
+  if (r.code === "setup_needs_secret_key") return { word: needsKeyText, needsKey: true };
+  if (storageFaultMessage(r.status, r.code))
+    return { word: () => storageFaultMessage(r.status, r.code) ?? "" };
   // The instance name is the one input the form cannot check itself (the brand's rules): the
   // server gives it a code of its own. The server's own sentence is English and names a rule, so
   // it is never shown.
   if (r.status === 400 && r.code === "setup_instance_name_invalid")
     return {
-      text: t(
-        "This name of the instance cannot be used. Choose a plain name, or leave the field empty.",
-      ),
+      word: () =>
+        t(
+          "This name of the instance cannot be used. Choose a plain name, or leave the field empty.",
+        ),
       field: "instance_name",
     };
-  if (r.status === 400) return { text: t("Check what you entered and try again.") };
+  if (r.status === 400) return { word: () => t("Check what you entered and try again.") };
   return {
-    text: twoFactorMessage({ status: r.status, code: r.status === 0 ? "network" : r.code }),
+    word: () => twoFactorMessage({ status: r.status, code: r.status === 0 ? "network" : r.code }),
   };
 }
 
@@ -75,7 +86,8 @@ export function SetUp({
 }) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
-  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
+  // Field messages are kept as how to word them too (D9).
+  const [errors, setErrors] = useState<Partial<Record<Field, Wording>>>({});
   const [needsKey, setNeedsKey] = useState(needsSecretKey);
   const alert = useRef<HTMLDivElement>(null);
   const i18n = useI18n();
@@ -91,12 +103,12 @@ export function SetUp({
     const value = (k: string) => String(f.get(k) ?? "");
     const username = value("username").trim();
     const password = value("password");
-    const found: Partial<Record<Field, string>> = {};
+    const found: Partial<Record<Field, Wording>> = {};
     if (!USERNAME.test(username))
-      found.username = t("The username may only use letters, digits and . _ - @");
+      found.username = () => t("The username may only use letters, digits and . _ - @");
     if ([...password].length < MIN_PASSWORD)
-      found.password = t("The password must be at least 12 characters.");
-    if (password !== value("repeat")) found.repeat = t("The two passwords are not the same.");
+      found.password = () => t("The password must be at least 12 characters.");
+    if (password !== value("repeat")) found.repeat = () => t("The two passwords are not the same.");
     setErrors(found);
     setFailure(null);
     const first = (["username", "password", "repeat"] as const).find((k) => found[k]);
@@ -118,10 +130,10 @@ export function SetUp({
       const why = setupFailure(r);
       if (why.needsKey) setNeedsKey(true);
       if (why.field) {
-        setErrors({ [why.field]: why.text });
+        setErrors({ [why.field]: why.word });
         form.querySelector<HTMLInputElement>(`[name="${why.field}"]`)?.focus();
       } else setFailure(why);
-    } else setFailure({ text: twoFactorMessage({ status: 0, code: "" }) });
+    } else setFailure({ word: () => twoFactorMessage({ status: 0, code: "" }) });
   }
 
   const off = needsKey;
@@ -160,7 +172,7 @@ export function SetUp({
         maxLength={120}
         disabled={off}
         autoFocus={!off}
-        error={errors.instance_name}
+        error={errors.instance_name?.()}
       />
       <Input
         label={t("Set-up code")}
@@ -184,7 +196,7 @@ export function SetUp({
         spellCheck={false}
         required
         disabled={off}
-        error={errors.username}
+        error={errors.username?.()}
       />
       <Input
         label={t("Password")}
@@ -194,7 +206,7 @@ export function SetUp({
         autoComplete="new-password"
         required
         disabled={off}
-        error={errors.password}
+        error={errors.password?.()}
       />
       <Input
         label={t("Repeat the password")}
@@ -203,13 +215,13 @@ export function SetUp({
         autoComplete="new-password"
         required
         disabled={off}
-        error={errors.repeat}
+        error={errors.repeat?.()}
       />
       {failure && (
         <div ref={alert} tabIndex={-1} className="setup-alert">
           <Notice
             tone="danger"
-            title={failure.text}
+            title={failure.word()}
             action={
               failure.closed ? <Button onClick={onClosed}>{t("Go to sign in")}</Button> : undefined
             }
