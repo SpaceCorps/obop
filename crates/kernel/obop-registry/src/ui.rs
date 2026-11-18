@@ -132,6 +132,9 @@ pub struct ModelUi {
     pub report: Option<ReportUi>,
     pub sections: Vec<UiSection>,
     pub filters: Vec<UiFilter>,
+    /// The label of one of `filters` that a list applies when it is opened with no search of its
+    /// own (R5); the person can remove it like any filter. A hint only.
+    pub default_filter: Option<String>,
     /// Where a record is seen on the public site: `/blog/{slug}`.
     pub public_url: Option<String>,
     /// Declared children, added to those the `resolve_child` rule finds.
@@ -158,6 +161,10 @@ pub struct FieldUi {
     pub hidden: bool,
     /// `journal_id.currency` or `currency`: where a money field's currency comes from.
     pub currency_from: Option<String>,
+    /// A condition on the saved record (the part of the expression language the browser evaluates,
+    /// `expr::check_display_subset`) while which the form shows the field read-only (R6). A hint
+    /// only: the server answers as it always did, and the rule it holds is the module's own.
+    pub readonly_when: Option<String>,
 }
 
 impl FieldUi {
@@ -604,6 +611,13 @@ impl FieldDef {
         self
     }
 
+    /// `[model.field.ui] readonly_when`: the form shows the field read-only while `source` holds
+    /// on the saved record (a new record is never held by it).
+    pub fn readonly_when(mut self, source: &str) -> Self {
+        self.hints_mut().ui.readonly_when = Some(source.trim().to_string());
+        self
+    }
+
     /// Whether the server alone sets the field (`readonly`).
     pub fn is_readonly(&self) -> bool {
         self.hints.as_ref().is_some_and(|h| h.readonly)
@@ -1004,6 +1018,14 @@ fn check_model(g: &mut Gate<'_>, model: &ModelDef) {
             }
         }
         g.one_of(&at, "default_view", &ui.default_view, &VIEW_HINTS);
+        if let Some(d) = &ui.default_filter
+            && !ui.filters.iter().any(|f| &f.label == d)
+        {
+            g.bad(
+                &at,
+                format!("default_filter {d:?} must be the label of one of the model's [[model.ui.filter]]"),
+            );
+        }
         g.one_of(&at, "menu", &ui.menu, &MENU_PLACES);
         g.text(&at, "menu_section", &ui.menu_section, 40);
         if ui.menu_order.is_some_and(|n| !(-1000..=1000).contains(&n)) {
@@ -1327,6 +1349,9 @@ fn check_field(
             g.bad(fp, "warn_before_days must be from 1 to 365".into());
         }
     }
+    if let Some(src) = &ui.readonly_when {
+        check_readonly_when(g, model, f, h, fp, src);
+    }
     if let Some(c) = &ui.currency_from {
         if !matches!(f.kind, FieldKind::Money | FieldKind::Decimal { .. }) {
             g.bad(fp, "currency_from is for a money or decimal field".into());
@@ -1352,6 +1377,53 @@ impl DefaultSpec {
             DefaultLit::Int(n) => n.to_string(),
             DefaultLit::Bool(b) => b.to_string(),
         }
+    }
+}
+
+/// `readonly_when`: a true/false condition over fields of the same record, inside the part of the
+/// language the browser evaluates, on a field a person could edit (not one the server sets).
+fn check_readonly_when(
+    g: &mut Gate<'_>,
+    model: &ModelDef,
+    f: &FieldDef,
+    h: &FieldHints,
+    fp: &str,
+    src: &str,
+) {
+    if f.computed.is_some() || f.sequence.is_some() || h.readonly {
+        g.bad(
+            fp,
+            "readonly_when is for a field a person edits, not a computed, numbered or readonly one"
+                .into(),
+        );
+        return;
+    }
+    if src.is_empty() || src.chars().count() > 400 {
+        g.bad(fp, "readonly_when must be 1 to 400 characters".into());
+        return;
+    }
+    let e = match crate::expr::Expr::parse_viewer(src) {
+        Ok(e) => e,
+        Err(e) => return g.bad(fp, format!("readonly_when `{src}`: {e}")),
+    };
+    if let Err(e) = crate::expr::check_display_subset(&e, model) {
+        return g.bad(fp, format!("readonly_when `{src}`: {e}"));
+    }
+    let scope = crate::expr::Scope {
+        model,
+        lookup: g.lookup,
+        allow_computed: true,
+    };
+    match crate::expr::check(&e, &scope) {
+        Err(e) => g.bad(fp, format!("readonly_when `{src}`: {e}")),
+        Ok(crate::expr::Ty::Bool) => {}
+        Ok(t) => g.bad(
+            fp,
+            format!(
+                "readonly_when `{src}` is {}; it must be a comparison or other true/false expression",
+                t.name()
+            ),
+        ),
     }
 }
 

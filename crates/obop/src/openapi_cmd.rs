@@ -53,6 +53,8 @@ pub fn value() -> J {
         .collect();
     let plans: Vec<&str> = plans.iter().map(String::as_str).collect();
     obop_http::openapi::describe_plans(&mut doc, &plans);
+    let others = app.dispatcher.commands_outside_meta(Surface::Rest, &caller);
+    obop_http::openapi::describe_commands(&mut doc, &others);
     obop_http::openapi::describe_oauth(&mut doc, BASE_URL);
     doc
 }

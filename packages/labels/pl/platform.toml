@@ -1,5 +1,6 @@
 [labels.pl.module]
 name = "Dostosowanie"
+summary = "Dostosuj instancję: motyw, aplikacje, moduły i marketplace."
 
 [labels.pl.model.module]
 name = "Moduł"

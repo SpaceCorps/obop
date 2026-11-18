@@ -390,7 +390,7 @@ fn normalise(
     };
     let provider = rt
         .provider(&provider_id)
-        .ok_or_else(|| format!("unknown provider {provider_id:?}"))?;
+        .ok_or_else(|| unknown_provider(rt, &provider_id))?;
     let me = owner_id(p);
 
     if creating {
@@ -544,6 +544,20 @@ fn connection_input(rt: Arc<Runtime>, create: bool) -> Guard {
     })
 }
 
+/// The refusal of a provider the catalogue does not have, with the ids it does have and their
+/// names, so a person or an agent who typed a name sees what to pick (GitHub issue 108).
+fn unknown_provider(rt: &Runtime, id: &str) -> String {
+    let choices: Vec<String> = rt
+        .providers()
+        .iter()
+        .map(|p| format!("{} ({})", p.id, p.name))
+        .collect();
+    format!(
+        "unknown provider {id:?}; pick one of the catalogue: {}",
+        choices.join(", ")
+    )
+}
+
 fn provider_policy_input(rt: Arc<Runtime>, create: bool) -> Guard {
     Box::new(move |_, input| {
         let mut m = map(input)?.clone();
@@ -551,7 +565,7 @@ fn provider_policy_input(rt: Arc<Runtime>, create: bool) -> Guard {
         if create || has(&m, "provider") {
             let id = txt(&m, "provider");
             if rt.provider(id).is_none() {
-                return Err(format!("unknown provider {id:?}"));
+                return Err(unknown_provider(&rt, id));
             }
             let taken = rt
                 .backend

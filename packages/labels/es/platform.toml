@@ -1,5 +1,6 @@
 [labels.es.module]
 name = "Personalizar"
+summary = "Personaliza la instancia: tema, aplicaciones, módulos y el marketplace."
 
 [labels.es.model.module]
 name = "Módulo"

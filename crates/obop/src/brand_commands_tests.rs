@@ -531,8 +531,19 @@ async fn rest_only_these_commands_exist_and_the_model_is_in_no_listing() {
         ["instance_brand.get"],
         "any other principal gains get only"
     );
-    // The model is in neither the metadata nor the authenticated OpenAPI document.
-    for token in ["admin", "bob"] {
+    // The model is not in the metadata; the authenticated OpenAPI document describes exactly the
+    // commands the token may run, as every command of a model without a `list` (K26).
+    for (token, want) in [
+        (
+            "admin",
+            &[
+                "/api/instance_brand/clear",
+                "/api/instance_brand/configure",
+                "/api/instance_brand/get",
+            ][..],
+        ),
+        ("bob", &["/api/instance_brand/get"][..]),
+    ] {
         let (s, meta) = rest(&r, "GET", token, "/api/meta", json!({})).await;
         assert_eq!(s, 200);
         assert!(
@@ -541,9 +552,18 @@ async fn rest_only_these_commands_exist_and_the_model_is_in_no_listing() {
         );
         let (s, doc) = rest(&r, "GET", token, "/api/openapi.json", json!({})).await;
         assert_eq!(s, 200);
+        let mut paths: Vec<&str> = doc["paths"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .filter(|p| p.starts_with("/api/instance_brand/"))
+            .collect();
+        paths.sort();
+        assert_eq!(paths, want, "{token}: openapi");
         assert!(
-            !doc.to_string().contains("instance_brand"),
-            "{token}: openapi"
+            doc["components"]["schemas"].get("instance_brand").is_none(),
+            "{token}: no record schema"
         );
     }
 }

@@ -236,3 +236,12 @@
     white-space: normal;
   }
 }
+
+/* The person who has the keyboard on the chart: the ring is drawn on their card. */
+.org-tree [role="treeitem"]:focus {
+  outline: none;
+}
+.org-tree [role="treeitem"]:focus-visible > .org-node {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}

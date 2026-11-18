@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "Anpassa"
+summary = "Anpassa instansen: tema, appar, moduler och marknadsplatsen."
 
 [labels.sv.model.module]
 name = "Modul"

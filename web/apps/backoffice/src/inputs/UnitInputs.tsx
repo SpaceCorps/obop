@@ -30,21 +30,36 @@ function Unit({ unit, children }: { unit: string; children: ReactNode }) {
   );
 }
 
-/** A time of day kept as minutes after midnight: the browser's time box, in steps of 15 minutes. */
+/**
+ * A time of day kept as minutes after midnight, read and typed on the 24-hour clock ("14:30") as
+ * every list, My day and the week plan write it, whatever the browser's language (S5). Takes 14:30,
+ * 14.30, 1430 or 14.
+ */
 export function TimeInput({ value, onChange, readOnly, common }: BaseInputProps) {
-  const v = String(value);
+  const box = useTypedText(
+    value,
+    (v) => (isInt(v) ? clockText(v) : v),
+    (v) => (isInt(v) ? clockText(v) : v),
+    (typed) => {
+      const m = parseClock(typed);
+      return m === null ? typed : String(m);
+    },
+    onChange,
+  );
   return (
     <input
       {...common}
-      type="time"
-      step={900}
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
       className="num timein"
-      value={isInt(v) ? clockText(v) : ""}
+      placeholder={readOnly ? "" : t("08:00")}
+      title={t("Type 14:30, 1430 or 14")}
+      value={box.text}
       readOnly={readOnly}
-      onChange={(e) => {
-        const m = parseClock(e.target.value);
-        onChange(m === null ? e.target.value : String(m));
-      }}
+      onFocus={box.onFocus}
+      onBlur={box.onBlur}
+      onChange={(e) => box.onChange(e.target.value)}
     />
   );
 }

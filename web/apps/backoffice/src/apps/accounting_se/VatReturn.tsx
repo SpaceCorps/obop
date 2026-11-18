@@ -193,7 +193,12 @@ export function VatReturnPanel({ row }: RecordExtProps) {
                   className="btn small"
                   href={
                     data.codeIds[code]
-                      ? href({ app: "accounting_se", model: CODE, id: data.codeIds[code] })
+                      ? href({
+                          app: "accounting_se",
+                          model: CODE,
+                          id: data.codeIds[code],
+                          field: "tax_id",
+                        })
                       : codesHref
                   }
                 >

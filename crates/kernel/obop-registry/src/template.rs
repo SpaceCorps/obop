@@ -19,6 +19,8 @@ pub enum SlotKind {
     AssertMessage,
     /// The message of the model's guard (D77): the lock banner (`guard` under the model).
     GuardMessage,
+    /// The message of a model rule (D88, `rule.<key>` under the model; the key is in `option`).
+    RuleMessage,
 }
 
 /// One thing a translator fills in, with its English source text.
@@ -74,6 +76,11 @@ pub fn slots(module: &Module) -> Vec<Slot> {
         push(SlotKind::ModelDescription, m.name, "", "", m.description);
         if let Some(message) = m.ext.guard.as_ref().and_then(|g| g.message) {
             push(SlotKind::GuardMessage, m.name, "", "", message);
+        }
+        for key in m.rule_keys() {
+            if let Some(message) = m.rule_message(key) {
+                push(SlotKind::RuleMessage, m.name, "", key, message);
+            }
         }
         for f in &m.fields {
             push(SlotKind::FieldLabel, m.name, f.name, "", &humanise(f.name));
@@ -139,6 +146,7 @@ impl Slot {
                 return t.assertion_message(&self.model, &self.item, &self.option, lang);
             }
             SlotKind::GuardMessage => return t.guard_message(&self.model, lang),
+            SlotKind::RuleMessage => return t.rule_message(&self.model, &self.option, lang),
         }
         .map(String::as_str)
     }
@@ -147,6 +155,9 @@ impl Slot {
     pub fn path(&self) -> String {
         if self.kind == SlotKind::GuardMessage {
             return format!("{}.guard.message", self.model);
+        }
+        if self.kind == SlotKind::RuleMessage {
+            return format!("{}.rule.{}.message", self.model, self.option);
         }
         if self.kind == SlotKind::AssertMessage {
             return format!(
@@ -164,7 +175,7 @@ impl Slot {
             SlotKind::OptionLabel => "option",
             SlotKind::ActionLabel => "label",
             SlotKind::ActionDescription => "description",
-            SlotKind::AssertMessage | SlotKind::GuardMessage => "message",
+            SlotKind::AssertMessage | SlotKind::GuardMessage | SlotKind::RuleMessage => "message",
         };
         let mut parts: Vec<&str> = [&self.model, &self.item, &self.option]
             .into_iter()
@@ -247,6 +258,10 @@ pub fn template(module: &Module, lang: &str) -> String {
                 "description",
             ),
             SlotKind::GuardMessage => (format!("labels.{lang}.model.{model}.guard"), "message"),
+            SlotKind::RuleMessage => (
+                format!("labels.{lang}.model.{model}.rule.{}", toml_key(&s.option)),
+                "message",
+            ),
             SlotKind::AssertMessage => (
                 format!(
                     "labels.{lang}.model.{model}.action.{item}.assert.{}",

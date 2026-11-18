@@ -344,12 +344,18 @@ export function effectiveOrder(
   fields: readonly FieldMeta[],
   sort: Sort | undefined,
 ): ServerOrder[] {
-  if (sort) return [{ field: sort.f, dir: sort.dir }];
+  const f = sort && fields.find((x) => x.name === sort.f);
+  if (sort && (!f || canSortBy(f))) return [{ field: sort.f, dir: sort.dir }];
   return listOrder(model, fields);
 }
 
-/** Classes an agent's token may not sort by (the server refuses a sort it could not read in clear). */
-const UNSORTABLE = new Set(["secret", "confidential_hr", "special_category"]);
+/**
+ * Whether the list may be sorted by a field: never by a picture or a file (#89), nor by a field this
+ * caller does not read in clear (`masked` in the metadata: an agent and personal data or a sensitive
+ * class) or a secret; the server refuses those sorts (R13). A person sorts by personal data.
+ */
+export const canSortBy = (f: FieldMeta): boolean =>
+  f.kind !== "image" && f.kind !== "file" && !f.masked && f.class !== "secret";
 
 /**
  * The default order of a list, restricted to the fields this person can read and the server can
@@ -359,8 +365,7 @@ const UNSORTABLE = new Set(["secret", "confidential_hr", "special_category"]);
  * look such lists up; records with a workflow stay newest first.
  */
 export function listOrder(model: ModelMeta, fields: readonly FieldMeta[]): ServerOrder[] {
-  const sortable = (f: FieldMeta) =>
-    f.kind !== "ref" && !f.personal_data && !UNSORTABLE.has(f.class);
+  const sortable = (f: FieldMeta) => f.kind !== "ref" && canSortBy(f);
   const ok = (name: string) => name === "id" || fields.some((f) => f.name === name && sortable(f));
   const base = defaultOrder(model);
   const onlyId = !model.ui?.order && base.length === 1 && base[0]?.field === "id";

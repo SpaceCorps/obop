@@ -1,5 +1,6 @@
 [labels.de.module]
 name = "Anpassen"
+summary = "Die Instanz anpassen: Design, Apps, Module und der Marktplatz."
 
 [labels.de.model.module]
 name = "Modul"

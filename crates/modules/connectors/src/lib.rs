@@ -21,7 +21,8 @@ use std::sync::Arc;
 /// Bind the module's commands to the dispatcher. `rt` is the shared runtime (store, secrets,
 /// the hardened client); call `rt.start()` afterwards to run events, retries and the schedule.
 pub fn register(d: &Arc<Dispatcher>, store: &Store, rt: &Arc<Runtime>) {
-    let m = module();
+    let mut m = module();
+    meta::offer_providers(&mut m, rt.providers());
     handlers::install(d, &m, store, rt);
     guards::install(d, rt);
     // The note that an erased party's maps are owed is written in the call that erased it.

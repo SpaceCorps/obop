@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Kirjanpito Ruotsi"
 description = "Kirjanpidon ruotsalainen lokalisointi: yrityksen tiedot, tositesarjat, alv-koodit ja -ruudut sekä jaksokohtainen alv-raportti, jonka ryhmä accounting.approver hyväksyy. TARKISTAMATON: mitään ei ole tarkistettu Skatteverketin (SKV 4700) tai SIE:n mukaan. BAS-tilikarttaa ei sisälly; käyttäjä valitsee tilit. Summat örinä, verokannat peruspisteinä. Täältä ei toimiteta mitään."
+summary = "Ruotsalaisen yrityksen tiedot, tositesarjat, alv-koodit, -ruudut ja alv-raportti. Kaikki alv-kytkennät TARKISTAMATTOMIA."
 
 [labels.fi.model.accounting_se_company]
 name = "Yritys"

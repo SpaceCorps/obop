@@ -148,3 +148,7 @@ production = "Produkcja"
 [labels.pl.model.inventory_move.field.origin]
 label = "Dokument źródłowy"
 description = "Dokument, z którego pochodzi ruch, na przykład numer zamówienia zakupu jak PO-00042 lub zlecenie produkcyjne"
+
+[labels.pl.model.inventory_move.field.lot]
+label = "Partia"
+description = "Przesuwana partia, gdy produkt jest śledzony w partiach; zatwierdzenie zmienia pozycję magazynową tej partii (tworzoną, gdy jej brak)"

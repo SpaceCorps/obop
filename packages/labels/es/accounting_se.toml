@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Contabilidad Suecia"
 description = "Localización sueca de la contabilidad: datos de la empresa, series de asientos, códigos y casillas de IVA, y un informe de IVA por periodo que aprueba el grupo accounting.approver. SIN VERIFICAR: nada se ha comprobado con Skatteverket (SKV 4700) ni con SIE. No incluye plan contable BAS; el usuario elige las cuentas. Importes en öre, tipos en puntos básicos. Desde aquí no se presenta nada."
+summary = "Datos de la empresa sueca, series de asientos, códigos y casillas de IVA y un informe de IVA. Todas las asignaciones de IVA SIN VERIFICAR."
 
 [labels.es.model.accounting_se_company]
 name = "Empresa"

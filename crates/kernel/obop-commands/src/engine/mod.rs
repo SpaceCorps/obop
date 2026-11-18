@@ -19,6 +19,7 @@ pub(crate) mod effects;
 pub(crate) mod frozen;
 pub(crate) mod hints;
 pub(crate) mod implied;
+pub(crate) mod model_rules;
 pub(crate) mod seq;
 pub(crate) mod unit;
 

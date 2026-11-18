@@ -121,3 +121,58 @@ export function narrowed(roots: readonly OrgNode[], keep: ReadonlySet<string>): 
     ns.filter((n) => keep.has(n.id)).map((n) => ({ ...n, children: cut(n.children) }));
   return cut(roots);
 }
+
+/** A person as the keyboard walks the chart: the order on screen, with their manager. */
+export type TreeRow = { id: string; parent: string | null; branch: boolean };
+
+/** The people shown, top to bottom: a branch's reports follow it only while it is unfolded. */
+export function visibleRows(roots: readonly OrgNode[], isOpen: (id: string) => boolean): TreeRow[] {
+  const out: TreeRow[] = [];
+  const walk = (ns: readonly OrgNode[], parent: string | null) => {
+    for (const n of ns) {
+      out.push({ id: n.id, parent, branch: n.children.length > 0 });
+      if (n.children.length && isOpen(n.id)) walk(n.children, n.id);
+    }
+  };
+  walk(roots, null);
+  return out;
+}
+
+/** What a key does on the chart (the tree pattern of WAI-ARIA): move, unfold, fold or open. */
+export type TreeStep = { focus?: string; open?: string; close?: string; activate?: string };
+
+/**
+ * Down and Up move to the next and the previous person shown, Home and End to the first and the
+ * last; Right unfolds a folded branch or moves to its first report; Left folds an unfolded branch
+ * or moves to the manager; Enter opens the person. Any other key does nothing (`null`).
+ */
+export function treeStep(
+  rows: readonly TreeRow[],
+  current: string,
+  key: string,
+  isOpen: (id: string) => boolean,
+): TreeStep | null {
+  const i = rows.findIndex((r) => r.id === current);
+  if (i < 0) return rows.length && key !== "Enter" ? { focus: rows[0]!.id } : null;
+  const row = rows[i]!;
+  switch (key) {
+    case "ArrowDown":
+      return i + 1 < rows.length ? { focus: rows[i + 1]!.id } : {};
+    case "ArrowUp":
+      return i > 0 ? { focus: rows[i - 1]!.id } : {};
+    case "Home":
+      return { focus: rows[0]!.id };
+    case "End":
+      return { focus: rows[rows.length - 1]!.id };
+    case "ArrowRight":
+      if (!row.branch) return {};
+      return isOpen(row.id) ? { focus: rows[i + 1]?.id } : { open: row.id };
+    case "ArrowLeft":
+      if (row.branch && isOpen(row.id)) return { close: row.id };
+      return row.parent ? { focus: row.parent } : {};
+    case "Enter":
+      return { activate: row.id };
+    default:
+      return null;
+  }
+}

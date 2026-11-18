@@ -90,3 +90,9 @@ description = "Devolver un turno publicado a abierto"
 [labels.es.model.planning_shift.action.confirm]
 label = "Confirmar"
 description = "El empleado confirma que trabajará el turno"
+
+[labels.es.model.planning_shift.rule.ends_after_start]
+message = "El turno termina antes de empezar: indique una hora de fin posterior al inicio"
+
+[labels.es.model.planning_shift.rule.no_double_shift]
+message = "El empleado ya tiene un turno a esa hora: elija otra hora u otro empleado"

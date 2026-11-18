@@ -87,3 +87,27 @@ test("the fleet home shows expiring licences, planned services and the workshop"
     await api.post("/api/module/uninstall", { id: "fleet" }, root);
   }
 });
+
+test("on a tablet the four vehicle tiles stand two by two (R10)", async ({ page, signIn, api }) => {
+  const root = await api.token("root");
+  await api.post("/api/marketplace_listing/install", { id: "fleet" }, root);
+  try {
+    await page.setViewportSize({ width: 834, height: 1112 });
+    await signIn("root", "/fleet/overview");
+    const tiles = page.locator(".fleet-home .kpistrip > *");
+    await expect(tiles).toHaveCount(4);
+    await expect(page.locator(".fleet-home .kpistrip[aria-busy]")).toHaveCount(0);
+    const boxes = await tiles.evaluateAll((els) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect();
+        return { top: Math.round(r.top), left: Math.round(r.left) };
+      }),
+    );
+    expect(new Set(boxes.map((b) => b.top)).size).toBe(2);
+    expect(new Set(boxes.map((b) => b.left)).size).toBe(2);
+    expect(boxes[0]!.top).toBe(boxes[1]!.top);
+    expect(boxes[2]!.top).toBe(boxes[3]!.top);
+  } finally {
+    await api.post("/api/module/uninstall", { id: "fleet" }, root);
+  }
+});

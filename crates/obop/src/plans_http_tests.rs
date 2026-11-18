@@ -254,8 +254,31 @@ async fn openapi_lists_the_five_for_a_person_and_get_alone_for_an_agent() {
         ]
     );
     assert!(doc["components"]["schemas"]["PlanRow"].is_object());
+    // Each is described once, by its own shapes, never by the untyped description of the
+    // commands outside /api/meta (K26, `describe_commands`): no operation of the plan commands
+    // sits under another path, and the one under its path is the typed one.
+    let described_by_plans = |doc: &J| {
+        let ops: Vec<(String, J)> = doc["paths"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .filter(|(_, item)| {
+                item["post"]["operationId"]
+                    .as_str()
+                    .is_some_and(|o| o.starts_with("plan."))
+            })
+            .map(|(k, item)| (k.clone(), item["post"]["tags"].clone()))
+            .collect();
+        for (path, tags) in &ops {
+            assert!(path.starts_with("/api/plan/"), "{path}");
+            assert_eq!(*tags, json!(["Approvals"]), "{path}");
+        }
+        ops.len()
+    };
+    assert_eq!(described_by_plans(&doc), 5);
     let (_, doc) = send(&w.r, "GET", Some(&agent), "/api/openapi.json", json!({})).await;
     assert_eq!(paths(&doc), ["/api/plan/get"]);
+    assert_eq!(described_by_plans(&doc), 1);
     let (_, doc) = send(&w.r, "GET", None, "/api/openapi.json", json!({})).await;
     assert!(
         paths(&doc).is_empty(),

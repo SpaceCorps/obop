@@ -14,34 +14,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tower::ServiceExt;
 
-/// Commands of models that have no `list` command, and the commands a module refuses for everyone
-/// (`Dispatcher::refuse_always`, D95: `can_delete` / `can_update` false in the metadata): registered
-/// on REST, absent from the document.
+/// The commands a module refuses for everyone (`Dispatcher::refuse_always`, D95: `can_delete` /
+/// `can_update` false in the metadata): registered on REST, absent from the document. Every other
+/// command has an operation, those of a model without a `list` included (K26).
 const KNOWN_OMITTED: &[&str] = &[
-    "bank_matching.book",
-    "bank_matching.suggest",
-    "import_map.get",
-    "import_map.search",
-    "instance_brand.clear",
-    "instance_brand.configure",
-    "instance_brand.get",
-    "instance_update.check",
-    "instance_update.rollback",
-    "instance_update.start",
-    "instance_update.status",
-    "invoice_credit.create",
-    "invoice_posting.create_move",
     "mileage_point.delete",
     "mileage_point.update",
     "mileage_trip.delete",
-    "module_plan.preview",
-    "setting.get",
-    "setting.update",
-    "sie_exchange.export",
-    "sie_exchange.import",
-    "stock_count.apply",
-    "time_billing.create_invoice",
-    "vat_computation.compute",
 ];
 
 /// The committed copy: `web/packages/client/openapi.json`, from the root of the workspace.
@@ -160,10 +139,9 @@ fn it_lists_every_command_of_an_account_with_every_group() {
         }
     }
     missing.sort();
-    // The document is made from `Dispatcher::meta`, which skips a model that has no `list`
-    // command, so these fourteen commands (REST ones included) have no operation, in the document
-    // an instance serves as well (docs/ISSUES.md K26). A new omission fails here; when one of
-    // these gains an operation, remove its id from the list.
+    // A command of a model without a `list` is described from `Dispatcher::commands_outside_meta`
+    // (K26), so only the commands refused for everyone have no operation. A new omission fails
+    // here.
     assert_eq!(
         missing, KNOWN_OMITTED,
         "commands without an operation in the document"
@@ -174,6 +152,10 @@ fn it_lists_every_command_of_an_account_with_every_group() {
         "/api/sale_order/confirm",
         "/api/auth/login",
         "/api/meta",
+        "/api/setting/get",
+        "/api/instance_update/check",
+        "/api/import_map/get",
+        "/api/module_plan/preview",
     ] {
         assert!(paths.contains_key(want), "{want}");
     }

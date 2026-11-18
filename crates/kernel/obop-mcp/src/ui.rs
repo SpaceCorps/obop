@@ -54,6 +54,7 @@ pub fn field_hints(o: &mut J, h: &FieldHints) {
             m.insert("hidden".into(), json!(true));
         }
         put_some(&mut m, "currency_from", &u.currency_from);
+        put_some(&mut m, "readonly_when", &u.readonly_when);
         o["ui"] = J::Object(m);
     }
 }
@@ -85,6 +86,7 @@ fn model_ui(u: &ModelUi) -> J {
     put_list(&mut m, "quick_create", &u.quick_create);
     put_some(&mut m, "order", &u.order);
     put_some(&mut m, "default_view", &u.default_view);
+    put_some(&mut m, "default_filter", &u.default_filter);
     put_some(&mut m, "menu", &u.menu);
     put_some(&mut m, "menu_section", &u.menu_section);
     put_some(&mut m, "menu_order", &u.menu_order);

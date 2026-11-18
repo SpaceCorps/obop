@@ -35,3 +35,37 @@ plural = "Egress rules"
 [labels.en.model.privacy_preview]
 name = "Privacy preview"
 plural = "Privacy previews"
+
+# The providers of the catalogue, offered where a setting or a connection picks one (GitHub issue 108).
+
+[labels.en.model.provider_policy.field.provider.options]
+webhook_out = "Webhook (send)"
+webhook_in = "Webhook (receive)"
+rest_api_pull = "REST API (pull)"
+csv_export = "CSV export"
+slack_webhook = "Slack (incoming webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (e-signature)"
+github_webhook = "GitHub (webhook)"
+google_drive = "Google Drive (browse and add documents)"
+google_oauth = "Google (calendar and contacts, read)"
+microsoft_oauth = "Microsoft (calendar and contacts, read)"
+zapier = "Zapier (automation)"
+make = "Make (automation)"
+n8n = "n8n (automation)"
+
+[labels.en.model.connection.field.provider.options]
+webhook_out = "Webhook (send)"
+webhook_in = "Webhook (receive)"
+rest_api_pull = "REST API (pull)"
+csv_export = "CSV export"
+slack_webhook = "Slack (incoming webhook)"
+stripe = "Stripe"
+docuseal = "DocuSeal (e-signature)"
+github_webhook = "GitHub (webhook)"
+google_drive = "Google Drive (browse and add documents)"
+google_oauth = "Google (calendar and contacts, read)"
+microsoft_oauth = "Microsoft (calendar and contacts, read)"
+zapier = "Zapier (automation)"
+make = "Make (automation)"
+n8n = "n8n (automation)"

@@ -61,7 +61,12 @@ fn doc_model() -> ModelDef {
         ],
         ext: Default::default(),
     }
+    // A rule of the model (D88), checked when the run writes the field.
+    .rule("cost_not_negative", "private_cost >= 0", RULE_MESSAGE)
 }
+
+/// The author's sentence of the model rule: a refusal's text, which no receipt or event carries.
+const RULE_MESSAGE: &str = "The cost cannot be negative";
 
 fn module(id: &str, models: Vec<ModelDef>) -> Module {
     Module {
@@ -1203,5 +1208,141 @@ fn rule4_a_field_declared_without_a_class_is_set_not_shown() {
             .clone();
         assert_eq!(c["hidden"], true, "{}", who.id);
         assert!(!view.to_string().contains(SECRET), "{}", who.id);
+    }
+}
+
+// ---- after the merge of main: K63, the model rules (D88) and K26 meet the plans ---------------
+
+/// K63 on the proposal path: an agent that sends in clear a field it is shown masked (a secret
+/// and personal data) gets a plan whether its guess is right or wrong, and neither guess nor
+/// stored secret reaches a receipt, a security event or an answer of the plan commands (rule 4).
+#[test]
+fn a_guess_of_a_masked_value_in_a_proposal_is_answered_alike_and_kept_out_of_every_record() {
+    let r = rig();
+    let id = r.seed();
+    const RIGHT: &str = "old secret";
+    const WRONG: &str = "wr0ng-guess-71c";
+    let mut plans = Vec::new();
+    for (note, client) in [(RIGHT, "Old Client"), (WRONG, "Wrong Client")] {
+        let input = m(&[
+            ("id", t(&id)),
+            ("state", t("posted")),
+            ("note", t(note)),
+            ("client", t(client)),
+        ]);
+        match r.call(&agent(), &format!("{M}.update"), input) {
+            Err(CallError::ApprovalRequired { plan_id }) => plans.push(plan_id),
+            other => panic!("{note}: expected a plan, got {other:?}"),
+        }
+    }
+    let note_change = |who: &Principal, plan: &str| {
+        let view = r.ok(who, "plan.get", m(&[("id", t(plan))]));
+        assert!(!view.to_string().contains(WRONG), "{}: {view}", who.id);
+        view["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["field"] == "note")
+            .unwrap_or_else(|| panic!("{view}"))
+            .clone()
+    };
+    for who in [ann(), boss()] {
+        // Set, not shown, for the right guess as for the wrong one.
+        let hidden = json!({"field": "note", "from": null, "to": null, "hidden": true});
+        assert_eq!(note_change(&who, &plans[0]), hidden, "{}", who.id);
+        assert_eq!(note_change(&who, &plans[1]), hidden, "{}", who.id);
+        let list = r.ok(&who, "plan.list", m(&[])).to_string();
+        for v in [RIGHT, WRONG] {
+            assert!(!list.contains(v), "{}: {list}", who.id);
+        }
+    }
+    for plan in &plans {
+        let receipt = r.d.receipts.get(r.d.shared.get(), plan).unwrap();
+        let told = r
+            .ok(&agent(), "plan.get", m(&[("id", t(plan))]))
+            .to_string();
+        for v in [RIGHT, WRONG, "Old Client", "Wrong Client"] {
+            assert!(!receipt.contains(v), "{receipt}");
+            assert!(!told.contains(v), "{told}");
+            assert!(
+                r.events().iter().all(|e| !e.3.contains(v)),
+                "{:?}",
+                r.events()
+            );
+        }
+    }
+}
+
+/// Main's model rules at approval: a rule the run breaks is the command's own refusal, so the plan
+/// is spent and failed with the code alone (not the author's sentence, not the value); a guard
+/// that refuses because the record moved on since keeps the plan waiting.
+#[test]
+fn a_rule_broken_at_approval_fails_the_plan_and_a_guard_refusal_keeps_it() {
+    // The request scope REST and MCP open for each call: it notes the rule that refused, by which
+    // the refusal is told apart as assertion_failed (without it, any refusal is bad_request).
+    let _request = crate::locale::scope(None);
+    let r = rig();
+    let id = r.seed();
+    let plan = match r.call(
+        &agent(),
+        &format!("{M}.update"),
+        m(&[
+            ("id", t(&id)),
+            ("state", t("posted")),
+            ("private_cost", Value::Int(-5)),
+        ]),
+    ) {
+        Err(CallError::ApprovalRequired { plan_id }) => plan_id,
+        other => panic!("expected a plan, got {other:?}"),
+    };
+    let e = r
+        .call(&boss(), "plan.approve", m(&[("id", t(&plan))]))
+        .unwrap_err();
+    let c = errors::classify(&e);
+    assert_eq!((c.status, c.code), (400, "assertion_failed"), "{e:?}");
+    let told = r.ok(&agent(), "plan.get", m(&[("id", t(&plan))]));
+    assert_eq!(told["status"], "failed", "{told}");
+    assert_eq!(told["failure"], "assertion_failed", "{told}");
+    let rec = r.ok(&boss(), &format!("{M}.get"), m(&[("id", t(&id))]));
+    assert_eq!(rec["state"], "draft", "nothing ran: {rec}");
+    assert_eq!(rec["private_cost"], 3, "nothing ran: {rec}");
+    let receipt = r.d.receipts.get(r.d.shared.get(), &plan).unwrap();
+    assert!(!receipt.contains(RULE_MESSAGE), "{receipt}");
+    assert!(
+        r.events().iter().all(|e| !e.3.contains(RULE_MESSAGE)),
+        "{:?}",
+        r.events()
+    );
+    // The record is posted by a person before the agent's post is approved: the transition's
+    // guard refuses at approval, and the plan still waits.
+    let id2 = r.seed();
+    let waiting = r.propose_post(&id2);
+    r.ok(&ann(), &format!("{M}.post"), m(&[("id", t(&id2))]));
+    let e = r
+        .call(&ann(), "plan.approve", m(&[("id", t(&waiting))]))
+        .unwrap_err();
+    assert_eq!(errors::classify(&e).status, 400, "{e:?}");
+    let told = r.ok(&agent(), "plan.get", m(&[("id", t(&waiting))]));
+    assert_eq!(told["status"], "waiting", "{told}");
+    assert_eq!(r.list(&ann(), m(&[])).len(), 1, "it still waits");
+}
+
+/// K26 meets D97: the commands outside /api/meta never include a plan command, for an agent (to
+/// whom the person-only four do not exist and whose `plan.get` is described by its own shapes)
+/// or for anybody else, so OpenAPI describes each plan command once.
+#[test]
+fn the_plan_commands_are_never_among_the_commands_outside_meta() {
+    let r = rig();
+    for who in [agent(), boss(), ann(), eve(), outsider()] {
+        let ids: Vec<String> =
+            r.d.commands_outside_meta(Surface::Rest, &who)
+                .into_iter()
+                .map(|c| c.id)
+                .collect();
+        assert!(
+            ids.iter().all(|i| !i.starts_with("plan.")),
+            "{}: {ids:?}",
+            who.id
+        );
     }
 }

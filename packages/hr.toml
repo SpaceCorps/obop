@@ -1,6 +1,6 @@
 [module]
 id = "hr"
-version = "0.4.0"
+version = "0.4.1"
 name = "Human Resources"
 description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group. An employee sees and files only their own leave requests; hr.manager sees all of them."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["people"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "hr_employee"
-changelog = "An employee can be linked to their obop user name, so leave that HR files for them is theirs (they see it: Requested by is filled in from the employee). A department head can be an employee. The back office gains an org chart, and a new leave request starts on the person's own employee record. Changed: someone without hr.manager can no longer file leave for a colleague who has a login (the request would be the colleague's, out of their sight); hr.manager files it."
+changelog = "0.4.1: a department whose head was written as a name gets that employee as its head when exactly one employee has that name; the name stays. An employee can be linked to their obop user name, so leave that HR files for them is theirs (they see it: Requested by is filled in from the employee). A department head can be an employee. The back office gains an org chart, and a new leave request starts on the person's own employee record. Changed: someone without hr.manager can no longer file leave for a colleague who has a login (the request would be the colleague's, out of their sight); hr.manager files it. The Time off list opens without refused requests: the filter Not refused is on until you remove it."
 
 [[model]]
 name = "hr_department"
@@ -346,6 +346,7 @@ write_group = "hr.user"
   menu_order = 2
   calendar = { start = "start_on", end = "end_on", color = "state" }
   report = { rows = "employee_id", cols = "leave_kind", measure = "days" }
+  default_filter = "Not refused"
 
   [[model.ui.section]]
   label = "Leave"
@@ -367,6 +368,10 @@ write_group = "hr.user"
   [[model.ui.filter]]
   label = "Upcoming"
   where = "state = approved && start_on > today"
+
+  [[model.ui.filter]]
+  label = "Not refused"
+  where = "state != refused"
 
   [[model.field]]
   name = "requested_by"
@@ -502,3 +507,11 @@ write_group = "hr.user"
     danger = true
     confirm = "Refuse this leave request?"
     done = "Leave refused"
+
+[[migration]]
+from = "<0.4.1"
+op = "link_by_name"
+model = "hr_department"
+field = "head_id"
+source = "head"
+description = "A department head written as a name becomes the employee of that name, when exactly one employee has it"

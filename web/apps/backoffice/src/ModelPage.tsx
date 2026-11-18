@@ -6,6 +6,7 @@ import type { App } from "./Chrome.tsx";
 import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
 import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.ts";
+import { defaultFilter } from "./filters.ts";
 import { csvCell, download, plainText, rowCurrency, visibleFields } from "./format.ts";
 import { ImportDialog } from "./ImportDialog.tsx";
 import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
@@ -23,6 +24,7 @@ import {
   type ViewState,
 } from "./query.ts";
 import { RecordPanel, useMissingRecord } from "./RecordPanel.tsx";
+import { today } from "./quickFilters.ts";
 import { prefersFullPage } from "./recordLayout.ts";
 import { indexModels } from "./presentation.ts";
 import { isFull, type Go, type Route } from "./route.ts";
@@ -53,8 +55,9 @@ type Props = {
   /** Replaces the generic "New" form, for a record an app creates with its own guided flow. */
   onNew?: () => void;
   /**
-   * Asked once, when the page opens on a new record (`id=new`): the values the form starts with
-   * (a file picked on another page). `null`: none.
+   * Asked each time the page opens on a new record (`id=new`, also through `openNew`): the values
+   * the form starts with (a file picked on another page, the person's own employee record), under
+   * any value `openNew` was given (a day picked in the calendar). `null`: none.
    */
   takeNewDefaults?: () => Record<string, unknown> | null;
   /** Drawn after the page and its dialogs: an app's own dialog, which may open the new form. */
@@ -248,11 +251,17 @@ export function ModelPage({
     [live, put, route.page],
   );
 
-  // A favorite marked default applies when the model opens without any search of its own.
+  // A favorite marked default applies when the model opens without any search of its own; else the
+  // package's default filter (`ui.default_filter`), which the person removes like any other.
   useEffect(() => {
     if (route.st) return;
     const fav = loadFavorites(model.name).find((f) => f.isDefault);
-    if (fav) put({ st: encodeState(fav.state), view: fav.view }, true);
+    if (fav) {
+      put({ st: encodeState(fav.state), view: fav.view }, true);
+      return;
+    }
+    const preset = defaultFilter(model, fields, { user, today: today() });
+    if (preset) put({ st: encodeState({ ...decodeState(""), facets: preset }) }, true);
     // only on first open of this model
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -337,7 +346,7 @@ export function ModelPage({
       openedHere.current = false;
       return;
     }
-    if (!openedHere.current) setNewValues(startValues());
+    if (!openedHere.current) setNewValues(startValues(takeNewDefaults?.() ?? {}));
     openedHere.current = true;
     // only when the route turns to a new record
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -350,7 +359,7 @@ export function ModelPage({
   const openNew = (given: Record<string, unknown> = {}) => {
     if (onNew) return onNew();
     openedHere.current = true;
-    setNewValues(startValues(given));
+    setNewValues(startValues({ ...takeNewDefaults?.(), ...given }));
     put({ id: "new", full: asPage ? "1" : "" });
   };
   const found = useRecord(model.name, route.id, serverMode || aggMode ? srv.rows : rows);
@@ -703,9 +712,11 @@ export function ModelPage({
           onDuplicate={(values) => openNew(values)}
           onSaved={(id) =>
             // A list in its default order shows the newest first: a new record is on the first page.
+            // The new form's address is replaced by the record's: Back leaves it and does not open
+            // an empty new form again (R16).
             route.id === "new" && paging && !state.sort && listDefault[0]?.dir === "desc"
-              ? put({ id, page: "" })
-              : put({ id })
+              ? put({ id, page: "" }, true)
+              : put({ id }, route.id === "new")
           }
         />
       )}

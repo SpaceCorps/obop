@@ -493,3 +493,220 @@ fn undoing_a_match_opens_the_item_again() {
     )
     .unwrap();
 }
+
+/// Q9: `obop call bank_matching book ... dry_run=true` sent the text "true" (the model has no
+/// `list`, so it is not in the metadata), and the handler read it as a real run. The command line
+/// now types the field by the module's own definition.
+#[test]
+fn the_command_line_types_dry_run_of_models_without_a_list_as_a_bool() {
+    let f = fixture();
+    let agent = Principal::agent("bot", &["accounting.user"], &["accounting.user"]);
+    let meta = f.app.dispatcher.meta(Surface::Cli, &agent);
+    assert!(
+        !meta
+            .iter()
+            .flat_map(|m| &m.models)
+            .any(|m| m.name == "bank_matching")
+    );
+    for model in ["bank_matching", "vat_computation", "invoice_posting"] {
+        assert_eq!(
+            crate::cli_kind(&f.app.dispatcher, &meta, model, "dry_run"),
+            "bool",
+            "{model}"
+        );
+    }
+    assert_eq!(
+        crate::cli_kind(&f.app.dispatcher, &meta, "bank_matching", "nope"),
+        "text"
+    );
+}
+
+/// Q4: a receivable item a bank transaction pays is `settled`, and the filters "Open items",
+/// "Overdue" and "Due in 30 days" leave it out.
+#[test]
+fn a_paid_receivable_item_is_settled_and_not_overdue() {
+    let f = fixture();
+    let (_, number, item) = f.invoice_with_move(9_520);
+    let search = |filter: J| {
+        call(
+            &f.app,
+            &admin(),
+            "accounting_move_line.search",
+            json!({"filter": filter}),
+        )
+        .unwrap()["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    };
+    let open = json!([{"field": "reconciled", "op": "ne", "value": true},
+                      {"field": "settled", "op": "eq", "value": false}]);
+    assert!(search(open.clone()).contains(&item));
+    let got = call(
+        &f.app,
+        &admin(),
+        "accounting_move_line.get",
+        json!({"id": item}),
+    )
+    .unwrap();
+    assert_eq!(got["settled"], json!(false));
+    let l = f.line(9_520, &format!("Payment {number}"));
+    f.book(json!({"bank_line": l, "invoice": number, "counter_account": "1510"}))
+        .unwrap();
+    let got = call(
+        &f.app,
+        &admin(),
+        "accounting_move_line.get",
+        json!({"id": item}),
+    )
+    .unwrap();
+    assert_eq!(got["settled"], json!(true));
+    assert!(!search(open).contains(&item));
+    // The package's own filters say the same.
+    let def = f.app.dispatcher.model_def("accounting_move_line").unwrap();
+    let wheres: Vec<String> = def
+        .ext
+        .ui
+        .as_ref()
+        .map(|u| u.filters.iter().map(|x| x.filter.source.clone()).collect())
+        .unwrap_or_default();
+    assert_eq!(wheres.len(), 3, "{wheres:?}");
+    assert!(
+        wheres.iter().all(|w| w.ends_with("&& settled = false")),
+        "{wheres:?}"
+    );
+}
+
+/// Q11: taking back a booked invoice payment cancels the draft entry, frees the item and the
+/// invoice and deletes the link, in one call; a posted entry is refused.
+#[test]
+fn unbook_takes_a_booked_payment_back_so_the_invoice_can_be_paid_again() {
+    let f = fixture();
+    let (inv, number, item) = f.invoice_with_move(7_000);
+    let l = f.line(7_000, &format!("Payment {number}"));
+    let r = f
+        .book(json!({"bank_line": l, "invoice": number, "counter_account": "1510"}))
+        .unwrap();
+    let mid = r["move_id"].as_str().unwrap().to_string();
+    let link = call(
+        &f.app,
+        &admin(),
+        "bank_matching.get",
+        json!({"bank_line": l}),
+    )
+    .unwrap();
+    assert_eq!(link["invoice_id"], json!(inv));
+    assert_eq!(link["move_state"], json!("draft"));
+    // Matched to the bank side of the draft entry, as the screen does.
+    let bank_side = rows(&f.app, "accounting_move_line")
+        .into_iter()
+        .find(|(_, x)| x["move_id"] == json!(mid) && x["debit"].as_i64().unwrap_or(0) > 0)
+        .unwrap()
+        .0;
+    call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.update",
+        json!({"id": l, "move_line_id": bank_side}),
+    )
+    .unwrap();
+    call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.match",
+        json!({"id": l}),
+    )
+    .unwrap();
+    // An agent may only look.
+    let agent = Principal::agent("bot", &["accounting.user"], &["accounting.user"]);
+    let m = refusal(call(
+        &f.app,
+        &agent,
+        "bank_matching.unbook",
+        json!({"bank_line": l}),
+    ));
+    assert!(m.contains("dry-run"), "{m}");
+    let dry = call(
+        &f.app,
+        &agent,
+        "bank_matching.unbook",
+        json!({"bank_line": l, "dry_run": true}),
+    )
+    .unwrap();
+    assert_eq!(dry["written"], json!(false));
+    assert_eq!(dry["move_cancelled"], json!(true));
+    assert_eq!(f.settles(&l), json!(item));
+    let done = call(
+        &f.app,
+        &admin(),
+        "bank_matching.unbook",
+        json!({"bank_line": l}),
+    )
+    .unwrap();
+    assert_eq!(done["unmatched"], json!(true));
+    let mv = rows(&f.app, "accounting_move")
+        .into_iter()
+        .find(|(id, _)| *id == mid)
+        .unwrap()
+        .1;
+    assert_eq!(mv["state"], json!("cancelled"));
+    let line = rows(&f.app, "accounting_bank_statement_line")
+        .into_iter()
+        .find(|(id, _)| *id == l)
+        .unwrap()
+        .1;
+    assert_eq!(line["state"], json!("unmatched"));
+    assert!(
+        line.get("settles_line_id").is_none_or(J::is_null),
+        "{line:?}"
+    );
+    assert!(line.get("move_line_id").is_none_or(J::is_null), "{line:?}");
+    assert!(rows(&f.app, "bank_matching").is_empty());
+    let got = call(
+        &f.app,
+        &admin(),
+        "bank_matching.get",
+        json!({"bank_line": l}),
+    )
+    .unwrap();
+    assert_eq!(got["booked"], json!(false));
+    // The invoice is offered and can be paid again, by the same line.
+    let s = call(
+        &f.app,
+        &admin(),
+        "bank_matching.suggest",
+        json!({"bank_line": l}),
+    )
+    .unwrap();
+    assert!(
+        s["suggestions"][0]["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["invoice_id"] == json!(inv)),
+        "{s}"
+    );
+    let again = f
+        .book(json!({"bank_line": l, "invoice": number, "counter_account": "1510"}))
+        .unwrap();
+    let again = again["move_id"].as_str().unwrap().to_string();
+    assert_eq!(f.settles(&l), json!(item));
+    // A posted entry is not taken back here.
+    call(
+        &f.app,
+        &admin(),
+        "accounting_move.post",
+        json!({"id": again}),
+    )
+    .unwrap();
+    let m = refusal(call(
+        &f.app,
+        &admin(),
+        "bank_matching.unbook",
+        json!({"bank_line": l}),
+    ));
+    assert!(m.contains("posted") && m.contains("reverse"), "{m}");
+    assert_eq!(rows(&f.app, "bank_matching").len(), 1);
+}
