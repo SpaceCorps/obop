@@ -536,6 +536,50 @@ describe("the detail", () => {
   });
 });
 
+/** Let the frames and the dialogs' own timers run, as a person waits a moment. */
+const afterFrames = async () => {
+  for (let i = 0; i < 3; i++)
+    await act(async () => {
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+    });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 400));
+  });
+};
+const heading = () => document.querySelector<HTMLElement>("#appr-title");
+
+describe("focus after a decision", () => {
+  it("lands on the heading after Approve", async () => {
+    await mount("#/approvals?id=p-update");
+    await click(document.querySelector("[data-testid=plan-approve]"));
+    await afterFrames();
+    expect(panel()).toBeNull();
+    expect(heading()?.textContent).toBe("Approvals");
+    expect(document.activeElement).toBe(heading());
+  });
+
+  it("lands on the heading after Approve through the confirmation dialog", async () => {
+    await mount("#/approvals?id=p-delete");
+    await click(button("Approve and delete"));
+    await click(button("Delete for good"));
+    await afterFrames();
+    expect(sent("approve")).toHaveLength(1);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.activeElement).toBe(heading());
+  });
+
+  it("lands on the heading after Reject through the dialog with a reason", async () => {
+    await mount("#/approvals?id=p-update");
+    await click(button("Reject", panel()!));
+    await type(document.querySelector("textarea")!, "Wrong amount");
+    await click(button("Reject request"));
+    await afterFrames();
+    expect(sent("reject")).toHaveLength(1);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.activeElement).toBe(heading());
+  });
+});
+
 describe("approve", () => {
   it("sends the version that was shown, says Approved and goes back to the list", async () => {
     await mount("#/approvals?id=p-update");

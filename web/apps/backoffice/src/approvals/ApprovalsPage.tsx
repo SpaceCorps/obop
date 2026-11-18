@@ -76,19 +76,39 @@ export function ApprovalsPage({ route, go }: { route: Route; go: Go }) {
       { replace },
     );
 
-  // Focus goes back to the row that opened the plan when it closes, or to the heading when the
-  // row has left the list (it was decided).
+  // Focus goes back to the row that opened the plan when it closes. After a decision it goes to
+  // the heading: the row is leaving the list, and the button that opened the dialog is gone, so
+  // the kit's dialogs have nothing to give focus back to (it would be `body`). This effect depends
+  // on `open` only: the list is read again right after a decision, and an effect that re-ran when
+  // the list changed would cancel the frame that was waiting to move focus.
   const lastOpen = useRef(open);
+  const decided = useRef(false);
   useEffect(() => {
     const was = lastOpen.current;
     lastOpen.current = open;
     if (!was || open) return;
-    const frame = requestAnimationFrame(() => {
-      const row = document.querySelector<HTMLElement>(`[data-plan="${CSS.escape(was)}"]`);
+    const afterDecision = decided.current;
+    decided.current = false;
+    const move = () => {
+      const row = afterDecision
+        ? null
+        : document.querySelector<HTMLElement>(`[data-plan="${CSS.escape(was)}"]`);
       (row ?? heading.current)?.focus({ preventScroll: false });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [open, list]);
+    };
+    const frame = requestAnimationFrame(move);
+    // A dialog that was open gives focus back once more after 300 ms when nothing has it; by then
+    // the heading has it, but if that gave up, take it here rather than leave it on `body`.
+    const late = afterDecision
+      ? setTimeout(() => {
+          const a = document.activeElement;
+          if (!a || a === document.body) move();
+        }, 350)
+      : undefined;
+    return () => {
+      cancelAnimationFrame(frame);
+      if (late) clearTimeout(late);
+    };
+  }, [open]);
 
   const tabs: { id: ApprovalsTab; label: string }[] = [
     { id: "waiting", label: t("Waiting") },
@@ -174,6 +194,7 @@ export function ApprovalsPage({ route, go }: { route: Route; go: Go }) {
           names={names}
           onClose={() => put({})}
           onDecided={() => {
+            decided.current = true;
             put({});
             void load();
           }}
