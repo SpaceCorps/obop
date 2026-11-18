@@ -131,7 +131,8 @@ export const test = base.extend<Fixtures & Options>({
       installed.push(id);
       return id;
     });
-    for (const id of installed) await api.run("root", "module.uninstall", { id });
+    // Newest first: a package that points into an older one goes before it (K27 b refuses the other order).
+    for (const id of installed.reverse()) await api.run("root", "module.uninstall", { id });
   },
 
   scratchPackage: async ({ api }, use) => {
@@ -142,7 +143,8 @@ export const test = base.extend<Fixtures & Options>({
       installed.push(id);
       return id;
     });
-    for (const id of installed) await api.run("root", "module.uninstall", { id });
+    // Newest first: a package that points into an older one goes before it (K27 b refuses the other order).
+    for (const id of installed.reverse()) await api.run("root", "module.uninstall", { id });
   },
 
   signIn: async ({ page, api }, use) => {
