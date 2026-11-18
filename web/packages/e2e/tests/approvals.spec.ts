@@ -31,9 +31,21 @@ const TOUCH = 44;
 const panelOf = (page: Page) => page.locator("aside[data-plan-panel]:not([role])");
 const dialogOf = (page: Page) => page.locator("aside[data-plan-panel][role=dialog]");
 
-/** The box of a control that must be on screen: its numbers, for the layout assertions. */
+/**
+ * The box of a control that must be on screen: its numbers, for the layout assertions. A sheet slides
+ * in, so the box is measured where it comes to rest: after the animations of the panel that holds the
+ * control (as `listProblems` waits for the page's), not while it still moves.
+ */
 async function boxOf(loc: Locator) {
   await expect(loc).toBeVisible();
+  await loc.evaluate((el) =>
+    Promise.all(
+      (el.closest("aside") ?? el)
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+        .map((a) => a.finished.catch(() => null)),
+    ),
+  );
   const b = await loc.boundingBox();
   expect(b, "a visible control has a box").not.toBeNull();
   return b!;
