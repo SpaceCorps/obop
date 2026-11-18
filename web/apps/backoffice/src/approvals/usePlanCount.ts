@@ -9,7 +9,7 @@ import { planCount, type PlanCount } from "./planApi.ts";
 export const COUNT_EVERY_MS = 60_000;
 
 const bus = typeof EventTarget === "function" ? new EventTarget() : null;
-const CHANGED = "obop-plans-changed";
+const CHANGED = "plans-changed";
 
 /** Say that plans changed (one was decided here): every count reads again. */
 export function plansChanged(): void {
