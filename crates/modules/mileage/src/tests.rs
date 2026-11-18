@@ -3069,11 +3069,12 @@ fn a_reviewer_reads_the_distance_not_the_start_and_end_and_an_admin_read_is_logg
         assert_eq!(events.len(), 2, "{events:?}");
         assert!(events.iter().any(|e| e.0 == audit::ALL_DRIVERS));
         // An administrator's update answers with them too (here one that changes nothing), and
-        // that read is logged as well.
+        // that read is logged as well. The confirm cleared the reason the reviewer typed, so an
+        // empty reason is the update that changes nothing.
         let admin_update = r.ok(
             &boss,
             "mileage_trip.update",
-            json!({"id": id, "reject_reason": "probe"}),
+            json!({"id": id, "reject_reason": null}),
         );
         assert_eq!(admin_update["end_lat"], "52.0020000");
         let events = r.events(audit::KIND);
