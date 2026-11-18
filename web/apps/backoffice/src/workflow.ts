@@ -181,12 +181,14 @@ export function canMove(
 }
 
 /**
- * A step with no way back for this person (#102): no action they may run moves the field on from
- * the state it leads to. `/api/meta` lists only runnable actions, so a step that someone else could
- * still undo counts as one-way here, and the question says what this person can do afterwards.
+ * A step with no way back (#102): no action moves the field on from the state it leads to. The
+ * server decides it over every action of the model (`one_way` in `/api/meta`), also the ones this
+ * person may not run, so a leave request that a manager approves or refuses afterwards is not one.
+ * Without that flag (an older server) only the actions listed here are looked at.
  */
 export function oneWay(model: ModelMeta, a: Command): boolean {
   if (!a.field || !a.to) return false;
+  if (typeof a.one_way === "boolean") return a.one_way;
   return !model.actions.some(
     (b) =>
       b.id !== a.id &&

@@ -66,6 +66,16 @@ describe("oneWay and questionOf", () => {
     expect(questionOf(model([publish, asked]), asked)).toBe("Confirm the shift?");
   });
 
+  it("takes the server's word, which counts the actions of other groups too", () => {
+    // An employee's view of a leave request: Request is listed, Approve and Refuse (a manager's)
+    // are not, yet the server knows the request has a way out.
+    const request = { ...act("request", "draft", "published"), one_way: false };
+    expect(oneWay(model([request]), request)).toBe(false);
+    expect(questionOf(model([request]), request)).toBeUndefined();
+    const lock = { ...act("confirm", "published", "confirmed"), one_way: true };
+    expect(oneWay(model([lock, cancel]), lock)).toBe(true);
+  });
+
   it("asks nothing for an action that moves no state", () => {
     const send: Command = { id: "shift.notify", description: "", needs_approval: false };
     expect(questionOf(model([publish, send]), send)).toBeUndefined();

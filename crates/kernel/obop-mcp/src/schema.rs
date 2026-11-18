@@ -549,6 +549,7 @@ mod tests {
                     from: Some("draft"),
                     to: "posted",
                 }),
+                one_way: None,
                 labels: Default::default(),
                 descriptions: Default::default(),
                 ui: None,

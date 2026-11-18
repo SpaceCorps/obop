@@ -185,6 +185,12 @@ pub struct CommandInfo {
     pub descriptions: Texts,
     /// `[model.action.ui]` (D95); `None` in the command catalog and when none is declared.
     pub ui: Option<Arc<obop_registry::ActionUi>>,
+    /// Set in `meta` for a transition (#102): whether no other action of the model, whatever
+    /// group may run it, moves the field out of the state this one reaches. The back office asks
+    /// before such a step. It is decided here because `meta` lists only the caller's actions, and
+    /// a step that a manager decides afterwards (a leave request) has a way out. `None` in the
+    /// command catalog and for an action that is not a transition.
+    pub one_way: Option<bool>,
 }
 
 /// What a guard decides about one call (D48).
@@ -622,6 +628,7 @@ impl Dispatcher {
                     labels: Texts::new(),
                     descriptions: Texts::new(),
                     ui: None,
+                    one_way: None,
                 }
             })
             .collect()
@@ -658,6 +665,7 @@ impl Dispatcher {
                 labels: Texts::new(),
                 descriptions: Texts::new(),
                 ui: None,
+                one_way: None,
             })
             .collect();
         out.sort_by(|a, b| a.id.cmp(&b.id));
@@ -739,6 +747,20 @@ impl Dispatcher {
                                 .iter()
                                 .find(|d| d.name == &id[name.len() + 1..])
                                 .and_then(|d| d.ui.clone()),
+                            one_way: c.transition.map(|t| {
+                                // Every action of the model counts, also one this caller may not
+                                // run; one refused for everyone does not.
+                                !cmds.iter().any(|(oid, o)| {
+                                    oid != id
+                                        && o.model == name.as_str()
+                                        && !never.contains_key(oid)
+                                        && o.transition.is_some_and(|ot| {
+                                            ot.field == t.field
+                                                && ot.to != t.to
+                                                && ot.from.is_none_or(|f| f == t.to)
+                                        })
+                                })
+                            }),
                         }
                     })
                     .collect();
@@ -2566,6 +2588,8 @@ mod mask_restore_tests;
 mod masked_guess_tests;
 #[cfg(test)]
 mod observe_tests;
+#[cfg(test)]
+mod one_way_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]
