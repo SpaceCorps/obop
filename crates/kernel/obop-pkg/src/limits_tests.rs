@@ -575,4 +575,10 @@ fn an_effect_constant_outside_the_limits_of_its_field_is_refused_at_install() {
     );
     let big = problem(&with_effect("qty = 11")).unwrap();
     assert!(big.contains("lim_doc.qty must be at most 10"), "{big}");
+    // A package installed by an older core, before the check existed, still loads when the
+    // server starts: its action is refused when it runs, and the module and its records stay.
+    let installed = Manifest::parse_installed(&with_effect("code = \"ABCDE\""))
+        .expect("parses")
+        .to_module_installed();
+    assert!(installed.is_ok(), "{installed:?}");
 }
