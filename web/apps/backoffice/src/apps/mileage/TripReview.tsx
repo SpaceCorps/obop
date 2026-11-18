@@ -84,7 +84,12 @@ export function TripReview({ model, row }: RecordExtProps) {
   // What the check found, as sentences; the counts come from the server (`integrity`), the number
   // of points from the points read here.
   const total = Number(row.point_count ?? pts.length) || pts.length;
-  const notes = checkNotes(row.integrity, total, state !== "recording" && km !== null);
+  // A private trip that ended has no points to judge: no "the track is clean" over nothing.
+  const notes = checkNotes(
+    row.integrity,
+    total,
+    state !== "recording" && km !== null && !(isPrivate && total === 0),
+  );
 
   const facts: [string, string][] = [
     [t("Driver"), String(row.driver ?? "")],
@@ -114,7 +119,7 @@ export function TripReview({ model, row }: RecordExtProps) {
         {isPrivate && (state === "ended" || state === "rejected") && (
           <p className="trip-ask" data-testid="trip-private-note">
             {t(
-              "A private trip is not submitted for review: no reviewer reads it. If the trip was for work, change its purpose.",
+              "A private trip has no Submit: it is never reviewed, and no reviewer reads it. If the trip was for work, change its purpose.",
             )}
           </p>
         )}
