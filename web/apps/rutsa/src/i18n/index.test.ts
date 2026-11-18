@@ -1,0 +1,53 @@
+import { describe, expect, test } from "vite-plus/test";
+import { en } from "./en.ts";
+import { t, tp } from "./index.ts";
+
+describe("sentences", () => {
+  test("a sentence is read by its key", () => {
+    expect(t("recording.notification.title")).toBe("Recording a trip");
+    expect(t("day.today")).toBe("Today");
+  });
+
+  test("placeholders are filled, and one without a value is left visible", () => {
+    expect(t("duration.hoursMinutes", { hours: 1, minutes: 5 })).toBe("1 h 5 min");
+    expect(t("duration.minutes", { minutes: 42 })).toBe("42 min");
+    expect(t("duration.minutes")).toBe("{minutes} min");
+  });
+
+  test("a count takes the form English uses for it", () => {
+    expect(tp("trips.count", 0)).toBe("0 trips");
+    expect(tp("trips.count", 1)).toBe("1 trip");
+    expect(tp("trips.count", 2)).toBe("2 trips");
+    expect(tp("trips.count", 21)).toBe("21 trips");
+  });
+});
+
+describe("the catalogue", () => {
+  const entries = Object.entries(en) as [string, string][];
+
+  test("no sentence is empty or has spaces around it", () => {
+    for (const [key, text] of entries) {
+      expect(text.trim(), key).not.toBe("");
+      expect(text, key).toBe(text.trim());
+    }
+  });
+
+  test("a placeholder is a word in braces, and every brace belongs to one", () => {
+    for (const [key, text] of entries) {
+      const withoutPlaceholders = text.replace(/\{\w+\}/g, "");
+      expect(withoutPlaceholders, key).not.toMatch(/[{}]/);
+    }
+  });
+
+  test("a key with plural forms has both forms, and each form shows the count", () => {
+    const plural = entries.filter(([key]) => /\.(one|other)$/.test(key));
+    const bases = new Set(plural.map(([key]) => key.replace(/\.(one|other)$/, "")));
+    for (const base of bases) {
+      for (const form of ["one", "other"]) {
+        const text = en[`${base}.${form}` as keyof typeof en];
+        expect(text, `${base}.${form}`).toBeDefined();
+        expect(text, `${base}.${form}`).toContain("{count}");
+      }
+    }
+  });
+});

@@ -85,8 +85,9 @@ Checkpoint: `vp check` and `vp test` pass.
 - [x] B7 `feat(rutsa): totals and formatting`: `core/present.ts` (km, clock time, duration, trips
       by day, today and this month; times are stored in UTC, days follow the time zone given, the
       phone's own; numbers and times through `Intl` for the language given, no words) and tests
-- [ ] B8 `feat(rutsa): English texts`: `i18n/index.ts`, `i18n/en.ts` (the notification of C4 and
-      the screens of D use them)
+- [x] B8 `feat(rutsa): English texts`: `i18n/index.ts` (`t`, `tp`), `i18n/en.ts` with the
+      sentences needed so far (the notification of C4, common words, the store's errors, days,
+      durations, trip counts) and tests; each screen of D adds its own sentences
 
 Checkpoint: `vp test` passes.
 
@@ -133,7 +134,8 @@ Components from `@obop/ui-native`.
       time are typed and checked (no date picker package in this stage)
 
 Checkpoint: the app runs on the emulator; Start, Pause, Resume, Stop, the list and a trip added by
-hand work when tried by hand.
+hand work when tried by hand; the clock times and km on the screen are right (`Intl` of Hermes:
+`mileage-app` notes that an engine without data for a language or time zone falls back quietly).
 
 ### E. Check on the emulator and the simulator
 
@@ -214,3 +216,6 @@ D23).
   ends the trip at its start.
 - 2026-11-18: B7 has no words (B8 comes after it): the duration is hours and minutes, the screens
   write "Today" and "min"; a trip belongs to the day and month of its start, compared by day keys.
+- 2026-11-18: B8 is the mechanism and the sentences known now; the screens of D add theirs, so the
+  catalogue has no unused key. Not taken yet: the Swedish catalogue, the language choice and the
+  translation checks of `mileage-app` (stage 2).
