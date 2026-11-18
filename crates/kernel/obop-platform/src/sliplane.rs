@@ -678,12 +678,17 @@ mod tests {
 
     type Asked = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
 
-    fn answering(map: Vec<(&'static str, u16)>) -> (Asked, impl FnMut(&str) -> Result<u16, String>) {
+    fn answering(
+        map: Vec<(&'static str, u16)>,
+    ) -> (Asked, impl FnMut(&str) -> Result<u16, String>) {
         let asked: Asked = Default::default();
         let a = asked.clone();
         let get = move |url: &str| {
             a.borrow_mut().push(url.to_string());
-            Ok(map.iter().find(|(p, _)| url.ends_with(p)).map_or(500, |(_, s)| *s))
+            Ok(map
+                .iter()
+                .find(|(p, _)| url.ends_with(p))
+                .map_or(500, |(_, s)| *s))
         };
         (asked, get)
     }
@@ -693,7 +698,10 @@ mod tests {
         // A current image: ready, and the old route is never asked.
         let (asked, mut get) = answering(vec![("/readyz", 200), ("/api/openapi.json", 200)]);
         assert!(ready_once("https://a.example/", &mut get).is_ok());
-        assert_eq!(*asked.borrow(), vec!["https://a.example/readyz".to_string()]);
+        assert_eq!(
+            *asked.borrow(),
+            vec!["https://a.example/readyz".to_string()]
+        );
         // Not ready (its database needs migration): no fall back to the route that would pass.
         let (asked, mut get) = answering(vec![("/readyz", 503), ("/api/openapi.json", 200)]);
         let e = ready_once("https://a.example", &mut get).unwrap_err();
