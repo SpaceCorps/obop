@@ -171,3 +171,49 @@ fn an_agent_cannot_turn_the_switch_on_and_a_person_s_change_is_in_the_audit_log(
     assert!(events.iter().any(|(_, d)| d.ends_with("allowed")));
     assert!(events.iter().any(|(_, d)| d.ends_with("refused")));
 }
+
+#[test]
+fn turning_the_switch_off_on_a_server_with_a_password_and_no_tls_says_what_goes_with_it() {
+    let r = rig();
+    let fields = with(
+        base("10.0.0.5"),
+        &[
+            ("username", J::from("office")),
+            ("password", J::from("relay-secret-1")),
+            ("allow_private_network", J::Bool(true)),
+        ],
+    );
+    let id = r.call(&admin(), "mail_server.create", fields).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // Off alone would leave a password for a send without TLS: refused, and the refusal does
+    // not tell the person to turn on the switch they are turning off.
+    let e = r
+        .call(
+            &admin(),
+            "mail_server.update",
+            v(&[
+                ("id", id.clone().into()),
+                ("allow_private_network", J::Bool(false)),
+            ]),
+        )
+        .unwrap_err();
+    assert!(e.contains("to turn off"), "{e}");
+    assert!(!e.contains("or allow the business"), "{e}");
+    // Off together with TLS is accepted.
+    let out = r
+        .call(
+            &admin(),
+            "mail_server.update",
+            v(&[
+                ("id", id.clone().into()),
+                ("allow_private_network", J::Bool(false)),
+                ("security", "starttls".into()),
+                ("port", 587.into()),
+            ]),
+        )
+        .unwrap();
+    assert_eq!(out["allow_private_network"], J::Bool(false));
+    assert_eq!(out["security"], "starttls");
+}

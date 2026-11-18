@@ -77,8 +77,10 @@ fn server_input(mail: Arc<Mail>, create: bool) -> Guard {
         };
         // The switch that lets a relay on the business's own network in (docs/spec/mail.md 6):
         // only a person turns it on; an agent cannot, not even as a proposal (an approved
-        // proposal runs as the agent, so this refuses it then too). Turning it off is always
-        // allowed.
+        // proposal runs as the agent, so this refuses it then too). Turning it off is allowed to
+        // anyone who may update the server, except that a server with security none and a user
+        // name must at the same time move to starttls or tls or drop the user name: a password
+        // is never stored for a send without TLS to a relay the switch no longer allows.
         let private_on = matches!(m.get("allow_private_network"), Some(Value::Bool(true)));
         if private_on && !p.is_person() {
             return Err(
@@ -122,7 +124,13 @@ fn server_input(mail: Arc<Mail>, create: bool) -> Guard {
                     // With the switch on, the send step still sends a password without TLS
                     // only when every address of the relay is on the business's own network.
                     if !loopback && !private_network {
-                        return Err("a password is never sent without TLS: choose starttls or tls, leave the user name empty, or allow the business's own network".into());
+                        let turning_off =
+                            matches!(m.get("allow_private_network"), Some(Value::Bool(false)));
+                        return Err(if turning_off {
+                            "a password is never sent without TLS: to turn off the business's own network, also choose starttls or tls, or leave the user name empty".into()
+                        } else {
+                            "a password is never sent without TLS: choose starttls or tls, leave the user name empty, or allow the business's own network".into()
+                        });
                     }
                 }
             }
