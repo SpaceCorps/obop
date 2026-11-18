@@ -1455,6 +1455,7 @@ dependencies = [
  "obop-storage",
  "obop-types",
  "obop-values",
+ "ring",
  "rustls",
  "serde_json",
  "sha2",

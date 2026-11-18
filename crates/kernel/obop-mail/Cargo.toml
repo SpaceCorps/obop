@@ -25,6 +25,8 @@ webpki-roots = "1"
 
 [dev-dependencies]
 obop-storage = { workspace = true, features = ["test-support"] }
+# A certificate for the TLS stand-in, made at test time (already in the tree through rustls).
+ring = "0.17.14"
 
 [lints]
 workspace = true

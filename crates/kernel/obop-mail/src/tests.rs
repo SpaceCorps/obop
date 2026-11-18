@@ -1,17 +1,88 @@
 //! The mail module against stand-ins on loopback: an SMTP server (plain, STARTTLS and implicit TLS
-//! with a test-only certificate) and a fake HTTP provider. Nothing leaves the machine.
+//! with a certificate made for the run) and a fake HTTP provider. Nothing leaves the machine.
 
 use super::*;
 use obop_commands::{Principal, Surface, Vault};
 use obop_connectors::{Config as RtConfig, SecretBox};
-use rustls::pki_types::pem::PemObject;
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const CERT: &str = include_str!("../tests-data/test-only-localhost.cert.pem");
-const KEY: &str = include_str!("../tests-data/test-only-localhost.key.pem");
+// ---- a certificate made for the run --------------------------------------------------------------
+
+/// DER: a tag, the length, the content.
+fn tlv(tag: u8, content: &[u8]) -> Vec<u8> {
+    let mut out = vec![tag];
+    let n = content.len();
+    if n < 0x80 {
+        out.push(n as u8);
+    } else if n < 0x100 {
+        out.extend_from_slice(&[0x81, n as u8]);
+    } else {
+        out.extend_from_slice(&[0x82, (n >> 8) as u8, n as u8]);
+    }
+    out.extend_from_slice(content);
+    out
+}
+
+fn seq(parts: &[Vec<u8>]) -> Vec<u8> {
+    tlv(0x30, &parts.concat())
+}
+
+/// A self-signed P-256 certificate for `localhost` and 127.0.0.1 and its PKCS#8 key, made once per
+/// test process with `ring`, so that no key is kept in the repository.
+fn test_cert() -> &'static (Vec<u8>, Vec<u8>) {
+    static CERT: std::sync::OnceLock<(Vec<u8>, Vec<u8>)> = std::sync::OnceLock::new();
+    CERT.get_or_init(|| {
+        use ring::signature::{ECDSA_P256_SHA256_ASN1_SIGNING, EcdsaKeyPair, KeyPair};
+        let rng = ring::rand::SystemRandom::new();
+        let pkcs8 = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, &rng).unwrap();
+        let key = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8.as_ref(), &rng)
+            .unwrap();
+        let ecdsa_sha256 = seq(&[tlv(0x06, &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02])]);
+        let name = seq(&[tlv(
+            0x31,
+            &seq(&[tlv(0x06, &[0x55, 0x04, 0x03]), tlv(0x0c, b"localhost")]),
+        )]);
+        let spki = seq(&[
+            seq(&[
+                tlv(0x06, &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01]),
+                tlv(0x06, &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]),
+            ]),
+            tlv(0x03, &[&[0u8][..], key.public_key().as_ref()].concat()),
+        ]);
+        let san = seq(&[
+            tlv(0x06, &[0x55, 0x1d, 0x11]),
+            tlv(
+                0x04,
+                &seq(&[tlv(0x82, b"localhost"), tlv(0x87, &[127, 0, 0, 1])]),
+            ),
+        ]);
+        let basic = seq(&[
+            tlv(0x06, &[0x55, 0x1d, 0x13]),
+            tlv(0x01, &[0xff]),
+            tlv(0x04, &seq(&[])),
+        ]);
+        let tbs = seq(&[
+            tlv(0xa0, &tlv(0x02, &[2])),
+            tlv(0x02, &[0x01, 0x02, 0x03, 0x04]),
+            ecdsa_sha256.clone(),
+            name.clone(),
+            seq(&[tlv(0x17, b"200101000000Z"), tlv(0x18, b"20991231235959Z")]),
+            name,
+            spki,
+            tlv(0xa3, &seq(&[san, basic])),
+        ]);
+        let sig = key.sign(&rng, &tbs).unwrap();
+        let cert = seq(&[
+            tbs,
+            ecdsa_sha256,
+            tlv(0x03, &[&[0u8][..], sig.as_ref()].concat()),
+        ]);
+        (cert, pkcs8.as_ref().to_vec())
+    })
+}
 const PASSWORD: &str = "relay-password-test-0001";
 
 // ---- the SMTP stand-in -------------------------------------------------------------------------
@@ -58,8 +129,9 @@ struct Smtp {
 }
 
 fn server_tls() -> Arc<rustls::ServerConfig> {
-    let certs = vec![CertificateDer::from_pem_slice(CERT.as_bytes()).unwrap()];
-    let key = PrivateKeyDer::from_pem_slice(KEY.as_bytes()).unwrap();
+    let (cert, pkcs8) = test_cert();
+    let certs = vec![CertificateDer::from(cert.clone())];
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(pkcs8.clone()));
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     Arc::new(
         rustls::ServerConfig::builder_with_provider(provider)
@@ -225,11 +297,7 @@ fn rig_with(allow_loopback: bool) -> Rig {
         Config::default(),
         Arc::new(move || c2.load(Ordering::SeqCst)),
     );
-    mail.trust_certificate(
-        CertificateDer::from_pem_slice(CERT.as_bytes())
-            .unwrap()
-            .to_vec(),
-    );
+    mail.trust_certificate(test_cert().0.clone());
     mail.register(&d, &store);
     Rig { d, mail, clock }
 }
