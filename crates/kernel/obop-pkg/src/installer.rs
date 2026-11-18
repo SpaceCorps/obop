@@ -146,7 +146,10 @@ pub struct Installer {
     /// a change made through another process can be told from this process's own (sync.rs).
     pub(crate) registered: Mutex<std::collections::BTreeMap<String, String>>,
     pub(crate) seen_version: std::sync::atomic::AtomicU64,
+    /// When this process last looked at the shared counter, on [`Installer::clock_ms`].
     pub(crate) last_check_ms: std::sync::atomic::AtomicU64,
+    /// When this installer was made: the start of [`Installer::clock_ms`].
+    pub(crate) made: std::time::Instant,
     /// The backup gate of updates that rewrite records (see [`MigrationGate`]).
     gate: Mutex<Option<Arc<dyn MigrationGate>>>,
 }
@@ -326,6 +329,7 @@ impl Installer {
             registered: Mutex::default(),
             seen_version: Default::default(),
             last_check_ms: Default::default(),
+            made: std::time::Instant::now(),
             gate: Mutex::new(None),
         })
     }
@@ -2757,7 +2761,15 @@ pub fn admin_module() -> Module {
                         "actor",
                         "Who did it: the user, an administrator or the operator",
                     ),
-                    f("detail", "A short note without any code or secret"),
+                    // Personal: it may repeat a network address, a peer or forwarded lines (the
+                    // sign door's entries), so an agent reads it as a token (O36, D40).
+                    FieldDef::new(
+                        "detail",
+                        "A short note without any code or secret",
+                        DataClass::Internal,
+                        true,
+                        ADMIN_GROUP,
+                    ),
                     f("at", "When it happened, in UTC (RFC 3339)"),
                 ],
                 commands: vec![],
@@ -3165,10 +3177,11 @@ mod tests {
     #[test]
     fn the_security_event_log_is_readable_by_admins_and_never_writable() {
         let store = Store::new();
-        let (d, _) = setup(&store);
+        let (d, inst) = setup(&store);
         let mut f = Fields::new();
         f.insert("user".into(), J::from("ada"));
-        f.insert("kind".into(), J::from("enrol_confirm"));
+        f.insert("kind".into(), J::from("sign_signed"));
+        f.insert("detail".into(), J::from("address 203.0.113.9"));
         store.backend().insert("security_event", "001", &f).unwrap();
         let rows =
             |p: &Principal| call(&d, p, "security_event.list", Value::Map(Default::default()));
@@ -3193,10 +3206,40 @@ mod tests {
             );
         }
         let agent = Principal::agent("ada/agent", &[ADMIN_GROUP], &[ADMIN_GROUP]);
-        assert!(
-            rows(&agent).is_ok(),
-            "an agent scoped to the admin group may read it"
-        );
+        let Ok(r) = rows(&agent) else {
+            panic!("an agent scoped to the admin group may read it")
+        };
+        // ...but the detail, which may hold an address, only as a token (O36); a person reads it.
+        let Value::List(l) = r.value else { panic!() };
+        let Value::Map(row) = &l[0] else { panic!() };
+        let Some(Value::Text(detail)) = row.get("detail") else {
+            panic!("{row:?}")
+        };
+        assert!(detail.starts_with("DETAIL_"), "{detail}");
+        assert_eq!(row.get("kind"), Some(&Value::text("sign_signed")));
+        let Ok(r) = rows(&admin()) else { panic!() };
+        let Value::List(l) = r.value else { panic!() };
+        let Value::Map(row) = &l[0] else { panic!() };
+        assert_eq!(row.get("detail"), Some(&Value::text("address 203.0.113.9")));
+        // Nothing writes it through `create` or `update`, so the metadata states no limit for it
+        // (K44 b), nor for the long list of a module's contents; a stored model keeps its limits.
+        let limit = |model: &str, field: &str| {
+            d.meta(Surface::Rest, &admin())
+                .into_iter()
+                .flat_map(|m| m.models)
+                .find(|m| m.name == model)
+                .and_then(|m| m.fields.into_iter().find(|f| f.name == field))
+                .map(|f| f.max_length)
+        };
+        assert_eq!(limit("security_event", "detail"), Some(None));
+        assert_eq!(limit("module", "contents"), Some(None));
+        inst.install(
+            include_str!("../../../../packages/fleet.toml"),
+            "upload",
+            "root",
+        )
+        .unwrap();
+        assert_eq!(limit("fleet_vehicle", "plate"), Some(Some(2048)));
     }
 
     #[test]
@@ -4491,7 +4534,8 @@ write_group = "fleetlog.manager"
             "root",
         )
         .unwrap();
-        let reader = Principal::user("m", &["fleetlog.user", "fleetlog.manager"]);
+        // The reader may see the vehicles too: the target is named only to who may (K27).
+        let reader = Principal::user("m", &["fleetlog.user", "fleetlog.manager", "fleet.user"]);
         let text = |d: &Dispatcher| {
             let m = d
                 .meta(Surface::Rest, &reader)
@@ -4671,12 +4715,17 @@ write_group = "fleetlog.manager"
                 .iter()
                 .any(|m| m.id == "fleet")
         };
-        let now = || {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64
-        };
+        // The installer's own monotonic clock, not the wall clock (O41): a stepped system clock
+        // moves nothing here.
+        let now = || b.clock_ms();
+        let wall = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        assert!(
+            now() < wall / 2,
+            "the look is timed on the installer's clock, not the milliseconds since 1970"
+        );
         a.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
             .unwrap();
         // B looked half a second ago: three looks now change nothing, and the time of the last

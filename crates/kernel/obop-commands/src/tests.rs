@@ -2487,3 +2487,64 @@ fn read_only_registration_exposes_get_list_and_search_and_ignores_actor_keys() {
     assert!(!d.meta(Surface::Rest, &u)[0].models[0].can_create);
     assert!(d.model_fields("hooks_item").is_some() && d.model_def("hooks_item").is_some());
 }
+
+/// `register_read_only` (the security event log) guards `list` and `search` like every other
+/// registration: an agent that sees a personal field only as a token can neither group by it nor
+/// filter on it, which would hand back the clear text or answer guesses.
+#[test]
+fn a_read_only_model_refuses_an_agent_query_on_a_masked_field() {
+    let (d, store) = (Dispatcher::new(), Store::new());
+    let mut m = hooks_module();
+    m.models[0].fields[1] = F::new("owner", "Owner", DataClass::None, true, "g");
+    d.register_read_only(&m, "hooks_item", &store);
+    store
+        .insert(
+            "hooks_item",
+            [
+                ("name".to_string(), Value::text("a")),
+                ("owner".to_string(), Value::text("ann@example.com")),
+            ]
+            .into(),
+        )
+        .unwrap();
+    let agent = Principal::agent("bot", &["g"], &["g"]);
+    let call = |c: &str, v: Value| {
+        d.call(
+            Surface::Mcp,
+            &agent,
+            &mut Vault::new(),
+            &format!("hooks_item.{c}"),
+            &v,
+        )
+    };
+    let grouped = Value::map([(
+        "aggregate",
+        Value::map([("group_by", Value::List(vec![Value::text("owner")]))]),
+    )]);
+    let filtered = Value::map([(
+        "filter",
+        Value::List(vec![Value::map([
+            ("field", Value::text("owner")),
+            ("op", Value::text("contains")),
+            ("value", Value::text("ann")),
+        ])]),
+    )]);
+    for (c, input) in [
+        ("search", &grouped),
+        ("search", &filtered),
+        ("list", &filtered),
+    ] {
+        match call(c, input.clone()) {
+            Err(CallError::Handler(e)) => {
+                assert_eq!(e, "unknown field hooks_item.owner", "{c}")
+            }
+            other => panic!("{c}: {other:?}"),
+        }
+    }
+    // A field the agent reads in clear stays usable.
+    let by_name = Value::map([(
+        "aggregate",
+        Value::map([("group_by", Value::List(vec![Value::text("name")]))]),
+    )]);
+    assert!(call("search", by_name).is_ok());
+}

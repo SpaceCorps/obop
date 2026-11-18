@@ -14,6 +14,7 @@ import {
 } from "./blobs.ts";
 import { useData } from "./data.tsx";
 import { loadPreview, type Preview } from "./filePreview.ts";
+import { useFieldForm } from "./inputs/form.ts";
 import { fieldTitle } from "./labels.ts";
 import { Icon } from "./ui.tsx";
 
@@ -90,9 +91,14 @@ export function BlobThumb({
   );
 }
 
-/** A file in a list or a card: a button that downloads it. */
-export function FileChip({ id, field }: { id: string; field: FieldMeta }) {
+/**
+ * A file in a list or a card: a button that downloads it. `record` is the id of the record that
+ * holds it, when known: the download is then named as that record holds the file (K55).
+ */
+export function FileChip({ id, field, record }: { id: string; field: FieldMeta; record?: string }) {
   const d = useData();
+  const from =
+    record && field.model ? { model: field.model, record, field: field.name } : undefined;
   const [state, setState] = useState<"idle" | "busy" | "failed">("idle");
   return (
     <button
@@ -103,7 +109,7 @@ export function FileChip({ id, field }: { id: string; field: FieldMeta }) {
       onClick={async (e) => {
         e.stopPropagation();
         setState("busy");
-        const ok = await saveBlob(d.token, id, fieldTitle(field));
+        const ok = await saveBlob(d.token, id, fieldTitle(field), from);
         setState(ok ? "idle" : "failed");
         if (!ok) d.notify(t("Could not download the file."), "error");
       }}
@@ -219,6 +225,9 @@ type BlobInputProps = {
 export function BlobInput(p: BlobInputProps) {
   const { field: f, value, onChange, readOnly } = p;
   const d = useData();
+  const form = useFieldForm();
+  // The saved record this input edits, when it holds this field: it names a download (K55).
+  const record = form?.model.name === f.model ? form.record : undefined;
   const isImage = f.kind === "image";
   const max = f.max_bytes ?? (isImage ? 5 * 1024 * 1024 : 25 * 1024 * 1024);
   const input = useRef<HTMLInputElement>(null);
@@ -387,7 +396,11 @@ export function BlobInput(p: BlobInputProps) {
   return (
     <div className="blobfield" data-over={over || undefined} {...drop}>
       <div className="blobrow">
-        {value ? <FileChip id={value} field={f} /> : <span className="dim">{t("No file")}</span>}
+        {value ? (
+          <FileChip id={value} field={f} record={record} />
+        ) : (
+          <span className="dim">{t("No file")}</span>
+        )}
         {!readOnly && (
           <div className="blobactions">
             <button

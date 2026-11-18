@@ -1498,7 +1498,7 @@
             "type": "string"
           },
           "detail": {
-            "description": "A short note without any code or secret",
+            "description": "A short note without any code or secret (personal data: agents see it masked)",
             "type": "string"
           },
           "kind": {
@@ -3219,7 +3219,7 @@
     },
     "/api/blobs/{id}": {
       "get": {
-        "description": "Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. Strong ETag; files are sent as attachments.",
+        "description": "Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. `model`, `record` and `field` together name the record the download comes from: identical bytes are stored once, so the file is then named as that record holds it, when the caller can read it. Strong ETag; files are sent as attachments.",
         "operationId": "downloadBlob",
         "parameters": [
           {
@@ -3243,6 +3243,30 @@
                 1280
               ],
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "record",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "field",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
