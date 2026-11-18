@@ -1435,6 +1435,45 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
         (202, json!(true)),
         "{b}"
     );
+    // The administrator approves it: the log line names the agent that proposed it as the actor
+    // and the person who approved it (N15).
+    let plan = b["plan_id"].as_str().unwrap().to_string();
+    let (s, b) = post(r, Some(&boss), &format!("/api/approve/{plan}"), json!({})).await;
+    assert_eq!(s, 200, "{b}");
+    let lines: Vec<_> = w
+        .app
+        .store
+        .backend()
+        .list("security_event")
+        .unwrap()
+        .into_iter()
+        .map(|(_, f)| f)
+        .filter(|f| f["kind"] == "oidc_bind")
+        .collect();
+    let approved = lines
+        .iter()
+        .find(|f| f["user"] == "bob")
+        .expect("the approved binding is logged");
+    assert_eq!(approved["actor"], "boss/agent", "{approved:?}");
+    assert!(
+        approved["detail"]
+            .as_str()
+            .unwrap()
+            .ends_with("(approved by boss)"),
+        "{approved:?}"
+    );
+    // The binding the administrator made without a proposal names nobody else.
+    let own = lines.iter().find(|f| f["user"] == "ada").unwrap();
+    assert_eq!(own["actor"], "boss");
+    assert!(!own["detail"].as_str().unwrap().contains("approved by"));
+    let (s, b) = post(
+        r,
+        Some(&boss),
+        "/api/user_account/unbind_sso",
+        json!({"id": "bob"}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
     let (s, b) = post(
         r,
         Some(&agent),
@@ -1474,7 +1513,8 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     );
     w.assert_nowhere(CLIENT_SECRET);
     w.assert_nowhere("attacker-secret");
-    assert_eq!(w.events("oidc_bind").len(), 1);
+    // The administrator's own binding and the approved proposal of the agent; nothing else.
+    assert_eq!(w.events("oidc_bind").len(), 2);
 }
 
 // ---- what the request asks for and what the token carries (scope, profile, optional claims) ---
