@@ -937,7 +937,6 @@ pub(crate) async fn callback(State(s): Shared, parts: Parts) -> Response {
     blocking(move || callback_blocking(&s, &parts)).await
 }
 
-/// Spend the flow: read it and delete it, and trust it only if the delete was ours.
 /// A page for a callback the store refused before its round trip was known (the layer of D74
 /// replaces it with its 503 page, which says to try again).
 fn busy_page() -> Response {
@@ -952,6 +951,7 @@ fn busy_page() -> Response {
     r
 }
 
+/// Spend the flow: read it and delete it, and trust it only if the delete was ours.
 pub(crate) fn take_flow(s: &HttpState, flow: &str) -> Option<J> {
     take_flow_from(&*s.shared.backend, flow)
 }

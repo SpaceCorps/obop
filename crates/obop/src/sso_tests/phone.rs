@@ -1469,19 +1469,15 @@ async fn phone_a_storage_fault_in_the_callback_is_never_a_500_and_leaves_the_flo
             continue;
         }
         match cb.status {
-            // D74: a refused store is a 503 that says what became of the changes; a page of it
-            // when the refusal came before the round trip was known (N19: a navigation).
+            // D74: a refusal before the round trip was known is the small page of a 503 (N19: a
+            // navigation), never the JSON of one.
             503 => {
-                if cb.body.starts_with("<!doctype html>") {
-                    assert!(cb.body.contains("Try again"), "{skip}: {}", cb.body);
-                } else {
-                    assert!(
-                        ["none", "unknown", "partial"]
-                            .contains(&cb.json()["applied"].as_str().unwrap()),
-                        "{skip}: {}",
-                        cb.body
-                    );
-                }
+                assert!(
+                    cb.body.starts_with("<!doctype html>"),
+                    "{skip}: {}",
+                    cb.body
+                );
+                assert!(cb.body.contains("Try again"), "{skip}: {}", cb.body);
                 as_503 += 1;
             }
             // Or the redirect with a fixed word, never the back office's fragment.

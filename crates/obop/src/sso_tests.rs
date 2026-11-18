@@ -3284,3 +3284,104 @@ async fn the_offered_question_is_limited_per_address() {
     assert_eq!(ask("198.51.100.7".into()).await, 429);
     assert_eq!(ask("198.51.100.8".into()).await, 200);
 }
+
+/// N19 through the real router: a storage fault at any call of the back office's start or
+/// callback ends in the route's own failure redirect (`#oidc_error=busy`), the normal ending, or
+/// the small page of a 503 (a callback whose sign-in row could not be read); never the JSON of a
+/// 503 and never a 500, because the browser came by navigation.
+#[tokio::test]
+async fn failures_a_storage_fault_in_the_web_leg_keeps_its_redirect_or_a_page() {
+    use obop_storage::testing::Flaky;
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    w.keep_throttle();
+    // The page of a 503: HTML that says to try again, never JSON.
+    let page = |r: &Raw, at: &str| {
+        assert!(r.body.starts_with("<!doctype html>"), "{at}: {}", r.body);
+        assert!(r.body.contains("Try again"), "{at}: {}", r.body);
+    };
+    // The start, refused at each call in turn.
+    let (mut busy_starts, mut clean) = (0, 0);
+    for skip in 0..60 {
+        let ip = format!("10.8.{}.{}", skip / 200, skip % 200 + 1);
+        let h = [("x-forwarded-for", ip.as_str())];
+        let before = flaky.refused();
+        flaky.refuse_call_after(skip);
+        let s = w
+            .send_h("GET", "/api/auth/oidc/start", &Jar::default(), None, &h)
+            .await;
+        let refused = flaky.refused() - before;
+        flaky.allow_models();
+        let at = format!("start {skip}");
+        match s.status {
+            303 if s.location() == "/#oidc_error=busy" => busy_starts += 1,
+            303 => assert!(
+                s.location().starts_with(&w.idp.authority()),
+                "{at}: {}",
+                s.location()
+            ),
+            503 => page(&s, &at),
+            other => panic!("{at}: {other}: {}", s.body),
+        }
+        if refused == 0 {
+            clean += 1;
+            if clean == 2 {
+                break;
+            }
+        }
+    }
+    assert!(clean >= 1, "the sweep went past the end of the start");
+    assert!(busy_starts > 0, "a refused start keeps its redirect");
+    // The callback, refused at each call in turn.
+    let (mut busy, mut pages, mut clean) = (0, 0, 0);
+    for skip in 0..120 {
+        let ip = format!("10.9.{}.{}", skip / 200, skip % 200 + 1);
+        let h = [("x-forwarded-for", ip.as_str())];
+        let mut jar = Jar::default();
+        let s = w
+            .send_h("GET", "/api/auth/oidc/start", &jar, None, &h)
+            .await;
+        jar.absorb(&s);
+        let uri = w.idp.authorize(&s.location(), ADA_OID);
+        let before = flaky.refused();
+        flaky.refuse_call_after(skip);
+        let r = w.send_h("GET", &uri, &jar, None, &h).await;
+        let refused = flaky.refused() - before;
+        flaky.allow_models();
+        let at = format!("callback {skip}");
+        if refused == 0 {
+            assert!(
+                r.location().starts_with("/#oidc="),
+                "{at}: {}",
+                r.location()
+            );
+            clean += 1;
+            if clean == 2 {
+                break;
+            }
+            continue;
+        }
+        match r.status {
+            303 => {
+                let loc = r.location();
+                if loc == "/#oidc_error=busy" {
+                    busy += 1;
+                } else {
+                    // A refusal the route could finish past (a log line it did not write).
+                    assert!(loc.starts_with("/#oidc="), "{at}: {loc}");
+                }
+            }
+            503 => {
+                page(&r, &at);
+                pages += 1;
+            }
+            other => panic!("{at}: {other}: {}", r.body),
+        }
+    }
+    assert!(clean >= 1, "the sweep went past the end of the callback");
+    assert!(
+        busy > 0 && pages > 0,
+        "both endings were met: {busy} {pages}"
+    );
+}
