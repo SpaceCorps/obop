@@ -588,9 +588,10 @@
   /* The dependency table stands in for the picture on a phone (DependencyOverview): the module's
      link fills its line, in the link colour so it reads as one. */
   .dep-table-wrap th a {
-    display: block;
-    padding-block: 0.8rem;
-    margin-block: -0.8rem;
+    display: flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+    margin-block: -0.6rem;
     color: var(--accent-ink);
   }
   .dep-table-wrap summary {
