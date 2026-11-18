@@ -260,20 +260,11 @@ fn platform(sub: &str, args: &mut Vec<String>) -> Exit {
                     }
                     let (pkcs8, public) =
                         obop_update::release::generate_release_key().map_err(|e| fail(&e))?;
-                    let mut f = std::fs::OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .open(&out)
+                    let mut f = create_private_file(std::path::Path::new(&out))
                         .map_err(|e| fail(&format!("cannot create {out}: {e}")))?;
                     std::io::Write::write_all(&mut f, &pkcs8)
                         .and_then(|()| f.sync_all())
                         .map_err(|e| fail(&format!("cannot write {out}: {e}")))?;
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::PermissionsExt;
-                        let _ =
-                            std::fs::set_permissions(&out, std::fs::Permissions::from_mode(0o600));
-                    }
                     println!("wrote the release key to {out}; keep it secret and off this server");
                     println!("public key: {public}");
                     Ok(())
@@ -356,5 +347,38 @@ fn platform(sub: &str, args: &mut Vec<String>) -> Exit {
             Ok(())
         }
         _ => Err(usage()),
+    }
+}
+
+/// A new file that only its owner can read, created that way (mode 0600 on Unix, never wider for
+/// a moment); an existing file is never overwritten. The release key of `release keygen` (H7).
+fn create_private_file(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        o.mode(0o600);
+    }
+    o.open(path)
+}
+
+#[cfg(test)]
+mod private_file_tests {
+    #[test]
+    fn the_release_key_file_is_created_private_and_never_overwritten() {
+        let dir = std::env::temp_dir().join(format!("obop-keyfile-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("release.pk8");
+        drop(super::create_private_file(&p).unwrap());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&p).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "{mode:o}");
+        }
+        assert!(super::create_private_file(&p).is_err(), "never overwritten");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
