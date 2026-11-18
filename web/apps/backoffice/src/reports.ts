@@ -46,8 +46,8 @@ export function keyOf(v: unknown): string {
 
 // ---- dimensions --------------------------------------------------------------------------------
 
-export type Bucket = "day" | "week" | "month" | "year";
-export const BUCKETS: readonly Bucket[] = ["day", "week", "month", "year"];
+export type Bucket = "day" | "week" | "iso_week" | "month" | "year";
+export const BUCKETS: readonly Bucket[] = ["day", "week", "iso_week", "month", "year"];
 const isBucket = (s: unknown): s is Bucket => BUCKETS.includes(s as Bucket);
 
 /** A field to group by; a date or datetime always has a period. */
@@ -90,6 +90,8 @@ export function dimTitle(d: Dim): string {
       return t("{field} (day)", { field: name });
     case "week":
       return t("{field} (week)", { field: name });
+    case "iso_week":
+      return t("{field} (ISO week)", { field: name });
     case "year":
       return t("{field} (year)", { field: name });
     default:
@@ -104,6 +106,8 @@ export function bucketName(b: Bucket): string {
       return t("Day");
     case "week":
       return t("Week");
+    case "iso_week":
+      return t("ISO week");
     case "year":
       return t("Year");
     default:
@@ -122,6 +126,10 @@ export function bucketLabel(bucket: Bucket, key: string): string {
       return shortDay(key, true);
     case "week":
       return t("Week of {date}", { date: shortDay(key, true) });
+    case "iso_week": {
+      const [y, w] = key.split("-W");
+      return t("Week {week}, {year}", { week: Number(w), year: y ?? "" });
+    }
     case "year":
       return key;
     default:
@@ -139,6 +147,7 @@ export function dimAxisLabel(d: Dim, key: string, lk: Lookup): string {
   if (!isDated(d.field) || !key) return dimLabel(d, key, lk);
   const b = d.bucket ?? "month";
   if (b === "day" || b === "week") return shortDay(key, false);
+  if (b === "iso_week") return `W${key.split("-W")[1] ?? key}`;
   return bucketLabel(b, key);
 }
 
@@ -158,6 +167,25 @@ export function mondayOf(day: string): string {
   return addDays(day, -((wd + 6) % 7));
 }
 
+/**
+ * The ISO 8601 week of a day, `YYYY-Www`, as the server cuts it (obop-values `Bucket::IsoWeek`):
+ * the week belongs to the year of its Thursday.
+ */
+export function isoWeekOf(day: string): string {
+  const thursday = addDays(mondayOf(day), 3);
+  const year = thursday.slice(0, 4);
+  const [y, m, d] = thursday.split("-").map(Number) as [number, number, number];
+  const n = Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 86_400_000 / 7) + 1;
+  return `${year}-W${String(n).padStart(2, "0")}`;
+}
+
+/** The Monday of an ISO week `YYYY-Www`. */
+export function mondayOfIsoWeek(key: string): string {
+  const [y, w] = key.split("-W").map(Number) as [number, number];
+  // 4 January is always in week 1.
+  return addDays(mondayOf(`${y}-01-04`), (w - 1) * 7);
+}
+
 /** The condition that lists exactly the records of one group (for a drill into the list). */
 export function dimCond(d: Dim, key: string): Cond {
   if (!isDated(d.field) || key === "") return condForKey(d.field, key);
@@ -167,6 +195,10 @@ export function dimCond(d: Dim, key: string): Cond {
       return { op: "range", f, min: key, max: key };
     case "week":
       return { op: "range", f, min: key, max: addDays(key, 6) };
+    case "iso_week": {
+      const monday = mondayOfIsoWeek(key);
+      return { op: "range", f, min: monday, max: addDays(monday, 6) };
+    }
     case "year":
       return { op: "range", f, min: `${key}-01-01`, max: `${key}-12-31` };
     default:
@@ -192,6 +224,8 @@ export function dimKeyOf(d: Dim, row: Row, zone = "UTC"): string {
       return day;
     case "week":
       return mondayOf(day);
+    case "iso_week":
+      return isoWeekOf(day);
     case "year":
       return day.slice(0, 4);
     default:
@@ -214,6 +248,8 @@ export function fillPeriods(keys: readonly string[], bucket: Bucket, max = 120):
         return addDays(k, 1);
       case "week":
         return addDays(k, 7);
+      case "iso_week":
+        return isoWeekOf(addDays(mondayOfIsoWeek(k), 7));
       case "year":
         return String(Number(k) + 1);
       default: {

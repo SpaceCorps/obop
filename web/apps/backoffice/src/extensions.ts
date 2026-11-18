@@ -17,6 +17,7 @@
  */
 import type { ComponentType, ReactNode } from "react";
 import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
+import type { Edit } from "./edit.ts";
 import type { NextActions } from "./presentation.ts";
 import type { App } from "./Chrome.tsx";
 import type { Go, Route } from "./route.ts";
@@ -31,6 +32,13 @@ export type RecordExtProps = {
   row: Row;
   /** A command of the panel is running: buttons should be disabled. */
   busy: boolean;
+  /** The value of a field as the form holds it now (the draft, else the record). */
+  value?: (f: FieldMeta) => Edit;
+  /**
+   * Save what the person changed in the form, as the action row does before an action; false
+   * when the save was refused (the form shows why) and the action should not run.
+   */
+  saveFirst?: () => Promise<boolean>;
 };
 
 /** What a section inside the form gets; `row` is null while a new record is being made. */

@@ -12,8 +12,11 @@
 //! Names are compared as the sign-in compares them (trimmed, lower case), so `ROOT` or ` root`
 //! is the account `root`. Once a claim is submitted its `employee` no longer changes (a wrapper of
 //! `expenses_expense.update`), so the maker cannot put another name on a claim and then approve
-//! it. A claim written in another person's name while it is a draft is that person's claim: the
-//! rule knows the claimant by `employee` only.
+//! it. A claim written in another person's name while it is a draft is that person's claim, but
+//! the person who submitted it (`submitted_by`, stamped by the submit action since expenses
+//! 0.5.0) may not approve it either (U7). The rule is checked again when a person approves an
+//! agent's plan, before the plan is spent (`Dispatcher::before_approve`), so a claimant who is
+//! refused leaves the plan for someone else.
 
 use crate::company_settings;
 use obop_commands::{ADMIN_GROUP, Dispatcher, Principal, Store, Value};
@@ -157,6 +160,35 @@ fn approver(p: &Principal, input: &Value) -> String {
     id.strip_suffix("/agent").unwrap_or(&id).to_string()
 }
 
+/// Refuse the approval of the claim `input.id` by `who` when they are its employee or the person
+/// who submitted it, unless the company allows self-approval.
+fn refuse_own(b: &dyn obop_storage::Backend, input: &Value, who: &str) -> Result<(), String> {
+    let id = text_of(input, "id");
+    if id.is_empty() || allows_self_approval(b)? {
+        return Ok(());
+    }
+    let Some(claim) = b.get("expenses_expense", &id).map_err(|e| e.to_string())? else {
+        return Ok(());
+    };
+    let who = norm(who.strip_suffix("/agent").unwrap_or(who));
+    // A name stored by an agent ("ann/agent") is the person behind it.
+    let named = |k: &str| {
+        claim
+            .get(k)
+            .and_then(J::as_str)
+            .map(|s| norm(s.strip_suffix("/agent").unwrap_or(s)))
+    };
+    if !who.is_empty()
+        && [named("employee"), named("submitted_by")]
+            .into_iter()
+            .flatten()
+            .any(|n| n == who)
+    {
+        return Err(refusal_text(obop_commands::locale::language()).into());
+    }
+    Ok(())
+}
+
 pub fn register(d: &Arc<Dispatcher>, store: &Store) {
     let m = module();
     let b = store.backend();
@@ -187,24 +219,18 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
             row(&*b)
         }),
     );
-    let (b, s) = (store.backend(), store.clone());
+    let s = store.clone();
     d.around(
         "expenses_expense.approve",
         Box::new(move |p, input, inner| {
-            let id = text_of(input, "id");
-            if !id.is_empty() && !allows_self_approval(&*b)? {
-                let employee = s
-                    .backend()
-                    .get("expenses_expense", &id)
-                    .map_err(|e| e.to_string())?
-                    .and_then(|f| f.get("employee").and_then(J::as_str).map(String::from))
-                    .unwrap_or_default();
-                if !norm(&employee).is_empty() && norm(&employee) == norm(&approver(p, input)) {
-                    return Err(refusal_text(obop_commands::locale::language()).into());
-                }
-            }
+            refuse_own(&*s.backend(), input, &approver(p, input))?;
             inner(input)
         }),
+    );
+    let s = store.clone();
+    d.before_approve(
+        "expenses_expense.approve",
+        Box::new(move |approver, input| refuse_own(&*s.backend(), input, &approver.id)),
     );
     let s = store.clone();
     d.around(

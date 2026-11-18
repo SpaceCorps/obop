@@ -42,12 +42,14 @@ export const staleAfter = (model: string): string[] => [model, ...(DERIVED[model
 export type Tone = "ok" | "error" | "info";
 
 /** Lists of records, loaded once per model and shared by the page, ref pickers, labels and smart buttons. */
-class RowStore {
+export class RowStore {
   private rows = new Map<string, Row[]>();
   private denied = new Map<string, string[]>();
   private errors = new Map<string, string>();
   private totals = new Map<string, number>();
   private pending = new Map<string, Promise<void>>();
+  /** A load asked for while one was running, which starts when that one is done. */
+  private queued = new Map<string, Promise<void>>();
   private listeners = new Set<() => void>();
   version = 0;
 
@@ -87,9 +89,25 @@ class RowStore {
   totalOf(model: string): number {
     return this.totals.get(model) ?? this.rows.get(model)?.length ?? 0;
   }
-  /** Reload a model only if some view already holds its rows. */
+  /**
+   * Reload a model only if some view already holds its rows. The answer is read after the call:
+   * a load that was already running may have been answered before a write that asks for this
+   * refresh (a line saved while its order was loading, a record created while the list was), so
+   * another load follows it instead of sharing its answer (FLAKY2: a total stayed 0.00).
+   */
   refresh(model: string): Promise<void> {
-    return this.rows.has(model) ? this.load(model) : Promise.resolve();
+    if (!this.rows.has(model)) return Promise.resolve();
+    const running = this.pending.get(model);
+    if (!running) return this.load(model);
+    let next = this.queued.get(model);
+    if (!next) {
+      next = running.then(() => {
+        this.queued.delete(model);
+        return this.load(model);
+      });
+      this.queued.set(model, next);
+    }
+    return next;
   }
 
   /** Reload every cached model, and try again the ones whose load failed. */

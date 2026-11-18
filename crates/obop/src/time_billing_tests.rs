@@ -263,3 +263,104 @@ fn an_entry_is_linked_once_under_its_own_id_and_get_reads_it() {
             .is_err()
     );
 }
+
+#[test]
+fn the_project_gives_the_customer_and_the_rate_and_lines_can_be_per_task() {
+    // K62: a project names its customer and hourly rate; the call may leave both out, the
+    // invoice is in the instance currency, and per=task gives one line per task.
+    let f = fixture();
+    let acme = rows(&f.app, "party")
+        .into_iter()
+        .find(|(_, p)| p["name"] == "Acme AB")
+        .unwrap()
+        .0;
+    let project = rows(&f.app, "projects_project")[0].0.clone();
+    call(
+        &f.app,
+        &admin(),
+        "projects_project.update",
+        json!({"id": project, "customer_id": acme, "hourly_rate": 60_000}),
+    )
+    .unwrap();
+    let other = create(
+        &f.app,
+        "projects_task",
+        json!({"title": "Build", "project_id": project}),
+    );
+    f.entry("2026-09-02", 90, true, true);
+    f.entry("2026-09-03", 45, true, true);
+    let e = create(
+        &f.app,
+        "timesheets_entry",
+        json!({"task_id": other, "worker": "ann", "worked_on": "2026-09-04", "minutes": 30,
+               "billable": true, "state": "draft"}),
+    );
+    for a in ["submit", "approve"] {
+        call(
+            &f.app,
+            &admin(),
+            &format!("timesheets_entry.{a}"),
+            json!({"id": e}),
+        )
+        .unwrap();
+    }
+    let input = json!({"project": "WEB", "from": "2026-09-01", "to": "2026-09-30", "per": "task"});
+    let r = f.run(input).unwrap();
+    assert_eq!(r["entries"], json!(3));
+    assert_eq!(r["lines"].as_array().unwrap().len(), 2, "{r}");
+    // 135 minutes of Design and 30 of Build at 600.00 an hour.
+    assert_eq!(r["lines"][0]["amount"], json!(135_000));
+    assert_eq!(r["lines"][1]["amount"], json!(30_000));
+    assert_eq!(
+        r["lines"][0]["description"],
+        json!("Design: 2.25 h (2 entries)")
+    );
+    let inv = rows(&f.app, "invoice");
+    assert_eq!(inv[0].1["party_id"], json!(acme));
+    assert_eq!(inv[0].1["currency"], json!("EUR"), "the instance currency");
+    assert_eq!(rows(&f.app, "time_billing").len(), 3);
+    // Without a rate anywhere it says where to set one.
+    call(
+        &f.app,
+        &admin(),
+        "projects_project.update",
+        json!({"id": project, "hourly_rate": null}),
+    )
+    .unwrap();
+    let m = refusal(f.run(json!({"project": "WEB", "from": "2026-09-01", "to": "2026-09-30"})));
+    assert!(m.contains("set the project's hourly rate"), "{m}");
+    let m = refusal(f.run(
+        json!({"project": "WEB", "from": "2026-09-01", "to": "2026-09-30",
+        "hourly_rate_minor": 100, "per": "week"}),
+    ));
+    assert!(m.contains("per must be entry or task"), "{m}");
+}
+
+#[test]
+fn the_project_rate_is_not_billed_in_another_currency() {
+    // The project's hourly rate is a money field of the instance currency (EUR here): a call that
+    // takes it and asks for SEK would bill the same number as crowns.
+    let f = fixture();
+    let project = rows(&f.app, "projects_project")[0].0.clone();
+    call(
+        &f.app,
+        &admin(),
+        "projects_project.update",
+        json!({"id": project, "hourly_rate": 60_000}),
+    )
+    .unwrap();
+    f.entry("2026-09-02", 60, true, true);
+    let base = json!({"project": "WEB", "customer": "Acme AB", "from": "2026-09-01",
+                      "to": "2026-09-30", "dry_run": true});
+    let mut sek = base.clone();
+    sek["currency"] = json!("SEK");
+    let m = refusal(f.run(sek.clone()));
+    assert!(m.contains("instance currency EUR"), "{m}");
+    assert!(m.contains("hourly_rate_minor"), "{m}");
+    // The instance currency named, or a rate in the call, is fine.
+    let mut eur = base.clone();
+    eur["currency"] = json!("EUR");
+    assert_eq!(f.run(eur).unwrap()["net"], json!(60_000));
+    sek["hourly_rate_minor"] = json!(70_000);
+    assert_eq!(f.run(sek).unwrap()["net"], json!(70_000));
+}

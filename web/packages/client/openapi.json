@@ -31587,7 +31587,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer at hourly_rate_minor; one line per entry. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post",
+        "summary": "Bill the approved, billable, not yet billed time entries of a project (project) between from and to as a draft invoice for a customer (customer, else the project's) at hourly_rate_minor (else the project's hourly rate); one line per entry, or per task with per=task. Refused in words when the customer, the rate, the period or the project is missing or unknown, when no entry qualifies, or when a billable entry in the period is not approved. dry_run shows the lines and writes nothing. An agent may only dry-run. The invoice stays a draft: posting is invoice.post",
         "tags": [
           "time_billing"
         ]
