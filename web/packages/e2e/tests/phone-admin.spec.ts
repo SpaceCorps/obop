@@ -187,6 +187,11 @@ for (const size of SIZES) {
       await open(page, "/");
       await settle(page);
       await fits(page, "home");
+      // The account menu: its items and its language switcher are what a finger hits next.
+      await page.getByRole("button", { name: "Account" }).click();
+      await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
+      await fits(page, "account menu open");
+      await page.keyboard.press("Escape");
     });
 
     test("the Guide has finger-sized links and Copy buttons", async ({ page, signIn }) => {
@@ -250,6 +255,25 @@ for (const size of SIZES) {
         if (section === "dependencies") expect(ranges).toHaveLength(1);
         if (section === "versions") expect(versions).toHaveLength(1);
       }
+      // The links of the dependency table are 44 px high without the hit boxes of two rows
+      // lying over each other (a tap between two names must land on one of them).
+      await open(page, "/customize/modules?tab=modules");
+      await settle(page);
+      await page.evaluate(() => {
+        for (const d of document.querySelectorAll<HTMLDetailsElement>("details.dep-table-wrap"))
+          d.open = true;
+      });
+      const links = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>(".dep-table-wrap tbody th a")]
+          .map((a) => a.getBoundingClientRect())
+          .filter((r) => r.width > 0)
+          .map((r) => ({ top: r.top + scrollY, bottom: r.bottom + scrollY })),
+      );
+      expect(links.length, "rows in the dependency table").toBeGreaterThanOrEqual(2);
+      for (let i = 1; i < links.length; i++)
+        expect
+          .soft(links[i]!.top, `link ${i} starts under link ${i - 1}`)
+          .toBeGreaterThanOrEqual(links[i - 1]!.bottom - 0.5);
     });
 
     test("Connectors: a connection's runs and flows, and the processing register", async ({
@@ -340,6 +364,17 @@ for (const size of SIZES) {
       const t = table(a, /./);
       expect.soft(t.scrolls, "the Drive table scrolls sideways").toBe(0);
       expect.soft(t.stacked, "the Drive table is stacked").toBe(size.name === "phone");
+      // A folder has no size: its empty cell takes no line of a stacked card, and stays a cell
+      // of the row on a tablet.
+      const emptyCell = await page.evaluate(() => {
+        const cell = [...document.querySelectorAll("tbody tr")]
+          .find((r) => r.textContent?.includes("Contracts of 2026"))
+          ?.querySelector("td:empty");
+        return cell ? getComputedStyle(cell).display : "missing";
+      });
+      expect(emptyCell, "the display of the folder's empty cell").toBe(
+        size.name === "phone" ? "none" : "table-cell",
+      );
     });
   });
 }
