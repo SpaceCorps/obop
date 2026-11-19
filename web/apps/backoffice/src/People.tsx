@@ -20,6 +20,7 @@ import { summarise, type Access } from "./access.ts";
 import { AppIcon, type App } from "./Chrome.tsx";
 import { MIN_PASSWORD, account, reason, type Failure, type Notify } from "./SecurityAccount.tsx";
 import { MicrosoftDialog } from "./PeopleSso.tsx";
+import { Refusal } from "./Refusal.tsx";
 import { readSso, type SsoState } from "./SsoAdmin.tsx";
 
 /* D69: the people of the instance, for administrators: create a person, choose what they may use
@@ -93,17 +94,6 @@ export function GroupPicker({
         {shown.length === 0 && <p className="hint">{t("No group matches.")}</p>}
       </div>
     </fieldset>
-  );
-}
-
-/** A refusal, announced as an alert; the focus goes to it so that the person reads it at once. */
-function Refusal({ message }: { message: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => ref.current?.focus(), [message]);
-  return (
-    <div ref={ref} tabIndex={-1} className="confirm-error" role="alert">
-      {message}
-    </div>
   );
 }
 
