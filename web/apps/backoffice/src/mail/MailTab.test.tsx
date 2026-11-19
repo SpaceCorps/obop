@@ -51,3 +51,37 @@ it("asks for the connections only of a person who may list them", async () => {
   await settle();
   expect(asked).toContain("/api/connection/search");
 });
+
+it("lists the deliveries as cards up to a tablet, with the subject on a line of its own", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const path = new URL(url, "http://localhost").pathname;
+      const rows =
+        path === "/api/outbound_mail/search"
+          ? [
+              {
+                id: "m1",
+                queued_at: "2026-11-19T02:09:00Z",
+                to: "ada@example.org",
+                subject: "A subject with a long reference mwmwwp1b4w0",
+                status: "failed",
+                last_error: "could not connect",
+                attempts: 1,
+                kind: "invoice",
+              },
+            ]
+          : [];
+      return new Response(JSON.stringify({ value: { rows }, denied: [] }), { status: 200 });
+    }),
+  );
+  act(() => root.render(<MailTab token="tok" notify={() => {}} readsConnections={false} />));
+  await settle();
+  const table = container.querySelector("table[aria-label], table")!;
+  expect(table.querySelector("caption")?.textContent).toBe("Deliveries");
+  // stack-md: cards on a tablet as well as on a phone (six columns did not fit 768 px).
+  expect(table.classList.contains("stack-sm")).toBe(true);
+  expect(table.classList.contains("stack-md")).toBe(true);
+  const subject = table.querySelector('td[data-label="Subject"]')!;
+  expect(subject.classList.contains("cell-wide")).toBe(true);
+});

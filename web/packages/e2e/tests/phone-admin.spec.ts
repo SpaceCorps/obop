@@ -399,6 +399,56 @@ for (const size of SIZES) {
       }
     });
 
+    test("Customize, Mail: the deliveries are cards with the subject on a line of its own", async ({
+      page,
+      signIn,
+      api,
+      uid,
+    }) => {
+      test.setTimeout(120_000);
+      // A relay that refuses at once: the message stays queued with an error line under its subject.
+      const server = await api.run("root", "mail_server.create", {
+        name: uid("Phone relay"),
+        kind: "smtp",
+        host: "127.0.0.1",
+        port: 9,
+        security: "none",
+        from_address: "phone@example.org",
+        enabled: true,
+        is_default: false,
+      });
+      let mail = "";
+      try {
+        const sent = await api.run("root", "outbound_mail.send", {
+          to: "ada@example.org",
+          subject: uid("A delivery with a long subject"),
+          body: "x",
+          server: server.id,
+          kind: "invoice",
+        });
+        mail = sent.id;
+        await signIn("root", "/customize/mail?tab=mail");
+        await settle(page);
+        await expect(page.getByRole("table", { name: "Deliveries" })).toBeVisible();
+        const a = await fits(page, "mail");
+        const t = table(a, "Deliveries");
+        expect.soft(t.scrolls, "Deliveries scroll sideways").toBe(0);
+        // Cards up to 60rem: the six columns of a delivery did not fit 768 px (a recipient ran four
+        // lines, the date five).
+        expect.soft(t.stacked, "Deliveries are stacked").toBe(true);
+        const cells = await labelled(page, "Deliveries");
+        const subjects = cells.filter((c) => c.label === "Subject");
+        expect(subjects.length, "deliveries listed").toBeGreaterThan(0);
+        for (const c of subjects)
+          expect.soft(c.width, "Subject spans its card").toBeGreaterThanOrEqual(c.row - 1);
+      } finally {
+        if (mail) await api.run("root", "outbound_mail.cancel", { id: mail }).catch(() => null);
+        await api
+          .run("root", "mail_server.update", { id: server.id, enabled: false })
+          .catch(() => null);
+      }
+    });
+
     test("Modules: the list, a module's panel and its dependency tables", async ({
       page,
       signIn,
