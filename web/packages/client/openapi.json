@@ -119,6 +119,11 @@
               "google_drive",
               "google_oauth",
               "microsoft_oauth",
+              "postmark",
+              "sendgrid",
+              "mailgun",
+              "microsoft_graph_mail",
+              "gmail_send",
               "zapier",
               "make",
               "n8n"
@@ -228,6 +233,7 @@
               "rest_pull",
               "csv_export",
               "browse",
+              "mail",
               "none"
             ],
             "type": "string"
@@ -665,6 +671,130 @@
           },
           "title": {
             "description": "Short description of the opportunity",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mail_server": {
+        "description": "A way out for mail: an SMTP relay, or a provider reached through a Connectors connection",
+        "properties": {
+          "connection": {
+            "description": "Provider: the Connectors connection that sends",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Mail may go out through this server",
+            "type": "boolean"
+          },
+          "footer": {
+            "description": "Text added under every message, such as the company's details or how to stop these messages (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "from_address": {
+            "description": "Sender address of every message from this server (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "from_name": {
+            "description": "Sender name shown to the recipient (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "host": {
+            "description": "SMTP: host name of the relay",
+            "type": "string"
+          },
+          "is_default": {
+            "description": "Used for every message kind no other server lists",
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "smtp (a relay) or provider (an API through a Connectors connection)",
+            "enum": [
+              "smtp",
+              "provider"
+            ],
+            "type": "string"
+          },
+          "kinds": {
+            "description": "Message kinds this server sends, comma separated (such as invoice, password_reset); empty means any",
+            "type": "string"
+          },
+          "last_test_at": {
+            "description": "When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "example": "2026-03-29T01:30:00.000000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_test_result": {
+            "description": "What the server answered to the last test message (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "name": {
+            "description": "A name that tells the servers apart",
+            "type": "string"
+          },
+          "password": {
+            "description": "SMTP: password; write-only, stored encrypted, never returned",
+            "type": "string"
+          },
+          "password_set": {
+            "description": "SMTP: whether a password is stored",
+            "type": "boolean"
+          },
+          "port": {
+            "description": "SMTP: port (587 for STARTTLS, 465 for TLS)",
+            "type": "integer"
+          },
+          "reply_to": {
+            "description": "Where replies go; empty means the sender address (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "security": {
+            "description": "SMTP: starttls, tls or none (none sends no password)",
+            "enum": [
+              "starttls",
+              "tls",
+              "none"
+            ],
+            "type": "string"
+          },
+          "test_recipient": {
+            "description": "Input of test_send: the address the test message goes to; never stored (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "username": {
+            "description": "SMTP: user name; empty means no authentication (personal data: agents see it masked)",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mail_template": {
+        "description": "Subject and text of one message kind in one language, with placeholders (a name in double braces)",
+        "properties": {
+          "body": {
+            "description": "Text, with placeholders (a name in double braces)",
+            "type": "string"
+          },
+          "key": {
+            "description": "The message kind the template is for, such as invoice or password_reset (unique)",
+            "type": "string"
+          },
+          "language": {
+            "description": "Language of the text",
+            "enum": [
+              "en",
+              "de",
+              "fr",
+              "pl",
+              "fi",
+              "sv",
+              "es"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "description": "Subject line, with placeholders (a name in double braces)",
             "type": "string"
           }
         },
@@ -1164,6 +1294,130 @@
         },
         "type": "object"
       },
+      "outbound_mail": {
+        "description": "One outbound message: the queue and the deliveries log. Never shows the body",
+        "properties": {
+          "attempts": {
+            "description": "Delivery attempts so far",
+            "type": "integer"
+          },
+          "bcc": {
+            "description": "Blind copy recipients, comma separated; never in a header (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "body": {
+            "description": "The text, sealed; erased once the message is sent or cancelled (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "cc": {
+            "description": "Copy recipients, comma separated (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "due": {
+            "description": "When it is due, in seconds since 1970",
+            "type": "integer"
+          },
+          "kind": {
+            "description": "What the message is for, such as invoice or password_reset; general when not given",
+            "type": "string"
+          },
+          "language": {
+            "description": "Input of send: the template language",
+            "enum": [
+              "en",
+              "de",
+              "fr",
+              "pl",
+              "fi",
+              "sv",
+              "es"
+            ],
+            "type": "string"
+          },
+          "last_error": {
+            "description": "Why the last attempt failed, without the body or credentials (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "lease_until": {
+            "description": "Worker lease, in seconds since 1970",
+            "type": "integer"
+          },
+          "message_id": {
+            "description": "The Message-ID header, the same on every attempt",
+            "type": "string"
+          },
+          "next_attempt_at": {
+            "description": "When it is tried next (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "example": "2026-03-29T01:30:00.000000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "queued_at": {
+            "description": "When it was queued (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "example": "2026-03-29T01:30:00.000000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "related_id": {
+            "description": "The id of that record",
+            "type": "string"
+          },
+          "related_model": {
+            "description": "The model of the record the message is about",
+            "type": "string"
+          },
+          "reply_to": {
+            "description": "Where replies go; empty means the server's setting (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "requested_by": {
+            "description": "Who queued it (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "sent_at": {
+            "description": "When the server or provider accepted it (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "example": "2026-03-29T01:30:00.000000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "server": {
+            "description": "The mail server that sends it",
+            "type": "string"
+          },
+          "server_reply": {
+            "description": "The server's or provider's answer to the accepted message (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "status": {
+            "description": "queued, sending, sent, failed or cancelled (moves only through the model's actions)",
+            "enum": [
+              "queued",
+              "sending",
+              "sent",
+              "failed",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "description": "Subject line (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "template": {
+            "description": "Input of send: the template key to render; recorded",
+            "type": "string"
+          },
+          "to": {
+            "description": "Recipients, comma separated (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "vars": {
+            "description": "Input of send: the template values as a JSON object; never stored (personal data: agents see it masked)",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "party": {
         "description": "A person or organisation the business deals with",
         "properties": {
@@ -1393,6 +1647,11 @@
               "google_drive",
               "google_oauth",
               "microsoft_oauth",
+              "postmark",
+              "sendgrid",
+              "mailgun",
+              "microsoft_graph_mail",
+              "gmail_send",
               "zapier",
               "make",
               "n8n"
@@ -1502,7 +1761,7 @@
             "type": "string"
           },
           "kind": {
-            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_link_revoked, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared, setup_open, setup_refused, setup_complete",
+            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_link_revoked, sign_link_restored, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared, setup_open, setup_refused, setup_complete",
             "type": "string"
           },
           "user": {
@@ -3631,6 +3890,11 @@
                             "google_drive",
                             "google_oauth",
                             "microsoft_oauth",
+                            "postmark",
+                            "sendgrid",
+                            "mailgun",
+                            "microsoft_graph_mail",
+                            "gmail_send",
                             "zapier",
                             "make",
                             "n8n"
@@ -4043,6 +4307,11 @@
                       "google_drive",
                       "google_oauth",
                       "microsoft_oauth",
+                      "postmark",
+                      "sendgrid",
+                      "mailgun",
+                      "microsoft_graph_mail",
+                      "gmail_send",
                       "zapier",
                       "make",
                       "n8n"
@@ -5797,6 +6066,11 @@
                       "google_drive",
                       "google_oauth",
                       "microsoft_oauth",
+                      "postmark",
+                      "sendgrid",
+                      "mailgun",
+                      "microsoft_graph_mail",
+                      "gmail_send",
                       "zapier",
                       "make",
                       "n8n"
@@ -16306,6 +16580,2687 @@
         ]
       }
     },
+    "/api/mail_server/bulk_create": {
+      "post": {
+        "operationId": "mail_server.bulk_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "csv": {
+                    "description": "Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB). Number fields take whole numbers, money minor units; a decimal is written with a point and a datetime with an offset or Z; a decimal field that rounds on import takes extra digits",
+                    "type": "string"
+                  },
+                  "dry_run": {
+                    "type": "boolean"
+                  },
+                  "idempotency_key": {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  "mode": {
+                    "enum": [
+                      "all_or_nothing",
+                      "partial"
+                    ],
+                    "type": "string"
+                  },
+                  "rows": {
+                    "items": {
+                      "properties": {
+                        "connection": {
+                          "description": "Provider: the Connectors connection that sends",
+                          "type": "string"
+                        },
+                        "enabled": {
+                          "description": "Mail may go out through this server",
+                          "type": "boolean"
+                        },
+                        "footer": {
+                          "description": "Text added under every message, such as the company's details or how to stop these messages (personal data: agents see it masked)",
+                          "maxLength": 100000,
+                          "type": "string"
+                        },
+                        "from_address": {
+                          "description": "Sender address of every message from this server (personal data: agents see it masked)",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "from_name": {
+                          "description": "Sender name shown to the recipient (personal data: agents see it masked)",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "host": {
+                          "description": "SMTP: host name of the relay",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "is_default": {
+                          "description": "Used for every message kind no other server lists",
+                          "type": "boolean"
+                        },
+                        "kind": {
+                          "description": "smtp (a relay) or provider (an API through a Connectors connection)",
+                          "enum": [
+                            "smtp",
+                            "provider"
+                          ],
+                          "type": "string"
+                        },
+                        "kinds": {
+                          "description": "Message kinds this server sends, comma separated (such as invoice, password_reset); empty means any",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "last_test_at": {
+                          "description": "When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                          "example": "2026-03-29T01:30:00.000000Z",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "last_test_result": {
+                          "description": "What the server answered to the last test message (personal data: agents see it masked)",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "A name that tells the servers apart",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "password": {
+                          "description": "SMTP: password; write-only, stored encrypted, never returned",
+                          "maxLength": 100000,
+                          "type": "string"
+                        },
+                        "password_set": {
+                          "description": "SMTP: whether a password is stored",
+                          "type": "boolean"
+                        },
+                        "port": {
+                          "description": "SMTP: port (587 for STARTTLS, 465 for TLS)",
+                          "type": "integer"
+                        },
+                        "reply_to": {
+                          "description": "Where replies go; empty means the sender address (personal data: agents see it masked)",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "security": {
+                          "description": "SMTP: starttls, tls or none (none sends no password)",
+                          "enum": [
+                            "starttls",
+                            "tls",
+                            "none"
+                          ],
+                          "type": "string"
+                        },
+                        "test_recipient": {
+                          "description": "Input of test_send: the address the test message goes to; never stored (personal data: agents see it masked)",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "username": {
+                          "description": "SMTP: user name; empty means no authentication (personal data: agents see it masked)",
+                          "maxLength": 2048,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "kind",
+                        "from_address"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 1000,
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "value": {
+                      "properties": {
+                        "created": {
+                          "type": "integer"
+                        },
+                        "dry_run": {
+                          "type": "boolean"
+                        },
+                        "errors": {
+                          "items": {
+                            "properties": {
+                              "error": {
+                                "type": "string"
+                              },
+                              "line": {
+                                "type": "integer"
+                              },
+                              "row": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "failed": {
+                          "type": "integer"
+                        },
+                        "ids": {
+                          "items": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "type": "array"
+                        },
+                        "mode": {
+                          "type": "string"
+                        },
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "valid": {
+                          "description": "With dry_run: rows that would be created",
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The report of the call."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create up to 1000 mail_server records in one call; all or nothing unless mode is partial",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_server/create": {
+      "post": {
+        "operationId": "mail_server.create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "connection": {
+                    "description": "Provider: the Connectors connection that sends",
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "description": "Mail may go out through this server",
+                    "type": "boolean"
+                  },
+                  "footer": {
+                    "description": "Text added under every message, such as the company's details or how to stop these messages (personal data: agents see it masked)",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "from_address": {
+                    "description": "Sender address of every message from this server (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "from_name": {
+                    "description": "Sender name shown to the recipient (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "host": {
+                    "description": "SMTP: host name of the relay",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "is_default": {
+                    "description": "Used for every message kind no other server lists",
+                    "type": "boolean"
+                  },
+                  "kind": {
+                    "description": "smtp (a relay) or provider (an API through a Connectors connection)",
+                    "enum": [
+                      "smtp",
+                      "provider"
+                    ],
+                    "type": "string"
+                  },
+                  "kinds": {
+                    "description": "Message kinds this server sends, comma separated (such as invoice, password_reset); empty means any",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "last_test_at": {
+                    "description": "When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "example": "2026-03-29T01:30:00.000000Z",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "last_test_result": {
+                    "description": "What the server answered to the last test message (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "A name that tells the servers apart",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "password": {
+                    "description": "SMTP: password; write-only, stored encrypted, never returned",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "password_set": {
+                    "description": "SMTP: whether a password is stored",
+                    "type": "boolean"
+                  },
+                  "port": {
+                    "description": "SMTP: port (587 for STARTTLS, 465 for TLS)",
+                    "type": "integer"
+                  },
+                  "reply_to": {
+                    "description": "Where replies go; empty means the sender address (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "security": {
+                    "description": "SMTP: starttls, tls or none (none sends no password)",
+                    "enum": [
+                      "starttls",
+                      "tls",
+                      "none"
+                    ],
+                    "type": "string"
+                  },
+                  "test_recipient": {
+                    "description": "Input of test_send: the address the test message goes to; never stored (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "username": {
+                    "description": "SMTP: user name; empty means no authentication (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "kind",
+                  "from_address"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/mail_server"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create a mail_server",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_server/delete": {
+      "post": {
+        "operationId": "mail_server.delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Deleted."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete a mail_server (agents only propose)",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_server/get": {
+      "post": {
+        "operationId": "mail_server.get",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/mail_server"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read one mail_server",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_server/list": {
+      "post": {
+        "operationId": "mail_server.list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "items": {
+                        "$ref": "#/components/schemas/mail_server"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Records."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List mail_server records",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_server/search": {
+      "post": {
+        "operationId": "mail_server.search",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "aggregate": {
+                    "description": "Groups with counts and sums over every matching record instead of rows",
+                    "properties": {
+                      "group_by": {
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "properties": {
+                                "bucket": {
+                                  "enum": [
+                                    "day",
+                                    "week",
+                                    "iso_week",
+                                    "month",
+                                    "year"
+                                  ],
+                                  "type": "string"
+                                },
+                                "field": {
+                                  "type": "string"
+                                },
+                                "zone": {
+                                  "description": "IANA zone name for a datetime, default the platform zone",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "field"
+                              ],
+                              "type": "object"
+                            }
+                          ]
+                        },
+                        "maxItems": 2,
+                        "type": "array"
+                      },
+                      "measures": {
+                        "items": {
+                          "properties": {
+                            "field": {
+                              "type": "string"
+                            },
+                            "op": {
+                              "enum": [
+                                "count",
+                                "sum",
+                                "min",
+                                "max",
+                                "avg"
+                              ],
+                              "type": "string"
+                            },
+                            "round": {
+                              "description": "avg only",
+                              "enum": [
+                                "half_even",
+                                "half_up",
+                                "down"
+                              ],
+                              "type": "string"
+                            },
+                            "scale": {
+                              "description": "avg only",
+                              "maximum": 12,
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "op"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 8,
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "filter": {
+                    "items": {
+                      "properties": {
+                        "bucket": {
+                          "description": "On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion",
+                          "enum": [
+                            "day",
+                            "week",
+                            "iso_week",
+                            "month",
+                            "year"
+                          ],
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "enum": [
+                            "eq",
+                            "ne",
+                            "contains",
+                            "in",
+                            "gt",
+                            "gte",
+                            "lt",
+                            "lte",
+                            "is_null"
+                          ],
+                          "type": "string"
+                        },
+                        "value": {},
+                        "zone": {
+                          "description": "With bucket on a datetime: an IANA zone name, default the platform zone",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "op"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "lang": {
+                    "description": "BCP-47 tag that picks the text collation",
+                    "type": "string"
+                  },
+                  "limit": {
+                    "maximum": 5000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "order": {
+                    "items": {
+                      "properties": {
+                        "dir": {
+                          "enum": [
+                            "asc",
+                            "desc"
+                          ],
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "value": {
+                      "properties": {
+                        "groups": {
+                          "items": {
+                            "properties": {
+                              "count": {
+                                "type": "integer"
+                              },
+                              "key": {
+                                "type": "object"
+                              },
+                              "measures": {
+                                "type": "object"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "rows": {
+                          "items": {
+                            "$ref": "#/components/schemas/mail_server"
+                          },
+                          "type": "array"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A page of records and the total."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Search mail_server records with filter, order, limit and offset",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_server/test_send": {
+      "post": {
+        "description": "Irreversible or money-moving: an agent token only proposes this and a human approves.",
+        "operationId": "mail_server.test_send",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/mail_server"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Send a short test message through this server now, to test_recipient, and record the answer",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_server/update": {
+      "post": {
+        "operationId": "mail_server.update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "connection": {
+                    "description": "Provider: the Connectors connection that sends",
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "description": "Mail may go out through this server",
+                    "type": "boolean"
+                  },
+                  "footer": {
+                    "description": "Text added under every message, such as the company's details or how to stop these messages (personal data: agents see it masked)",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "from_address": {
+                    "description": "Sender address of every message from this server (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "from_name": {
+                    "description": "Sender name shown to the recipient (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "host": {
+                    "description": "SMTP: host name of the relay",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "is_default": {
+                    "description": "Used for every message kind no other server lists",
+                    "type": "boolean"
+                  },
+                  "kind": {
+                    "description": "smtp (a relay) or provider (an API through a Connectors connection)",
+                    "enum": [
+                      "smtp",
+                      "provider"
+                    ],
+                    "type": "string"
+                  },
+                  "kinds": {
+                    "description": "Message kinds this server sends, comma separated (such as invoice, password_reset); empty means any",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "last_test_at": {
+                    "description": "When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "example": "2026-03-29T01:30:00.000000Z",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "last_test_result": {
+                    "description": "What the server answered to the last test message (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "A name that tells the servers apart",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "password": {
+                    "description": "SMTP: password; write-only, stored encrypted, never returned",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "password_set": {
+                    "description": "SMTP: whether a password is stored",
+                    "type": "boolean"
+                  },
+                  "port": {
+                    "description": "SMTP: port (587 for STARTTLS, 465 for TLS)",
+                    "type": "integer"
+                  },
+                  "reply_to": {
+                    "description": "Where replies go; empty means the sender address (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "security": {
+                    "description": "SMTP: starttls, tls or none (none sends no password)",
+                    "enum": [
+                      "starttls",
+                      "tls",
+                      "none"
+                    ],
+                    "type": "string"
+                  },
+                  "test_recipient": {
+                    "description": "Input of test_send: the address the test message goes to; never stored (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "username": {
+                    "description": "SMTP: user name; empty means no authentication (personal data: agents see it masked)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/mail_server"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update a mail_server; a status field only moves along a declared action",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_template/bulk_create": {
+      "post": {
+        "operationId": "mail_template.bulk_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "csv": {
+                    "description": "Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB). Number fields take whole numbers, money minor units; a decimal is written with a point and a datetime with an offset or Z; a decimal field that rounds on import takes extra digits",
+                    "type": "string"
+                  },
+                  "dry_run": {
+                    "type": "boolean"
+                  },
+                  "idempotency_key": {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  "mode": {
+                    "enum": [
+                      "all_or_nothing",
+                      "partial"
+                    ],
+                    "type": "string"
+                  },
+                  "rows": {
+                    "items": {
+                      "properties": {
+                        "body": {
+                          "description": "Text, with placeholders (a name in double braces)",
+                          "maxLength": 100000,
+                          "type": "string"
+                        },
+                        "key": {
+                          "description": "The message kind the template is for, such as invoice or password_reset (unique)",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "language": {
+                          "description": "Language of the text",
+                          "enum": [
+                            "en",
+                            "de",
+                            "fr",
+                            "pl",
+                            "fi",
+                            "sv",
+                            "es"
+                          ],
+                          "type": "string"
+                        },
+                        "subject": {
+                          "description": "Subject line, with placeholders (a name in double braces)",
+                          "maxLength": 2048,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "language",
+                        "subject",
+                        "body"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 1000,
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "value": {
+                      "properties": {
+                        "created": {
+                          "type": "integer"
+                        },
+                        "dry_run": {
+                          "type": "boolean"
+                        },
+                        "errors": {
+                          "items": {
+                            "properties": {
+                              "error": {
+                                "type": "string"
+                              },
+                              "line": {
+                                "type": "integer"
+                              },
+                              "row": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "failed": {
+                          "type": "integer"
+                        },
+                        "ids": {
+                          "items": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "type": "array"
+                        },
+                        "mode": {
+                          "type": "string"
+                        },
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "valid": {
+                          "description": "With dry_run: rows that would be created",
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The report of the call."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create up to 1000 mail_template records in one call; all or nothing unless mode is partial",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_template/create": {
+      "post": {
+        "operationId": "mail_template.create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "body": {
+                    "description": "Text, with placeholders (a name in double braces)",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "key": {
+                    "description": "The message kind the template is for, such as invoice or password_reset (unique)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "language": {
+                    "description": "Language of the text",
+                    "enum": [
+                      "en",
+                      "de",
+                      "fr",
+                      "pl",
+                      "fi",
+                      "sv",
+                      "es"
+                    ],
+                    "type": "string"
+                  },
+                  "subject": {
+                    "description": "Subject line, with placeholders (a name in double braces)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "language",
+                  "subject",
+                  "body"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/mail_template"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create a mail_template",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_template/delete": {
+      "post": {
+        "operationId": "mail_template.delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Deleted."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete a mail_template (agents only propose)",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_template/get": {
+      "post": {
+        "operationId": "mail_template.get",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/mail_template"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read one mail_template",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_template/list": {
+      "post": {
+        "operationId": "mail_template.list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "items": {
+                        "$ref": "#/components/schemas/mail_template"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Records."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List mail_template records",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_template/search": {
+      "post": {
+        "operationId": "mail_template.search",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "aggregate": {
+                    "description": "Groups with counts and sums over every matching record instead of rows",
+                    "properties": {
+                      "group_by": {
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "properties": {
+                                "bucket": {
+                                  "enum": [
+                                    "day",
+                                    "week",
+                                    "iso_week",
+                                    "month",
+                                    "year"
+                                  ],
+                                  "type": "string"
+                                },
+                                "field": {
+                                  "type": "string"
+                                },
+                                "zone": {
+                                  "description": "IANA zone name for a datetime, default the platform zone",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "field"
+                              ],
+                              "type": "object"
+                            }
+                          ]
+                        },
+                        "maxItems": 2,
+                        "type": "array"
+                      },
+                      "measures": {
+                        "items": {
+                          "properties": {
+                            "field": {
+                              "type": "string"
+                            },
+                            "op": {
+                              "enum": [
+                                "count",
+                                "sum",
+                                "min",
+                                "max",
+                                "avg"
+                              ],
+                              "type": "string"
+                            },
+                            "round": {
+                              "description": "avg only",
+                              "enum": [
+                                "half_even",
+                                "half_up",
+                                "down"
+                              ],
+                              "type": "string"
+                            },
+                            "scale": {
+                              "description": "avg only",
+                              "maximum": 12,
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "op"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 8,
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "filter": {
+                    "items": {
+                      "properties": {
+                        "bucket": {
+                          "description": "On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion",
+                          "enum": [
+                            "day",
+                            "week",
+                            "iso_week",
+                            "month",
+                            "year"
+                          ],
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "enum": [
+                            "eq",
+                            "ne",
+                            "contains",
+                            "in",
+                            "gt",
+                            "gte",
+                            "lt",
+                            "lte",
+                            "is_null"
+                          ],
+                          "type": "string"
+                        },
+                        "value": {},
+                        "zone": {
+                          "description": "With bucket on a datetime: an IANA zone name, default the platform zone",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "op"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "lang": {
+                    "description": "BCP-47 tag that picks the text collation",
+                    "type": "string"
+                  },
+                  "limit": {
+                    "maximum": 5000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "order": {
+                    "items": {
+                      "properties": {
+                        "dir": {
+                          "enum": [
+                            "asc",
+                            "desc"
+                          ],
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "value": {
+                      "properties": {
+                        "groups": {
+                          "items": {
+                            "properties": {
+                              "count": {
+                                "type": "integer"
+                              },
+                              "key": {
+                                "type": "object"
+                              },
+                              "measures": {
+                                "type": "object"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "rows": {
+                          "items": {
+                            "$ref": "#/components/schemas/mail_template"
+                          },
+                          "type": "array"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A page of records and the total."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Search mail_template records with filter, order, limit and offset",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/mail_template/update": {
+      "post": {
+        "operationId": "mail_template.update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "body": {
+                    "description": "Text, with placeholders (a name in double braces)",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "description": "The message kind the template is for, such as invoice or password_reset (unique)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "language": {
+                    "description": "Language of the text",
+                    "enum": [
+                      "en",
+                      "de",
+                      "fr",
+                      "pl",
+                      "fi",
+                      "sv",
+                      "es"
+                    ],
+                    "type": "string"
+                  },
+                  "subject": {
+                    "description": "Subject line, with placeholders (a name in double braces)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/mail_template"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update a mail_template; a status field only moves along a declared action",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
     "/api/marketplace_listing/get": {
       "post": {
         "operationId": "marketplace_listing.get",
@@ -21412,6 +24367,1148 @@
         ]
       }
     },
+    "/api/outbound_mail/cancel": {
+      "post": {
+        "operationId": "outbound_mail.cancel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/outbound_mail"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Cancel a queued message; its body is erased",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/outbound_mail/delete": {
+      "post": {
+        "operationId": "outbound_mail.delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Deleted."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete a outbound_mail (agents only propose)",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/outbound_mail/get": {
+      "post": {
+        "operationId": "outbound_mail.get",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/outbound_mail"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read one outbound_mail",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/outbound_mail/list": {
+      "post": {
+        "operationId": "outbound_mail.list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "items": {
+                        "$ref": "#/components/schemas/outbound_mail"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Records."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List outbound_mail records",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/outbound_mail/process": {
+      "post": {
+        "operationId": "outbound_mail.process",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/outbound_mail"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Send the messages that are due now (the worker does this every few seconds)",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/outbound_mail/retry": {
+      "post": {
+        "description": "Irreversible or money-moving: an agent token only proposes this and a human approves.",
+        "operationId": "outbound_mail.retry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/outbound_mail"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Queue a failed message again, attempts from zero",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/outbound_mail/search": {
+      "post": {
+        "operationId": "outbound_mail.search",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "aggregate": {
+                    "description": "Groups with counts and sums over every matching record instead of rows",
+                    "properties": {
+                      "group_by": {
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "properties": {
+                                "bucket": {
+                                  "enum": [
+                                    "day",
+                                    "week",
+                                    "iso_week",
+                                    "month",
+                                    "year"
+                                  ],
+                                  "type": "string"
+                                },
+                                "field": {
+                                  "type": "string"
+                                },
+                                "zone": {
+                                  "description": "IANA zone name for a datetime, default the platform zone",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "field"
+                              ],
+                              "type": "object"
+                            }
+                          ]
+                        },
+                        "maxItems": 2,
+                        "type": "array"
+                      },
+                      "measures": {
+                        "items": {
+                          "properties": {
+                            "field": {
+                              "type": "string"
+                            },
+                            "op": {
+                              "enum": [
+                                "count",
+                                "sum",
+                                "min",
+                                "max",
+                                "avg"
+                              ],
+                              "type": "string"
+                            },
+                            "round": {
+                              "description": "avg only",
+                              "enum": [
+                                "half_even",
+                                "half_up",
+                                "down"
+                              ],
+                              "type": "string"
+                            },
+                            "scale": {
+                              "description": "avg only",
+                              "maximum": 12,
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "op"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 8,
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "filter": {
+                    "items": {
+                      "properties": {
+                        "bucket": {
+                          "description": "On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion",
+                          "enum": [
+                            "day",
+                            "week",
+                            "iso_week",
+                            "month",
+                            "year"
+                          ],
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "enum": [
+                            "eq",
+                            "ne",
+                            "contains",
+                            "in",
+                            "gt",
+                            "gte",
+                            "lt",
+                            "lte",
+                            "is_null"
+                          ],
+                          "type": "string"
+                        },
+                        "value": {},
+                        "zone": {
+                          "description": "With bucket on a datetime: an IANA zone name, default the platform zone",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "op"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "lang": {
+                    "description": "BCP-47 tag that picks the text collation",
+                    "type": "string"
+                  },
+                  "limit": {
+                    "maximum": 5000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "order": {
+                    "items": {
+                      "properties": {
+                        "dir": {
+                          "enum": [
+                            "asc",
+                            "desc"
+                          ],
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "value": {
+                      "properties": {
+                        "groups": {
+                          "items": {
+                            "properties": {
+                              "count": {
+                                "type": "integer"
+                              },
+                              "key": {
+                                "type": "object"
+                              },
+                              "measures": {
+                                "type": "object"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "rows": {
+                          "items": {
+                            "$ref": "#/components/schemas/outbound_mail"
+                          },
+                          "type": "array"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A page of records and the total."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Search outbound_mail records with filter, order, limit and offset",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/api/outbound_mail/send": {
+      "post": {
+        "description": "Irreversible or money-moving: an agent token only proposes this and a human approves.",
+        "operationId": "outbound_mail.send",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/outbound_mail"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Queue a message: to, subject and body, or template with language and vars; returns its id. The worker sends it after the call",
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
     "/api/party/bulk_create": {
       "post": {
         "operationId": "party.bulk_create",
@@ -25355,6 +29452,11 @@
                             "google_drive",
                             "google_oauth",
                             "microsoft_oauth",
+                            "postmark",
+                            "sendgrid",
+                            "mailgun",
+                            "microsoft_graph_mail",
+                            "gmail_send",
                             "zapier",
                             "make",
                             "n8n"
@@ -25616,6 +29718,11 @@
                       "google_drive",
                       "google_oauth",
                       "microsoft_oauth",
+                      "postmark",
+                      "sendgrid",
+                      "mailgun",
+                      "microsoft_graph_mail",
+                      "gmail_send",
                       "zapier",
                       "make",
                       "n8n"
@@ -26471,6 +30578,11 @@
                       "google_drive",
                       "google_oauth",
                       "microsoft_oauth",
+                      "postmark",
+                      "sendgrid",
+                      "mailgun",
+                      "microsoft_graph_mail",
+                      "gmail_send",
                       "zapier",
                       "make",
                       "n8n"

@@ -751,10 +751,13 @@ impl Dispatcher {
                 // `update` (where the field limits are checked, D90), or a `create` or `update` of
                 // its own. A model with neither (the module list, the security log) is output
                 // only, and states no limit that nothing would hold (K44 b).
-                let written = m.generated_writes
-                    || ["create", "update"]
-                        .iter()
-                        .any(|c| cmds.contains_key(&format!("{name}.{c}")));
+                // A command refused for everyone (`refuse_always`) holds no limit either: a model
+                // whose create and update are both refused (the deliveries of `mail`) is output
+                // only too.
+                let written = ["create", "update"].iter().any(|c| {
+                    let id = format!("{name}.{c}");
+                    cmds.contains_key(&id) && !never.contains_key(&id)
+                });
                 infos.push(ModelInfo {
                     ui: m.def.ext.ui.clone(),
                     children: {
@@ -1561,6 +1564,21 @@ impl Dispatcher {
         // that proposed it as the caller. Stamped again after the guard, which may have rewritten
         // the input.
         stamp_approver(&mut input, approver);
+        // The write context of the run names the approving person (N15): the security log line
+        // of whatever the plan does says who approved it (`audit::event_record`), next to the
+        // agent that proposed it as the actor.
+        let mut ctx = obop_storage::ctx::current().unwrap_or_else(|| {
+            let owner = plan.principal.id.strip_suffix("/agent");
+            obop_storage::WriteCtx::new(owner.unwrap_or(&plan.principal.id), "", &plan.id)
+        });
+        ctx.via.approver = Some(approver.id.clone());
+        ctx.via.agent = plan.principal.kind == PrincipalKind::Agent;
+        let _approved = obop_storage::ctx::scope(ctx);
+        // The actions the call implies (D48) are calls of their own, through their wrappers:
+        // they see the approver as a direct call of the action does (docs/ISSUES.md O5).
+        for step in &mut pre {
+            stamp_approver(&mut step.input, approver);
+        }
         let result = self.run(&c, &plan.principal, vault, input, pre);
         // The store refused before the call changed anything: the plan goes back, or the
         // approver's retry (the 503 says to retry) would meet "not found" and the proposal would

@@ -2332,6 +2332,78 @@ fn what_the_dispatcher_stamps_about_the_approver_reaches_the_guard_and_is_not_th
     assert_eq!(ran["_caller"], Value::text("agt"));
 }
 
+/// docs/ISSUES.md O5: the action that an approved `update` runs implicitly (D48) sees who
+/// approved, as a direct call of the action does, so that its wrapper can hold the approver to
+/// the same rules as the caller.
+#[test]
+fn the_action_an_approved_update_implies_sees_the_approver() {
+    use crate::{Pre, Verdict};
+    use std::sync::{Arc, Mutex};
+    let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
+    d.register_crud(&m, &store);
+    let person = Principal::user("pat", &["g"]);
+    let made = d
+        .call(
+            Surface::Rest,
+            &person,
+            &mut Vault::new(),
+            "hooks_item.create",
+            &m_of(&[("name", "x"), ("owner", "o")]),
+        )
+        .unwrap();
+    let Value::Map(made) = made.value else {
+        panic!("{made:?}")
+    };
+    let id = made["id"].clone();
+    d.add_guard(
+        "hooks_t",
+        "hooks_item.update",
+        false,
+        Box::new(move |_, input| {
+            let Value::Map(m) = input else {
+                return Ok(Verdict::default());
+            };
+            Ok(Verdict {
+                approval: true,
+                pre: vec![Pre {
+                    command: "hooks_item.create".into(),
+                    input: Value::map([("id", m["id"].clone())]),
+                    field: "name",
+                }],
+                ..Default::default()
+            })
+        }),
+    );
+    let seen = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let log = seen.clone();
+    d.around(
+        "hooks_item.create",
+        Box::new(move |_, input, _| {
+            log.lock().unwrap().push(input.clone());
+            Err("stop here".into())
+        }),
+    );
+    let agent = Principal::agent("agt", &["g"], &["g"]);
+    let Err(CallError::ApprovalRequired { plan_id }) = d.call(
+        Surface::Rest,
+        &agent,
+        &mut Vault::new(),
+        "hooks_item.update",
+        &Value::map([("id", id), ("name", Value::text("y"))]),
+    ) else {
+        panic!("proposal")
+    };
+    let dan = Principal::user("dan", &["g", "extra"]);
+    let _ = d.approve(&dan, &mut Vault::new(), &plan_id);
+    let seen = seen.lock().unwrap();
+    let Some(Value::Map(step)) = seen.first() else {
+        panic!("the implied action did not run: {seen:?}")
+    };
+    assert_eq!(step["_actor_approver"], Value::text("dan"), "{step:?}");
+    assert_eq!(step["_actor_approver_admin"], Value::Bool(false));
+    assert_eq!(step["_caller"], Value::text("agt"));
+}
+
 #[test]
 fn observers_hear_about_successful_commands_only_and_go_with_their_module() {
     use std::sync::{Arc, Mutex};

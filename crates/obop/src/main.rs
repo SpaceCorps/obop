@@ -1447,6 +1447,15 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let default_language =
         obop_http::shell::from_env().map_err(|e| fail(&format!("error: {e}")))?;
     let app = open_app(o)?;
+    // With `sign` installed and no OBOP_PUBLIC_URL the signer page may refuse every post behind
+    // a TLS proxy (docs/ISSUES.md O29).
+    if let Some(note) = app
+        .dispatcher
+        .sign_service()
+        .and_then(|s| s.start_up_note())
+    {
+        eprintln!("{note}");
+    }
     let auth = authenticator(&app, o);
     // No code where the routes are off (`--dev-auth`, or a set-up that could not be turned on).
     if auth.setup().is_some() {
@@ -1513,6 +1522,7 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
         state.set_server_info(Arc::new(obop_ops::pgadmin::Reconnecting::new(&url)));
     }
     app.connectors.start();
+    app.mail.start();
     // Scheduled backups with an off-host copy and retention, when OBOP_BACKUP_SCHEDULE is set.
     backup_cli::start_scheduler(scheduler, app.store.backend(), app.store.blobs());
     // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
@@ -4623,7 +4633,7 @@ mod bundled_packages {
                 }
             }
         }
-        assert_eq!(files.len(), 6 * 32);
+        assert_eq!(files.len(), 6 * 33);
         let refs: Vec<&str> = files.iter().map(String::as_str).collect();
         assert!(modules_check_files(&refs, true).is_ok());
     }

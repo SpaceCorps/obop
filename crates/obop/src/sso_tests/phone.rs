@@ -977,8 +977,8 @@ async fn phone_the_two_kinds_of_round_trip_are_not_mixed_up() {
     assert_eq!(r.status, 410, "{}", r.body);
     assert!(!consent(&r));
 
-    // A row that names a flow of an agent's connector is not finished on it: the connector's
-    // flow gets no person, and its return address refuses.
+    // A row that names a flow of an agent's connector is finished on it (N5): the connector's
+    // flow gets the person, and its return address shows the consent.
     let mcp = w.mcp_client().await;
     let mut other = Browser::default();
     let uri = format!(
@@ -1013,10 +1013,7 @@ async fn phone_the_two_kinds_of_round_trip_are_not_mixed_up() {
         format!("/oauth/authorize/return?flow={mcp_flow}")
     );
     let rec = w.oauth_flow(&mcp_flow).unwrap();
-    assert!(
-        rec["user"].is_null() && rec.get("pre_user").is_none(),
-        "{rec}"
-    );
+    assert_eq!(rec["user"], "ada", "{rec}");
     let r = w
         .browse(
             &mut other,
@@ -1026,40 +1023,56 @@ async fn phone_the_two_kinds_of_round_trip_are_not_mixed_up() {
             &[],
         )
         .await;
-    assert_eq!(r.status, 403, "{}", r.body);
-    assert!(!consent(&r));
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(consent(&r));
 }
 
+/// N5: the sign-in page of an MCP client (an agent's connector) offers Microsoft too, so an account
+/// that signs in with Microsoft only connects one; its grant lasts 30 days at most, as a phone's.
 #[tokio::test]
-async fn phone_a_flow_of_an_agents_connector_sees_no_link_and_the_route_refuses_it() {
+async fn a_microsoft_only_account_connects_an_mcp_client_through_microsoft_for_30_days_at_most() {
+    const CLAUDE: &str = "https://claude.ai/api/mcp/auth_callback";
+    const MCP: &str = "http://obop.test/mcp";
     let w = world(true).await;
-    let mcp = w.mcp_client().await;
-    let mut b = Browser::default();
-    let uri = format!(
-        "/oauth/authorize?response_type=code&client_id={mcp}&redirect_uri={}&state=xyz&code_challenge={}&code_challenge_method=S256&resource={}",
-        enc("https://claude.ai/api/mcp/auth_callback"),
-        s256(VERIFIER),
-        enc("http://obop.test/mcp"),
-    );
-    let r = w.browse(&mut b, "GET", &uri, None, &[]).await;
+    ada_sso_only(&w).await;
+    let mut claude = Phone::new(&w).await;
+    claude.client = w.mcp_client().await;
+    let uri = authorize_uri(&claude.client, CLAUDE, MCP, "");
+    let r = claude.go("GET", &uri, None).await;
     assert!(login_page(&r), "{}", r.body);
-    assert!(!r.body.contains("Microsoft"), "{}", r.body);
-    assert!(!r.body.contains("/oauth/authorize/microsoft"));
+    assert!(r.body.contains("/oauth/authorize/microsoft"), "{}", r.body);
     let flow = hidden_of(&r.body, "flow");
-    let hits = w.idp.hits("");
-    let r = w
-        .browse(
-            &mut b,
-            "GET",
-            &format!("/oauth/authorize/microsoft?flow={flow}"),
-            None,
-            &[],
-        )
-        .await;
-    assert_eq!(r.status, 403, "{}", r.body);
-    assert!(w.sso_rows().is_empty(), "no round trip was begun");
-    assert_eq!(w.idp.hits(""), hits, "the provider was not asked anything");
-    assert!(w.events("oidc_start").is_empty());
+    let r = claude.microsoft(&flow, ADA_OID).await;
+    assert!(consent(&r), "{}", r.body);
+    let page = page_of(&flow, &r);
+    // 90 days is not offered and a form posted by hand for it is refused; 30 is taken.
+    assert!(!r.body.contains("value=\"90\""), "{}", r.body);
+    let refused = claude.decide(&page, "90").await;
+    assert_eq!(refused.status, 200, "the consent again, with the reason");
+    assert!(consent(&refused), "{}", refused.body);
+    let r = claude.decide(&page, "30").await;
+    let loc = r.location();
+    assert!(loc.starts_with(&format!("{CLAUDE}?code=oac_")), "{loc}");
+    let f = form_of(&[
+        ("grant_type", "authorization_code"),
+        ("code", &query_of(&loc, "code")),
+        ("client_id", &claude.client),
+        ("redirect_uri", CLAUDE),
+        ("code_verifier", VERIFIER),
+        ("resource", MCP),
+    ]);
+    let t = w.app_post("/oauth/token", &f).await;
+    assert_eq!(t.status, 200, "{}", t.body);
+    let grants = w.app.store.backend().list("oauth_grant").unwrap();
+    let g = &grants
+        .iter()
+        .find(|(_, g)| g["client_id"] == claude.client.as_str())
+        .unwrap()
+        .1;
+    let lasts = g["expires_at"].as_u64().unwrap() - g["created_at"].as_u64().unwrap();
+    assert_eq!(lasts, 30 * 86_400);
+    // No phone was registered: an MCP client is not a device.
+    assert_eq!(w.devices(), 0);
 }
 
 #[tokio::test]
@@ -1456,14 +1469,15 @@ async fn phone_a_storage_fault_in_the_callback_is_never_a_500_and_leaves_the_flo
             continue;
         }
         match cb.status {
-            // D74: a refused store is a 503 that says what became of the changes.
+            // D74: a refusal before the round trip was known is the small page of a 503 (N19: a
+            // navigation), never the JSON of one.
             503 => {
                 assert!(
-                    ["none", "unknown", "partial"]
-                        .contains(&cb.json()["applied"].as_str().unwrap()),
+                    cb.body.starts_with("<!doctype html>"),
                     "{skip}: {}",
                     cb.body
                 );
+                assert!(cb.body.contains("Try again"), "{skip}: {}", cb.body);
                 as_503 += 1;
             }
             // Or the redirect with a fixed word, never the back office's fragment.

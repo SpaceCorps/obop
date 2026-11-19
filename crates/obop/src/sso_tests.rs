@@ -194,8 +194,15 @@ impl Idp {
                     let (method, path) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
                     let body = req.split("\r\n\r\n").nth(1).unwrap_or("");
                     let (status, out) = Idp::answer(&state, port, method, path, body);
+                    // A redirect points at an address of the stand-in that answers like the
+                    // endpoint would (N19: a redirect must never be followed).
+                    let location = if (300..400).contains(&status) {
+                        format!("Location: http://127.0.0.1:{port}/elsewhere{path}\r\n")
+                    } else {
+                        String::new()
+                    };
                     let reply = format!(
-                        "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                        "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\n{location}Content-Length: {}\r\nConnection: close\r\n\r\n{out}",
                         out.len()
                     );
                     let _ = s.write_all(reply.as_bytes());
@@ -1360,6 +1367,14 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     .await;
     assert_eq!(g["value"]["enabled"], true, "{g}");
     assert_eq!(g["value"]["break_glass_enough"], true, "{g}");
+    // When and by whom it was last changed (N19: declared and returned).
+    assert_eq!(g["value"]["last_editor"], "boss", "{g}");
+    assert!(
+        g["value"]["modified_at"]
+            .as_str()
+            .is_some_and(|t| t.ends_with('Z') && t.len() == 20),
+        "{g}"
+    );
     // Bind, make SSO-only, and the listing shows it.
     let (s, b) = post(
         r,
@@ -1435,6 +1450,45 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
         (202, json!(true)),
         "{b}"
     );
+    // The administrator approves it: the log line names the agent that proposed it as the actor
+    // and the person who approved it (N15).
+    let plan = b["plan_id"].as_str().unwrap().to_string();
+    let (s, b) = post(r, Some(&boss), &format!("/api/approve/{plan}"), json!({})).await;
+    assert_eq!(s, 200, "{b}");
+    let lines: Vec<_> = w
+        .app
+        .store
+        .backend()
+        .list("security_event")
+        .unwrap()
+        .into_iter()
+        .map(|(_, f)| f)
+        .filter(|f| f["kind"] == "oidc_bind")
+        .collect();
+    let approved = lines
+        .iter()
+        .find(|f| f["user"] == "bob")
+        .expect("the approved binding is logged");
+    assert_eq!(approved["actor"], "boss/agent", "{approved:?}");
+    assert!(
+        approved["detail"]
+            .as_str()
+            .unwrap()
+            .ends_with("(approved by boss)"),
+        "{approved:?}"
+    );
+    // The binding the administrator made without a proposal names nobody else.
+    let own = lines.iter().find(|f| f["user"] == "ada").unwrap();
+    assert_eq!(own["actor"], "boss");
+    assert!(!own["detail"].as_str().unwrap().contains("approved by"));
+    let (s, b) = post(
+        r,
+        Some(&boss),
+        "/api/user_account/unbind_sso",
+        json!({"id": "bob"}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
     let (s, b) = post(
         r,
         Some(&agent),
@@ -1474,7 +1528,8 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     );
     w.assert_nowhere(CLIENT_SECRET);
     w.assert_nowhere("attacker-secret");
-    assert_eq!(w.events("oidc_bind").len(), 1);
+    // The administrator's own binding and the approved proposal of the agent; nothing else.
+    assert_eq!(w.events("oidc_bind").len(), 2);
 }
 
 // ---- what the request asks for and what the token carries (scope, profile, optional claims) ---
@@ -2929,6 +2984,72 @@ async fn failures_a_token_endpoint_that_is_not_well_is_unavailable_and_one_that_
     );
 }
 
+/// A begun sign-in is stored with a lifetime of ten minutes at the store itself (N20 a): a flow
+/// stored without one would never be purged, because `purge_expired` removes only rows stored
+/// with a lifetime. Read from the SQLite table, since the Backend has no read of a row's lifetime.
+#[tokio::test]
+async fn failures_a_begun_sign_in_is_stored_with_a_lifetime_of_ten_minutes() {
+    let dir = obop_storage::testing::TempPath::dir("obop-sso-flow-ttl");
+    let file = dir.path().join("app.db");
+    let backend = obop_storage::open(&format!("sqlite://{}", file.to_str().unwrap())).unwrap();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    let before = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    assert_eq!(w.start(&mut Jar::default()).await.status, 303);
+    let after = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let db = rusqlite::Connection::open(&file).unwrap();
+    let expiries: Vec<i64> = db
+        .prepare("SELECT expires_ms FROM obop_kv WHERE key LIKE 'auth.sso.flow:%'")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(expiries.len(), 1, "one begun sign-in");
+    let ten = 10 * 60 * 1000;
+    assert!(
+        (before + ten..=after + ten).contains(&expiries[0]),
+        "{} is not ten minutes after the start",
+        expiries[0]
+    );
+    drop(db);
+    drop(w);
+}
+
+/// The sign-in's calls to Microsoft never follow a redirect (N19): a discovery document, a key set
+/// or a token endpoint that answers 302 is a fault of the provider, and the address it points to
+/// is never asked.
+#[tokio::test]
+async fn failures_a_redirect_of_the_provider_is_never_followed() {
+    let w = world(true).await;
+    for status in [301, 302, 307, 308] {
+        w.idp.st.lock().unwrap().discovery_status = status;
+        w.state.forget_sso_cache_for_test();
+        let r = w.start(&mut Jar::default()).await;
+        assert_eq!(r.location(), "/#oidc_error=unavailable", "{status}");
+    }
+    w.idp.st.lock().unwrap().discovery_status = 200;
+    w.state.forget_sso_cache_for_test();
+    for status in [302, 307] {
+        w.idp.st.lock().unwrap().token_status = status;
+        let r = w.sign_in(&mut Jar::default(), ADA_OID).await;
+        assert_eq!(r.location(), "/#oidc_error=unavailable", "{status}");
+    }
+    w.idp.st.lock().unwrap().token_status = 200;
+    w.idp.st.lock().unwrap().jwks_status = 302;
+    w.state.forget_sso_cache_for_test();
+    let r = w.sign_in(&mut Jar::default(), ADA_OID).await;
+    assert_eq!(r.location(), "/#oidc_error=unavailable");
+    assert_eq!(w.idp.hits("/elsewhere"), 0, "no redirect was followed");
+    assert_eq!(w.idp.arrived("/elsewhere"), 0);
+}
+
 /// 60 callbacks that spent a flow are the most one address may make in a minute (the flows are
 /// begun from many addresses, so the limit of starts does not stand in the way).
 #[tokio::test]
@@ -3162,4 +3283,105 @@ async fn the_offered_question_is_limited_per_address() {
     }
     assert_eq!(ask("198.51.100.7".into()).await, 429);
     assert_eq!(ask("198.51.100.8".into()).await, 200);
+}
+
+/// N19 through the real router: a storage fault at any call of the back office's start or
+/// callback ends in the route's own failure redirect (`#oidc_error=busy`), the normal ending, or
+/// the small page of a 503 (a callback whose sign-in row could not be read); never the JSON of a
+/// 503 and never a 500, because the browser came by navigation.
+#[tokio::test]
+async fn failures_a_storage_fault_in_the_web_leg_keeps_its_redirect_or_a_page() {
+    use obop_storage::testing::Flaky;
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    w.keep_throttle();
+    // The page of a 503: HTML that says to try again, never JSON.
+    let page = |r: &Raw, at: &str| {
+        assert!(r.body.starts_with("<!doctype html>"), "{at}: {}", r.body);
+        assert!(r.body.contains("Try again"), "{at}: {}", r.body);
+    };
+    // The start, refused at each call in turn.
+    let (mut busy_starts, mut clean) = (0, 0);
+    for skip in 0..60 {
+        let ip = format!("10.8.{}.{}", skip / 200, skip % 200 + 1);
+        let h = [("x-forwarded-for", ip.as_str())];
+        let before = flaky.refused();
+        flaky.refuse_call_after(skip);
+        let s = w
+            .send_h("GET", "/api/auth/oidc/start", &Jar::default(), None, &h)
+            .await;
+        let refused = flaky.refused() - before;
+        flaky.allow_models();
+        let at = format!("start {skip}");
+        match s.status {
+            303 if s.location() == "/#oidc_error=busy" => busy_starts += 1,
+            303 => assert!(
+                s.location().starts_with(&w.idp.authority()),
+                "{at}: {}",
+                s.location()
+            ),
+            503 => page(&s, &at),
+            other => panic!("{at}: {other}: {}", s.body),
+        }
+        if refused == 0 {
+            clean += 1;
+            if clean == 2 {
+                break;
+            }
+        }
+    }
+    assert!(clean >= 1, "the sweep went past the end of the start");
+    assert!(busy_starts > 0, "a refused start keeps its redirect");
+    // The callback, refused at each call in turn.
+    let (mut busy, mut pages, mut clean) = (0, 0, 0);
+    for skip in 0..120 {
+        let ip = format!("10.9.{}.{}", skip / 200, skip % 200 + 1);
+        let h = [("x-forwarded-for", ip.as_str())];
+        let mut jar = Jar::default();
+        let s = w
+            .send_h("GET", "/api/auth/oidc/start", &jar, None, &h)
+            .await;
+        jar.absorb(&s);
+        let uri = w.idp.authorize(&s.location(), ADA_OID);
+        let before = flaky.refused();
+        flaky.refuse_call_after(skip);
+        let r = w.send_h("GET", &uri, &jar, None, &h).await;
+        let refused = flaky.refused() - before;
+        flaky.allow_models();
+        let at = format!("callback {skip}");
+        if refused == 0 {
+            assert!(
+                r.location().starts_with("/#oidc="),
+                "{at}: {}",
+                r.location()
+            );
+            clean += 1;
+            if clean == 2 {
+                break;
+            }
+            continue;
+        }
+        match r.status {
+            303 => {
+                let loc = r.location();
+                if loc == "/#oidc_error=busy" {
+                    busy += 1;
+                } else {
+                    // A refusal the route could finish past (a log line it did not write).
+                    assert!(loc.starts_with("/#oidc="), "{at}: {loc}");
+                }
+            }
+            503 => {
+                page(&r, &at);
+                pages += 1;
+            }
+            other => panic!("{at}: {other}: {}", r.body),
+        }
+    }
+    assert!(clean >= 1, "the sweep went past the end of the callback");
+    assert!(
+        busy > 0 && pages > 0,
+        "both endings were met: {busy} {pages}"
+    );
 }

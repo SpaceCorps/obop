@@ -71,3 +71,21 @@
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
+
+/* Whether the evidence of a signed request still equals the log entry (SignEvidenceCheck), in the
+   same gutter as the links under it. */
+.sign-evidence-check {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.25rem 0;
+}
+.sign-evidence-check h3,
+.sign-evidence-check p {
+  margin: 0;
+}
+@media (max-width: 40rem) {
+  .record .sign-evidence-check {
+    padding-inline: var(--space-4);
+  }
+}

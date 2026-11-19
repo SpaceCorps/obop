@@ -60,6 +60,7 @@ export const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   setup_complete: msg("First administrator created"),
   sign_link_issued: msg("Signing link made"),
   sign_link_revoked: msg("Signing link revoked"),
+  sign_link_restored: msg("Signing link made to work again by an administrator"),
   sign_signed: msg("Signed through a signing link"),
   sign_refused: msg("Signing link refused"),
 };

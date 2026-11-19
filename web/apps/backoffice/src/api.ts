@@ -366,8 +366,10 @@ export type Reply =
  * only its hash: made from the generic New form, the link is lost and an active link nobody has
  * stays behind (D92, docs/SIGN.md). The button "Create signing link" on a sign request is the one
  * place that shows it. No registry flag says this yet, so the back office names the model.
+ * `outbound_mail` is queued only by `outbound_mail.send` (docs/spec/mail.md); the server refuses
+ * its generated create and import.
  */
-export const ACTION_ONLY_MODELS: ReadonlySet<string> = new Set(["sign_link"]);
+export const ACTION_ONLY_MODELS: ReadonlySet<string> = new Set(["sign_link", "outbound_mail"]);
 
 /** Turn off the generic New and Import of the models in `ACTION_ONLY_MODELS`, and remember the right. */
 export function markActionOnly(modules: ModuleMeta[]): void {

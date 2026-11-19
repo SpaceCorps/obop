@@ -842,7 +842,7 @@ impl Runtime {
         let (c, p) = self.connection(connection)?;
         match p.engine {
             Engine::RestPull => return self.pull(connection),
-            Engine::WebhookIn | Engine::Browse | Engine::None => {
+            Engine::WebhookIn | Engine::Browse | Engine::Mail | Engine::None => {
                 return Err(format!("{} has nothing to send", p.name));
             }
             _ => {}
@@ -1473,6 +1473,15 @@ impl Runtime {
                     return Err("the connection is not authorised yet".into());
                 }
                 notes.push("the account is authorised".into());
+            }
+            Engine::Mail => {
+                if p.auth_kind == "oauth2" && c.oauth_tokens.is_empty() {
+                    return Err("the connection is not authorised yet".into());
+                }
+                notes.push(
+                    "send a test message from the mail server in Customize, Mail: this check sends nothing"
+                        .into(),
+                );
             }
             Engine::None => return Err("this provider is a definition only; nothing runs".into()),
         }

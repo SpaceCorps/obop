@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Badge, Button, Dialog, Input, Notice, Tooltip, t } from "@obop/ui";
-import { search, type FieldMeta, type Row } from "./api.ts";
+import { call, search, type FieldMeta, type Row } from "./api.ts";
 import { useData } from "./data.tsx";
-import { instantShort, instantText } from "./format.ts";
+import { instantShort, instantText, optionLabel } from "./format.ts";
+import { fieldTitle } from "./labels.ts";
 import { useLeaveHold } from "./leaveGuard.ts";
 import { serverMessage } from "./serverMessage.ts";
 import {
@@ -20,6 +21,7 @@ import {
   selectAll,
   type LinkStatus,
   type MadeLink,
+  REQUEST_MODEL,
 } from "./signLinks.ts";
 import { isDocumentRequest } from "./workflow.ts";
 
@@ -475,5 +477,58 @@ export function SignLinks({ request }: { request: Row }) {
       busy={busy}
       onRevoke={(row) => void revoke(row)}
     />
+  );
+}
+
+const CHECK_TONE = { matches: "success", differs: "danger", no_entry: "warning" } as const;
+
+/**
+ * On a signed request, whether its evidence still equals what the security log recorded at signing
+ * (`evidence_check`, docs/SIGN.md "Checking the evidence"). The server works it out when one request
+ * is read (`sign_request.get`); a list row does not carry it, so it is asked here. Nothing is shown to
+ * a person the server does not show the field to.
+ */
+export function SignEvidenceCheck({ request }: { request: Row }) {
+  const d = useData();
+  const field = d.models
+    .get(REQUEST_MODEL)
+    ?.model.fields.find((f: FieldMeta) => f.name === "evidence_check");
+  const signed = String(request.state ?? "") === "signed";
+  const [value, setValue] = useState<string | null>(null);
+  useEffect(() => {
+    setValue(null);
+    if (!field || !signed) return;
+    let live = true;
+    void call(d.token, `${REQUEST_MODEL}.get`, { id: request.id }).then((r) => {
+      if (!live || r.kind !== "ok" || !r.value || typeof r.value !== "object") return;
+      const v = (r.value as Row).evidence_check;
+      setValue(typeof v === "string" && v in CHECK_TONE ? v : null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [d.token, request.id, signed, !!field, d.mutations]);
+  if (!field || !value) return null;
+  const tone = CHECK_TONE[value as keyof typeof CHECK_TONE];
+  return (
+    <section className="sign-evidence-check" aria-label={fieldTitle(field)}>
+      <h3 className="overline">{fieldTitle(field)}</h3>
+      <p>
+        <Badge tone={tone}>{optionLabel(value, field)}</Badge>
+      </p>
+      <p className="hint">
+        {value === "matches"
+          ? t(
+              "The evidence equals what the security log recorded when it was signed. It shows a change made through the screens or the commands; it is not tamper-proof against someone who can write the database.",
+            )
+          : value === "differs"
+            ? t(
+                "The evidence or the wording the signer read was changed after signing. Compare it with the security log entry of the signature.",
+              )
+            : t(
+                "The security log has no entry of a signature through a link for this request, so there is nothing to compare.",
+              )}
+      </p>
+    </section>
   );
 }

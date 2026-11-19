@@ -1787,6 +1787,264 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mail_server/bulk_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create up to 1000 mail_server records in one call; all or nothing unless mode is partial */
+        post: operations["mail_server.bulk_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_server/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a mail_server */
+        post: operations["mail_server.create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_server/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete a mail_server (agents only propose) */
+        post: operations["mail_server.delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_server/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read one mail_server */
+        post: operations["mail_server.get"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_server/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List mail_server records */
+        post: operations["mail_server.list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_server/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search mail_server records with filter, order, limit and offset */
+        post: operations["mail_server.search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_server/test_send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a short test message through this server now, to test_recipient, and record the answer
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["mail_server.test_send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_server/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update a mail_server; a status field only moves along a declared action */
+        post: operations["mail_server.update"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_template/bulk_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create up to 1000 mail_template records in one call; all or nothing unless mode is partial */
+        post: operations["mail_template.bulk_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_template/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a mail_template */
+        post: operations["mail_template.create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_template/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete a mail_template (agents only propose) */
+        post: operations["mail_template.delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_template/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read one mail_template */
+        post: operations["mail_template.get"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_template/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List mail_template records */
+        post: operations["mail_template.list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_template/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search mail_template records with filter, order, limit and offset */
+        post: operations["mail_template.search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail_template/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update a mail_template; a status field only moves along a declared action */
+        post: operations["mail_template.update"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/marketplace_listing/get": {
         parameters: {
             query?: never;
@@ -2355,6 +2613,148 @@ export interface paths {
         put?: never;
         /** Plan an install without doing it: the steps in order with versions and licences, blockers and warnings. Give id (marketplace) or manifest (obop.toml text) */
         post: operations["module_plan.preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound_mail/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a queued message; its body is erased */
+        post: operations["outbound_mail.cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound_mail/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete a outbound_mail (agents only propose) */
+        post: operations["outbound_mail.delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound_mail/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read one outbound_mail */
+        post: operations["outbound_mail.get"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound_mail/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List outbound_mail records */
+        post: operations["outbound_mail.list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound_mail/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send the messages that are due now (the worker does this every few seconds) */
+        post: operations["outbound_mail.process"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound_mail/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue a failed message again, attempts from zero
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["outbound_mail.retry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound_mail/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search outbound_mail records with filter, order, limit and offset */
+        post: operations["outbound_mail.search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound_mail/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue a message: to, subject and body, or template with language and vars; returns its id. The worker sends it after the call
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["outbound_mail.send"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3773,7 +4173,7 @@ export interface components {
              * @description Id of the provider from the catalogue
              * @enum {string}
              */
-            provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
+            provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "postmark" | "sendgrid" | "mailgun" | "microsoft_graph_mail" | "gmail_send" | "zapier" | "make" | "n8n";
             /** @description Most flows per hour */
             rate_limit_per_hour?: number;
             /** @description Output of the last command (test, sync, authorisation link); never stored */
@@ -3823,7 +4223,7 @@ export interface components {
              * @description The generic engine that runs it
              * @enum {string}
              */
-            engine?: "webhook_out" | "webhook_in" | "rest_pull" | "csv_export" | "browse" | "none";
+            engine?: "webhook_out" | "webhook_in" | "rest_pull" | "csv_export" | "browse" | "mail" | "none";
             /**
              * @description Whether transfers rest on EU or adequate-country processing: yes, no or verify with the provider
              * @enum {string}
@@ -4064,6 +4464,71 @@ export interface components {
             stage?: "new" | "qualified" | "won" | "lost";
             /** @description Short description of the opportunity */
             title?: string;
+        };
+        /** @description A way out for mail: an SMTP relay, or a provider reached through a Connectors connection */
+        mail_server: {
+            /** @description Provider: the Connectors connection that sends */
+            connection?: string;
+            /** @description Mail may go out through this server */
+            enabled?: boolean;
+            /** @description Text added under every message, such as the company's details or how to stop these messages (personal data: agents see it masked) */
+            footer?: string;
+            /** @description Sender address of every message from this server (personal data: agents see it masked) */
+            from_address?: string;
+            /** @description Sender name shown to the recipient (personal data: agents see it masked) */
+            from_name?: string;
+            /** @description SMTP: host name of the relay */
+            host?: string;
+            /** @description Used for every message kind no other server lists */
+            is_default?: boolean;
+            /**
+             * @description smtp (a relay) or provider (an API through a Connectors connection)
+             * @enum {string}
+             */
+            kind?: "smtp" | "provider";
+            /** @description Message kinds this server sends, comma separated (such as invoice, password_reset); empty means any */
+            kinds?: string;
+            /**
+             * Format: date-time
+             * @description When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            last_test_at?: string;
+            /** @description What the server answered to the last test message (personal data: agents see it masked) */
+            last_test_result?: string;
+            /** @description A name that tells the servers apart */
+            name?: string;
+            /** @description SMTP: password; write-only, stored encrypted, never returned */
+            password?: string;
+            /** @description SMTP: whether a password is stored */
+            password_set?: boolean;
+            /** @description SMTP: port (587 for STARTTLS, 465 for TLS) */
+            port?: number;
+            /** @description Where replies go; empty means the sender address (personal data: agents see it masked) */
+            reply_to?: string;
+            /**
+             * @description SMTP: starttls, tls or none (none sends no password)
+             * @enum {string}
+             */
+            security?: "starttls" | "tls" | "none";
+            /** @description Input of test_send: the address the test message goes to; never stored (personal data: agents see it masked) */
+            test_recipient?: string;
+            /** @description SMTP: user name; empty means no authentication (personal data: agents see it masked) */
+            username?: string;
+        };
+        /** @description Subject and text of one message kind in one language, with placeholders (a name in double braces) */
+        mail_template: {
+            /** @description Text, with placeholders (a name in double braces) */
+            body?: string;
+            /** @description The message kind the template is for, such as invoice or password_reset (unique) */
+            key?: string;
+            /**
+             * @description Language of the text
+             * @enum {string}
+             */
+            language?: "en" | "de" | "fr" | "pl" | "fi" | "sv" | "es";
+            /** @description Subject line, with placeholders (a name in double braces) */
+            subject?: string;
         };
         /** @description A module offered by the marketplace */
         marketplace_listing: {
@@ -4340,6 +4805,75 @@ export interface components {
             /** @description Notes that do not stop anything, such as a proprietary licence (a list) */
             warnings?: string;
         };
+        /** @description One outbound message: the queue and the deliveries log. Never shows the body */
+        outbound_mail: {
+            /** @description Delivery attempts so far */
+            attempts?: number;
+            /** @description Blind copy recipients, comma separated; never in a header (personal data: agents see it masked) */
+            bcc?: string;
+            /** @description The text, sealed; erased once the message is sent or cancelled (personal data: agents see it masked) */
+            body?: string;
+            /** @description Copy recipients, comma separated (personal data: agents see it masked) */
+            cc?: string;
+            /** @description When it is due, in seconds since 1970 */
+            due?: number;
+            /** @description What the message is for, such as invoice or password_reset; general when not given */
+            kind?: string;
+            /**
+             * @description Input of send: the template language
+             * @enum {string}
+             */
+            language?: "en" | "de" | "fr" | "pl" | "fi" | "sv" | "es";
+            /** @description Why the last attempt failed, without the body or credentials (personal data: agents see it masked) */
+            last_error?: string;
+            /** @description Worker lease, in seconds since 1970 */
+            lease_until?: number;
+            /** @description The Message-ID header, the same on every attempt */
+            message_id?: string;
+            /**
+             * Format: date-time
+             * @description When it is tried next (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            next_attempt_at?: string;
+            /**
+             * Format: date-time
+             * @description When it was queued (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            queued_at?: string;
+            /** @description The id of that record */
+            related_id?: string;
+            /** @description The model of the record the message is about */
+            related_model?: string;
+            /** @description Where replies go; empty means the server's setting (personal data: agents see it masked) */
+            reply_to?: string;
+            /** @description Who queued it (personal data: agents see it masked) */
+            requested_by?: string;
+            /**
+             * Format: date-time
+             * @description When the server or provider accepted it (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            sent_at?: string;
+            /** @description The mail server that sends it */
+            server?: string;
+            /** @description The server's or provider's answer to the accepted message (personal data: agents see it masked) */
+            server_reply?: string;
+            /**
+             * @description queued, sending, sent, failed or cancelled (moves only through the model's actions)
+             * @enum {string}
+             */
+            status?: "queued" | "sending" | "sent" | "failed" | "cancelled";
+            /** @description Subject line (personal data: agents see it masked) */
+            subject?: string;
+            /** @description Input of send: the template key to render; recorded */
+            template?: string;
+            /** @description Recipients, comma separated (personal data: agents see it masked) */
+            to?: string;
+            /** @description Input of send: the template values as a JSON object; never stored (personal data: agents see it masked) */
+            vars?: string;
+        };
         /** @description A person or organisation the business deals with */
         party: {
             /** @description Work email address (personal data: agents see it masked) */
@@ -4451,7 +4985,7 @@ export interface components {
              * @description Id of the provider this policy is for
              * @enum {string}
              */
-            provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
+            provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "postmark" | "sendgrid" | "mailgun" | "microsoft_graph_mail" | "gmail_send" | "zapier" | "make" | "n8n";
             /** @description People with connectors.user may connect their own accounts */
             users_may_use?: boolean;
             /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
@@ -4502,7 +5036,7 @@ export interface components {
             at?: string;
             /** @description A short note without any code or secret (personal data: agents see it masked) */
             detail?: string;
-            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_link_revoked, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared, setup_open, setup_refused, setup_complete */
+            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_link_revoked, sign_link_restored, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared, setup_open, setup_refused, setup_complete */
             kind?: string;
             /** @description The account the event is about */
             user?: string;
@@ -5818,7 +6352,7 @@ export interface operations {
                          * @description Id of the provider from the catalogue
                          * @enum {string}
                          */
-                        provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
+                        provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "postmark" | "sendgrid" | "mailgun" | "microsoft_graph_mail" | "gmail_send" | "zapier" | "make" | "n8n";
                         /** @description Most flows per hour */
                         rate_limit_per_hour?: number;
                         /** @description Output of the last command (test, sync, authorisation link); never stored */
@@ -6034,7 +6568,7 @@ export interface operations {
                      * @description Id of the provider from the catalogue
                      * @enum {string}
                      */
-                    provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
+                    provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "postmark" | "sendgrid" | "mailgun" | "microsoft_graph_mail" | "gmail_send" | "zapier" | "make" | "n8n";
                     /** @description Most flows per hour */
                     rate_limit_per_hour?: number;
                     /** @description Output of the last command (test, sync, authorisation link); never stored */
@@ -7056,7 +7590,7 @@ export interface operations {
                      * @description Id of the provider from the catalogue
                      * @enum {string}
                      */
-                    provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
+                    provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "postmark" | "sendgrid" | "mailgun" | "microsoft_graph_mail" | "gmail_send" | "zapier" | "make" | "n8n";
                     /** @description Most flows per hour */
                     rate_limit_per_hour?: number;
                     /** @description Output of the last command (test, sync, authorisation link); never stored */
@@ -13117,6 +13651,1477 @@ export interface operations {
             };
         };
     };
+    "mail_server.bulk_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB). Number fields take whole numbers, money minor units; a decimal is written with a point and a datetime with an offset or Z; a decimal field that rounds on import takes extra digits */
+                    csv?: string;
+                    dry_run?: boolean;
+                    idempotency_key?: string;
+                    /** @enum {string} */
+                    mode?: "all_or_nothing" | "partial";
+                    rows?: {
+                        /** @description Provider: the Connectors connection that sends */
+                        connection?: string;
+                        /** @description Mail may go out through this server */
+                        enabled?: boolean;
+                        /** @description Text added under every message, such as the company's details or how to stop these messages (personal data: agents see it masked) */
+                        footer?: string;
+                        /** @description Sender address of every message from this server (personal data: agents see it masked) */
+                        from_address: string;
+                        /** @description Sender name shown to the recipient (personal data: agents see it masked) */
+                        from_name?: string;
+                        /** @description SMTP: host name of the relay */
+                        host?: string;
+                        /** @description Used for every message kind no other server lists */
+                        is_default?: boolean;
+                        /**
+                         * @description smtp (a relay) or provider (an API through a Connectors connection)
+                         * @enum {string}
+                         */
+                        kind: "smtp" | "provider";
+                        /** @description Message kinds this server sends, comma separated (such as invoice, password_reset); empty means any */
+                        kinds?: string;
+                        /**
+                         * Format: date-time
+                         * @description When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @example 2026-03-29T01:30:00.000000Z
+                         */
+                        last_test_at?: string;
+                        /** @description What the server answered to the last test message (personal data: agents see it masked) */
+                        last_test_result?: string;
+                        /** @description A name that tells the servers apart */
+                        name: string;
+                        /** @description SMTP: password; write-only, stored encrypted, never returned */
+                        password?: string;
+                        /** @description SMTP: whether a password is stored */
+                        password_set?: boolean;
+                        /** @description SMTP: port (587 for STARTTLS, 465 for TLS) */
+                        port?: number;
+                        /** @description Where replies go; empty means the sender address (personal data: agents see it masked) */
+                        reply_to?: string;
+                        /**
+                         * @description SMTP: starttls, tls or none (none sends no password)
+                         * @enum {string}
+                         */
+                        security?: "starttls" | "tls" | "none";
+                        /** @description Input of test_send: the address the test message goes to; never stored (personal data: agents see it masked) */
+                        test_recipient?: string;
+                        /** @description SMTP: user name; empty means no authentication (personal data: agents see it masked) */
+                        username?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description The report of the call. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            created?: number;
+                            dry_run?: boolean;
+                            errors?: {
+                                error?: string;
+                                line?: number;
+                                row?: number;
+                            }[];
+                            failed?: number;
+                            ids?: (string | null)[];
+                            mode?: string;
+                            ok?: boolean;
+                            replayed?: boolean;
+                            total?: number;
+                            /** @description With dry_run: rows that would be created */
+                            valid?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_server.create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Provider: the Connectors connection that sends */
+                    connection?: string;
+                    /** @description Mail may go out through this server */
+                    enabled?: boolean;
+                    /** @description Text added under every message, such as the company's details or how to stop these messages (personal data: agents see it masked) */
+                    footer?: string;
+                    /** @description Sender address of every message from this server (personal data: agents see it masked) */
+                    from_address: string;
+                    /** @description Sender name shown to the recipient (personal data: agents see it masked) */
+                    from_name?: string;
+                    /** @description SMTP: host name of the relay */
+                    host?: string;
+                    /** @description Used for every message kind no other server lists */
+                    is_default?: boolean;
+                    /**
+                     * @description smtp (a relay) or provider (an API through a Connectors connection)
+                     * @enum {string}
+                     */
+                    kind: "smtp" | "provider";
+                    /** @description Message kinds this server sends, comma separated (such as invoice, password_reset); empty means any */
+                    kinds?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    last_test_at?: string;
+                    /** @description What the server answered to the last test message (personal data: agents see it masked) */
+                    last_test_result?: string;
+                    /** @description A name that tells the servers apart */
+                    name: string;
+                    /** @description SMTP: password; write-only, stored encrypted, never returned */
+                    password?: string;
+                    /** @description SMTP: whether a password is stored */
+                    password_set?: boolean;
+                    /** @description SMTP: port (587 for STARTTLS, 465 for TLS) */
+                    port?: number;
+                    /** @description Where replies go; empty means the sender address (personal data: agents see it masked) */
+                    reply_to?: string;
+                    /**
+                     * @description SMTP: starttls, tls or none (none sends no password)
+                     * @enum {string}
+                     */
+                    security?: "starttls" | "tls" | "none";
+                    /** @description Input of test_send: the address the test message goes to; never stored (personal data: agents see it masked) */
+                    test_recipient?: string;
+                    /** @description SMTP: user name; empty means no authentication (personal data: agents see it masked) */
+                    username?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mail_server"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_server.delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_server.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mail_server"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_server.list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mail_server"][];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_server.search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Groups with counts and sums over every matching record instead of rows */
+                    aggregate?: {
+                        group_by?: (string | {
+                            /** @enum {string} */
+                            bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                            field: string;
+                            /** @description IANA zone name for a datetime, default the platform zone */
+                            zone?: string;
+                        })[];
+                        measures?: {
+                            field?: string;
+                            /** @enum {string} */
+                            op: "count" | "sum" | "min" | "max" | "avg";
+                            /**
+                             * @description avg only
+                             * @enum {string}
+                             */
+                            round?: "half_even" | "half_up" | "down";
+                            /** @description avg only */
+                            scale?: number;
+                        }[];
+                    };
+                    filter?: {
+                        /**
+                         * @description On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion
+                         * @enum {string}
+                         */
+                        bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                        field: string;
+                        /** @enum {string} */
+                        op: "eq" | "ne" | "contains" | "in" | "gt" | "gte" | "lt" | "lte" | "is_null";
+                        value?: unknown;
+                        /** @description With bucket on a datetime: an IANA zone name, default the platform zone */
+                        zone?: string;
+                    }[];
+                    /** @description BCP-47 tag that picks the text collation */
+                    lang?: string;
+                    limit?: number;
+                    offset?: number;
+                    order?: {
+                        /** @enum {string} */
+                        dir?: "asc" | "desc";
+                        field?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description A page of records and the total. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            groups?: {
+                                count?: number;
+                                key?: Record<string, never>;
+                                measures?: Record<string, never>;
+                            }[];
+                            rows?: components["schemas"]["mail_server"][];
+                            total?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_server.test_send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mail_server"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_server.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Provider: the Connectors connection that sends */
+                    connection?: string;
+                    /** @description Mail may go out through this server */
+                    enabled?: boolean;
+                    /** @description Text added under every message, such as the company's details or how to stop these messages (personal data: agents see it masked) */
+                    footer?: string;
+                    /** @description Sender address of every message from this server (personal data: agents see it masked) */
+                    from_address?: string;
+                    /** @description Sender name shown to the recipient (personal data: agents see it masked) */
+                    from_name?: string;
+                    /** @description SMTP: host name of the relay */
+                    host?: string;
+                    id: string;
+                    /** @description Used for every message kind no other server lists */
+                    is_default?: boolean;
+                    /**
+                     * @description smtp (a relay) or provider (an API through a Connectors connection)
+                     * @enum {string}
+                     */
+                    kind?: "smtp" | "provider";
+                    /** @description Message kinds this server sends, comma separated (such as invoice, password_reset); empty means any */
+                    kinds?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    last_test_at?: string;
+                    /** @description What the server answered to the last test message (personal data: agents see it masked) */
+                    last_test_result?: string;
+                    /** @description A name that tells the servers apart */
+                    name?: string;
+                    /** @description SMTP: password; write-only, stored encrypted, never returned */
+                    password?: string;
+                    /** @description SMTP: whether a password is stored */
+                    password_set?: boolean;
+                    /** @description SMTP: port (587 for STARTTLS, 465 for TLS) */
+                    port?: number;
+                    /** @description Where replies go; empty means the sender address (personal data: agents see it masked) */
+                    reply_to?: string;
+                    /**
+                     * @description SMTP: starttls, tls or none (none sends no password)
+                     * @enum {string}
+                     */
+                    security?: "starttls" | "tls" | "none";
+                    /** @description Input of test_send: the address the test message goes to; never stored (personal data: agents see it masked) */
+                    test_recipient?: string;
+                    /** @description SMTP: user name; empty means no authentication (personal data: agents see it masked) */
+                    username?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mail_server"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_template.bulk_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB). Number fields take whole numbers, money minor units; a decimal is written with a point and a datetime with an offset or Z; a decimal field that rounds on import takes extra digits */
+                    csv?: string;
+                    dry_run?: boolean;
+                    idempotency_key?: string;
+                    /** @enum {string} */
+                    mode?: "all_or_nothing" | "partial";
+                    rows?: {
+                        /** @description Text, with placeholders (a name in double braces) */
+                        body: string;
+                        /** @description The message kind the template is for, such as invoice or password_reset (unique) */
+                        key: string;
+                        /**
+                         * @description Language of the text
+                         * @enum {string}
+                         */
+                        language: "en" | "de" | "fr" | "pl" | "fi" | "sv" | "es";
+                        /** @description Subject line, with placeholders (a name in double braces) */
+                        subject: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description The report of the call. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            created?: number;
+                            dry_run?: boolean;
+                            errors?: {
+                                error?: string;
+                                line?: number;
+                                row?: number;
+                            }[];
+                            failed?: number;
+                            ids?: (string | null)[];
+                            mode?: string;
+                            ok?: boolean;
+                            replayed?: boolean;
+                            total?: number;
+                            /** @description With dry_run: rows that would be created */
+                            valid?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_template.create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Text, with placeholders (a name in double braces) */
+                    body: string;
+                    /** @description The message kind the template is for, such as invoice or password_reset (unique) */
+                    key: string;
+                    /**
+                     * @description Language of the text
+                     * @enum {string}
+                     */
+                    language: "en" | "de" | "fr" | "pl" | "fi" | "sv" | "es";
+                    /** @description Subject line, with placeholders (a name in double braces) */
+                    subject: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mail_template"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_template.delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_template.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mail_template"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_template.list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mail_template"][];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_template.search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Groups with counts and sums over every matching record instead of rows */
+                    aggregate?: {
+                        group_by?: (string | {
+                            /** @enum {string} */
+                            bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                            field: string;
+                            /** @description IANA zone name for a datetime, default the platform zone */
+                            zone?: string;
+                        })[];
+                        measures?: {
+                            field?: string;
+                            /** @enum {string} */
+                            op: "count" | "sum" | "min" | "max" | "avg";
+                            /**
+                             * @description avg only
+                             * @enum {string}
+                             */
+                            round?: "half_even" | "half_up" | "down";
+                            /** @description avg only */
+                            scale?: number;
+                        }[];
+                    };
+                    filter?: {
+                        /**
+                         * @description On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion
+                         * @enum {string}
+                         */
+                        bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                        field: string;
+                        /** @enum {string} */
+                        op: "eq" | "ne" | "contains" | "in" | "gt" | "gte" | "lt" | "lte" | "is_null";
+                        value?: unknown;
+                        /** @description With bucket on a datetime: an IANA zone name, default the platform zone */
+                        zone?: string;
+                    }[];
+                    /** @description BCP-47 tag that picks the text collation */
+                    lang?: string;
+                    limit?: number;
+                    offset?: number;
+                    order?: {
+                        /** @enum {string} */
+                        dir?: "asc" | "desc";
+                        field?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description A page of records and the total. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            groups?: {
+                                count?: number;
+                                key?: Record<string, never>;
+                                measures?: Record<string, never>;
+                            }[];
+                            rows?: components["schemas"]["mail_template"][];
+                            total?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mail_template.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Text, with placeholders (a name in double braces) */
+                    body?: string;
+                    id: string;
+                    /** @description The message kind the template is for, such as invoice or password_reset (unique) */
+                    key?: string;
+                    /**
+                     * @description Language of the text
+                     * @enum {string}
+                     */
+                    language?: "en" | "de" | "fr" | "pl" | "fi" | "sv" | "es";
+                    /** @description Subject line, with placeholders (a name in double braces) */
+                    subject?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mail_template"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     "marketplace_listing.get": {
         parameters: {
             query?: never;
@@ -16068,6 +18073,671 @@ export interface operations {
             };
         };
     };
+    "outbound_mail.cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["outbound_mail"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "outbound_mail.delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "outbound_mail.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["outbound_mail"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "outbound_mail.list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["outbound_mail"][];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "outbound_mail.process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["outbound_mail"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "outbound_mail.retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["outbound_mail"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "outbound_mail.search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Groups with counts and sums over every matching record instead of rows */
+                    aggregate?: {
+                        group_by?: (string | {
+                            /** @enum {string} */
+                            bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                            field: string;
+                            /** @description IANA zone name for a datetime, default the platform zone */
+                            zone?: string;
+                        })[];
+                        measures?: {
+                            field?: string;
+                            /** @enum {string} */
+                            op: "count" | "sum" | "min" | "max" | "avg";
+                            /**
+                             * @description avg only
+                             * @enum {string}
+                             */
+                            round?: "half_even" | "half_up" | "down";
+                            /** @description avg only */
+                            scale?: number;
+                        }[];
+                    };
+                    filter?: {
+                        /**
+                         * @description On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion
+                         * @enum {string}
+                         */
+                        bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                        field: string;
+                        /** @enum {string} */
+                        op: "eq" | "ne" | "contains" | "in" | "gt" | "gte" | "lt" | "lte" | "is_null";
+                        value?: unknown;
+                        /** @description With bucket on a datetime: an IANA zone name, default the platform zone */
+                        zone?: string;
+                    }[];
+                    /** @description BCP-47 tag that picks the text collation */
+                    lang?: string;
+                    limit?: number;
+                    offset?: number;
+                    order?: {
+                        /** @enum {string} */
+                        dir?: "asc" | "desc";
+                        field?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description A page of records and the total. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            groups?: {
+                                count?: number;
+                                key?: Record<string, never>;
+                                measures?: Record<string, never>;
+                            }[];
+                            rows?: components["schemas"]["outbound_mail"][];
+                            total?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "outbound_mail.send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["outbound_mail"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     "party.bulk_create": {
         parameters: {
             query?: never;
@@ -18248,7 +20918,7 @@ export interface operations {
                          * @description Id of the provider this policy is for
                          * @enum {string}
                          */
-                        provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
+                        provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "postmark" | "sendgrid" | "mailgun" | "microsoft_graph_mail" | "gmail_send" | "zapier" | "make" | "n8n";
                         /** @description People with connectors.user may connect their own accounts */
                         users_may_use?: boolean;
                         /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
@@ -18375,7 +21045,7 @@ export interface operations {
                      * @description Id of the provider this policy is for
                      * @enum {string}
                      */
-                    provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
+                    provider: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "postmark" | "sendgrid" | "mailgun" | "microsoft_graph_mail" | "gmail_send" | "zapier" | "make" | "n8n";
                     /** @description People with connectors.user may connect their own accounts */
                     users_may_use?: boolean;
                     /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
@@ -18840,7 +21510,7 @@ export interface operations {
                      * @description Id of the provider this policy is for
                      * @enum {string}
                      */
-                    provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "zapier" | "make" | "n8n";
+                    provider?: "webhook_out" | "webhook_in" | "rest_api_pull" | "csv_export" | "slack_webhook" | "stripe" | "docuseal" | "github_webhook" | "google_drive" | "google_oauth" | "microsoft_oauth" | "postmark" | "sendgrid" | "mailgun" | "microsoft_graph_mail" | "gmail_send" | "zapier" | "make" | "n8n";
                     /** @description People with connectors.user may connect their own accounts */
                     users_may_use?: boolean;
                     /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
