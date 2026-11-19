@@ -211,15 +211,26 @@ export function ModelPage({
   }, [store.denied]);
 
   const base = useMemo(() => ({ app: route.app, model: route.model }), [route.app, route.model]);
+  // The search in the address was set on this page (the person's own, also an empty one).
+  const chose = useRef(false);
   const put = useCallback(
     (
-      patch: { view?: string; id?: string; st?: string; page?: string; full?: string },
+      patch: {
+        view?: string;
+        id?: string;
+        st?: string;
+        page?: string;
+        full?: string;
+        field?: string;
+      },
       replace = false,
     ) => {
       const id = patch.id ?? route.id;
+      if (patch.st !== undefined) chose.current = true;
       go(
         {
           ...base,
+          ...(patch.field ? { field: patch.field } : {}),
           view: patch.view ?? route.view,
           id,
           st: patch.st ?? route.st,
@@ -252,19 +263,26 @@ export function ModelPage({
   );
 
   // A favorite marked default applies when the model opens without any search of its own; else the
-  // package's default filter (`ui.default_filter`), which the person removes like any other.
+  // package's default filter (`ui.default_filter`), which the person removes like any other. It
+  // applies again whenever the address loses its search from outside (the sidebar entry of the
+  // model, a link), not when the person cleared the search on this page (`chose`).
   useEffect(() => {
-    if (route.st) return;
+    if (route.st) {
+      chose.current = false;
+      return;
+    }
+    if (chose.current) return;
     const fav = loadFavorites(model.name).find((f) => f.isDefault);
     if (fav) {
       put({ st: encodeState(fav.state), view: fav.view }, true);
       return;
     }
     const preset = defaultFilter(model, fields, { user, today: today() });
-    if (preset) put({ st: encodeState({ ...decodeState(""), facets: preset }) }, true);
-    // only on first open of this model
+    // The field a link names (`&field=`, Q19) stays, so the record it opens still focuses it.
+    if (preset)
+      put({ st: encodeState({ ...decodeState(""), facets: preset }), field: route.field }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [route.st]);
 
   const setView = (v: string) => {
     try {

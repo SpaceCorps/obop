@@ -22,6 +22,8 @@ export class TripAlreadyActive extends Error {
 /** What changes on a trip row when the server has answered. Absent keys stay as they are. */
 export interface TripPatch {
   serverId?: string | null;
+  /** The driver changed the purpose; it is sent with `end`, or at once when the server holds an ended trip. */
+  purpose?: Purpose;
   endedAt?: string | null;
   createAttempted?: boolean;
   endDone?: boolean;
@@ -108,6 +110,19 @@ export function hasWork(t: LocalTrip): boolean {
   if (t.origin === "server") return t.submitRequested && !t.submitDone;
   if (!t.stopRequested) return true; // points are uploaded while recording
   return !t.endDone || (t.submitRequested && !t.submitDone);
+}
+
+/**
+ * Whether the driver may change the purpose of the trip: until it is submitted, also a private trip
+ * that was marked so by mistake. The server takes a change while the trip is recording, ended or
+ * rejected and refuses it from the review on (docs/spec/mobile.md 8.6).
+ */
+export function canChangePurpose(t: LocalTrip): boolean {
+  if (t.discardReason !== null || t.discardDone) return false;
+  if (t.submitRequested || t.submitDone) return false;
+  if (t.problem !== null && t.problem.code !== "incomplete") return false;
+  if (t.origin === "device" && !t.endDone) return true;
+  return t.serverId !== null && (t.serverState === "ended" || t.serverState === "rejected");
 }
 
 /**

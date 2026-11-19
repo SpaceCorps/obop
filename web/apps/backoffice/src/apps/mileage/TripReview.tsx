@@ -10,7 +10,15 @@ import type { RecordExtProps } from "../../extensions.ts";
 import { useData } from "../../data.tsx";
 import { optionLabel } from "../../format.ts";
 import { knownZone } from "../../instants.ts";
-import { accepted, checkNotes, drawRoute, kmOf, minutesBetween, pointsOf } from "./track.ts";
+import {
+  accepted,
+  checkNotes,
+  drawRoute,
+  flagsOf,
+  kmOf,
+  minutesBetween,
+  pointsOf,
+} from "./track.ts";
 import "./mileage.css";
 
 const POINT = "mileage_point";
@@ -41,7 +49,7 @@ function duration(min: number): string {
     : t("{m} min", { m: fmt.integer(m) });
 }
 
-export function TripReview({ model, row }: RecordExtProps) {
+export function TripReview({ model, row, value }: RecordExtProps) {
   const d = useData();
   const [points, setPoints] = useState<Points>({ kind: "loading" });
   const state = String(row.state ?? "");
@@ -62,7 +70,9 @@ export function TripReview({ model, row }: RecordExtProps) {
     return () => {
       live = false;
     };
-  }, [d.token, row.id]);
+    // Read again when a save changed the route: marking the trip private removes its points, and
+    // the panel is not drawn anew after a save.
+  }, [d.token, row.id, row.purpose, row.point_count]);
 
   const pts = useMemo(() => (points.kind === "ready" ? pointsOf(points.rows) : []), [points]);
   const drawn = useMemo(() => drawRoute(pts, W, H, 24), [pts]);
@@ -70,6 +80,12 @@ export function TripReview({ model, row }: RecordExtProps) {
   const km = kmOf(row.distance_m);
   const minutes = minutesBetween(row.started_at, row.ended_at);
   const purposeField = model.fields.find((f) => f.name === "purpose");
+  // A private trip is never reviewed, and the server keeps no route of it once it has ended.
+  const isPrivate = row.purpose === "private";
+  // Marking the trip private in the form: saving removes its route for good (docs/spec/mobile.md
+  // 5.6), so the form says so before the person saves.
+  const drafted = purposeField && value ? String(value(purposeField)) : String(row.purpose ?? "");
+  const dropsRoute = drafted === "private" && !isPrivate;
   const day = inZone(row.started_at, {
     weekday: "short",
     day: "numeric",
@@ -83,6 +99,8 @@ export function TripReview({ model, row }: RecordExtProps) {
   // of points from the points read here.
   const total = Number(row.point_count ?? pts.length) || pts.length;
   const notes = checkNotes(row.integrity, total, state !== "recording" && km !== null);
+  // The route went when the trip was marked private; the trip may be business again since.
+  const routeRemoved = Boolean(flagsOf(row.integrity).route_removed);
 
   const facts: [string, string][] = [
     [t("Driver"), String(row.driver ?? "")],
@@ -106,10 +124,34 @@ export function TripReview({ model, row }: RecordExtProps) {
         </div>
         {state === "in_review" && (
           <p className="trip-ask">
-            {t("Check the route and the details, then confirm or reject the trip.")}
+            {total > 0
+              ? t("Check the route and the details, then confirm or reject the trip.")
+              : routeRemoved
+                ? // The check note below says why there is no route; it is said once.
+                  t("Check the details, then confirm or reject the trip.")
+                : t(
+                    "This trip has no route to check. Check the details, then confirm or reject it.",
+                  )}
+          </p>
+        )}
+        {isPrivate && (state === "ended" || state === "rejected") && (
+          <p className="trip-ask" data-testid="trip-private-note">
+            {t(
+              "A private trip has no Submit: it is never reviewed, and no reviewer reads it. If the trip was for work, change its purpose.",
+            )}
           </p>
         )}
       </div>
+      {dropsRoute && (
+        <p className="trip-note warn" role="alert" data-testid="trip-private-warning">
+          <Icon name="warning" size={16} />
+          <span>
+            {t(
+              "A private trip keeps its distance and times, not its route: saving removes the route for good, also if the purpose is changed back later.",
+            )}
+          </span>
+        </p>
+      )}
 
       <figure className="trip-map">
         {points.kind === "loading" ? (
@@ -136,7 +178,11 @@ export function TripReview({ model, row }: RecordExtProps) {
             <Icon name="info" size={16} />
             {state === "recording"
               ? t("The trip is still being recorded.")
-              : t("No route: this trip has no points.")}
+              : routeRemoved
+                ? t("No route")
+                : isPrivate
+                  ? t("A private trip keeps no route: only its distance and times.")
+                  : t("No route: this trip has no points.")}
           </p>
         )}
         {drawn.path && (

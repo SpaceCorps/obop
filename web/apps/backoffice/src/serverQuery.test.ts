@@ -47,6 +47,12 @@ describe("search state to server query", () => {
     ]);
   });
 
+  it("a text that must differ is `ne` on the server (U1)", () => {
+    const plan = toServer(state([{ op: "isnot", f: "title", v: ["[erased]"] }]), fields);
+    expect(plan.rest).toEqual([]);
+    expect(plan.filter).toEqual([{ field: "title", op: "ne", value: "[erased]" }]);
+  });
+
   it("several values become `in`", () => {
     const plan = toServer(state([{ op: "is", f: "stage", v: ["new", "won"] }]), fields);
     expect(plan.filter).toEqual([{ field: "stage", op: "in", value: ["new", "won"] }]);

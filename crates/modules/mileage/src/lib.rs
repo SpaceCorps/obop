@@ -46,5 +46,12 @@ pub fn register_with_clock(d: &Dispatcher, store: &Store, clock: Clock) {
     audit::install(d, db, clock);
 }
 
+/// Removes the route of every private trip that is no longer recording but still holds one
+/// (stored by an earlier build of the module). `serve` runs it once at start. The answer is the
+/// number of trips cleared.
+pub fn drop_private_routes(store: &Store) -> Result<usize, String> {
+    handlers::drop_private_routes(&store.backend())
+}
+
 #[cfg(test)]
 mod tests;

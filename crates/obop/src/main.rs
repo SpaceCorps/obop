@@ -1496,6 +1496,12 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     }
     app.connectors.start();
     app.mail.start();
+    // A private trip keeps no route (docs/spec/mobile.md 5.6): those stored before that rule lose it.
+    match mileage::drop_private_routes(&app.store) {
+        Ok(0) => {}
+        Ok(n) => eprintln!("mileage: removed the route of {n} private trips"),
+        Err(e) => eprintln!("mileage: the routes of private trips were not removed: {e}"),
+    }
     // Scheduled backups with an off-host copy and retention, when OBOP_BACKUP_SCHEDULE is set.
     backup_cli::start_scheduler(scheduler, app.store.backend(), app.store.blobs());
     // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
