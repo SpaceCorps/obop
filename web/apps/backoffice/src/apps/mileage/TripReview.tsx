@@ -70,7 +70,9 @@ export function TripReview({ model, row, value }: RecordExtProps) {
     return () => {
       live = false;
     };
-  }, [d.token, row.id]);
+    // Read again when a save changed the route: marking the trip private removes its points, and
+    // the panel is not drawn anew after a save.
+  }, [d.token, row.id, row.purpose, row.point_count]);
 
   const pts = useMemo(() => (points.kind === "ready" ? pointsOf(points.rows) : []), [points]);
   const drawn = useMemo(() => drawRoute(pts, W, H, 24), [pts]);

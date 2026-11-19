@@ -84,4 +84,7 @@ test("saving a trip as private asks first, and Keep editing saves nothing", asyn
   await expect.poll(async () => (await tripOf(api, id)).purpose).toBe("private");
   now = await tripOf(api, id);
   expect(Number(now.point_count)).toBe(0);
+  // The panel no longer draws the route it just removed.
+  await expect(record.locator(".trip-map svg")).toHaveCount(0);
+  await expect(record.locator(".trip-map-none")).toBeVisible();
 });
