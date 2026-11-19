@@ -138,12 +138,12 @@ describe("readSheet reads the file as csv.rs does (csvRead.fixtures.json)", () =
 
 describe("importNames", () => {
   it("splice changes only the named spans", () => {
-    const text = '﻿title;party_id\r\n\r\nA;"Acme ""Example"""\rB;x\n';
+    const text = '\ufefftitle;party_id\r\n\r\nA;"Acme ""Example"""\rB;x\n';
     const sheet = readSheet(text)!;
     const cell = sheet.records[0]!.cells[1]!;
     expect(cell.value).toBe('Acme "Example"');
     expect(splice(text, [{ start: cell.start, end: cell.end, text: ACME }])).toBe(
-      `﻿title;party_id\r\n\r\nA;${ACME}\rB;x\n`,
+      `\ufefftitle;party_id\r\n\r\nA;${ACME}\rB;x\n`,
     );
     const b = sheet.records[1]!.cells[1]!;
     expect(
@@ -151,7 +151,7 @@ describe("importNames", () => {
         { start: b.start, end: b.end, text: BETA },
         { start: cell.start, end: cell.end, text: ACME },
       ]),
-    ).toBe(`﻿title;party_id\r\n\r\nA;${ACME}\rB;${BETA}\n`);
+    ).toBe(`\ufefftitle;party_id\r\n\r\nA;${ACME}\rB;${BETA}\n`);
   });
 
   it("nothing to look up returns the same string", () => {

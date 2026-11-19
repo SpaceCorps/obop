@@ -52,7 +52,7 @@ function delimiterOf(text: string, from: number): "," | ";" {
  * The limits on size, rows, columns and cell length are left to the server.
  */
 export function readSheet(text: string): Sheet | null {
-  const from = text.startsWith("﻿") ? 1 : 0;
+  const from = text.startsWith("\ufeff") ? 1 : 0;
   if (text.includes("\0")) return null;
   const delim = delimiterOf(text, from);
   const records: { line: number; cells: Span[] }[] = [];

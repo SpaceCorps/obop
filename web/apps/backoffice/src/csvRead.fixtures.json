@@ -37,13 +37,13 @@
   },
   {
     "name": "a byte order mark is dropped",
-    "text": "﻿a;b\n1;2\n",
+    "text": "\ufeffa;b\n1;2\n",
     "expect": { "delimiter": ";", "headers": ["a", "b"], "rows": [["1", "2"]], "lines": [2] }
   },
   {
     "name": "a second byte order mark is text and not trimmed",
-    "text": "﻿﻿a,b\n1,2\n",
-    "expect": { "delimiter": ",", "headers": ["﻿a", "b"], "rows": [["1", "2"]], "lines": [2] }
+    "text": "\ufeff\ufeffa,b\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["\ufeffa", "b"], "rows": [["1", "2"]], "lines": [2] }
   },
   {
     "name": "more semicolons than commas",
@@ -219,8 +219,8 @@
   },
   {
     "name": "a no-break space round a header is trimmed",
-    "text": " a ,b\n 1,2\n",
-    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [[" 1", "2"]], "lines": [2] }
+    "text": "\u00a0a\u00a0,b\n\u00a01,2\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["\u00a01", "2"]], "lines": [2] }
   },
   {
     "name": "a next-line character round a header is trimmed",
@@ -229,16 +229,16 @@
   },
   {
     "name": "a zero-width space is not trimmed",
-    "text": "​a,b\n1,2\n",
-    "expect": { "delimiter": ",", "headers": ["​a", "b"], "rows": [["1", "2"]], "lines": [2] }
+    "text": "\u200ba,b\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["\u200ba", "b"], "rows": [["1", "2"]], "lines": [2] }
   },
   {
     "name": "characters outside the basic plane",
-    "text": "name,𝔸\n😀 Smile,\"🎉;x\"\n",
+    "text": "name,\ud835\udd38\n\ud83d\ude00 Smile,\"\ud83c\udf89;x\"\n",
     "expect": {
       "delimiter": ",",
-      "headers": ["name", "𝔸"],
-      "rows": [["😀 Smile", "🎉;x"]],
+      "headers": ["name", "\ud835\udd38"],
+      "rows": [["\ud83d\ude00 Smile", "\ud83c\udf89;x"]],
       "lines": [2]
     }
   },
@@ -258,7 +258,7 @@
     "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [], "lines": [] }
   },
   { "name": "an empty file", "text": "", "expect": { "refused": true } },
-  { "name": "only a byte order mark", "text": "﻿", "expect": { "refused": true } },
+  { "name": "only a byte order mark", "text": "\ufeff", "expect": { "refused": true } },
   { "name": "only blank lines", "text": "\n\r\n\r", "expect": { "refused": true } },
   { "name": "a short row", "text": "a,b\n1\n", "expect": { "refused": true } },
   { "name": "two empty cells under one column", "text": "a\n,\n", "expect": { "refused": true } },
