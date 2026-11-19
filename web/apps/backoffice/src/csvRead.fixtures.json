@@ -1,0 +1,310 @@
+[
+  {
+    "name": "plain commas",
+    "text": "a,b\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "CR LF line ends",
+    "text": "a,b\r\n1,2\r\n3,4\r\n",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["a", "b"],
+      "rows": [
+        ["1", "2"],
+        ["3", "4"]
+      ],
+      "lines": [2, 3]
+    }
+  },
+  {
+    "name": "a lone CR ends a record",
+    "text": "a,b\r1,2\r3,4",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["a", "b"],
+      "rows": [
+        ["1", "2"],
+        ["3", "4"]
+      ],
+      "lines": [2, 3]
+    }
+  },
+  {
+    "name": "CR CR LF is a record end and a blank line",
+    "text": "a\r\r\n1\r\n",
+    "expect": { "delimiter": ",", "headers": ["a"], "rows": [["1"]], "lines": [3] }
+  },
+  {
+    "name": "a byte order mark is dropped",
+    "text": "﻿a;b\n1;2\n",
+    "expect": { "delimiter": ";", "headers": ["a", "b"], "rows": [["1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "a second byte order mark is text and not trimmed",
+    "text": "﻿﻿a,b\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["﻿a", "b"], "rows": [["1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "more semicolons than commas",
+    "text": "a;b;c,d\n1;2;3,4\n",
+    "expect": {
+      "delimiter": ";",
+      "headers": ["a", "b", "c,d"],
+      "rows": [["1", "2", "3,4"]],
+      "lines": [2]
+    }
+  },
+  {
+    "name": "semicolons and commas in equal number give a comma",
+    "text": "a;b,c\n1;2,3\n",
+    "expect": { "delimiter": ",", "headers": ["a;b", "c"], "rows": [["1;2", "3"]], "lines": [2] }
+  },
+  {
+    "name": "a quoted delimiter in the header does not count",
+    "text": "\"a;b\",c\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["a;b", "c"], "rows": [["1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "a quoted comma in a semicolon header",
+    "text": "\"x,y\";z\n1;2\n",
+    "expect": { "delimiter": ";", "headers": ["x,y", "z"], "rows": [["1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "only the first record decides the delimiter",
+    "text": "a,b\n\"1;2;3\",4\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["1;2;3", "4"]], "lines": [2] }
+  },
+  {
+    "name": "a line break inside a quoted header is not the end of the first record",
+    "text": "\"a\nb\";c;d\n1;2;3\n",
+    "expect": {
+      "delimiter": ";",
+      "headers": ["a\nb", "c", "d"],
+      "rows": [["1", "2", "3"]],
+      "lines": [3]
+    }
+  },
+  {
+    "name": "a tab is not a delimiter",
+    "text": "a\tb\n1\t2\n",
+    "expect": { "delimiter": ",", "headers": ["a\tb"], "rows": [["1\t2"]], "lines": [2] }
+  },
+  {
+    "name": "doubled quotes inside a quoted cell",
+    "text": "name,note\nAda,\"says \"\"hi\"\"\"\n",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["name", "note"],
+      "rows": [["Ada", "says \"hi\""]],
+      "lines": [2]
+    }
+  },
+  {
+    "name": "a doubled quote at the end of a quoted cell",
+    "text": "a,b\n\"x\"\"\",2\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["x\"", "2"]], "lines": [2] }
+  },
+  {
+    "name": "a quoted cell in the middle of a row",
+    "text": "a,b,c\n1,\"2,5\",3\n",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["a", "b", "c"],
+      "rows": [["1", "2,5", "3"]],
+      "lines": [2]
+    }
+  },
+  {
+    "name": "a quoted semicolon in a semicolon file",
+    "text": "a;b\n\"1;2\";3\n",
+    "expect": { "delimiter": ";", "headers": ["a", "b"], "rows": [["1;2", "3"]], "lines": [2] }
+  },
+  {
+    "name": "a line break inside quotes counts a line",
+    "text": "a,b\nBob,\"two\nlines\"\nCy,3\n",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["a", "b"],
+      "rows": [
+        ["Bob", "two\nlines"],
+        ["Cy", "3"]
+      ],
+      "lines": [2, 4]
+    }
+  },
+  {
+    "name": "CR LF inside quotes counts one line",
+    "text": "a,b\n1,\"x\r\ny\"\n2,3\n",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["a", "b"],
+      "rows": [
+        ["1", "x\r\ny"],
+        ["2", "3"]
+      ],
+      "lines": [2, 4]
+    }
+  },
+  {
+    "name": "a lone CR inside quotes is not a line",
+    "text": "a,b\n1,\"x\ry\"\n2,3\n",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["a", "b"],
+      "rows": [
+        ["1", "x\ry"],
+        ["2", "3"]
+      ],
+      "lines": [2, 3]
+    }
+  },
+  {
+    "name": "blank lines between records are skipped",
+    "text": "a,b\n\n1,2\n\n3,4",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["a", "b"],
+      "rows": [
+        ["1", "2"],
+        ["3", "4"]
+      ],
+      "lines": [3, 5]
+    }
+  },
+  {
+    "name": "blank lines before the header",
+    "text": "\n\r\na,b\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["1", "2"]], "lines": [4] }
+  },
+  {
+    "name": "a last line without a line end",
+    "text": "a,b\n1,2",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "a quoted last cell without a line end",
+    "text": "a\n\"x\"",
+    "expect": { "delimiter": ",", "headers": ["a"], "rows": [["x"]], "lines": [2] }
+  },
+  {
+    "name": "a line of one quoted empty cell is skipped",
+    "text": "a,b\n\"\"\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["1", "2"]], "lines": [3] }
+  },
+  {
+    "name": "an empty quoted cell beside another is kept",
+    "text": "a,b\n\"\",2\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["", "2"]], "lines": [2] }
+  },
+  {
+    "name": "an empty last cell",
+    "text": "a,b\n1,\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["1", ""]], "lines": [2] }
+  },
+  {
+    "name": "a cell of only spaces is kept as written",
+    "text": "a,b\n   ,x\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["   ", "x"]], "lines": [2] }
+  },
+  {
+    "name": "header names are trimmed, cells are not",
+    "text": " a , b\t\n 1 , 2 \n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [[" 1 ", " 2 "]], "lines": [2] }
+  },
+  {
+    "name": "a quoted header is trimmed too",
+    "text": "\" a \",b\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "a no-break space round a header is trimmed",
+    "text": " a ,b\n 1,2\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [[" 1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "a next-line character round a header is trimmed",
+    "text": "\u0085a,b\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [["1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "a zero-width space is not trimmed",
+    "text": "​a,b\n1,2\n",
+    "expect": { "delimiter": ",", "headers": ["​a", "b"], "rows": [["1", "2"]], "lines": [2] }
+  },
+  {
+    "name": "characters outside the basic plane",
+    "text": "name,𝔸\n😀 Smile,\"🎉;x\"\n",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["name", "𝔸"],
+      "rows": [["😀 Smile", "🎉;x"]],
+      "lines": [2]
+    }
+  },
+  {
+    "name": "cells that look like formulas are kept as written",
+    "text": "a\n=1+1\n@x\n-3\n",
+    "expect": {
+      "delimiter": ",",
+      "headers": ["a"],
+      "rows": [["=1+1"], ["@x"], ["-3"]],
+      "lines": [2, 3, 4]
+    }
+  },
+  {
+    "name": "a header and no rows",
+    "text": "a,b\n",
+    "expect": { "delimiter": ",", "headers": ["a", "b"], "rows": [], "lines": [] }
+  },
+  { "name": "an empty file", "text": "", "expect": { "refused": true } },
+  { "name": "only a byte order mark", "text": "﻿", "expect": { "refused": true } },
+  { "name": "only blank lines", "text": "\n\r\n\r", "expect": { "refused": true } },
+  { "name": "a short row", "text": "a,b\n1\n", "expect": { "refused": true } },
+  { "name": "two empty cells under one column", "text": "a\n,\n", "expect": { "refused": true } },
+  { "name": "a trailing delimiter on a row", "text": "a,b\n1,2,\n", "expect": { "refused": true } },
+  {
+    "name": "a trailing delimiter in the header",
+    "text": "a,b,\n1,2,3\n",
+    "expect": { "refused": true }
+  },
+  { "name": "an empty header between two", "text": "a,,b\n1,2,3\n", "expect": { "refused": true } },
+  { "name": "a header of only spaces", "text": "a, \n1,2\n", "expect": { "refused": true } },
+  { "name": "a repeated header", "text": "a,a\n1,2\n", "expect": { "refused": true } },
+  {
+    "name": "a header repeated once trimmed",
+    "text": "a, a\n1,2\n",
+    "expect": { "refused": true }
+  },
+  {
+    "name": "a quote opened and never closed",
+    "text": "a,b\n1,\"x\n",
+    "expect": { "refused": true }
+  },
+  {
+    "name": "a quote in the middle of a cell",
+    "text": "a,b\n1,x\"y\n",
+    "expect": { "refused": true }
+  },
+  {
+    "name": "a quote in the middle of a header",
+    "text": "a\"b,c\n1,2\n",
+    "expect": { "refused": true }
+  },
+  {
+    "name": "text after a closing quote",
+    "text": "a,b\n1,\"x\"y\n",
+    "expect": { "refused": true }
+  },
+  {
+    "name": "a space after a closing quote",
+    "text": "a,b\n1,\"x\" \n",
+    "expect": { "refused": true }
+  },
+  {
+    "name": "a space before an opening quote",
+    "text": "a,b\n1, \"x\"\n",
+    "expect": { "refused": true }
+  },
+  { "name": "a NUL character", "text": "a\n\u0000\n", "expect": { "refused": true } }
+]
