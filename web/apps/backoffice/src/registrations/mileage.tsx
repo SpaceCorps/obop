@@ -1,8 +1,10 @@
 // Mileage: the trip list opens on the trips to review, and a trip shows its route, its figures and
 // the server's check of the track above the form; Confirm and Reject stand side by side in the
 // action row, Reject asking for the reason (UI plan 3.6). Submit is drawn by the app too, so that a
-// private trip, which is never reviewed, has none.
+// private trip, which is never reviewed, has none. Saving the trip as private asks first, because
+// that removes its route for good.
 import { registerModelPage, registerRecordExtension } from "../extensions.ts";
+import { privateSaveQuestion } from "../apps/mileage/privateSave.ts";
 import { REJECT, RejectAction } from "../apps/mileage/RejectAction.tsx";
 import { SUBMIT, SubmitAction } from "../apps/mileage/SubmitAction.tsx";
 import { TripReview } from "../apps/mileage/TripReview.tsx";
@@ -15,4 +17,5 @@ registerRecordExtension(TRIP, {
   actions: [SubmitAction, RejectAction],
   panels: [TripReview],
   overrides: [REJECT, SUBMIT],
+  confirmSave: [privateSaveQuestion],
 });
