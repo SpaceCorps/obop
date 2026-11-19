@@ -271,6 +271,23 @@ impl Dispatcher {
         )
     }
 
+    /// The checks of `create_checked` for `records` without writing anything: `Ok` when
+    /// `create_checked` would accept them as the store is now (a guard that plans a later write).
+    pub fn check_created(
+        &self,
+        store: &Store,
+        p: &crate::Principal,
+        records: &[(&str, String, Value)],
+    ) -> Result<(), String> {
+        crud::create_all_checked(
+            &self.engine(store),
+            &crate::engine::Actor::of(p),
+            records,
+            Vec::new(),
+            false,
+        )
+    }
+
     /// Register `get`, `list` and `search` of one model (the reads of the model engine).
     fn register_reads(&self, module: &Module, def: &ModelDef, eng: &Engine) {
         let name = def.name;

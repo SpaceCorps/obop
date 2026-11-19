@@ -621,46 +621,8 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
 /// the write group of the entries (booking on post lends it, see `book_after_post`).
 fn write(env: Env<'_>, p: &Principal, pl: &Planned) -> Result<String, String> {
     let b = &*env.store.backend();
-    let mid = new_id();
-    let mut mv = Fields::new();
-    for (k, v) in [
-        ("journal_id", &pl.journal_id),
-        ("date", &pl.date),
-        ("reference", &pl.reference),
-    ] {
-        mv.insert(k.into(), J::from(v.as_str()));
-    }
-    mv.insert(
-        "narration".into(),
-        J::from(format!("Customer invoice {}", pl.reference)),
-    );
-    // The state is the first of its options, draft, as for every create (D48).
-    if !pl.party_id.is_empty() {
-        mv.insert("partner_id".into(), J::from(pl.party_id.as_str()));
-    }
-    let record = |f: Fields| Value::from_json(&J::Object(f.into_iter().collect()));
-    let mut records = vec![("accounting_move", mid.clone(), record(mv))];
+    let (mid, records) = entries(pl);
     let mut ops = Vec::new();
-    for l in &pl.lines {
-        let mut f = Fields::new();
-        f.insert("move_id".into(), J::from(mid.as_str()));
-        f.insert("account_id".into(), J::from(l.account_id.as_str()));
-        f.insert("label".into(), J::from(l.label.as_str()));
-        f.insert("debit".into(), J::from(l.debit));
-        f.insert("credit".into(), J::from(l.credit));
-        // Stated, so the filters "Open items" and "Overdue" (reconciled = false) find the item.
-        f.insert("reconciled".into(), J::Bool(false));
-        if !pl.party_id.is_empty() {
-            f.insert("partner_id".into(), J::from(pl.party_id.as_str()));
-        }
-        if let Some(t) = &l.tax_id {
-            f.insert("tax_id".into(), J::from(t.as_str()));
-        }
-        if let Some(d) = &l.due_on {
-            f.insert("due_on".into(), J::from(d.as_str()));
-        }
-        records.push(("accounting_move_line", new_id(), record(f)));
-    }
     let mut link = Fields::new();
     link.insert("invoice_id".into(), J::from(pl.invoice_id.as_str()));
     link.insert("move_id".into(), J::from(mid.as_str()));
@@ -688,6 +650,59 @@ fn write(env: Env<'_>, p: &Principal, pl: &Planned) -> Result<String, String> {
             }
         })?;
     Ok(mid)
+}
+
+/// The person who posted, with the `accounting.user` group the booking settings lend for the
+/// write of the entry (booking on post).
+fn booker(who: &Principal) -> Principal {
+    let a = Actor::of(who);
+    let mut groups: Vec<&str> = a.groups.iter().map(String::as_str).collect();
+    groups.push(GROUP);
+    Principal::user(&a.caller, &groups)
+}
+
+/// The move and its lines of a plan, as records for `create_checked` (the move id first).
+fn entries(pl: &Planned) -> (String, Vec<(&'static str, String, Value)>) {
+    let mid = new_id();
+    let mut mv = Fields::new();
+    for (k, v) in [
+        ("journal_id", &pl.journal_id),
+        ("date", &pl.date),
+        ("reference", &pl.reference),
+    ] {
+        mv.insert(k.into(), J::from(v.as_str()));
+    }
+    mv.insert(
+        "narration".into(),
+        J::from(format!("Customer invoice {}", pl.reference)),
+    );
+    // The state is the first of its options, draft, as for every create (D48).
+    if !pl.party_id.is_empty() {
+        mv.insert("partner_id".into(), J::from(pl.party_id.as_str()));
+    }
+    let record = |f: Fields| Value::from_json(&J::Object(f.into_iter().collect()));
+    let mut records = vec![("accounting_move", mid.clone(), record(mv))];
+    for l in &pl.lines {
+        let mut f = Fields::new();
+        f.insert("move_id".into(), J::from(mid.as_str()));
+        f.insert("account_id".into(), J::from(l.account_id.as_str()));
+        f.insert("label".into(), J::from(l.label.as_str()));
+        f.insert("debit".into(), J::from(l.debit));
+        f.insert("credit".into(), J::from(l.credit));
+        // Stated, so the filters "Open items" and "Overdue" (reconciled = false) find the item.
+        f.insert("reconciled".into(), J::Bool(false));
+        if !pl.party_id.is_empty() {
+            f.insert("partner_id".into(), J::from(pl.party_id.as_str()));
+        }
+        if let Some(t) = &l.tax_id {
+            f.insert("tax_id".into(), J::from(t.as_str()));
+        }
+        if let Some(d) = &l.due_on {
+            f.insert("due_on".into(), J::from(d.as_str()));
+        }
+        records.push(("accounting_move_line", new_id(), record(f)));
+    }
+    (mid, records)
 }
 
 fn new_id() -> String {
@@ -921,7 +936,7 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
     // observer: an update that repeats `state = posted` on a posted invoice books nothing.
     let posting: Arc<std::sync::Mutex<std::collections::HashSet<String>>> = Arc::default();
     let (st, dw, marks) = (store.clone(), Arc::downgrade(d), posting.clone());
-    let check = move |input: &Value| -> Result<obop_commands::Verdict, String> {
+    let check = move |who: &Principal, input: &Value| -> Result<obop_commands::Verdict, String> {
         let b = st.backend();
         let Some(d) = dw.upgrade() else {
             return Ok(obop_commands::Verdict::default());
@@ -946,13 +961,17 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 .unwrap_or(false)
             && link_of(&*b, &i.invoice)?.is_none()
         {
-            plan_in(&*b, &i, "draft").map_err(|e| {
-                let lang = obop_commands::locale::language();
-                match closed_period(&*b, &i.date) {
-                    Some(name) => post_refusal(lang, Some((&i.date, &name)), &e),
-                    None => post_refusal(lang, None, &e),
-                }
-            })?;
+            // The plan, then every check of the create the booking will run (references and
+            // their filters, such as an inactive tax, required fields, limits), writing nothing.
+            plan_in(&*b, &i, "draft")
+                .and_then(|pl| d.check_created(&st, &booker(who), &entries(&pl).1))
+                .map_err(|e| {
+                    let lang = obop_commands::locale::language();
+                    match closed_period(&*b, &i.date) {
+                        Some(name) => post_refusal(lang, Some((&i.date, &name)), &e),
+                        None => post_refusal(lang, None, &e),
+                    }
+                })?;
         }
         Ok(obop_commands::Verdict::default())
     };
@@ -962,14 +981,14 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
         "invoicing",
         "invoice.post",
         true,
-        Box::new(move |_, input| c(input)),
+        Box::new(move |p, input| c(p, input)),
     );
     d.add_guard(
         "invoicing",
         "invoice.update",
         true,
-        Box::new(move |_, input| match input {
-            Value::Map(x) if x.get("state") == Some(&Value::text("posted")) => check(input),
+        Box::new(move |p, input| match input {
+            Value::Map(x) if x.get("state") == Some(&Value::text("posted")) => check(p, input),
             _ => Ok(obop_commands::Verdict::default()),
         }),
     );
@@ -1071,9 +1090,5 @@ fn book_after_post(env: Env<'_>, who: &Principal, input: &Value) -> Result<(), S
     if !posted || link_of(b, &i.invoice)?.is_some() {
         return Ok(());
     }
-    let a = Actor::of(who);
-    let mut groups: Vec<&str> = a.groups.iter().map(String::as_str).collect();
-    groups.push(GROUP);
-    let booker = Principal::user(&a.caller, &groups);
-    write(env, &booker, &plan_in(b, &i, "posted")?).map(|_| ())
+    write(env, &booker(who), &plan_in(b, &i, "posted")?).map(|_| ())
 }

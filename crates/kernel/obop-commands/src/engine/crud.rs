@@ -445,6 +445,18 @@ pub(crate) fn create_all(
     records: &[(&str, String, Value)],
     extra: Vec<obop_storage::Op>,
 ) -> R<()> {
+    create_all_checked(eng, actor, records, extra, true)
+}
+
+/// As `create_all`; with `write` false every check runs and the unit is dropped uncommitted, so
+/// nothing is written (a guard that must refuse what the write after it would refuse).
+pub(crate) fn create_all_checked(
+    eng: &Engine,
+    actor: &Actor,
+    records: &[(&str, String, Value)],
+    extra: Vec<obop_storage::Op>,
+    write: bool,
+) -> R<()> {
     let mut unit = eng.unit();
     for (model, id, input) in records {
         let def = eng.def(model).ok_or_else(|| format!("no model {model}"))?;
@@ -458,6 +470,9 @@ pub(crate) fn create_all(
             ));
         }
         create_in(eng, &mut unit, &def, actor, input, id)?;
+    }
+    if !write {
+        return Ok(());
     }
     for op in extra {
         unit.push_op(op);

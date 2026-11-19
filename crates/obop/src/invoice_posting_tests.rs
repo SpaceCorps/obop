@@ -481,6 +481,43 @@ fn a_booking_that_would_be_refused_refuses_the_post_and_changes_nothing() {
     assert!(rows(&f.app, "accounting_move").is_empty());
 }
 
+/// U6 review: the guard runs the same create checks as the booking, so a booking tax that was made
+/// inactive after it was configured (the line's `tax_id` filter `active = true`) refuses the post,
+/// and the invoice stays a draft with no number and no move (it was posted and left unbooked).
+#[test]
+fn an_inactive_booking_tax_refuses_the_post_and_changes_nothing() {
+    let f = fixture(2500);
+    configure(&f, json!({}));
+    let tax = rows(&f.app, "accounting_tax")
+        .into_iter()
+        .find(|(_, r)| r["name"] == json!("Test tax"))
+        .unwrap()
+        .0;
+    call(
+        &f.app,
+        &admin(),
+        "accounting_tax.update",
+        json!({"id": tax, "active": false}),
+    )
+    .unwrap();
+    let inv = invoice_with_dates(&f, &[10_000]);
+    let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": inv})));
+    assert!(m.contains("not posted") && m.contains("tax_id"), "{m}");
+    let stored = rows(&f.app, "invoice")
+        .into_iter()
+        .find(|(id, _)| *id == inv)
+        .unwrap()
+        .1;
+    assert_eq!(stored["state"], json!("draft"));
+    assert!(
+        stored.get("number").is_none_or(|n| n.is_null()),
+        "{stored:?}"
+    );
+    assert!(rows(&f.app, "accounting_move").is_empty());
+    assert!(rows(&f.app, "accounting_move_line").is_empty());
+    assert!(rows(&f.app, "invoice_posting").is_empty());
+}
+
 #[test]
 fn the_booking_settings_are_checked_and_changed_by_an_accounting_manager() {
     let f = fixture(2500);
