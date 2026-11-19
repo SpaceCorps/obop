@@ -378,6 +378,23 @@ describe("importNames", () => {
     expect(readSheet(`﻿${file(1_048_574)}`)).toBeNull();
   });
 
+  it("names that differ by case, by spaces or by Unicode normalisation are one name", () => {
+    const nfc = "Café Nord";
+    const nfd = "café   nord";
+    expect(nfc.toLowerCase()).not.toBe(nfd.replace(/ +/g, " "));
+    const look = world([lead, party, account], {
+      party: [
+        { id: "c1", name: nfc },
+        { id: "c2", name: nfd },
+      ],
+    });
+    const label = labeller(look, [lead, party, account]);
+    const t = targetOf(party, look, label("party"), true);
+    // Two records that look the same are two records of one name: never a silent pick.
+    expect(decide(t, "CAFÉ NORD")).toEqual({ kind: "several" });
+    expect(decide(t, "CAFÉ NORD")).toEqual({ kind: "several" });
+  });
+
   it("a file over 1 MiB once the names are replaced is refused", () => {
     expect(overLimit("x".repeat(1_048_576))).toBe(false);
     expect(overLimit("x".repeat(1_048_577))).toBe(true);
