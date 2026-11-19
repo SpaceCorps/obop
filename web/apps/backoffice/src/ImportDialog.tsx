@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Dialog, Notice, Select, Table, fmt, inSentence, t } from "@obop/ui";
 import { call, type ModelMeta } from "./api.ts";
 import { useData } from "./data.tsx";
@@ -73,6 +73,8 @@ export function ImportDialog({
   const input = useRef<HTMLInputElement>(null);
   /** Counts the chosen files and the checks: an answer that lands after a newer one is dropped. */
   const turn = useRef(0);
+  /** What the dialog found: the report, or why the file cannot be imported. */
+  const result = useRef<HTMLDivElement>(null);
   const columns = model.fields
     .filter((f) => !f.computed && !f.sequence && f.kind !== "image" && f.kind !== "file")
     .map((f) => f.name);
@@ -234,6 +236,18 @@ export function ImportDialog({
   const canImport = !!checked && (mode === "partial" ? (checked.valid ?? 0) > 0 : checked.ok);
   const busy = phase.at === "resolving" || phase.at === "checking" || phase.at === "importing";
   const report = phase.at === "done" ? phase.report : checked;
+  const outcome = !!report || phase.at === "refused" || phase.at === "proposed";
+
+  // What the dialog found is below the hints, out of sight on a phone: bring it into view. The
+  // control that chose the file was disabled while the dialog worked, so the focus is moved to
+  // the result too, and not left on the Close button where Enter would close the dialog.
+  useEffect(() => {
+    const el = result.current;
+    if (!el) return;
+    el.scrollIntoView?.({ block: "nearest" });
+    const at = document.activeElement;
+    if (!at || !el.closest(".import-dialog")?.contains(at)) el.focus({ preventScroll: true });
+  }, [phase]);
 
   return (
     <Dialog
@@ -343,79 +357,83 @@ export function ImportDialog({
         )}
         {phase.at === "checking" && <p role="status">{t("Checking the file...")}</p>}
         {phase.at === "importing" && <p role="status">{t("Importing...")}</p>}
-        {phase.at === "refused" && (
-          <Notice tone="danger" title={t("The file cannot be imported")}>
-            {phase.word()}
-          </Notice>
-        )}
-        {phase.at === "proposed" && (
-          <Notice tone="info" title={t("Proposed, not imported")}>
-            {t("A person with the right to create these records must approve it first.")}
-          </Notice>
-        )}
-        {report && (
-          <div className="stack">
-            <p role="status" className="import-summary">
-              {phase.at === "done" ? (
-                <>
-                  <Badge tone="success">{t("Imported")}</Badge>{" "}
-                  {t("Created: {created}. Skipped: {failed}.", {
-                    created: fmt.integer(report.created ?? 0),
-                    failed: fmt.integer(report.failed),
-                  })}
-                </>
-              ) : (
-                <>
-                  <Badge tone={report.failed === 0 ? "success" : "warning"}>
-                    {report.failed === 0 ? t("Ready") : t("Problems")}
-                  </Badge>{" "}
-                  {t("Rows ready: {valid}. Rows with problems: {failed}.", {
-                    valid: fmt.integer(report.valid ?? 0),
-                    failed: fmt.integer(report.failed),
-                  })}
-                </>
-              )}
-            </p>
-            {report.errors.length > 0 && (
-              // One block per problem on a phone, the message on top (stack). The explicit roles
-              // keep it a table for Safari, which drops the semantics once display changes.
-              <Table caption={t("Problems found")} dense stack role="table">
-                <thead>
-                  <tr role="row">
-                    <th scope="col" role="columnheader">
-                      {t("Row")}
-                    </th>
-                    <th scope="col" role="columnheader">
-                      {t("Line")}
-                    </th>
-                    <th scope="col" role="columnheader">
-                      {t("Problem")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.errors.map((e) => (
-                    <tr key={e.row} role="row">
-                      <td role="cell" data-label={t("Row")}>
-                        {e.row}
-                      </td>
-                      <td role="cell" data-label={t("Line")}>
-                        {e.line ?? ""}
-                      </td>
-                      <td role="cell" className="cell-main">
-                        <ProblemCell
-                          ours={problems.current.get(e.row)}
-                          error={e.error}
-                          text={problemText}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
+        {outcome && (
+          <div ref={result} tabIndex={-1} className="stack import-result">
+            {phase.at === "refused" && (
+              <Notice tone="danger" title={t("The file cannot be imported")}>
+                {phase.word()}
+              </Notice>
             )}
-            {report.errors_truncated && (
-              <p className="hint">{t("Only the first 100 problems are listed.")}</p>
+            {phase.at === "proposed" && (
+              <Notice tone="info" title={t("Proposed, not imported")}>
+                {t("A person with the right to create these records must approve it first.")}
+              </Notice>
+            )}
+            {report && (
+              <div className="stack">
+                <p role="status" className="import-summary">
+                  {phase.at === "done" ? (
+                    <>
+                      <Badge tone="success">{t("Imported")}</Badge>{" "}
+                      {t("Created: {created}. Skipped: {failed}.", {
+                        created: fmt.integer(report.created ?? 0),
+                        failed: fmt.integer(report.failed),
+                      })}
+                    </>
+                  ) : (
+                    <>
+                      <Badge tone={report.failed === 0 ? "success" : "warning"}>
+                        {report.failed === 0 ? t("Ready") : t("Problems")}
+                      </Badge>{" "}
+                      {t("Rows ready: {valid}. Rows with problems: {failed}.", {
+                        valid: fmt.integer(report.valid ?? 0),
+                        failed: fmt.integer(report.failed),
+                      })}
+                    </>
+                  )}
+                </p>
+                {report.errors.length > 0 && (
+                  // One block per problem on a phone, the message on top (stack). The explicit roles
+                  // keep it a table for Safari, which drops the semantics once display changes.
+                  <Table caption={t("Problems found")} dense stack role="table">
+                    <thead>
+                      <tr role="row">
+                        <th scope="col" role="columnheader">
+                          {t("Row")}
+                        </th>
+                        <th scope="col" role="columnheader">
+                          {t("Line")}
+                        </th>
+                        <th scope="col" role="columnheader">
+                          {t("Problem")}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.errors.map((e) => (
+                        <tr key={e.row} role="row">
+                          <td role="cell" data-label={t("Row")}>
+                            {e.row}
+                          </td>
+                          <td role="cell" data-label={t("Line")}>
+                            {e.line ?? ""}
+                          </td>
+                          <td role="cell" className="cell-main">
+                            <ProblemCell
+                              ours={problems.current.get(e.row)}
+                              error={e.error}
+                              text={problemText}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                )}
+                {report.errors_truncated && (
+                  <p className="hint">{t("Only the first 100 problems are listed.")}</p>
+                )}
+              </div>
             )}
           </div>
         )}

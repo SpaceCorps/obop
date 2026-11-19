@@ -236,6 +236,28 @@ describe("the Import dialog with names in a reference column", () => {
     expect(cells[1]).toMatch(/address bar\.<br>.*required/);
   });
 
+  it("brings the report into view and moves the focus to it", async () => {
+    const scrolled: Element[] = [];
+    const scroll = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scroll,
+    });
+    try {
+      await mount();
+      await choose(`title,party_id\nA,${ACME}\n`);
+      const result = document.body.querySelector(".import-result")!;
+      expect(result.textContent).toContain("Rows ready: 1. Rows with problems: 0.");
+      expect(scrolled).toContain(result);
+      expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+      expect(document.activeElement).toBe(result);
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
   it("a file chosen while the names of another are looked up wins, and the input waits", async () => {
     let release!: () => void;
     const held = new Promise<void>((done) => (release = done));
