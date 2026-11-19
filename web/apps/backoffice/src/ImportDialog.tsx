@@ -125,7 +125,9 @@ export function ImportDialog({
       tos.map((to) => [to, [to, ...titleReads(d.models.get(to)!.model, look)]] as const),
     );
     const load = new Set([...reads.values()].flat().filter((m) => d.models.has(m)));
-    // Fresh rows, once per chosen file: a load already running is followed by a new one.
+    // Fresh rows, once per chosen file: rows a view holds are loaded again (a load of them already
+    // running is followed by a new one); a model with no rows yet joins a load already running,
+    // which was asked for before the file was chosen (RowStore.load).
     await Promise.all(
       [...load].map((m) => (d.store.cached(m) ? d.store.refresh(m) : d.store.load(m))),
     );
