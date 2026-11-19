@@ -12,6 +12,7 @@ import {
   useWorded,
 } from "@obop/ui";
 import { call } from "./api.ts";
+import { Refusal } from "./Refusal.tsx";
 import { account, type Notify } from "./SecurityAccount.tsx";
 import { serverMessage } from "./serverMessage.ts";
 import { copyText } from "./signLinks.ts";
@@ -292,11 +293,7 @@ function SsoFormDialog({
             )}
           </p>
         )}
-        {error && (
-          <div className="confirm-error" role="alert">
-            {error}
-          </div>
-        )}
+        {error && <Refusal message={error} />}
       </form>
     </Dialog>
   );
@@ -495,7 +492,6 @@ export function MicrosoftSignInSection({
           title={t("Remove Microsoft sign-in?")}
           confirmLabel={t("Remove")}
           busy={busy}
-          error={removeError}
           onConfirm={() => void remove()}
           onClose={() => setRemoving(false)}
         >
@@ -506,6 +502,8 @@ export function MicrosoftSignInSection({
               )}
             </p>
             {onlyCount !== null && onlyCount > 0 && <p>{onlyPeople(onlyCount)}</p>}
+            {/* Here and not as the question's own `error`, so that it takes the focus. */}
+            {removeError && <Refusal message={removeError} />}
           </div>
         </ConfirmDialog>
       )}

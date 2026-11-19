@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FocusEvent } from "react";
 import { Button, Checkbox, ConfirmDialog, Dialog, Input, t, useWorded } from "@obop/ui";
 import { call } from "./api.ts";
+import { Refusal } from "./Refusal.tsx";
 import type { Notify } from "./SecurityAccount.tsx";
 import { serverMessage } from "./serverMessage.ts";
 import { isGuid, type SsoState } from "./SsoAdmin.tsx";
@@ -219,11 +220,7 @@ export function MicrosoftDialog({
               { user: person.name },
             )}
           </p>
-          {error && (
-            <div className="confirm-error" role="alert">
-              {error}
-            </div>
-          )}
+          {error && <Refusal message={error} />}
         </form>
       </Dialog>
     );
@@ -251,11 +248,7 @@ export function MicrosoftDialog({
             disabled={busy || ((providerOff || tooFew) && !only)}
             onChange={(e) => (e.target.checked ? setConfirm("only") : void setOnly(false))}
           />
-          {error && confirm !== "unbind" && (
-            <div className="confirm-error" role="alert">
-              {error}
-            </div>
-          )}
+          {error && confirm !== "unbind" && <Refusal message={error} />}
           <div className="stack">
             <div className="actionrow">
               <Button
@@ -308,7 +301,6 @@ export function MicrosoftDialog({
           title={t("Remove the Microsoft binding of {user}?", { user: person.name })}
           confirmLabel={t("Remove binding")}
           busy={busy}
-          error={error}
           onConfirm={() => void unbind()}
           onClose={() => setConfirm(null)}
         >
@@ -319,6 +311,8 @@ export function MicrosoftDialog({
               )}
             </p>
             {own && <p>{t("This is your own account: you are signed out at once.")}</p>}
+            {/* Here and not as the question's own `error`, so that it takes the focus. */}
+            {error && <Refusal message={error} />}
           </div>
         </ConfirmDialog>
       )}
