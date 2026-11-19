@@ -540,9 +540,103 @@ fn closed_period(b: &dyn Backend, date: &str) -> Option<String> {
         .map(|(_, p)| text(p, "name"))
 }
 
+/// The cause of a refused booking in words for a person, when the create checks refused a
+/// reference of the entry (`ref_not_allowed` on the tax, account, partner or journal): the record
+/// by its name, and "inactive" where the filter it failed is `active = true`. None for any other
+/// refusal, which keeps its detail. An agent gets the coded detail instead (the caller decides).
+pub fn person_cause(b: &dyn Backend, lang: Option<&str>, why: &str) -> Option<String> {
+    let rest = why.strip_prefix(obop_commands::errors::code::REF_NOT_ALLOWED)?;
+    let rest = rest.strip_prefix(": ")?;
+    let (path, rest) = rest.split_once(": the ")?;
+    let field = path.rsplit_once('.')?.1;
+    let (target, rest) = rest.split_once(" cannot be picked here; it must satisfy ")?;
+    let (model, id) = target.split_once(' ')?;
+    let inactive = rest.trim() == "active = true";
+    let row = b.get(model, id).ok().flatten();
+    let name = row
+        .as_ref()
+        .map(|f| match (text(f, "code"), text(f, "name")) {
+            (c, n) if !c.is_empty() && !n.is_empty() && model == "accounting_account" => {
+                format!("{c} {n}")
+            }
+            (c, n) => {
+                if n.is_empty() {
+                    c
+                } else {
+                    n
+                }
+            }
+        })
+        .filter(|n| !n.is_empty())?;
+    // (the noun with its article, "is inactive", "cannot be used here"), machine-drafted.
+    let (noun, off, not_here) = match (lang.unwrap_or("en"), field) {
+        ("de", "tax_id") => (
+            "der Steuersatz",
+            "ist nicht aktiv",
+            "kann hier nicht verwendet werden",
+        ),
+        ("de", "account_id") => (
+            "das Konto",
+            "ist nicht aktiv",
+            "kann hier nicht verwendet werden",
+        ),
+        ("de", "partner_id") => (
+            "der Partner",
+            "ist nicht aktiv",
+            "kann hier nicht verwendet werden",
+        ),
+        ("de", "journal_id") => (
+            "das Journal",
+            "ist nicht aktiv",
+            "kann hier nicht verwendet werden",
+        ),
+        ("fr", "tax_id") => ("la taxe", "est inactive", "ne peut pas être utilisée ici"),
+        ("fr", "account_id") => ("le compte", "est inactif", "ne peut pas être utilisé ici"),
+        ("fr", "partner_id") => (
+            "le partenaire",
+            "est inactif",
+            "ne peut pas être utilisé ici",
+        ),
+        ("fr", "journal_id") => ("le journal", "est inactif", "ne peut pas être utilisé ici"),
+        ("pl", "tax_id") => ("stawka podatku", "jest nieaktywna", "nie może być tu użyta"),
+        ("pl", "account_id") => ("konto", "jest nieaktywne", "nie może być tu użyte"),
+        ("pl", "partner_id") => ("kontrahent", "jest nieaktywny", "nie może być tu użyty"),
+        ("pl", "journal_id") => ("dziennik", "jest nieaktywny", "nie może być tu użyty"),
+        ("fi", "tax_id") => ("vero", "ei ole käytössä", "ei kelpaa tähän"),
+        ("fi", "account_id") => ("tili", "ei ole käytössä", "ei kelpaa tähän"),
+        ("fi", "partner_id") => ("kumppani", "ei ole käytössä", "ei kelpaa tähän"),
+        ("fi", "journal_id") => ("päiväkirja", "ei ole käytössä", "ei kelpaa tähän"),
+        ("sv", "tax_id") => ("skattesatsen", "är inte aktiv", "kan inte användas här"),
+        ("sv", "account_id") => ("kontot", "är inte aktivt", "kan inte användas här"),
+        ("sv", "partner_id") => ("partnern", "är inte aktiv", "kan inte användas här"),
+        ("sv", "journal_id") => ("journalen", "är inte aktiv", "kan inte användas här"),
+        ("es", "tax_id") => ("el impuesto", "está inactivo", "no se puede usar aquí"),
+        ("es", "account_id") => ("la cuenta", "está inactiva", "no se puede usar aquí"),
+        ("es", "partner_id") => ("el contacto", "está inactivo", "no se puede usar aquí"),
+        ("es", "journal_id") => ("el diario", "está inactivo", "no se puede usar aquí"),
+        (_, "tax_id") => ("the booking tax", "is inactive", "cannot be used here"),
+        (_, "account_id") => ("the account", "is inactive", "cannot be used here"),
+        (_, "partner_id") => ("the customer", "is inactive", "cannot be used here"),
+        (_, "journal_id") => ("the journal", "is inactive", "cannot be used here"),
+        _ => return None,
+    };
+    let quoted = match lang {
+        Some("de") | Some("pl") => format!("„{name}“"),
+        Some("fr") => format!("« {name} »"),
+        Some("fi") | Some("sv") => format!("”{name}”"),
+        Some("es") => format!("«{name}»"),
+        _ => format!("“{name}”"),
+    };
+    Some(format!(
+        "{noun} {quoted} {}",
+        if inactive { off } else { not_here }
+    ))
+}
+
 /// The refusal of a post whose journal entry cannot be booked, in the language of the request
 /// (machine-drafted translations). A closed period is named with its fix (another issue date);
-/// any other cause keeps its English detail and points to the booking settings.
+/// any other cause keeps its detail (for a person in words where `person_cause` has them) and
+/// points to the booking settings.
 pub fn post_refusal(lang: Option<&str>, closed: Option<(&str, &str)>, why: &str) -> String {
     if let Some((date, period)) = closed {
         return match lang {
@@ -589,7 +683,7 @@ pub fn post_refusal(lang: Option<&str>, closed: Option<(&str, &str)>, why: &str)
             "La factura no se ha contabilizado porque no se puede crear su asiento: {why}. Corrija los ajustes de contabilización de facturas o desactive la contabilización automática."
         ),
         _ => format!(
-            "The invoice was not posted, because its journal entry cannot be booked: {why}. Fix the booking settings (invoice_posting_setting) or turn book_on_post off."
+            "The invoice was not posted, because its journal entry cannot be booked: {why}. Fix the booking settings of invoices or turn automatic booking off."
         ),
     }
 }
@@ -969,7 +1063,15 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                     let lang = obop_commands::locale::language();
                     match closed_period(&*b, &i.date) {
                         Some(name) => post_refusal(lang, Some((&i.date, &name)), &e),
-                        None => post_refusal(lang, None, &e),
+                        None => {
+                            // A person reads the record by its name; an agent keeps the code.
+                            let why = who
+                                .is_person()
+                                .then(|| person_cause(&*b, lang, &e))
+                                .flatten()
+                                .unwrap_or(e);
+                            post_refusal(lang, None, &why)
+                        }
                     }
                 })?;
         }

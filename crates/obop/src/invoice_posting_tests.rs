@@ -501,8 +501,36 @@ fn an_inactive_booking_tax_refuses_the_post_and_changes_nothing() {
     )
     .unwrap();
     let inv = invoice_with_dates(&f, &[10_000]);
+    // A person reads the tax by its name, without the code, the model path or the id.
     let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": inv})));
-    assert!(m.contains("not posted") && m.contains("tax_id"), "{m}");
+    assert!(m.contains("not posted"), "{m}");
+    assert!(m.contains("the booking tax “Test tax” is inactive"), "{m}");
+    for internal in [
+        "ref_not_allowed",
+        "tax_id",
+        "accounting_tax",
+        tax.as_str(),
+        "book_on_post",
+    ] {
+        assert!(!m.contains(internal), "{internal} in {m}");
+    }
+    {
+        let _s = obop_commands::locale::scope(Some("de"));
+        let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": inv})));
+        assert!(
+            m.contains("der Steuersatz „Test tax“ ist nicht aktiv"),
+            "{m}"
+        );
+        assert!(!m.contains("ref_not_allowed"), "{m}");
+    }
+    // An agent keeps the coded detail.
+    let agent = Principal::agent(
+        "bot",
+        &["base.user", "invoicing.user", "invoicing.manager"],
+        &["base.user", "invoicing.user", "invoicing.manager"],
+    );
+    let m = refusal(call(&f.app, &agent, "invoice.post", json!({"id": inv})));
+    assert!(m.contains("ref_not_allowed") && m.contains("tax_id"), "{m}");
     let stored = rows(&f.app, "invoice")
         .into_iter()
         .find(|(id, _)| *id == inv)
