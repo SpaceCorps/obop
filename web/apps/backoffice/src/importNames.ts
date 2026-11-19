@@ -411,11 +411,6 @@ export type Problem = {
   to: string;
   /** The cell's text, trimmed as the server trims it. */
   text: string;
-  /**
-   * The ends of the server's sentences about the cells of this row the browser left as names
-   * (`there is no <to> <text>`, crud.rs): a refusal that ends so is about the same thing.
-   */
-  same: string[];
 };
 
 /** The file with every name found once replaced by its id, and the first problem of each row. */
@@ -440,25 +435,20 @@ export function resolveNames(
         edits.push({ start: cell.start, end: cell.end, text: o.id });
         continue;
       }
-      const same = `there is no ${col.to} ${v}`;
-      const first = problems.get(rec.row);
-      if (first) first.same.push(same);
-      else
-        problems.set(rec.row, {
-          kind: o.kind,
-          header: col.header,
-          to: col.to,
-          text: v,
-          same: [same],
-        });
+      if (!problems.has(rec.row))
+        problems.set(rec.row, { kind: o.kind, header: col.header, to: col.to, text: v });
     }
   }
   return { text: splice(text, edits), problems };
 }
 
-/** Whether the server's refusal of a row is about a cell the browser left as a name. */
+/**
+ * Whether the server's refusal of a row is about the very cell of the browser's sentence: it ends
+ * with `there is no <to> <text>` (crud.rs). A refusal about another cell of the row, even one the
+ * browser also left as a name, is something else and is shown after the browser's sentence.
+ */
 export function sameRefusal(p: Problem, error: string): boolean {
-  return p.same.some((s) => error.endsWith(s));
+  return error.endsWith(`there is no ${p.to} ${p.text}`);
 }
 
 /** A name for a sentence: trimmed, cut at 40 characters with "…". */

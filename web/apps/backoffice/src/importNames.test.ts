@@ -332,12 +332,13 @@ describe("importNames", () => {
     const out = run(text, look, [lead, party, account]);
     const p = out.problems.get(1)!;
     expect([p.kind, p.header, p.to, p.text]).toEqual(["none", "account_id", "account", "Nowhere"]);
-    // The server's refusal of either cell is about the same thing (R3); another one is not.
+    // Only the server's refusal of that very cell is about the same thing (R3). Its refusal of the
+    // other cell (the server names the first failing field in the model's order) is shown too.
     expect(
       sameRefusal(p, "lead.account_id must be an account id; there is no account Nowhere"),
     ).toBe(true);
     expect(sameRefusal(p, "lead.party_id must be a party id; there is no party Twin Example")).toBe(
-      true,
+      false,
     );
     expect(sameRefusal(p, "lead.title is required")).toBe(false);
     expect(sameRefusal(p, "lead.party_id must be a party id; there is no party Nowhere")).toBe(
