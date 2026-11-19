@@ -232,7 +232,9 @@ test.describe("administering Sign in with Microsoft", () => {
     // A refused Save: the red line takes the focus and lies inside the visible part of the sheet
     // and of the screen (it was drawn under the fold, and nothing happened for the person).
     allowHttpErrors(503);
-    await page.route("**/api/sso_provider/configure", (r) =>
+    // (The page adds the language to the address as a query.)
+    const configure = /\/api\/sso_provider\/configure(\?|$)/;
+    await page.route(configure, (r) =>
       r.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
     );
     await form.getByRole("button", { name: "Save" }).click();
@@ -244,7 +246,7 @@ test.describe("administering Sign in with Microsoft", () => {
     expect(alertBox.y).toBeGreaterThanOrEqual(bodyBox.y - 1);
     expect(alertBox.y + alertBox.height).toBeLessThanOrEqual(bodyBox.y + bodyBox.height + 1);
     expect(alertBox.y + alertBox.height).toBeLessThanOrEqual(844);
-    await page.unroute("**/api/sso_provider/configure");
+    await page.unroute(configure);
     await form.getByRole("button", { name: "Cancel" }).click();
     await expect(change).toBeFocused();
     const button = microsoft(page, "bea");
