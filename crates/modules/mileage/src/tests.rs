@@ -3238,3 +3238,124 @@ fn a_private_trip_keeps_its_distance_and_times_but_not_its_route() {
         assert_eq!(positions(&id), 4);
     });
 }
+
+#[test]
+fn a_route_removed_for_a_private_purpose_is_named_in_the_checks_of_the_review() {
+    each_rig(|r| {
+        let (ann, rex) = (driver("ann"), reviewer("rex"));
+        let id = r.ended(&ann);
+        assert_eq!(r.trip_row(&id)["integrity"], "", "a clean walk");
+        let made = r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "private"}),
+        );
+        assert_eq!(made["integrity"], "route_removed:10", "{made}");
+        // Back to business: the trip goes to review with no route, and the checks say why.
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "business"}),
+        );
+        r.ok(&ann, "mileage_trip.submit", json!({"id": id}));
+        let seen = r.ok(&rex, "mileage_trip.get", json!({"id": id}));
+        assert_eq!(seen["integrity"], "route_removed:10", "{seen}");
+        assert_eq!(seen["point_count"], 0, "{seen}");
+
+        // Ended as private: the flag stands next to what the check found.
+        let id = r.recording(&ann);
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "private"}),
+        );
+        r.walk(&ann, &id, 1, 10);
+        let ended = r.ok(
+            &ann,
+            "mileage_trip.end",
+            json!({"id": id, "expected_points": 10, "last_seq": 10}),
+        );
+        assert_eq!(ended["integrity"], "route_removed:10", "{ended}");
+    });
+}
+
+#[test]
+fn an_agent_does_not_mark_a_trip_private_but_the_phone_does() {
+    each_rig(|r| {
+        let ann = driver("ann");
+        let agent = Principal::agent("ann/agent", &[DRIVER], &[DRIVER]);
+        let id = r.ended(&ann);
+        let e = r.refused(
+            &agent,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "private"}),
+        );
+        assert!(e.contains("an agent cannot set it"), "{e}");
+        assert_eq!(r.points_stored(&id), 10);
+        assert_eq!(r.trip_row(&id)["purpose"], "business");
+        // Another purpose is no loss of data.
+        r.ok(
+            &agent,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "commute"}),
+        );
+        // The app's token names its device: the driver's own tap on Private.
+        let mut phone = Principal::agent("ann/agent", &[DRIVER], &[DRIVER]);
+        phone.device = Some("device-1".into());
+        r.ok(
+            &phone,
+            "mileage_trip.update",
+            json!({"id": id, "purpose": "private"}),
+        );
+        assert_eq!(r.points_stored(&id), 0);
+    });
+}
+
+#[test]
+fn private_trips_stored_with_a_route_lose_it_once_at_start() {
+    use obop_storage::Op;
+    each_rig(|r| {
+        let ann = driver("ann");
+        let db = r.store.backend();
+        // As an earlier build left them: private, ended or discarded, with points and positions.
+        let mut old = Vec::new();
+        for _ in 0..2 {
+            let id = r.ended(&ann);
+            let mut patch = obop_storage::Fields::new();
+            patch.insert("purpose".into(), J::from("private"));
+            db.apply_checked(&[Op::Patch {
+                model: TRIP.into(),
+                id: id.clone(),
+                patch,
+                expect: vec![],
+            }])
+            .unwrap();
+            old.push(id);
+        }
+        // Still recording: its points count the distance at `end`.
+        let live = r.recording(&ann);
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": live, "purpose": "private"}),
+        );
+        r.walk(&ann, &live, 1, 3);
+        let business = r.ended(&ann);
+
+        assert_eq!(crate::drop_private_routes(&r.store), Ok(2));
+        for id in &old {
+            assert_eq!(r.points_stored(id), 0);
+            let row = r.trip_row(id);
+            assert!(
+                row["start_lat"].is_null() && row["end_lon"].is_null(),
+                "{row:?}"
+            );
+            assert_eq!(row["integrity"], "route_removed:10", "{row:?}");
+            assert!(row["distance_m"].as_str().is_some_and(|d| d != "0.00"));
+        }
+        assert_eq!(r.points_stored(&live), 3);
+        assert_eq!(r.points_stored(&business), 10);
+        // Nothing is left for a second start.
+        assert_eq!(crate::drop_private_routes(&r.store), Ok(0));
+    });
+}
