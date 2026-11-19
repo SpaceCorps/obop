@@ -71,6 +71,8 @@ export function ImportDialog({
   /** The browser's own sentence for a row whose reference it could not look up, by row. */
   const problems = useRef(new Map<number, Problem>());
   const input = useRef<HTMLInputElement>(null);
+  /** Counts the chosen files and the checks: an answer that lands after a newer one is dropped. */
+  const turn = useRef(0);
   const columns = model.fields
     .filter((f) => !f.computed && !f.sequence && f.kind !== "image" && f.kind !== "file")
     .map((f) => f.name);
@@ -86,12 +88,14 @@ export function ImportDialog({
   const refs = columns.filter((c) => model.fields.some((f) => f.name === c && f.kind === "ref"));
 
   async function check(text: string, m: Mode) {
+    const mine = ++turn.current;
     setPhase({ at: "checking" });
     const r = await call(d.token, `${model.name}.bulk_create`, {
       csv: text,
       mode: m,
       dry_run: true,
     });
+    if (mine !== turn.current) return;
     if (r.kind === "ok") setPhase({ at: "checked", report: r.value as Report });
     else if (r.kind === "approval") setPhase({ at: "proposed" });
     else setPhase({ at: "refused", word: () => serverMessage(r.message) });
@@ -140,12 +144,18 @@ export function ImportDialog({
       );
     }
     const out = resolveNames(raw, sheet, wanted, targets);
+    // readSheet gave up on a text over the limit as read (the server's to refuse), so only the ids
+    // can have made this one larger.
     return overLimit(out.text) ? null : out;
   }
 
   async function pick(file: File | undefined) {
     if (!file) return;
+    // A file chosen while an earlier one is still read or looked up wins: the earlier one stops.
+    const mine = ++turn.current;
     setFileName(file.name);
+    // No report of the earlier file, so nothing can be imported until this one is checked.
+    setPhase({ at: "choose" });
     csv.current = "";
     problems.current = new Map();
     if (file.size > MAX_BYTES) {
@@ -155,7 +165,10 @@ export function ImportDialog({
       });
       return;
     }
-    const ready = await prepare(await file.text());
+    const raw = await file.text();
+    if (mine !== turn.current) return;
+    const ready = await prepare(raw);
+    if (mine !== turn.current) return;
     if (!ready) {
       setPhase({
         at: "refused",
@@ -285,7 +298,13 @@ export function ImportDialog({
                 accept=".csv,text/csv"
                 className="sr-only"
                 aria-label={t("Choose a CSV file")}
-                onChange={(e) => void pick(e.target.files?.[0])}
+                disabled={busy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  // Emptied, so the same file chosen again (after it was corrected) is read again.
+                  e.target.value = "";
+                  void pick(file);
+                }}
               />
               <Button icon="upload" disabled={busy} onClick={() => input.current?.click()}>
                 {fileName ? t("Choose another file") : t("Choose a CSV file")}
