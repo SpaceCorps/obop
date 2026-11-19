@@ -354,6 +354,30 @@ describe("importNames", () => {
     expect(shortName("x".repeat(40))).toBe("x".repeat(40));
   });
 
+  it("readSheet keeps to the server's limits, and reads a file at each of them", () => {
+    // The fixture holds cases over the limits (both readers); these are the ones at them.
+    const columns = (n: number) => Array.from({ length: n }, (_, i) => `c${i}`).join(",");
+    expect(readSheet(`${columns(100)}\n${columns(100)}\n`)!.headers).toHaveLength(100);
+    expect(readSheet(`${columns(101)}\n${columns(101)}\n`)).toBeNull();
+    const rows = (n: number) => `a\n${"x\n".repeat(n)}`;
+    expect(readSheet(rows(1000))!.records).toHaveLength(1000);
+    expect(readSheet(rows(1001))).toBeNull();
+    // A cell of 65,536 bytes is read; one byte more is refused, counted in bytes of UTF-8 and not
+    // in UTF-16 units (a four byte character is two units, a three byte one is one).
+    expect(readSheet(`a\n${"€".repeat(21_845)}x\n`)!.records[0]!.cells[0]!.value).toHaveLength(
+      21_846,
+    );
+    expect(readSheet(`a\n${"€".repeat(21_845)}xy\n`)).toBeNull();
+    expect(readSheet(`a\n"${"\u{1F600}".repeat(16_384)}x"\n`)).toBeNull();
+    // A whole file of 1 MiB (1000 rows) is read; one byte more is refused, a byte order mark too.
+    const file = (n: number) =>
+      `a\n${`${"x".repeat(1048)}\n`.repeat(999)}${"x".repeat(n - 2 - 999 * 1049 - 1)}\n`;
+    expect(file(1_048_576).length).toBe(1_048_576);
+    expect(readSheet(file(1_048_576))!.records).toHaveLength(1000);
+    expect(readSheet(file(1_048_577))).toBeNull();
+    expect(readSheet(`﻿${file(1_048_574)}`)).toBeNull();
+  });
+
   it("a file over 1 MiB once the names are replaced is refused", () => {
     expect(overLimit("x".repeat(1_048_576))).toBe(false);
     expect(overLimit("x".repeat(1_048_577))).toBe(true);

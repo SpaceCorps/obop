@@ -46,12 +46,33 @@ function delimiterOf(text: string, from: number): "," | ";" {
   return semis > commas ? ";" : ",";
 }
 
+/** The limits of csv.rs: most data rows, most columns, longest cell in bytes of UTF-8. */
+const MAX_ROWS = 1000;
+const MAX_COLUMNS = 100;
+const MAX_CELL_BYTES = 65_536;
+
+/** The length of `s` in bytes of UTF-8, as the server counts it. */
+function utf8Length(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff && (s.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      n += 4;
+      i++;
+    } else n += 3;
+  }
+  return n;
+}
+
 /**
  * The file as `csv::parse` reads it, with where each cell is in the text; `null` where the server
- * refuses the file for its structure (then the text is sent unchanged and the server says why).
- * The limits on size, rows, columns and cell length are left to the server.
+ * refuses the file, for its structure or its limits (size, rows, columns, cell length). Then the
+ * text is sent unchanged and the server says why: no name is looked up in a file it refuses.
  */
 export function readSheet(text: string): Sheet | null {
+  if (overLimit(text)) return null;
   const from = text.startsWith("\ufeff") ? 1 : 0;
   if (text.includes("\0")) return null;
   const delim = delimiterOf(text, from);
@@ -135,6 +156,11 @@ export function readSheet(text: string): Sheet | null {
   }
   const [head, ...data] = records;
   if (!head) return null; // empty: the first line must name the fields
+  if (head.cells.length > MAX_COLUMNS || data.length > MAX_ROWS) return null;
+  // Only a cell longer than a third of the limit in UTF-16 units can be over it in bytes.
+  for (const r of records)
+    for (const c of r.cells)
+      if (c.value.length > MAX_CELL_BYTES / 3 && utf8Length(c.value) > MAX_CELL_BYTES) return null;
   const headers = head.cells.map((s) => rustTrim(s.value));
   for (let i = 0; i < headers.length; i++)
     if (headers[i] === "" || headers.indexOf(headers[i]!) < i) return null;
