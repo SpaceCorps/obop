@@ -63,7 +63,7 @@ test("saving a trip as private asks first, and Keep editing saves nothing", asyn
   const id = await endedTrip(api, uid("private"));
   await signIn("drew", `/mileage/mileage_trip?view=list&id=${id}`);
   const record = page.getByRole("complementary", { name: /record$/ });
-  await expect(record.locator(".trip-map svg")).toBeVisible();
+  await expect(record.locator(".trip-map svg[role=img]")).toBeVisible();
 
   await record.getByLabel("Purpose", { exact: true }).selectOption("private");
   await record.getByRole("button", { name: "Save", exact: true }).click();
@@ -85,7 +85,7 @@ test("saving a trip as private asks first, and Keep editing saves nothing", asyn
   now = await tripOf(api, id);
   expect(Number(now.point_count)).toBe(0);
   // The panel no longer draws the route it just removed.
-  await expect(record.locator(".trip-map svg")).toHaveCount(0);
+  await expect(record.locator(".trip-map svg[role=img]")).toHaveCount(0);
   await expect(record.locator(".trip-map-none")).toBeVisible();
 });
 
