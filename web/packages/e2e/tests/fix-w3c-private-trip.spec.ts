@@ -88,3 +88,24 @@ test("saving a trip as private asks first, and Keep editing saves nothing", asyn
   await expect(record.locator(".trip-map svg")).toHaveCount(0);
   await expect(record.locator(".trip-map-none")).toBeVisible();
 });
+
+// A trip in review whose route went when it was marked private (and is business again) says once
+// that it has no route: in the check note, not also in the question and the map box.
+test("a reviewed trip whose route was removed says so once", async ({ page, api, signIn, uid }) => {
+  const id = await endedTrip(api, uid("removed"));
+  const drew = await api.token("drew");
+  for (const purpose of ["private", "business"]) {
+    const r = await api.post("/api/mileage_trip/update", { id, purpose }, drew);
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+  }
+  const sub = await api.post("/api/mileage_trip/submit", { id }, drew);
+  expect(sub.status, JSON.stringify(sub.json)).toBe(200);
+
+  await signIn("mina", `/mileage/mileage_trip?view=list&id=${id}`);
+  const review = page.getByRole("region", { name: "Trip review" });
+  await expect(review.locator(".trip-notes")).toContainText("The route was removed");
+  await expect(review.locator(".trip-ask")).toHaveText(
+    "Check the details, then confirm or reject the trip.",
+  );
+  await expect(review.locator(".trip-map-none")).toHaveText("No route");
+});

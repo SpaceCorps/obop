@@ -126,7 +126,12 @@ export function TripReview({ model, row, value }: RecordExtProps) {
           <p className="trip-ask">
             {total > 0
               ? t("Check the route and the details, then confirm or reject the trip.")
-              : t("This trip has no route to check. Check the details, then confirm or reject it.")}
+              : routeRemoved
+                ? // The check note below says why there is no route; it is said once.
+                  t("Check the details, then confirm or reject the trip.")
+                : t(
+                    "This trip has no route to check. Check the details, then confirm or reject it.",
+                  )}
           </p>
         )}
         {isPrivate && (state === "ended" || state === "rejected") && (
@@ -173,10 +178,10 @@ export function TripReview({ model, row, value }: RecordExtProps) {
             <Icon name="info" size={16} />
             {state === "recording"
               ? t("The trip is still being recorded.")
-              : isPrivate
-                ? t("A private trip keeps no route: only its distance and times.")
-                : routeRemoved
-                  ? t("No route: it was removed when the trip was marked private.")
+              : routeRemoved
+                ? t("No route")
+                : isPrivate
+                  ? t("A private trip keeps no route: only its distance and times.")
                   : t("No route: this trip has no points.")}
           </p>
         )}
