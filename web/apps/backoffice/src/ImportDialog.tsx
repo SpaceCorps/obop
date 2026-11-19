@@ -1,19 +1,34 @@
 import { useRef, useState } from "react";
-import { Badge, Button, Dialog, Notice, Select, Table, fmt, t } from "@obop/ui";
+import { Badge, Button, Dialog, Notice, Select, Table, fmt, inSentence, t } from "@obop/ui";
 import { call, type ModelMeta } from "./api.ts";
 import { useData } from "./data.tsx";
 import { csvCell, download } from "./format.ts";
-import { fieldTitle } from "./labels.ts";
+import {
+  MAX_BYTES,
+  lookupColumns,
+  overLimit,
+  readSheet,
+  resolveNames,
+  sameRefusal,
+  shortName,
+  targetOf,
+  titleReads,
+  type Look,
+  type Problem,
+  type Target,
+} from "./importNames.ts";
+import { fieldTitle, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 
 /* D70: import records of a model from a CSV file through bulk_create. The file is read in the
    browser and sent as text; the server parses it and checks every row exactly as it would check a
    record created by hand. A dry run shows the problems first; nothing is written until the person
-   confirms. A fresh idempotency key per chosen file means a double click cannot import twice. */
+   confirms. A fresh idempotency key per chosen file means a double click cannot import twice.
+   A reference column may hold the other record's name (D70 amendment, importNames.ts): the names
+   are looked up once per chosen file, and the check and the import send the same text. */
 
 /** The most the server takes in one call (kept in step with bulk_create). */
 const MAX_ROWS = 1000;
-const MAX_BYTES = 1_048_576;
 
 type Mode = "all_or_nothing" | "partial";
 type RowError = { row: number; line?: number; error: string };
@@ -29,6 +44,7 @@ type Report = {
 
 type Phase =
   | { at: "choose" }
+  | { at: "resolving" }
   | { at: "checking" }
   | { at: "checked"; report: Report }
   | { at: "refused"; word: () => string }
@@ -52,10 +68,22 @@ export function ImportDialog({
   const [fileName, setFileName] = useState("");
   const csv = useRef("");
   const key = useRef("");
+  /** The browser's own sentence for a row whose reference it could not look up, by row. */
+  const problems = useRef(new Map<number, Problem>());
   const input = useRef<HTMLInputElement>(null);
   const columns = model.fields
     .filter((f) => !f.computed && !f.sequence && f.kind !== "image" && f.kind !== "file")
     .map((f) => f.name);
+  /** Fields and their columns, as the "Fields you can fill" line lists them. */
+  const listed = (names: readonly string[]) =>
+    names
+      .map((c) => {
+        const f = model.fields.find((x) => x.name === c);
+        // A no-break space, so a line never ends between a field's name and its column.
+        return f ? `${fieldTitle(f)}\u00a0(${c})` : c;
+      })
+      .join(", ");
+  const refs = columns.filter((c) => model.fields.some((f) => f.name === c && f.kind === "ref"));
 
   async function check(text: string, m: Mode) {
     setPhase({ at: "checking" });
@@ -69,9 +97,57 @@ export function ImportDialog({
     else setPhase({ at: "refused", word: () => serverMessage(r.message) });
   }
 
+  /**
+   * The text to send for the person's file: the same string when no cell needs a lookup, else the
+   * file with each name found once replaced by its record's id, and the problems of the rest.
+   * `null`: with the ids in it, the file is over the server's limit.
+   */
+  async function prepare(
+    raw: string,
+  ): Promise<{ text: string; problems: Map<number, Problem> } | null> {
+    const sheet = readSheet(raw);
+    const wanted = lookupColumns(sheet, model);
+    if (!sheet || wanted.length === 0) return { text: raw, problems: new Map() };
+    setPhase({ at: "resolving" });
+    const look: Look = {
+      model: (n) => d.models.get(n)?.model,
+      rows: (n) => d.store.cached(n),
+    };
+    // A model the person may not read is left to the server, which says there is no such record.
+    const tos = [...new Set(wanted.map((c) => c.to))].filter((to) => d.models.has(to));
+    const reads = new Map(
+      tos.map((to) => [to, [to, ...titleReads(d.models.get(to)!.model, look)]] as const),
+    );
+    const load = new Set([...reads.values()].flat().filter((m) => d.models.has(m)));
+    // Fresh rows, once per chosen file: a load already running is followed by a new one.
+    await Promise.all(
+      [...load].map((m) => (d.store.cached(m) ? d.store.refresh(m) : d.store.load(m))),
+    );
+    const targets = new Map<string, Target | null>();
+    for (const to of tos) {
+      if (d.store.errorOf(to)) continue;
+      // Complete only when every record was loaded: the total is counted before the list is capped.
+      const complete = reads
+        .get(to)!
+        .filter((m) => d.models.has(m))
+        .every(
+          (m) => !d.store.errorOf(m) && d.store.totalOf(m) <= (d.store.cached(m)?.length ?? 0),
+        );
+      const target = d.models.get(to)!.model;
+      targets.set(
+        to,
+        targetOf(target, look, (r) => d.recordLabel(to, r), complete),
+      );
+    }
+    const out = resolveNames(raw, sheet, wanted, targets);
+    return overLimit(out.text) ? null : out;
+  }
+
   async function pick(file: File | undefined) {
     if (!file) return;
     setFileName(file.name);
+    csv.current = "";
+    problems.current = new Map();
     if (file.size > MAX_BYTES) {
       setPhase({
         at: "refused",
@@ -79,9 +155,54 @@ export function ImportDialog({
       });
       return;
     }
-    csv.current = await file.text();
+    const ready = await prepare(await file.text());
+    if (!ready) {
+      setPhase({
+        at: "refused",
+        word: () =>
+          t(
+            "With the names looked up, the file is larger than 1 MiB. Split it into smaller files.",
+          ),
+      });
+      return;
+    }
+    // The text and its key are made together: the check and the import send this text.
+    csv.current = ready.text;
+    problems.current = ready.problems;
     key.current = crypto.randomUUID();
     await check(csv.current, mode);
+  }
+
+  /** The browser's sentence for a reference it left as a name. */
+  function problemText(p: Problem): string {
+    const info = d.models.get(p.to);
+    const args = {
+      model: inSentence(info ? modelTitle(info.model, info.module.id) : p.to.replace(/_/g, " ")),
+      name: shortName(p.text),
+      column: p.header,
+    };
+    switch (p.kind) {
+      case "none":
+        return t(
+          "No {model} is named “{name}” (column {column}). Check the spelling, or add it first.",
+          args,
+        );
+      case "several":
+        return t(
+          "More than one {model} is named “{name}” (column {column}). Give one of them another name, or write the id of the one you mean: open it and copy the text after “id=” from the address bar.",
+          args,
+        );
+      case "archived":
+        return t(
+          "The only {model} named “{name}” is archived (column {column}). Restore it first, or choose another.",
+          args,
+        );
+      case "unsure":
+        return t(
+          "The import cannot be sure which {model} “{name}” means (column {column}). Write its id instead: open the record and copy the text after “id=” from the address bar.",
+          args,
+        );
+    }
   }
 
   async function run() {
@@ -98,7 +219,7 @@ export function ImportDialog({
 
   const checked = phase.at === "checked" ? phase.report : null;
   const canImport = !!checked && (mode === "partial" ? (checked.valid ?? 0) > 0 : checked.ok);
-  const busy = phase.at === "checking" || phase.at === "importing";
+  const busy = phase.at === "resolving" || phase.at === "checking" || phase.at === "importing";
   const report = phase.at === "done" ? phase.report : checked;
 
   return (
@@ -135,10 +256,18 @@ export function ImportDialog({
           <>
             <p className="hint">
               {t(
-                "The first line of the file names the fields. References are the id of the record. Number fields take whole numbers; money is in minor units such as cents. Up to {rows} rows and 1 MiB, UTF-8, comma or semicolon.",
+                "The first line of the file names the fields. Number fields take whole numbers; money is in minor units such as cents. Up to {rows} rows and 1 MiB, UTF-8, comma or semicolon.",
                 { rows: fmt.integer(MAX_ROWS) },
               )}
             </p>
+            {refs.length > 0 && (
+              <p className="hint">
+                {t(
+                  "A column that points to another record ({columns}) takes the name of that record, written as the lists show it. Capital letters and extra spaces do not matter. If two records have the same name, give one of them another name first.",
+                  { columns: listed(refs) },
+                )}
+              </p>
+            )}
             {model.fields.some((f) => f.kind === "decimal" || f.kind === "datetime") && (
               <p className="hint">
                 {t(
@@ -147,15 +276,7 @@ export function ImportDialog({
               </p>
             )}
             <p className="hint">
-              {t("Fields you can fill: {fields}", {
-                fields: columns
-                  .map((c) => {
-                    const f = model.fields.find((x) => x.name === c);
-                    // A no-break space, so a line never ends between a field's name and its column.
-                    return f ? `${fieldTitle(f)}\u00a0(${c})` : c;
-                  })
-                  .join(", "),
-              })}
+              {t("Fields you can fill: {fields}", { fields: listed(columns) })}
             </p>
             <div className="import-pick">
               <input
@@ -197,6 +318,9 @@ export function ImportDialog({
               <option value="partial">{t("Import the good rows and report the rest")}</option>
             </Select>
           </>
+        )}
+        {phase.at === "resolving" && (
+          <p role="status">{t("Looking up the names in your file...")}</p>
         )}
         {phase.at === "checking" && <p role="status">{t("Checking the file...")}</p>}
         {phase.at === "importing" && <p role="status">{t("Importing...")}</p>}
@@ -260,7 +384,11 @@ export function ImportDialog({
                         {e.line ?? ""}
                       </td>
                       <td role="cell" className="cell-main">
-                        {serverMessage(e.error)}
+                        <ProblemCell
+                          ours={problems.current.get(e.row)}
+                          error={e.error}
+                          text={problemText}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -274,5 +402,30 @@ export function ImportDialog({
         )}
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * The Problem cell: the browser's sentence for a reference it left as a name, and the server's
+ * own sentence after it on a second line when that one is about something else, so nothing the
+ * server says about the row is hidden.
+ */
+function ProblemCell({
+  ours,
+  error,
+  text,
+}: {
+  ours: Problem | undefined;
+  error: string;
+  text: (p: Problem) => string;
+}) {
+  if (!ours) return <>{serverMessage(error)}</>;
+  if (sameRefusal(ours, error)) return <>{text(ours)}</>;
+  return (
+    <>
+      {text(ours)}
+      <br />
+      {serverMessage(error)}
+    </>
   );
 }
