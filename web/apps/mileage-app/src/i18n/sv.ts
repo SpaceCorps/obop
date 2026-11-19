@@ -232,6 +232,10 @@ export const sv: Translation<"one"> = {
   "trip.purpose.change": "Du kan ändra syftet tills resan har skickats in.",
   "trip.private.note":
     "En privat resa skickas inte in för granskning: ingen granskare läser den. Servern sparar sträckan och tiderna, inte färdvägen. Om resan var i tjänsten, ändra syftet.",
+  "trip.private.confirm.title": "Markera resan som privat?",
+  "trip.private.confirm.message":
+    "En privat resa behåller sträckan och tiderna, inte färdvägen. Färdvägen tas bort från servern för gott, även om du ändrar syftet tillbaka.",
+  "trip.private.confirm": "Markera som privat",
   "trip.state": "Status",
   "trip.checks": "Serverns kontroller",
   "trip.check.seq_gap.one": "{count} lucka i numreringen av punkterna",
@@ -240,6 +244,10 @@ export const sv: Translation<"one"> = {
   "trip.check.speed_jump.other": "{count} punkter uteslöts på grund av omöjliga hopp",
   "trip.check.low_accuracy.one": "{count} punkt uteslöts på grund av låg noggrannhet",
   "trip.check.low_accuracy.other": "{count} punkter uteslöts på grund av låg noggrannhet",
+  "trip.check.route_removed.one":
+    "Färdvägen togs bort när resan markerades som privat ({count} punkt)",
+  "trip.check.route_removed.other":
+    "Färdvägen togs bort när resan markerades som privat ({count} punkter)",
   "trip.submit": "Skicka in för granskning",
   "trip.submit.hint": "Skickar resan till en granskare",
   "trip.discard": "Kassera resan",

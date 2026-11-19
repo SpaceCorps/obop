@@ -1131,6 +1131,28 @@ describe("the purpose of a trip (a private trip is never reviewed)", () => {
     await expect(engine.changePurpose("c1", "private")).rejects.toThrow();
   });
 
+  test("a purpose changed while the end is on its way is sent again when its sending fails", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    const endTrip = server.endTrip.bind(server);
+    server.endTrip = async (id) => {
+      const answer = await endTrip(id);
+      // The driver taps Commute while the answer of the end travels back, and the network drops.
+      await store.patchTrip("c1", { purpose: "commute" });
+      server.fail("updateTrip", networkError());
+      return answer;
+    };
+    await engine.drain();
+    server.endTrip = endTrip;
+    expect(server.stored("c1")!.state).toBe("ended");
+    expect(server.stored("c1")!.purpose).toBe("business");
+    await engine.drain();
+    expect(server.stored("c1")!.purpose).toBe("commute");
+    const local = (await store.getTrip("c1"))!;
+    expect(local.endDone).toBe(true);
+    expect(local.purpose).toBe("commute");
+  });
+
   test("a change the server refuses leaves the phone as it was", async () => {
     const { store, server, engine } = await rig();
     await recordAndStop(store, 4);

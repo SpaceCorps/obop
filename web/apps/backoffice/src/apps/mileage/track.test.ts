@@ -94,4 +94,10 @@ describe("mileage track", () => {
     expect(unknown.map((n) => n.tone)).toEqual(["warn"]);
     expect(checkNotes("", 10, false)).toEqual([]);
   });
+  it("never calls a track of no points clean, and names a route removed for a private purpose", () => {
+    expect(checkNotes("", 0, true)).toEqual([]);
+    const removed = checkNotes("route_removed:10", 0, true);
+    expect(removed.map((n) => n.tone)).toEqual(["warn"]);
+    expect(removed[0].text).toContain("removed when the trip was marked private (10 points)");
+  });
 });

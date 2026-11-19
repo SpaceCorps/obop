@@ -611,7 +611,7 @@ export function RecordPanel({
         )}
         {!creating &&
           ext.panels.map((Panel, i) => (
-            <Panel key={i} model={model} fields={fields} row={row} busy={busy} />
+            <Panel key={i} model={model} fields={fields} row={row} busy={busy} value={value} />
           ))}
         <FormBody
           focusField={focusField}

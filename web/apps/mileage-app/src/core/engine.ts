@@ -353,10 +353,23 @@ export function createEngine({
     });
   }
 
+  /**
+   * A purpose the driver changed while the end was on its way (or whose sending failed) goes to the
+   * server before the phone marks the end done: once it is done, the purpose follows the server,
+   * and a change that was not sent would be lost.
+   */
+  async function sendPurpose(t: LocalTrip, id: string, server: RemoteTrip): Promise<void> {
+    const now = await store.getTrip(t.clientTripId);
+    if (!now || server.purpose === null || now.purpose === server.purpose) return;
+    if (server.state !== "ended" && server.state !== "rejected") return;
+    await call("end", () => api.updateTrip(id, { purpose: now.purpose }));
+  }
+
   async function end(t: LocalTrip, id: string): Promise<void> {
     const server = await call("end", () => api.getTrip(id));
     if (server.state !== "recording") {
       // A repeat of a call whose answer was lost: the trip is ended already.
+      await sendPurpose(t, id, server);
       await store.patchTrip(t.clientTripId, {
         endDone: true,
         attempts: 0,
@@ -397,6 +410,10 @@ export function createEngine({
       }
       throw error;
     }
+    // The driver changed the purpose again while the end was on its way: the server holds the
+    // ended trip now, so it is sent as a change of its own. A failure leaves the end not done, and
+    // the next attempt finds the trip ended and sends it again.
+    await sendPurpose(t, id, ended);
     // The server has the route and the distance; the phone does not keep the route. One
     // transaction: a kill between the two would leave the route on the phone for good.
     await store.patchTrip(t.clientTripId, {
@@ -406,12 +423,6 @@ export function createEngine({
       purgePoints: true,
       ...fromServer(ended),
     });
-    // The driver changed the purpose again while the end was on its way: the server holds the
-    // ended trip now, so it is sent as a change of its own.
-    const now = await store.getTrip(t.clientTripId);
-    if (now && ended.purpose !== null && now.purpose !== ended.purpose) {
-      await call("end", () => api.updateTrip(id, { purpose: now.purpose }));
-    }
   }
 
   async function submit(t: LocalTrip, id: string): Promise<void> {

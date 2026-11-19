@@ -1,10 +1,11 @@
 import { Banner, Button, Field, Row, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
-import { View } from "react-native";
+import { Alert, View } from "react-native";
 import {
   canChangePurpose,
   canDiscard,
   canSubmit,
+  confirmsPurpose,
   formatDistance,
   integrityLines,
   isServerProblem,
@@ -13,7 +14,7 @@ import {
 } from "../../core/present.ts";
 import { formatDateTime, t, type MessageKey } from "../../i18n/index.ts";
 import { changeTripPurpose, discardTrip, retryTrip, submitTrip } from "../../native/actions.ts";
-import { PURPOSES } from "../../core/types.ts";
+import { PURPOSES, type Purpose } from "../../core/types.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { useOutbox } from "../hooks.ts";
 import type { Nav } from "../router.ts";
@@ -48,6 +49,20 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
   const act = (work: () => Promise<void>, after?: () => void) => {
     setActionFailed(false);
     work().then(after, () => setActionFailed(true));
+  };
+
+  /** Sets the purpose; marking a trip private is confirmed first, because the route goes for good. */
+  const choosePurpose = (p: Purpose) => {
+    if (!trip) return;
+    const change = () => act(() => changeTripPurpose(trip.clientTripId, p));
+    if (!confirmsPurpose(trip, p)) {
+      change();
+      return;
+    }
+    Alert.alert(t("trip.private.confirm.title"), t("trip.private.confirm.message"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("trip.private.confirm"), style: "destructive", onPress: change },
+    ]);
   };
 
   // Read the server's view of the trip once when it is opened.
@@ -203,7 +218,7 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
                     label={t(`purpose.${p}` as MessageKey)}
                     variant={p === trip.purpose ? "primary" : "secondary"}
                     selected={p === trip.purpose}
-                    onPress={() => act(() => changeTripPurpose(trip.clientTripId, p))}
+                    onPress={() => choosePurpose(p)}
                     testID={`trip-purpose-${p}`}
                   />
                 ))}
