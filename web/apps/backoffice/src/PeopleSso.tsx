@@ -302,7 +302,12 @@ export function MicrosoftDialog({
           confirmLabel={t("Remove binding")}
           busy={busy}
           onConfirm={() => void unbind()}
-          onClose={() => setConfirm(null)}
+          onClose={() => {
+            // Its refusal belongs to the question: left in state it would show (and take the
+            // focus) under the checkbox once the question is gone.
+            setConfirm(null);
+            setError(null);
+          }}
         >
           <div className="stack">
             <p>
