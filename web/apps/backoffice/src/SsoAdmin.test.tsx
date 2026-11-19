@@ -1337,6 +1337,23 @@ describe("a refusal kept on the screen takes the keyboard focus", () => {
     expect(alertDialog()!.contains(document.activeElement)).toBe(true);
   });
 
+  it("Cancel of the question before Remove binding leaves no old refusal behind", async () => {
+    server.provider = stored();
+    server.users = [person("ada", { sso_oid: OID })];
+    server.refuse["user_account.unbind_sso"] =
+      "ada signs in with Microsoft only: turn that off first";
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    await click(button("Remove binding", dialog()!));
+    await press(button("Remove binding", alertDialog()!));
+    expect(focusedAlert()).toBe("ada signs in with Microsoft only: turn that off first");
+    await click(button("Cancel", alertDialog()!));
+    expect(alertDialog()).toBeNull();
+    // The refusal belonged to the question: it must not stay under the checkbox and take the focus.
+    expect(dialog()!.querySelector('[role="alert"]')).toBeNull();
+    expect(focusedAlert()).toBeNull();
+  });
+
   it("a wrong object id still puts the focus on the field, not on an alert", async () => {
     server.provider = stored();
     await mountPeople();
