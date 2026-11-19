@@ -189,6 +189,7 @@ function assignments(patch: TripPatch): { sets: string[]; values: SqlValue[] } {
     values.push(value);
   };
   add("server_id", patch.serverId);
+  add("purpose", patch.purpose);
   add("ended_at", patch.endedAt);
   add(
     "create_attempted",
@@ -410,8 +411,20 @@ export function createSqlStore(
           const known = await tripOf(tx, r.clientTripId);
           if (known) {
             await tx.run(
-              "UPDATE trip SET server_id = COALESCE(server_id, ?), server_state = ?, distance_m = COALESCE(?, distance_m), integrity = COALESCE(?, integrity), reject_reason = ? WHERE client_trip_id = ?",
-              [r.id, r.state, r.distanceM, r.integrity, r.rejectReason, r.clientTripId],
+              // The purpose follows the server once the phone has nothing of it left to send (the
+              // end carries a change the driver made before it); a change made in the back office
+              // then shows here too.
+              "UPDATE trip SET server_id = COALESCE(server_id, ?), server_state = ?, distance_m = COALESCE(?, distance_m), integrity = COALESCE(?, integrity), reject_reason = ?, purpose = CASE WHEN ? IS NOT NULL AND (origin = 'server' OR end_done = 1) THEN ? ELSE purpose END WHERE client_trip_id = ?",
+              [
+                r.id,
+                r.state,
+                r.distanceM,
+                r.integrity,
+                r.rejectReason,
+                r.purpose,
+                r.purpose,
+                r.clientTripId,
+              ],
             );
             continue;
           }

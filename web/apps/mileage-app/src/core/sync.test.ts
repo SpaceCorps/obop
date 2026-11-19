@@ -25,6 +25,7 @@ function rig(reports: DrainReport[]) {
     drain: async () => reports[Math.min(drains++, reports.length - 1)]!,
     refreshTrip: async () => {},
     refreshRemote: async () => {},
+    changePurpose: async () => {},
   };
   const sync = createSyncController({
     engine,
@@ -150,6 +151,7 @@ describe("the sync controller", () => {
         },
         refreshTrip: async () => {},
         refreshRemote: async () => {},
+        changePurpose: async () => {},
       },
       signedIn: () => true,
       onRejected: async () => {},

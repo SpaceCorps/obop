@@ -155,6 +155,9 @@ describe("the checks of the server", () => {
       "future_flag:2",
     ]);
     expect(integrityLines("")).toEqual([]);
+    expect(integrityLines("route_removed:10")).toEqual([
+      "Route removed when the trip was marked private (10 points)",
+    ]);
   });
 });
 
