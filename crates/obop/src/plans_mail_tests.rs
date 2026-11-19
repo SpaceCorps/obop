@@ -176,7 +176,7 @@ async fn mail_the_list_and_the_count_show_no_value_and_each_person_only_what_the
 }
 
 #[tokio::test]
-async fn mail_the_detail_and_its_change_view_hide_the_password_and_what_a_person_may_not_read() {
+async fn mail_the_detail_and_its_change_view_hide_the_password_and_the_text_from_everyone() {
     let w = world();
     let p = propose(&w).await;
     for who in ["ada", "mo"] {
@@ -194,8 +194,9 @@ async fn mail_the_detail_and_its_change_view_hide_the_password_and_what_a_person
         );
         assert_no_sealed_value(&format!("the server change for {who}"), &d.to_string());
     }
-    // The text: hidden from a person without `mail.system` (the group of the sealed field).
-    for who in ["mo", "sam"] {
+    // The text: hidden from everyone, the administrator too. Its group `mail.system` is held by
+    // nobody, but `platform.admin` holds every group: the change view must not show it to ada.
+    for who in ["ada", "mo", "sam"] {
         let t = token(&w.r, who).await;
         let (s, d) = post(&w.r, Some(&t), "/api/plan/get", json!({"id": p.message})).await;
         assert_eq!(s, 200, "{d}");

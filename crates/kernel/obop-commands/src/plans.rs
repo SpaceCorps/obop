@@ -1003,7 +1003,10 @@ impl Dispatcher {
     }
 
     /// Whether the person may see the value of `field` of `model`: they hold its group and its
-    /// class is not one the masking denies them. A name the model does not declare is never shown.
+    /// class is not one the masking denies them. A name the model does not declare is never shown,
+    /// nor a field the module shows on no screen (`[model.field.ui] hidden`, such as the sealed
+    /// text of a message): a plan keeps what the agent sent in clear (K63), and `platform.admin`
+    /// holds every group, so the group alone would show an administrator a value nobody reads.
     fn shown(&self, p: &Principal, model: &str, field: &str) -> bool {
         let models = self.models.read().unwrap();
         let Some(def) = models
@@ -1015,6 +1018,7 @@ impl Dispatcher {
         let class = def.class.unwrap_or(DataClass::Secret);
         p.allows(def.permission_group)
             && mode_for(p.kind, class, def.personal_data) == MaskMode::Allow
+            && !def.hints.as_ref().is_some_and(|h| h.ui.hidden)
     }
 
     /// What a waiting plan changes, for the person of `look` (D97 "the change view"): the fields
