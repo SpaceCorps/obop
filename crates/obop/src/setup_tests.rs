@@ -161,6 +161,11 @@ async fn the_page_answers_open_then_creates_the_administrator_then_closes_for_go
         .filter(|g| g != "*")
         .collect();
     assert_eq!(groups, json!(all));
+    // Named, so that the rule cannot pass on a list that left out what a built-in module adds:
+    // the administrator group, and the group of the built-in module `mail`.
+    for g in [obop_commands::ADMIN_GROUP, obop_mail::ADMIN] {
+        assert!(groups.as_array().unwrap().iter().any(|x| x == g), "{g}");
+    }
 }
 
 #[tokio::test]
