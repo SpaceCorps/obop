@@ -124,10 +124,14 @@ cancelled = "Anulowane"
 [labels.pl.model.inventory_move.action.validate]
 label = "Zrealizuj"
 description = "Potwierdza, że towar faktycznie został przemieszczony: ilość opuszcza pozycję źródłową i trafia na docelową (tylko magazynierzy); wykonanej operacji nie można cofnąć"
+confirm = "Zatwierdzić ten ruch? Zapas zmieni się od razu, a zakończonego ruchu nie można cofnąć."
+done = "Zapas zaktualizowany"
 
 [labels.pl.model.inventory_move.action.cancel]
 label = "Anuluj"
 description = "Anuluje roboczą operację"
+confirm = "Anulować ten ruch?"
+done = "Ruch anulowany"
 
 [labels.pl.model.inventory_item.field.below_reorder]
 description = "Czy pozycja wymaga uwagi: ilość jest ujemna albo równa poziomowi ponownego zamówienia lub niższa"

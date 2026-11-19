@@ -51,11 +51,15 @@ approved = "Approuvée"
 [labels.fr.model.timesheets_entry.action.submit]
 label = "Soumettre"
 description = "Soumet la saisie pour approbation"
+done = "Soumis pour approbation"
 
 [labels.fr.model.timesheets_entry.action.approve]
 label = "Approuver"
 description = "Approuve une saisie soumise (responsable uniquement)"
+confirm = "Approuver cette saisie de temps ? Elle ne pourra plus être modifiée ensuite."
+done = "Approuvé"
 
 [labels.fr.model.timesheets_entry.action.reject]
 label = "Rejeter"
 description = "Renvoie une saisie soumise en brouillon (responsable uniquement)"
+done = "Renvoyé en brouillon"

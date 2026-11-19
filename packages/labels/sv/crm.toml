@@ -47,15 +47,22 @@ lost = "Förlorad"
 [labels.sv.model.lead.action.qualify]
 label = "Kvalificera"
 description = "Flytta en ny lead till fasen kvalificerad"
+done = "Leadet kvalificerat"
 
 [labels.sv.model.lead.action.mark_won]
 label = "Markera som vunnen"
 description = "Flytta leaden till fasen vunnen"
+done = "Markerad som vunnen"
 
 [labels.sv.model.lead.action.mark_lost]
 label = "Markera som förlorad"
 description = "Flytta leaden till fasen förlorad"
+confirm = "Markera det här leadet som förlorat?"
+done = "Markerad som förlorad"
 
 [labels.sv.model.lead.action.reopen]
 label = "Öppna igen"
 description = "Flytta tillbaka leaden till fasen ny"
+
+[labels.sv.model.lead.section.why_it_was_lost]
+label = "Varför den förlorades"

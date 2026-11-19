@@ -91,6 +91,7 @@ cancelled = "Peruutettu"
 [labels.fi.model.manufacturing_order.action.confirm]
 label = "Vahvista"
 description = "Vahvista luonnostilaus, jotta tuotanto voidaan suunnitella; se tarvitsee valmiin tuotteen, tuotantopaikan ja vähintään yhden komponenttirivin"
+done = "Tilaus vahvistettu"
 
 [labels.fi.model.manufacturing_order.action.confirm.assert.has_product]
 message = "Valitse ensin valmis tuote: kun tilaus valmistuu, se viedään varastoon tuotantopaikalla"
@@ -104,14 +105,19 @@ message = "Lisää ensin komponentit: tilaus ilman komponentteja ei siirrä vara
 [labels.fi.model.manufacturing_order.action.start]
 label = "Aloita"
 description = "Aloita vahvistetun tilauksen tuotanto"
+done = "Tuotanto aloitettu"
 
 [labels.fi.model.manufacturing_order.action.finish]
 label = "Päätä"
 description = "Merkitse tuotanto päättyneeksi: kun tuotantopaikka on annettu, jokaisesta komponentista syntyy luonnossiirto, joka ottaa sen sieltä, ja yksi, joka vie valmiin tuotteen sinne, tilausnumero lähdeasiakirjana, varaston vahvistettavaksi (vaatii ryhmän inventory.user)"
+confirm = "Merkitäänkö tuotanto valmiiksi? Varastosiirrot ottavat osat pois ja vievät valmiin tuotteen tuotantopaikkaan. Valmista tilausta ei voi enää muuttaa."
+done = "Tuotanto valmis"
 
 [labels.fi.model.manufacturing_order.action.cancel]
 label = "Peruuta"
 description = "Peruuta tilaus, jota ei ole vahvistettu"
+confirm = "Perutaanko tämä tilaus?"
+done = "Tilaus peruttu"
 
 [labels.fi.model.manufacturing_order.field.product_id]
 label = "Tuote"

@@ -37,10 +37,13 @@ description = "Código de moneda ISO 4217"
 [labels.es.model.sale_order.action.confirm]
 label = "Confirmar"
 description = "Confirmar un pedido en borrador"
+done = "Pedido confirmado; hay un borrador de factura listo"
 
 [labels.es.model.sale_order.action.cancel]
 label = "Cancelar"
 description = "Cancelar un pedido"
+confirm = "¿Cancelar este pedido?"
+done = "Pedido cancelado"
 
 [labels.es.model.sale_order.action.reset_to_draft]
 label = "Volver a borrador"

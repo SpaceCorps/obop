@@ -129,10 +129,12 @@ description = "Köa ett meddelande: to, subject och body, eller template med lan
 [labels.sv.model.outbound_mail.action.retry]
 label = "Skicka igen"
 description = "Köa ett misslyckat meddelande igen, försök från noll"
+done = "Köad igen"
 
 [labels.sv.model.outbound_mail.action.cancel]
 label = "Avbryt"
 description = "Avbryt ett köat meddelande; dess text raderas"
+done = "Avbruten"
 
 [labels.sv.model.outbound_mail.action.process]
 label = "Skicka förfallna"
@@ -184,6 +186,10 @@ starttls = "STARTTLS"
 tls = "TLS"
 none = "Ingen"
 
+[labels.sv.model.mail_server.field.allow_private_network]
+label = "Tillåt eget nätverk"
+description = "SMTP: reläet får finnas i företagets eget nätverk (en privat adress som 10.0.0.5), och säkerheten none godtas där; av som standard, bara en person slår på det (docs/spec/mail.md 6)"
+
 [labels.sv.model.mail_server.field.username]
 label = "Användarnamn"
 description = "SMTP: användarnamn; tomt betyder ingen inloggning"
@@ -231,6 +237,7 @@ description = "Indata till test_send: adressen testmeddelandet går till; sparas
 [labels.sv.model.mail_server.action.test_send]
 label = "Skicka test"
 description = "Skicka nu ett kort testmeddelande via servern till test_recipient och spara svaret"
+done = "Testmeddelandet skickat"
 
 [labels.sv.model.mail_template]
 name = "E-postmall"

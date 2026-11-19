@@ -663,8 +663,17 @@ fn render_pools(t: &mut String) {
 }
 
 fn render(s: &HttpState) -> String {
+    let mut t = render_process(&s.ops);
+    render_db_up(&mut t, || {
+        s.shared.backend.counter_get("health.ping").map(drop)
+    });
+    render_pools(&mut t);
+    render_rest(s, t)
+}
+
+/// The series every obop process has: build, uptime and the HTTP counters of `o`.
+fn render_process(o: &Ops) -> String {
     use std::fmt::Write;
-    let o = &s.ops;
     let mut t = String::new();
     let _ = writeln!(
         t,
@@ -725,9 +734,14 @@ fn render(s: &HttpState) -> String {
         o.sum_micros.load(Relaxed) as f64 / 1e6
     );
     let _ = writeln!(t, "obop_http_request_duration_seconds_count {count}");
+    t
+}
 
+/// `obop_db_up` and `obop_db_ping_seconds` from one ping, timed here.
+fn render_db_up(t: &mut String, ping: impl FnOnce() -> Result<(), String>) {
+    use std::fmt::Write;
     let started = Instant::now();
-    let up = reachable(&s.shared.backend.counter_get("health.ping"));
+    let up = reachable(&ping());
     let ping = started.elapsed().as_secs_f64();
     let _ = writeln!(t, "# HELP obop_db_up 1 when the database answered a ping.");
     let _ = writeln!(t, "# TYPE obop_db_up gauge");
@@ -738,9 +752,10 @@ fn render(s: &HttpState) -> String {
     );
     let _ = writeln!(t, "# TYPE obop_db_ping_seconds gauge");
     let _ = writeln!(t, "obop_db_ping_seconds {ping:.6}");
+}
 
-    render_pools(&mut t);
-
+fn render_rest(s: &HttpState, mut t: String) -> String {
+    use std::fmt::Write;
     let g = gauges(s);
     if let Some(n) = g.sessions {
         let _ = writeln!(
@@ -819,6 +834,90 @@ fn render(s: &HttpState) -> String {
         let _ = writeln!(t, "obop_wal_archive_failed_total {}", w.failed);
     }
     t
+}
+
+/// The metrics of the control plane (`obop platform serve`, I6): who may read them and the HTTP
+/// counters of its router.
+pub struct PlaneOps {
+    ops: Ops,
+}
+
+impl PlaneOps {
+    pub fn new(access: MetricsAccess) -> Arc<Self> {
+        let ops = Ops::new();
+        ops.set_access(access);
+        Arc::new(PlaneOps { ops })
+    }
+}
+
+/// Whether the control plane's database answers (`PlatformApi::ready`).
+pub(crate) type PlaneReady = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
+
+/// Counts the control plane's responses, as [`track`] does for an instance.
+pub(crate) async fn plane_track(
+    State(p): State<Arc<PlaneOps>>,
+    req: Request,
+    next: Next,
+) -> Response {
+    let t = Instant::now();
+    let resp = next.run(req).await;
+    p.ops.observe(resp.status().as_u16(), t.elapsed());
+    resp
+}
+
+/// `GET /metrics` of the control plane: build, uptime, the HTTP counters, whether its database
+/// answers (`ready`) and the connection pools of the process. The same access rule as an
+/// instance (`OBOP_METRICS_TOKEN`, or a direct loopback caller on a loopback bind).
+pub(crate) async fn plane_metrics(
+    State((p, ready)): State<(Arc<PlaneOps>, PlaneReady)>,
+    req: Request,
+) -> Response {
+    let access = p
+        .ops
+        .access
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    match authorize(&access, &req) {
+        Verdict::Allowed => {
+            let body = super::blocking(move || {
+                let mut t = render_process(&p.ops);
+                render_db_up(&mut t, || ready());
+                render_pools(&mut t);
+                t
+            })
+            .await;
+            metrics_text(body)
+        }
+        other => refused(other),
+    }
+}
+
+fn metrics_text(body: String) -> Response {
+    no_store(
+        (
+            StatusCode::OK,
+            [(
+                header::CONTENT_TYPE,
+                "text/plain; version=0.0.4; charset=utf-8",
+            )],
+            body,
+        )
+            .into_response(),
+    )
+}
+
+fn refused(v: Verdict) -> Response {
+    match v {
+        Verdict::Unauthorized => no_store(
+            (
+                StatusCode::UNAUTHORIZED,
+                [(header::WWW_AUTHENTICATE, "Bearer realm=\"metrics\"")],
+            )
+                .into_response(),
+        ),
+        _ => no_store(StatusCode::NOT_FOUND.into_response()),
+    }
 }
 
 /// `GET /metrics`: Prometheus text, for whoever the operator opened it to.

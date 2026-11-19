@@ -78,7 +78,7 @@ test.describe("Customize > Modules", () => {
     await page.getByRole("tab", { name: /^Marketplace/ }).click();
     const ts = card(page, "Timesheets");
     await expect(ts).toBeVisible();
-    await expect(ts).toContainText("0.4.1 · SpaceCorps");
+    await expect(ts).toContainText("0.4.2 · SpaceCorps");
     await expect(ts).toContainText("Beta");
     await expect(ts).toContainText("Works with core 0.2");
     await expect(ts).toContainText("Marketplace");
@@ -130,7 +130,7 @@ test.describe("Customize > Modules", () => {
         .locator(":scope > li");
       await expect(steps).toHaveCount(2);
       await expect(steps.nth(0)).toContainText("Projects");
-      await expect(steps.nth(0)).toContainText("0.6.0");
+      await expect(steps.nth(0)).toContainText("0.6.1");
       await expect(steps.nth(0)).toContainText("Apache-2.0");
       await expect(steps.nth(0)).toContainText("needed by timesheets");
       await expect(steps.nth(1)).toContainText("Timesheets");
@@ -209,7 +209,7 @@ test.describe("Customize > Modules", () => {
       expect(
         (await api.run("root", "module.list")).find((m: { id: string }) => m.id === "projects")
           .version,
-      ).toBe("0.6.0");
+      ).toBe("0.6.1");
     } finally {
       await clean(api, "timesheets", "projects");
     }
@@ -333,7 +333,7 @@ test.describe("Customize > Modules", () => {
       const tree = panel.getByRole("list", { name: "Dependencies of Field Service" }).first();
       const hr = tree.getByRole("listitem").filter({ hasText: "Human Resources" }).first();
       await expect(hr).toContainText("≥0.2, <1");
-      await expect(hr).toContainText("installed 0.5.0");
+      await expect(hr).toContainText("installed 0.5.1");
       await expect(hr).toContainText("Satisfied");
       const base = tree.getByRole("listitem").filter({ hasText: "Contacts" }).first();
       await expect(base).toContainText("Built in");

@@ -25,6 +25,8 @@ description = "Notas internas de texto libre"
 [labels.es.model.party.action.erase]
 label = "Suprimir datos"
 description = "Anonimizar el tercero en el propio registro y dejar constancia del borrado"
+confirm = "¿Borrar los datos personales de este contacto? No se puede deshacer."
+done = "Datos personales borrados"
 
 [labels.es.model.party.field.photo]
 label = "Foto"

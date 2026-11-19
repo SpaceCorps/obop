@@ -951,6 +951,14 @@ impl Backend for Flaky {
         self.gate(true)?;
         self.inner.ensure_unique(name, model, fields)
     }
+    fn unique_indexes(&self) -> Result<Vec<String>> {
+        self.gate(false)?;
+        self.inner.unique_indexes()
+    }
+    fn drop_unique_index(&self, name: &str) -> Result<()> {
+        self.gate(true)?;
+        self.inner.drop_unique_index(name)
+    }
     fn kind(&self) -> &'static str {
         self.inner.kind()
     }

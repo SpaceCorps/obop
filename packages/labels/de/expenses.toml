@@ -73,18 +73,24 @@ refused = "Abgelehnt"
 [labels.de.model.expenses_expense.action.submit]
 label = "Einreichen"
 description = "Die Abrechnung zur Genehmigung einreichen"
+done = "Zur Freigabe eingereicht"
 
 [labels.de.model.expenses_expense.action.approve]
 label = "Genehmigen"
 description = "Eine eingereichte Abrechnung genehmigen (nur Führungskräfte)"
+done = "Spesenantrag freigegeben"
 
 [labels.de.model.expenses_expense.action.pay]
 label = "Bezahlen"
 description = "Die Erstattung als bezahlt erfassen (nur Finanzen); Zahlungsdatum ist heute, wenn keines angegeben ist"
+confirm = "Diesen Spesenantrag als bezahlt festhalten?"
+done = "Spesenantrag als bezahlt markiert"
 
 [labels.de.model.expenses_expense.action.refuse]
 label = "Ablehnen"
 description = "Eine eingereichte Abrechnung ablehnen (nur Führungskräfte)"
+confirm = "Diesen Spesenantrag ablehnen? Ein abgelehnter Antrag kann nicht mehr geändert werden."
+done = "Spesenantrag abgelehnt"
 
 [labels.de.model.expenses_expense.field.number]
 label = "Nummer"
@@ -93,3 +99,15 @@ description = "Abrechnungsnummer wie EXP-2026-0042, wird beim Anlegen vergeben; 
 [labels.de.model.expenses_expense.field.receipt]
 description = "Foto oder Scan des Belegs (PDF oder Bild); nur als Download für Personen, die die Abrechnung lesen dürfen"
 label = "Beleg"
+
+[labels.de.model.expenses_expense.section.expense]
+label = "Ausgabe"
+
+[labels.de.model.expenses_expense.section.notes]
+label = "Notizen"
+
+[labels.de.model.expenses_expense.section.claimed_by]
+label = "Eingereicht von"
+
+[labels.de.model.expenses_expense.section.payment]
+label = "Zahlung"

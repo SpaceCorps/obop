@@ -82,6 +82,7 @@ confirmed = "Confirmado"
 [labels.es.model.planning_shift.action.publish]
 label = "Publicar"
 description = "Publicar el turno al empleado asignado, o a todos si está abierto"
+done = "Publicado"
 
 [labels.es.model.planning_shift.action.unpublish]
 label = "Despublicar"
@@ -90,6 +91,7 @@ description = "Devolver un turno publicado a abierto"
 [labels.es.model.planning_shift.action.confirm]
 label = "Confirmar"
 description = "El empleado confirma que trabajará el turno"
+done = "Confirmado"
 
 [labels.es.model.planning_shift.rule.ends_after_start]
 message = "El turno termina antes de empezar: indique una hora de fin posterior al inicio"

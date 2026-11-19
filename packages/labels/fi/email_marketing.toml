@@ -136,14 +136,19 @@ cancelled = "Peruutettu"
 [labels.fi.model.email_marketing_campaign.action.schedule]
 label = "Ajoita"
 description = "Merkitse kampanja ajoitetuksi sen päivälle"
+done = "Ajastettu"
 
 [labels.fi.model.email_marketing_campaign.action.send]
 label = "Merkitse lähetetyksi"
 description = "Merkitse ajoitettu kampanja lähetetyksi; sähköpostia ei lähetetä (vain esihenkilö)"
+confirm = "Merkitäänkö tämä kampanja lähetetyksi? Sähköpostia ei lähetetä: tämä instanssi ei vielä lähetä sähköpostia. Kampanjaa ei voi sen jälkeen muuttaa."
+done = "Merkitty lähetetyksi; sähköpostia ei lähetetty"
 
 [labels.fi.model.email_marketing_campaign.action.send_now]
 label = "Merkitse lähetetyksi"
 description = "Merkitse luonnoskampanja lähetetyksi; sähköpostia ei lähetetä (vain esihenkilö)"
+confirm = "Merkitäänkö tämä kampanja lähetetyksi? Sähköpostia ei lähetetä: tämä instanssi ei vielä lähetä sähköpostia. Kampanjaa ei voi sen jälkeen muuttaa."
+done = "Merkitty lähetetyksi; sähköpostia ei lähetetty"
 
 [labels.fi.model.email_marketing_campaign.action.unschedule]
 label = "Poista ajoitus"
@@ -152,3 +157,16 @@ description = "Palauta ajoitettu kampanja luonnokseksi"
 [labels.fi.model.email_marketing_campaign.action.cancel]
 label = "Peruuta"
 description = "Peruuta ajoitettu kampanja"
+confirm = "Perutaanko tämä kampanja? Sitä ei voi sen jälkeen muuttaa."
+
+[labels.fi.model.email_marketing_campaign.section.message]
+label = "Viesti"
+
+[labels.fi.model.email_marketing_campaign.section.content]
+label = "Sisältö"
+
+[labels.fi.model.email_marketing_campaign.section.schedule]
+label = "Aikataulu"
+
+[labels.fi.model.email_marketing_campaign.section.results]
+label = "Tulokset"

@@ -37,10 +37,13 @@ description = "Kod waluty ISO 4217"
 [labels.pl.model.sale_order.action.confirm]
 label = "Potwierdź"
 description = "Potwierdza zamówienie robocze"
+done = "Zamówienie potwierdzone; projekt faktury jest gotowy"
 
 [labels.pl.model.sale_order.action.cancel]
 label = "Anuluj"
 description = "Anuluje zamówienie"
+confirm = "Anulować to zamówienie?"
+done = "Zamówienie anulowane"
 
 [labels.pl.model.sale_order.action.reset_to_draft]
 label = "Przywróć wersję roboczą"

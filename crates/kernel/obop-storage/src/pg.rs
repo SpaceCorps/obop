@@ -716,6 +716,27 @@ impl Backend for Pg {
             Ok(())
         })
     }
+    fn unique_indexes(&self) -> Result<Vec<String>> {
+        self.main.read(Class::List, |c| {
+            Ok(c.query(
+                "SELECT indexname::text FROM pg_indexes WHERE schemaname = current_schema() \
+                 AND tablename = 'obop_record' AND indexname LIKE 'obop\\_uq\\_%' \
+                 ORDER BY indexname",
+                &[],
+            )?
+            .iter()
+            .map(|r| r.get::<_, String>(0))
+            .collect())
+        })
+    }
+    fn drop_unique_index(&self, name: &str) -> Result<()> {
+        let name = crate::unique_index_ident(name)?;
+        let sql = format!("DROP INDEX IF EXISTS {name}");
+        self.main.run(Class::Batch, |c| {
+            c.batch_execute(&sql)?;
+            Ok(())
+        })
+    }
     fn kind(&self) -> &'static str {
         "postgres"
     }
@@ -723,7 +744,7 @@ impl Backend for Pg {
     fn lock(&self, key: &str) -> Result<LockGuard> {
         let local = self.locks.take(key)?;
         let session = self.lock_session()?;
-        let deadline = std::time::Instant::now() + LOCK_WAIT;
+        let deadline = std::time::Instant::now() + crate::lock_wait(key)?;
         loop {
             if session.ask("SELECT pg_try_advisory_lock(hashtextextended($1, 0))", key)? {
                 return Ok(Box::new(PgGuard {

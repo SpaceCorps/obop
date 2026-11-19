@@ -25,6 +25,8 @@ description = "Notes internes en texte libre"
 [labels.fr.model.party.action.erase]
 label = "Effacer"
 description = "Anonymise le tiers sur place et enregistre l’effacement"
+confirm = "Effacer les données personnelles de ce contact ? Cette action est irréversible."
+done = "Données personnelles effacées"
 
 [labels.fr.model.party.field.photo]
 label = "Photo"
