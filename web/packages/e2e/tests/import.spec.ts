@@ -116,7 +116,9 @@ test.describe("CSV import", () => {
 // D70 amendment: a reference column may hold the other record's name, as the lists show it. The
 // dialog looks the names up among the records the person may read and sends their ids; a name it
 // cannot be sure of stays as written, so the server refuses that row and the dialog says why.
-// The bulk calls are shared between root and sam: the server takes 12 a minute per person.
+// The server takes 12 bulk calls a minute from one person, dry runs included. This file makes
+// 5 as root (3 of them in the first describe), 5 as sam and 4 as dana, so it can run twice in a
+// row on one instance (`--repeat-each=2`). A new case here counts its calls against that.
 test.describe("CSV import with names in a reference column", () => {
   test("a name in a reference column is looked up and the rows import", async ({
     page,
@@ -139,6 +141,8 @@ test.describe("CSV import with names in a reference column", () => {
     await expect(dialog.getByText(/Rows ready: 1\. Rows with problems: 0\./)).toBeVisible();
     expect(bulk).toHaveLength(1);
     expect(csvOf(bulk[0]!)).toBe(`title,party_id\r\n${title},${party.id}\r\n`);
+    // Emptied after the pick, so the same file chosen again (once corrected) is read again.
+    await expect(dialog.getByLabel("Choose a CSV file")).toHaveValue("");
     await dialog.getByRole("button", { name: /^Import 1 rows?$/ }).click();
     await expect(dialog.getByText(/Created: 1\. Skipped: 0\./)).toBeVisible();
     const made = (await api.list("root", "lead")).filter((l) => l.title === title);
@@ -179,6 +183,8 @@ test.describe("CSV import with names in a reference column", () => {
     const body = `title,party_id\n"${t1}\nsecond line",${good.name}\n${t2},${twin}\n${t3},${missing}\n`;
     await signIn("sam");
     let dialog = await importDialog(page);
+    // The good rows import on their own (that Stop keeps Import back is the next case's).
+    await dialog.getByLabel("If a row is wrong").selectOption("partial");
     await dialog.getByLabel("Choose a CSV file").setInputFiles(csvFile(body));
     await expect(dialog.getByText(/Rows ready: 1\. Rows with problems: 2\./)).toBeVisible();
     const problems = dialog.getByRole("table", { name: "Problems found" });
@@ -194,9 +200,6 @@ test.describe("CSV import with names in a reference column", () => {
     await expect(absent.getByRole("cell").nth(2)).toHaveText(
       `No contact is named “${missing}” (column party_id). Check the spelling, or add it first.`,
     );
-    // "Stop: import nothing" offers no import; the good rows import on their own.
-    await expect(dialog.getByRole("button", { name: "Import", exact: true })).toBeDisabled();
-    await dialog.getByLabel("If a row is wrong").selectOption("partial");
     await dialog.getByRole("button", { name: /^Import 1 rows?$/ }).click();
     await expect(dialog.getByText(/Created: 1\. Skipped: 2\./)).toBeVisible();
     await dialog.getByRole("button", { name: "Done" }).click();
@@ -238,7 +241,7 @@ test.describe("CSV import with names in a reference column", () => {
     const party = await api.create("root", "party", { name: uid("Once Party") });
     const missing = uid("Nobody Party");
     const [t1, t2] = [uid("Once lead"), uid("Once missing lead")];
-    await signIn("root");
+    await signIn("dana");
     const dialog = await importDialog(page);
     const bulk = requests(page, "/api/lead/bulk_create");
     const searches = requests(page, "/api/party/search");
@@ -246,6 +249,8 @@ test.describe("CSV import with names in a reference column", () => {
       .getByLabel("Choose a CSV file")
       .setInputFiles(csvFile(`title,party_id\n${t1},${party.name}\n${t2},${missing}\n`));
     await expect(dialog.getByText(/Rows ready: 1\. Rows with problems: 1\./)).toBeVisible();
+    // "Stop: import nothing" offers no import while a row has a problem.
+    await expect(dialog.getByRole("button", { name: "Import", exact: true })).toBeDisabled();
     await dialog.getByLabel("If a row is wrong").selectOption("partial");
     await expect(dialog.getByRole("button", { name: /^Import 1 rows?$/ })).toBeEnabled();
     await dialog.getByRole("button", { name: /^Import 1 rows?$/ }).click();
@@ -275,7 +280,7 @@ test.describe("CSV import with names in a reference column", () => {
     await api.create("root", "party", { name: twin });
     const missing = uid("Phone Nobody");
     await page.setViewportSize({ width: 390, height: 844 });
-    await signIn("sam");
+    await signIn("dana");
     const dialog = await importDialog(page, true);
     await dialog
       .getByLabel("Choose a CSV file")
@@ -287,6 +292,12 @@ test.describe("CSV import with names in a reference column", () => {
     await expect(dialog.getByText(/Rows ready: 1\. Rows with problems: 2\./)).toBeVisible();
     await expect(dialog.getByText(/No contact is named/)).toBeVisible();
     await expect(dialog.getByText(/More than one contact is named/)).toBeVisible();
+    // Below the hints, the report is brought into view: its first problem is whole on screen.
+    const first = dialog
+      .getByRole("table", { name: "Problems found" })
+      .getByRole("row")
+      .filter({ hasText: "No contact is named" });
+    await expect(first).toBeInViewport({ ratio: 1 });
     expect(await layoutProblems(page)).toEqual([]);
     const sizes = await dialog.evaluate((root) => {
       const box = root.querySelector<HTMLElement>(".dialog-body") ?? root;
