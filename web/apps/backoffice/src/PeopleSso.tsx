@@ -292,6 +292,13 @@ export function MicrosoftDialog({
                 { user: person.name },
               )}
             </p>
+            {/* D91 section 5 and N5: turning it on ends no agent token and no MCP grant, and a
+                grant made while it is on lasts 30 days at most (phone or MCP client). */}
+            <p>
+              {t(
+                "Agent tokens and connected apps stay valid. An app they connect from now on lasts 30 days at most.",
+              )}
+            </p>
             {own && <p>{t("This is your own account: you are signed out at once.")}</p>}
           </div>
         </ConfirmDialog>
@@ -308,7 +315,7 @@ export function MicrosoftDialog({
           <div className="stack">
             <p>
               {t(
-                "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid; an agent token still ends on the date it got while the account was bound. Their password still works.",
+                "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid until the end date each one already has. Their password still works.",
               )}
             </p>
             {own && <p>{t("This is your own account: you are signed out at once.")}</p>}

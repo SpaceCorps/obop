@@ -1063,6 +1063,11 @@ describe("People: Microsoft, the questions and the rules", () => {
     expect(ask.textContent).toContain(
       "The password and passkeys of ada are refused from now on. Their sessions and phone sign-ins end.",
     );
+    // N5: a Microsoft-only account can connect an MCP client now, for 30 days at most; what it
+    // already has stays (D91 section 5).
+    expect(ask.textContent).toContain(
+      "Agent tokens and connected apps stay valid. An app they connect from now on lasts 30 days at most.",
+    );
     expect(ask.textContent).not.toContain("your own account");
     expect(sent("/api/user_account/set_sso_only")).toHaveLength(0);
     expect(field("Microsoft only")!.checked).toBe(false);
@@ -1126,11 +1131,13 @@ describe("People: Microsoft, the questions and the rules", () => {
     const ask = alertDialog()!;
     expect(ask.textContent).toContain("Remove the Microsoft binding of ada?");
     expect(ask.textContent).toContain(
-      "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid; an agent token still ends on the date it got while the account was bound. Their password still works.",
+      "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid until the end date each one already has. Their password still works.",
     );
-    // Since N18 every agent token of a bound account has an end, which an unbinding keeps: the
-    // question must not read as if the tokens became valid for ever.
+    // Every agent token of a bound account has an end (N18), and so has a connected app (a grant
+    // made while the account was Microsoft only ends after 30 days, N5): an unbinding keeps each
+    // end, for apps as for tokens. The sentence must not name the end of agent tokens only.
     expect(ask.textContent).not.toContain("connected apps stay valid. Their password");
+    expect(ask.textContent).not.toContain("an agent token still ends");
     expect(sent("/api/user_account/unbind_sso")).toHaveLength(0);
     await click(button("Cancel", ask));
     expect(sent("/api/user_account/unbind_sso")).toHaveLength(0);
