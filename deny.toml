@@ -38,11 +38,3 @@ version = 2
 # Every advisory fails the check, unmaintained and unsound ones included, until it is fixed or a
 # person records here why it does not apply (`ignore = [{ id = "RUSTSEC-...", reason = "..." }]`).
 yanked = "deny"
-ignore = [
-    # ammonia 4.2.5, the only fix, was released on 2026-11-13 and passes the cooldown of the pin
-    # policy (D23, 7 days) on 2026-11-20. Not reachable in obop: the sanitisers of obop-community
-    # and obop-site (src/md.rs) allow neither `svg` nor `math` nor any MathML element, and the
-    # mutation needs one of them allowed. EXPIRES 2026-11-27: update to ammonia 4.2.5 (or later)
-    # and remove this entry.
-    { id = "RUSTSEC-2026-0533", reason = "fix inside the pin cooldown until 2026-11-20; svg and math are not allowed by our sanitisers; expires 2026-11-27" },
-]
