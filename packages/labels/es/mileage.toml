@@ -115,14 +115,18 @@ description = "Finalizar un viaje en curso cuando han llegado todos los puntos: 
 [labels.es.model.mileage_trip.action.submit]
 label = "Enviar"
 description = "Enviar un viaje finalizado a revisión"
+done = "Enviado a revisión"
 
 [labels.es.model.mileage_trip.action.confirm]
 label = "Confirmar"
 description = "Confirmar un viaje en revisión; desde entonces cuenta. Un revisor no puede confirmar su propio viaje"
+confirm = "¿Confirmar este viaje? Desde ahora cuenta y ninguna acción lo deshace."
+done = "Viaje confirmado"
 
 [labels.es.model.mileage_trip.action.reject]
 label = "Rechazar"
 description = "Rechazar un viaje en revisión; escribe antes el motivo del rechazo. Un revisor no puede rechazar su propio viaje"
+done = "Viaje rechazado"
 
 [labels.es.model.mileage_trip.action.reopen]
 label = "Reabrir"
@@ -131,10 +135,13 @@ description = "Devolver un viaje rechazado a finalizado para que el conductor lo
 [labels.es.model.mileage_trip.action.discard]
 label = "Descartar"
 description = "Descartar tu propio viaje en curso, finalizado o rechazado; escribe antes el motivo. Un viaje descartado nunca cuenta"
+done = "Viaje descartado"
 
 [labels.es.model.mileage_trip.action.discard_stuck]
 label = "Descartar atascado"
 description = "Descartar, como administrador, un viaje atascado en grabando o finalizado"
+confirm = "¿Descartar este viaje atascado? Nunca contará."
+done = "Viaje descartado"
 
 [labels.es.model.mileage_point]
 name = "Punto"
@@ -171,3 +178,15 @@ description = "Velocidad sobre el suelo en metros por segundo, cuando el teléfo
 [labels.es.model.mileage_point.field.driver]
 label = "Conductor"
 description = "Usuario del conductor del viaje; el servidor lo toma del viaje"
+
+[labels.es.model.mileage_trip.section.trip]
+label = "Viaje"
+
+[labels.es.model.mileage_trip.section.review]
+label = "Revisión"
+
+[labels.es.model.mileage_trip.section.discard]
+label = "Descarte"
+
+[labels.es.model.mileage_trip.section.recorded_by_the_app]
+label = "Registrado por la aplicación"

@@ -50,10 +50,14 @@ description = "Référence du client imprimée sur la facture, texte libre"
 [labels.fr.model.invoice.action.post]
 label = "Comptabiliser"
 description = "Comptabilise une facture en brouillon et lui attribue le numéro suivant de la série"
+confirm = "Valider cette facture ? Elle reçoit son numéro et ne pourra plus être modifiée."
+done = "Facture validée"
 
 [labels.fr.model.invoice.action.cancel]
 label = "Annuler"
 description = "Annule une facture en brouillon"
+confirm = "Annuler ce brouillon de facture ?"
+done = "Facture annulée"
 
 [labels.fr.model.invoice.field.party_id]
 label = "Tiers"
@@ -91,3 +95,6 @@ description = "Prix d’une unité en plus petite unité monétaire"
 [labels.fr.model.invoice_line.field.amount_minor]
 label = "Montant"
 description = "Montant de la ligne en plus petite unité monétaire : quantité multipliée par le prix unitaire"
+
+[labels.fr.model.invoice.section.invoice]
+label = "Facture"

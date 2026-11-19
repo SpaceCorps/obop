@@ -91,6 +91,8 @@ closed = "Clôturée"
 [labels.fr.model.pos_session.action.close]
 label = "Clôturer"
 description = "Clôture la session une fois le tiroir compté (responsable uniquement)"
+confirm = "Fermer cette session ? Comptez d'abord l'argent du tiroir ; une session fermée ne peut plus être modifiée."
+done = "Session fermée"
 
 [labels.fr.model.pos_session.action.close.assert.difference_explained]
 message = "L'écart de caisse n'est pas expliqué : indiquez-en la raison dans la note avant de clôturer"
@@ -144,14 +146,18 @@ cancelled = "Annulée"
 [labels.fr.model.pos_order.action.pay]
 label = "Payer"
 description = "La vente est entièrement payée : refusé tant que les paiements ne couvrent pas le total ; crée un mouvement de stock en brouillon par ligne (exige le groupe inventory.user)"
+done = "Vente payée"
 
 [labels.fr.model.pos_order.action.cancel]
 label = "Annuler"
 description = "Annule une vente qui n’a jamais été payée"
+confirm = "Annuler cette vente ? Elle garde son numéro de ticket et ne pourra plus être modifiée ensuite."
 
 [labels.fr.model.pos_order.action.refund]
 label = "Rembourser"
 description = "Rembourse une vente payée au client (responsable uniquement)"
+confirm = "Rembourser cette vente au client ?"
+done = "Vente remboursée"
 
 [labels.fr.model.pos_order_line]
 name = "Ligne de vente"
@@ -254,3 +260,6 @@ description = "La part des paiements faite en espèces (plus petite unité moné
 [labels.fr.model.pos_order.field.refund_session_id]
 label = "Remboursée dans la session"
 description = "La session dont le tiroir a versé l’espèce d’un remboursement, fixée par le serveur quand une vente d’une session clôturée est remboursée : la session alors ouverte à la caisse de la vente ; vide si la session de la vente était encore ouverte"
+
+[labels.fr.model.pos_session.section.cash_count]
+label = "Comptage de caisse"

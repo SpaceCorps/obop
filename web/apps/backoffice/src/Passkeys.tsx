@@ -10,6 +10,7 @@ import {
   t,
   twoFactorMessage,
   useWorded,
+  type Wording,
 } from "@obop/ui";
 import { Icon } from "./ui.tsx";
 import {
@@ -76,8 +77,9 @@ export function ReauthForm({
   tone?: "primary" | "danger";
   /** Fields of the action itself, above the confirmation. */
   children?: React.ReactNode;
-  /** Resolves to an error text, or null when the action went through. */
-  onSubmit: (reauth: Reauth) => Promise<string | null>;
+  /** Resolves to how to word the error (kept as a wording, so a language switch rewords it, D9),
+   * or null when the action went through. */
+  onSubmit: (reauth: Reauth) => Promise<Wording | string | null>;
   onCancel: () => void;
 }) {
   const secondFactor = hasTotp || hasPasskeys;
@@ -111,7 +113,7 @@ export function ReauthForm({
     setBusy(false);
     // The proof is spent whether or not the action went through.
     setProved(false);
-    if (err) setError(() => err);
+    if (err) setError(err);
   }
 
   const needsCode = secondFactor && !proved && mode !== "passkey";
@@ -235,8 +237,8 @@ export function PasskeysSection({
     );
   if (list === "error") return <Notice tone="danger" title={t("Passkeys could not be loaded.")} />;
 
-  const finished = (r: Outcome<unknown>, done: string): string | null => {
-    if (!r.ok) return passkeyMessage(r);
+  const finished = (r: Outcome<unknown>, done: string): Wording | null => {
+    if (!r.ok) return () => passkeyMessage(r);
     setView({ name: "idle" });
     notify(done);
     onChanged?.();
@@ -381,7 +383,7 @@ export function PasskeysSection({
           submitLabel={t("Create passkey")}
           onSubmit={async (reauth) => {
             const r = await registerPasskey(token, reauth, name);
-            if (!r.ok) return passkeyMessage(r);
+            if (!r.ok) return () => passkeyMessage(r);
             onChanged?.();
             void load();
             notify(t("Passkey added"));

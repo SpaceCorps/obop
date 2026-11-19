@@ -37,10 +37,13 @@ description = "ISO 4217 -valuuttakoodi"
 [labels.fi.model.sale_order.action.confirm]
 label = "Vahvista"
 description = "Vahvista luonnostilaus"
+done = "Tilaus vahvistettu; laskuluonnos on valmis"
 
 [labels.fi.model.sale_order.action.cancel]
 label = "Peruuta"
 description = "Peruuta tilaus"
+confirm = "Perutaanko tämä tilaus?"
+done = "Tilaus peruttu"
 
 [labels.fi.model.sale_order.action.reset_to_draft]
 label = "Palauta luonnokseksi"

@@ -57,11 +57,21 @@ archived = "Zarchiwizowane"
 [labels.pl.model.knowledge_article.action.publish]
 label = "Opublikuj"
 description = "Publikuje artykuł (tylko kierownik)"
+done = "Artykuł jest opublikowany"
 
 [labels.pl.model.knowledge_article.action.unpublish]
 label = "Cofnij publikację"
 description = "Przywraca artykuł do wersji roboczej"
+done = "Artykuł wrócił do szkicu"
 
 [labels.pl.model.knowledge_article.action.archive]
 label = "Archiwizuj"
 description = "Archiwizuje nieaktualny artykuł"
+confirm = "Zarchiwizować ten artykuł? Żaden krok go nie przywróci."
+done = "Artykuł jest zarchiwizowany"
+
+[labels.pl.model.knowledge_article.section.article]
+label = "Artykuł"
+
+[labels.pl.model.knowledge_article.section.details]
+label = "Szczegóły"

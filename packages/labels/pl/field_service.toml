@@ -107,18 +107,23 @@ cancelled = "Anulowane"
 [labels.pl.model.field_service_job.action.depart]
 label = "Jestem w drodze"
 description = "Technik jest w drodze"
+done = "W drodze"
 
 [labels.pl.model.field_service_job.action.start]
 label = "Rozpocznij pracę"
 description = "Technik dotarł na miejsce i rozpoczął pracę"
+done = "Rozpoczęto pracę"
 
 [labels.pl.model.field_service_job.action.complete]
 label = "Zakończ zlecenie"
 description = "Kończy zlecenie; gdy wymagany jest podpis, najpierw zapisz podpisującego i datę podpisania"
+confirm = "Zakończyć to zlecenie? Zakończonego zlecenia nie można już zmienić."
+done = "Zlecenie wykonane"
 
 [labels.pl.model.field_service_job.action.cancel]
 label = "Anuluj"
 description = "Anuluje zlecenie, którego nie rozpoczęto"
+confirm = "Anulować to zlecenie? Potem nie będzie można go zmienić."
 
 [labels.pl.model.field_service_part]
 name = "Część"
@@ -150,3 +155,18 @@ description = "Uwaga o części, na przykład numer seryjny"
 
 [labels.pl.model.field_service_job.action.complete.assert.signed]
 message = "Klient musi najpierw odebrać to zlecenie: wpisz, kto podpisał i kiedy"
+
+[labels.pl.model.field_service_job.section.job]
+label = "Zlecenie"
+
+[labels.pl.model.field_service_job.section.customer_and_site]
+label = "Klient i miejsce"
+
+[labels.pl.model.field_service_job.section.schedule]
+label = "Harmonogram"
+
+[labels.pl.model.field_service_job.section.sign_off]
+label = "Odbiór"
+
+[labels.pl.model.field_service_job.section.report]
+label = "Deklaracja"

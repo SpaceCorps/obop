@@ -129,10 +129,12 @@ description = "Eine Nachricht einreihen: to, subject und body oder template mit 
 [labels.de.model.outbound_mail.action.retry]
 label = "Erneut senden"
 description = "Eine fehlgeschlagene Nachricht erneut einreihen, Versuche ab null"
+done = "Erneut eingereiht"
 
 [labels.de.model.outbound_mail.action.cancel]
 label = "Stornieren"
 description = "Eine eingereihte Nachricht stornieren; ihr Text wird gelöscht"
+done = "Abgebrochen"
 
 [labels.de.model.outbound_mail.action.process]
 label = "Fällige senden"
@@ -184,6 +186,10 @@ starttls = "STARTTLS"
 tls = "TLS"
 none = "Keine"
 
+[labels.de.model.mail_server.field.allow_private_network]
+label = "Eigenes Netzwerk erlauben"
+description = "SMTP: Das Relay darf im eigenen Netzwerk des Unternehmens liegen (eine private Adresse wie 10.0.0.5), und die Sicherheit none ist dort erlaubt; standardmäßig aus, nur eine Person schaltet es ein (docs/spec/mail.md 6)"
+
 [labels.de.model.mail_server.field.username]
 label = "Benutzername"
 description = "SMTP: Benutzername; leer bedeutet keine Anmeldung"
@@ -231,6 +237,7 @@ description = "Eingabe von test_send: die Adresse der Testnachricht; nie gespeic
 [labels.de.model.mail_server.action.test_send]
 label = "Test senden"
 description = "Jetzt eine kurze Testnachricht über diesen Server an test_recipient senden und die Antwort festhalten"
+done = "Testnachricht gesendet"
 
 [labels.de.model.mail_template]
 name = "E-Mail-Vorlage"

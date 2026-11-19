@@ -12,7 +12,7 @@ import { fromEdit, relocaleNumber, sameAsStored, toEdit, validate, type Edit } f
 import { recordExtensionOf, withoutOverridden } from "./extensions.ts";
 import { FormBody, flushLines, linesDirty, newLinesRegistry } from "./FormBody.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
-import { actionTitle, fieldTitle } from "./labels.ts";
+import { actionDone, actionTitle, fieldTitle } from "./labels.ts";
 import { extendTrail, trailStore } from "./lastRecord.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
@@ -44,7 +44,14 @@ import { RecordHeader } from "./RecordHeader.tsx";
 import { RelatedChips } from "./RelatedChips.tsx";
 import { nav, useRoute } from "./route.ts";
 import "./registrations.ts";
-import { canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
+import {
+  canMove,
+  initialOption,
+  isGoverned,
+  moveRecord,
+  namedQuestionOf,
+  questionOf,
+} from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -466,7 +473,7 @@ export function RecordPanel({
 
   /** An action button was pressed: ask first when it needs words or a confirm, else run it. */
   const asks = (a: Command) =>
-    needsOf(a).length > 0 || !!a.ui?.confirm || actions.danger.some((x) => x.id === a.id);
+    needsOf(a).length > 0 || !!questionOf(model, a) || actions.danger.some((x) => x.id === a.id);
   function requestAction(a: Command) {
     if (!row || busy) return;
     if (asks(a)) setAsking(a);
@@ -489,7 +496,7 @@ export function RecordPanel({
       const f = a.field ? model.fields.find((x) => x.name === a.field) : undefined;
       const now = { ...row, ...after } as Row;
       d.notify(
-        a.ui?.done ??
+        actionDone(a) ??
           (f && a.to
             ? t("{model} {name} is now {state}", {
                 model: title,
@@ -658,13 +665,12 @@ export function RecordPanel({
             label={actionLabelFor(asking, inSentence(title))}
             needs={needsOf(asking)}
             question={
-              asking.ui?.confirm ??
-              (actions.danger.some((x) => x.id === asking.id)
-                ? t("{action} “{name}”?", {
-                    action: actionLabelFor(asking, inSentence(title)),
-                    name: label,
-                  })
-                : undefined)
+              // The package's question; for a danger action without one, the one that names the
+              // record (with the no-way-back sentence when it is one); else the question of a
+              // step with no way back (#102).
+              actions.danger.some((x) => x.id === asking.id)
+                ? namedQuestionOf(model, asking, actionLabelFor(asking, inSentence(title)), label)
+                : questionOf(model, asking)
             }
             danger={actions.danger.some((x) => x.id === asking.id)}
             currency={currency}

@@ -81,6 +81,8 @@ test.describe("the record form", () => {
     const finish = panel.locator(".actionrow").getByRole("button", { name: "Finish" });
     await expect(finish).toHaveClass(/primary/);
     await finish.click();
+    // Done is a state no action leaves: the button asks first (#102).
+    await page.getByRole("alertdialog").getByRole("button", { name: "Finish" }).click();
     await expect(page.locator(".toast").filter({ hasText: "is now done" })).toBeVisible();
     await expect(page.locator(".toast").filter({ hasText: "Write a note first" })).toHaveCount(0);
     const stored = await api.run("root", `${model}.get`, { id: job.id });
@@ -120,6 +122,7 @@ test.describe("the record form", () => {
     const job = await api.create("root", model, { title: uid("Job") });
     await signIn("root", `/${model}/${model}?view=list&id=${job.id}`);
     await page.locator("aside.record .actionrow").getByRole("button", { name: "Finish" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Finish" }).click();
     const toast = page.locator(".toast").filter({ hasText: "Write a note first" });
     await expect(toast).toBeVisible();
     await expect(toast).not.toContainText("assertion");

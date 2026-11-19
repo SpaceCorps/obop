@@ -132,10 +132,14 @@ description = "Skąd pochodzi pole i co sprawdzono, na przykład wydanie SKV 470
 [labels.pl.model.accounting_se_vat_box.action.verify]
 label = "Zweryfikuj"
 description = "Oznacz pole jako sprawdzone z SKV 4700 (tylko zatwierdzający); zapisuje, kto i kiedy zweryfikował"
+confirm = "Oznaczyć to pole jako sprawdzone z formularzem SKV 4700?"
+done = "Pole sprawdzone"
 
 [labels.pl.model.accounting_se_vat_box.action.unverify]
 label = "Cofnij weryfikację"
 description = "Wycofaj weryfikację pola (tylko zatwierdzający)"
+confirm = "Wycofać weryfikację tego pola?"
+done = "Weryfikacja wycofana"
 
 [labels.pl.model.accounting_se_vat_code]
 name = "Kod VAT"
@@ -232,10 +236,14 @@ description = "Skąd pochodzi kod i co sprawdzono, na przykład wydanie SKV 4700
 [labels.pl.model.accounting_se_vat_code.action.verify]
 label = "Zweryfikuj"
 description = "Oznacz kod jako sprawdzony z SKV 4700 (tylko zatwierdzający); zapisuje, kto i kiedy zweryfikował"
+confirm = "Oznaczyć ten kod VAT jako sprawdzony z formularzem SKV 4700?"
+done = "Kod VAT sprawdzony"
 
 [labels.pl.model.accounting_se_vat_code.action.unverify]
 label = "Cofnij weryfikację"
 description = "Wycofaj weryfikację kodu (tylko zatwierdzający)"
+confirm = "Wycofać weryfikację tego kodu VAT?"
+done = "Weryfikacja wycofana"
 
 [labels.pl.model.accounting_se_vat_report]
 name = "Raport VAT"
@@ -307,14 +315,18 @@ filed = "Złożony"
 [labels.pl.model.accounting_se_vat_report.action.propose]
 label = "Zaproponuj"
 description = "Zaproponuj raport do zatwierdzenia; agenci mogą to robić"
+done = "Zaproponowano do zatwierdzenia"
 
 [labels.pl.model.accounting_se_vat_report.action.withdraw]
 label = "Wycofaj"
 description = "Cofnij zaproponowany raport do szkicu"
+done = "Przywrócono do szkicu"
 
 [labels.pl.model.accounting_se_vat_report.action.approve]
 label = "Zatwierdź"
 description = "Zatwierdź raport (tylko zatwierdzający; pola muszą być potwierdzone jako sprawdzone z SKV 4700)"
+confirm = "Zatwierdzić tę deklarację VAT? Nie będzie można jej już zmienić."
+done = "Deklaracja VAT zatwierdzona"
 
 [labels.pl.model.accounting_se_vat_report.action.approve.assert.boxes_checked]
 message = "Pola nie zostały potwierdzone jako sprawdzone z SKV 4700"
@@ -322,6 +334,8 @@ message = "Pola nie zostały potwierdzone jako sprawdzone z SKV 4700"
 [labels.pl.model.accounting_se_vat_report.action.record_filed]
 label = "Zapisz złożenie"
 description = "Zapisz, że deklarację złożono w Skatteverket poza tym systemem (tylko zatwierdzający)"
+confirm = "Zapisać, że tę deklarację złożono w Skatteverket?"
+done = "Zapisano jako złożoną"
 
 [labels.pl.model.accounting_se_vat_report_line]
 name = "Wiersz raportu VAT"

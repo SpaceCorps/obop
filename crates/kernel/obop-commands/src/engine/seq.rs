@@ -229,6 +229,18 @@ pub(crate) fn index_name(model: &str, fields: &[&str]) -> String {
     format!("{}_{:016x}", &readable[..46], h)
 }
 
+/// The names of the database constraints `def` declares (what [`ensure_indexes`] makes).
+pub(crate) fn index_names(def: &ModelDef) -> Vec<String> {
+    unique_specs(def)
+        .into_iter()
+        .map(|(field, with)| {
+            let mut cols = vec![field];
+            cols.extend(with.iter().copied());
+            index_name(def.name, &cols)
+        })
+        .collect()
+}
+
 /// Create the database constraints of `def`. A database that already holds duplicates keeps
 /// working (the write-time check still applies); the failure is reported.
 pub(crate) fn ensure_indexes(backend: &dyn obop_storage::Backend, def: &ModelDef) {

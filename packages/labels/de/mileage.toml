@@ -115,14 +115,18 @@ description = "Eine laufende Fahrt beenden, sobald alle Punkte da sind: der Serv
 [labels.de.model.mileage_trip.action.submit]
 label = "Einreichen"
 description = "Eine beendete Fahrt zur Prüfung senden"
+done = "Zur Prüfung gesendet"
 
 [labels.de.model.mileage_trip.action.confirm]
 label = "Bestätigen"
 description = "Eine Fahrt in Prüfung bestätigen; ab dann zählt sie. Ein Prüfer kann seine eigene Fahrt nicht bestätigen"
+confirm = "Diese Fahrt bestätigen? Ab dann zählt sie, und keine Aktion nimmt das zurück."
+done = "Fahrt bestätigt"
 
 [labels.de.model.mileage_trip.action.reject]
 label = "Ablehnen"
 description = "Eine Fahrt in Prüfung ablehnen; zuerst den Grund der Ablehnung schreiben. Ein Prüfer kann seine eigene Fahrt nicht ablehnen"
+done = "Fahrt abgelehnt"
 
 [labels.de.model.mileage_trip.action.reopen]
 label = "Wieder öffnen"
@@ -131,10 +135,13 @@ description = "Eine abgelehnte Fahrt auf beendet zurücksetzen, damit der Fahrer
 [labels.de.model.mileage_trip.action.discard]
 label = "Verwerfen"
 description = "Die eigene laufende, beendete oder abgelehnte Fahrt verwerfen; zuerst den Grund schreiben. Eine verworfene Fahrt zählt nie"
+done = "Fahrt verworfen"
 
 [labels.de.model.mileage_trip.action.discard_stuck]
 label = "Hängende verwerfen"
 description = "Eine in Aufzeichnung oder Beendet hängende Fahrt als Administrator verwerfen"
+confirm = "Diese hängengebliebene Fahrt verwerfen? Sie zählt dann nie."
+done = "Fahrt verworfen"
 
 [labels.de.model.mileage_point]
 name = "Punkt"
@@ -171,3 +178,15 @@ description = "Geschwindigkeit über Grund in Metern pro Sekunde, wenn das Telef
 [labels.de.model.mileage_point.field.driver]
 label = "Fahrer"
 description = "Login des Fahrers der Fahrt; der Server setzt ihn aus der Fahrt"
+
+[labels.de.model.mileage_trip.section.trip]
+label = "Fahrt"
+
+[labels.de.model.mileage_trip.section.review]
+label = "Prüfung"
+
+[labels.de.model.mileage_trip.section.discard]
+label = "Verwerfen"
+
+[labels.de.model.mileage_trip.section.recorded_by_the_app]
+label = "Von der App erfasst"

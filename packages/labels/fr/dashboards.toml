@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Tableaux de bord"
-description = "Tableaux de bord et leurs tuiles, stockés comme données pour qu’une interface les affiche. Un tableau de bord reste privé à son propriétaire et à dashboards.manager tant qu’il n’est pas partagé. Une tuile définit son type, le modèle lu, le champ de mesure, l’agrégation, le regroupement, un filtre et une position. Le package ne stocke que la définition et ne calcule rien."
+description = "Tableaux de bord et leurs tuiles, stockés comme données pour qu’une interface les affiche. Un tableau de bord reste privé à son propriétaire et à dashboards.manager tant qu’il n’est pas partagé. Une tuile définit son type, le modèle lu, le champ de mesure, l’agrégation, le regroupement, la période, un filtre et une position. Le package ne stocke que la définition et ne calcule rien."
 summary = "Tableaux de bord et tuiles stockés comme données, que le back-office affiche en indicateurs, graphiques et tableaux."
 
 [labels.fr.model.dashboards_dashboard]
@@ -71,6 +71,17 @@ sum = "Somme"
 [labels.fr.model.dashboards_widget.field.group_by]
 label = "Regrouper par"
 description = "Champ selon lequel découper le résultat (champ de sélection, de référence ou de date) ; vide pour une seule valeur"
+
+[labels.fr.model.dashboards_widget.field.period]
+label = "Période"
+description = "Si group_by est une date ou une date et heure : la période par laquelle ses valeurs sont comptées (jour, semaine, semaine ISO, mois ou année) ; vide signifie mois"
+
+[labels.fr.model.dashboards_widget.field.period.options]
+day = "Jour"
+week = "Semaine"
+iso_week = "Semaine ISO"
+month = "Mois"
+year = "Année"
 
 [labels.fr.model.dashboards_widget.field.filter]
 label = "Filtre"

@@ -400,7 +400,8 @@ describe("which cards a section shows and which it folds", () => {
       expect(at(id, section), `${id} ${section}`).toEqual([n, 0]);
     // Nine marked cards and one other (three or more marked): the rule holds a long run to one other.
     expect(at("connectors", "actions")).toEqual([10, 3]);
-    expect(at("accounting", "actions")).toEqual([7, 3]);
+    // Accounting 0.6.0 adds Unreconcile, an unmarked card, so four others are folded.
+    expect(at("accounting", "actions")).toEqual([7, 4]);
     expect(at("accounting", "models")).toEqual([3, 5]);
     // The two apps whose Submit and Approve cards speak of approval: nothing is folded, as before.
     expect(at("timesheets", "actions")).toEqual([3, 0]);

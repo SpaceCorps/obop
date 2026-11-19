@@ -50,10 +50,14 @@ description = "Referenz des Kunden auf der Rechnung, Freitext"
 [labels.de.model.invoice.action.post]
 label = "Buchen"
 description = "Einen Rechnungsentwurf buchen und ihm die nächste Nummer der Folge geben"
+confirm = "Diese Rechnung buchen? Sie erhält ihre Nummer und kann nicht mehr geändert werden."
+done = "Rechnung gebucht"
 
 [labels.de.model.invoice.action.cancel]
 label = "Stornieren"
 description = "Einen Rechnungsentwurf stornieren"
+confirm = "Diesen Rechnungsentwurf stornieren?"
+done = "Rechnung storniert"
 
 [labels.de.model.invoice.field.party_id]
 label = "Geschäftspartner"
@@ -91,3 +95,6 @@ description = "Preis einer Einheit in der kleinsten Währungseinheit"
 [labels.de.model.invoice_line.field.amount_minor]
 label = "Betrag"
 description = "Positionsbetrag in der kleinsten Währungseinheit: Menge mal Stückpreis"
+
+[labels.de.model.invoice.section.invoice]
+label = "Rechnung"

@@ -7,6 +7,7 @@ import { fmt, t } from "@obop/ui";
 import { aggregate, search, type Row } from "../../api.ts";
 import type { RecordExtProps } from "../../extensions.ts";
 import { useData } from "../../data.tsx";
+import { actionConfirm } from "../../labels.ts";
 import { serverMessage } from "../../serverMessage.ts";
 import { Button, Icon } from "../../ui.tsx";
 import { MOVE, settleMoves } from "../inventory/moves.ts";
@@ -216,7 +217,7 @@ export function FinishAction({ model, row, busy }: RecordExtProps) {
               "{count} components are short at {location}. Finishing leaves the stock there below zero. Finish anyway?",
               { count: String(short.length), location: at },
             )
-          : (finish!.ui?.confirm ?? t("Mark production as finished?")),
+          : (actionConfirm(finish!) ?? t("Mark production as finished?")),
       short.length ? t("Finish anyway") : t("Finish"),
       t("Cancel"),
     );

@@ -50,10 +50,14 @@ description = "Kundens referens som skrivs på fakturan, fri text"
 [labels.sv.model.invoice.action.post]
 label = "Bokför"
 description = "Bokför en faktura i utkast och ge den nästa nummer i serien"
+confirm = "Bokföra den här fakturan? Den får sitt nummer och kan inte längre ändras."
+done = "Fakturan bokförd"
 
 [labels.sv.model.invoice.action.cancel]
 label = "Annullera"
 description = "Annullera en faktura i utkast"
+confirm = "Makulera det här fakturautkastet?"
+done = "Fakturan makulerad"
 
 [labels.sv.model.invoice.field.party_id]
 label = "Part"
@@ -91,3 +95,6 @@ description = "Pris för en enhet i valutans minsta enhet"
 [labels.sv.model.invoice_line.field.amount_minor]
 label = "Belopp"
 description = "Radbelopp i minsta enhet: antal gånger enhetspris"
+
+[labels.sv.model.invoice.section.invoice]
+label = "Faktura"

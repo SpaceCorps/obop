@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Koontinäytöt"
-description = "Koontinäytöt ja niiden ruudut tallennettuna tietona käyttöliittymän piirrettäväksi. Koontinäytöllä on otsikko ja omistaja, ja se on yksityinen (myös dashboards.manager näkee sen), ellei sitä jaeta. Ruutu määrittelee lajin, luettavan tietuetyypin, mittarikentän, yhdistämistavan, ryhmittelyn, suodattimen ja järjestyksen. Paketti ei tarkista tietuetyyppiä tai kenttiä eikä laske mitään."
+description = "Koontinäytöt ja niiden ruudut tallennettuna tietona käyttöliittymän piirrettäväksi. Koontinäytöllä on otsikko ja omistaja, ja se on yksityinen (myös dashboards.manager näkee sen), ellei sitä jaeta. Ruutu määrittelee lajin, luettavan tietuetyypin, mittarikentän, yhdistämistavan, ryhmittelyn, jakson, suodattimen ja järjestyksen. Paketti ei tarkista tietuetyyppiä tai kenttiä eikä laske mitään."
 summary = "Koontinäytöt ja ruudut tallennettuna tietona, jotka käyttöliittymä piirtää KPI-lukuina, kaavioina ja taulukoina."
 
 [labels.fi.model.dashboards_dashboard]
@@ -71,6 +71,17 @@ sum = "Summa"
 [labels.fi.model.dashboards_widget.field.group_by]
 label = "Ryhmittely"
 description = "Kenttä, jolla tulos jaetaan (valinta-, viite- tai päivämääräkenttä); tyhjä yhdelle arvolle"
+
+[labels.fi.model.dashboards_widget.field.period]
+label = "Jakso"
+description = "Kun group_by on päivämäärä tai päivämäärä ja aika: jakso, jonka mukaan arvot lasketaan (päivä, viikko, ISO-viikko, kuukausi tai vuosi); tyhjä tarkoittaa kuukautta"
+
+[labels.fi.model.dashboards_widget.field.period.options]
+day = "Päivä"
+week = "Viikko"
+iso_week = "ISO-viikko"
+month = "Kuukausi"
+year = "Vuosi"
 
 [labels.fi.model.dashboards_widget.field.filter]
 label = "Suodatin"

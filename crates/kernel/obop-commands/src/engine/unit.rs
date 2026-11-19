@@ -157,6 +157,9 @@ pub(crate) struct Unit<'a> {
     /// Records inserted or merged, for the uniqueness check.
     touched: Vec<Key>,
     cap: usize,
+    /// The number of records the refusal at the cap names: what the caller may write, not the
+    /// running total the cap is counted in (K39 b).
+    budget: usize,
     undo: Vec<Undo>,
     /// The overlay by the keys of the uniqueness rules asked about so far, by model.
     keyed: RefCell<HashMap<String, Vec<Keyed>>>,
@@ -181,6 +184,7 @@ impl<'a> Unit<'a> {
             written: 0,
             touched: Vec::new(),
             cap: MAX_EFFECT_RECORDS,
+            budget: MAX_EFFECT_RECORDS,
             undo: Vec::new(),
             keyed: RefCell::new(HashMap::new()),
             guards: None,
@@ -233,6 +237,7 @@ impl<'a> Unit<'a> {
     /// may write as many records as when it is called by itself, whatever was written before it.
     pub fn own_budget(mut self) -> Self {
         self.cap = self.written.saturating_add(MAX_EFFECT_RECORDS);
+        self.budget = MAX_EFFECT_RECORDS;
         self
     }
 
@@ -279,6 +284,7 @@ impl<'a> Unit<'a> {
     pub fn with_cap(backend: &'a dyn Backend, cap: usize) -> Self {
         let mut u = Self::new(backend);
         u.cap = cap;
+        u.budget = cap;
         u
     }
 
@@ -328,6 +334,7 @@ impl<'a> Unit<'a> {
     pub fn unbounded(backend: &'a dyn Backend) -> Self {
         let mut u = Self::new(backend);
         u.cap = usize::MAX;
+        u.budget = usize::MAX;
         u
     }
 
@@ -336,7 +343,8 @@ impl<'a> Unit<'a> {
         self.written += n;
         if self.written > self.cap {
             return Err(format!(
-                "this action would touch more than {MAX_EFFECT_RECORDS} records; nothing was changed. Split the work into smaller parts"
+                "this action would touch more than {} records; nothing was changed. Split the work into smaller parts",
+                self.budget
             ));
         }
         Ok(())
@@ -600,6 +608,27 @@ mod tests {
         let mut u = Unit::new(&*b);
         for i in 0..MAX_EFFECT_RECORDS {
             u.insert("t", &format!("x{i}"), Fields::new()).unwrap();
+        }
+        let e = u.insert("t", "over", Fields::new()).unwrap_err();
+        assert!(e.contains("more than 500 records"), "{e}");
+    }
+
+    /// K39 (b): the refusal at the cap names the cap the unit was made with (a bulk create's).
+    #[test]
+    fn the_refusal_at_the_cap_names_the_cap_of_the_unit() {
+        let b = obop_storage::open("memory:").unwrap();
+        let mut u = Unit::with_cap(&*b, 3);
+        for i in 0..3 {
+            u.insert("t", &format!("x{i}"), Fields::new()).unwrap();
+        }
+        let e = u.insert("t", "over", Fields::new()).unwrap_err();
+        assert!(e.contains("more than 3 records"), "{e}");
+        // A budget of its own after earlier writes names the budget, not the running total.
+        let mut u = Unit::new(&*b);
+        u.insert("t", "y0", Fields::new()).unwrap();
+        let mut u = u.own_budget();
+        for i in 0..MAX_EFFECT_RECORDS {
+            u.insert("t", &format!("z{i}"), Fields::new()).unwrap();
         }
         let e = u.insert("t", "over", Fields::new()).unwrap_err();
         assert!(e.contains("more than 500 records"), "{e}");
