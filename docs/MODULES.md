@@ -771,7 +771,7 @@ not_by = "submitted_by"              # server: the person in this text field may
 
 | Key | Where | Values and rules |
 |---|---|---|
-| `home`, `launcher` | `[module]` | `home`: a model of the module or `"overview"`. `launcher = false` keeps the app off the launcher. |
+| `home`, `launcher` | `[module]` | `home`: a model of the module or `"overview"`. The bundled finance and supply apps keep one landing rule: an app whose menu shows Overview opens on it (Accounting, Inventory, Purchase, Manufacturing); the others have no Overview in their menu and open on their main list. `launcher = false` keeps the app off the launcher. |
 | `title`, `subtitle` | `[model.ui]` | A template of at most 200 characters: `{field}`, `{ref.field}`; ` \| ` separates alternatives and the first whose placeholders are all set wins. No markup. |
 | `list`, `card`, `quick_create` | `[model.ui]` | Field names of the model, no repeats (at most 20, 12 and 12). |
 | `card_sum` | `[model.ui]` | A number, money or decimal field. |

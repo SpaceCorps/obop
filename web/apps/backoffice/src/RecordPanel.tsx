@@ -389,6 +389,15 @@ export function RecordPanel({
           body[f.name] = r.value;
       } else if (changed(f)) body[f.name] = r.value;
     }
+    // A change the app wants a yes for (an extension's `confirmSave`) is asked first; Keep editing
+    // saves nothing and leaves the form as it is.
+    if (row && !creating) {
+      for (const ask of ext.confirmSave) {
+        const question = ask(row, body);
+        if (question && nav.ask && !(await nav.ask(question, t("Save"), t("Keep editing"))))
+          return null;
+      }
+    }
     setBusy(true);
     // Until the server has answered, a way out (Escape, a link, Back) waits; it goes on when this
     // function is over, so after `onSaved` has put the saved record in the address.
@@ -618,7 +627,7 @@ export function RecordPanel({
         )}
         {!creating &&
           ext.panels.map((Panel, i) => (
-            <Panel key={i} model={model} fields={fields} row={row} busy={busy} />
+            <Panel key={i} model={model} fields={fields} row={row} busy={busy} value={value} />
           ))}
         <FormBody
           focusField={focusField}

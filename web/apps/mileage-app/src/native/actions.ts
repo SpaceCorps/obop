@@ -110,6 +110,18 @@ export async function discardTrip(clientTripId: string, reason: string): Promise
   rt.sync.kick();
 }
 
+/**
+ * The driver changes the purpose of a trip that is not submitted. A trip the phone still has to
+ * end takes it with the end; one the server holds already needs the connection now, and a failure
+ * is thrown with nothing changed.
+ */
+export async function changeTripPurpose(clientTripId: string, purpose: Purpose): Promise<void> {
+  const rt = await getRuntime();
+  await rt.engine.changePurpose(clientTripId, purpose);
+  emitChange();
+  rt.sync.kick();
+}
+
 /** The driver asks to try a refused step again. */
 export async function retryTrip(clientTripId: string): Promise<void> {
   const rt = await getRuntime();

@@ -31,3 +31,6 @@ done = "Personenbezogene Daten gelöscht"
 [labels.de.model.party.field.photo]
 label = "Foto"
 description = "Foto oder Logo des Kontakts (PNG, JPEG, WebP oder GIF, bis 2 MiB)"
+
+[labels.de.model.party.filter.not_erased]
+label = "Nicht anonymisiert"

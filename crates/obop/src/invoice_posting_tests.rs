@@ -481,6 +481,71 @@ fn a_booking_that_would_be_refused_refuses_the_post_and_changes_nothing() {
     assert!(rows(&f.app, "accounting_move").is_empty());
 }
 
+/// U6 review: the guard runs the same create checks as the booking, so a booking tax that was made
+/// inactive after it was configured (the line's `tax_id` filter `active = true`) refuses the post,
+/// and the invoice stays a draft with no number and no move (it was posted and left unbooked).
+#[test]
+fn an_inactive_booking_tax_refuses_the_post_and_changes_nothing() {
+    let f = fixture(2500);
+    configure(&f, json!({}));
+    let tax = rows(&f.app, "accounting_tax")
+        .into_iter()
+        .find(|(_, r)| r["name"] == json!("Test tax"))
+        .unwrap()
+        .0;
+    call(
+        &f.app,
+        &admin(),
+        "accounting_tax.update",
+        json!({"id": tax, "active": false}),
+    )
+    .unwrap();
+    let inv = invoice_with_dates(&f, &[10_000]);
+    // A person reads the tax by its name, without the code, the model path or the id.
+    let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": inv})));
+    assert!(m.contains("not posted"), "{m}");
+    assert!(m.contains("the booking tax “Test tax” is inactive"), "{m}");
+    for internal in [
+        "ref_not_allowed",
+        "tax_id",
+        "accounting_tax",
+        tax.as_str(),
+        "book_on_post",
+    ] {
+        assert!(!m.contains(internal), "{internal} in {m}");
+    }
+    {
+        let _s = obop_commands::locale::scope(Some("de"));
+        let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": inv})));
+        assert!(
+            m.contains("der Steuersatz „Test tax“ ist nicht aktiv"),
+            "{m}"
+        );
+        assert!(!m.contains("ref_not_allowed"), "{m}");
+    }
+    // An agent keeps the coded detail.
+    let agent = Principal::agent(
+        "bot",
+        &["base.user", "invoicing.user", "invoicing.manager"],
+        &["base.user", "invoicing.user", "invoicing.manager"],
+    );
+    let m = refusal(call(&f.app, &agent, "invoice.post", json!({"id": inv})));
+    assert!(m.contains("ref_not_allowed") && m.contains("tax_id"), "{m}");
+    let stored = rows(&f.app, "invoice")
+        .into_iter()
+        .find(|(id, _)| *id == inv)
+        .unwrap()
+        .1;
+    assert_eq!(stored["state"], json!("draft"));
+    assert!(
+        stored.get("number").is_none_or(|n| n.is_null()),
+        "{stored:?}"
+    );
+    assert!(rows(&f.app, "accounting_move").is_empty());
+    assert!(rows(&f.app, "accounting_move_line").is_empty());
+    assert!(rows(&f.app, "invoice_posting").is_empty());
+}
+
 #[test]
 fn the_booking_settings_are_checked_and_changed_by_an_accounting_manager() {
     let f = fixture(2500);
@@ -773,4 +838,49 @@ fn the_settings_say_the_receivable_is_the_total_plus_vat() {
         "the hint"
     );
     assert!(page.contains("invoice total plus VAT"), "the hint");
+}
+
+/// U6: the entry goes through the checks of `accounting_move.create`, so an invoice whose
+/// customer record is gone is refused with the reference named, and nothing is written (the
+/// batch written straight to the store kept a dangling `partner_id`).
+#[test]
+fn the_entry_is_checked_like_accounting_move_create() {
+    let f = fixture(2500);
+    let inv = invoice_with_dates(&f, &[10_000]);
+    call(&f.app, &admin(), "invoice.post", json!({"id": inv})).unwrap();
+    let party = rows(&f.app, "invoice")
+        .into_iter()
+        .find(|(id, _)| *id == inv)
+        .map(|(_, r)| r["party_id"].as_str().unwrap().to_string())
+        .unwrap();
+    assert!(f.app.store.backend().delete("party", &party).unwrap());
+    let m = refusal(f.run(&inv, false));
+    assert!(m.contains("partner_id"), "{m}");
+    assert!(m.contains("nothing was written"), "{m}");
+    assert!(rows(&f.app, "accounting_move").is_empty());
+    assert!(rows(&f.app, "accounting_move_line").is_empty());
+    assert!(rows(&f.app, "invoice_posting").is_empty());
+}
+
+/// U6: booking on post makes the entry as the person who posted with the `accounting.user` group
+/// lent for that write, so a poster who holds only the invoicing groups is booked as well.
+#[test]
+fn a_post_by_an_invoicing_clerk_is_booked() {
+    let f = fixture(2500);
+    configure(&f, json!({}));
+    let inv = invoice_with_dates(&f, &[10_000]);
+    let clerk = Principal::user(
+        "clerk",
+        &["base.user", "invoicing.user", "invoicing.manager"],
+    );
+    call(&f.app, &clerk, "invoice.post", json!({"id": inv})).unwrap();
+    let link = call(
+        &f.app,
+        &admin(),
+        "invoice_posting.get",
+        json!({"invoice": inv}),
+    )
+    .unwrap();
+    assert_eq!(link["booked"], json!(true), "{link}");
+    assert_eq!(rows(&f.app, "accounting_move_line").len(), 3);
 }
