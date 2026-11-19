@@ -1061,6 +1061,11 @@ describe("People: Microsoft, the questions and the rules", () => {
     expect(ask.textContent).toContain(
       "The password and passkeys of ada are refused from now on. Their sessions and phone sign-ins end.",
     );
+    // N5: a Microsoft-only account can connect an MCP client now, for 30 days at most; what it
+    // already has stays (D91 section 5).
+    expect(ask.textContent).toContain(
+      "Agent tokens and connected apps stay valid. An app they connect from now on lasts 30 days at most.",
+    );
     expect(ask.textContent).not.toContain("your own account");
     expect(sent("/api/user_account/set_sso_only")).toHaveLength(0);
     expect(field("Microsoft only")!.checked).toBe(false);
@@ -1124,11 +1129,13 @@ describe("People: Microsoft, the questions and the rules", () => {
     const ask = alertDialog()!;
     expect(ask.textContent).toContain("Remove the Microsoft binding of ada?");
     expect(ask.textContent).toContain(
-      "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid; an agent token still ends on the date it got while the account was bound. Their password still works.",
+      "Their sessions and phone sign-ins end. Agent tokens and connected apps stay valid until the end date each one already has. Their password still works.",
     );
-    // Since N18 every agent token of a bound account has an end, which an unbinding keeps: the
-    // question must not read as if the tokens became valid for ever.
+    // Every agent token of a bound account has an end (N18), and so has a connected app (a grant
+    // made while the account was Microsoft only ends after 30 days, N5): an unbinding keeps each
+    // end, for apps as for tokens. The sentence must not name the end of agent tokens only.
     expect(ask.textContent).not.toContain("connected apps stay valid. Their password");
+    expect(ask.textContent).not.toContain("an agent token still ends");
     expect(sent("/api/user_account/unbind_sso")).toHaveLength(0);
     await click(button("Cancel", ask));
     expect(sent("/api/user_account/unbind_sso")).toHaveLength(0);
@@ -1260,5 +1267,82 @@ describe("a refusal kept on the screen follows a switch of the language (D9)", (
     expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(english);
     await act(async () => void (await setLanguage("de", false)));
     expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe(german);
+  });
+});
+
+// On a phone a dialog is a bottom sheet: a refusal drawn under its visible part says nothing to a
+// person who pressed the button. The refusal takes the keyboard focus, which also scrolls it into
+// view (a field's own message keeps its own rule: the focus goes to the field).
+describe("a refusal kept on the screen takes the keyboard focus", () => {
+  const focusedAlert = () => {
+    const a = document.activeElement;
+    return a?.getAttribute("role") === "alert" ? a.textContent : null;
+  };
+
+  it("the set-up form", async () => {
+    server.refuse["sso_provider.configure"] = "the tenant could not be reached";
+    await mountSection();
+    await click(button("Set up Microsoft sign-in"));
+    await type(field("Tenant ID"), TENANT);
+    await type(field("Application (client) ID"), APP);
+    await type(field("Client secret"), SECRET);
+    await press(button("Save", dialog()!));
+    expect(focusedAlert()).toBe("the tenant could not be reached");
+  });
+
+  it("the question before Remove", async () => {
+    server.provider = stored();
+    server.refuse["sso_provider.clear"] = "accounts are still bound to this tenant";
+    await mountSection();
+    await click(button("Remove", container));
+    await press(button("Remove", alertDialog()!));
+    expect(focusedAlert()).toBe("accounts are still bound to this tenant");
+    // Still inside the question, which stays open.
+    expect(alertDialog()!.contains(document.activeElement)).toBe(true);
+  });
+
+  it("the Bind dialog of a person", async () => {
+    server.provider = stored();
+    server.refuse["user_account.bind_sso"] = "that object id is bound to another account already";
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    await type(field("Object ID"), OID);
+    await press(button("Bind", dialog()!));
+    expect(focusedAlert()).toBe("that object id is bound to another account already");
+  });
+
+  it("Microsoft only: the question closes and the refusal by the checkbox has the focus", async () => {
+    server.provider = stored();
+    server.users = [person("ada", { sso_oid: OID })];
+    server.refuse["user_account.set_sso_only"] = "ada has never signed in with Microsoft";
+    await mountPeople("root1");
+    await click(microsoftButton("ada"));
+    await click(field("Microsoft only"));
+    await press(button("Make Microsoft only", alertDialog()!));
+    expect(alertDialog()).toBeNull();
+    expect(focusedAlert()).toBe("ada has never signed in with Microsoft");
+    expect(dialog()!.contains(document.activeElement)).toBe(true);
+  });
+
+  it("the question before Remove binding", async () => {
+    server.provider = stored();
+    server.users = [person("ada", { sso_oid: OID })];
+    server.refuse["user_account.unbind_sso"] =
+      "ada signs in with Microsoft only: turn that off first";
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    await click(button("Remove binding", dialog()!));
+    await press(button("Remove binding", alertDialog()!));
+    expect(focusedAlert()).toBe("ada signs in with Microsoft only: turn that off first");
+    expect(alertDialog()!.contains(document.activeElement)).toBe(true);
+  });
+
+  it("a wrong object id still puts the focus on the field, not on an alert", async () => {
+    server.provider = stored();
+    await mountPeople();
+    await click(microsoftButton("ada"));
+    await type(field("Object ID"), "not-an-id");
+    await press(button("Bind", dialog()!));
+    expect(document.activeElement).toBe(field("Object ID"));
   });
 });

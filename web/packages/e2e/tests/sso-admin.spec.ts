@@ -201,6 +201,7 @@ test.describe("administering Sign in with Microsoft", () => {
   test("on a phone: the section, the People row and the dialog fit the screen", async ({
     page,
     request,
+    allowHttpErrors,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await adminPage(page, request);
@@ -228,6 +229,22 @@ test.describe("administering Sign in with Microsoft", () => {
         (el) => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1,
       ),
     ).toBe(true);
+    // A refused Save: the red line takes the focus and lies inside the visible part of the sheet
+    // and of the screen (it was drawn under the fold, and nothing happened for the person).
+    allowHttpErrors(503);
+    await page.route("**/api/sso_provider/configure", (r) =>
+      r.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
+    );
+    await form.getByRole("button", { name: "Save" }).click();
+    const refusal = form.getByRole("alert");
+    await expect(refusal).toBeFocused();
+    await expect(refusal).toBeInViewport();
+    const alertBox = (await refusal.boundingBox())!;
+    const bodyBox = (await form.locator(".dialog-body").boundingBox())!;
+    expect(alertBox.y).toBeGreaterThanOrEqual(bodyBox.y - 1);
+    expect(alertBox.y + alertBox.height).toBeLessThanOrEqual(bodyBox.y + bodyBox.height + 1);
+    expect(alertBox.y + alertBox.height).toBeLessThanOrEqual(844);
+    await page.unroute("**/api/sso_provider/configure");
     await form.getByRole("button", { name: "Cancel" }).click();
     await expect(change).toBeFocused();
     const button = microsoft(page, "bea");
