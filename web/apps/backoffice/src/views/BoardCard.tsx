@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { Badge, fmt, getCurrency, t, type MenuItem } from "@obop/ui";
+import { Badge, fmt, getCurrency, type MenuItem } from "@obop/ui";
 import type { FieldMeta, ModelMeta, Row } from "../api.ts";
+import { ApprovalMark } from "../ApprovalMark.tsx";
 import { blobUrl, thumbWidth } from "../blobs.ts";
 import { BlobThumb } from "../BlobFields.tsx";
 import { useData } from "../data.tsx";
@@ -287,7 +288,7 @@ export function BoardCard(p: BoardCardProps) {
       type="button"
       className={`btn small knext${date && !money ? " end" : ""}`}
       disabled={p.next.busy}
-      title={p.next.approval ? t("(needs a human's approval when an agent runs it)") : undefined}
+      data-needs-approval={p.next.approval || undefined}
       onClick={(e) => {
         e.stopPropagation();
         p.next!.run();
@@ -296,7 +297,7 @@ export function BoardCard(p: BoardCardProps) {
       onPointerDown={(e) => e.stopPropagation()}
     >
       {p.next.label}
-      {p.next.approval ? " *" : ""}
+      {p.next.approval && <ApprovalMark />}
     </button>
   ) : null;
 

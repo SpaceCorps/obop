@@ -383,40 +383,101 @@ pub(crate) fn system_error(def: &ModelDef, name: &str) -> String {
 
 pub(crate) fn create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Value> {
     let actor = Actor::from_input(input);
+    let mut unit = eng.unit();
+    let id = uuid::Uuid::now_v7().to_string();
+    let held = create_in(eng, &mut unit, def, &actor, input, &id)?;
+    commit(eng, unit)?;
+    crate::blobs::hold_created(&eng.store, def, &id, &held, &actor.caller);
+    row_after_commit(eng, def, &id, &held)
+}
+
+/// What the generated `create` checks and writes, inside `unit` under the id given: the declared
+/// fields, the fills and defaults (D95), the kinds, the required fields and references with their
+/// filters, the limits, the sequences, the guard (D77) and the unique keys. Returns the fields
+/// written. The caller commits the unit and has checked the model's write group.
+pub(crate) fn create_in(
+    eng: &Engine,
+    unit: &mut Unit<'_>,
+    def: &Arc<ModelDef>,
+    actor: &Actor,
+    input: &Value,
+    id: &str,
+) -> R<Fields> {
     let given = declared_fields(def, input)?;
-    crate::blobs::check_write_groups(def, &mut given.keys(), &actor)?;
+    crate::blobs::check_write_groups(def, &mut given.keys(), actor)?;
     if let Some(k) = given.keys().find(|k| def.is_system_field(k)) {
         return Err(system_error(def, k));
     }
     let mut f = to_fields(&given);
     hints::refuse_readonly(def, &f, None)?;
     let look = lookup_fn(eng);
-    let mut unit = eng.unit();
     let today = hints::today(eng);
     let cx = FillCtx {
         eng,
-        reads: &unit,
+        reads: &*unit,
         look: &look,
-        actor: &actor,
+        actor,
         today: &today,
     };
     hints::fill_in(&cx, def, &mut f)?;
     kinds::canonicalise(def, &mut f, Path::Write)?;
     default_governed(def, &mut f);
-    own_default(def, &mut f, &actor);
-    check_fields(&unit, &look, &actor, def, &f, true)?;
+    own_default(def, &mut f, actor);
+    check_fields(&*unit, &look, actor, def, &f, true)?;
     hints::check_ref_filters(&cx, def, &f, None)?;
-    seq::assign(&mut unit, def, &mut f, None, eng.now())?;
-    if let Some(why) = creator_blocked(&Gate::new(&unit, &look, &actor), def, &f) {
+    seq::assign(unit, def, &mut f, None, eng.now())?;
+    if let Some(why) = creator_blocked(&Gate::new(&*unit, &look, actor), def, &f) {
         return Err(why);
     }
-    let id = uuid::Uuid::now_v7().to_string();
     let held = f.clone();
-    unit.insert(def.name, &id, f)?;
-    seq::check_unique(&unit, &look)?;
-    commit(eng, unit)?;
-    crate::blobs::hold_created(&eng.store, def, &id, &held, &actor.caller);
-    row_after_commit(eng, def, &id, &held)
+    unit.insert(def.name, id, f)?;
+    seq::check_unique(&*unit, &look)?;
+    Ok(held)
+}
+
+/// Create records with the checks of the generated `create` (`create_in`) and add the caller's
+/// own steps `extra`, all in one unit committed in one transaction: all of it or none (U6). The
+/// records are made in order, so a later one may refer to an earlier one by its given id. The
+/// actor must hold the write group of every model it creates.
+pub(crate) fn create_all(
+    eng: &Engine,
+    actor: &Actor,
+    records: &[(&str, String, Value)],
+    extra: Vec<obop_storage::Op>,
+) -> R<()> {
+    create_all_checked(eng, actor, records, extra, true)
+}
+
+/// As `create_all`; with `write` false every check runs and the unit is dropped uncommitted, so
+/// nothing is written (a guard that must refuse what the write after it would refuse).
+pub(crate) fn create_all_checked(
+    eng: &Engine,
+    actor: &Actor,
+    records: &[(&str, String, Value)],
+    extra: Vec<obop_storage::Op>,
+    write: bool,
+) -> R<()> {
+    let mut unit = eng.unit();
+    for (model, id, input) in records {
+        let def = eng.def(model).ok_or_else(|| format!("no model {model}"))?;
+        if !eng.effects_may_write(def.name) {
+            return Err(format!("{} is changed by its own commands only", def.name));
+        }
+        if !actor.holds(def.write_group) {
+            return Err(format!(
+                "creating a {} needs the {} group",
+                def.name, def.write_group
+            ));
+        }
+        create_in(eng, &mut unit, &def, actor, input, id)?;
+    }
+    if !write {
+        return Ok(());
+    }
+    for op in extra {
+        unit.push_op(op);
+    }
+    commit(eng, unit)
 }
 
 /// The record as the caller gets it back after a change that has committed: read again, so that

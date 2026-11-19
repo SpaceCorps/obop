@@ -35,12 +35,13 @@
 //! one batch of the store (with the entry's date as the invoice's issue date when it had none), so an invoice gets one move even when two runs race. `get` reads the
 //! link of an invoice. An agent may only dry-run `create_move`.
 //!
-//! That batch is written straight to the store, not through `accounting_move.create`: the move's
-//! own checks are made here instead (the journal exists and is active, every account exists and
-//! is not deprecated, the date is not in a closed period, the move balances). What the generated
-//! commands would add and this does not: the move's `required` and reference checks beyond those,
-//! its guard, and an audit row of `accounting_move.create` (the call that posted the invoice is
-//! the record of it).
+//! The move and its lines go through every check of the generated `accounting_move.create` and
+//! `accounting_move_line.create` (`Dispatcher::create_checked`, U6: fills, kinds, required fields,
+//! references and their filters, limits, the guard); the plan adds the booking's own (the journal
+//! is active, no account is deprecated, the date is not in a closed period, the move balances).
+//! No audit row of `accounting_move.create` is written: the call that posted the invoice, or
+//! `create_move`, is the record of it. Booking on post makes the entry as the person who posted,
+//! with the `accounting.user` group the booking settings lend for that write.
 
 use crate::company_settings;
 use crate::sie::Env;
@@ -613,9 +614,55 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
     plan_in(&*b, &i, "posted")
 }
 
-/// Write the move, its lines and the link in one batch. The link's id is the invoice id, so a
-/// second move for the same invoice is refused by the store.
-fn write(b: &dyn Backend, pl: &Planned) -> Result<String, String> {
+/// Write the move, its lines and the link in one batch. The move and its lines are made through
+/// the checks of `accounting_move.create` and `accounting_move_line.create` (U6); the link and
+/// the issue date are this command's own steps in the same transaction. The link's id is the
+/// invoice id, so a second move for the same invoice is refused by the store. `p` books: it needs
+/// the write group of the entries (booking on post lends it, see `book_after_post`).
+fn write(env: Env<'_>, p: &Principal, pl: &Planned) -> Result<String, String> {
+    let b = &*env.store.backend();
+    let (mid, records) = entries(pl);
+    let mut ops = Vec::new();
+    let mut link = Fields::new();
+    link.insert("invoice_id".into(), J::from(pl.invoice_id.as_str()));
+    link.insert("move_id".into(), J::from(mid.as_str()));
+    ops.push(Op::Insert {
+        model: MODEL.into(),
+        id: pl.invoice_id.clone(),
+        fields: link,
+    });
+    if pl.stamp_issue_date {
+        let mut f = Fields::new();
+        f.insert("issue_date".into(), J::from(pl.date.as_str()));
+        ops.push(Op::Merge {
+            model: "invoice".into(),
+            id: pl.invoice_id.clone(),
+            patch: f,
+        });
+    }
+    env.d
+        .create_checked(env.store, p, &records, ops)
+        .map_err(|e| {
+            if link_of(b, &pl.invoice_id).ok().flatten().is_some() {
+                "this invoice already has a move; one invoice gets one (nothing was written)".into()
+            } else {
+                format!("the move could not be written (nothing was written): {e}")
+            }
+        })?;
+    Ok(mid)
+}
+
+/// The person who posted, with the `accounting.user` group the booking settings lend for the
+/// write of the entry (booking on post).
+fn booker(who: &Principal) -> Principal {
+    let a = Actor::of(who);
+    let mut groups: Vec<&str> = a.groups.iter().map(String::as_str).collect();
+    groups.push(GROUP);
+    Principal::user(&a.caller, &groups)
+}
+
+/// The move and its lines of a plan, as records for `create_checked` (the move id first).
+fn entries(pl: &Planned) -> (String, Vec<(&'static str, String, Value)>) {
     let mid = new_id();
     let mut mv = Fields::new();
     for (k, v) in [
@@ -629,15 +676,12 @@ fn write(b: &dyn Backend, pl: &Planned) -> Result<String, String> {
         "narration".into(),
         J::from(format!("Customer invoice {}", pl.reference)),
     );
-    mv.insert("state".into(), J::from("draft"));
+    // The state is the first of its options, draft, as for every create (D48).
     if !pl.party_id.is_empty() {
         mv.insert("partner_id".into(), J::from(pl.party_id.as_str()));
     }
-    let mut ops = vec![Op::Insert {
-        model: "accounting_move".into(),
-        id: mid.clone(),
-        fields: mv,
-    }];
+    let record = |f: Fields| Value::from_json(&J::Object(f.into_iter().collect()));
+    let mut records = vec![("accounting_move", mid.clone(), record(mv))];
     for l in &pl.lines {
         let mut f = Fields::new();
         f.insert("move_id".into(), J::from(mid.as_str()));
@@ -656,37 +700,9 @@ fn write(b: &dyn Backend, pl: &Planned) -> Result<String, String> {
         if let Some(d) = &l.due_on {
             f.insert("due_on".into(), J::from(d.as_str()));
         }
-        ops.push(Op::Insert {
-            model: "accounting_move_line".into(),
-            id: new_id(),
-            fields: f,
-        });
+        records.push(("accounting_move_line", new_id(), record(f)));
     }
-    let mut link = Fields::new();
-    link.insert("invoice_id".into(), J::from(pl.invoice_id.as_str()));
-    link.insert("move_id".into(), J::from(mid.as_str()));
-    ops.push(Op::Insert {
-        model: MODEL.into(),
-        id: pl.invoice_id.clone(),
-        fields: link,
-    });
-    if pl.stamp_issue_date {
-        let mut f = Fields::new();
-        f.insert("issue_date".into(), J::from(pl.date.as_str()));
-        ops.push(Op::Merge {
-            model: "invoice".into(),
-            id: pl.invoice_id.clone(),
-            patch: f,
-        });
-    }
-    b.apply(&ops).map_err(|e| {
-        if link_of(b, &pl.invoice_id).ok().flatten().is_some() {
-            "this invoice already has a move; one invoice gets one (nothing was written)".into()
-        } else {
-            format!("the move could not be written (nothing was written): {e}")
-        }
-    })?;
-    Ok(mid)
+    (mid, records)
 }
 
 fn new_id() -> String {
@@ -705,7 +721,7 @@ pub fn create_move(
     if dry_run {
         return Ok((pl, None));
     }
-    let mid = write(&*env.store.backend(), &pl)?;
+    let mid = write(env, p, &pl)?;
     Ok((pl, Some(mid)))
 }
 
@@ -920,7 +936,7 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
     // observer: an update that repeats `state = posted` on a posted invoice books nothing.
     let posting: Arc<std::sync::Mutex<std::collections::HashSet<String>>> = Arc::default();
     let (st, dw, marks) = (store.clone(), Arc::downgrade(d), posting.clone());
-    let check = move |input: &Value| -> Result<obop_commands::Verdict, String> {
+    let check = move |who: &Principal, input: &Value| -> Result<obop_commands::Verdict, String> {
         let b = st.backend();
         let Some(d) = dw.upgrade() else {
             return Ok(obop_commands::Verdict::default());
@@ -945,13 +961,17 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 .unwrap_or(false)
             && link_of(&*b, &i.invoice)?.is_none()
         {
-            plan_in(&*b, &i, "draft").map_err(|e| {
-                let lang = obop_commands::locale::language();
-                match closed_period(&*b, &i.date) {
-                    Some(name) => post_refusal(lang, Some((&i.date, &name)), &e),
-                    None => post_refusal(lang, None, &e),
-                }
-            })?;
+            // The plan, then every check of the create the booking will run (references and
+            // their filters, such as an inactive tax, required fields, limits), writing nothing.
+            plan_in(&*b, &i, "draft")
+                .and_then(|pl| d.check_created(&st, &booker(who), &entries(&pl).1))
+                .map_err(|e| {
+                    let lang = obop_commands::locale::language();
+                    match closed_period(&*b, &i.date) {
+                        Some(name) => post_refusal(lang, Some((&i.date, &name)), &e),
+                        None => post_refusal(lang, None, &e),
+                    }
+                })?;
         }
         Ok(obop_commands::Verdict::default())
     };
@@ -961,21 +981,21 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
         "invoicing",
         "invoice.post",
         true,
-        Box::new(move |_, input| c(input)),
+        Box::new(move |p, input| c(p, input)),
     );
     d.add_guard(
         "invoicing",
         "invoice.update",
         true,
-        Box::new(move |_, input| match input {
-            Value::Map(x) if x.get("state") == Some(&Value::text("posted")) => check(input),
+        Box::new(move |p, input| match input {
+            Value::Map(x) if x.get("state") == Some(&Value::text("posted")) => check(p, input),
             _ => Ok(obop_commands::Verdict::default()),
         }),
     );
     let (st, dw) = (store.clone(), Arc::downgrade(d));
     d.observe(
         &m.id,
-        Box::new(move |id, _, input, _| {
+        Box::new(move |id, who, input, _| {
             if id != "invoice.post" && id != "invoice.update" {
                 return;
             }
@@ -994,7 +1014,7 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 return;
             }
             let Some(d) = dw.upgrade() else { return };
-            if let Err(e) = book_after_post(&d, &*st.backend(), input) {
+            if let Err(e) = book_after_post(Env { d: &d, store: &st }, who, input) {
                 eprintln!(
                     "the invoice was posted but its journal entry could not be booked: {e}; book it with invoice_posting.create_move"
                 );
@@ -1056,7 +1076,11 @@ fn today(d: &Dispatcher) -> String {
 }
 
 /// After a post (or an update that posted): book the invoice if it is now posted and has no move.
-fn book_after_post(d: &Dispatcher, b: &dyn Backend, input: &Value) -> Result<(), String> {
+/// The entry is made as the person who posted, with the `accounting.user` group the booking
+/// settings lend for this write (an accounting manager turned booking on post on), so an invoicing
+/// clerk's post is booked; every other check of `accounting_move.create` applies (U6).
+fn book_after_post(env: Env<'_>, who: &Principal, input: &Value) -> Result<(), String> {
+    let (d, b) = (env.d, &*env.store.backend());
     let Some(i) = booking_for(d, b, input)? else {
         return Ok(());
     };
@@ -1066,5 +1090,5 @@ fn book_after_post(d: &Dispatcher, b: &dyn Backend, input: &Value) -> Result<(),
     if !posted || link_of(b, &i.invoice)?.is_some() {
         return Ok(());
     }
-    write(b, &plan_in(b, &i, "posted")?).map(|_| ())
+    write(env, &booker(who), &plan_in(b, &i, "posted")?).map(|_| ())
 }
