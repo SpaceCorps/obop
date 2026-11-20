@@ -118,8 +118,9 @@ Before C: JDK 17, the Android SDK and the emulator installed (list in `docs/spec
       (change signal), `native/task.ts` imported in `index.ts` before the app is registered, what
       it does with a delivery in `core/delivery.ts` and its tests; `RECEIVE_BOOT_COMPLETED` on
       Android; the unused `fetch` mode removed on iOS (`config/ios.ts`)
-- [ ] C4 `feat(rutsa): start, pause, resume and stop`: `native/recorder.ts`, `native/actions.ts`; the
-      Android notification "recording" while a trip runs
+- [x] C4 `feat(rutsa): start, pause, resume and stop`: `native/recorder.ts`, `native/actions.ts`; the
+      order of the steps and the rollbacks in `core/recording.ts` and its tests; the Android
+      notification "recording" while a trip runs; a temporary panel in `App.tsx` to try it
 - [ ] C5 `feat(rutsa): recover a recording after a restart`: recording health in
       `core/liveness.ts` (no position for a while) and tests; when the app opens with a trip that
       is recording, it starts the location updates again (the screen of D4 shows the health)
@@ -245,3 +246,9 @@ D23).
 - 2026-11-20: C3 takes the body of the task of `mileage-app` into the pure `core/delivery.ts`
   (`storeDelivery`), tested against a real store; `native/task.ts` only stops the updates and
   signals the screens.
+- 2026-11-20: C4 puts the order of the steps (check, store, location updates) and the rollbacks in
+  the pure `core/recording.ts`, tested with a stand-in for the location updates; Pause and Resume,
+  which `mileage-app` does not have, stop and start the updates; a Start that the system refuses
+  ends and deletes its trip (`deleteTrip` takes only an ended one). `App.tsx` has a temporary
+  panel (Start, Pause, Resume, Stop, the state and the points) so C3 and C4 can be tried on the
+  emulator before block D, which replaces it.
