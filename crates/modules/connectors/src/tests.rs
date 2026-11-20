@@ -528,7 +528,7 @@ fn people_see_only_their_own_connections() {
             let m = err(&e, &p, cmd, json!({"id": other, "name": "x"}));
             assert_eq!(
                 m,
-                format!("no connection {other}"),
+                obop_commands::errors::no_record("connection", other),
                 "{cmd} must look like a missing record"
             );
         }
@@ -566,7 +566,7 @@ fn people_see_only_their_own_connections() {
         "consent.create",
         json!({"connection": mine, "purpose": "I am not the owner of this", "legal_basis": "consent"}),
     );
-    assert!(m.contains("no connection"));
+    assert!(m.starts_with("record_not_found: no connection"), "{m}");
 }
 
 #[test]

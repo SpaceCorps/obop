@@ -41,7 +41,7 @@ fn virtual_model(d: &Dispatcher, m: &Module, model: &'static str, rows: Rows) {
                 .into_iter()
                 .find(|(i, _)| i == id)
                 .map(|(i, f)| row(&i, &f))
-                .ok_or_else(|| format!("no {model} {id}"))
+                .ok_or_else(|| obop_commands::errors::no_record(model, id))
         }),
     );
     let (r, dd) = (rows.clone(), def.clone());
@@ -143,7 +143,7 @@ fn set(rt: &Runtime, model: &str, id: &str, pairs: &[(&str, J)]) -> Result<(), S
     if rt.backend.update(model, id, &fields_of(pairs))? {
         Ok(())
     } else {
-        Err(format!("no {model} {id}"))
+        Err(obop_commands::errors::no_record(model, id))
     }
 }
 
@@ -326,9 +326,9 @@ fn consent_create(rt: &Runtime, input: &Value) -> Result<Value, String> {
     let id = txt(m, "connection");
     let (c, p) = rt
         .connection(id)
-        .map_err(|_| format!("no connection {id}"))?;
+        .map_err(|_| obop_commands::errors::no_record("connection", id))?;
     if !a.admin && c.owner_user != a.id {
-        return Err(format!("no connection {id}"));
+        return Err(obop_commands::errors::no_record("connection", id));
     }
     if c.state == "revoked" {
         return Err("the connection is revoked; start a new one".into());
