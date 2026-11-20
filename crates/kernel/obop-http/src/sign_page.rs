@@ -505,7 +505,12 @@ mod tests {
             let stripped = with
                 .html
                 .replace(&format!(" {notice}"), "")
-                .replace("<input type=\"hidden\" name=\"hist\" value=\"1\">", "");
+                .replace("<input type=\"hidden\" name=\"hist\" value=\"1\">", "")
+                // The consent id of the texts shown names the history sentence too (O59).
+                .replace(
+                    &crate::sign_text::consent_version_with_history_for(lang),
+                    &crate::sign_text::consent_version_for(lang),
+                );
             let block_start = stripped.find(&format!("<h2>{title}</h2>")).unwrap();
             let block_end = stripped[block_start..].find("<form").unwrap() + block_start;
             let stripped = format!("{}{}", &stripped[..block_start], &stripped[block_end..]);
@@ -879,13 +884,14 @@ fn late() { txt::html(lang, \"late_key\"); }
     }
 
     // Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here; the fourteen form
-    // pages printed again for the hidden field `words` of `sign` 0.3.0 (docs/ISSUES.md O59).
+    // pages printed again for the hidden field `words` of `sign` 0.3.0 and again for `wid` of 0.3.1
+    // (docs/ISSUES.md O59).
     #[rustfmt::skip]
     const SIGNER_PINS: &[(&str, &str)] = &[
-        ("form/en", "3cae0dd796bd9b99f3f84294adb0adf236aa0f914d8edd4d3af827e6cf3634a5"),
+        ("form/en", "e89e15de9b98e8cc2a7b6a6d4fd918975c5b6570e6be21fad55b22db29cec575"),
         ("done/en", "ce47739c881ba48ad44e4455cbd57c76c30ae86ea238cff596bba02ac72bec85"),
         ("closed/en", "6e684a757dfb11494f102e1d90073a9e702d1f101fe722ad7c40a042dc7a3e5f"),
-        ("form_history/en", "6bf9708158d71701f63ef17453e31ac204df4e598af3c6720af770f708d3bfba"),
+        ("form_history/en", "3af963d3979fe1427063846f2b29fffd5d2dbcf07c15168bbf317ce2f5c7793f"),
         ("done_history/en", "1092efbae7248530dbea2b67c3a08adb0ce3d822323ccd766735d92a8ddd3e7d"),
         ("msg_unknown/en", "d7cb391cdb401549948bdd034bbe9ce3c60571608d4b623f8e453fa8cfee60dc"),
         ("msg_gone_expired/en", "04e23020bf82642ed3cf06d708ea501204ed9b7e7bec0d1d83563918a7482fc7"),
@@ -895,10 +901,10 @@ fn late() { txt::html(lang, \"late_key\"); }
         ("msg_unavailable/en", "ea56b5716c103b12be2631c95035778d480547643b1b731e6a0cb538a6ac32b4"),
         ("msg_err_name/en", "b25ae8e71423892640c8363924790e69eec36dfd289e0be565fec23eb106995a"),
         ("msg_forbidden/en", "4acf9e30d488b55ae0679dee0acc36dad17351badc291af1f366790f6dcf7800"),
-        ("form/de", "06852bb3c0a69b6273e035ae55dc53144c5b4f6e7dbaa56331958494020b03a1"),
+        ("form/de", "b30cce4f4a5b5ea03103d514d05474e357404fa28eb38fb533c37c1662c249a7"),
         ("done/de", "0d0e8e6912f6b2382f94e90968e801cf76b83f77ec5f2101be622fbd67c22b7b"),
         ("closed/de", "4e7747ae7b1553942944d25b041f8574ac877164fbc8626961e1b19a1f44aece"),
-        ("form_history/de", "20eebec4a492cf83b3d62dd935bfdae922d1a18af702806c3a72eb907ea354a1"),
+        ("form_history/de", "05b2102c4f21357d5797a4cc1532dbb11644d5ee61e114961e5c60f247e6829f"),
         ("done_history/de", "81a9e006d182b432480d07c307a2201627d6f07a66b4ec91446db6c60b4bc11a"),
         ("msg_unknown/de", "4e6cec7497089d57caa24f49452144a8ae0d07704595c0ac7ef60f509e44087f"),
         ("msg_gone_expired/de", "9673c46a6725a080134491e304c2aacbabd8751a4cec10a2168d896eae178b66"),
@@ -908,10 +914,10 @@ fn late() { txt::html(lang, \"late_key\"); }
         ("msg_unavailable/de", "bf93933df3694c8ffb7d78b6c30781c16d857dd6920549febe84ff31e31bebaf"),
         ("msg_err_name/de", "82fd7834c8424122278a62fa75a474f228bb3b98aaf6abbfbc364f021f62e50b"),
         ("msg_forbidden/de", "8dfb498d51829dec1ed614c1a4591cda2982343e0a16a1e0741f32a6240e3cac"),
-        ("form/fr", "6ba0967dc44295128f0767e9467df72ec032257267482464f331dec69e913a59"),
+        ("form/fr", "1c6bb3bd820e48034420391d42429a51e694f5b6f7a8039fc78d9bb992a57fae"),
         ("done/fr", "6a2b5976597425eb122f01b9bd5b50873ac91899d7f7d6c34a96e61381832744"),
         ("closed/fr", "3dc5230584f02df78441571d92f1a24fdffdef7404cbdc843a21c0a62525f856"),
-        ("form_history/fr", "ded5220e7dfc3ab87c822de8059fda4df996615c714360df05a82f2a59a9f81d"),
+        ("form_history/fr", "4c9e7d19e3d83e9242a313a0cc610a464b8ad327332bd4dda9783bd0e1f8c18d"),
         ("done_history/fr", "98c0eceb392bc7a53ec8121e6d31f8c94f30995daf794d57c08ba2a6251e6761"),
         ("msg_unknown/fr", "344a9e58918d714e3b178f676ed8a2122e6c7f81227dfa051b765b8fecb21d6c"),
         ("msg_gone_expired/fr", "14aca3df43cabb32a1020dba5e5a347c37efe0196b48bc1ded8942ce4f286514"),
@@ -921,10 +927,10 @@ fn late() { txt::html(lang, \"late_key\"); }
         ("msg_unavailable/fr", "14e1b4576516b5479cdd369ad27b238118c53fb05e17acea51ba54647c085ca3"),
         ("msg_err_name/fr", "44b24198b9f85214f1a90d6c8b834e7d096cdc350b089341028b4f3d7360fae2"),
         ("msg_forbidden/fr", "ae95927ee81afc5de863d3c08ca78f694eb4efd6de59b4d92b1771242d39d72a"),
-        ("form/pl", "9ff60123dbab83368d06215bc0e04fbd37581a0e7b0f72c9758c001b794668f1"),
+        ("form/pl", "bf552ae28666dbfdfe283d0056740e39022f588d0a5fefc2abcfa677ea32a4f2"),
         ("done/pl", "1094928de630d5257f8d3aaa3ad188aa074c9d30aff11e12f3561da1a446d0f1"),
         ("closed/pl", "71c85b1a39f147daad6cef28d5501e246cfcd3041c1456a10a1c0ce425e11c65"),
-        ("form_history/pl", "34715890283333f4307e0d7f21476af2aa307d22a5c358ba4e9ad12e79a55e78"),
+        ("form_history/pl", "367ced1a0579dbed9d3e6ee6ed9750b2c6f21201545c34af7de1dba3fba15b41"),
         ("done_history/pl", "c23e2da1c9da3ecf4bf9ef9480dbe04d934cba58561549b5867f8a6636cd74c1"),
         ("msg_unknown/pl", "83358ddaf731426628f2efa390824d8ff333e163d3359731eb140cd4718b2b6f"),
         ("msg_gone_expired/pl", "ec5a042e5fc9034037990974539dc1608ac0f85a157acf808810808196aa1554"),
@@ -934,10 +940,10 @@ fn late() { txt::html(lang, \"late_key\"); }
         ("msg_unavailable/pl", "679c00b82c2a7442554cfe5ba9834fa1871900570c836870c06f1f76d7a8157f"),
         ("msg_err_name/pl", "a89772c18ea8e0db5ec1bfa970524b7551e5a3c5de437496afd126b64d05ce1a"),
         ("msg_forbidden/pl", "7bad13652deee7638ac920d946834f4e74c51f8d89af2a977601906fd7be5aee"),
-        ("form/fi", "cccdd1368695c1ba5abf46efa411a70b535d2b2c7c45572d24af5cafdd1e47aa"),
+        ("form/fi", "d3464370f559ee1fb0bb071948b30652993ee8a6ad25bf5bceebe96c75afd7ef"),
         ("done/fi", "f30440399c1f304bae115136b046278cef2e35a5f112f9cd49f8d90391bb6c60"),
         ("closed/fi", "6db6dad0266304b454522927ed04fbb94b0c9367146ebfb65b4ee2ae69ec80e3"),
-        ("form_history/fi", "cc365760c7bb71279c7111371c74b2e1d85b0e760e78dbc5bc50fb83e6c93775"),
+        ("form_history/fi", "a0042e2bd508e05bb24e7a7571b38dcd1365a000630dea097430ed26f9e6e4ec"),
         ("done_history/fi", "15d798f42a7eeb0cc110a20483cc0c3c4913928d10a8dc56fcca6f7e779d2838"),
         ("msg_unknown/fi", "329c82ce5cb53b205c9b5ff6f750b2decb559c62b91d1020f69afb8c9026dd3e"),
         ("msg_gone_expired/fi", "f44932b4116dbf608c47492e0b52346c36eaca9de2604be97e39f91b8d6e5dd4"),
@@ -947,10 +953,10 @@ fn late() { txt::html(lang, \"late_key\"); }
         ("msg_unavailable/fi", "5947e830f0d0710810a943ae54fe40b725c6067fa45e306eb599341f0d1685e6"),
         ("msg_err_name/fi", "e291f3f4be3ec6d231a93a862fd205e381103454e886b7adc249f76f011312f3"),
         ("msg_forbidden/fi", "b9206e44ad7ef6974c8cc895052904fac270e05fa9c3041adf314323f79bb837"),
-        ("form/sv", "3ef7c97d33839780f5830249893c02c0d456324fbe34c2824dab4d3cfb1e0b0e"),
+        ("form/sv", "8ffcb29ef211d6c77202fea3d4d992f6ceb0cb5d0e91f58134b1f505b0429c51"),
         ("done/sv", "eafb8f385ce59443e9f5117097d29f5a87d4b9f6f6c5a05a8ce61ba71ad98907"),
         ("closed/sv", "66d6bea8f5acb0562716fa587332c61c3e7c3b32b5a176f2294fc0183d344bfb"),
-        ("form_history/sv", "3414daf06151ea5c442fcbb18dbab32336c1fc895cddf7c04d32c3cd56a8128c"),
+        ("form_history/sv", "4cc88969404d0811879d2987aa5f6f1931099ab2ba858b00d55a5150c7af9a7c"),
         ("done_history/sv", "4189d23ac7654333a11db951d7a8f1f3ccfcef22bb93d675574f96bc34594087"),
         ("msg_unknown/sv", "91fc264c52034cc9ea17d14332a507fa891795f56f128878a99a0659ac73a447"),
         ("msg_gone_expired/sv", "beb2c64e230c8e69f15a3a298a7351ccfbc987232247b61a1416cb045cadd87d"),
@@ -960,10 +966,10 @@ fn late() { txt::html(lang, \"late_key\"); }
         ("msg_unavailable/sv", "47a596b9a16b8dedddc8df22847361f6c54c27f2ee521f016b6fd1696819e0e2"),
         ("msg_err_name/sv", "3795016c2ac9ea049d3cf1aefcd3877bb9a3fb877d409fdc72ca884c5186f9df"),
         ("msg_forbidden/sv", "a1371a049e878f0ba55f311cfa01475ca759680a88546c11fc52d13313ae3eba"),
-        ("form/es", "d82893059b269e1c884e8d94cd9f501ea139bacd522be58adb4eca14b129685f"),
+        ("form/es", "cc2af9bad1162c185eaf8b0d218aa3f1f1444af308d7741a326fe48fa8dc2085"),
         ("done/es", "b73b576eb0cd45a69f838e0346fc0289f5e9caf6fc10be296eb6cf324e9f1660"),
         ("closed/es", "2edd31cb803477e617e990f47f7dad927491b263adaf91fab8aff12c5b0d3ea2"),
-        ("form_history/es", "0c5c178dd8ef682c4777196ac88eda64b93a60a0ff6a313999ec1d6211fa5d16"),
+        ("form_history/es", "9a1e6615be4130bf97000dc292ec2d86cbbe9ccad76e7965626a62965fb63cb9"),
         ("done_history/es", "9cb530b5d12794cea94d5170c3200036aaf27f18a15006b3bbd65faaa5a28d0e"),
         ("msg_unknown/es", "8f19d80bc2733308847012bb5eec8fe95a7f9d7b8a91b29233b2637668d15a14"),
         ("msg_gone_expired/es", "44c3533f68f40058bdf876abf8c69e262109f32aa361aa18021c356201d7ffd1"),
