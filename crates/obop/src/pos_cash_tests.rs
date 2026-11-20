@@ -311,7 +311,11 @@ fn a_refund_after_closing_does_not_change_the_closed_session() {
     // refund names it (pos 0.7.1 wrote it afterwards, in a separate write).
     let refunded = ok(&f.a, "pos_order.refund", json!({"id": kept}));
     assert_eq!(refunded["state"], json!("refunded"), "{refunded}");
-    assert_eq!(refunded["refund_session_id"], json!(id(&next)), "{refunded}");
+    assert_eq!(
+        refunded["refund_session_id"],
+        json!(id(&next)),
+        "{refunded}"
+    );
     let after = ok(&f.a, "pos_session.get", json!({"id": s}));
     assert_eq!(
         (

@@ -14,6 +14,7 @@ import {
   prettyReq,
   sourceLabel,
 } from "./status.ts";
+import { StoredLimits } from "./StoredLimits.tsx";
 import { ChangeList, Notes } from "./UpgradeDetails.tsx";
 import type { Contents, PanelTab, Row } from "./types.ts";
 
@@ -61,6 +62,7 @@ export function DetailPanel({
   index,
   hrefFor,
   actions,
+  token,
 }: {
   row: Row;
   kind: "installed" | "market";
@@ -75,6 +77,8 @@ export function DetailPanel({
   index: Map<string, Row>;
   hrefFor: (id: string) => string | null;
   actions: CardActions;
+  /** The session: the Contents tab of an installed module checks its stored values (K46). */
+  token?: string;
 }) {
   const ref = useRef<HTMLElement>(null);
   // Up to 60rem the panel floats over the page (modules.css), so the page behind it holds still
@@ -159,7 +163,7 @@ export function DetailPanel({
             hrefFor={hrefFor}
           />
         )}
-        {panel === "contents" && <ContentsTab row={row} kind={kind} />}
+        {panel === "contents" && <ContentsTab row={row} kind={kind} token={token} />}
         {panel === "versions" && <Versions row={row} kind={kind} actions={actions} />}
       </div>
     </aside>
@@ -427,7 +431,15 @@ function Dependencies({
   );
 }
 
-function ContentsTab({ row, kind }: { row: Row; kind: "installed" | "market" }) {
+function ContentsTab({
+  row,
+  kind,
+  token,
+}: {
+  row: Row;
+  kind: "installed" | "market";
+  token?: string;
+}) {
   const c: Contents | undefined = row.contents;
   if (!c)
     return (
@@ -522,6 +534,7 @@ function ContentsTab({ row, kind }: { row: Row; kind: "installed" | "market" }) 
           ))}
         </span>
       </section>
+      {kind === "installed" && token && <StoredLimits token={token} module={row.id} />}
     </div>
   );
 }

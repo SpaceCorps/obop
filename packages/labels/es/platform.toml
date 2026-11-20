@@ -394,6 +394,10 @@ description = "Resultado de upgrade_all: los módulos que se actualizaron (una l
 label = "Omitidos"
 description = "Resultado de upgrade_all: los módulos cuya actualización estaba bloqueada, con el motivo (una lista)"
 
+[labels.es.model.module.field.stored_limits]
+label = "Valores fuera de los límites"
+description = "Resultado de stored_limits: por cada campo con un límite, los registros, cuántos tienen un valor fuera de los límites y el texto más largo (una lista)"
+
 [labels.es.model.module.action.upgrade]
 label = "Actualizar"
 description = "Actualizar un módulo instalado a la versión más reciente que ofrece el mercado, con las dependencias que necesita el plan, en una sola operación atómica. Indicar id"
@@ -401,6 +405,10 @@ description = "Actualizar un módulo instalado a la versión más reciente que o
 [labels.es.model.module.action.upgrade_all]
 label = "Actualizar todos"
 description = "Actualizar cada módulo que tenga una versión más reciente que esta instancia pueda admitir; un módulo cuya actualización está bloqueada se queda como está y se informa"
+
+[labels.es.model.module.action.stored_limits]
+label = "Comprobar valores guardados"
+description = "Solo lectura: por cada campo con una longitud, un límite o un formato, cuántos registros hay, cuántos tienen un valor fuera de los límites aplicados ahora (fijados o endurecidos después de escribirse) y el texto guardado más largo. Indique id para ver un módulo; lee cada registro de cada modelo que examina"
 
 [labels.es.model.module.action.rollback]
 label = "Revertir"
