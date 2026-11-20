@@ -788,17 +788,20 @@ export function restorePlace(): void {
 /**
  * The waits, in milliseconds, before the sign-in page asks again whether Microsoft is offered
  * after the answer 429 (the read is limited per address and minute, N19: an office behind one
- * address could hit it, and a Microsoft-only person would see no button). Tests set them to 0.
+ * address could hit it, and a Microsoft-only person would see no button). After the `delays` it
+ * goes on asking every `slow` milliseconds, at most `slowTries` more times (UB4: it used to stop
+ * after about 65 seconds, and the button stayed hidden until a reload). Tests set them to 0.
  */
-export const ssoRetry = { delays: [15_000, 20_000, 30_000] };
+export const ssoRetry = { delays: [15_000, 20_000, 30_000], slow: 60_000, slowTries: 30 };
 
 /** Whether the sign-in page offers Sign in with Microsoft. Nothing is offered on any doubt. */
 export async function ssoEnabled(): Promise<boolean> {
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetch("/api/auth/sso");
-      if (res.status === 429 && attempt < ssoRetry.delays.length) {
-        await new Promise((done) => setTimeout(done, ssoRetry.delays[attempt]));
+      if (res.status === 429 && attempt < ssoRetry.delays.length + ssoRetry.slowTries) {
+        const wait = ssoRetry.delays[attempt] ?? ssoRetry.slow;
+        await new Promise((done) => setTimeout(done, wait));
         continue;
       }
       if (!res.ok) return false;

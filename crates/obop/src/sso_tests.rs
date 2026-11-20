@@ -33,6 +33,7 @@ const CALLBACK: &str = "http://obop.test/api/auth/oidc/callback";
 const CALLBACK_HTTPS: &str = "https://obop.test/api/auth/oidc/callback";
 
 mod phone;
+mod sites;
 
 // ---- the stand-in provider ---------------------------------------------------------------------
 
@@ -3283,6 +3284,39 @@ async fn the_offered_question_is_limited_per_address() {
     }
     assert_eq!(ask("198.51.100.7".into()).await, 429);
     assert_eq!(ask("198.51.100.8".into()).await, 200);
+}
+
+/// UB4: the minute of `/api/auth/sso` slides; the route counts in the windows of
+/// `obop_storage::limit::hit_sliding`, so the hits of the window before are counted too. Sixty hits
+/// already in this window (and the next, should the minute turn while the test runs) leave no room
+/// for one more; a fixed window under another key would answer 200.
+#[tokio::test]
+async fn the_offered_question_counts_in_the_sliding_minute() {
+    let w = world(true).await;
+    let ip = "198.51.100.9";
+    let key = format!("rl:sso:status:{ip}");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let index = now / 60_000;
+    let b = w.app.store.backend();
+    for i in [index, index + 1] {
+        for _ in 0..60 {
+            b.counter_add(&format!("{key}:{i}"), 120_000, false)
+                .unwrap();
+        }
+    }
+    let s = w
+        .send_h(
+            "GET",
+            "/api/auth/sso",
+            &Jar::default(),
+            None,
+            &[("x-forwarded-for", ip)],
+        )
+        .await;
+    assert_eq!(s.status, 429, "{}", s.body);
 }
 
 /// N19 through the real router: a storage fault at any call of the back office's start or

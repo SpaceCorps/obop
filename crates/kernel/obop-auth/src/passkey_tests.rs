@@ -1356,3 +1356,92 @@ fn a_refused_read_never_turns_a_good_passkey_answer_into_a_counted_failure() {
         "the sweep met a refusal in {refused_runs} runs only"
     );
 }
+
+/// E7c: username-first, for a key that does not keep the name. The options of a name that may sign
+/// in with a passkey list its keys; every other name (unknown, not allowed, disabled) gets stand-in
+/// ids that are the same on every ask and look like real ones, so the answer does not say whether
+/// the name exists. A key that sends no user handle is accepted for the typed name only.
+#[test]
+fn username_first_lists_the_keys_of_the_name_or_the_same_stand_ins_for_any_other_name() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    user_with(&r.a, "bob", &["base.user"]);
+    let (token, p) = session(&r.a, "ada");
+    let mut auth = SoftAuthenticator::es256();
+    add(&r, &token, &p, &mut auth, "Key").unwrap();
+    let opts = r.a.proof_options(&p, &ctx()).unwrap();
+    r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
+    let ids = |name: &str| -> Vec<String> {
+        let o = r.a.passkey_login_options_for(&ctx(), name).unwrap();
+        assert_eq!(o["publicKey"]["userVerification"], "required");
+        o["publicKey"]["allowCredentials"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| {
+                assert!(c.get("transports").is_none(), "no transports: {c}");
+                assert_eq!(c["type"], "public-key");
+                c["id"].as_str().unwrap().to_string()
+            })
+            .collect()
+    };
+    let real = r.a.passkeys_of("ada")[0].1["cred_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // Not allowed to sign in with a passkey alone yet: a stand-in, not the key.
+    let before = ids("ada");
+    assert!(!before.contains(&real));
+    r.a.set_passwordless(&p, true, &pw()).unwrap();
+    assert_eq!(
+        ids("ADA "),
+        vec![real.clone()],
+        "the name as typed is trimmed and folded"
+    );
+    // Unknown names and names without a passkey: stand-ins, the same every time, of real length.
+    for name in ["nobody", "bob", "zoë"] {
+        let a = ids(name);
+        assert!(!a.is_empty() && a.len() <= 2, "{name}: {a:?}");
+        assert_eq!(a, ids(name), "{name}: the same on every ask");
+        assert!(!a.contains(&real));
+        for id in &a {
+            assert_eq!(
+                crate::webauthn::b64url_decode(id).unwrap().len(),
+                32,
+                "{id}"
+            );
+        }
+    }
+    assert_ne!(ids("nobody"), ids("nobody2"));
+    // A key without a user handle signs in for the typed name...
+    auth.send_user_handle = false;
+    let o = r.a.passkey_login_options_for(&ctx(), "ada").unwrap();
+    let out =
+        r.a.passkey_login(&ctx(), None, &auth.get(&o, ORIGIN))
+            .unwrap();
+    assert!(is_session(&out), "{out:?}");
+    // ...and not for another one, and a name anybody may type gets no line in its log from it.
+    let before = events_of(&r, "passkey_failed").len();
+    for name in ["bob", "ghost"] {
+        let o = r.a.passkey_login_options_for(&ctx(), name).unwrap();
+        assert!(
+            denied(r.a.passkey_login(&ctx(), None, &auth.get(&o, ORIGIN)))
+                .contains("different account")
+        );
+    }
+    assert_eq!(
+        events_of(&r, "passkey_failed").len(),
+        before,
+        "no passkey_failed line under a typed name"
+    );
+    // A disabled account gets stand-ins too.
+    let mut f = Fields::new();
+    f.insert("disabled".into(), J::Bool(true));
+    r.b.update("auth_user", "ada", &f).unwrap();
+    assert!(!ids("ada").contains(&real));
+    // A name is needed.
+    assert!(matches!(
+        r.a.passkey_login_options_for(&ctx(), "  "),
+        Err(MfaError::Invalid(_))
+    ));
+}

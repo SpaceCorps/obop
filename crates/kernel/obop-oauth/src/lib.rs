@@ -11,6 +11,7 @@
 //! the browser binding of a sign-in are stored only as SHA-256 hashes, so nothing here needs the
 //! key ring and no secret is ever written in the clear.
 
+pub mod cimd;
 pub mod client;
 mod devices;
 pub mod flow;
@@ -65,23 +66,55 @@ pub struct OAuthConfig {
     /// register that follows the rules of RFC 8252; a list refuses the registration of a mobile
     /// client whose redirect has another scheme. `OBOP_OAUTH_MOBILE_SCHEMES` in [`OAuthConfig::from_env`].
     pub mobile_schemes: Option<Vec<String>>,
+    /// The redirect hosts an MCP client may register and use (E1c), lower case and without a
+    /// port: `None` lets any client register that follows the rules of the redirects; a list
+    /// refuses the registration of an MCP client with a redirect to another host, and the sign-in
+    /// of one registered before the list was set. `OBOP_OAUTH_MCP_REDIRECT_HOSTS` in
+    /// [`OAuthConfig::from_env`].
+    pub mcp_redirect_hosts: Option<Vec<String>>,
+    /// The hosts whose Client ID Metadata Documents this instance reads (E7i), lower case, an
+    /// entry `*.example.com` for the subdomains of one: `None` (the default) reads none, and an
+    /// address is then no client. `OBOP_OAUTH_CIMD_HOSTS` in [`OAuthConfig::from_env`].
+    pub cimd_hosts: Option<Vec<String>>,
+    /// Lets a document be read over plain `http` from `127.0.0.1` (tests only; set with
+    /// `OBOP_CONNECTORS_ALLOW_LOOPBACK`, which the outbound client needs for it too).
+    pub cimd_allow_loopback: bool,
 }
 
 impl OAuthConfig {
     /// The defaults, with `OBOP_OAUTH_MOBILE_SCHEMES` (a comma-separated list of the redirect
     /// schemes mobile apps may register with, such as `org.obop.mileage`; `http` admits a loopback
-    /// redirect) when it names at least one.
+    /// redirect) and `OBOP_OAUTH_MCP_REDIRECT_HOSTS` (a comma-separated list of the redirect hosts
+    /// MCP clients may use, such as `claude.ai,localhost`) when each names at least one.
     pub fn from_env() -> Self {
         Self {
             mobile_schemes: std::env::var("OBOP_OAUTH_MOBILE_SCHEMES")
                 .ok()
                 .and_then(|v| parse_schemes(&v)),
+            mcp_redirect_hosts: std::env::var("OBOP_OAUTH_MCP_REDIRECT_HOSTS")
+                .ok()
+                .and_then(|v| parse_schemes(&v)),
+            cimd_hosts: std::env::var("OBOP_OAUTH_CIMD_HOSTS")
+                .ok()
+                .and_then(|v| parse_schemes(&v)),
+            cimd_allow_loopback: matches!(
+                std::env::var("OBOP_CONNECTORS_ALLOW_LOOPBACK").as_deref(),
+                Ok("1" | "true")
+            ),
             ..Self::default()
+        }
+    }
+
+    /// Whether an MCP client may use the redirect `uri` under the operator's list of hosts (E1c).
+    pub fn mcp_redirect_allowed(&self, uri: &str) -> bool {
+        match &self.mcp_redirect_hosts {
+            None => true,
+            Some(hosts) => redirect::host_of(uri).is_some_and(|h| hosts.contains(&h)),
         }
     }
 }
 
-/// The schemes of a comma-separated list, lower case; `None` when it names none.
+/// The entries of a comma-separated list (schemes or hosts), lower case; `None` when it names none.
 pub fn parse_schemes(v: &str) -> Option<Vec<String>> {
     let list: Vec<String> = v
         .split(',')
@@ -108,6 +141,9 @@ impl Default for OAuthConfig {
             idle_client_secs: 180 * 24 * 3600,
             max_devices_per_user: 20,
             mobile_schemes: None,
+            mcp_redirect_hosts: None,
+            cimd_hosts: None,
+            cimd_allow_loopback: false,
         }
     }
 }
@@ -166,6 +202,8 @@ pub struct OAuth {
     pub(crate) auth: Arc<dyn Authenticator>,
     pub(crate) cfg: OAuthConfig,
     skew: AtomicU64,
+    /// How a Client ID Metadata Document is read (E7i), when the HTTP layer set it.
+    pub(crate) cimd: std::sync::OnceLock<Arc<cimd::CimdFetch>>,
 }
 
 impl OAuth {
@@ -182,6 +220,7 @@ impl OAuth {
             auth,
             cfg,
             skew: AtomicU64::new(0),
+            cimd: std::sync::OnceLock::new(),
         }))
     }
 

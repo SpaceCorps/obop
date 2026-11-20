@@ -262,20 +262,36 @@ impl OAuth {
         base: &str,
         p: &AuthorizeParams,
     ) -> Result<Validated, AuthzError> {
+        self.validate_authorize_from(base, p, None)
+    }
+
+    /// As `validate_authorize`, for a request from the client address `ip`: a metadata document
+    /// the request makes the server read is counted against that address too (E7i).
+    pub fn validate_authorize_from(
+        &self,
+        base: &str,
+        p: &AuthorizeParams,
+        ip: Option<&str>,
+    ) -> Result<Validated, AuthzError> {
         let page = |key| AuthzError::Page { key };
         let client = p
             .client_id
             .as_deref()
-            .and_then(|id| self.client(id))
+            .and_then(|id| self.client_from(id, ip))
             .ok_or(page("err.client"))?;
         let matches = |u: &str| match client.class {
-            Class::Mcp => redirect::matches(&client.redirect_uris, u),
+            // A client registered before the operator listed the hosts is held to the list too.
+            Class::Mcp => {
+                redirect::matches(&client.redirect_uris, u) && self.cfg.mcp_redirect_allowed(u)
+            }
             Class::Mobile => redirect::matches_mobile(&client.redirect_uris, u),
         };
         let redirect_uri = match p.redirect_uri.as_deref() {
             Some(u) if matches(u) => u.to_string(),
             Some(_) => return Err(page("err.redirect")),
-            None if client.redirect_uris.len() == 1 => client.redirect_uris[0].clone(),
+            None if client.redirect_uris.len() == 1 && matches(&client.redirect_uris[0]) => {
+                client.redirect_uris[0].clone()
+            }
             None => return Err(page("err.redirect")),
         };
         let state = p
@@ -645,13 +661,32 @@ impl OAuth {
         csrf: &str,
         mfa_token: Option<&str>,
     ) -> Result<J, FlowError> {
+        self.passkey_options_for(ctx, id, binder, csrf, mfa_token, None)
+    }
+
+    /// As `passkey_options`; with a `username` typed on the page and no `mfa_token`, the options
+    /// of that name (username-first, E7c: its keys, or the same stand-in ids for any name that
+    /// has none, so the answer does not say whether the name exists).
+    pub fn passkey_options_for(
+        &self,
+        ctx: &obop_commands::WebauthnCtx,
+        id: &str,
+        binder: &str,
+        csrf: &str,
+        mfa_token: Option<&str>,
+        username: Option<&str>,
+    ) -> Result<J, FlowError> {
         let _ = self.load(id, binder, Some(csrf))?;
         let api = self.auth.passkeys().ok_or(FlowError::Forbidden)?;
-        api.passkey_login_options(ctx, mfa_token)
-            .map_err(|e| match e {
-                obop_commands::MfaError::Locked(_) => FlowError::Busy(60),
-                _ => FlowError::Forbidden,
-            })
+        let name = username.map(str::trim).filter(|n| !n.is_empty());
+        match (mfa_token, name) {
+            (None, Some(name)) => api.passkey_login_options_for(ctx, name),
+            _ => api.passkey_login_options(ctx, mfa_token),
+        }
+        .map_err(|e| match e {
+            obop_commands::MfaError::Locked(_) => FlowError::Busy(60),
+            _ => FlowError::Forbidden,
+        })
     }
 
     /// The browser's answer to a passkey request: signs in without a password, or completes the
@@ -673,8 +708,16 @@ impl OAuth {
         )
         .map_err(|e| FlowError::Busy(e.retry_after.unwrap_or(60)))?;
         let api = self.auth.passkeys().ok_or(FlowError::Forbidden)?;
-        match api.passkey_login(ctx, mfa_token, credential) {
-            Ok(out) => self.after_login(id, &mut rec, out),
+        match api.passkey_login_seen(ctx, mfa_token, credential) {
+            Ok((out, seen)) => {
+                // A sign-in by passkey alone: the epoch its check compared is the baseline (L19),
+                // never one read after it.
+                if let Some((user, epoch)) = seen {
+                    rec["pre_user"] = J::from(user);
+                    rec["pre_epoch"] = epoch.map_or(J::Null, J::from);
+                }
+                self.after_login(id, &mut rec, out)
+            }
             Err(obop_commands::MfaError::Locked(_)) => {
                 self.count_attempt(id, &mut rec)?;
                 let _ = self.flow_put(id, &rec);
@@ -754,16 +797,12 @@ impl OAuth {
     fn seat(&self, rec: &mut J, who: &str) -> Result<(), FlowError> {
         if Class::of_record(rec).is_mobile() {
             // The epoch read before the credential was looked at, when it is for the same person:
-            // a sign-in by password, with or without a second factor, or by Microsoft (the epoch
-            // its sign-in compared). A sign-in by passkey alone has no earlier read, because the
-            // person is known only once the assertion has been checked, so the epoch is read
-            // here, after it. A credential change (a passkey removed, a reset, a new password)
-            // that commits between the check of the assertion and this read, the few
-            // milliseconds of resolving and revoking one session, is therefore not seen by the
-            // later compares, which hold this baseline: that sign-in can finish for a credential
-            // that had just been removed, and ends with the next change of credentials or by
-            // revoking the device (docs/ISSUES.md L19). The exchange of the code closes every
-            // other window, atomically.
+            // a sign-in by password, with or without a second factor, by Microsoft (the epoch its
+            // sign-in compared) or by passkey alone (the epoch the check of the assertion
+            // compared, L19). A credential change that commits after that read is seen by the
+            // later compares, which hold this baseline. Only a flow with no such read for this
+            // person reads the epoch here; the exchange of the code closes every other window,
+            // atomically.
             let epoch = if rec["pre_user"].as_str() == Some(who) {
                 rec["pre_epoch"].as_str().map(String::from)
             } else {

@@ -2488,6 +2488,17 @@ pub trait PasskeyApi: Send + Sync {
         ctx: &WebauthnCtx,
         mfa_token: Option<&str>,
     ) -> Result<serde_json::Value, MfaError>;
+    /// Request options for signing in with a passkey alone after the person typed a name
+    /// (username-first, E7c): the passkeys of that name that may sign in, or stand-in ids that are
+    /// the same on every ask when there are none, so the answer does not say whether the name
+    /// exists. For keys that do not keep the name themselves (some hardware keys).
+    fn passkey_login_options_for(
+        &self,
+        _ctx: &WebauthnCtx,
+        _username: &str,
+    ) -> Result<serde_json::Value, MfaError> {
+        Err(MfaError::Invalid("not offered here".into()))
+    }
     /// Verify the assertion: the second step with `mfa_token`, else passwordless sign-in.
     fn passkey_login(
         &self,
@@ -2495,6 +2506,20 @@ pub trait PasskeyApi: Send + Sync {
         mfa_token: Option<&str>,
         credential: &serde_json::Value,
     ) -> Result<LoginOutcome, MfaError>;
+    /// [`PasskeyApi::passkey_login`], with, for a sign-in by passkey alone, who it was for and the
+    /// credential epoch the check of the assertion compared: the baseline an OAuth flow keeps, so
+    /// that a change of credentials that commits after the check is seen by the later compares
+    /// (docs/ISSUES.md L19). `None` for the second step, whose epoch the first step read.
+    #[allow(clippy::type_complexity)]
+    fn passkey_login_seen(
+        &self,
+        ctx: &WebauthnCtx,
+        mfa_token: Option<&str>,
+        credential: &serde_json::Value,
+    ) -> Result<(LoginOutcome, Option<(String, Option<String>)>), MfaError> {
+        self.passkey_login(ctx, mfa_token, credential)
+            .map(|out| (out, None))
+    }
     /// The second-step methods a pending sign-in offers: `totp` and `passkey`.
     fn methods(&self, mfa_token: &str) -> Vec<&'static str>;
 }

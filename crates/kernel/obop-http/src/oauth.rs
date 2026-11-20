@@ -289,6 +289,48 @@ fn flow_failure(e: FlowError, lang: &str, brand: &Shown) -> Response {
     }
 }
 
+// ---- client metadata documents (E7i) ------------------------------------------------------------
+
+/// How a Client ID Metadata Document is read: through a client of its own of the hardened outbound
+/// kind (public addresses only, no redirects, `https` except a loopback number when `loopback`),
+/// at most five seconds and a body of at most `obop_oauth::cimd::MAX_DOCUMENT` bytes, from the host
+/// of the address only, and only a `200` answer of JSON.
+pub(crate) fn cimd_fetcher(loopback: bool) -> Arc<obop_oauth::cimd::CimdFetch> {
+    use obop_connectors::net::{Client, ClientConfig, Request};
+    let wait = std::time::Duration::from_secs(5);
+    let client = Client::new(ClientConfig {
+        allow_loopback: loopback,
+        timeout: wait,
+        max_response: obop_oauth::cimd::MAX_DOCUMENT,
+        ..ClientConfig::default()
+    });
+    Arc::new(move |url: &str| {
+        let host = obop_oauth::redirect::host_of(url).ok_or("no host")?;
+        let r = client
+            .send_within(
+                Request {
+                    method: "GET",
+                    url,
+                    headers: vec![("Accept".into(), "application/json".into())],
+                    body: None,
+                    allowed_hosts: &[host],
+                },
+                wait,
+            )
+            .map_err(|e| format!("{e:?}"))?;
+        if r.status != 200 {
+            return Err(format!("the document answered {}", r.status));
+        }
+        if !r
+            .header("content-type")
+            .is_some_and(|t| t.to_ascii_lowercase().contains("json"))
+        {
+            return Err("the document is not served as JSON".into());
+        }
+        Ok(r.body)
+    })
+}
+
 // ---- metadata ------------------------------------------------------------------------------
 
 pub(crate) async fn authorization_server(State(s): Shared, h: HeaderMap) -> Response {
@@ -300,7 +342,10 @@ pub(crate) async fn authorization_server(State(s): Shared, h: HeaderMap) -> Resp
     let base = s.mcp.base_url(&h);
     super::mcp::public_json(
         "application/json",
-        &obop_oauth::authorization_server_metadata(&base, &brand),
+        &obop_oauth::cimd::with_cimd(
+            obop_oauth::authorization_server_metadata(&base, &brand),
+            s.oauth.as_ref().is_some_and(|o| o.cimd_enabled()),
+        ),
     )
 }
 
@@ -451,8 +496,9 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
     // A client that asks for JSON (a mobile app that checks the instance still knows it before it
     // opens the browser, L40) gets a machine-readable answer and no sign-in: no flow is stored and
     // no sign-in page of the address is counted. A browser asks for HTML and gets the page.
+    let ip = client_ip(s, parts);
     if wants_json(&parts.headers) {
-        return authorize_probe(&o, &base, &pairs);
+        return authorize_probe(&o, &base, &pairs, &ip);
     }
     let Ok(p) = params_of(&pairs) else {
         return html(
@@ -461,7 +507,7 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
             None,
         );
     };
-    let v = match o.validate_authorize(&base, &p) {
+    let v = match o.validate_authorize_from(&base, &p, Some(&ip)) {
         Ok(v) => v,
         Err(AuthzError::Page { key }) => {
             return html(
@@ -485,7 +531,7 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
             ));
         }
     };
-    let (id, binder) = match o.begin(&v, &client_ip(s, parts), lang) {
+    let (id, binder) = match o.begin(&v, &ip, lang) {
         Ok(x) => x,
         Err(e) => {
             return html(
@@ -523,7 +569,7 @@ fn wants_json(h: &HeaderMap) -> bool {
 /// would begin a sign-in, as `{"status":"ok","client_id":...}` (200) or an OAuth error object (400:
 /// `invalid_client` for a client the instance does not know, which is the one a mobile app acts on
 /// by registering again; `invalid_request` and the other codes of RFC 6749 4.1.2.1 otherwise).
-fn authorize_probe(o: &OAuth, base: &str, pairs: &[(String, String)]) -> Response {
+fn authorize_probe(o: &OAuth, base: &str, pairs: &[(String, String)], ip: &str) -> Response {
     let error = |code: &str, description: &str| {
         oauth_json(
             StatusCode::BAD_REQUEST,
@@ -533,7 +579,7 @@ fn authorize_probe(o: &OAuth, base: &str, pairs: &[(String, String)]) -> Respons
     let Ok(p) = params_of(pairs) else {
         return error("invalid_request", "the authorization request is malformed");
     };
-    match o.validate_authorize(base, &p) {
+    match o.validate_authorize_from(base, &p, Some(ip)) {
         Ok(_) => oauth_json(
             StatusCode::OK,
             &json!({"status": "ok", "client_id": p.client_id}),
@@ -949,7 +995,8 @@ fn webauthn_ctx(s: &HttpState, parts: &Parts, st: &Step) -> Option<obop_commands
 }
 
 /// A script on the sign-in page asks for a passkey challenge (form-encoded: `flow`, `csrf` and,
-/// for the second step, `mfa_token`; the flow cookie comes along). Answers JSON.
+/// for the second step, `mfa_token`, or the `username` typed for a username-first sign-in, E7c;
+/// the flow cookie comes along). Answers JSON.
 pub(crate) async fn passkey_options(State(s): Shared, parts: Parts, body: Bytes) -> Response {
     blocking(move || {
         let st = match step(&s, &parts, &body) {
@@ -960,9 +1007,10 @@ pub(crate) async fn passkey_options(State(s): Shared, parts: Parts, body: Bytes)
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         };
         let mfa = pair(&st.pairs, "mfa_token").filter(|t| !t.is_empty());
+        let username = pair(&st.pairs, "username");
         match st
             .o
-            .passkey_options(&c, &st.flow, &st.binder, &st.csrf, mfa)
+            .passkey_options_for(&c, &st.flow, &st.binder, &st.csrf, mfa, username)
         {
             Ok(j) => oauth_json(StatusCode::OK, &j),
             Err(FlowError::Busy(wait)) => {

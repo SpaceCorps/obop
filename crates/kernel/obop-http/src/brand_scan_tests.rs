@@ -1615,9 +1615,12 @@ fn the_enrolment_files_may_name_what_their_rows_list_and_nothing_else() {
 /// The closed list of files whose string literals are scanned. The slice that makes another page
 /// show the brand adds its file here in the commit that wires it, with a row for each literal that
 /// has to stay.
-const LITERAL_FILES: [&str; 2] = [
+const LITERAL_FILES: [&str; 4] = [
     "kernel/obop-oauth/src/page.rs",
     "kernel/obop-http/src/oauth.rs",
+    // The two files of the enrolment that the plan of S1 put on the closed list (BRN7).
+    "kernel/obop-auth/src/mfa.rs",
+    "kernel/obop-http/src/passkeys.rs",
 ];
 
 /// The files that hold no literal that names obop and so have no row in [`LITERAL_ALLOWED`] and are
@@ -1646,7 +1649,7 @@ type LiteralRow = (
     &'static str,
 );
 
-const LITERAL_ALLOWED: [LiteralRow; 3] = [
+const LITERAL_ALLOWED: [LiteralRow; 10] = [
     (
         "kernel/obop-oauth/src/page.rs",
         "CATALOGUE",
@@ -1677,6 +1680,64 @@ const LITERAL_ALLOWED: [LiteralRow; 3] = [
         "identifier",
         "the name of the cookie that binds a browser to its flow: an identifier of the program that a \
          person does not read; renaming it would end the flows in progress",
+    ),
+    (
+        "kernel/obop-auth/src/mfa.rs",
+        "from_env",
+        Some(
+            "WARNING: OBOP_DEV_INSECURE_KEY is set: two-factor secrets are sealed with a public key. Development only.",
+        ),
+        1,
+        "admin",
+        "the warning the server writes to its own log at start when the development key is set: only          the operator reads it, and it names the environment variable so that it can be unset",
+    ),
+    (
+        "kernel/obop-auth/src/mfa.rs",
+        "from_env",
+        Some("OBOP_REQUIRE_MFA_FOR_ADMINS"),
+        1,
+        "env",
+        "the name of the environment variable that sets the default of the policy for administrators",
+    ),
+    (
+        "kernel/obop-auth/src/mfa.rs",
+        "recovery_hash",
+        Some("obop-recovery:{user}:{}"),
+        1,
+        "identifier",
+        "the domain prefix of the hash of a recovery code: never shown, and changing it would make          every stored recovery code fail",
+    ),
+    (
+        "kernel/obop-auth/src/mfa.rs",
+        "security_setting",
+        Some("obop_setting"),
+        1,
+        "identifier",
+        "the name of the model that holds the instance settings: a table name a person does not read",
+    ),
+    (
+        "kernel/obop-auth/src/mfa.rs",
+        "ring",
+        None,
+        1,
+        "admin",
+        "the refusal when the server has no secret key: it names the environment variable          OBOP_SECRET_KEY that the operator must set, and only an operator can act on it",
+    ),
+    (
+        "kernel/obop-auth/src/mfa.rs",
+        "after_first_factor",
+        Some("obopmfa_{}"),
+        1,
+        "identifier",
+        "the prefix of the short-lived token of the second sign-in step: an identifier on the wire          that tells the token apart in logs and scanners, never read as a name",
+    ),
+    (
+        "kernel/obop-http/src/passkeys.rs",
+        "ctx_named",
+        Some("Set OBOP_PUBLIC_URL (docs/DEPLOY.md)."),
+        1,
+        "admin",
+        "the hint of the refusal when the server cannot tell its own address for passkeys: it names          the environment variable OBOP_PUBLIC_URL that only the operator can set",
     ),
 ];
 
@@ -1934,9 +1995,38 @@ const OAUTH_RS: &str = "fn cors() { let _ = \"Retry-After, X-Obop-Applied\"; }\n
 const PAGE_PATH: &str = "kernel/obop-oauth/src/page.rs";
 const OAUTH_PATH: &str = "kernel/obop-http/src/oauth.rs";
 
+/// The two enrolment files of the list (BRN7) with the literals of their rows and nothing else.
+const ENROLMENT: [(&str, &str); 2] = [
+    (
+        "kernel/obop-auth/src/mfa.rs",
+        "fn from_env() { let _ = \"WARNING: OBOP_DEV_INSECURE_KEY is set: two-factor secrets are sealed with a public key. Development only.\"; let _ = \"OBOP_REQUIRE_MFA_FOR_ADMINS\"; }
+         fn recovery_hash() { let _ = \"obop-recovery:{user}:{}\"; }
+         fn security_setting() { let _ = \"obop_setting\"; }
+         fn ring() { let _ = \"needs OBOP_SECRET_KEY\"; }
+         fn after_first_factor() { let _ = \"obopmfa_{}\"; }
+",
+    ),
+    (
+        "kernel/obop-http/src/passkeys.rs",
+        "fn ctx_named() { let _ = \"Set OBOP_PUBLIC_URL (docs/DEPLOY.md).\"; }
+",
+    ),
+];
+
+/// A tree of `files` and the enrolment files of the list, unless `files` gives one of them.
+fn listed(files: &[(&str, &str)]) -> BTreeMap<String, String> {
+    let mut all: Vec<(&str, &str)> = files.to_vec();
+    for (path, code) in ENROLMENT {
+        if !files.iter().any(|(p, _)| *p == path) {
+            all.push((path, code));
+        }
+    }
+    tree(&all)
+}
+
 #[test]
 fn the_scan_for_literals_finds_a_new_literal() {
-    let ok = tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, OAUTH_RS)]);
+    let ok = listed(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, OAUTH_RS)]);
     let (found, drift) = literal_scan(&ok);
     assert!(found.is_empty() && drift.is_empty(), "{found:?} {drift:?}");
 
@@ -1945,7 +2035,7 @@ fn the_scan_for_literals_finds_a_new_literal() {
         "{}\nfn brand_line() -> &'static str {{\n    \"obop\"\n}}\n",
         page_with(35)
     );
-    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &added), (OAUTH_PATH, OAUTH_RS)]));
+    let (found, drift) = literal_scan(&listed(&[(PAGE_PATH, &added), (OAUTH_PATH, OAUTH_RS)]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(
         found[0].starts_with(&format!("{PAGE_PATH}:40:")) && found[0].contains("`brand_line`"),
@@ -1958,12 +2048,15 @@ fn the_scan_for_literals_finds_a_new_literal() {
         "{}\nfn f() {{ let _ = \"Welcome to OBOP\"; }}\n",
         page_with(35)
     );
-    let (found, _) = literal_scan(&tree(&[(PAGE_PATH, &loud), (OAUTH_PATH, OAUTH_RS)]));
+    let (found, _) = literal_scan(&listed(&[(PAGE_PATH, &loud), (OAUTH_PATH, OAUTH_RS)]));
     assert_eq!(found.len(), 1, "{found:?}");
 
     // The same text in another function is not the row's: the row names the item.
     let moved = OAUTH_RS.replace("fn cookie_name()", "fn other()");
-    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &moved)]));
+    let (found, drift) = literal_scan(&listed(&[
+        (PAGE_PATH, &page_with(35)),
+        (OAUTH_PATH, &moved),
+    ]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("`other`"), "{found:?}");
     assert!(drift.iter().any(|d| d.contains("cookie_name")), "{drift:?}");
@@ -1971,28 +2064,28 @@ fn the_scan_for_literals_finds_a_new_literal() {
     // The relying-party name of the passkey step is no longer a row (S1e takes it from the reader):
     // the literal `"obop"` back in `webauthn_ctx` is found, with the item, and no row is left over.
     let back = format!("{OAUTH_RS}fn webauthn_ctx() {{ let _ = \"obop\"; }}\n");
-    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &back)]));
+    let (found, drift) = literal_scan(&listed(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &back)]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("`webauthn_ctx`"), "{found:?}");
     assert!(drift.is_empty(), "{drift:?}");
 
     // A different literal in the item of a row with an exact literal is not let through.
     let widened = OAUTH_RS.replace("obop_oauth_{}", "obop_oauth_{} shop");
-    let (found, _) = literal_scan(&tree(&[
+    let (found, _) = literal_scan(&listed(&[
         (PAGE_PATH, &page_with(35)),
         (OAUTH_PATH, &widened),
     ]));
     assert_eq!(found.len(), 1, "{found:?}");
 
     // A file of the list that is missing from the tree is a failure, not a pass.
-    let (found, _) = literal_scan(&tree(&[(OAUTH_PATH, OAUTH_RS)]));
+    let (found, _) = literal_scan(&listed(&[(OAUTH_PATH, OAUTH_RS)]));
     assert!(found.iter().any(|f| f.starts_with(PAGE_PATH)), "{found:?}");
 }
 
 #[test]
 fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
     // A sixth catalogue key that names obop sits under the row of the five and over its count.
-    let (found, drift) = literal_scan(&tree(&[
+    let (found, drift) = literal_scan(&listed(&[
         (PAGE_PATH, &page_with(36)),
         (OAUTH_PATH, OAUTH_RS),
     ]));
@@ -2004,14 +2097,14 @@ fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
     );
 
     // A row that matches less than it says: a cell lost its name, or the literal was renamed.
-    let (found, drift) = literal_scan(&tree(&[
+    let (found, drift) = literal_scan(&listed(&[
         (PAGE_PATH, &page_with(34)),
         (OAUTH_PATH, OAUTH_RS),
     ]));
     assert!(found.is_empty(), "{found:?}");
     assert!(drift[0].contains("has 34"), "{drift:?}");
     let renamed = OAUTH_RS.replace("obop_oauth_{}", "oauth_{}");
-    let (found, drift) = literal_scan(&tree(&[
+    let (found, drift) = literal_scan(&listed(&[
         (PAGE_PATH, &page_with(35)),
         (OAUTH_PATH, &renamed),
     ]));
@@ -2029,7 +2122,7 @@ fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
 fn the_scan_for_literals_reads_escapes_and_finds_concat() {
     let listed = |extra: &str| {
         let page = format!("{}\n{extra}\n", page_with(35));
-        literal_scan(&tree(&[(PAGE_PATH, &page), (OAUTH_PATH, OAUTH_RS)]))
+        literal_scan(&listed(&[(PAGE_PATH, &page), (OAUTH_PATH, OAUTH_RS)]))
     };
     // The name written with escapes, and over a line break.
     for (what, src) in [
@@ -2079,7 +2172,7 @@ fn the_scan_for_literals_leaves_comments_test_code_and_files_off_the_list_alone(
         page_with(35)
     );
     let elsewhere = "fn f() { let _ = \"obop\"; }";
-    let (found, drift) = literal_scan(&tree(&[
+    let (found, drift) = literal_scan(&listed(&[
         (PAGE_PATH, &noisy),
         (OAUTH_PATH, OAUTH_RS),
         ("kernel/obop-http/src/mfa.rs", elsewhere),
@@ -2104,7 +2197,7 @@ fn the_clean_files_are_closed_to_a_literal_that_names_obop() {
             ),
             ("an escape", "fn text() { let _ = \"ob\\u{6f}p\"; }"),
         ] {
-            let (found, drift) = literal_scan(&tree(&[
+            let (found, drift) = literal_scan(&listed(&[
                 (PAGE_PATH, &page_with(35)),
                 (OAUTH_PATH, OAUTH_RS),
                 (clean, added),
@@ -2117,14 +2210,14 @@ fn the_clean_files_are_closed_to_a_literal_that_names_obop() {
             assert!(drift.is_empty(), "{clean}: {what}: {drift:?}");
         }
         // `concat!` is found there too, as in the other listed files.
-        let (found, _) = literal_scan(&tree(&[
+        let (found, _) = literal_scan(&listed(&[
             (PAGE_PATH, &page_with(35)),
             (OAUTH_PATH, OAUTH_RS),
             (clean, "fn f() { let _ = concat!(\"ob\", \"op\"); }"),
         ]));
         assert!(found.iter().any(|f| f.contains("`concat!`")), "{found:?}");
         // Comments and test code are not code of the file.
-        let (found, drift) = literal_scan(&tree(&[
+        let (found, drift) = literal_scan(&listed(&[
             (PAGE_PATH, &page_with(35)),
             (OAUTH_PATH, OAUTH_RS),
             (
@@ -3012,7 +3105,7 @@ const OAUTH_CORE: &str = "kernel/obop-oauth/src/lib.rs";
 const RUNTIME: &str = "kernel/obop-connectors/src/runtime.rs";
 const BROWSE: &str = "kernel/obop-blob-gdrive/src/browse.rs";
 
-const LITERAL_ALLOWED_S3: [LiteralRow; 32] = [
+const LITERAL_ALLOWED_S3: [LiteralRow; 35] = [
     (
         MCP_HTTP,
         "from_env",
@@ -3246,6 +3339,30 @@ const LITERAL_ALLOWED_S3: [LiteralRow; 32] = [
         1,
         "env",
         "the name of the environment variable that lists the redirect schemes of the mobile apps that          may register (L10): an operator's words",
+    ),
+    (
+        OAUTH_CORE,
+        "from_env",
+        Some("OBOP_OAUTH_MCP_REDIRECT_HOSTS"),
+        1,
+        "env",
+        "the name of the environment variable that lists the redirect hosts of the MCP clients that          may register and sign in (E1c): an operator's words",
+    ),
+    (
+        OAUTH_CORE,
+        "from_env",
+        Some("OBOP_OAUTH_CIMD_HOSTS"),
+        1,
+        "env",
+        "the name of the environment variable that lists the hosts whose client metadata documents are read (E7i): an operator's words",
+    ),
+    (
+        OAUTH_CORE,
+        "from_env",
+        Some("OBOP_CONNECTORS_ALLOW_LOOPBACK"),
+        1,
+        "env",
+        "the name of the environment variable that lets tests read a client metadata document from a loopback number (E7i): an operator's words",
     ),
     (
         RUNTIME,
