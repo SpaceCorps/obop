@@ -125,6 +125,7 @@ description = "Milloin se on vuorossa, sekunteina vuodesta 1970"
 [labels.fi.model.outbound_mail.action.send]
 label = "Lähetä"
 description = "Lisää viesti jonoon: to, subject ja body tai template sekä language ja vars; palauttaa sen tunnisteen. Työprosessi lähettää sen kutsun jälkeen"
+done = "Viesti lisätty jonoon"
 
 [labels.fi.model.outbound_mail.action.retry]
 label = "Lähetä uudelleen"

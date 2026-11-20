@@ -125,6 +125,7 @@ description = "Quand il est dû, en secondes depuis 1970"
 [labels.fr.model.outbound_mail.action.send]
 label = "Envoyer"
 description = "Mettre un message en file : to, subject et body, ou template avec language et vars ; renvoie son identifiant. Le processus l’envoie après l’appel"
+done = "Message mis en file d’attente"
 
 [labels.fr.model.outbound_mail.action.retry]
 label = "Renvoyer"

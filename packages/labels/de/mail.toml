@@ -125,6 +125,7 @@ description = "Wann es fällig ist, in Sekunden seit 1970"
 [labels.de.model.outbound_mail.action.send]
 label = "Senden"
 description = "Eine Nachricht einreihen: to, subject und body oder template mit language und vars; gibt ihre ID zurück. Der Worker sendet sie nach dem Aufruf"
+done = "Nachricht eingereiht"
 
 [labels.de.model.outbound_mail.action.retry]
 label = "Erneut senden"

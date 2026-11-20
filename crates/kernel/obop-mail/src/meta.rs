@@ -141,7 +141,9 @@ fn outbound() -> ModelDef {
             .approval()
             .of_model()
             // What the list's Send asks for (U66); a template is queued through the API.
-            .needs(&["to", "subject", "body"]),
+            .needs(&["to", "subject", "body"])
+            // Queued, not sent: the worker sends it later.
+            .done("Message queued"),
             // Declared as moves of `status`, so every surface offers each one only in the state
             // it starts from; the handlers do the work.
             CommandDef::new("retry", "Queue a failed message again, attempts from zero", ADMIN)

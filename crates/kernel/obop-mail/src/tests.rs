@@ -1179,3 +1179,17 @@ mod n6;
 mod private_network;
 mod review;
 mod second_review;
+
+// The list's Send queues a message; the worker sends it later. Its note must not say "done".
+#[test]
+fn send_says_the_message_was_queued_in_every_language() {
+    let m = meta::module();
+    let model = m.models.iter().find(|x| x.name == "outbound_mail").unwrap();
+    let send = model.commands.iter().find(|c| c.name == "send").unwrap();
+    let done = send.ui.as_ref().and_then(|u| u.done.clone());
+    assert_eq!(done.as_deref(), Some("Message queued"));
+    let tr = &m.translations.models["outbound_mail"].dones["send"];
+    for lang in ["de", "fr", "pl", "fi", "sv", "es"] {
+        assert!(tr.get(lang).is_some_and(|s| !s.is_empty()), "{lang}");
+    }
+}

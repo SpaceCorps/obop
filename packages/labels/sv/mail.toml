@@ -125,6 +125,7 @@ description = "När det ska göras, i sekunder sedan 1970"
 [labels.sv.model.outbound_mail.action.send]
 label = "Skicka"
 description = "Köa ett meddelande: to, subject och body, eller template med language och vars; returnerar dess id. Arbetsprocessen skickar det efter anropet"
+done = "Meddelandet har köats"
 
 [labels.sv.model.outbound_mail.action.retry]
 label = "Skicka igen"
