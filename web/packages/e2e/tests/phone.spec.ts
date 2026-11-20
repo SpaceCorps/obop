@@ -323,7 +323,8 @@ test.describe("phone widths", () => {
         ]) {
           // A tab's code and data load on demand behind a skeleton: wait for those answers (U51).
           const origin = new URL(page.url()).origin;
-          const loaded = answered(page, (url) => url.startsWith(origin));
+          // A tab with static text, or whose code an earlier visit loaded, sends nothing: mayBeNone.
+          const loaded = answered(page, (url) => url.startsWith(origin), { mayBeNone: true });
           await open(page, `/customize/${tab}?tab=${tab}`);
           // The app shows "Loading" while it fetches what a tab needs; on a busy machine that can
           // take longer than an assertion's default wait.
