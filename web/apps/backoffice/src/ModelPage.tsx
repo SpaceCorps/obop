@@ -307,7 +307,18 @@ export function ModelPage({
           ),
     // lookup changes when ref labels load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serverMode, aggMode, rows, query.facets, query.sort, fields, listDefault, d.version, d.lang],
+    [
+      serverMode,
+      aggMode,
+      rows,
+      query.facets,
+      query.sort,
+      fields,
+      listDefault,
+      d.version,
+      d.lang,
+      d.locale,
+    ],
   );
   const paging = view === "list" && !grouped;
   const shown: Row[] = aggMode

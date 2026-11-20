@@ -152,7 +152,7 @@ function OpenRegister(p: {
       p.configs
         .filter((c) => c.active !== false)
         .sort((a, b) => compareText(str(a.name), str(b.name))),
-    [p.configs, d.lang],
+    [p.configs, d.lang, d.locale],
   );
   const busyTills = new Set(p.open.map((s) => str(s.config_id)));
   const free = tills.filter((c) => !busyTills.has(c.id));
@@ -347,7 +347,7 @@ function Terminal(p: {
           image: str(r.image),
         }))
         .sort((a, b) => compareText(a.name, b.name)),
-    [products.rows, d.lang],
+    [products.rows, d.lang, d.locale],
   );
   const shown = useMemo(() => list.filter((x) => matches(x, q)), [list, q]);
   const total = cartTotal(cart);

@@ -190,6 +190,12 @@ describe("the reader of hooks", () => {
     expect(at("const x = 1; /* i18n-memo-ok: pressed later, because\n   it is long */")).toEqual([
       "apps/x/src/a.tsx:4",
     ]);
+    // nor is a line that has code between two block comments (D14f)
+    expect(at("/* a */ const x = 1; /* i18n-memo-ok: pressed later */")).toEqual([
+      "apps/x/src/a.tsx:3",
+    ]);
+    // a marker line stacked above a block of several lines reaches the statement (D14e, 6)
+    expect(at("// i18n-memo-ok: pressed later\n/* a note\n   over two lines */")).toEqual([]);
   });
 
   it("reads the dependencies of a memo whose function has type arguments with a comma", () => {
@@ -220,6 +226,27 @@ describe("what counts as translating", () => {
     // with the language in the dependencies it is fine
     expect(f('const v = useMemo(() => t("x"), [m, lang]);')).toEqual([]);
     expect(f("const v = useMemo(() => fmt.money(1), [m, d.locale]);")).toEqual([]);
+  });
+
+  it("holds a memo that sorts to the locale, which follows the region (D14)", () => {
+    const why = "sorts with compareText; the dependencies name lang but not locale";
+    expect(f("const v = useMemo(() => rows.sort(compareText), [rows, d.lang]);")).toEqual([
+      `apps/x/src/a.tsx:2 ${why}`,
+    ]);
+    for (const deps of [
+      "[rows, d.locale]",
+      "[rows, locale]",
+      "[rows, i18n]",
+      "[rows, d.lang, d.locale]",
+    ])
+      expect(f(`const v = useMemo(() => rows.sort(compareText), ${deps});`), deps).toEqual([]);
+    // a function that sorts, however far, is held the same way; one that only translates is not
+    const lib = `const byName = (a: string, b: string) => compareText(a, b);
+      const label = (id: string) => t(id);`;
+    expect(f(`${lib}\nconst v = useMemo(() => rows.sort(byName), [rows, d.lang]);`)).toHaveLength(
+      1,
+    );
+    expect(f(`${lib}\nconst v = useMemo(() => ids.map(label), [ids, d.lang]);`)).toEqual([]);
   });
 
   it("refuses dependencies it cannot read as a list, and does not take a type argument for them", () => {
@@ -483,12 +510,18 @@ describe("what counts as translating", () => {
       `{ f }: { f: (t: string) => void }`,
       `{ onPick }: { onPick: (t: string, tone?: "a" | "b") => void }`,
       `p = (t: string) => t`,
-      `a: { f: (fmt: string) => void }, b: number`,
     ])
       expect(
         f(`function C(${header}) { return useMemo(() => t("Open"), [rows]); }`),
         header,
       ).toHaveLength(1);
+    // the name of a parameter of a function type next to a real parameter (D14e: with `t("Open")`
+    // this row was flagged with either reading and pinned nothing)
+    expect(
+      f(
+        `function C(a: { f: (fmt: string) => void }, b: number) { return useMemo(() => fmt.money(1), [rows]); }`,
+      ),
+    ).toHaveLength(1);
     // a return type that is a function type
     expect(
       f(`function C(): ((t: string) => void) { return useMemo(() => t("Open"), [rows]); }`),
@@ -572,6 +605,95 @@ describe("what counts as translating", () => {
     expect(f('const C = memo(function C() { useI18n(); return t("x"); });')).toEqual([]);
   });
 
+  it("does not take the place where a callback declares t for a use of t (D14a)", () => {
+    const memo = "\nfunction C() { return useMemo(() => <Tabs tabs={a} />, [a]); }";
+    for (const body of [
+      "p.tabs.map((t) => <i key={t.id} />)",
+      "p.tabs.map(t => <i key={t.id} />)",
+      "p.tabs.map(({ t }) => <i key={t.id} />)",
+      "p.tabs.map(function (t) { return <i key={t.id} />; })",
+      "(() => { try { return null; } catch (t) { return <i key={t.id} />; } })()",
+      "(() => { for (const t of p.tabs) void t.id; return null; })()",
+    ])
+      expect(
+        f(`export function Tabs(p: { tabs: { id: string }[] }) { return ${body}; }${memo}`),
+        body,
+      ).toEqual([]);
+    // a default value is still a use, and so is a call of `t` beside the callback
+    expect(
+      f(`export function Tabs(p: { tabs: string[] }, x = t("a")) { return x; }${memo}`),
+    ).toHaveLength(1);
+    expect(
+      f(
+        `export function Tabs(p: { tabs: string[] }) { return p.tabs.map((t) => t) + t("a"); }${memo}`,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("reads the parameters and the body of a wrapped function (D14b)", () => {
+    const use = "\nfunction C() { return useMemo(() => label(a), [a]); }";
+    for (const decl of [
+      `const label = useCallback((m: string) => { const t = (s: string) => s; return t(m); }, []);`,
+      `const label = memo((m: string) => { const t = (s: string) => s; return t(m); });`,
+      `const label = forwardRef((m: string, t: (s: string) => string) => t(m));`,
+      `const label = memo(function label(m: string) { const t = (s: string) => s; return t(m); });`,
+      `const label = useCallback<(t: string) => string>((t) => t, []);`,
+      `const label = forwardRef<HTMLElement, { m: string }>((p, t: (s: string) => string) => t(p.m));`,
+    ])
+      expect(f(`${decl}${use}`), decl).toEqual([]);
+    // a constant whose initialiser starts with a parenthesis has no parameters: it translates
+    expect(f(`export const label = (t("x") + "y");${use}`)).toHaveLength(1);
+  });
+
+  it("reads an expression-bodied memo with an unspaced comparison (D14c)", () => {
+    for (const cmp of ["rows.length<3", "rows.length<=3", "a<b"])
+      expect(f(`const v = useMemo(() => ${cmp} ? t("a") : t("b"), [rows]);`), cmp).toHaveLength(1);
+    expect(f('const v = useMemo(() => rows.length<3 ? t("a") : t("b"), [rows, lang]);')).toEqual(
+      [],
+    );
+    // a tuple type that a `>` closes is not a list of dependencies
+    expect(
+      f('const v = useMemo(() => new Map<string, [number, string]>([["a", [1, t("x")]]]));'),
+    ).toEqual([]);
+  });
+
+  it("does not take a return type or a condition for a parameter list (D14d)", () => {
+    for (const head of [
+      "function C(): (t: string) => void {",
+      "function C(): Foo<(t: string) => void> {",
+      "const C = (): (t: string) => void => {",
+    ])
+      expect(f(`${head} return useMemo(() => t("Open"), [rows]); }`), head).toHaveLength(1);
+    for (const cond of ['if (t("x"))', "while (t)", "switch (t(k))"])
+      expect(
+        f(`function C() { ${cond} { return useMemo(() => t("Open"), [rows]); } }`),
+        cond,
+      ).toHaveLength(1);
+    // the real parameters before a return type still shadow
+    expect(
+      f(
+        `function C(t: (s: string) => string): (x: string) => void { return useMemo(() => t("a"), []); }`,
+      ),
+    ).toEqual([]);
+  });
+
+  it("pins the reader where a change would go unnoticed (D14e)", () => {
+    // (1) the variable of a `for` header around the memo shadows
+    expect(
+      f(`function C() { for (const t of rows) { const v = useMemo(() => t("a"), []); } }`),
+    ).toEqual([]);
+    // (2) and (3): a graph function whose parameter is named t, without parentheses or as a function
+    const use = "\nfunction C() { return useMemo(() => label(a), [a]); }";
+    expect(f(`export const label = t => t("a");${use}`)).toEqual([]);
+    expect(f(`const label = function (t) { return t("a"); };${use}`)).toEqual([]);
+    // (4) a constant in an `if` block of a graph function does not shadow the rest of it
+    expect(
+      f(`export function label(m) { if (m) { const t = 1; void t; } return t(m); }${use}`),
+    ).toHaveLength(1);
+    // (5) an arrow in the type arguments of an expression-bodied memo with no dependencies
+    expect(f('const v = useMemo(() => t("x") as Map<() => void, string>);')).toEqual([]);
+  });
+
   it("does not follow what only changes the language", () => {
     expect(f('const v = useMemo(() => setLanguage("de"), []);')).toEqual([]);
   });
@@ -631,6 +753,10 @@ describe("the source of the apps", () => {
     // and the set is not everything: functions that only shape data are not in it
     for (const plain of ["isEmpty", "keyOf", "slug", "href", "msg", "personalLang", "setLanguage"])
       expect(names.has(plain), plain).toBe(false);
+    // nor are functions whose only `t` is the parameter of a callback (D14a): `Tabs` maps its tabs
+    // with `(t) => ...` and `Navigation` renders `Tabs`; `notify` updates the toasts with `(t) => ...`
+    for (const plain of ["Tabs", "Navigation"]) expect(names.has(plain), plain).toBe(false);
+    expect(a.members.has("notify")).toBe(false);
   });
 
   it("has no memo that translates, sorts or formats without the language in its dependencies", () => {

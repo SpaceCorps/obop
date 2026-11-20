@@ -127,7 +127,7 @@ export function GraphView(p: ViewProps) {
         : [],
     // The refs stand for the dimension and the currencies; ref labels arrive with `version`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [report.rows, dimKey, curs.join(), model, lk, d.lang],
+    [report.rows, dimKey, curs.join(), model, lk, d.lang, d.locale],
   );
 
   if (!dim) return <p className="hint pad">{t("Nothing to group these records by.")}</p>;

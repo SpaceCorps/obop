@@ -307,7 +307,7 @@ export function KanbanView(p: ViewProps) {
     const present = [...(totals?.keys() ?? [])];
     return domainOf(gf, present, d.lookup);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gf, server, clientRows, totals, d.version, d.lang]);
+  }, [gf, server, clientRows, totals, d.version, d.lang, d.locale]);
   const countOf = (key: string) =>
     server
       ? (totals?.get(key)?.count ?? 0)

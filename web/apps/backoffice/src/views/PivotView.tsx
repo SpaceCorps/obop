@@ -205,7 +205,7 @@ export function PivotView(p: ViewProps) {
     () => (rowD ? matrixOf(report.rows, [rowD, colD], lk) : null),
     // The refs stand for the dimensions; ref labels arrive with `version`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [report.rows, rowRef, colRef, lk, d.lang],
+    [report.rows, rowRef, colRef, lk, d.lang, d.locale],
   );
 
   if (!rowD || !mx) return <p className="hint pad">{t("Nothing to group these records by.")}</p>;
