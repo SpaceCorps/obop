@@ -203,7 +203,7 @@ export function ListView(p: ViewProps) {
   const groups = useMemo(
     () => (levels.length ? buildGroups(rows, levels, d.lookup) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, state.group, d.lookup, d.lang],
+    [rows, state.group, d.lookup, d.lang, d.locale],
   );
   const items = useMemo(() => {
     if (!groups.length) return rows.map((row, ri): Item => ({ t: "row", row, ri }));
@@ -346,7 +346,7 @@ export function ListView(p: ViewProps) {
         ? t("{ok} updated, {failed} failed: {reason}", {
             ok: ids.length - failed.length,
             failed: failed.length,
-            reason: failed[0] ?? "",
+            reason: failed[0]?.() ?? "",
           })
         : t("{count, plural, one {Set {field} on # record} other {Set {field} on # records}}", {
             count: ids.length,

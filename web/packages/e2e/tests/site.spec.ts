@@ -1045,6 +1045,14 @@ test.describe("website without JavaScript", () => {
       // The rule can fail: the language's own word for beta is found, and "Betalning" is not it.
       expect(`Maturity: ${m.meta.maturities.beta}`).toMatch(beta);
       expect(`Maturity: ${m.meta.maturities.stable}`).not.toMatch(beta);
+      // The Markdown copies are fetched together, while the pages are read: one after the other they
+      // added up past the limit of a request on a loaded machine (U65).
+      const copies = new Map(
+        slugs.map((slug) => [
+          slug,
+          request.get(`${base()}${prefix}/apps/${slug}.md`).then((r) => r.text()),
+        ]),
+      );
       for (const slug of slugs) {
         const where = `${locale} ${slug}`;
         await page.goto(`${base()}${prefix}/apps/${slug}/`, { waitUntil: "domcontentloaded" });
@@ -1065,7 +1073,7 @@ test.describe("website without JavaScript", () => {
             els.map((el) => (el.tagName === "META" ? el.getAttribute("content") : el.textContent)),
           );
         expect(data.join(" "), `${where}: structured data and descriptions`).not.toMatch(beta);
-        const md = await (await request.get(`${base()}${prefix}/apps/${slug}.md`)).text();
+        const md = await copies.get(slug)!;
         expect(md, `${where}: the Markdown copy`).not.toMatch(beta);
         expect(md, where).toContain(`**${m.meta.maturity}:** ${m.meta.maturities.stable}`);
       }

@@ -20,10 +20,17 @@
 //     must be `d`, `lk` or `lookup`).
 //
 // A name that the code around the hook declares (a constant above it in the same block, a
-// parameter of the function that holds it; a function type in an annotation binds nothing) or the
-// hook declares itself is not the import of the same name; a function of the call graph is read
-// the same way (its parameters and the constants at the level of its body). A hook is marked as right by `// i18n-memo-ok: <reason>` in a comment directly above
-// its statement or inside the call; the reason needs three word characters.
+// parameter of the function that holds it; a function type in an annotation or a return type
+// binds nothing, nor does the condition of an `if`, `while` or `switch`) or the hook declares
+// itself is not the import of the same name; a function of the call graph is read the same way
+// (its parameters and the constants at the level of its body). The place where a parameter, a
+// `catch` or a `for` variable is declared is not a use of the name. A hook is marked as right by
+// `// i18n-memo-ok: <reason>` in a comment directly above its statement or inside the call; the
+// reason needs three word characters.
+//
+// A memo that sorts with the collation or counts weeks from the first day of the week
+// (`compareText`, `firstDayOfWeek`, however far) names the locale, which follows the region,
+// and not only the language (ISSUES.md D14).
 //
 // Not read (the shapes are listed in ISSUES.md D14): `useCallback`, `useEffect`, an initial
 // `useState(() => t(...))`, state that holds a finished translated string, namespace and default
@@ -184,7 +191,11 @@ function marked(src: string, masked: string, at: number, end: number): boolean {
       // (code before a comment makes the line a statement, and the comment belongs to that statement)
       let first = k;
       while (first > 0 && !lines[first]!.includes("/*")) first--;
-      if (!lines[first]!.trim().startsWith("/*")) break;
+      const opener = lines[first]!.trim();
+      if (!opener.startsWith("/*")) break;
+      // and nothing but the comment on it: `/* a */ const x = 1; /* marker */` is a line of code
+      const close = opener.indexOf("*/");
+      if (close >= 0 && opener.slice(close + 2).trim()) break;
       if (MARKER.test(lines.slice(first, k + 1).join("\n"))) return true;
       k = first - 1;
     } else break;
@@ -193,6 +204,8 @@ function marked(src: string, masked: string, at: number, end: number): boolean {
 }
 /** What a dependency list must name. */
 const LANGUAGE_DEP = /(?<![\w$])(?:lang|locale|i18n)(?![\w$])|\.lang(?![\w$])|\.locale(?![\w$])/;
+/** What the list of a memo that sorts by the region must name (`i18n` holds both). */
+const LOCALE_DEP = /(?<![\w$])(?:locale|i18n)(?![\w$])|\.locale(?![\w$])/;
 
 export type Hook = {
   hook: string;
@@ -214,10 +227,24 @@ function argumentComplete(text: string): boolean {
     const c = text[i]!;
     if ("([{".includes(c)) depth++;
     else if (")]}".includes(c)) depth--;
-    else if (depth === 0 && c === "<" && /[\w$]/.test(text[i - 1] ?? "")) angle++;
+    // `Map<string` opens type arguments; `n<=3` and `n<3` compare (ISSUES.md D14c)
+    else if (
+      depth === 0 &&
+      c === "<" &&
+      /[\w$]/.test(text[i - 1] ?? "") &&
+      !/[\d=]/.test(text[i + 1] ?? "")
+    )
+      angle++;
     else if (depth === 0 && c === ">" && text[i - 1] !== "=" && angle > 0) angle--;
   }
   return angle === 0;
+}
+
+/** Is `tail` (what follows the last comma of a call) a list, as against the end of a tuple type? */
+function depsList(tail: string): boolean {
+  const s = tail.trimStart();
+  if (s[0] !== "[") return false;
+  return s.slice(matchClose(s, 0) + 1).trimStart()[0] !== ">";
 }
 
 /** Every `useMemo` and `memo` call of a source file. */
@@ -261,7 +288,12 @@ export function hooks(src: string, masked: string = code(src)): Hook[] {
     // What follows the last comma is the dependencies, whatever it looks like (a list, a variable,
     // `deps!`, a conditional): `problem()` says when it is not a list it can read. It is not them
     // when the text before the comma is not yet a whole argument (`new Map<string, string>(...)`).
-    if (last !== undefined && argumentComplete(masked.slice(start, last))) {
+    // A list after the last comma is the dependencies whatever comes before it (`rows.length<3 ?
+    // t(yes) : t(no), [rows]`), unless it is a tuple type that a `>` closes (`Map<string, [a, b]>`).
+    if (
+      last !== undefined &&
+      (depsList(masked.slice(last + 1, end)) || argumentComplete(masked.slice(start, last)))
+    ) {
       fnEnd = last;
       deps = masked.slice(last + 1, end).trim();
     }
@@ -329,6 +361,14 @@ function statementEnd(masked: string, depth: Int32Array, from: number): number {
   return masked.length;
 }
 
+/** Does an initialiser wrap a function: `useCallback(`, `memo(`, `forwardRef(`, type arguments or not? */
+function wrapped(init: string): boolean {
+  const m = /^\s*(?:useCallback|memo|forwardRef)\s*/.exec(init);
+  if (!m) return false;
+  const i = afterTypeArgs(init, m[0].length);
+  return /^\s*\(/.test(init.slice(i));
+}
+
 /** Declarations of `masked`: `function name` and `const name = ...`, at the top level or inside others. */
 function declarations(masked: string, depth: Int32Array, nested: boolean): Decl[] {
   const out: Decl[] = [];
@@ -387,7 +427,7 @@ function declarations(masked: string, depth: Int32Array, nested: boolean): Decl[
       arrow = masked[k] === "=" && masked[k + 1] === ">" && depth[k] === depth[start];
     const fn =
       /^\s*(?:async\s+)?function\b/.test(init) ||
-      /^\s*useCallback\s*(?:<[^(]*>)?\s*\(/.test(init) ||
+      wrapped(init) ||
       (/^\s*(?:async\s+)?(?:<[^>(]*>\s*)?(?:\(|[A-Za-z_$][\w$]*\s*=>)/.test(init) && arrow);
     out.push({ name: m[1]!, start: m.index!, end, fn, params: start });
   }
@@ -498,6 +538,14 @@ export const SEEDS = [
 ];
 
 /**
+ * The collation and the first day of the week of the store. They follow the region, which a
+ * person can set apart from the language, so a memo that sorts or counts weeks with them (however
+ * far) names the locale, not only the language (ISSUES.md D14). The formatters of `fmt` follow the
+ * region too, but nearly every text uses one (`t` formats its numbers), so they are not held to it.
+ */
+export const REGION_SEEDS = ["compareText", "firstDayOfWeek"];
+
+/**
  * Functions of the store that read the state without showing it: they apply or save a choice, or
  * resolve it. A memo that calls them does not cache a text.
  */
@@ -528,6 +576,8 @@ export type Analysis = {
   members: Set<string>;
   /** For each top-level declaration (`path#name`), the functions declared inside it that translate. */
   locals: Map<string, Set<string>>;
+  /** The same three for what reaches the collation (`REGION_SEEDS`), which follows the region. */
+  regional: Pick<Analysis, "translators" | "members" | "locals">;
   /** The nodes that are functions, as against constants such as `fmt`. */
   fns: Set<string>;
 };
@@ -682,29 +732,72 @@ function scopeAt(file: File, top: Decl, at: number): Set<string> {
     for (const d of declared(masked.slice(i + 1, at)))
       if (depth[i + 1 + d.at] === level + 1) out.add(d.name);
     // the parameters of the function this block is the body of, or the header of a `for`
-    const before = masked.slice(top.start, i).trimEnd();
-    const single = /([A-Za-z_$][\w$]*)\s*=>$/.exec(before);
-    if (single) out.add(single[1]!);
-    let j = i - 1;
-    while (j >= top.start && !")};{".includes(masked[j]!)) j--;
-    if (masked[j] !== ")" || depth[j] !== level + 1) continue;
-    let o = j - 1;
-    while (o >= top.start && !(masked[o] === "(" && depth[o] === level)) o--;
-    // only what the header binds: its parameters, and the variable of a `for (const x of ...)`. A
-    // function type in an annotation (`{ f }: { f: (t: string) => void }`) binds nothing here.
-    const header = masked.slice(o + 1, j);
-    for (const n of bindings(header, false)) out.add(n);
-    for (const x of declared(header)) out.add(x.name);
+    for (const n of headerOf(masked, depth, top.start, i, level)) out.add(n);
   }
   return out;
 }
 
 /**
- * The names the parameters of a declaration bind: `function f(a, { b })`, `const f = async <T>(a) =>`,
- * `const f = a =>`, `const f = useCallback((a) => ...)`. A function type in an annotation and the
- * parameters of a callback in the body bind nothing here.
+ * The names the head of the block that opens at `brace` binds, when the block is the body of a
+ * function: its parameters (`(a, b) {`, `(a): T {`, `(a) => {`, `a => {`), or the variable of a
+ * `for (const x of ...)`. A parenthesised group that is not a parameter list binds nothing: a
+ * function type in an annotation (`{ f }: { f: (t: string) => void }`) or a return type
+ * (`(): (t: string) => void {`, `Foo<(t: string) => void>`), or the condition of an `if`, a
+ * `while` or a `switch` (ISSUES.md D14d).
  */
-function parametersOf(masked: string, d: Decl): string[] {
+function headerOf(
+  masked: string,
+  depth: Int32Array,
+  from: number,
+  brace: number,
+  level: number,
+): string[] {
+  const before = masked.slice(from, brace).trimEnd();
+  const single = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*=>$/.exec(before);
+  if (single) return [single[1]!];
+  // the groups at the level of the block, nearest first, up to the start of the statement
+  for (let j = brace - 1; j >= from; j--) {
+    const c = masked[j]!;
+    if (depth[j] !== level && !(c === ")" && depth[j] === level + 1)) continue;
+    if (";{}".includes(c) && depth[j] === level) return [];
+    if (c !== ")") continue;
+    let o = j - 1;
+    while (o >= from && !(masked[o] === "(" && depth[o] === level)) o--;
+    const header = masked.slice(o + 1, j);
+    const lead = masked.slice(from, o).trimEnd();
+    const between = masked.slice(j + 1, brace).trim();
+    j = o;
+    if (/(?<![\w$])(?:if|while|switch)$/.test(lead)) return [];
+    if (/(?<![\w$])for(?:\s+await)?$/.test(lead)) return declared(header).map((x) => x.name);
+    if (/[:<|&]$/.test(lead)) continue; // a type: `(): ((t: T) => U) {`, `A | ((t) => U)`
+    if (between === "" || between === "=>" || between.startsWith(":"))
+      return bindings(header, false);
+  }
+  return [];
+}
+
+/** The index after the type arguments that open at `i` (`<A, (t: B) => C>`), or `i` when none do. */
+function afterTypeArgs(masked: string, i: number): number {
+  if (masked[i] !== "<") return i;
+  let angle = 0;
+  for (; i < masked.length; i++) {
+    if (masked[i] === "<") angle++;
+    else if (masked[i] === ">" && masked[i - 1] !== "=" && --angle === 0) return i + 1;
+  }
+  return i;
+}
+
+/** The wrappers whose first argument is the function itself (D14b). */
+const WRAPPER = /^(?:useCallback|memo|forwardRef)\s*/;
+
+/**
+ * The parameters of a function declaration and where its body opens: `function f(a, { b })`,
+ * `const f = async <T>(a) =>`, `const f = a =>`, and the same inside `useCallback(...)`, `memo(...)`
+ * and `forwardRef(...)`, with or without type arguments (`useCallback<(t: T) => U>((a) => ...)`).
+ * A function type in an annotation and the parameters of a callback in the body bind nothing here.
+ * `body` is the index of the `{` of the body, or -1 for an arrow with an expression body.
+ */
+function parametersOf(masked: string, d: Decl): { names: string[]; body: number } {
   let i = d.params;
   const skip = () => {
     while (/\s/.test(masked[i] ?? "")) i++;
@@ -712,25 +805,50 @@ function parametersOf(masked: string, d: Decl): string[] {
   const eat = (re: RegExp) => {
     const m = re.exec(masked.slice(i, i + 200));
     if (m) i += m[0].length;
+    return !!m;
   };
   skip();
-  eat(/^useCallback\s*(?:<[^(]*>)?\s*\(/);
-  skip();
-  eat(/^async\s+/);
-  eat(/^function\s*\*?\s*[\w$]*\s*/);
-  if (masked[i] === "<") {
-    // type parameters: an arrow's `=>` does not close them
-    let angle = 0;
-    for (; i < masked.length; i++) {
-      if (masked[i] === "<") angle++;
-      else if (masked[i] === ">" && masked[i - 1] !== "=" && --angle === 0) break;
-    }
+  for (let k = 0; k < 3 && eat(WRAPPER); k++) {
+    i = afterTypeArgs(masked, i);
+    skip();
+    if (masked[i] !== "(") return { names: [], body: -1 };
     i++;
     skip();
   }
-  if (masked[i] === "(") return bindings(masked.slice(i + 1, matchClose(masked, i)), false);
-  const single = /^([A-Za-z_$][\w$]*)\s*=>/.exec(masked.slice(i, i + 200));
-  return single ? [single[1]!] : [];
+  eat(/^async\s+/);
+  eat(/^function\s*\*?\s*[\w$]*\s*/);
+  i = afterTypeArgs(masked, i);
+  skip();
+  let names: string[] = [];
+  let after = i;
+  if (masked[i] === "(") {
+    const close = matchClose(masked, i);
+    names = bindings(masked.slice(i + 1, close), false);
+    after = close + 1;
+  } else {
+    const single = /^([A-Za-z_$][\w$]*)\s*(?==>)/.exec(masked.slice(i, i + 200));
+    if (!single) return { names: [], body: -1 };
+    names = [single[1]!];
+    after = i + single[0].length;
+  }
+  // the body: the first `{` after the parameters that does not open a type (`(): { a: T } {`), and
+  // for an arrow the one right after its `=>`
+  let angle = 0;
+  for (let j = after; j < masked.length && j < d.end; j++) {
+    const c = masked[j]!;
+    if (c === "<") angle++;
+    else if (c === ">" && masked[j - 1] === "=") {
+      let k = j + 1;
+      while (/\s/.test(masked[k] ?? "")) k++;
+      if (angle === 0) return { names, body: masked[k] === "{" ? k : -1 };
+    } else if (c === ">") angle--;
+    else if (c === "{" && angle === 0) {
+      const lead = masked.slice(after, j).trimEnd();
+      if (!lead.endsWith(":") && !/[|&,<]$/.test(lead)) return { names, body: j };
+      j = matchClose(masked, j);
+    } else if ((c === ";" || c === ",") && angle === 0) break;
+  }
+  return { names, body: -1 };
 }
 
 export type Refs = {
@@ -749,8 +867,100 @@ export type Refs = {
 /** The receivers a member translator is followed on: the data context `d` and a lookup `lk`/`lookup`. */
 const RECEIVER = "(?:d|lk|lookup)";
 
+/** For each opening bracket of `text`, the index of the one that closes it (-1 when none does). */
+function closers(text: string): Int32Array {
+  const out = new Int32Array(text.length).fill(-1);
+  const stack: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === "(" || c === "[" || c === "{") stack.push(i);
+    else if (c === ")" || c === "]" || c === "}") {
+      const o = stack.pop();
+      if (o !== undefined) out[o] = i;
+    }
+  }
+  return out;
+}
+
+/**
+ * `text` with the places where names are declared as parameters blanked: the parameter lists of
+ * arrows and functions (their default values are kept, they are uses), `x =>`, `catch (x)` and the
+ * variable of a `for` header. Declaring `(t) =>` is not a use of the imported `t` (ISSUES.md D14a).
+ */
+function unbind(text: string): string {
+  const out = text.split("");
+  const close = closers(text);
+  const blank = (a: number, b: number) => {
+    for (let k = a; k < b; k++) if (out[k] !== "\n") out[k] = " ";
+  };
+  // a parameter list or a pattern from `a` to `b`: blank all but the default values
+  const params = (a: number, b: number) => {
+    let s = a;
+    for (let k = a; k <= b; k++) {
+      const c = text[k];
+      if (k < b && (c === "(" || c === "[" || c === "{") && close[k]! > k && close[k]! < b) {
+        k = close[k]!;
+        continue;
+      }
+      if (k < b && c !== ",") continue;
+      element(s, k);
+      s = k + 1;
+    }
+  };
+  const element = (a: number, b: number) => {
+    let q = -1;
+    for (let k = a; k < b; k++) {
+      const c = text[k]!;
+      if ((c === "(" || c === "[" || c === "{") && close[k]! > k) {
+        k = close[k]!;
+        continue;
+      }
+      if (
+        c === "=" &&
+        text[k + 1] !== ">" &&
+        text[k + 1] !== "=" &&
+        !"=!<>".includes(text[k - 1]!)
+      ) {
+        q = k;
+        break;
+      }
+    }
+    const end = q < 0 ? b : q;
+    for (let k = a; k < end; k++) {
+      const c = text[k]!;
+      if ((c === "{" || c === "[") && close[k]! > k && close[k]! < end) {
+        out[k] = " ";
+        params(k + 1, close[k]!);
+        out[close[k]!] = " ";
+        k = close[k]!;
+      } else if (out[k] !== "\n") out[k] = " ";
+    }
+  };
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "(" || close[i]! < 0) continue;
+    const j = close[i]!;
+    const lead = text.slice(Math.max(0, i - 60), i);
+    if (/(?<![\w$])catch\s*$/.test(lead)) blank(i + 1, j);
+    else if (/(?<![\w$])for(?:\s+await)?\s*$/.test(lead)) {
+      const m = /^\s*(?:const|let|var)\s+/.exec(text.slice(i + 1, j));
+      if (!m) continue;
+      const head = i + 1 + m[0].length;
+      const stop = /\s(?:of|in)\s|[=;]/.exec(text.slice(head, j));
+      blank(i + 1, stop ? head + stop.index : j);
+    } else if (
+      /(?<![\w$.])function\s*\*?\s*[\w$]*\s*(?:<[^>]*>)?\s*$/.test(lead) ||
+      /^\s*(?::[^=;{]*?)?=>/.test(text.slice(j + 1, j + 200))
+    )
+      params(i + 1, j);
+  }
+  for (const m of text.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\s*=>/g))
+    if (m[1] !== "async") blank(m.index!, m.index! + m[1]!.length);
+  return out.join("");
+}
+
 /** What `text` (a piece of `file`) refers to. `shadow` names are the code's own and are not imports. */
-function refsOf(files: Map<string, File>, file: File, text: string, shadow: Set<string>): Refs {
+function refsOf(files: Map<string, File>, file: File, raw: string, shadow: Set<string>): Refs {
+  const text = unbind(raw);
   const plain = new Map<string, boolean>();
   const members = new Set<string>();
   const bare = new Set<string>();
@@ -771,8 +981,9 @@ function refsOf(files: Map<string, File>, file: File, text: string, shadow: Set<
     if ((text[b] === "{" || text[b] === ",") && text[a] === ":" && text[a + 1] !== ":") continue;
     add(name, text[a] === ".");
   }
-  // `...name`: the lookbehind above rejects a name after a dot, which a spread is
-  for (const m of text.matchAll(/\.\.\.\s*([A-Za-z_$][\w$]*)/g)) add(m[1]!, false);
+  // `...name`: the lookbehind above rejects a name after a dot, which a spread is; `...t.filter()`
+  // spreads a member of `t`, as `t.filter()` would be read without the dots
+  for (const m of text.matchAll(/\.\.\.\s*([A-Za-z_$][\w$]*)\s*(\??\.)?/g)) add(m[1]!, !!m[2]);
   // JSX: `<Name` and `<Name.Part`
   for (const m of text.matchAll(/(?<![\w$])<([A-Z][\w$]*)/g)) add(m[1]!, false);
   // a member call, or a member passed as an argument, of the data context or a lookup (the objects
@@ -817,18 +1028,29 @@ export function analyse(sources: Source[]): Analysis {
     ))
       typed.add(m[1]!);
 
-  type Node = { key: string; file: File; decl: Decl; refs: Refs; seed: boolean };
-  const nodes: Node[] = [];
+  const nodes: GraphNode[] = [];
   const own = (file: File, d: Decl, nested: boolean) => {
     // What a declaration gives its own names to: its parameters and the constants at the level of its
     // body, not the parameters of a callback in it or of a function type in an annotation (the same
     // rule as `scopeAt`). A top-level function does not shadow itself; one declared inside another
     // does, so a local `const t = (s) => s` is not a use of the imported `t`.
+    // The level of the body is counted from its own `{`, so a wrapper call around the function
+    // (`useCallback((m) => { const t = ...; }, [])`) adds no level (D14b). Only a function has
+    // parameters: `const x = (t(key) + "b")` has none.
     const text = file.masked.slice(d.start, d.end);
-    const shadow = new Set(parametersOf(file.masked, d));
     const base = file.depth[d.start]!;
-    for (const x of declared(text)) if (file.depth[d.start + x.at]! - base <= 1) shadow.add(x.name);
-    if (!nested) shadow.delete(d.name);
+    const shadow = new Set<string>();
+    if (d.fn) {
+      const p = parametersOf(file.masked, d);
+      for (const n of p.names) shadow.add(n);
+      const inner = p.body < 0 ? -1 : file.depth[p.body]! + 1;
+      for (const x of declared(text)) if (file.depth[d.start + x.at] === inner) shadow.add(x.name);
+      if (nested) shadow.add(d.name);
+    } else {
+      for (const x of declared(text))
+        if (file.depth[d.start + x.at]! - base <= 1) shadow.add(x.name);
+      if (!nested) shadow.delete(d.name);
+    }
     return { text, shadow };
   };
   for (const file of files.values())
@@ -845,7 +1067,7 @@ export function analyse(sources: Source[]): Analysis {
 
   // Functions declared inside others. Each is a local of the one around it (`label` in a component),
   // and one that is handed out as a property is a member for `d.name(...)` anywhere.
-  const inner: { scope: string; file: File; decl: Decl; refs: Refs }[] = [];
+  const inner: InnerNode[] = [];
   for (const file of files.values())
     for (const d of file.nested) {
       if (!d.fn) continue;
@@ -861,7 +1083,37 @@ export function analyse(sources: Source[]): Analysis {
     }
 
   const isFn = new Map(nodes.map((n) => [n.key, n.decl.fn]));
-  const translators = new Set<string>(nodes.filter((n) => n.seed).map((n) => n.key));
+  const all = spread(nodes, inner, isFn, typed, (n) => n.seed);
+  const region = spread(
+    nodes,
+    inner,
+    isFn,
+    typed,
+    (n) => n.file.path === STORE && REGION_SEEDS.includes(n.decl.name),
+  );
+  return {
+    files,
+    translators: all.translators,
+    via: all.via,
+    members: all.members,
+    locals: all.locals,
+    regional: { translators: region.translators, members: region.members, locals: region.locals },
+    fns: new Set([...isFn].filter(([, f]) => f).map(([k]) => k)),
+  };
+}
+
+type GraphNode = { key: string; file: File; decl: Decl; refs: Refs; seed: boolean };
+type InnerNode = { scope: string; file: File; decl: Decl; refs: Refs };
+
+/** The functions that reach one of the seeds, by the rules at the top of the file. */
+function spread(
+  nodes: GraphNode[],
+  inner: InnerNode[],
+  isFn: Map<string, boolean>,
+  typed: Set<string>,
+  seed: (n: GraphNode) => boolean,
+) {
+  const translators = new Set<string>(nodes.filter(seed).map((n) => n.key));
   const via = new Map<string, string>();
   const members = new Set<string>();
   const locals = new Map<string, Set<string>>(); // scope -> names of its translating inner functions
@@ -898,18 +1150,25 @@ export function analyse(sources: Source[]): Analysis {
         grown = true;
       }
   }
-  return {
-    files,
-    translators,
-    via,
-    members,
-    locals,
-    fns: new Set([...isFn].filter(([, f]) => f).map(([k]) => k)),
-  };
+  return { translators, via, members, locals };
 }
 
 /** What a hook uses that translates, sorts or formats; empty when nothing. */
 export function usesTranslators(a: Analysis, path: string, hook: Hook): string[] {
+  return uses(a, a, path, hook);
+}
+
+/** What a hook uses that follows the region (`compareText`, `firstDayOfWeek`); empty when nothing. */
+export function usesRegional(a: Analysis, path: string, hook: Hook): string[] {
+  return uses(a, a.regional, path, hook);
+}
+
+function uses(
+  a: Analysis,
+  g: Pick<Analysis, "translators" | "members" | "locals">,
+  path: string,
+  hook: Hook,
+): string[] {
   const file = a.files.get(path);
   if (!file) return [];
   // the names the code around the hook gives to things are its own, as are the hook's: not an
@@ -926,10 +1185,10 @@ export function usesTranslators(a: Analysis, path: string, hook: Hook): string[]
   const refs = refsOf(a.files, file, hook.body, shadow);
   const hit: string[] = [];
   for (const [key, direct] of refs.plain)
-    if (a.translators.has(key) && (direct || !a.fns.has(key))) hit.push(key.split("#")[1]!);
-  for (const m of refs.members) if (a.members.has(m)) hit.push(`.${m}`);
+    if (g.translators.has(key) && (direct || !a.fns.has(key))) hit.push(key.split("#")[1]!);
+  for (const m of refs.members) if (g.members.has(m)) hit.push(`.${m}`);
   // a helper of the component around the hook that translates (`const label = (x) => t(x)`)
-  for (const b of refs.bare) if (a.locals.get(scope)?.has(b)) hit.push(b);
+  for (const b of refs.bare) if (g.locals.get(scope)?.has(b)) hit.push(b);
   return [...new Set(hit)].sort();
 }
 
@@ -944,9 +1203,14 @@ export function problem(a: Analysis, path: string, h: Hook): string | null {
       : `a memo component that uses ${uses.join(", ")} does not use useI18n()`;
   if (h.deps === null) return null; // computed on every render
   if (!h.deps.startsWith("[")) return "the dependencies are not a list the guard can read";
-  return namesLanguage(h.deps)
-    ? null
-    : `uses ${uses.join(", ")}; the dependencies do not name lang or locale`;
+  if (!namesLanguage(h.deps))
+    return `uses ${uses.join(", ")}; the dependencies do not name lang or locale`;
+  // The collation and the first day of the week follow the region, which a person can set apart
+  // from the language: a memo that uses them names the locale, not only the language.
+  const regional = usesRegional(a, path, h);
+  return regional.length && !LOCALE_DEP.test(h.deps)
+    ? `follows the region with ${regional.join(", ")}; the dependencies name lang but not locale`
+    : null;
 }
 
 /* ---------------------------------------------------------------------------------------------- */

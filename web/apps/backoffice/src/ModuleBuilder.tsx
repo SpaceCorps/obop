@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { msg, t, useI18n } from "@obop/ui";
+import { msg, t, useI18n, useWorded } from "@obop/ui";
 import { call, getCoreVersion, type Kind, type ModuleMeta } from "./api.ts";
 import { label as labelOf } from "./format.ts";
 import { appTitle, modelTitle } from "./labels.ts";
@@ -212,7 +212,7 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
   ]);
   const fields = useMemo(() => own.map(shownField), [own, lang]);
   const [statuses, setStatuses] = useState("open, done");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const st = useMemo(() => listOf(statuses), [statuses]);
   const named = fields.filter((f) => f.name.trim());
   const targets = useMemo(
@@ -507,7 +507,8 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
             className="btn primary"
             onClick={async () => {
               const p = problem();
-              if (p) return setError(p);
+              // The form as it was when pressed, worded again after a language switch (D9).
+              if (p) return setError(() => problem() ?? "");
               const r = await call(token, "module.install", { manifest: text });
               if (r.kind === "ok") {
                 setError(null);
@@ -515,7 +516,7 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                 onModulesChanged();
                 location.hash = href({ app: id });
               } else
-                setError(
+                setError(() =>
                   r.kind === "error"
                     ? serverMessage(r.message)
                     : t("Waiting for a human to approve"),

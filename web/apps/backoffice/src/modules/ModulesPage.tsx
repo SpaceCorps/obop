@@ -253,7 +253,7 @@ export function ModulesPage({
               view.setDialog({
                 kind: "plan",
                 request: { manifest },
-                title: t("Install this package"),
+                title: () => t("Install this package"),
                 name: "",
                 verb: "install",
               })
@@ -266,7 +266,7 @@ export function ModulesPage({
         <PlanDialog
           token={view.token}
           request={view.dialog.request}
-          title={view.dialog.title}
+          title={view.dialog.title()}
           nameOf={view.nameOf}
           rows={[...data.installed, ...data.market]}
           onClose={() => view.setDialog(null)}

@@ -4,7 +4,7 @@
 // points come from `mileage_point.search`, the call an agent makes; Confirm and Reject stay the
 // trip's own action buttons.
 import { useEffect, useMemo, useState } from "react";
-import { Icon, fmt, t } from "@obop/ui";
+import { Icon, clock24, fmt, t } from "@obop/ui";
 import { LOAD_LIMIT, getTime, search, type Row } from "../../api.ts";
 import type { RecordExtProps } from "../../extensions.ts";
 import { useData } from "../../data.tsx";
@@ -32,7 +32,7 @@ const inZone = (iso: unknown, o: Intl.DateTimeFormatOptions): string => {
   const zone = getTime().zone;
   try {
     return new Intl.DateTimeFormat(fmt.locale, {
-      ...o,
+      ...clock24(o),
       timeZone: knownZone(zone) ? zone : "UTC",
     }).format(new Date(iso));
   } catch {

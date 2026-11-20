@@ -155,6 +155,11 @@ type Ctx = {
    * field shows an option (shows_option_of), so a memo that keeps one lists it among its dependencies.
    */
   lang: string;
+  /**
+   * The locale of the collation and the formats (`useI18n().locale`): the region when the person
+   * set one, else the language. A memo that sorts with `compareText` lists it (ISSUES.md D14).
+   */
+  locale: string;
   /** Counts successful writes, so server-side queries know when to ask again. */
   mutations: number;
   /** A toast; `opts.action` adds a link or a button at its end ("Open" the record an action made). */
@@ -243,7 +248,7 @@ export function DataProvider(props: {
   // The label of a record (recordLabel, refText) is in the person's language when its label field
   // shows an option (shows_option_of). The context is a new object when the language changes, and a
   // memo that keeps such a label lists `d.lang` among its dependencies.
-  const { lang } = useI18n();
+  const { lang, locale } = useI18n();
 
   // A reloaded module list (install, uninstall) means the cached rows may be stale.
   useEffect(() => {
@@ -280,6 +285,7 @@ export function DataProvider(props: {
       store,
       version,
       lang,
+      locale,
       mutations,
       notify,
       confirm,
@@ -309,7 +315,20 @@ export function DataProvider(props: {
       },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, modules, apps, models, store, version, mutations, notify, confirm, linkFor, lang]);
+  }, [
+    token,
+    modules,
+    apps,
+    models,
+    store,
+    version,
+    mutations,
+    notify,
+    confirm,
+    linkFor,
+    lang,
+    locale,
+  ]);
 
   return <DataCtx.Provider value={value}>{props.children}</DataCtx.Provider>;
 }

@@ -1,6 +1,7 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
+import { answered } from "../support/answered.ts";
 import { expect, open, test } from "../support/fixtures.ts";
 
 // Every screen of the back office at phone widths. Each screen is measured, not looked at: nothing
@@ -271,8 +272,11 @@ test.describe("phone widths", () => {
         await page.keyboard.press("Escape");
 
         for (const view of ["list", "kanban", "calendar", "pivot", "graph"]) {
+          // The view shows a skeleton until its data is in: wait for the answers it asked for (U51).
+          const data = answered(page, (url) => url.includes(`/api/${model}/`));
           await open(page, `/${model}/${model}?view=${view}`);
           await expect(page.locator(`.content.view-${view}`)).toBeVisible();
+          await data();
           await expect(page.locator(".content .skeleton")).toHaveCount(0);
           await check(page, `view-${view}`, label);
         }
@@ -317,6 +321,9 @@ test.describe("phone widths", () => {
           "brand",
           "guide",
         ]) {
+          // A tab's code and data load on demand behind a skeleton: wait for those answers (U51).
+          const origin = new URL(page.url()).origin;
+          const loaded = answered(page, (url) => url.startsWith(origin));
           await open(page, `/customize/${tab}?tab=${tab}`);
           // The app shows "Loading" while it fetches what a tab needs; on a busy machine that can
           // take longer than an assertion's default wait.
@@ -324,6 +331,7 @@ test.describe("phone widths", () => {
             timeout: 20_000,
           });
           await expect(page.getByRole("tab", { name: /./, selected: true }).first()).toBeVisible();
+          await loaded();
           await expect(page.locator(".content .skeleton")).toHaveCount(0);
           await check(page, `customize-${tab}`, label);
         }

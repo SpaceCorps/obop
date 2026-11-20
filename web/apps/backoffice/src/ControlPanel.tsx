@@ -226,6 +226,13 @@ export function ControlPanel(p: Props) {
   };
   const removeAt = (i: number) =>
     setState({ ...state, facets: state.facets.filter((_, j) => j !== i) });
+  // A chip's remove button goes with its chip, so the focus moves to the search input instead of
+  // falling to the page body, where a keyboard user would start again from the top (U84). Only for
+  // a press of Enter or Space (a click with no pointer, detail 0): a tap does not open the phone's
+  // keyboard.
+  const keepFocus = (e: React.MouseEvent) => {
+    if (e.detail === 0) input.current?.focus();
+  };
   const clearText = () => {
     setText("");
     onLive?.("");
@@ -346,6 +353,7 @@ export function ControlPanel(p: Props) {
                     onClick={(e) => {
                       e.stopPropagation();
                       removeAt(i);
+                      keepFocus(e);
                     }}
                     aria-label={t("Remove filter {filter}", { filter: chipText(c) })}
                   >
@@ -361,6 +369,7 @@ export function ControlPanel(p: Props) {
                     onClick={(e) => {
                       e.stopPropagation();
                       setState({ ...state, group: state.group.filter((x) => x !== g) });
+                      keepFocus(e);
                     }}
                     aria-label={t("Remove grouping by {field}", {
                       field: fieldTitleByName(g, fields),

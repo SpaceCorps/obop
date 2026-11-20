@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { fmt, getCurrency, msg, t, useI18n } from "@obop/ui";
+import { firstDayOfWeek, fmt, getCurrency, msg, t, useI18n } from "@obop/ui";
 import { getTime, type FieldMeta, type ModelMeta } from "./api.ts";
 import { loadFavorites, saveFavorites, type Favorite } from "./favorites.ts";
 import { FieldInput } from "./fields.tsx";
@@ -61,17 +61,18 @@ export const metaOr = (meta: ModelMeta | undefined, model: string, fields: Field
  * ranges of its main dates, worked out for today in the instance's zone.
  */
 export function useQuickFilters(meta: ModelMeta, fields: FieldMeta[], user?: string) {
-  const { lang } = useI18n();
+  const { lang, locale } = useI18n();
   const today = todayIn(getTime().zone);
   return useMemo(() => {
-    const ctx = { user, today, firstDay: fmt.firstDay() };
+    const ctx = { user, today, firstDay: firstDayOfWeek() };
     return [
       ...quickFilters(meta, fields, ctx),
       ...rangeFields(fields).flatMap((f) => dateFilters(f, ctx)),
     ];
-    // The labels are translated: a new language makes them again.
+    // The labels are translated: a new language makes them again. The weeks start on the first
+    // day of the region, which a person can change apart from the language (D14).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta, fields, user, today, lang]);
+  }, [meta, fields, user, today, lang, locale]);
 }
 
 /** Filters, Group by (with Sort) and Favorites side by side; one column on a phone. */

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Badge, t } from "@obop/ui";
+import { Badge, t, useWorded } from "@obop/ui";
 import type { Reply } from "../api.ts";
 import { useData, useRows } from "../data.tsx";
 import { request } from "../net.ts";
@@ -35,7 +35,7 @@ type SharedDrive = { id: string; name: string };
 type PolicyRow = { id: string; provider: string };
 
 function useDriveSettings(token: string, version: number) {
-  const [state, setState] = useState<{ settings?: DriveSettings; error?: string }>({});
+  const [state, setState] = useState<{ settings?: DriveSettings; failed?: boolean }>({});
   const [again, setAgain] = useState(0);
   useEffect(() => {
     let live = true;
@@ -45,12 +45,14 @@ function useDriveSettings(token: string, version: number) {
         return (await r.json()) as { settings?: DriveSettings };
       })
       .then((v) => live && setState({ settings: v.settings }))
-      .catch(() => live && setState({ error: t("Could not read the state of the connection.") }));
+      .catch(() => live && setState({ failed: true }));
     return () => {
       live = false;
     };
   }, [token, version, again]);
-  return { ...state, reload: () => setAgain((n) => n + 1) };
+  // The sentence is worded when it is drawn, so it follows a language switch (D9).
+  const error = state.failed ? t("Could not read the state of the connection.") : undefined;
+  return { settings: state.settings, error, reload: () => setAgain((n) => n + 1) };
 }
 
 const tone = (s: DriveSettings["state"]) =>
@@ -82,12 +84,12 @@ export function GoogleDrive() {
   const [writeGroup, setWriteGroup] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [drives, setDrives] = useState<SharedDrive[] | null>(null);
-  const [drivesError, setDrivesError] = useState("");
+  const [drivesError, setDrivesError] = useWorded();
   const [drivesAgain, setDrivesAgain] = useState(0);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState<{
     tone: "success" | "danger" | "info";
-    text: string;
+    text: () => string; // how to word it, called each time it is drawn (D9)
   } | null>(null);
 
   const connected = settings?.state === "connected";
@@ -105,7 +107,7 @@ export function GoogleDrive() {
         return (await r.json()) as { drives?: SharedDrive[] };
       })
       .then((v) => live && setDrives(v.drives ?? []))
-      .catch(() => live && setDrivesError(t("Could not read your shared drives.")));
+      .catch(() => live && setDrivesError(() => t("Could not read your shared drives.")));
     return () => {
       live = false;
     };
@@ -126,17 +128,18 @@ export function GoogleDrive() {
     if (r.kind === "approval") {
       setMessage({
         tone: "info",
-        text: t(
-          "Approval needed: this was proposed as plan {plan}. Nothing changes until a human approves it.",
-          {
-            plan: r.planId.slice(0, 8),
-          },
-        ),
+        text: () =>
+          t(
+            "Approval needed: this was proposed as plan {plan}. Nothing changes until a human approves it.",
+            {
+              plan: r.planId.slice(0, 8),
+            },
+          ),
       });
       return true;
     }
     if (r.kind === "error") {
-      setMessage({ tone: "danger", text: serverMessage(r.message) });
+      setMessage({ tone: "danger", text: () => serverMessage(r.message) });
       return true;
     }
     return false;
@@ -163,7 +166,7 @@ export function GoogleDrive() {
     setWriteGroup(null);
     await d.store.load("provider_policy");
     reload();
-    setMessage({ tone: "success", text: t("Saved.") });
+    setMessage({ tone: "success", text: () => t("Saved.") });
   }
 
   async function saveWorkspace() {
@@ -186,7 +189,7 @@ export function GoogleDrive() {
     setWorkspace(null);
     await d.store.load("provider_policy");
     reload();
-    setMessage({ tone: "success", text: t("Workspace saved.") });
+    setMessage({ tone: "success", text: () => t("Workspace saved.") });
   }
 
   async function connect() {
@@ -210,7 +213,10 @@ export function GoogleDrive() {
       {},
     ).url;
     if (!link)
-      return setMessage({ tone: "danger", text: t("Google did not give a sign-in address.") });
+      return setMessage({
+        tone: "danger",
+        text: () => t("Google did not give a sign-in address."),
+      });
     // Google asks the person to agree, then sends the browser back to obop.
     window.location.assign(link);
   }
@@ -231,7 +237,10 @@ export function GoogleDrive() {
     if (fail(r)) return;
     await d.store.load("connection");
     reload();
-    setMessage({ tone: "success", text: t("Disconnected. The sign-in was removed from obop.") });
+    setMessage({
+      tone: "success",
+      text: () => t("Disconnected. The sign-in was removed from obop."),
+    });
   }
 
   return (
@@ -252,7 +261,7 @@ export function GoogleDrive() {
           )}
         </Notice>
       )}
-      {message && <Notice tone={message.tone}>{message.text}</Notice>}
+      {message && <Notice tone={message.tone}>{message.text()}</Notice>}
       {settings.state === "connected" && (
         <Notice
           tone="success"

@@ -19,6 +19,7 @@ import { appMirror, developerBody } from "./lib/app-page.ts";
 import { appView } from "./lib/app-view.ts";
 import { appName, loadApps, type App } from "./lib/apps.ts";
 import { changelogMarkdown, loadChangelog } from "./lib/changelog.ts";
+import { isMain } from "./lib/main.ts";
 import { appsIndexMirror, homeMirror, pricingMirror } from "./lib/mirror.ts";
 import { CORE_VERSION, GEN, GITHUB, REPO_ROOT, SITE_ROOT, SITE_URL, SRC } from "./lib/paths.ts";
 import { slugify } from "./lib/slug.ts";
@@ -480,7 +481,7 @@ export function assemble(): PageRecord[] {
   return records;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const records = assemble();
   console.log(`assembled ${records.length} pages for ${LOCALES.length} locales`);
 }

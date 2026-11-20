@@ -11,11 +11,24 @@ export function nf(locale: string, o: Intl.NumberFormatOptions = {}): Intl.Numbe
   return f;
 }
 
+/**
+ * The options with the 24-hour clock (`h23`) when they show a time of day. The week grid, the
+ * calendar and the date popover write 14:30 in every language (S5); a time in a title or a list
+ * cell does too, so an English browser never shows 2:30 PM beside 14:30 (docs/ISSUES.md U16).
+ * Options that already choose a clock (`hourCycle`, `hour12`) are left as they are.
+ */
+export function clock24(o: Intl.DateTimeFormatOptions): Intl.DateTimeFormatOptions {
+  const time = o.hour !== undefined || o.timeStyle !== undefined;
+  return time && o.hourCycle === undefined && o.hour12 === undefined
+    ? { ...o, hourCycle: "h23" }
+    : o;
+}
+
 const dfCache = new Map<string, Intl.DateTimeFormat>();
 export function df(locale: string, o: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   const key = locale + JSON.stringify(o);
   let f = dfCache.get(key);
-  if (!f) dfCache.set(key, (f = new Intl.DateTimeFormat(locale, o)));
+  if (!f) dfCache.set(key, (f = new Intl.DateTimeFormat(locale, clock24(o))));
   return f;
 }
 

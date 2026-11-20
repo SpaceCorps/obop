@@ -206,6 +206,8 @@ export function formatInstant(iso: unknown, zone: string, locale: string): strin
       timeZone: knownZone(zone) ? zone : "UTC",
       dateStyle: "medium",
       timeStyle: "medium",
+      // The 24-hour clock in every language, as the grid and the calendar (U16).
+      hourCycle: "h23",
     });
     dfCache.set(key, f);
   }
@@ -233,6 +235,8 @@ export function instantShort(
       timeZone: knownZone(zone) ? zone : "UTC",
       dateStyle: "medium",
       timeStyle: "short",
+      // The 24-hour clock in every language, as the grid and the calendar (U16).
+      hourCycle: "h23",
     });
     shortCache.set(key, f);
   }
