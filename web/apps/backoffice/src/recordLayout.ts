@@ -3,7 +3,7 @@
 // functions over `/api/meta` and a row, so they are tested without a browser. Each reads the D95
 // hint first (`ui.section`, `guard`, `children`, `readonly`, action `ui`) and falls back to a
 // heuristic, because no server sends the hints yet.
-import { msgx, t, tx } from "@obop/ui";
+import { getLang, labelFor, msgx, t, tx } from "@obop/ui";
 import { fixedOnceCreated, type Command, type FieldMeta, type ModelMeta, type Row } from "./api.ts";
 import { isEmpty, optionLabel } from "./format.ts";
 import { actionTitle, guardMessage } from "./labels.ts";
@@ -144,7 +144,8 @@ export function sectionsOf(model: ModelMeta, fields: FieldMeta[], c: SectionCtx)
     if (fs.length === 0) continue;
     out.push({
       key: `hint-${i}`,
-      label: tx("section", s.label),
+      // The package's own translation (R17), else the catalogue of the built-in modules.
+      label: labelFor({ labels: s.labels ?? {} }, getLang(), tx("section", s.label)),
       fields: fs,
       collapsed: !!s.collapsed || (i > 0 && closedWhenEmpty(fs)),
       personal: personal(fs),

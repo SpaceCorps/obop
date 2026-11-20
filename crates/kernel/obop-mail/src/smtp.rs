@@ -50,6 +50,9 @@ pub struct Relay {
     pub password: String,
     /// The name this side gives in `EHLO`.
     pub helo: String,
+    /// The administrator's switch `allow_private_network`: the relay may resolve to an address
+    /// of the business's own network, and a password may go without TLS to such an address.
+    pub private_network: bool,
 }
 
 impl std::fmt::Debug for Relay {
@@ -244,7 +247,7 @@ fn ehlo(s: &mut Session, helo: &str) -> Result<Vec<String>, Failure> {
         .collect())
 }
 
-fn vet(client: &Client, relay: &Relay) -> Result<Vec<SocketAddr>, Failure> {
+pub(crate) fn vet(client: &Client, relay: &Relay) -> Result<Vec<SocketAddr>, Failure> {
     let host = relay.host.trim().to_ascii_lowercase();
     if host.is_empty() {
         return Err(Failure::Permanent("the mail server has no host".into()));
@@ -257,7 +260,7 @@ fn vet(client: &Client, relay: &Relay) -> Result<Vec<SocketAddr>, Failure> {
     // The outbound client checks a URL; the scheme only satisfies its rule, nothing is sent.
     let url = format!("https://{shown}:{}/", relay.port);
     client
-        .vet(&url, std::slice::from_ref(&host))
+        .vet_with(&url, std::slice::from_ref(&host), relay.private_network)
         .map(|v| v.addrs)
         .map_err(|e| match e {
             NetError::Resolve(_) | NetError::Timeout | NetError::Transport(_) => {
@@ -278,7 +281,12 @@ pub fn send(
     // Built first: a message that cannot be built is refused before the relay is contacted.
     let body = msg.to_bytes().map_err(Failure::Permanent)?;
     let addrs = vet(client, relay)?;
-    let loopback = addrs.iter().all(|a| a.ip().is_loopback());
+    // Where a password may go without TLS: a loopback stand-in, or, with the switch on, a relay
+    // whose every address is on the business's own network. Never a public address.
+    let loopback = addrs.iter().all(|a| {
+        a.ip().is_loopback()
+            || (relay.private_network && obop_connectors::net::ip_is_private_network(a.ip()))
+    });
     let mut last = None;
     let mut tcp = None;
     for a in &addrs {

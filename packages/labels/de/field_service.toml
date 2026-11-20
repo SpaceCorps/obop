@@ -107,18 +107,23 @@ cancelled = "Storniert"
 [labels.de.model.field_service_job.action.depart]
 label = "Ich bin unterwegs"
 description = "Der Techniker ist unterwegs"
+done = "Unterwegs"
 
 [labels.de.model.field_service_job.action.start]
 label = "Arbeit beginnen"
 description = "Der Techniker ist angekommen und hat die Arbeit begonnen"
+done = "Arbeit begonnen"
 
 [labels.de.model.field_service_job.action.complete]
 label = "Einsatz abschließen"
 description = "Den Einsatz abschließen; ist eine Unterschrift erforderlich, zuerst Unterzeichnet von und Unterzeichnet am erfassen"
+confirm = "Diesen Einsatz abschließen? Ein erledigter Einsatz kann nicht mehr geändert werden."
+done = "Einsatz erledigt"
 
 [labels.de.model.field_service_job.action.cancel]
 label = "Stornieren"
 description = "Einen noch nicht begonnenen Einsatz stornieren"
+confirm = "Diesen Einsatz absagen? Er kann danach nicht mehr geändert werden."
 
 [labels.de.model.field_service_part]
 name = "Teil"
@@ -150,3 +155,18 @@ description = "Anmerkung zum Teil, zum Beispiel die Seriennummer"
 
 [labels.de.model.field_service_job.action.complete.assert.signed]
 message = "Der Kunde muss diesen Einsatz zuerst abzeichnen: Tragen Sie ein, wer wann unterschrieben hat"
+
+[labels.de.model.field_service_job.section.job]
+label = "Einsatz"
+
+[labels.de.model.field_service_job.section.customer_and_site]
+label = "Kunde und Einsatzort"
+
+[labels.de.model.field_service_job.section.schedule]
+label = "Zeitplan"
+
+[labels.de.model.field_service_job.section.sign_off]
+label = "Abnahme"
+
+[labels.de.model.field_service_job.section.report]
+label = "Meldung"

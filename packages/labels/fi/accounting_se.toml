@@ -132,10 +132,14 @@ description = "Mistä ruutu on peräisin ja mitä on tarkistettu, esimerkiksi SK
 [labels.fi.model.accounting_se_vat_box.action.verify]
 label = "Tarkista"
 description = "Merkitse ruutu SKV 4700:n mukaan tarkistetuksi (vain hyväksyjät); tallentaa tarkistajan ja päivämäärän"
+confirm = "Merkitäänkö tämä ruutu tarkistetuksi lomaketta SKV 4700 vasten?"
+done = "Ruutu tarkistettu"
 
 [labels.fi.model.accounting_se_vat_box.action.unverify]
 label = "Peru tarkistus"
 description = "Peru ruudun tarkistus (vain hyväksyjät)"
+confirm = "Perutaanko tämän ruudun tarkistus?"
+done = "Tarkistus peruttu"
 
 [labels.fi.model.accounting_se_vat_code]
 name = "Alv-koodi"
@@ -232,10 +236,14 @@ description = "Mistä koodi on peräisin ja mitä on tarkistettu, esimerkiksi SK
 [labels.fi.model.accounting_se_vat_code.action.verify]
 label = "Tarkista"
 description = "Merkitse koodi SKV 4700:n mukaan tarkistetuksi (vain hyväksyjät); tallentaa tarkistajan ja päivämäärän"
+confirm = "Merkitäänkö tämä arvonlisäverokoodi tarkistetuksi lomaketta SKV 4700 vasten?"
+done = "Arvonlisäverokoodi tarkistettu"
 
 [labels.fi.model.accounting_se_vat_code.action.unverify]
 label = "Peru tarkistus"
 description = "Peru koodin tarkistus (vain hyväksyjät)"
+confirm = "Perutaanko tämän arvonlisäverokoodin tarkistus?"
+done = "Tarkistus peruttu"
 
 [labels.fi.model.accounting_se_vat_report]
 name = "Alv-raportti"
@@ -307,14 +315,18 @@ filed = "Toimitettu"
 [labels.fi.model.accounting_se_vat_report.action.propose]
 label = "Ehdota"
 description = "Ehdota raporttia hyväksyttäväksi; agentit saavat tehdä tämän"
+done = "Ehdotettu hyväksyttäväksi"
 
 [labels.fi.model.accounting_se_vat_report.action.withdraw]
 label = "Peru ehdotus"
 description = "Palauta ehdotettu raportti luonnokseksi"
+done = "Palautettu luonnokseksi"
 
 [labels.fi.model.accounting_se_vat_report.action.approve]
 label = "Hyväksy"
 description = "Hyväksy raportti (vain hyväksyjät; ruudut on vahvistettava SKV 4700:n mukaan tarkistetuiksi)"
+confirm = "Hyväksytäänkö tämä arvonlisäveroilmoitus? Sitä ei voi enää muuttaa."
+done = "Arvonlisäveroilmoitus hyväksytty"
 
 [labels.fi.model.accounting_se_vat_report.action.approve.assert.boxes_checked]
 message = "Ruutuja ei ole vahvistettu SKV 4700:n mukaan tarkistetuiksi"
@@ -322,6 +334,8 @@ message = "Ruutuja ei ole vahvistettu SKV 4700:n mukaan tarkistetuiksi"
 [labels.fi.model.accounting_se_vat_report.action.record_filed]
 label = "Kirjaa toimitus"
 description = "Kirjaa, että ilmoitus on toimitettu Skatteverketille tämän järjestelmän ulkopuolella (vain hyväksyjät)"
+confirm = "Kirjataanko, että tämä ilmoitus jätettiin Skatteverketille?"
+done = "Kirjattu jätetyksi"
 
 [labels.fi.model.accounting_se_vat_report_line]
 name = "Alv-raportin rivi"

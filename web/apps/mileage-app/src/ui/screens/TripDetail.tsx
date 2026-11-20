@@ -1,8 +1,11 @@
 import { Banner, Button, Field, Row, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
+import { Alert, View } from "react-native";
 import {
+  canChangePurpose,
   canDiscard,
   canSubmit,
+  confirmsPurpose,
   formatDistance,
   integrityLines,
   isServerProblem,
@@ -10,7 +13,8 @@ import {
   tripStatus,
 } from "../../core/present.ts";
 import { formatDateTime, t, type MessageKey } from "../../i18n/index.ts";
-import { discardTrip, retryTrip, submitTrip } from "../../native/actions.ts";
+import { changeTripPurpose, discardTrip, retryTrip, submitTrip } from "../../native/actions.ts";
+import { PURPOSES, type Purpose } from "../../core/types.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { useOutbox } from "../hooks.ts";
 import type { Nav } from "../router.ts";
@@ -45,6 +49,20 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
   const act = (work: () => Promise<void>, after?: () => void) => {
     setActionFailed(false);
     work().then(after, () => setActionFailed(true));
+  };
+
+  /** Sets the purpose; marking a trip private is confirmed first, because the route goes for good. */
+  const choosePurpose = (p: Purpose) => {
+    if (!trip) return;
+    const change = () => act(() => changeTripPurpose(trip.clientTripId, p));
+    if (!confirmsPurpose(trip, p)) {
+      change();
+      return;
+    }
+    Alert.alert(t("trip.private.confirm.title"), t("trip.private.confirm.message"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("trip.private.confirm"), style: "destructive", onPress: change },
+    ]);
   };
 
   // Read the server's view of the trip once when it is opened.
@@ -190,7 +208,31 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
           />
           <Row title={t("trip.started")} value={when(trip.startedAt) ?? ""} />
           {trip.endedAt ? <Row title={t("trip.ended")} value={when(trip.endedAt) ?? ""} /> : null}
-          <Row title={t("trip.purpose")} value={t(`purpose.${trip.purpose}` as MessageKey)} />
+          {canChangePurpose(trip) ? (
+            <>
+              <Text variant="label">{t("trip.purpose")}</Text>
+              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                {PURPOSES.map((p) => (
+                  <Button
+                    key={p}
+                    label={t(`purpose.${p}` as MessageKey)}
+                    variant={p === trip.purpose ? "primary" : "secondary"}
+                    selected={p === trip.purpose}
+                    onPress={() => choosePurpose(p)}
+                    testID={`trip-purpose-${p}`}
+                  />
+                ))}
+              </View>
+              <Text tone="muted">{t("trip.purpose.change")}</Text>
+            </>
+          ) : (
+            <Row title={t("trip.purpose")} value={t(`purpose.${trip.purpose}` as MessageKey)} />
+          )}
+          {trip.purpose === "private" && status !== "recording" && !trip.discardDone ? (
+            <Text tone="muted" testID="private-note">
+              {t("trip.private.note")}
+            </Text>
+          ) : null}
           {trip.integrity ? (
             <Row title={t("trip.checks")} subtitle={integrityLines(trip.integrity).join("\n")} />
           ) : null}

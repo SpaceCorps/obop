@@ -71,6 +71,30 @@ fn v6_is_public(ip: Ipv6Addr) -> bool {
         || (s[0] == 0x0100 && s[1..4].iter().all(|x| *x == 0))) // discard-only
 }
 
+/// Whether an address is on a business's own network: RFC 1918 (10/8, 172.16/12, 192.168/16)
+/// and IPv6 unique-local (fc00::/7), also in their IPv4-mapped form. Never link-local
+/// (169.254/16, fe80::/10), loopback, carrier-grade NAT or a cloud-metadata address (the AWS
+/// IPv6 one, fd00:ec2::/32, is unique-local in form and stays refused). Only a caller that an
+/// administrator switched on per destination asks this (a mail relay on the office network,
+/// docs/spec/mail.md 6).
+pub fn ip_is_private_network(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4_is_private_network(v4),
+        IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return v4_is_private_network(v4);
+            }
+            let s = v6.segments();
+            (s[0] & 0xfe00) == 0xfc00 && !(s[0] == 0xfd00 && s[1] == 0x0ec2)
+        }
+    }
+}
+
+fn v4_is_private_network(ip: Ipv4Addr) -> bool {
+    let [a, b, _, _] = ip.octets();
+    a == 10 || (a == 172 && (16..=31).contains(&b)) || (a == 192 && b == 168)
+}
+
 fn is_loopback(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v) => v.is_loopback(),
@@ -356,6 +380,18 @@ impl Client {
     /// Check a URL against the rules and resolve it once. Used by `send` and by the connection
     /// test, which reports why a URL would be refused without sending anything.
     pub fn vet(&self, url: &str, allowed_hosts: &[String]) -> Result<Vetted, NetError> {
+        self.vet_with(url, allowed_hosts, false)
+    }
+
+    /// [`Client::vet`], and with `private_network` an address of the business's own network
+    /// ([`ip_is_private_network`]) is accepted too. Every other rule stays: link-local and
+    /// cloud-metadata addresses are refused, loopback needs the operator's switch.
+    pub fn vet_with(
+        &self,
+        url: &str,
+        allowed_hosts: &[String],
+        private_network: bool,
+    ) -> Result<Vetted, NetError> {
         let (u, host) = self.check_shape(url, allowed_hosts)?;
         let literal: Option<IpAddr> = host.parse().ok();
         let port = u
@@ -372,7 +408,9 @@ impl Client {
             return Err(NetError::Resolve(host));
         }
         for a in &addrs {
-            let ok = ip_is_public(a.ip()) || (self.cfg.allow_loopback && is_loopback(a.ip()));
+            let ok = ip_is_public(a.ip())
+                || (self.cfg.allow_loopback && is_loopback(a.ip()))
+                || (private_network && ip_is_private_network(a.ip()));
             if !ok {
                 return Err(NetError::BlockedAddress(host));
             }

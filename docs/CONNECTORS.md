@@ -58,6 +58,8 @@ Treatments: `allow` (as is), `pseudonymise` (a keyed HMAC-SHA256 pseudonym `psn_
 
 Pseudonymised data is still personal data (GDPR Article 4(5)). That is why, by default, personal data goes only to a provider whose agreement is recorded.
 
+Before any of this, the event itself is cut: the Dispatcher tells its observers (the event worker of the Connectors among them) about a command that succeeded with every `secret` field of the command's model removed from the input and from the answer (also from the rows of a `bulk_create`, whose CSV text is dropped whole when the model has such a field), and without the values a command shows once and never stores (the link of `sign_link.create`; the table is `SHOWN_ONCE` in `obop-commands/src/observe.rs`). The caller still gets the full answer (docs/ISSUES.md U46).
+
 ### 2.2 The gate, step by step
 
 `Egress::prepare(connection, model, rows)` refuses, with a reason that is also written to the log, unless all hold:

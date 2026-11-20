@@ -46,7 +46,7 @@
   border-radius: var(--radius-lg);
   background: var(--surface-2);
 }
-.trip-map svg {
+.trip-map > svg {
   display: block;
   inline-size: 100%;
   block-size: auto;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { createEngine } from "./engine.ts";
-import { canDiscard } from "./present.ts";
+import { canChangePurpose, canDiscard, canSubmit } from "./present.ts";
 import { createSqlStore, migrate } from "./sql-store.ts";
 import { TripAlreadyActive, hasWork, type OutboxStore } from "./store.ts";
 import type { NewFix } from "./types.ts";
@@ -1092,5 +1092,85 @@ describe("trips the server lists", () => {
     ]);
     expect(trips[1]).toMatchObject({ distanceM: "5000.00", submitDone: true, endDone: true });
     expect(hasWork(trips[1]!)).toBe(false);
+  });
+});
+
+describe("the purpose of a trip (a private trip is never reviewed)", () => {
+  test("a purpose changed before the end goes with the end, and a private trip keeps no route", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    await engine.changePurpose("c1", "private");
+    expect((await store.getTrip("c1"))!.purpose).toBe("private");
+    expect(server.count("updateTrip")).toBe(0);
+    expect((await engine.drain()).state).toBe("idle");
+    const stored = server.stored("c1")!;
+    expect(stored).toMatchObject({ purpose: "private", state: "ended" });
+    expect(server.pointSeqs(stored.id)).toEqual([]);
+    const local = (await store.getTrip("c1"))!;
+    expect(local.endDone).toBe(true);
+    expect(local.distanceM).toBe(server.distance);
+    expect(canSubmit(local)).toBe(false);
+  });
+
+  test("a trip marked private by mistake goes back to business and is submitted", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    await engine.drain();
+    await engine.changePurpose("c1", "private");
+    expect(server.stored("c1")!.purpose).toBe("private");
+    expect((await store.getTrip("c1"))!.purpose).toBe("private");
+    expect(canSubmit((await store.getTrip("c1"))!)).toBe(false);
+    await engine.changePurpose("c1", "business");
+    expect(server.stored("c1")!.purpose).toBe("business");
+    const back = (await store.getTrip("c1"))!;
+    expect(canSubmit(back)).toBe(true);
+    await store.requestSubmit("c1");
+    await engine.drain();
+    expect(server.stored("c1")!.state).toBe("in_review");
+    expect(canChangePurpose((await store.getTrip("c1"))!)).toBe(false);
+    await expect(engine.changePurpose("c1", "private")).rejects.toThrow();
+  });
+
+  test("a purpose changed while the end is on its way is sent again when its sending fails", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    const endTrip = server.endTrip.bind(server);
+    server.endTrip = async (id) => {
+      const answer = await endTrip(id);
+      // The driver taps Commute while the answer of the end travels back, and the network drops.
+      await store.patchTrip("c1", { purpose: "commute" });
+      server.fail("updateTrip", networkError());
+      return answer;
+    };
+    await engine.drain();
+    server.endTrip = endTrip;
+    expect(server.stored("c1")!.state).toBe("ended");
+    expect(server.stored("c1")!.purpose).toBe("business");
+    await engine.drain();
+    expect(server.stored("c1")!.purpose).toBe("commute");
+    const local = (await store.getTrip("c1"))!;
+    expect(local.endDone).toBe(true);
+    expect(local.purpose).toBe("commute");
+  });
+
+  test("a change the server refuses leaves the phone as it was", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    await engine.drain();
+    server.fail("updateTrip", networkError());
+    await expect(engine.changePurpose("c1", "commute")).rejects.toBeDefined();
+    expect((await store.getTrip("c1"))!.purpose).toBe("business");
+    expect(server.stored("c1")!.purpose).toBe("business");
+  });
+
+  test("a purpose changed in the back office shows on the phone once the trip is ended", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    await engine.drain();
+    server.stored("c1")!.purpose = "commute";
+    await engine.refreshRemote();
+    expect((await store.getTrip("c1"))!.purpose).toBe("commute");
+    await engine.refreshTrip("c1");
+    expect((await store.getTrip("c1"))!.purpose).toBe("commute");
   });
 });

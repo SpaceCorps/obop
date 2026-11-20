@@ -132,10 +132,13 @@ expired = "Vanhentunut"
 [labels.fi.model.sign_request.action.send]
 label = "Lähetä"
 description = "Lähetä pyyntö allekirjoittajalle"
+done = "Lähetetty allekirjoittajalle"
 
 [labels.fi.model.sign_request.action.sign]
 label = "Allekirjoita"
 description = "Kirjaa käsin, että allekirjoittaja allekirjoitti; vain pyynnölle, joka ei koske asiakirjaa, sillä asiakirjaa koskevan pyynnön allekirjoittaja allekirjoittaa linkin kautta"
+confirm = "Kirjataanko, että allekirjoittaja allekirjoitti? Asiakirjaa koskeva pyyntö allekirjoitetaan sen sijaan allekirjoituslinkin kautta."
+done = "Merkitty allekirjoitetuksi"
 
 [labels.fi.model.sign_request.action.sign.assert.document_request]
 message = "Asiakirjaa koskevan pyynnön allekirjoittaja allekirjoittaa linkin kautta; sitä ei voi merkitä käsin allekirjoitetuksi"
@@ -143,14 +146,19 @@ message = "Asiakirjaa koskevan pyynnön allekirjoittaja allekirjoittaa linkin ka
 [labels.fi.model.sign_request.action.decline]
 label = "Kieltäydy"
 description = "Kirjaa, että allekirjoittaja kieltäytyi"
+confirm = "Kirjataanko, että allekirjoittaja kieltäytyi?"
+done = "Merkitty hylätyksi"
 
 [labels.fi.model.sign_request.action.expire]
 label = "Merkitse vanhentuneeksi"
 description = "Kirjaa, että pyyntö vanheni allekirjoittamatta"
+confirm = "Kirjataanko, että pyyntö vanheni allekirjoittamattomana?"
+done = "Merkitty vanhentuneeksi"
 
 [labels.fi.model.sign_request.action.send_document]
 label = "Lähetä asiakirja"
 description = "Lähetä pyyntö Asiakirjat-sovelluksen asiakirjasta: ottaa PDF:n SHA-256:n, säilyttää tarkan kopion ja siirtää pyynnön tilaan lähetetty; luo sen jälkeen allekirjoituslinkki"
+done = "Lähetetty. Luo seuraavaksi allekirjoituslinkki."
 
 [labels.fi.model.sign_link]
 name = "Allekirjoituslinkki"
@@ -176,3 +184,15 @@ description = "Milloin linkki peruutettiin (UTC); aseta arvo peruuttaaksesi link
 [labels.fi.model.sign_link.field.link]
 label = "Linkkiosoite"
 description = "Itse linkki: vain create-vastauksessa, näytetään kerran, ei koskaan tallenneta eikä koskaan palauteta komennoilla get, list tai search"
+
+[labels.fi.model.sign_request.section.request]
+label = "Pyyntö"
+
+[labels.fi.model.sign_request.section.options]
+label = "Valinnat"
+
+[labels.fi.model.sign_request.section.sent_file]
+label = "Lähetetty tiedosto"
+
+[labels.fi.model.sign_request.section.evidence]
+label = "Todisteet"

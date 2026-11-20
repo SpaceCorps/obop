@@ -124,10 +124,14 @@ cancelled = "Peruutettu"
 [labels.fi.model.inventory_move.action.validate]
 label = "Vahvista"
 description = "Vahvista, että tavara todella siirtyi: määrä poistuu lähtörivistä ja saapuu kohderiville (vain varastonhoitajat); valmista siirtoa ei voi perua"
+confirm = "Vahvistetaanko tämä siirto? Varasto muuttuu heti, eikä valmista siirtoa voi perua."
+done = "Varasto päivitetty"
 
 [labels.fi.model.inventory_move.action.cancel]
 label = "Peruuta"
 description = "Peruuta luonnossiirto"
+confirm = "Perutaanko tämä siirto?"
+done = "Siirto peruttu"
 
 [labels.fi.model.inventory_item.field.below_reorder]
 description = "Tarvitseeko rivi huomiota: määrä on alle nollan tai tilauspisteessä tai sen alla"

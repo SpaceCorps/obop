@@ -417,3 +417,18 @@ fn crediting_a_time_billed_invoice_frees_its_entries() {
         "the entries can be billed again"
     );
 }
+
+#[test]
+fn the_credit_invoice_can_be_posted_and_a_zero_invoice_cannot() {
+    let f = fixture();
+    let inv = f.booked(&[10_000]);
+    let r = f.credit(&inv, false).unwrap();
+    let cid = r["credit_invoice_id"].as_str().unwrap().to_string();
+    let posted = call(&f.app, &admin(), "invoice.post", json!({"id": cid})).unwrap();
+    assert_eq!(posted["state"], json!("posted"));
+    assert!(posted["number"].as_str().is_some_and(|n| !n.is_empty()));
+    // An invoice without any amount still cannot be posted.
+    let empty = f.invoice(&[], false);
+    let m = refusal(call(&f.app, &admin(), "invoice.post", json!({"id": empty})));
+    assert!(m.contains("Add at least one line"), "{m}");
+}

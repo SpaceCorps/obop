@@ -1,6 +1,6 @@
 [module]
 id = "field_service"
-version = "0.3.1"
+version = "0.3.2"
 name = "Field Service"
 description = "On-site jobs for customers, done by a technician: scheduled, en route, in progress, done or cancelled. A job records the customer, the site, the technician, the planned day and start (minutes since midnight), the parts used and whether the customer must sign off. Site address and contact details are personal data. Needs the Human Resources and Products packages."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["field-service", "jobs", "technicians"]
 categories = ["services"]
 maturity = "experimental"
 requires_core = "^0.2.2"
-changelog = "The job actions are named as a technician says them, On my way, Start work and Complete job, the same on the job, the board and My day."
+changelog = "0.3.2: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). The job actions are named as a technician says them, On my way, Start work and Complete job, the same on the job, the board and My day."
 home = "field_service_job"
 
 [module.dependencies]

@@ -21,6 +21,8 @@ const spec = (title: string): Omit<ModuleSpec, "id"> => ({
       to: "done",
       assert: [{ expr: "is_set(title)", message: EN, key: "needs_title" }],
     },
+    // A way back from done, so Finish is no step that asks first (#102).
+    { name: "reopen", field: "state", from: "done", to: "open" },
   ],
   labels: (id) => `
 [labels.sv.model.${id}.action.finish]
