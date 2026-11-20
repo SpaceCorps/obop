@@ -385,7 +385,7 @@ A history entry whose `text` is `in_progress` and whose `kind` is `status` reads
 | `from` | string | none | The value the field must have now; one of the options. Without `from` the action works from any value; the bundled packages always set it. Must differ from `to`. |
 | `to` | string | required | The value to set; one of the options. |
 | `group` | string | the model's `write_group` | `module.role`. |
-| `approval` | bool | `false` | Agents may only propose it (D18). |
+| `approval` | bool | `false` | Agents may only propose it (D18). A person decides the proposal on the back office's Approvals page (D97): the filled button names the act, so a good `label` and `ui.confirm` help the person who reads it. |
 | `assert` | array | `[]` | Conditions that must hold before the action runs, each an expression (3.8) as a string, or `{ expr = "...", message = "..." }`, with an optional `key = "..."` that a label table can translate the message by (3.8). At most 8. |
 | `effect` | array of tables | `[]` | What the action does besides moving the state, `[[model.action.effect]]` (3.8). At most 12. |
 

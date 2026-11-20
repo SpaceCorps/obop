@@ -435,10 +435,17 @@ async fn agents_can_only_propose_account_changes_and_an_administrator_decides() 
         json!({}),
     )
     .await;
+    // Since D97's review the dispatcher reads the proposer's account at the approval: a disabled
+    // owner's agent cannot run, so the plan is refused before it is spent (not found, as for a
+    // plan the approver may not run) instead of failing in the handler (400).
     assert_eq!(
-        s, 400,
+        s, 404,
         "the proposing administrator is disabled, so the plan does nothing"
     );
+    let (s, b) = post(r, Some(&second_t), "/api/plan/get", json!({"id": stale})).await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["value"]["proposer_can_run"], false);
+    assert_eq!(b["value"]["can_approve"], false);
     let (_, users) = get(r, &second_t, "/api/auth/users").await;
     let ada_row = users["users"]
         .as_array()

@@ -874,3 +874,27 @@ description = "Cuándo se importó el registro"
 [labels.es.model.import_map.field.imported_by]
 label = "Importado por"
 description = "Quién lo importó"
+
+[labels.es.model.plan]
+name = "Solicitud de aprobación"
+description = "Una solicitud de un agente que espera a una persona o que ya se decidió: quién propuso qué comando sobre qué registro, cuándo y qué pasó con ella. Una persona ve las solicitudes que podría decidir y las de sus propios agentes; un agente solo ve las suyas, con get"
+
+[labels.es.model.plan.field.seen_version]
+label = "Versión vista"
+description = "Entrada de approve: la versión del registro que se mostró a la persona (seen_version en la respuesta de get); si el registro cambió desde entonces, no se ejecuta nada y la solicitud sigue esperando"
+
+[labels.es.model.plan.field.reason]
+label = "Motivo"
+description = "Entrada de reject: por qué, en 300 caracteres como máximo, para que lo lea el agente; se mantiene separado de cualquier instrucción"
+
+[labels.es.model.plan.action.count]
+label = "Contar"
+description = "Cuántas solicitudes esperan a la persona que pregunta (waiting), cuántas de ellas hicieron sus propios agentes (mine_waiting) y si puede decidir alguna (can_decide). Solo una persona"
+
+[labels.es.model.plan.action.approve]
+label = "Aprobar"
+description = "Aprobar una solicitud en espera: el comando se ejecuta tal como lo propuso el agente. Indique id y, de get, seen_version: si el registro cambió desde entonces, no se ejecuta nada. Solo una persona"
+
+[labels.es.model.plan.action.reject]
+label = "Rechazar"
+description = "Rechazar una solicitud en espera: no se ejecuta nada y se informa al agente. Indique id y, si quiere, un motivo (300 caracteres como máximo). Solo una persona"

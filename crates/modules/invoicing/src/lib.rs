@@ -338,7 +338,9 @@ mod tests {
             panic!()
         };
         assert_eq!(s.field("invoice", &id, "state"), Some(Value::text("draft")));
-        let human = Principal::user("h", &["invoicing.manager"]);
+        // The approver reads the invoice too (D97: a person who cannot read the record does not
+        // decide it).
+        let human = Principal::user("h", &["invoicing.user", "invoicing.manager"]);
         d.approve(&human, &mut v, &plan_id).unwrap();
         assert_eq!(
             s.field("invoice", &id, "state"),
@@ -419,7 +421,9 @@ mod tests {
         d.set_clock(std::sync::Arc::new(|| 1_790_000_000));
         register(&d, &s);
         let agent = Principal::agent("a", &["invoicing.manager"], &["invoicing.manager"]);
-        let human = Principal::user("h", &["invoicing.manager"]);
+        // The approver reads the invoice too (D97: a person who cannot read the record does not
+        // decide it).
+        let human = Principal::user("h", &["invoicing.user", "invoicing.manager"]);
         let (mut refused_before_a_change, mut positions) = (0, 0);
         for skip in 0..40 {
             let id = seed(&s, "o1");

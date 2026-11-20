@@ -1,0 +1,31 @@
+/* The top-bar button of the Approvals page: the check-circle with a count in a badge. A link drawn
+   like the bar's icon buttons (44 px square on a touch screen); the badge sits on its corner. */
+.appr-entry {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  text-decoration: none;
+}
+.appr-badge {
+  position: absolute;
+  inset-block-start: 0.15rem;
+  inset-inline-end: 0.05rem;
+  display: grid;
+  place-items: center;
+  min-inline-size: 1.1rem;
+  block-size: 1.1rem;
+  padding-inline: 0.25rem;
+  border-radius: 999px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* On the narrowest phones the app's name needs the room: the account menu has the same way in. */
+@media (max-width: 21rem) {
+  .appr-entry {
+    display: none;
+  }
+}

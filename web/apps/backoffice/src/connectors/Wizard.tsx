@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Badge, t, useWorded } from "@obop/ui";
+import { sentText, notifySent } from "../approvals/sent.ts";
 import { useData } from "../data.tsx";
 import { modelTitle } from "../labels.ts";
 import { serverMessage } from "../serverMessage.ts";
@@ -176,13 +177,7 @@ export function Wizard(props: Props) {
       });
       if (r.kind !== "ok") {
         setBusy(false);
-        return setError(() =>
-          r.kind === "approval"
-            ? t("Approval needed: the connection was proposed as plan {plan}.", {
-                plan: r.planId.slice(0, 8),
-              })
-            : serverMessage(r.message),
-        );
+        return setError(() => (r.kind === "approval" ? sentText() : serverMessage(r.message)));
       }
       id = (r.value as { id: string }).id;
       setConnection(id);
@@ -196,9 +191,7 @@ export function Wizard(props: Props) {
       });
       if (r.kind !== "ok") {
         setBusy(false);
-        return setError(() =>
-          r.kind === "approval" ? t("Approval needed.") : serverMessage(r.message),
-        );
+        return setError(() => (r.kind === "approval" ? sentText() : serverMessage(r.message)));
       }
       setConsentDone(true);
     }
@@ -230,15 +223,7 @@ export function Wizard(props: Props) {
       return props.onDone(connection);
     }
     if (r.kind === "approval") {
-      d.notify(
-        t(
-          "Approval needed: connecting was proposed as plan {plan}. Nothing changes until a human approves it.",
-          {
-            plan: r.planId.slice(0, 8),
-          },
-        ),
-        "info",
-      );
+      notifySent(d.notify, r.planId);
       return props.onDone(connection);
     }
     setError(() => serverMessage(r.message));

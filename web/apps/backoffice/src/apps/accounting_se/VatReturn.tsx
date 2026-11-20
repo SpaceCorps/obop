@@ -6,6 +6,7 @@
 // dry-run it). UNVERIFIED, as the package is: the page says so.
 import { useEffect, useState } from "react";
 import { Button, Icon, Notice, fmt, t } from "@obop/ui";
+import { notifySent } from "../../approvals/sent.ts";
 import { call, search, type Row } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
@@ -145,8 +146,7 @@ export function VatReturnPanel({ row }: RecordExtProps) {
       );
       await Promise.all([d.changed(REPORT), d.changed(LINE)]);
       setReload((n) => n + 1);
-    } else if (r.kind === "approval")
-      d.notify(t("Approval needed: nothing changes until a human approves it."), "info");
+    } else if (r.kind === "approval") notifySent(d.notify, r.planId);
     else d.notify(serverMessage(r.message), "error");
   }
 

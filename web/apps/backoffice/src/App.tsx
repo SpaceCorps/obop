@@ -41,6 +41,7 @@ import type { Cond } from "./query.ts";
 import { rememberRecord } from "./recent.ts";
 import { SetupCard } from "./SetupCard.tsx";
 import { parseModulesRoute } from "./modules/route.ts";
+import { isApprovals } from "./approvals/route.ts";
 import {
   PRODUCT_DOC_TABS,
   holdsMailServers,
@@ -72,6 +73,9 @@ import { clearInstanceTheme, sessionCounter } from "./sessionGuard.ts";
 const Customize = lazy(() => import("./Customize.tsx").then((m) => ({ default: m.Customize })));
 const AppOverview = lazy(() =>
   import("./AppOverview.tsx").then((m) => ({ default: m.AppOverview })),
+);
+const ApprovalsPage = lazy(() =>
+  import("./approvals/ApprovalsPage.tsx").then((m) => ({ default: m.ApprovalsPage })),
 );
 
 /** What every route shows while it loads. */
@@ -460,6 +464,7 @@ export function App() {
           onTheme={() => go({ app: "customize", model: "theme", tab: "theme" })}
           onBrand={() => go({ app: "customize", model: "brand", tab: "brand" })}
           onSecurity={() => go({ app: "customize", model: "security", tab: "security" })}
+          token={token}
         />
         <div className="workspace">
           {app && app.id !== "customize" && (
@@ -534,6 +539,8 @@ export function App() {
                   onModulesChanged={() => void refresh()}
                   notify={notify}
                 />
+              ) : isApprovals(route) ? (
+                <ApprovalsPage route={route} go={go} />
               ) : extPage ? (
                 extPage
               ) : app && (isOverview(route) || atHome) ? (

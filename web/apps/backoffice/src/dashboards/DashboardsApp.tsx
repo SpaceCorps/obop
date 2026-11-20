@@ -19,6 +19,7 @@ import {
   useI18n,
   useWorded,
 } from "@obop/ui";
+import { sentText } from "../approvals/sent.ts";
 import type { ModelMeta, Reply, Row } from "../api.ts";
 import type { App } from "../Chrome.tsx";
 import { useData, useRows } from "../data.tsx";
@@ -216,16 +217,7 @@ export function DashboardsApp({
 
   const open = (id: string, view = route.view) => go({ app: app.id, model: BOARD, id, view });
   const message = (r: Reply): string | null =>
-    r.kind === "ok"
-      ? null
-      : r.kind === "approval"
-        ? t(
-            "Approval needed: plan {plan} was proposed. Nothing changes until a human approves it.",
-            {
-              plan: r.planId.slice(0, 8),
-            },
-          )
-        : serverMessage(r.message);
+    r.kind === "ok" ? null : r.kind === "approval" ? sentText() : serverMessage(r.message);
 
   async function createStarter() {
     setBusy(true);

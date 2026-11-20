@@ -98,6 +98,12 @@ mod passkey_tests;
 mod payments_tests;
 #[cfg(test)]
 mod people_collab_hints_tests;
+#[cfg(test)]
+mod plans_cli_tests;
+#[cfg(test)]
+mod plans_http_tests;
+#[cfg(test)]
+mod plans_mail_tests;
 mod pos_cash;
 #[cfg(test)]
 mod pos_cash_tests;

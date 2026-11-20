@@ -2422,9 +2422,11 @@ fn an_approver_without_the_driver_group_stands_behind_nothing() {
         );
         let id = r.in_review(&ann);
         let plan = propose(r, &rex_agent, "mileage_trip.confirm", &id);
+        // D97: a person who cannot read the trip does not decide it; the alias answers as for a
+        // plan that is not there (it was the module's own "no mileage_trip" before).
         let refused = r.d.approve(&dan, &mut Vault::new(), &plan);
         assert!(
-            matches!(refused, Err(CallError::Handler(ref m)) if m.starts_with("no mileage_trip")),
+            matches!(refused, Err(CallError::Forbidden(_))),
             "{refused:?}"
         );
         assert_eq!(r.state(&id), "in_review");
@@ -2438,7 +2440,7 @@ fn an_approver_without_the_driver_group_stands_behind_nothing() {
         let plan = propose(r, &ada_agent, "mileage_trip.discard_stuck", &stuck);
         let refused = r.d.approve(&eve, &mut Vault::new(), &plan);
         assert!(
-            matches!(refused, Err(CallError::Handler(ref m)) if m.starts_with("no mileage_trip")),
+            matches!(refused, Err(CallError::Forbidden(_))),
             "{refused:?}"
         );
         assert_eq!(r.state(&stuck), "recording");
@@ -2471,10 +2473,12 @@ fn the_discard_an_agent_proposed_is_approved_only_by_the_driver_of_the_trip() {
         );
         let plan = propose(r, &agent, "mileage_trip.discard", &id);
         // Nobody who is not the driver stands behind the discard of another's trip: a plain
-        // driver is told no such trip, a reviewer and an administrator, who read it, are told
-        // whose action it is. The plan is not spent by any of the refusals.
+        // driver, who cannot read it, finds no such plan (D97), a reviewer and an administrator,
+        // who read it, are told whose action it is. The plan is not spent by any of the refusals.
+        let e = r.d.approve(&bob, &mut Vault::new(), &plan);
+        assert!(matches!(e, Err(CallError::Forbidden(_))), "bob: {e:?}");
+        assert_eq!(r.state(&id), "rejected", "bob");
         for (approver, needle) in [
-            (&bob, "no mileage_trip"),
             (&rita, "only the driver of a trip can discard it"),
             (&ada, "only the driver of a trip can discard it"),
         ] {

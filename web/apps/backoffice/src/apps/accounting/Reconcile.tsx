@@ -13,6 +13,7 @@
 // Keyboard: j and k (or the arrow keys) move between transactions, Enter runs the first proposal.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Icon, Select, fmt, getCurrency, t } from "@obop/ui";
+import { notifySent } from "../../approvals/sent.ts";
 import { call, search, type Row } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { ModelPageProps } from "../../extensions.ts";
@@ -166,8 +167,7 @@ export function ReconcileView(p: ModelPageProps) {
     return true;
   }
   function fail(r: Awaited<ReturnType<typeof call>>): false {
-    if (r.kind === "approval")
-      d.notify(t("Approval needed: nothing changes until a human approves it."), "info");
+    if (r.kind === "approval") notifySent(d.notify, r.planId);
     else if (r.kind === "error") d.notify(serverMessage(r.message), "error");
     return false;
   }

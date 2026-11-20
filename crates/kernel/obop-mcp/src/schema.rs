@@ -340,7 +340,7 @@ fn describe(c: &CommandInfo, cmd: &str) -> String {
     let mut d = c.description.to_string();
     if c.needs_approval {
         d.push_str(
-            " Needs human approval: called with an agent token it does not run, it returns status \"approval_required\" and a plan_id; ask a human to approve the plan.",
+            " Needs human approval: called with an agent token it does not run, it returns status \"approval_required\" and a plan_id; a person approves or rejects it on the Approvals page of the back office, and plan__get says what became of it.",
         );
     }
     if cmd == "update" {
@@ -372,6 +372,7 @@ pub fn tools(d: &Dispatcher, p: &Principal) -> Vec<J> {
         };
         let input = match models.get(model) {
             Some(m) => input_schema(m, cmd),
+            None if model == obop_commands::plans::MODEL => plan_input_schema(cmd),
             None => {
                 json!({"type": "object", "additionalProperties": true, "description": "The same JSON object as the REST request body of this command."})
             }
@@ -387,6 +388,29 @@ pub fn tools(d: &Dispatcher, p: &Principal) -> Vec<J> {
         }));
     }
     out
+}
+
+/// The input of the commands of the model `plan` (D97), which are not records of a model.
+pub fn plan_input_schema(cmd: &str) -> J {
+    let id = json!({"type": "string", "description": "The plan id (plan_id of the approval_required answer)."});
+    match cmd {
+        "get" => json!({"type": "object", "properties": {"id": id}, "required": ["id"]}),
+        "approve" => {
+            json!({"type": "object", "properties": {"id": id, "seen_version": {"type": "integer", "description": "The seen_version that plan.get answered: when the record changed since, nothing runs."}}, "required": ["id"]})
+        }
+        "reject" => {
+            json!({"type": "object", "properties": {"id": id, "reason": {"type": "string", "maxLength": 300, "description": "Why, for the agent to read (at most 300 characters)."}}, "required": ["id"]})
+        }
+        "list" => json!({"type": "object", "properties": {
+            "state": {"type": "string", "enum": ["waiting", "decided"]},
+            "model": {"type": "string"},
+            "record_id": {"type": "string"},
+            "mine": {"type": "boolean"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+            "offset": {"type": "integer", "minimum": 0}
+        }}),
+        _ => json!({"type": "object", "properties": {}}),
+    }
 }
 
 /// Whether an agent's token is denied a field of this class outright, and not given a mask token

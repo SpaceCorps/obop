@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog, fmt, t } from "@obop/ui";
+import { approvalsHref } from "./approvals/route.ts";
 import type { Row } from "./api.ts";
 import { BULK_CAP, inBatches, tally, type Collected, type Outcome } from "./bulk.ts";
 import { serverMessage } from "./serverMessage.ts";
@@ -196,9 +197,16 @@ export function BulkDialog(p: Props) {
                     <strong>{r.label}</strong>{" "}
                     {r.status === "approval" ? (
                       <span>
-                        {t("waiting for approval (plan {plan})", {
-                          plan: r.planId?.slice(0, 8) ?? "",
-                        })}
+                        {r.planId ? (
+                          <a
+                            href={approvalsHref({ id: r.planId })}
+                            aria-label={t("{label}, waiting for approval", { label: r.label })}
+                          >
+                            {t("waiting for approval")}
+                          </a>
+                        ) : (
+                          t("waiting for approval")
+                        )}
                       </span>
                     ) : (
                       <span className="bad-text">{serverMessage(r.message)}</span>

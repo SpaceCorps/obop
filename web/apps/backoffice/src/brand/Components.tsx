@@ -582,8 +582,12 @@ function Feedback({ notify }: { notify: Notify }) {
           <Toast tone="error" onDismiss={() => {}}>
             Could not save the lead. Check your connection and try again.
           </Toast>
-          <Toast tone="info" onDismiss={() => {}}>
-            Approval needed: a human must approve this change first.
+          <Toast
+            tone="info"
+            action={{ label: "Open Approvals", href: "#/approvals" }}
+            onDismiss={() => {}}
+          >
+            Sent for approval.
           </Toast>
         </div>
         <div className="state-row">

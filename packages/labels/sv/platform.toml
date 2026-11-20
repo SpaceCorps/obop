@@ -874,3 +874,27 @@ description = "När posten importerades"
 [labels.sv.model.import_map.field.imported_by]
 label = "Importerad av"
 description = "Vem som importerade den"
+
+[labels.sv.model.plan]
+name = "Begäran om godkännande"
+description = "En begäran som en agent gjort och som väntar på en person, eller som har avgjorts: vem som föreslog vilket kommando på vilken post, när, och vad som blev av det. En person ser de begäranden hen kan avgöra och de som hens egna agenter gjort; en agent ser bara sina egna, med get"
+
+[labels.sv.model.plan.field.seen_version]
+label = "Visad version"
+description = "Indata till approve: versionen av posten som personen fick se (seen_version i svaret från get); om posten har ändrats sedan dess körs ingenting och begäran fortsätter att vänta"
+
+[labels.sv.model.plan.field.reason]
+label = "Skäl"
+description = "Indata till reject: varför, med högst 300 tecken, för agenten att läsa; hålls åtskilt från alla instruktioner"
+
+[labels.sv.model.plan.action.count]
+label = "Räkna"
+description = "Hur många begäranden som väntar på den som frågar (waiting), hur många av dem hens egna agenter gjort (mine_waiting) och om hen får avgöra några (can_decide). Endast en person"
+
+[labels.sv.model.plan.action.approve]
+label = "Godkänn"
+description = "Godkänn en väntande begäran: kommandot körs så som agenten föreslog det. Ange id och, från get, seen_version: om posten har ändrats sedan dess körs ingenting. Endast en person"
+
+[labels.sv.model.plan.action.reject]
+label = "Avvisa"
+description = "Avvisa en väntande begäran: ingenting körs och agenten får veta det. Ange id och gärna ett skäl (högst 300 tecken). Endast en person"

@@ -969,7 +969,7 @@ async fn an_agent_proposes_a_delete_a_human_approves_once() {
         res["structuredContent"]["instruction"]
             .as_str()
             .unwrap()
-            .contains("human")
+            .contains("A person must approve")
     );
     let plan = res["structuredContent"]["plan_id"]
         .as_str()
@@ -1497,17 +1497,20 @@ async fn with_a_brand_row_the_documents_that_name_nothing_are_what_they_were() {
     pin::check("DOCUMENT_PINS_UNMOVED", &pinned, &now);
 }
 
-// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here. Again on
+// `feat/approvals-inbox` (D97, 2026-11-17), on purpose: the two `initialize` rows, whose
+// instructions now say that a person decides on the Approvals page and that plan__get tells the
+// agent what became of its plan.
 #[rustfmt::skip]
 pub(crate) const DOCUMENT_PINS: &[(&str, &str)] = &[
-    ("dev/initialize", "8a3f084efbe055ac106ace611ea479ac11fafeb26ad0b847e07e4f62bfb7d9fd"),
+    ("dev/initialize", "66b2cdbf47be8564dd3159c9902e690ba0b09fe78677f8723c071cdc2d891df0"),
     ("dev/protected_resource", "e3e57b571ff64b0181b39e754bfb08de13fd750617d8ddac25c5c27802695f7d"),
     ("dev/protected_resource_mcp", "926657cda56f9be9a4b624ab9bac92342d9a517a269790fa85048c69d327091f"),
     ("dev/server_card_well_known", "5250a8129ea0a45f48397d565a091ece41bfe9ef556f5d9c7e2c48657b1a40b6"),
     ("dev/server_card", "c34818d586218d5ae34764d7051d44aea7290bf336d99840436a8921c0aa7772"),
     ("dev/ai_catalog", "d109573687505810bfb7f85dec1a83df3468e2a893bf1fd8d926ccc23ee342d1"),
     ("dev/authorization_server", "1a2b1763741896338d5e9c00d0d87022021e95588f0d6cb49fc954ba87f1acbf"),
-    ("auth/initialize", "8a3f084efbe055ac106ace611ea479ac11fafeb26ad0b847e07e4f62bfb7d9fd"),
+    ("auth/initialize", "66b2cdbf47be8564dd3159c9902e690ba0b09fe78677f8723c071cdc2d891df0"),
     ("auth/protected_resource", "d7db74c6cf3b25a26eea951a1be0e93df1327fec0702cc89fc6507e84a5b2e90"),
     ("auth/protected_resource_mcp", "9691f5d13e591152c01115d55b42eeafd99f2ebec921ecb7498358d1f8c322e6"),
     ("auth/server_card_well_known", "4d2e0e2a45e427581785d30b719aae7536949437a50f43049ebba18489f5e2fe"),

@@ -5,6 +5,7 @@
 // `projects_task.create` with the project filled in. Nothing here is not a command (OR-4).
 import { useEffect, useState, type FormEvent } from "react";
 import { fmt, t } from "@obop/ui";
+import { notifySent } from "../../approvals/sent.ts";
 import { search, type Command, type FieldMeta, type ModelMeta, type Row } from "../../api.ts";
 import type { RecordExtProps } from "../../extensions.ts";
 import { useData } from "../../data.tsx";
@@ -90,8 +91,7 @@ export function ProjectPanel({ row, busy }: RecordExtProps) {
     const out = await d.run(a.id, { id: r.id });
     setWorking("");
     if (out.kind === "error") d.notify(serverMessage(out.message), "error");
-    else if (out.kind === "approval")
-      d.notify(t("Approval needed: nothing changes until a human approves it."), "info");
+    else if (out.kind === "approval") notifySent(d.notify, out.planId);
   };
 
   const add = async (e: FormEvent) => {

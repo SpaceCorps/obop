@@ -107,7 +107,7 @@ pub const FIELDS: &[SealedField] = &[
 ];
 
 /// Short-lived values whose purpose is their own key.
-pub const KV_PREFIXES: &[&str] = &["plan:", "vault:", "mcp:s:"];
+pub const KV_PREFIXES: &[&str] = &["plan:", "planrec:", "vault:", "mcp:s:"];
 
 #[derive(Debug, Clone, Copy)]
 pub struct Options {

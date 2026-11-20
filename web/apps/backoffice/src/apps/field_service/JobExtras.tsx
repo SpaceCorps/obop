@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { Button, Dialog, Input, t } from "@obop/ui";
 import { call, type Row } from "../../api.ts";
+import { notifySent } from "../../approvals/sent.ts";
 import { useData } from "../../data.tsx";
 import type { RecordExtProps } from "../../extensions.ts";
 import { formatDate, isoDate, money, optionLabel } from "../../format.ts";
@@ -45,7 +46,7 @@ export function SignOff({ row, busy }: RecordExtProps) {
         d.notify(t("Signed by {name}", { name: who }), "ok");
       } else if (r.kind === "approval") {
         setOpen(false);
-        d.notify(t("Sent for approval"), "info");
+        notifySent(d.notify, r.planId);
       } else d.notify(serverMessage(r.message), "error");
     } finally {
       setWorking(false);
@@ -134,7 +135,7 @@ export function CompleteJob({ model, row, busy }: RecordExtProps) {
     try {
       const r = await d.run(cmd.id, { id: row.id });
       if (r.kind === "ok") d.notify(actionDone(cmd) || t("Job done"), "ok");
-      else if (r.kind === "approval") d.notify(t("Sent for approval"), "info");
+      else if (r.kind === "approval") notifySent(d.notify, r.planId);
       else d.notify(serverMessage(r.message), "error");
     } finally {
       setWorking(false);

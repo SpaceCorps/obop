@@ -22,7 +22,11 @@ import { ListView } from "../views/ListView.tsx";
 import type { ViewProps } from "../views/types.ts";
 import { Block, Specimen } from "./kit.tsx";
 
-type Notify = (t: string, tone?: "ok" | "error" | "info") => void;
+type Notify = (
+  t: string,
+  tone?: "ok" | "error" | "info",
+  opts?: { action?: { label: string; href?: string } },
+) => void;
 
 const f = (name: string, kind: FieldMeta["kind"], extra: Partial<FieldMeta> = {}): FieldMeta => ({
   name,
@@ -358,7 +362,9 @@ function DialogDemo({ notify }: { notify: Notify }) {
         </Button>
         <Button
           onClick={() =>
-            notify("Approval needed: a human must approve posting INV-0042 first.", "info")
+            notify("Sent for approval.", "info", {
+              action: { label: "Open Approvals", href: "#/approvals" },
+            })
           }
         >
           Approval toast

@@ -215,12 +215,14 @@ test.describe("governed fields for an agent", () => {
     );
     await page.goto(`/#/${model}/${model}?view=list&id=${rec.id}`);
 
-    // The action proposes: the toast names the plan and nothing changes.
+    // The action proposes: the toast says so with a link to the plan, and nothing changes.
     await action(page, /^Finish/).click();
-    const toast = page.locator(".toast").filter({ hasText: "Approval needed" });
-    await expect(toast).toContainText("Finish");
-    await expect(toast).toContainText(/plan [0-9a-f]{8}/);
-    await expect(toast).toContainText("Nothing changes until a human approves it");
+    const toast = page.locator(".toast").filter({ hasText: "Sent for approval." });
+    await expect(toast.getByRole("link", { name: "Open Approvals" })).toHaveAttribute(
+      "href",
+      /#\/approvals\?id=[0-9a-f-]+/,
+    );
+    await expect(toast).not.toContainText(/plan [0-9a-f]{8}/);
     expect(await stateOf(api, model, rec.id)).toBe("doing");
   });
 });

@@ -10,6 +10,7 @@ import { search, type Row } from "../../api.ts";
 import type { App } from "../../Chrome.tsx";
 import { useData } from "../../data.tsx";
 import { formatDate, isoDate, optionLabel } from "../../format.ts";
+import { notifySent } from "../../approvals/sent.ts";
 import { actionConfirm, actionTitle } from "../../labels.ts";
 import { clockText, linkOf, shownNumber } from "../../inputs/display.ts";
 import { serverMessage } from "../../serverMessage.ts";
@@ -77,7 +78,7 @@ export function MyDay({ app }: { app: App }) {
     try {
       const r = await d.run(`${JOB}.${action}`, { id: job.id });
       if (r.kind === "ok") d.notify(done, "ok");
-      else if (r.kind === "approval") d.notify(t("Sent for approval"), "info");
+      else if (r.kind === "approval") notifySent(d.notify, r.planId);
       else d.notify(serverMessage(r.message), "error");
     } finally {
       setWorking("");

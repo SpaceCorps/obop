@@ -48,6 +48,19 @@ describe("the kinds of the security log", () => {
     }
   });
 
+  it("lists the five kinds of the approvals inbox and has words for each", () => {
+    for (const k of [
+      "plan_proposed",
+      "plan_approved",
+      "plan_rejected",
+      "plan_failed",
+      "plan_expired",
+    ]) {
+      expect(listed, k).toContain(k);
+      expect(EVENT_KINDS[k], `no label for ${k}`).toBeDefined();
+    }
+  });
+
   it("lists the kinds of Sign and has words for every one", () => {
     const sign = listed.filter((k) => k.startsWith("sign_"));
     expect(sign.sort()).toEqual([

@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 /// The lock every guarded write takes (and the signer door of `sign`, around its batch).
 pub(crate) const TXN_KEY: &str = "dispatcher.txn";
 /// How long a proposed plan waits for a human.
-const PLAN_TTL_MS: u64 = 7 * 24 * 3600 * 1000;
+pub(crate) const PLAN_TTL_MS: u64 = 7 * 24 * 3600 * 1000;
 
 /// The backend and key ring a dispatcher shares with other processes.
 #[derive(Clone)]
@@ -196,6 +196,132 @@ impl Plans {
                     .remove(plan_id);
                 Ok(())
             }
+        }
+    }
+}
+
+/// The key of the receipt of a plan (D97): `planrec:` does not start with `plan:`, so a scan of
+/// the plans never returns a receipt.
+fn receipt_key(plan_id: &str) -> String {
+    format!("planrec:{plan_id}")
+}
+
+/// The marker that the expiry of a plan was written to the log once (`kv_put_new`).
+fn expired_key(plan_id: &str) -> String {
+    format!("planexp:{plan_id}")
+}
+
+/// Receipts of plans (D97): small, non-secret facts about a plan (who proposed which command on
+/// which record, when, and what became of it), sealed like the plan and kept longer than it. The
+/// text is the JSON of `plans::Receipt`; this layer only stores it.
+#[derive(Default)]
+pub(crate) struct Receipts {
+    local: Mutex<HashMap<String, String>>,
+    expired: Mutex<HashSet<String>>,
+}
+
+impl Receipts {
+    pub fn put(
+        &self,
+        shared: Option<&Shared>,
+        plan_id: &str,
+        json: &str,
+        ttl_ms: u64,
+    ) -> Result<(), String> {
+        match shared {
+            Some(s) => {
+                let key = receipt_key(plan_id);
+                let sealed = s.ring.seal_str(&key, json).map_err(String::from)?;
+                s.backend.kv_put(&key, &sealed, Some(ttl_ms))
+            }
+            None => {
+                self.local
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(plan_id.to_string(), json.to_string());
+                Ok(())
+            }
+        }
+    }
+
+    pub fn get(&self, shared: Option<&Shared>, plan_id: &str) -> Option<String> {
+        match shared {
+            Some(s) => {
+                let key = receipt_key(plan_id);
+                let sealed = s.backend.kv_get(&key).ok()??;
+                s.ring.open_str(&key, &sealed).ok()
+            }
+            None => self
+                .local
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(plan_id)
+                .cloned(),
+        }
+    }
+
+    /// Every receipt that has not run out, by plan id. A receipt that cannot be opened is left
+    /// out (it belongs to no plan anyone can act on).
+    pub fn all(&self, shared: Option<&Shared>) -> Result<Vec<(String, String)>, String> {
+        match shared {
+            Some(s) => Ok(s
+                .backend
+                .kv_scan("planrec:")?
+                .into_iter()
+                .filter_map(|(key, sealed)| {
+                    let id = key.strip_prefix("planrec:")?.to_string();
+                    let text = s.ring.open_str(&key, &sealed).ok()?;
+                    Some((id, text))
+                })
+                .collect()),
+            None => Ok(self
+                .local
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()),
+        }
+    }
+
+    /// True for the first caller only, in every process: the one that writes `plan_expired`.
+    pub fn first_to_expire(&self, shared: Option<&Shared>, plan_id: &str) -> bool {
+        match shared {
+            Some(s) => s
+                .backend
+                .kv_put_new(&expired_key(plan_id), "1", Some(40 * 24 * 3600 * 1000))
+                .unwrap_or(false),
+            None => self
+                .expired
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(plan_id.to_string()),
+        }
+    }
+}
+
+impl Plans {
+    /// Every plan waiting, by id. A plan that cannot be opened or read is left out.
+    pub fn all(&self, shared: Option<&Shared>) -> Result<Vec<(String, Pending)>, String> {
+        match shared {
+            Some(s) => Ok(s
+                .backend
+                .kv_scan("plan:")?
+                .into_iter()
+                .filter_map(|(key, sealed)| {
+                    let id = key.strip_prefix("plan:")?.to_string();
+                    let text = s.ring.open_str(&purpose(&id), &sealed).ok()?;
+                    let p = Pending::from_json(&serde_json::from_str(&text).ok()?)?;
+                    Some((id, p))
+                })
+                .collect()),
+            None => Ok(self
+                .local
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()),
         }
     }
 }

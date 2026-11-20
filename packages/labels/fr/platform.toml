@@ -874,3 +874,27 @@ description = "Quand l'enregistrement a été importé"
 [labels.fr.model.import_map.field.imported_by]
 label = "Importé par"
 description = "Qui l'a importé"
+
+[labels.fr.model.plan]
+name = "Demande d'approbation"
+description = "Une demande faite par un agent qui attend une personne, ou qui a été tranchée : qui a proposé quelle commande sur quel enregistrement, quand, et ce qu'il en est advenu. Une personne voit les demandes qu'elle pourrait trancher et celles de ses propres agents ; un agent ne voit que les siennes, avec get"
+
+[labels.fr.model.plan.field.seen_version]
+label = "Version vue"
+description = "Entrée de approve : la version de l'enregistrement montrée à la personne (seen_version dans la réponse de get) ; si l'enregistrement a changé depuis, rien ne s'exécute et la demande reste en attente"
+
+[labels.fr.model.plan.field.reason]
+label = "Motif"
+description = "Entrée de reject : pourquoi, en 300 caractères au plus, pour que l'agent le lise ; tenu à l'écart de toute instruction"
+
+[labels.fr.model.plan.action.count]
+label = "Compter"
+description = "Combien de demandes attendent la personne qui demande (waiting), combien d'entre elles viennent de ses propres agents (mine_waiting) et si elle peut en trancher (can_decide). Réservé à une personne"
+
+[labels.fr.model.plan.action.approve]
+label = "Approuver"
+description = "Approuver une demande en attente : la commande s'exécute telle que l'agent l'a proposée. Indiquez id et, depuis get, seen_version : si l'enregistrement a changé depuis, rien ne s'exécute. Réservé à une personne"
+
+[labels.fr.model.plan.action.reject]
+label = "Refuser"
+description = "Refuser une demande en attente : rien ne s'exécute et l'agent en est informé. Indiquez id et, si vous le souhaitez, un motif (300 caractères au plus). Réservé à une personne"

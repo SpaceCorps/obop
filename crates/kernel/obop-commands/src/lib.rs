@@ -7,7 +7,7 @@ pub mod audit;
 pub mod locale;
 mod shared;
 pub use shared::Shared;
-use shared::{Pending, Plans};
+use shared::{Pending, Plans, Receipts};
 
 pub use obop_masking::{PrincipalKind, RestoreError, Vault};
 use obop_masking::{Restored, mode_for};
@@ -154,8 +154,16 @@ pub enum CallError {
         plan_id: String,
     },
     UnknownPlan(String),
+    /// The plan was decided before this call reached it (D97): by whom (none for an expiry),
+    /// when (RFC 3339) and how (`approved`, `rejected`, `failed`, `expired`). Given only to a
+    /// person who may see the plan; anybody else gets `UnknownPlan`.
+    AlreadyDecided {
+        state: String,
+        by: Option<String>,
+        at: Option<String>,
+    },
     /// The record is no longer at the version the caller read (D75). `current` is the version it
-    /// has now. Nothing was written. No producer yet.
+    /// has now. Nothing was written. Produced by `plan.approve` with a `seen_version` (D97).
     PreconditionFailed {
         current: i64,
     },
@@ -270,6 +278,12 @@ struct Registered {
     /// generated `update` and the generic handler of an action share a unit of work
     /// (`engine::implied`); a handler written by hand reads and writes the store itself.
     generated: bool,
+    /// One of the commands of the model `plan` (D97): run by the dispatcher, not by `handler`,
+    /// and left out of the metadata of the models.
+    native: bool,
+    /// Exists for a person at the keyboard only: any other principal is answered as for a
+    /// command that does not exist, and the catalogue does not show it.
+    person_only: bool,
     handler: Handler,
 }
 
@@ -279,6 +293,12 @@ struct Registered {
 pub struct Dispatcher {
     /// Proposed calls waiting for approval: in memory, or shared between processes (B1).
     plans: Plans,
+    /// Their receipts (D97).
+    receipts: Receipts,
+    /// The owner of an agent as the stored account says now (D97, after the review): an approved
+    /// plan runs with the groups the owner still holds, and not at all when the account is
+    /// disabled or gone. Unset (tests, embedding, `--dev-auth`): the plan's own copy.
+    proposer_source: std::sync::OnceLock<plans::ProposerSource>,
     /// Run before commands, the catalogue and the metadata are looked up: lets the installer
     /// bring this process's modules in line with what another process installed (B1).
     sync_hook: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>>,
@@ -638,13 +658,18 @@ impl Dispatcher {
     /// describe: every command of a model without a visible `list` (the settings, the import map,
     /// the instance update, a module plan ...), sorted by id. A command that a module refuses for
     /// everyone (`refuse_always`) is left out. `obop openapi` and `GET /api/openapi.json` describe
-    /// these from here (K26), so the document names every command the token can run.
+    /// these from here (K26), so the document names every command the token can run. The plan
+    /// commands (D97) are left out: they have their own shapes (`openapi::describe_plans`), and a
+    /// person-only command is no command at all to anyone else.
     pub fn commands_outside_meta(&self, surface: Surface, p: &Principal) -> Vec<CommandInfo> {
         self.sync();
         let cmds = self.commands.read().unwrap();
         let never = self.never.read().unwrap();
-        let visible =
-            |c: &Registered| on_surface(c.surfaces, surface) && p.allows(c.permission_group);
+        let visible = |c: &Registered| {
+            on_surface(c.surfaces, surface)
+                && p.allows(c.permission_group)
+                && (!c.person_only || p.is_person())
+        };
         // A command of group `*` that the kind of token can never use is left out, as from the
         // catalogues (L17).
         let listed = |model: &str| {
@@ -654,7 +679,11 @@ impl Dispatcher {
         let mut out: Vec<CommandInfo> = cmds
             .iter()
             .filter(|(id, c)| {
-                visible(c) && devices::usable(id, p) && !never.contains_key(*id) && !listed(c.model)
+                visible(c)
+                    && !c.native
+                    && devices::usable(id, p)
+                    && !never.contains_key(*id)
+                    && !listed(c.model)
             })
             .map(|(id, c)| CommandInfo {
                 id: id.clone(),
@@ -681,8 +710,11 @@ impl Dispatcher {
         let cmds = self.commands.read().unwrap();
         let models = self.models.read().unwrap();
         let order = self.order.read().unwrap();
-        let visible =
-            |c: &Registered| on_surface(c.surfaces, surface) && p.allows(c.permission_group);
+        let visible = |c: &Registered| {
+            on_surface(c.surfaces, surface)
+                && p.allows(c.permission_group)
+                && (!c.person_only || p.is_person())
+        };
         // Whether the caller may see the target of a `shows_option_of` (K27).
         let sees_target = |s: &obop_registry::ShowsOption| {
             cmds.get(&format!("{}.list", s.model))
@@ -708,7 +740,8 @@ impl Dispatcher {
                 let Some(list) = cmds.get(&format!("{name}.list")) else {
                     continue;
                 };
-                if !visible(list) || !devices::usable(&format!("{name}.list"), p) {
+                // The plans (D97) are no records: their commands have their own shapes.
+                if !visible(list) || list.native || !devices::usable(&format!("{name}.list"), p) {
                     continue;
                 }
                 let never = self.never.read().unwrap();
@@ -1089,6 +1122,7 @@ impl Dispatcher {
                 module: module.id.clone(),
                 description: crate::import_map::describe(m.name, command)
                     .or_else(|| crate::brand::describe(m.name, command))
+                    .or_else(|| crate::plans::describe(m.name, command))
                     .unwrap_or(c.description),
                 needs_approval: c.needs_approval,
                 model: m.name,
@@ -1100,6 +1134,8 @@ impl Dispatcher {
                 actor,
                 writes: !matches!(command, "get" | "list" | "search"),
                 generated,
+                native: false,
+                person_only: false,
                 handler,
             }),
         );
@@ -1477,6 +1513,7 @@ impl Dispatcher {
             .filter(|(id, c)| {
                 on_surface(c.surfaces, surface)
                     && p.allows(c.permission_group)
+                    && (!c.person_only || p.is_person())
                     && devices::usable(id, p)
             })
             .map(|(id, _)| id.clone())
@@ -1504,10 +1541,18 @@ impl Dispatcher {
         if !on_surface(c.surfaces, surface) {
             return Err(CallError::NotOnSurface(id.into()));
         }
+        // Only a person decides (D97): to anyone else these commands do not exist.
+        if c.person_only && !p.is_person() {
+            return Err(CallError::UnknownCommand(id.into()));
+        }
         // Same answer for "no such group" and "scope too narrow": do not leak which. A command a
         // mobile app's token is refused whatever its groups is answered the same (L20).
         if !p.allows(c.permission_group) || devices::refused(id, p) {
             return Err(CallError::Forbidden(id.into()));
+        }
+        // The plans (D97): run here, never proposed, never a plan themselves.
+        if c.native {
+            return self.plan_call(p, vault, id, input);
         }
         // The fields an agent sent in clear although it is shown them masked count as changed in
         // this call, whatever their value (K63; `engine::frozen::sent_clear`).
@@ -1553,114 +1598,38 @@ impl Dispatcher {
             if let Some(why) = self.mixed(&c, p, &input, &pre) {
                 return Err(refusal(why, &input));
             }
-            // Dry-run: keep the restored input, hand back a plan id (D18, D42).
+            // Dry-run: keep the restored input, hand back a plan id (D18, D42). The count of an
+            // agent's waiting plans and the new one are one step (D97), under the lock.
+            let _cap = match &_txn {
+                Some(_) => None,
+                None => Some(self.txn_guard()?),
+            };
             let plan_id = uuid::Uuid::now_v7().to_string();
-            self.plans
-                .put(
-                    self.shared.get(),
-                    &plan_id,
-                    &Pending {
-                        principal: p.clone(),
-                        id: id.into(),
-                        input,
-                        clear,
-                    },
-                )
-                .map_err(CallError::Handler)?;
+            self.propose(
+                &plan_id,
+                &Pending {
+                    principal: p.clone(),
+                    id: id.into(),
+                    input,
+                    clear,
+                },
+            )?;
             return Err(CallError::ApprovalRequired { plan_id });
         }
         self.run(&c, p, vault, input, pre)
     }
 
-    /// A human approves a proposed plan. The command runs with the proposing agent's own
-    /// permissions (still checked) and the approver must hold the command's group too.
+    /// A human approves a proposed plan (`POST /api/approve/{plan_id}`). The command runs with the
+    /// proposing agent's own permissions (still checked) and the approver must hold the command's
+    /// group too, and be able to read the record (D97). It answers as it always has: a plan that
+    /// is not there is not found, also when it was decided before (`plan.approve` says by whom).
     pub fn approve(
         &self,
         approver: &Principal,
         vault: &mut Vault,
         plan_id: &str,
     ) -> Result<Response, CallError> {
-        self.sync();
-        if !approver.is_person() {
-            return Err(CallError::Forbidden("approve".into()));
-        }
-        let _txn = self.txn_guard()?;
-        let plan = self
-            .plans
-            .get(self.shared.get(), plan_id)
-            .ok_or_else(|| CallError::UnknownPlan(plan_id.into()))?;
-        let c = self
-            .commands
-            .read()
-            .unwrap()
-            .get(&plan.id)
-            .cloned()
-            .ok_or_else(|| CallError::UnknownCommand(plan.id.clone()))?;
-        if !approver.allows(c.permission_group) || !plan.principal.allows(c.permission_group) {
-            return Err(CallError::Forbidden(plan.id.clone()));
-        }
-        // The record may have changed since the proposal, so the guard runs again, and the
-        // approver must hold the groups of any transition the call implicitly runs (D48).
-        let mut input = plan.input.clone();
-        // What the agent sent in clear for a field it is shown masked counts as changed now too.
-        let _clear = engine::frozen::ClearScope::enter(plan.clear.clone());
-        // The guard sees who is approving, so that it can refuse before the plan is spent.
-        stamp_approver(&mut input, approver);
-        let mut pre = Vec::new();
-        let guard = self.guards.read().unwrap().get(&plan.id).cloned();
-        if let Some(g) = guard {
-            let v = (g.guard)(&plan.principal, &input).map_err(|m| refusal(m, &input))?;
-            if v.requires.iter().any(|r| !approver.allows(r)) {
-                return Err(CallError::Forbidden(plan.id.clone()));
-            }
-            pre = v.pre;
-            if let Some(i) = v.input {
-                input = i;
-            }
-        }
-        self.run_screen(&plan.id, &plan.principal, &mut input)?;
-        let check = self.before_approve.read().unwrap().get(&plan.id).cloned();
-        if let Some(check) = check {
-            check(approver, &input).map_err(|m| refusal(m, &input))?;
-        }
-        // Taken out first, so it runs once; if it is still there the plan would run again.
-        self.plans
-            .remove(self.shared.get(), plan_id)
-            .map_err(CallError::Handler)?;
-        // The person who approved is who a handler may name in its log; the plan keeps the agent
-        // that proposed it as the caller. Stamped again after the guard, which may have rewritten
-        // the input.
-        stamp_approver(&mut input, approver);
-        // The write context of the run names the approving person (N15): the security log line
-        // of whatever the plan does says who approved it (`audit::event_record`), next to the
-        // agent that proposed it as the actor.
-        let mut ctx = obop_storage::ctx::current().unwrap_or_else(|| {
-            let owner = plan.principal.id.strip_suffix("/agent");
-            obop_storage::WriteCtx::new(owner.unwrap_or(&plan.principal.id), "", &plan.id)
-        });
-        ctx.via.approver = Some(approver.id.clone());
-        ctx.via.agent = plan.principal.kind == PrincipalKind::Agent;
-        let _approved = obop_storage::ctx::scope(ctx);
-        // The actions the call implies (D48) are calls of their own, through their wrappers:
-        // they see the approver as a direct call of the action does (docs/ISSUES.md O5).
-        for step in &mut pre {
-            stamp_approver(&mut step.input, approver);
-        }
-        let result = self.run(&c, &plan.principal, vault, input, pre);
-        // The store refused before the call changed anything: the plan goes back, or the
-        // approver's retry (the 503 says to retry) would meet "not found" and the proposal would
-        // be lost (D74). The decision is the one the 503 layer makes to say "nothing was changed"
-        // (a fault was noted and no change committed), whatever the run answered (a run that
-        // swallowed a refusal and answered Ok is turned into that 503 as well), and not a look at
-        // the text of the error, which the engine may wrap. After a change had committed the plan
-        // stays gone: it ran. So it does after `storage_unavailable`, where a change in flight may
-        // have committed before the connection broke: the answer says "unknown", and putting the
-        // plan back would let the retry run an approved action twice.
-        let state = obop_storage::fault::state();
-        if state.fault.is_some() && !state.wrote && !state.in_flight {
-            self.put_plan_back(approver, plan_id, &plan);
-        }
-        result
+        self.decide(approver, vault, plan_id, None, true)
     }
 
     /// Put an approved plan back after the store refused its run before anything changed. Tried
@@ -1668,13 +1637,13 @@ impl Dispatcher {
     /// back the proposal is lost, and the answer says so: the request counts as one that did
     /// something that cannot be taken back (so it is a partial 503), and the security log has an
     /// entry that names the plan, so that the agent can be asked to propose again.
-    fn put_plan_back(&self, approver: &Principal, plan_id: &str, plan: &Pending) {
+    fn put_plan_back(&self, approver: &Principal, plan_id: &str, plan: &Pending) -> bool {
         use obop_storage::fault;
         let started = std::time::Instant::now();
         loop {
             let put = fault::bookkeeping(|| self.plans.put(self.shared.get(), plan_id, plan));
             if put.is_ok() {
-                return;
+                return true;
             }
             if started.elapsed() >= std::time::Duration::from_secs(2) {
                 break;
@@ -1704,6 +1673,7 @@ impl Dispatcher {
                 eprintln!("{what} (and the security log was refused too: {e})");
             }
         }
+        false
     }
 
     /// Run the handler of a command through its wrapper, if one was installed (`around`). Every
@@ -2515,6 +2485,7 @@ pub mod json;
 mod kinds;
 mod observe;
 pub mod pay;
+pub mod plans;
 pub mod public;
 pub mod query;
 pub mod sign;
@@ -2590,6 +2561,8 @@ mod masked_guess_tests;
 mod observe_tests;
 #[cfg(test)]
 mod one_way_tests;
+#[cfg(test)]
+mod plans_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]

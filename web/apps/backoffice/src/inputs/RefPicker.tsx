@@ -27,6 +27,7 @@ import {
   type Row,
   type ServerFilter,
 } from "../api.ts";
+import { notifySent } from "../approvals/sent.ts";
 import { labelField, useData, useRows } from "../data.tsx";
 import { toEdit, type Edit } from "../edit.ts";
 import { visibleFields } from "../format.ts";
@@ -461,10 +462,7 @@ export function RefPicker(p: RefPickerProps) {
       d.notify(t("{model} “{name}” created", { model: targetTitle, name }));
       if (id) pick(id);
     } else if (r.kind === "approval") {
-      d.notify(
-        t("Approval needed: the new record was proposed. A human must approve it first."),
-        "info",
-      );
+      notifySent(d.notify, r.planId);
       close();
     } else {
       // Something else is required: the full form takes it from here.
