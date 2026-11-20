@@ -1,12 +1,20 @@
 // The trip review of Mileage: the route of a trip drawn from its points, and what the server's
 // check of the track found, in words. Pure, so it is tested without a browser.
 import { fmt, t } from "@obop/ui";
+import { analyseTrack, type Fix } from "@obop/trip-core";
 import type { Row } from "../../api.ts";
 
 /** The server drops a fix whose accuracy radius is above this (mileage `track.rs` MAX_ACCURACY_M). */
 export const MAX_ACCURACY_M = 100;
 
-export type Point = { lat: number; lon: number; accuracy: number | null };
+export type Point = {
+  lat: number;
+  lon: number;
+  accuracy: number | null;
+  /** The sequence number and the time of the fix (ms), when the row has them. */
+  seq?: number;
+  t?: number;
+};
 
 const num = (v: unknown): number | null => {
   if (v === null || v === undefined || v === "") return null;
@@ -21,7 +29,14 @@ export function pointsOf(rows: readonly Row[]): Point[] {
     const lat = num(r.lat);
     const lon = num(r.lon);
     if (lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
-    out.push({ lat, lon, accuracy: num(r.accuracy_m) });
+    const seq = num(r.seq);
+    const t = typeof r.recorded_at === "string" ? Date.parse(r.recorded_at) : Number.NaN;
+    out.push({
+      lat,
+      lon,
+      accuracy: num(r.accuracy_m),
+      ...(seq !== null && Number.isFinite(t) ? { seq, t } : {}),
+    });
   }
   return out;
 }
@@ -39,19 +54,48 @@ export type Drawn = {
 };
 
 /**
+ * The fixes the server's check of the track keeps, in stretches (`analyseTrack` of
+ * `@obop/trip-core`, the rules the server computes the distance with): a fix of poor accuracy, one
+ * from before the start, one that jumped further than a car can drive, and the fixes before a
+ * re-anchor of a trip that had not moved yet (a far-off first fix) are left out (UB10). Points
+ * without a sequence number and a time are judged by their accuracy alone, as one stretch.
+ */
+function stretchesOf(points: readonly Point[], startedAt?: string | null): Point[][] {
+  if (points.every((p) => p.seq !== undefined && p.t !== undefined)) {
+    const fixes: Fix[] = points.map((p) => ({
+      seq: p.seq!,
+      t: p.t!,
+      lat: p.lat,
+      lon: p.lon,
+      accuracyM: p.accuracy,
+    }));
+    const start = startedAt ? Date.parse(startedAt) : Number.NaN;
+    const a = analyseTrack(fixes, Number.isFinite(start) ? { startedAt: start } : {});
+    const bySeq = new Map(points.map((p) => [p.seq!, p]));
+    return a.stretches.map((s) => s.map((seq) => bySeq.get(seq)!));
+  }
+  const kept = points.filter(accepted);
+  return kept.length ? [kept] : [];
+}
+
+/**
  * Fit the route into a box keeping its shape (a local flat projection: a degree of longitude is
- * shorter by the cosine of the latitude), with `pad` around it.
+ * shorter by the cosine of the latitude), with `pad` around it. The route is the fixes that the
+ * check of the track keeps (`stretchesOf`); the others are the dropped points.
  */
 export function drawRoute(
   points: readonly Point[],
   width: number,
   height: number,
   pad = 16,
+  startedAt?: string | null,
 ): Drawn {
   const empty: Drawn = { path: "", start: null, end: null, dropped: [] };
   if (!points.length) return empty;
-  // The box fits the accepted route; one far-off dropped fix must not shrink it to a dot.
-  const fit = points.some(accepted) ? points.filter(accepted) : points;
+  const stretches = stretchesOf(points, startedAt);
+  const keep = new Set(stretches.flat());
+  // The box fits the kept route; one far-off dropped fix must not shrink it to a dot.
+  const fit = keep.size ? [...keep] : points;
   const lat0 = (fit.reduce((s, p) => s + p.lat, 0) / fit.length) * (Math.PI / 180);
   const k = Math.cos(lat0);
   const proj = (p: Point) => [p.lon * k, -p.lat] as const;
@@ -79,11 +123,16 @@ export function drawRoute(
       round(pin(offY + (y - minY) * scale, height)),
     ];
   };
-  const kept: [number, number][] = [];
-  const dropped: [number, number][] = [];
-  for (const p of points) (accepted(p) ? kept : dropped).push(at(p));
-  const path = kept.map(([x, y], i) => `${i ? "L" : "M"}${x} ${y}`).join(" ");
-  return { path, start: kept[0] ?? null, end: kept[kept.length - 1] ?? null, dropped };
+  const dropped = points.filter((p) => !keep.has(p)).map(at);
+  // Each stretch is its own line: the jump between two is not part of the route.
+  const lines = stretches.map((s) => s.map(at));
+  const path = lines
+    .flatMap((line) => line.map(([x, y], i) => `${i ? "L" : "M"}${x} ${y}`))
+    .join(" ");
+  const first = lines[0]?.[0] ?? null;
+  const lastLine = lines[lines.length - 1];
+  const end = lastLine ? lastLine[lastLine.length - 1]! : null;
+  return { path, start: first, end, dropped };
 }
 
 /** The flags the server set when the trip ended (`seq_gap:2 speed_jump:1 low_accuracy:14`). */

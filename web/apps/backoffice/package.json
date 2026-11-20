@@ -6,6 +6,7 @@
   "type": "module",
   "dependencies": {
     "@obop/host-bridge": "workspace:*",
+    "@obop/trip-core": "workspace:*",
     "@obop/ui": "workspace:*",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

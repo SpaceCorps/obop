@@ -55,6 +55,14 @@ export interface TrackAnalysis {
   readonly first: Fix | null;
   /** The last accepted fix (the end position of the trip), `null` when there is none. */
   readonly last: Fix | null;
+  /**
+   * The route the distance runs through, as the `seq` of the fixes that count, in stretches: a
+   * re-anchor after something was driven starts a new stretch (the jump between two stretches is
+   * not part of the distance and is not a line of the route); a re-anchor before anything was
+   * driven drops the fixes before it, because the trip starts where the run does. For a drawing
+   * of the route (the back office's trip review, docs/ISSUES.md UB10).
+   */
+  readonly stretches: readonly (readonly number[])[];
 }
 
 /**
@@ -97,6 +105,7 @@ export function analyseTrack(fixes: readonly Fix[], options: TrackOptions = {}):
   let reanchors = 0;
   let first: Fix | null = null;
   let last: Fix | null = null;
+  let stretches: number[][] = [];
   // The run of held-back fixes and the sum of its own steps.
   let run: Fix[] = [];
   let runM = 0;
@@ -125,7 +134,11 @@ export function analyseTrack(fixes: readonly Fix[], options: TrackOptions = {}):
         if (run.length >= REANCHOR_RUN) {
           // Nothing was driven before the jump (a phone that stood at a far-off place, the
           // emulator's default one): the trip starts where the run does.
-          if (distanceM === 0) first = run[0]!;
+          if (distanceM === 0) {
+            first = run[0]!;
+            stretches = [];
+          }
+          stretches.push(run.map((f) => f.seq));
           reanchors++;
           accepted += run.length;
           distanceM += runM;
@@ -139,8 +152,10 @@ export function analyseTrack(fixes: readonly Fix[], options: TrackOptions = {}):
       run = [];
       runM = 0;
       distanceM += d;
+      stretches[stretches.length - 1]!.push(p.seq);
     } else {
       first = p;
+      stretches.push([p.seq]);
     }
     accepted++;
     last = p;
@@ -156,6 +171,7 @@ export function analyseTrack(fixes: readonly Fix[], options: TrackOptions = {}):
     seqGaps,
     first,
     last,
+    stretches,
   };
 }
 

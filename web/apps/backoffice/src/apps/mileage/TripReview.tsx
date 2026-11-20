@@ -75,7 +75,8 @@ export function TripReview({ model, row, value }: RecordExtProps) {
   }, [d.token, row.id, row.purpose, row.point_count]);
 
   const pts = useMemo(() => (points.kind === "ready" ? pointsOf(points.rows) : []), [points]);
-  const drawn = useMemo(() => drawRoute(pts, W, H, 24), [pts]);
+  const startedAt = typeof row.started_at === "string" ? row.started_at : null;
+  const drawn = useMemo(() => drawRoute(pts, W, H, 24, startedAt), [pts, startedAt]);
   const poor = pts.filter((p) => !accepted(p)).length;
   const km = kmOf(row.distance_m);
   const minutes = minutesBetween(row.started_at, row.ended_at);
