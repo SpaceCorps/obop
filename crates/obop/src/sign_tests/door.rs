@@ -1300,14 +1300,16 @@ fn the_race_is_won_once_on_sqlite_and_on_postgres_too() {
             assert_eq!(s, 200, "{v}");
             f.mint("mia", &f.req.clone()).await.1
         });
+        // The form reads the request from the store, and the synchronous PostgreSQL client cannot
+        // be used inside the runtime: the one form all eight signers post is made out here.
+        let form = f.form_body(
+            &path,
+            &[("name", "Jane Test"), ("agree", "1"), ("doc", &f.file)],
+        );
         rt.block_on(async {
             let mut set = tokio::task::JoinSet::new();
             for i in 0..8u8 {
-                let (router, path) = (f.router.clone(), path.clone());
-                let body = f.form_body(
-                    &path,
-                    &[("name", "Jane Test"), ("agree", "1"), ("doc", &f.file)],
-                );
+                let (router, path, body) = (f.router.clone(), path.clone(), form.clone());
                 set.spawn(async move {
                     send(
                         &router,
