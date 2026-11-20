@@ -817,6 +817,37 @@ fn checkout_creates_one_order_with_lines_priced_by_the_server() {
     assert!(h.contains("data-clear-cart") && h.contains("we will contact you"));
 }
 
+/// G10: an order line records the title the buyer saw: the listing's translation in the
+/// buyer's language, and the default title where the listing has none.
+#[test]
+fn an_order_line_keeps_the_title_in_the_language_of_the_checkout() {
+    let s = shop();
+    let sencha = listing(&s, "sencha-green-tea");
+    let teapot = listing(&s, "stoneware-teapot");
+    let std = methods(&s)
+        .into_iter()
+        .find(|m| m.text("name") == "Standard delivery")
+        .unwrap();
+    let lines = [(sencha.id.as_str(), "1"), (teapot.id.as_str(), "1")];
+    let r = post(
+        &s,
+        "/shop/checkout",
+        &order_fields(&lines, &[("shipping_method_id", &std.id), ("lang", "de")]),
+    );
+    assert_eq!(r.status, 303, "{}", text(&r));
+    let mut got: Vec<String> = s
+        .store
+        .backend()
+        .list("ecommerce_order_line")
+        .unwrap()
+        .into_iter()
+        .map(|(_, l)| l["description"].as_str().unwrap().to_string())
+        .collect();
+    got.sort();
+    // The Sencha has a German translation, the teapot has none.
+    assert_eq!(got, ["Sencha Grüntee, 100 g", "Stoneware Teapot, 0.8 l"]);
+}
+
 #[test]
 fn security_checkout_never_trusts_prices_totals_or_state_from_the_browser() {
     let s = shop();
