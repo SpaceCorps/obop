@@ -43,7 +43,8 @@ export function ModelActions({ model }: { model: ModelMeta }) {
     setBusy(null);
     const name = actionTitle(a);
     if (r.kind !== "ok" && r.kind !== "approval") {
-      if (asked) setRefusal(serverMessage(r.message));
+      // The server's words are kept and worded when drawn (D9), so a language switch rewords them.
+      if (asked) setRefusal(r.message);
       else d.notify(serverMessage(r.message), "error");
       return;
     }
@@ -84,7 +85,7 @@ export function ModelActions({ model }: { model: ModelMeta }) {
           danger={false}
           currency={getCurrency()}
           busy={busy === asking.id}
-          error={refusal}
+          error={refusal === null ? null : serverMessage(refusal)}
           onCancel={() => ask(null)}
           onConfirm={(values) => void run(asking, values, true)}
         />
