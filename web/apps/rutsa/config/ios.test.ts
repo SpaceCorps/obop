@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { iosBundleId, withoutDevClientEntries } from "./ios.ts";
+import { iosBundleId, withoutDevClientEntries, withoutFetchMode } from "./ios.ts";
 
 describe("the bundle id of the iOS build", () => {
   test("is the application id unless the build names another", () => {
@@ -14,6 +14,21 @@ describe("the bundle id of the iOS build", () => {
     for (const value of bad) {
       expect(() => iosBundleId(value, "org.obop.rutsa"), value).toThrow(/OBOP_IOS_BUNDLE_ID/);
     }
+  });
+});
+
+describe("the background modes", () => {
+  test("fetch is removed and location stays", () => {
+    expect(withoutFetchMode(["location", "fetch"])).toEqual(["location"]);
+    expect(withoutFetchMode(["fetch", "location"])).toEqual(["location"]);
+    expect(withoutFetchMode(["location"])).toEqual(["location"]);
+  });
+
+  test("nothing else is touched and a missing list is an empty one", () => {
+    expect(withoutFetchMode(["location", "audio", "fetch"])).toEqual(["location", "audio"]);
+    expect(withoutFetchMode(undefined)).toEqual([]);
+    expect(withoutFetchMode("fetch")).toEqual([]);
+    expect(withoutFetchMode(["location", 5, null])).toEqual(["location"]);
   });
 });
 

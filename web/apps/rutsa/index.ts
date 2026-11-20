@@ -1,5 +1,7 @@
-// The entry of the app. The background location task will be imported here, before the app is
-// registered (PLAN.md, C3): the system can run it when no screen exists.
+// The background location task is defined here, before the app is registered: expo-task-manager
+// runs it when the location service delivers positions, also when no screen exists
+// (src/native/task.ts).
+import "./src/native/task.ts";
 import { registerRootComponent } from "expo";
 import App from "./App.tsx";
 

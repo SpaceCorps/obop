@@ -1,7 +1,7 @@
 import type { ExpoConfig } from "expo/config";
 import { withAppBuildGradle, withInfoPlist, type ConfigPlugin } from "expo/config-plugins";
 import { identity } from "./config/identity.ts";
-import { iosBundleId, withoutDevClientEntries } from "./config/ios.ts";
+import { iosBundleId, withoutDevClientEntries, withoutFetchMode } from "./config/ios.ts";
 import { NATIVE_TEXTS } from "./config/native-texts.ts";
 
 // The id is a placeholder until the owner rules (config/identity.ts). A test build for iOS signed
@@ -22,6 +22,9 @@ const withMinSdk: ConfigPlugin = (config) =>
     return c;
   });
 
+// The one background mode on iOS is `location`: the `fetch` that expo-task-manager adds is taken out
+// (config/ios.ts).
+//
 // `expo-dev-client` is in the plugins for the development build (`vp run start`). Its iOS entries in
 // Info.plist (the Bonjour service `_expo._tcp` and the URL scheme `exp+rutsa`) belong to that build
 // only and are removed from every other one; OBOP_DEV_CLIENT=1 at `expo prebuild` keeps them for an
@@ -30,6 +33,7 @@ const withMinSdk: ConfigPlugin = (config) =>
 const DEV_CLIENT = process.env.OBOP_DEV_CLIENT === "1";
 const withIosPlistCleanup: ConfigPlugin = (config) =>
   withInfoPlist(config, (c) => {
+    c.modResults.UIBackgroundModes = withoutFetchMode(c.modResults.UIBackgroundModes);
     if (!DEV_CLIENT) c.modResults = withoutDevClientEntries(c.modResults);
     return c;
   });
@@ -48,6 +52,12 @@ const config: ExpoConfig = {
     // would carry the database without its key, which stays in the Keystore of this phone, so
     // Android's backup is off.
     allowBackup: false,
+    // expo-task-manager schedules a persisted job when a location arrives and Android refuses that
+    // without this permission: the first emulator run of the Mileage app's release build crashed
+    // with "Requested job cannot be persisted without holding
+    // android.permission.RECEIVE_BOOT_COMPLETED" at the first fix. No library of the app declares
+    // it. It is a normal permission (no prompt).
+    permissions: ["android.permission.RECEIVE_BOOT_COMPLETED"],
     // Permissions that libraries add to the merged manifest and the app never uses: the overlay of
     // the development menu, old external storage access, vibration, and the biometric prompt of
     // secure-store (the key is stored without a fingerprint). The same list as the Mileage app;

@@ -22,6 +22,18 @@ export function iosBundleId(env: string | undefined, fallback: string): string {
 }
 
 /**
+ * The background modes the app declares. `expo-task-manager` adds `fetch` and the app uses no
+ * background fetch (an unused mode is a question in the App Store review); `location` is the only
+ * one it needs. Anything else that a library adds stays.
+ *
+ * From `mileage-app` (`config/ios.ts`).
+ */
+export function withoutFetchMode(modes: unknown): string[] {
+  if (!Array.isArray(modes)) return [];
+  return modes.filter((mode): mode is string => typeof mode === "string" && mode !== "fetch");
+}
+
+/**
  * Takes out of Info.plist the entries that `expo-dev-client` adds for a development build: the
  * Bonjour service `_expo._tcp` (finding a dev server on the network) and the URL scheme `exp+<slug>`
  * (opening a project from the launcher). Any other build has no use for them. The dev launcher's

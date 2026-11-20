@@ -114,10 +114,10 @@ Before C: JDK 17, the Android SDK and the emulator installed (list in `docs/spec
       notification, the app's page in the settings); the text of the iOS location dialog in
       `config/native-texts.ts`; plugin of `expo-location` (foreground service, background mode
       `location`, "while using" only)
-- [ ] C3 `feat(rutsa): background location task`: `native/config.ts` (task name), `native/bus.ts`
-      (change signal), `native/task.ts` imported in `index.ts` before the app is registered;
-      `RECEIVE_BOOT_COMPLETED` on Android; the unused `fetch` mode removed on iOS
-      (`config/ios.ts`)
+- [x] C3 `feat(rutsa): background location task`: `native/config.ts` (task name), `native/bus.ts`
+      (change signal), `native/task.ts` imported in `index.ts` before the app is registered, what
+      it does with a delivery in `core/delivery.ts` and its tests; `RECEIVE_BOOT_COMPLETED` on
+      Android; the unused `fetch` mode removed on iOS (`config/ios.ts`)
 - [ ] C4 `feat(rutsa): start, pause, resume and stop`: `native/recorder.ts`, `native/actions.ts`; the
       Android notification "recording" while a trip runs
 - [ ] C5 `feat(rutsa): recover a recording after a restart`: recording health in
@@ -242,3 +242,6 @@ D23).
 - 2026-11-18: C2 asks for the notification permission of Android 13 too (`requestNotifications`,
   from `mileage-app`), which the plan had left out: without it the notification of BR-14 is not
   shown.
+- 2026-11-20: C3 takes the body of the task of `mileage-app` into the pure `core/delivery.ts`
+  (`storeDelivery`), tested against a real store; `native/task.ts` only stops the updates and
+  signals the screens.
