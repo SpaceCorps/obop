@@ -364,12 +364,17 @@ impl Auth {
         if let Some(bound) = rec["user"].as_str()
             && bound != owner
         {
-            self.event(
-                bound,
-                "passkey_failed",
-                bound,
-                "a passkey of another account was presented",
-            );
+            // A sign-in challenge was bound to a name anybody may type (username-first, E7c): a
+            // line in that name's log would let anybody write one, so only a second step or a
+            // proof, which a password or a session stands behind, writes it.
+            if purpose != "login" {
+                self.event(
+                    bound,
+                    "passkey_failed",
+                    bound,
+                    "a passkey of another account was presented",
+                );
+            }
             return Err(denied("this passkey belongs to a different account"));
         }
         if stored["rp_id"].as_str() != Some(&ctx.rp_id) {

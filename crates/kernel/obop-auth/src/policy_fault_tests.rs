@@ -32,8 +32,12 @@ fn a_sign_in_whose_policy_read_is_refused_gets_no_session_that_skips_enrolment()
         panic!("a session")
     };
     assert!(mfa_enrolment_required);
-    // The policy cannot be read: it was read as "not required" and the person had a full
-    // session without the second factor the administrator demands.
+    // The policy cannot be read: the sign-in answers the store's trouble and hands out no
+    // session. This holds the outcome, not the fix of UB3 alone: the request guard refuses the
+    // session's write after any refused read of the request, so a policy read swallowed as "not
+    // required" ends here too (a mutation run of 2026-11-20 showed it). The two tests below,
+    // whose answers write nothing, are the proof that the policy read itself is no longer
+    // swallowed.
     flaky.refuse_model("obop_setting", Mode::Reads);
     let (done, _) = request(|| r.a.login_step("bob", PW));
     flaky.allow_models();

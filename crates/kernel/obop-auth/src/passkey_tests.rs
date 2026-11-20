@@ -1420,11 +1420,19 @@ fn username_first_lists_the_keys_of_the_name_or_the_same_stand_ins_for_any_other
         r.a.passkey_login(&ctx(), None, &auth.get(&o, ORIGIN))
             .unwrap();
     assert!(is_session(&out), "{out:?}");
-    // ...and not for another one.
-    let o = r.a.passkey_login_options_for(&ctx(), "bob").unwrap();
-    assert!(
-        denied(r.a.passkey_login(&ctx(), None, &auth.get(&o, ORIGIN)))
-            .contains("different account")
+    // ...and not for another one, and a name anybody may type gets no line in its log from it.
+    let before = events_of(&r, "passkey_failed").len();
+    for name in ["bob", "ghost"] {
+        let o = r.a.passkey_login_options_for(&ctx(), name).unwrap();
+        assert!(
+            denied(r.a.passkey_login(&ctx(), None, &auth.get(&o, ORIGIN)))
+                .contains("different account")
+        );
+    }
+    assert_eq!(
+        events_of(&r, "passkey_failed").len(),
+        before,
+        "no passkey_failed line under a typed name"
     );
     // A disabled account gets stand-ins too.
     let mut f = Fields::new();
