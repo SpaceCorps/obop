@@ -106,6 +106,9 @@ pub mod code {
     pub const READONLY_FIELD: &str = "readonly_field";
     /// D95: a ref names a record its field's `ref_filter` does not allow.
     pub const REF_NOT_ALLOWED: &str = "ref_not_allowed";
+    /// D58, U19: the record would belong to someone else under the model's access rule, so its
+    /// creator could not see it afterwards (leave filed for a colleague with a login).
+    pub const CREATOR_BLOCKED: &str = "creator_blocked";
     /// Step 2: the caller is known and may not do this.
     pub const DENIED: &str = "denied";
     /// Step 2: the caller must confirm their identity again.
@@ -269,6 +272,13 @@ pub const TABLE: &[Row] = &[
         retry_after: None,
         origin: "D95",
         hint: "The record named in the field does not satisfy the field's ref_filter (GET /api/meta). Nothing was changed. Pick a record that does, then retry.",
+    },
+    Row {
+        code: code::CREATOR_BLOCKED,
+        status: 400,
+        retry_after: None,
+        origin: "D58",
+        hint: "The record would be someone else's under the model's access rule, so you could not see it afterwards. Nothing was saved. Make it yours, or ask someone the message names to file it.",
     },
     Row {
         code: code::DENIED,
@@ -964,6 +974,7 @@ mod tests {
             ("limit_violated", 400),
             ("readonly_field", 400),
             ("ref_not_allowed", 400),
+            ("creator_blocked", 400),
             ("denied", 403),
             ("reauth_required", 400),
             ("incomplete", 409),
