@@ -1743,6 +1743,8 @@
   "No lines yet.": "Ei vielä rivejä.",
   "No longer a draft: open it to see why": "Ei enää luonnos: avaa nähdäksesi syyn",
   "No mail provider is connected yet.": "Sähköpostipalvelua ei ole vielä yhdistetty.",
+  "No mail server is set up: add one under Customize, Mail": "Postipalvelinta ei ole määritetty: lisää se kohdassa Mukauta, Sähköposti",
+  "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default": "Mikään postipalvelin ei lähetä viestejä, joiden laji on {kind}: lisää laji palvelimelle tai merkitse yksi oletukseksi",
   "No mail server yet": "Ei vielä sähköpostipalvelinta",
   "No match": "Ei osumaa",
   "No matches": "Ei osumia",

@@ -342,6 +342,19 @@ const GUARD_RULES: Rule[] = [
 ];
 
 const RULES: Rule[] = [
+  // Mail (obop-mail): a message queued with no server to send it.
+  [
+    /^no mail server is set up: add one under Customize, Mail$/,
+    () => t("No mail server is set up: add one under Customize, Mail"),
+  ],
+  [
+    /^no mail server sends messages of the kind (\w+): list it on a server or mark one as the default$/,
+    (m) =>
+      t(
+        "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default",
+        { kind: m[1]! },
+      ),
+  ],
   [
     /^unknown field (\w+)\.(\w+)$/,
     (m) => t("Unknown field: {field}", { field: fieldName(m[1]!, m[2]!) }),

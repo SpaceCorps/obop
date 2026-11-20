@@ -1743,6 +1743,8 @@
   "No lines yet.": "No lines yet.",
   "No longer a draft: open it to see why": "No longer a draft: open it to see why",
   "No mail provider is connected yet.": "No mail provider is connected yet.",
+  "No mail server is set up: add one under Customize, Mail": "No mail server is set up: add one under Customize, Mail",
+  "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default": "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default",
   "No mail server yet": "No mail server yet",
   "No match": "No match",
   "No matches": "No matches",

@@ -1743,6 +1743,8 @@
   "No lines yet.": "Aún no hay líneas.",
   "No longer a draft: open it to see why": "Ya no es un borrador: ábralo para ver por qué",
   "No mail provider is connected yet.": "Todavía no hay ningún proveedor de correo conectado.",
+  "No mail server is set up: add one under Customize, Mail": "No hay ningún servidor de correo configurado: añada uno en Personalizar, Correo",
+  "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default": "Ningún servidor de correo envía mensajes del tipo {kind}: añádalo a un servidor o marque uno como predeterminado",
   "No mail server yet": "Aún no hay servidor de correo",
   "No match": "Sin coincidencias",
   "No matches": "Sin coincidencias",

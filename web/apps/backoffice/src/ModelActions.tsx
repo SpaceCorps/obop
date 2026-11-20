@@ -20,6 +20,8 @@ export function ModelActions({ model }: { model: ModelMeta }) {
   const d = useData();
   const [asking, setAsking] = useState<Command | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Why the server refused the action asked in the dialog: it stays open with what was typed.
+  const [refusal, setRefusal] = useState<string | null>(null);
   const actions = modelActions(model);
   if (actions.length === 0) return null;
 
@@ -28,16 +30,28 @@ export function ModelActions({ model }: { model: ModelMeta }) {
       .map((n) => model.fields.find((f) => f.name === n))
       .filter((f): f is FieldMeta => !!f);
 
-  async function run(a: Command, input: Record<string, unknown>) {
-    setAsking(null);
+  const ask = (a: Command | null) => {
+    setRefusal(null);
+    setAsking(a);
+  };
+
+  /** Run `a`; from the dialog (`asked`) a refusal is shown in it and the dialog stays open. */
+  async function run(a: Command, input: Record<string, unknown>, asked = false) {
+    setRefusal(null);
     setBusy(a.id);
     const r = await d.run(a.id, input);
     setBusy(null);
     const name = actionTitle(a);
+    if (r.kind !== "ok" && r.kind !== "approval") {
+      if (asked) setRefusal(serverMessage(r.message));
+      else d.notify(serverMessage(r.message), "error");
+      return;
+    }
+    setAsking(null);
     if (r.kind === "ok") {
       d.notify(actionDone(a) ?? t("{name} done", { name }));
       d.refreshAll();
-    } else if (r.kind === "approval")
+    } else
       d.notify(
         t(
           "Approval needed: “{name}” was proposed (plan {plan}). Nothing changes until a human approves it.",
@@ -45,7 +59,6 @@ export function ModelActions({ model }: { model: ModelMeta }) {
         ),
         "info",
       );
-    else d.notify(serverMessage(r.message), "error");
   }
 
   return (
@@ -57,9 +70,7 @@ export function ModelActions({ model }: { model: ModelMeta }) {
           data-model-action={a.id}
           loading={busy === a.id}
           disabled={busy !== null}
-          onClick={() =>
-            needsOf(a).length > 0 || questionOf(model, a) ? setAsking(a) : void run(a, {})
-          }
+          onClick={() => (needsOf(a).length > 0 || questionOf(model, a) ? ask(a) : void run(a, {}))}
         >
           {actionTitle(a)}
         </Button>
@@ -72,8 +83,10 @@ export function ModelActions({ model }: { model: ModelMeta }) {
           question={questionOf(model, asking)}
           danger={false}
           currency={getCurrency()}
-          onCancel={() => setAsking(null)}
-          onConfirm={(values) => void run(asking, values)}
+          busy={busy === asking.id}
+          error={refusal}
+          onCancel={() => ask(null)}
+          onConfirm={(values) => void run(asking, values, true)}
         />
       )}
     </>

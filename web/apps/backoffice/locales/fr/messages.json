@@ -1743,6 +1743,8 @@
   "No lines yet.": "Aucune ligne pour l’instant.",
   "No longer a draft: open it to see why": "N'est plus un brouillon : ouvrez-la pour voir pourquoi",
   "No mail provider is connected yet.": "Aucun fournisseur d’e-mail n’est encore connecté.",
+  "No mail server is set up: add one under Customize, Mail": "Aucun serveur de messagerie n’est configuré : ajoutez-en un sous Personnaliser, E-mail",
+  "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default": "Aucun serveur de messagerie n’envoie les messages du type {kind} : ajoutez-le à un serveur ou définissez-en un par défaut",
   "No mail server yet": "Pas encore de serveur de messagerie",
   "No match": "Aucune correspondance",
   "No matches": "Aucun résultat",

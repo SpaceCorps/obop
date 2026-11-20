@@ -1743,6 +1743,8 @@
   "No lines yet.": "Inga rader än.",
   "No longer a draft: open it to see why": "Inte längre ett utkast: öppna den för att se varför",
   "No mail provider is connected yet.": "Ingen e-postleverantör är ansluten ännu.",
+  "No mail server is set up: add one under Customize, Mail": "Ingen e-postserver är inställd: lägg till en under Anpassa, E-post",
+  "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default": "Ingen e-postserver skickar meddelanden av typen {kind}: lägg till den på en server eller markera en som standard",
   "No mail server yet": "Ingen e-postserver ännu",
   "No match": "Ingen träff",
   "No matches": "Inga träffar",

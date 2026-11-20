@@ -1743,6 +1743,8 @@
   "No lines yet.": "machine-drafted",
   "No longer a draft: open it to see why": "machine-drafted",
   "No mail provider is connected yet.": "machine-drafted",
+  "No mail server is set up: add one under Customize, Mail": "machine-drafted",
+  "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default": "machine-drafted",
   "No mail server yet": "machine-drafted",
   "No match": "machine-drafted",
   "No matches": "machine-drafted",

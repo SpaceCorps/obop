@@ -1743,6 +1743,8 @@
   "No lines yet.": "Brak pozycji.",
   "No longer a draft: open it to see why": "To już nie jest szkic: otwórz, aby zobaczyć dlaczego",
   "No mail provider is connected yet.": "Nie podłączono jeszcze żadnego dostawcy poczty.",
+  "No mail server is set up: add one under Customize, Mail": "Nie skonfigurowano serwera poczty: dodaj go w Dostosuj, Poczta",
+  "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default": "Żaden serwer poczty nie wysyła wiadomości rodzaju {kind}: dodaj go do serwera albo oznacz jeden jako domyślny",
   "No mail server yet": "Brak serwera poczty",
   "No match": "Brak dopasowania",
   "No matches": "Brak dopasowań",

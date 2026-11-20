@@ -53,6 +53,8 @@ const SAMPLES: string[] = [
   "fleet_vehicle.state: a select needs options",
   "fleet_vehicle.owner: a ref needs `to`, the target model",
   "fleet_vehicle.plate: field has no description",
+  "no mail server is set up: add one under Customize, Mail",
+  "no mail server sends messages of the kind invoice: list it on a server or mark one as the default",
 ];
 
 const read = (lang: string): Record<string, string> =>
