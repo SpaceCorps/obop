@@ -88,6 +88,8 @@ mod modules_describe;
 mod modules_tests;
 #[cfg(test)]
 mod oauth_tests;
+#[cfg(test)]
+mod one_way_tests;
 mod openapi_cmd;
 #[cfg(test)]
 mod openapi_tests;

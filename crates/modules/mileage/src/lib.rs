@@ -44,6 +44,12 @@ pub fn register_with_clock(d: &Dispatcher, store: &Store, clock: Clock) {
     guards::install(d, &m.id, db.clone(), clock.clone());
     handlers::install(d, &m, db.clone(), clock.clone());
     audit::install(d, db, clock);
+    // The discards declare no `from`; the policy lets them start only before confirm, so `meta`
+    // does not count them as a way out of a confirmed trip (U76).
+    for a in ["discard", "discard_stuck"] {
+        let states = policy::starts_in(a).unwrap_or_default();
+        d.starts_only_in(&m.id, &format!("{}.{a}", policy::TRIP), states);
+    }
 }
 
 /// Removes the route of every private trip that is no longer recording but still holds one

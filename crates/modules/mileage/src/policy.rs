@@ -315,6 +315,20 @@ fn word(action: &str) -> &str {
     }
 }
 
+/// The states each action of a trip may start in (the declared `from`, or for the two discards,
+/// which declare none, the states this policy allows); `None` for a name that is no action.
+pub(crate) fn starts_in(action: &str) -> Option<&'static [&'static str]> {
+    Some(match action {
+        "end" => &[RECORDING],
+        "submit" => &[ENDED],
+        "confirm" | "reject" => &[IN_REVIEW],
+        "reopen" => &[REJECTED],
+        "discard" => &[RECORDING, ENDED, REJECTED],
+        "discard_stuck" => &[RECORDING, ENDED],
+        _ => return None,
+    })
+}
+
 /// Whether `who` may run `action` on `trip`, and why not. `approver` is the person who approved
 /// an agent's proposal, if this is the run of one: the person who decides is then the approver.
 /// Group membership of the action itself is the dispatcher's check; this is state, ownership and
@@ -328,14 +342,8 @@ pub fn check_action(
     let st = state(trip);
     let decider = approver.unwrap_or(&who.id);
     let mine = owns(who, trip);
-    let allowed_from: &[&str] = match action {
-        "end" => &[RECORDING],
-        "submit" => &[ENDED],
-        "confirm" | "reject" => &[IN_REVIEW],
-        "reopen" => &[REJECTED],
-        "discard" => &[RECORDING, ENDED, REJECTED],
-        "discard_stuck" => &[RECORDING, ENDED],
-        other => return Err(format!("{TRIP}.{other} is not an action of a trip")),
+    let Some(allowed_from) = starts_in(action) else {
+        return Err(format!("{TRIP}.{action} is not an action of a trip"));
     };
     match action {
         "end" | "submit" | "discard" if !mine => {
