@@ -1394,10 +1394,20 @@ impl Runtime {
                 }
                 Some(_) => {}
             }
-            if self.backend.update(CONNECTION, &c.id, &f)? {
-                Ok(())
-            } else {
-                Err(format!("no connection {}", c.id))
+            if !self.backend.update(CONNECTION, &c.id, &f)? {
+                return Err(format!("no connection {}", c.id));
+            }
+            // And after it: a revocation that came between the check and the write set the state
+            // before it cleared the tokens, so a revoked state here means the tokens just written
+            // may have outlived its clearing. They are cleared again.
+            match self.backend.get(CONNECTION, &c.id)? {
+                Some(now) if now.get("state").and_then(J::as_str) == Some("revoked") => {
+                    let mut clear = Fields::new();
+                    clear.insert("oauth_tokens".into(), "".into());
+                    self.backend.update(CONNECTION, &c.id, &clear)?;
+                    Err(REVOKED.into())
+                }
+                _ => Ok(()),
             }
         })
     }
@@ -1905,5 +1915,54 @@ mod config_tests {
         let c = with(&[("OBOP_PUBLIC_URL", "https://obop.example/"), ("X", "1")]);
         assert_eq!(c.public_url.as_deref(), Some("https://obop.example"));
         assert_eq!(with(&[("OBOP_PUBLIC_URL", "")]).public_url, None);
+    }
+}
+
+#[cfg(test)]
+mod revoke_race_tests {
+    use super::*;
+    use obop_storage::testing::Flaky;
+
+    /// K19: a revocation that lands between the re-check of `store_tokens` and its write leaves
+    /// no tokens on the revoked connection.
+    #[test]
+    fn a_revocation_between_the_check_and_the_write_leaves_no_tokens() {
+        let b = obop_storage::open("memory:").unwrap();
+        let flaky = Flaky::new(b.clone());
+        let rt = Runtime::with_providers(
+            flaky.clone(),
+            Arc::new(Dispatcher::new()),
+            SecretBox::for_tests(),
+            Config::default(),
+            providers(),
+            Some(Client::new(ClientConfig::default())),
+        );
+        let row = json!({"name": "Hook", "provider": "webhook_out", "state": "connected",
+            "retention_days": 30, "oauth_tokens": ""});
+        b.insert(CONNECTION, "c1", row.as_object().unwrap())
+            .unwrap();
+        let c = Connection::load(&*b, "c1").unwrap();
+        let tokens = Tokens::from_json(&json!({
+            "access_token": "a", "refresh_token": "r", "expires_at": 4_000_000_000u64
+        }))
+        .unwrap();
+        // The revocation, as `connection.revoke` does it: the state first, then the tokens.
+        flaky.after_the_get_of(
+            CONNECTION,
+            0,
+            Box::new(|b| {
+                let mut f = Fields::new();
+                f.insert("state".into(), "revoked".into());
+                b.update(CONNECTION, "c1", &f).unwrap();
+                let mut f = Fields::new();
+                f.insert("oauth_tokens".into(), "".into());
+                b.update(CONNECTION, "c1", &f).unwrap();
+            }),
+        );
+        let e = rt.store_tokens(&c, &tokens).unwrap_err();
+        assert!(e.contains("revoked"), "{e}");
+        let now = b.get(CONNECTION, "c1").unwrap().unwrap();
+        assert_eq!(now["state"], "revoked");
+        assert_eq!(now["oauth_tokens"], "", "no tokens on a revoked connection");
     }
 }
