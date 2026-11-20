@@ -43,9 +43,7 @@ fn passwordless(r: &Rig) -> (SoftAuthenticator, String, obop_commands::Principal
         .register_finish(&p, &token, &ctx(), "Phone", &cred)
         .unwrap();
     let opts = r.auth.proof_options(&p, &ctx()).unwrap();
-    r.auth
-        .proof(&p, &ctx(), &auth.get(&opts, ORIGIN))
-        .unwrap();
+    r.auth.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
     r.auth.set_passwordless(&p, true, &pw).unwrap();
     (auth, token, p)
 }
@@ -59,24 +57,21 @@ fn a_credential_change_after_the_check_of_a_passkey_alone_ends_the_phones_sign_i
         let r = rig_on(backend, "ada", OAuthConfig::default());
         let (mut key, _, _) = passwordless(&r);
         let c = r.mobile_client();
-        let v = r.o.validate_authorize(BASE, &r.mobile_params(&c, APP)).unwrap();
+        let v =
+            r.o.validate_authorize(BASE, &r.mobile_params(&c, APP))
+                .unwrap();
         let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
         let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
-        let opts = r
-            .o
-            .passkey_options(&ctx(), &id, &binder, &csrf, None)
-            .unwrap();
+        let opts =
+            r.o.passkey_options(&ctx(), &id, &binder, &csrf, None)
+                .unwrap();
         let cred = key.get(&opts, ORIGIN);
         // The change: the credential epoch moves (as a new password, a reset or a passkey removed
         // on another device moves it), right after the `after`-th read of the account by the
         // passkey step.
         let fired = Arc::new(AtomicUsize::new(0));
         let checked = Arc::new(AtomicBool::new(false));
-        let (seen, past_check, events) = (
-            fired.clone(),
-            checked.clone(),
-            r.backend.clone(),
-        );
+        let (seen, past_check, events) = (fired.clone(), checked.clone(), r.backend.clone());
         flaky.after_the_get_of(
             "auth_user",
             after,
@@ -94,9 +89,7 @@ fn a_credential_change_after_the_check_of_a_passkey_alone_ends_the_phones_sign_i
                 seen.fetch_add(1, Ordering::SeqCst);
             }),
         );
-        let step = r
-            .o
-            .login_passkey(&ctx(), &id, &binder, &csrf, None, &cred);
+        let step = r.o.login_passkey(&ctx(), &id, &binder, &csrf, None, &cred);
         let fired_in_step = fired.load(Ordering::SeqCst) > 0;
         flaky.allow_models();
         if !fired_in_step {
@@ -125,7 +118,10 @@ fn a_credential_change_after_the_check_of_a_passkey_alone_ends_the_phones_sign_i
         if let Ok(DecideOut::Redirect(loc)) = out {
             let code = query(&loc, "code");
             let t = r.mobile_token(&c, &code, &verifier(), APP, &DEVICE);
-            assert!(t.is_err(), "after read {after}: a token for a changed credential");
+            assert!(
+                t.is_err(),
+                "after read {after}: a token for a changed credential"
+            );
         } else {
             assert_eq!(out, Err(FlowError::Gone), "after read {after}");
         }

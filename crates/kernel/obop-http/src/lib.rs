@@ -43,9 +43,9 @@ mod addr_scan_tests;
 #[cfg(test)]
 mod audit_kind_tests;
 #[cfg(test)]
-mod brand_scan_tests;
-#[cfg(test)]
 mod auth_platform_login_tests;
+#[cfg(test)]
+mod brand_scan_tests;
 #[cfg(test)]
 mod error_tests;
 #[cfg(test)]

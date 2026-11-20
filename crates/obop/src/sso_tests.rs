@@ -33,6 +33,7 @@ const CALLBACK: &str = "http://obop.test/api/auth/oidc/callback";
 const CALLBACK_HTTPS: &str = "https://obop.test/api/auth/oidc/callback";
 
 mod phone;
+mod sites;
 
 // ---- the stand-in provider ---------------------------------------------------------------------
 

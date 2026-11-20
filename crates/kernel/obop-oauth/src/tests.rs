@@ -160,10 +160,10 @@ fn query(location: &str, key: &str) -> String {
         .to_string()
 }
 
+mod mcp_hosts;
 mod microsoft;
 mod mobile;
 mod mobile_review;
-mod mcp_hosts;
 mod passkey_epoch;
 
 #[test]

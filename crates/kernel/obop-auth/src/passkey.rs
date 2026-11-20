@@ -1024,7 +1024,9 @@ impl PasskeyApi for Auth {
         self.pk_limit(ctx, "verify", VERIFY_PER_IP)?;
         match mfa_token {
             Some(tok) => self.login_second(ctx, tok, credential),
-            None => self.login_passwordless(ctx, credential).map(|(out, _, _)| out),
+            None => self
+                .login_passwordless(ctx, credential)
+                .map(|(out, _, _)| out),
         }
     }
 
@@ -1037,7 +1039,9 @@ impl PasskeyApi for Auth {
         self.site(ctx)?;
         self.pk_limit(ctx, "verify", VERIFY_PER_IP)?;
         match mfa_token {
-            Some(tok) => self.login_second(ctx, tok, credential).map(|out| (out, None)),
+            Some(tok) => self
+                .login_second(ctx, tok, credential)
+                .map(|out| (out, None)),
             None => self
                 .login_passwordless(ctx, credential)
                 .map(|(out, name, epoch)| (out, Some((name, epoch)))),

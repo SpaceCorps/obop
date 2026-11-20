@@ -68,7 +68,12 @@ fn a_client_registered_before_the_list_cannot_sign_in_to_a_host_off_it() {
         .validate_authorize(BASE, &after.params(&id, "https://evil.example/cb"))
         .err();
     assert!(
-        matches!(refused, Some(AuthzError::Page { key: "err.redirect" })),
+        matches!(
+            refused,
+            Some(AuthzError::Page {
+                key: "err.redirect"
+            })
+        ),
         "{refused:?}"
     );
     // The only redirect, left out of the request: the same answer.
@@ -78,7 +83,9 @@ fn a_client_registered_before_the_list_cannot_sign_in_to_a_host_off_it() {
     };
     assert!(matches!(
         after.o.validate_authorize(BASE, &p),
-        Err(AuthzError::Page { key: "err.redirect" })
+        Err(AuthzError::Page {
+            key: "err.redirect"
+        })
     ));
     // A client whose redirect is on the list goes on as before.
     after

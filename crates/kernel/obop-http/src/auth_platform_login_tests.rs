@@ -55,8 +55,7 @@ async fn login(answer: &'static str) -> (StatusCode, Option<String>, String) {
 
 #[tokio::test]
 async fn a_refused_read_of_the_account_is_a_503_and_never_a_wrong_password() {
-    let (s, wait, body) =
-        login("storage_unavailable: connection refused (db.internal:5432)").await;
+    let (s, wait, body) = login("storage_unavailable: connection refused (db.internal:5432)").await;
     assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE, "{body}");
     assert!(wait.is_some(), "a time to wait");
     assert!(!body.contains("db.internal"), "no store text: {body}");

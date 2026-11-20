@@ -2053,7 +2053,10 @@ fn the_scan_for_literals_finds_a_new_literal() {
 
     // The same text in another function is not the row's: the row names the item.
     let moved = OAUTH_RS.replace("fn cookie_name()", "fn other()");
-    let (found, drift) = literal_scan(&listed(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &moved)]));
+    let (found, drift) = literal_scan(&listed(&[
+        (PAGE_PATH, &page_with(35)),
+        (OAUTH_PATH, &moved),
+    ]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("`other`"), "{found:?}");
     assert!(drift.iter().any(|d| d.contains("cookie_name")), "{drift:?}");

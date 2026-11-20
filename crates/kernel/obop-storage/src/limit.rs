@@ -54,8 +54,8 @@ pub fn hit_sliding_at(
         None => 0,
     };
     // previous * (window - into) / window + current, in whole hits, rounded down.
-    let estimate =
-        current + (u128::from(previous) * u128::from(window_ms - into) / u128::from(window_ms)) as u64;
+    let estimate = current
+        + (u128::from(previous) * u128::from(window_ms - into) / u128::from(window_ms)) as u64;
     if estimate > max {
         Err((window_ms - into).div_ceil(1000).max(1))
     } else {
@@ -112,6 +112,9 @@ mod tests {
             assert!(hit_sliding_at(&*b, "s", 60, minute, t3).is_ok());
         }
         assert!(hit_sliding_at(&*b, "s", 60, minute, t3).is_err());
-        assert!(hit_sliding_at(&*b, "other", 60, minute, t3).is_ok(), "keys are independent");
+        assert!(
+            hit_sliding_at(&*b, "other", 60, minute, t3).is_ok(),
+            "keys are independent"
+        );
     }
 }
