@@ -135,13 +135,13 @@ async fn two_links_with_two_names_at_once_sign_the_request_once_under_one_of_the
     let mut set = tokio::task::JoinSet::new();
     for i in 0..8u8 {
         let (path, name) = if i % 2 == 0 {
-            (first_path.clone(), "Jane+Test")
+            (first_path.clone(), "Jane Test")
         } else {
-            (second_path.clone(), "John+Other")
+            (second_path.clone(), "John Other")
         };
-        let (router, file) = (f.router.clone(), f.file.clone());
+        let router = f.router.clone();
+        let body = f.form_body(&path, &[("name", name), ("agree", "1"), ("doc", &f.file)]);
         set.spawn(async move {
-            let body = format!("name={name}&agree=1&doc={file}");
             let r = send(
                 &router,
                 Request::post(&path)

@@ -197,7 +197,7 @@ pub(crate) fn form(lang: &str, f: &Form<'_>, brand: &Shown) -> Page {
 <p><a class=\"btn\" href=\"{pdf}\" target=\"_blank\" rel=\"noopener noreferrer\">{open_full}</a></p>\
 <p class=\"muted\">{fingerprint}</p>{history}{error}\
 <form method=\"post\" action=\"{base}\">\
-<input type=\"hidden\" name=\"doc\" value=\"{hash}\"><input type=\"hidden\" name=\"words\" value=\"{words}\"><input type=\"hidden\" name=\"lang\" value=\"{lang}\">{seen}\
+<input type=\"hidden\" name=\"doc\" value=\"{hash}\"><input type=\"hidden\" name=\"words\" value=\"{words}\"><input type=\"hidden\" name=\"wid\" value=\"{wid}\"><input type=\"hidden\" name=\"lang\" value=\"{lang}\">{seen}\
 <label for=\"name\">{name_label}</label>\
 <input id=\"name\" name=\"name\" type=\"text\" maxlength=\"120\" autocomplete=\"name\" required value=\"{typed}\">\
 <p class=\"muted\">{name_hint}</p>\
@@ -214,6 +214,12 @@ pub(crate) fn form(lang: &str, f: &Form<'_>, brand: &Shown) -> Page {
         fingerprint = txt::html(lang, "fingerprint", &[("hash", &short)]),
         hash = esc(f.document_hash),
         words = esc(f.wording),
+        // The consent id of the texts this page shows, compared at the post (O59).
+        wid = esc(&if f.history.is_some() {
+            txt::consent_version_with_history_for(lang)
+        } else {
+            txt::consent_version_for(lang)
+        }),
         lang = esc(lang),
         name_label = txt::html(lang, "name_label", &[]),
         typed = esc(f.typed),
@@ -348,9 +354,15 @@ mod tests {
     #[test]
     fn the_pages_without_a_history_are_byte_for_byte_what_they_were_before_it() {
         for (lang, form_hash, done_hash, closed_hash) in BEFORE_THE_HISTORY {
-            // Without the hidden field `words` of 0.3.0 (O59), which is not part of the history.
-            let form_page =
-                form_html(lang).replace("<input type=\"hidden\" name=\"words\" value=\"\">", "");
+            // Without the hidden fields `words` of 0.3.0 and `wid` of 0.3.1 (O59), which are not
+            // part of the history.
+            let wid = format!(
+                "<input type=\"hidden\" name=\"wid\" value=\"{}\">",
+                txt::consent_version_for(lang)
+            );
+            let form_page = form_html(lang)
+                .replace("<input type=\"hidden\" name=\"words\" value=\"\">", "")
+                .replace(&wid, "");
             assert_eq!(sha(&form_page), form_hash, "{lang}: the form");
             assert_eq!(
                 sha(&done(lang, "2026-11-03T10:00:00.000000Z", None, &unbranded()).html),

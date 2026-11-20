@@ -307,6 +307,9 @@ pub struct Flaky {
     apply_skip: AtomicI64,
     kv_new_budget: AtomicI64,
     kv_put_budget: AtomicI64,
+    counter_budget: AtomicI64,
+    /// A refused counter is a fault of the pool (noted, D74), not a plain error.
+    counter_busy: AtomicBool,
     /// -1: off; n: calls to let through before one is refused.
     once: AtomicI64,
     /// Calls still to refuse after the first one of a run (see refuse_calls_after).
@@ -394,6 +397,8 @@ impl Flaky {
             apply_skip: AtomicI64::new(0),
             kv_new_budget: AtomicI64::new(0),
             kv_put_budget: AtomicI64::new(0),
+            counter_budget: AtomicI64::new(0),
+            counter_busy: AtomicBool::new(false),
             once: AtomicI64::new(-1),
             run_left: AtomicI64::new(0),
             run_len: AtomicI64::new(0),
@@ -505,6 +510,8 @@ impl Flaky {
         self.apply_skip.store(0, SeqCst);
         self.kv_new_budget.store(0, SeqCst);
         self.kv_put_budget.store(0, SeqCst);
+        self.counter_budget.store(0, SeqCst);
+        self.counter_busy.store(false, SeqCst);
         self.once.store(-1, SeqCst);
         self.run_left.store(0, SeqCst);
         self.run_len.store(0, SeqCst);
@@ -584,6 +591,20 @@ impl Flaky {
     /// Refuse the next `n` `kv_put` calls (short-lived values: plans, sessions) and nothing else.
     pub fn refuse_kv_put(&self, n: i64) {
         self.kv_put_budget.store(n, SeqCst);
+    }
+
+    /// Refuse the next `n` `counter_add` calls (the counts of the rate limits) and nothing else,
+    /// with a plain error of the statement (no fault is noted).
+    pub fn refuse_counters(&self, n: i64) {
+        self.counter_busy.store(false, SeqCst);
+        self.counter_budget.store(n, SeqCst);
+    }
+
+    /// As [`Flaky::refuse_counters`], as a pool with every connection in use: the fault is noted
+    /// on the request (D74), so the request is answered 503.
+    pub fn refuse_counters_busy(&self, n: i64) {
+        self.counter_busy.store(true, SeqCst);
+        self.counter_budget.store(n, SeqCst);
     }
 
     /// Let `skip` calls of any kind through, then refuse the one after them, once: a refusal at
@@ -966,6 +987,18 @@ impl Backend for Flaky {
         self.inner.lock(key)
     }
     fn counter_add(&self, key: &str, ttl_ms: u64, extend: bool) -> Result<u64> {
+        if self
+            .counter_budget
+            .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
+            .is_ok()
+        {
+            self.refused.fetch_add(1, SeqCst);
+            if !self.counter_busy.load(SeqCst) {
+                return Err("the counter could not be written".into());
+            }
+            fault::note(Fault::Busy);
+            return Err(Fault::Busy.message("all database connections are in use, try again"));
+        }
         self.gate(true)?;
         self.inner.counter_add(key, ttl_ms, extend)
     }

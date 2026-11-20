@@ -58,8 +58,8 @@ fn as_it_was_in_0_2_2(now: &str) -> String {
         assert_eq!(text.matches(new).count(), 1, "{lang}: {new}");
         text = text.replace(new, was);
     }
-    assert_eq!(text.matches("version = \"0.3.0\"").count(), 1);
-    text.replace("version = \"0.3.0\"", "version = \"0.2.2\"")
+    assert_eq!(text.matches("version = \"0.3.1\"").count(), 1);
+    text.replace("version = \"0.3.1\"", "version = \"0.2.2\"")
 }
 
 /// The English help and every translation of the field, as an administrator sees them in the
@@ -99,7 +99,7 @@ fn the_words_table_is_the_bundled_text() {
         assert!(was.to_lowercase().contains("obop"), "{lang}: {was}");
     }
     let m = obop_pkg::Manifest::parse(&now).unwrap();
-    assert_eq!(m.module.version, "0.3.0");
+    assert_eq!(m.module.version, "0.3.1");
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn module_upgrade_brings_the_new_words_to_an_instance_that_has_sign() {
         .installer
         .install_outcome(&now, "marketplace", "test")
         .unwrap();
-    assert_eq!(out.root.version, "0.3.0");
+    assert_eq!(out.root.version, "0.3.1");
 
     // Now every language says it without the product, and says what the table says.
     let help = help_of(&app);

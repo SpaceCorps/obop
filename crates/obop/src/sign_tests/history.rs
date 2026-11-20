@@ -45,16 +45,18 @@ fn normalised(body: &str, rid: &str, tok: &str) -> String {
     without_words(body).replace(rid, "RID").replace(tok, "TOK")
 }
 
-/// The page without its `<input type="hidden" name="words" value="...">`.
+/// The page without its `<input type="hidden" name="words" value="...">` and, from `sign` 0.3.1
+/// on, its `wid` (the consent id of the texts shown, O59).
 fn without_words(body: &str) -> String {
-    let at = "<input type=\"hidden\" name=\"words\" value=\"";
-    match body.find(at) {
-        Some(i) => {
+    let mut body = body.to_string();
+    for name in ["words", "wid"] {
+        let at = format!("<input type=\"hidden\" name=\"{name}\" value=\"");
+        if let Some(i) = body.find(&at) {
             let end = i + body[i..].find("\">").expect("the field ends") + 2;
-            format!("{}{}", &body[..i], &body[end..])
+            body = format!("{}{}", &body[..i], &body[end..]);
         }
-        None => body.to_string(),
     }
+    body
 }
 
 /// The SHA-256 of the pages of a request that does not show the signatures so far, as the code
@@ -902,8 +904,10 @@ async fn the_list_shows_the_typed_name_and_the_time_and_nothing_else_of_the_othe
     ];
     // What is the viewer's own is on its page: its request id, the secret of its link and the
     // fingerprint of the file. Take that out, and none of the other request's values is left.
+    // From `sign` 0.3.1 its own consent id too, in the hidden field `wid` (O59).
     let strip = |html: &str| {
-        html.replace(&viewer.id, "")
+        without_words(html)
+            .replace(&viewer.id, "")
             .replace(viewer.token(), "")
             .replace(&f.file, "")
     };
@@ -1794,7 +1798,7 @@ async fn the_door_follows_an_update_and_a_rollback_of_the_package_for_the_switch
         .installer
         .install(&Bundled.fetch("sign").unwrap(), "marketplace", "test")
         .unwrap();
-    assert_eq!(installed_sign(&f), "0.3.0");
+    assert_eq!(installed_sign(&f), "0.3.1");
     tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
     flaky.reset_reads();
     let html = page_of(&f, &path, 171).await;
@@ -1907,7 +1911,7 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
     let new = obop_pkg::Manifest::parse(&new_text).unwrap();
     assert_eq!(
         (old.module.version.as_str(), new.module.version.as_str()),
-        ("0.2.1", "0.3.0")
+        ("0.2.1", "0.3.1")
     );
     let changes = obop_pkg::migrate::diff(&old, &new);
     // The switch, (0.2.5) the computed flag the row rule of a request without a Document reads,
@@ -1969,7 +1973,7 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
         .installer
         .install_outcome(&new_text, "marketplace", "test")
         .unwrap();
-    assert_eq!(out.root.version, "0.3.0");
+    assert_eq!(out.root.version, "0.3.1");
     // Not a record was rewritten.
     let after: Vec<_> = ids.iter().map(|id| f.record("sign_request", id)).collect();
     assert_eq!(after, before);
@@ -2769,6 +2773,9 @@ async fn door_reads(f: &Fx, flaky: &Flaky, p1: &str, p2: &str) -> Vec<(&'static 
         200
     );
     out.push(("the PDF", door_part(flaky, b)));
+    // The hidden fields of the page (O59), read before the count starts.
+    let words = obop_commands::sign::page_wording(&f.record("sign_request", &f.req));
+    let wid = obop_http::sign_text::consent_version_for("en");
     flaky.reset_reads();
     let b = brand_gets(flaky);
     let r = f
@@ -2780,6 +2787,8 @@ async fn door_reads(f: &Fx, flaky: &Flaky, p1: &str, p2: &str) -> Vec<(&'static 
                 ("agree", "1"),
                 ("doc", &f.file),
                 ("lang", "en"),
+                ("words", &words),
+                ("wid", &wid),
             ],
         )
         .await;

@@ -1220,9 +1220,12 @@ async fn eight_signers_at_once_sign_the_request_once() {
     let (f, link_id, path, _) = sent().await;
     let mut set = tokio::task::JoinSet::new();
     for i in 0..8u8 {
-        let (router, path, file) = (f.router.clone(), path.clone(), f.file.clone());
+        let (router, path) = (f.router.clone(), path.clone());
+        let body = f.form_body(
+            &path,
+            &[("name", "Jane Test"), ("agree", "1"), ("doc", &f.file)],
+        );
         set.spawn(async move {
-            let body = format!("name=Jane+Test&agree=1&doc={file}");
             let r = send(
                 &router,
                 Request::post(&path)
@@ -1300,9 +1303,12 @@ fn the_race_is_won_once_on_sqlite_and_on_postgres_too() {
         rt.block_on(async {
             let mut set = tokio::task::JoinSet::new();
             for i in 0..8u8 {
-                let (router, path, file) = (f.router.clone(), path.clone(), f.file.clone());
+                let (router, path) = (f.router.clone(), path.clone());
+                let body = f.form_body(
+                    &path,
+                    &[("name", "Jane Test"), ("agree", "1"), ("doc", &f.file)],
+                );
                 set.spawn(async move {
-                    let body = format!("name=Jane+Test&agree=1&doc={file}");
                     send(
                         &router,
                         Request::post(&path)
