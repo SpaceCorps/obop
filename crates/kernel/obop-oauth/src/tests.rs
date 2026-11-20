@@ -160,6 +160,7 @@ fn query(location: &str, key: &str) -> String {
         .to_string()
 }
 
+mod cimd;
 mod mcp_hosts;
 mod microsoft;
 mod mobile;

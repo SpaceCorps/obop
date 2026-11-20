@@ -11,6 +11,7 @@
 //! the browser binding of a sign-in are stored only as SHA-256 hashes, so nothing here needs the
 //! key ring and no secret is ever written in the clear.
 
+pub mod cimd;
 pub mod client;
 mod devices;
 pub mod flow;
@@ -71,6 +72,13 @@ pub struct OAuthConfig {
     /// of one registered before the list was set. `OBOP_OAUTH_MCP_REDIRECT_HOSTS` in
     /// [`OAuthConfig::from_env`].
     pub mcp_redirect_hosts: Option<Vec<String>>,
+    /// The hosts whose Client ID Metadata Documents this instance reads (E7i), lower case, an
+    /// entry `*.example.com` for the subdomains of one: `None` (the default) reads none, and an
+    /// address is then no client. `OBOP_OAUTH_CIMD_HOSTS` in [`OAuthConfig::from_env`].
+    pub cimd_hosts: Option<Vec<String>>,
+    /// Lets a document be read over plain `http` from `127.0.0.1` (tests only; set with
+    /// `OBOP_CONNECTORS_ALLOW_LOOPBACK`, which the outbound client needs for it too).
+    pub cimd_allow_loopback: bool,
 }
 
 impl OAuthConfig {
@@ -86,6 +94,13 @@ impl OAuthConfig {
             mcp_redirect_hosts: std::env::var("OBOP_OAUTH_MCP_REDIRECT_HOSTS")
                 .ok()
                 .and_then(|v| parse_schemes(&v)),
+            cimd_hosts: std::env::var("OBOP_OAUTH_CIMD_HOSTS")
+                .ok()
+                .and_then(|v| parse_schemes(&v)),
+            cimd_allow_loopback: matches!(
+                std::env::var("OBOP_CONNECTORS_ALLOW_LOOPBACK").as_deref(),
+                Ok("1" | "true")
+            ),
             ..Self::default()
         }
     }
@@ -127,6 +142,8 @@ impl Default for OAuthConfig {
             max_devices_per_user: 20,
             mobile_schemes: None,
             mcp_redirect_hosts: None,
+            cimd_hosts: None,
+            cimd_allow_loopback: false,
         }
     }
 }
@@ -185,6 +202,8 @@ pub struct OAuth {
     pub(crate) auth: Arc<dyn Authenticator>,
     pub(crate) cfg: OAuthConfig,
     skew: AtomicU64,
+    /// How a Client ID Metadata Document is read (E7i), when the HTTP layer set it.
+    pub(crate) cimd: std::sync::OnceLock<Arc<cimd::CimdFetch>>,
 }
 
 impl OAuth {
@@ -201,6 +220,7 @@ impl OAuth {
             auth,
             cfg,
             skew: AtomicU64::new(0),
+            cimd: std::sync::OnceLock::new(),
         }))
     }
 

@@ -289,6 +289,48 @@ fn flow_failure(e: FlowError, lang: &str, brand: &Shown) -> Response {
     }
 }
 
+// ---- client metadata documents (E7i) ------------------------------------------------------------
+
+/// How a Client ID Metadata Document is read: through a client of its own of the hardened outbound
+/// kind (public addresses only, no redirects, `https` except a loopback number when `loopback`),
+/// at most five seconds and a body of at most `obop_oauth::cimd::MAX_DOCUMENT` bytes, from the host
+/// of the address only, and only a `200` answer of JSON.
+pub(crate) fn cimd_fetcher(loopback: bool) -> Arc<obop_oauth::cimd::CimdFetch> {
+    use obop_connectors::net::{Client, ClientConfig, Request};
+    let wait = std::time::Duration::from_secs(5);
+    let client = Client::new(ClientConfig {
+        allow_loopback: loopback,
+        timeout: wait,
+        max_response: obop_oauth::cimd::MAX_DOCUMENT,
+        ..ClientConfig::default()
+    });
+    Arc::new(move |url: &str| {
+        let host = obop_oauth::redirect::host_of(url).ok_or("no host")?;
+        let r = client
+            .send_within(
+                Request {
+                    method: "GET",
+                    url,
+                    headers: vec![("Accept".into(), "application/json".into())],
+                    body: None,
+                    allowed_hosts: &[host],
+                },
+                wait,
+            )
+            .map_err(|e| format!("{e:?}"))?;
+        if r.status != 200 {
+            return Err(format!("the document answered {}", r.status));
+        }
+        if !r
+            .header("content-type")
+            .is_some_and(|t| t.to_ascii_lowercase().contains("json"))
+        {
+            return Err("the document is not served as JSON".into());
+        }
+        Ok(r.body)
+    })
+}
+
 // ---- metadata ------------------------------------------------------------------------------
 
 pub(crate) async fn authorization_server(State(s): Shared, h: HeaderMap) -> Response {
@@ -300,7 +342,10 @@ pub(crate) async fn authorization_server(State(s): Shared, h: HeaderMap) -> Resp
     let base = s.mcp.base_url(&h);
     super::mcp::public_json(
         "application/json",
-        &obop_oauth::authorization_server_metadata(&base, &brand),
+        &obop_oauth::cimd::with_cimd(
+            obop_oauth::authorization_server_metadata(&base, &brand),
+            s.oauth.as_ref().is_some_and(|o| o.cimd_enabled()),
+        ),
     )
 }
 

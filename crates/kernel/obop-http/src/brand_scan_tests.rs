@@ -3105,7 +3105,7 @@ const OAUTH_CORE: &str = "kernel/obop-oauth/src/lib.rs";
 const RUNTIME: &str = "kernel/obop-connectors/src/runtime.rs";
 const BROWSE: &str = "kernel/obop-blob-gdrive/src/browse.rs";
 
-const LITERAL_ALLOWED_S3: [LiteralRow; 33] = [
+const LITERAL_ALLOWED_S3: [LiteralRow; 35] = [
     (
         MCP_HTTP,
         "from_env",
@@ -3347,6 +3347,22 @@ const LITERAL_ALLOWED_S3: [LiteralRow; 33] = [
         1,
         "env",
         "the name of the environment variable that lists the redirect hosts of the MCP clients that          may register and sign in (E1c): an operator's words",
+    ),
+    (
+        OAUTH_CORE,
+        "from_env",
+        Some("OBOP_OAUTH_CIMD_HOSTS"),
+        1,
+        "env",
+        "the name of the environment variable that lists the hosts whose client metadata documents are read (E7i): an operator's words",
+    ),
+    (
+        OAUTH_CORE,
+        "from_env",
+        Some("OBOP_CONNECTORS_ALLOW_LOOPBACK"),
+        1,
+        "env",
+        "the name of the environment variable that lets tests read a client metadata document from a loopback number (E7i): an operator's words",
     ),
     (
         RUNTIME,

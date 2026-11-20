@@ -130,7 +130,15 @@ impl HttpState {
         oauth_config: obop_oauth::OAuthConfig,
     ) -> Arc<Self> {
         let shared = shared::SharedState::for_dispatcher(&dispatcher);
+        let cimd = oauth_config
+            .cimd_hosts
+            .is_some()
+            .then_some(oauth_config.cimd_allow_loopback);
         let oauth = obop_oauth::OAuth::new(shared.backend.clone(), auth.clone(), oauth_config);
+        // Client ID Metadata Documents (E7i) are read only where the operator listed hosts.
+        if let (Some(o), Some(loopback)) = (&oauth, cimd) {
+            o.set_cimd_fetcher(oauth::cimd_fetcher(loopback));
+        }
         Arc::new(Self {
             dispatcher,
             auth,
