@@ -760,6 +760,8 @@ mod mfa_tests;
 #[cfg(test)]
 mod passkey_tests;
 #[cfg(test)]
+mod policy_fault_tests;
+#[cfg(test)]
 mod signin_fault_tests;
 
 #[cfg(test)]

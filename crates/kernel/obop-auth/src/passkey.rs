@@ -602,7 +602,9 @@ impl PasskeyApi for Auth {
             "passwordless": u["passkey_login"].as_bool() == Some(true),
             "passwordless_possible": uv_any,
             "totp": u["mfa_enabled"].as_bool() == Some(true),
-            "policy_requires_second_factor": self.enrolment_required_for(&groups),
+            "policy_requires_second_factor": self
+                .enrolment_required_for(&groups)
+                .map_err(MfaError::Unavailable)?,
             "is_admin": p.groups.contains(ADMIN_GROUP),
         }))
     }
@@ -839,7 +841,12 @@ impl PasskeyApi for Auth {
         let left = all.len().saturating_sub(1);
         let totp = self.settled(|| self.mfa_enabled(name))?;
         let groups: Vec<String> = p.groups.iter().cloned().collect();
-        if left == 0 && !totp && self.enrolment_required_for(&groups) {
+        if left == 0
+            && !totp
+            && self
+                .enrolment_required_for(&groups)
+                .map_err(MfaError::Unavailable)?
+        {
             return Err(MfaError::Invalid(
                 "your administrator requires a second factor, and this is your last one: add another passkey or an authenticator app first".into(),
             ));
