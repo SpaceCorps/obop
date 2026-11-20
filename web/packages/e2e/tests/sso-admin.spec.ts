@@ -151,6 +151,10 @@ test.describe("administering Sign in with Microsoft", () => {
       `People table at 1280 px: table ${widths.table}, box scrollWidth ${widths.scrollWidth}, clientWidth ${widths.clientWidth}`,
     );
     expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth);
+    // On a phone the cell is a 44 px target.
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect((await microsoft(page, "bea").boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await page.setViewportSize({ width: 1280, height: 900 });
     // Change settings and Remove are side by side at the start of the line.
     const change = await s
       .getByRole("button", { name: "Change settings", exact: true })

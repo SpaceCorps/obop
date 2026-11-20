@@ -92,12 +92,14 @@ test.describe("accounts and sessions", () => {
     await expect(row).toContainText("Active");
 
     // Disable: the person is signed out at once and cannot sign in.
-    await row.getByRole("button", { name: "Disable" }).click();
+    await row.getByRole("button", { name: `More actions for ${name}` }).click();
+    await page.getByRole("menuitem", { name: "Disable" }).click();
     await expect(page.getByText(`${name} is disabled and signed out.`)).toBeVisible();
     await expect(row).toContainText("Disabled");
     expect((await api.post("/api/party/list", {}, patToken)).status).toBe(401);
     expect((await api.post("/api/auth/login", { username: name, password })).status).toBe(401);
-    await row.getByRole("button", { name: "Enable" }).click();
+    await row.getByRole("button", { name: `More actions for ${name}` }).click();
+    await page.getByRole("menuitem", { name: "Enable" }).click();
     await expect(page.getByText(`${name} can sign in again.`)).toBeVisible();
     await expect(row).toContainText("Active");
     expect((await api.post("/api/auth/login", { username: name, password })).status).toBe(200);
@@ -106,12 +108,14 @@ test.describe("accounts and sessions", () => {
     const own = people
       .getByRole("row")
       .filter({ has: page.getByRole("cell", { name: "root", exact: true }) });
-    await own.getByRole("button", { name: "Disable" }).click();
+    await own.getByRole("button", { name: "More actions for root" }).click();
+    await page.getByRole("menuitem", { name: "Disable" }).click();
     await expect(page.getByText("you cannot disable your own account")).toBeVisible();
 
     // Reset: a temporary password; the person must choose their own before anything else.
     const temp = "e2e temporary pw 3!";
-    await row.getByRole("button", { name: "Reset password" }).click();
+    await row.getByRole("button", { name: `More actions for ${name}` }).click();
+    await page.getByRole("menuitem", { name: "Reset password" }).click();
     await page.getByLabel(`Temporary password for ${name}`).fill(temp);
     await page.getByRole("button", { name: "Set temporary password" }).click();
     await expect(page.getByText(/Temporary password set for pat\./)).toBeVisible();

@@ -624,6 +624,9 @@ export function Segmented<T extends string>({
   iconOnlyNarrow?: boolean;
 }) {
   const radio = mode === "radio";
+  // A radio group with nothing chosen (a state the caller cannot describe by a choice) still has
+  // one stop on the Tab key: its first choice.
+  const chosen = options.some((o) => o.value === value);
   return (
     <div
       className="switcher"
@@ -631,7 +634,7 @@ export function Segmented<T extends string>({
       aria-label={label}
       onKeyDown={radio ? (e) => rovingKeys(e, '[role="radio"]') : undefined}
     >
-      {options.map((o) => (
+      {options.map((o, i) => (
         <button
           key={o.value}
           type="button"
@@ -639,7 +642,7 @@ export function Segmented<T extends string>({
           aria-checked={radio ? value === o.value : undefined}
           aria-pressed={radio ? undefined : value === o.value}
           aria-label={iconOnlyNarrow ? o.label : undefined}
-          tabIndex={radio ? (value === o.value ? 0 : -1) : undefined}
+          tabIndex={radio ? (value === o.value || (!chosen && i === 0) ? 0 : -1) : undefined}
           title={iconOnlyNarrow ? o.label : undefined}
           onClick={() => onChange(o.value)}
         >
@@ -720,14 +723,21 @@ export function Menu({
   items,
   align = "start",
   triggerClassName,
+  fixed = false,
 }: {
   trigger: ReactNode;
   ariaLabel?: string;
   items: MenuItem[];
   align?: "start" | "end";
   triggerClassName?: string;
+  /**
+   * Place the list against the window instead of inside its parent, for a menu in a box that
+   * clips (a table that scrolls): it opens above the button when there is no room below.
+   */
+  fixed?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [spot, setSpot] = useState<CSSProperties | null>(null);
   // The entry whose own list is shown (a submenu), by its label; null: the top list.
   const [sub, setSub] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -740,6 +750,32 @@ export function Menu({
     if (refocus) btn.current?.focus();
   }, []);
   useDismiss(ref, open, () => close(true));
+  useLayoutEffect(() => {
+    if (!fixed || !open) return;
+    const place = () => {
+      const b = btn.current?.getBoundingClientRect();
+      if (!b) return;
+      const high = list.current?.offsetHeight ?? 0;
+      const room = window.innerHeight - b.bottom - 8;
+      const up = high > room && b.top > room;
+      const wide = document.documentElement.clientWidth;
+      setSpot({
+        position: "fixed",
+        insetBlockStart: up ? "auto" : b.bottom + 6,
+        insetBlockEnd: up ? window.innerHeight - b.top + 6 : "auto",
+        insetInlineStart: align === "end" ? "auto" : Math.max(8, b.left),
+        insetInlineEnd: align === "end" ? Math.max(8, wide - b.right) : "auto",
+        maxBlockSize: Math.max(120, (up ? b.top : window.innerHeight - b.bottom) - 14),
+      });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [fixed, open, sub, align]);
   useEffect(() => {
     if (open)
       list.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus();
@@ -778,6 +814,7 @@ export function Menu({
           role="menu"
           aria-label={ariaLabel}
           className={cx("dd-panel panel menu-list", align === "end" && "end")}
+          style={fixed ? (spot ?? { position: "fixed" }) : undefined}
           onKeyDown={(e) => {
             rovingKeys(e, '[role="menuitem"]', "vertical", false);
             if (e.key === "Tab") close(false);

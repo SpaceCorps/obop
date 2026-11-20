@@ -85,7 +85,7 @@ write_group = "assets.manager"
   kind = "number"
 ```
 
-A model needs a description and two groups: people holding `read_group` can read records (`get`, `list`, `search`); people holding `write_group` can `create`, `update` and `delete`. Every field needs a description and a data class. `class = "none"` is how you say "this is not personal data and not otherwise sensitive"; it must be written out. `required = true` makes the server refuse a create without the field. Fields default to `kind = "text"`.
+A model needs a description and two groups: people holding `read_group` can read records (`get`, `list`, `search`); people holding `write_group` can `create`, `update` and `delete`. The write group does not include the read group: someone who holds only the write group cannot list the records, so give a manager both groups (the People screen does, for Manager). Every field needs a description and a data class. `class = "none"` is how you say "this is not personal data and not otherwise sensitive"; it must be written out. `required = true` makes the server refuse a create without the field. Fields default to `kind = "text"`.
 
 Each model automatically gets seven commands, with the same names on REST, MCP and the CLI: `<model>.get`, `.list`, `.search`, `.create`, `.bulk_create`, `.update` and `.delete`. Records get an `id` assigned by the server. `list` and `search` take the optional `filter`, `order`, `limit` and `offset` of section 4.1; `delete` removes a record that no other record refers to and, being destructive, is only *proposed* by an agent. A field that is the target of an action is governed (section 6.1): `create` and `update` cannot set it freely.
 
@@ -921,7 +921,7 @@ A data class tags a field for masking, export and retention (CONVENTIONS section
 
 ### Assigning groups to people (D69)
 
-The permission groups your module names (on models, fields and actions, and `see_all`) are exactly the groups an administrator can give to a person: Customize > Security > People lists every group of every installed module, and `obop admin groups USER --groups a,b` and `POST /api/auth/users/{name}/groups` accept only those. Install the module first; a group no module declares is refused. Removing a module does not take its group from people who hold it (they keep it until an administrator changes it), but it can no longer be given to anyone else.
+The permission groups your module names (on models, fields and actions, and `see_all`) are exactly the groups an administrator can give to a person: Customize > Security > People lists every group of every installed module, and `obop admin groups USER --groups a,b` and `POST /api/auth/users/{name}/groups` accept only those. Install the module first; a group no module declares is refused. People shows each app's groups as No access, User and Manager (the base group, and the base group together with the manage group); the app's other groups sit under "More access" and groups no app owns under "Other access", and "Show technical names" shows the identifiers. Removing a module does not take its group from people who hold it (they keep it until an administrator changes it), but it can no longer be given to anyone else.
 
 `personal_data = true` marks a field as about an identifiable person; it drives access and erasure requests (D33). A personal-data field may never be `none` (the gate refuses it). A field can be sensitive without being personal data (a company's bank balance is `financial`, not personal).
 

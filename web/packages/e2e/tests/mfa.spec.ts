@@ -258,9 +258,26 @@ test.describe("two-factor authentication", () => {
     // The suite runs with the admin policy off (OBOP_REQUIRE_MFA_FOR_ADMINS=0).
     await expect(adminsSwitch).not.toBeChecked();
 
-    await page.getByLabel("Username").fill("quinn");
-    await page.getByRole("button", { name: "Reset two-factor" }).click();
+    // The reset is an item of the row's More menu, with a confirmation that says what is lost.
+    const people = page.getByRole("table", { name: "People" });
+    const quinn = people
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name: "quinn", exact: true }) });
+    await expect(quinn).toContainText("On");
+    const moreQuinn = quinn.getByRole("button", { name: "More actions for quinn" });
+    await moreQuinn.click();
+    await page.getByRole("menuitem", { name: "Reset two-factor" }).click();
+    const ask = page.getByRole("alertdialog", { name: "Reset two-factor for quinn?" });
+    await expect(ask).toContainText("loses their authenticator app, passkeys and recovery codes");
+    // A dialog opened from the menu gives the focus back to the button of the menu.
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(ask).toHaveCount(0);
+    await expect(moreQuinn).toBeFocused();
+    await moreQuinn.click();
+    await page.getByRole("menuitem", { name: "Reset two-factor" }).click();
+    await ask.getByRole("button", { name: "Reset two-factor" }).click();
     await expect(page.getByText("Two-factor reset for quinn", { exact: true })).toBeVisible();
+    await expect(quinn).toContainText("Off");
     const log = page.getByRole("table", { name: "Security log" });
     const row = log.locator("tr", { hasText: "Two-factor reset" }).first();
     await expect(row).toContainText("quinn");
@@ -271,12 +288,37 @@ test.describe("two-factor authentication", () => {
       password: users.quinn.password,
     });
     expect(plain.json.token).toBeTruthy();
-    // Someone with nothing to reset gets a plain answer, not a stack trace.
-    await page.getByLabel("Username").fill("quinn");
-    await page.getByRole("button", { name: "Reset two-factor" }).click();
-    await expect(
-      page.getByText("There is no such person, or they have no two-factor to reset."),
-    ).toBeVisible();
+    // The item is not offered where there is nothing to reset, nor on your own row.
+    await quinn.getByRole("button", { name: "More actions for quinn" }).click();
+    await expect(page.getByRole("menuitem", { name: "Reset password" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Reset two-factor" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await people.getByRole("button", { name: "More actions for root" }).click();
+    await expect(page.getByRole("menuitem", { name: "Reset two-factor" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    // Someone whose two-factor went away while the dialog was open gets a plain answer.
+    // (The reset ended quinn's sessions: she signs in again to enrol again.)
+    const fresh = plain.json.token as string;
+    const begun = await api.post("/api/auth/mfa/begin", {}, fresh);
+    const again0 = await api.post(
+      "/api/auth/mfa/confirm",
+      { code: code(begun.json.secret, stepNow()) },
+      fresh,
+    );
+    expect(again0.status, JSON.stringify(again0.json)).toBe(200);
+    await page.reload();
+    await quinn.getByRole("button", { name: "More actions for quinn" }).click();
+    await page.getByRole("menuitem", { name: "Reset two-factor" }).click();
+    const again = page.getByRole("alertdialog", { name: "Reset two-factor for quinn?" });
+    expect(
+      (await api.post("/api/auth/mfa/reset", { user: "quinn" }, await api.token("root"))).status,
+    ).toBe(200);
+    await again.getByRole("button", { name: "Reset two-factor" }).click();
+    const refusal = again.getByRole("alert");
+    await expect(refusal).toHaveText(
+      "There is no such person, or they have no two-factor to reset.",
+    );
+    await expect(refusal).toBeFocused();
   });
 
   test("agent tokens cannot enrol, disable or reset", async ({ api, allowHttpErrors }) => {

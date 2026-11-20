@@ -22,6 +22,8 @@
   "Text",
   "Version",
   "Version {version}",
+  "access\u0004Admin",
+  "access\u0004Agent",
   "app\u0004CRM",
   "field\u0004Budget",
   "field\u0004Filter",
