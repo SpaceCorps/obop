@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { Binding } from "../core/identity.ts";
-import { dismissStaleFileNote, staleFileRecoveredAt } from "../core/open-outbox.ts";
+import {
+  databaseProblem,
+  dismissStaleFileNote,
+  staleFileRecoveredAt,
+  type DatabaseProblem,
+} from "../core/open-outbox.ts";
 import type { LanguageCode } from "../i18n/index.ts";
 import type { Choice } from "../i18n/language.ts";
 import type { SessionStatus } from "../core/session.ts";
@@ -13,7 +18,7 @@ import { getRuntime, type Runtime } from "../native/runtime.ts";
 export type Loaded =
   | { state: "loading" }
   | { state: "ready"; runtime: Runtime }
-  | { state: "failed"; message: string };
+  | { state: "failed"; message: string; problem: DatabaseProblem };
 
 /**
  * Opens the encrypted database and reads the session. `retry` tries again after a failure (a
@@ -29,7 +34,11 @@ export function useRuntime(): Loaded & { retry: () => void } {
       (runtime) => alive && setLoaded({ state: "ready", runtime }),
       (error: unknown) =>
         alive &&
-        setLoaded({ state: "failed", message: error instanceof Error ? error.message : "error" }),
+        setLoaded({
+          state: "failed",
+          message: error instanceof Error ? error.message : "error",
+          problem: databaseProblem(error),
+        }),
     );
     return () => {
       alive = false;

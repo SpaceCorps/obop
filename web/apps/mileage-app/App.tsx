@@ -11,7 +11,9 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
 import { BackHandler } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
-import { t } from "./src/i18n/index.ts";
+import type { DatabaseProblem } from "./src/core/open-outbox.ts";
+import { t, type MessageKey } from "./src/i18n/index.ts";
+import { eraseDatabase } from "./src/native/database.ts";
 import { stopRecording } from "./src/native/recorder.ts";
 import type { Runtime } from "./src/native/runtime.ts";
 import {
@@ -142,12 +144,60 @@ function Loading() {
 }
 
 /**
- * The trips could not be opened (a wrong key, a damaged file). Nothing is deleted. The driver can
- * try again and can stop the location service, which keeps running without the app's screens.
+ * The trips could not be opened (a wrong key, a damaged file). Nothing is deleted unless the driver
+ * asks for it. The driver can try again, can stop the location service, which keeps running
+ * without the app's screens, and, when Try again keeps failing, can erase the trips on this phone
+ * after a second step that says the unsent trips are lost (L34). The details say the cause in the
+ * driver's language when the app knows it (L51), else the error as it is.
  */
-function Failed({ message, retry }: { message: string; retry: () => void }) {
+function Failed({
+  message,
+  problem,
+  retry,
+}: {
+  message: string;
+  problem: DatabaseProblem;
+  retry: () => void;
+}) {
   const [stopped, setStopped] = useState(false);
   const [details, setDetails] = useState(false);
+  const [erase, setErase] = useState<"no" | "asking" | "busy" | "failed">("no");
+  const eraseNow = () => {
+    setErase("busy");
+    void eraseDatabase().then(
+      () => {
+        setErase("no");
+        retry();
+      },
+      () => setErase("failed"),
+    );
+  };
+  if (erase === "asking" || erase === "busy") {
+    return (
+      <Screen
+        title={t("error.database.erase")}
+        footer={
+          <>
+            <Button
+              label={t("error.database.erase.yes")}
+              variant="danger"
+              busy={erase === "busy"}
+              onPress={eraseNow}
+              testID="database-erase-yes"
+            />
+            <Button
+              label={t("common.cancel")}
+              variant="ghost"
+              onPress={() => setErase("no")}
+              testID="database-erase-cancel"
+            />
+          </>
+        }
+      >
+        <Text tone="danger">{t("error.database.erase.confirm")}</Text>
+      </Screen>
+    );
+  }
   return (
     <Screen
       title={t("home.title")}
@@ -165,6 +215,12 @@ function Failed({ message, retry }: { message: string; retry: () => void }) {
             }
             testID="database-stop"
           />
+          <Button
+            label={t("error.database.erase")}
+            variant="ghost"
+            onPress={() => setErase("asking")}
+            testID="database-erase"
+          />
         </>
       }
     >
@@ -173,8 +229,13 @@ function Failed({ message, retry }: { message: string; retry: () => void }) {
       </Text>
       <Text>{tOs("error.database.hint")}</Text>
       {stopped ? <Text tone="muted">{t("error.database.stopped")}</Text> : null}
+      {erase === "failed" ? <Text tone="danger">{t("error.database.erase.failed")}</Text> : null}
       <Button label={t("common.details")} variant="ghost" onPress={() => setDetails((d) => !d)} />
-      {details ? <Text tone="muted">{message}</Text> : null}
+      {details ? (
+        <Text tone="muted">
+          {problem === "other" ? message : t(`error.database.detail.${problem}` as MessageKey)}
+        </Text>
+      ) : null}
     </Screen>
   );
 }
@@ -182,7 +243,8 @@ function Failed({ message, retry }: { message: string; retry: () => void }) {
 function Root() {
   const loaded = useRuntime();
   if (loaded.state === "loading") return <Loading />;
-  if (loaded.state === "failed") return <Failed message={loaded.message} retry={loaded.retry} />;
+  if (loaded.state === "failed")
+    return <Failed message={loaded.message} problem={loaded.problem} retry={loaded.retry} />;
   return <Routes rt={loaded.runtime} />;
 }
 

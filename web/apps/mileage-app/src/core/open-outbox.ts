@@ -93,6 +93,41 @@ export function isNotADatabase(error: unknown): boolean {
   );
 }
 
+/** The message of the refusal of a database without SQLCipher. */
+export const NOT_ENCRYPTED = "The database is not encrypted: this build has no SQLCipher";
+
+/**
+ * Why the database could not be opened, as a word the catalogue has a sentence for, so that the
+ * screen "Failed" says it in the driver's language (L51): a build without SQLCipher, a key that
+ * does not fit the file (a lost key, a damaged file), a file from a newer version of the app, or
+ * anything else (shown as the error says it).
+ */
+export type DatabaseProblem = "no_cipher" | "wrong_key" | "newer" | "other";
+
+export function databaseProblem(error: unknown): DatabaseProblem {
+  const text = error instanceof Error ? error.message : String(error);
+  if (text.startsWith(NOT_ENCRYPTED)) return "no_cipher";
+  if (isNotADatabase(error)) return "wrong_key";
+  if (text.startsWith("The database is from a newer version of the app")) return "newer";
+  return "other";
+}
+
+/**
+ * Erases the trips on this phone when the database cannot be opened (L34): the file and its side
+ * files first, then the key, so that the next open makes a new key and a new, empty file. The file
+ * must be closed (a failed open closes it). The trips that were not sent are lost for good, which
+ * the screen says twice before it calls this. A deletion that fails leaves the key, so nothing that
+ * could still be read is made unreadable; a key that is not deleted after the file was is harmless
+ * (the next open makes a new file with it).
+ */
+export async function eraseOutbox(
+  ports: Pick<OpenPorts, "secrets" | "deleteFile">,
+  names: Pick<OpenNames, "databaseKey">,
+): Promise<void> {
+  await ports.deleteFile();
+  await ports.secrets.delete(names.databaseKey);
+}
+
 interface OpenFile {
   file: FileHandle;
   db: SqlDb;
@@ -126,7 +161,7 @@ async function openWithKey(
     const cipherVersion = version[0]?.cipher_version;
     if (typeof cipherVersion !== "string" || cipherVersion === "") {
       // Plain SQLite would store the route in the clear. Fail closed.
-      throw new Error("The database is not encrypted: this build has no SQLCipher");
+      throw new Error(NOT_ENCRYPTED);
     }
     await file.exec("PRAGMA busy_timeout = 5000");
     await file.exec("PRAGMA journal_mode = WAL");

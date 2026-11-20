@@ -1,7 +1,13 @@
 import * as Crypto from "expo-crypto";
 import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
-import { openOutbox, policyFor, type FileHandle, type OpenPorts } from "../core/open-outbox.ts";
+import {
+  eraseOutbox,
+  openOutbox,
+  policyFor,
+  type FileHandle,
+  type OpenPorts,
+} from "../core/open-outbox.ts";
 import type { SqlDb, SqlValue } from "../core/sql.ts";
 import type { StartupConfig } from "../core/startup-config.ts";
 import { hostConfig } from "./host.ts";
@@ -80,4 +86,13 @@ let opener: (() => Promise<Opened>) | null = null;
 export async function openDatabase(): Promise<Opened> {
   opener ??= createDatabaseOpener(hostConfig());
   return opener();
+}
+
+/**
+ * Erases the database file and its key after an open failed (the screen "Failed", L34): the next
+ * `openDatabase` makes a new key and an empty file. The trips that were not sent are lost.
+ */
+export async function eraseDatabase(): Promise<void> {
+  const { storage } = hostConfig().identity;
+  await eraseOutbox(portsFor(storage.databaseFile), { databaseKey: storage.databaseKey });
 }
