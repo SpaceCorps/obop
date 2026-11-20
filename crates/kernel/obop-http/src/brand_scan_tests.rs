@@ -3338,6 +3338,14 @@ const LITERAL_ALLOWED_S3: [LiteralRow; 33] = [
         "the name of the environment variable that lists the redirect schemes of the mobile apps that          may register (L10): an operator's words",
     ),
     (
+        OAUTH_CORE,
+        "from_env",
+        Some("OBOP_OAUTH_MCP_REDIRECT_HOSTS"),
+        1,
+        "env",
+        "the name of the environment variable that lists the redirect hosts of the MCP clients that          may register and sign in (E1c): an operator's words",
+    ),
+    (
         RUNTIME,
         "from_vars",
         Some("OBOP_PUBLIC_URL"),

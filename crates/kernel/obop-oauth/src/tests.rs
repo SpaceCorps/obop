@@ -163,6 +163,7 @@ fn query(location: &str, key: &str) -> String {
 mod microsoft;
 mod mobile;
 mod mobile_review;
+mod mcp_hosts;
 mod passkey_epoch;
 
 #[test]

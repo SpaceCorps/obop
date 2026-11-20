@@ -269,13 +269,18 @@ impl OAuth {
             .and_then(|id| self.client(id))
             .ok_or(page("err.client"))?;
         let matches = |u: &str| match client.class {
-            Class::Mcp => redirect::matches(&client.redirect_uris, u),
+            // A client registered before the operator listed the hosts is held to the list too.
+            Class::Mcp => {
+                redirect::matches(&client.redirect_uris, u) && self.cfg.mcp_redirect_allowed(u)
+            }
             Class::Mobile => redirect::matches_mobile(&client.redirect_uris, u),
         };
         let redirect_uri = match p.redirect_uri.as_deref() {
             Some(u) if matches(u) => u.to_string(),
             Some(_) => return Err(page("err.redirect")),
-            None if client.redirect_uris.len() == 1 => client.redirect_uris[0].clone(),
+            None if client.redirect_uris.len() == 1 && matches(&client.redirect_uris[0]) => {
+                client.redirect_uris[0].clone()
+            }
             None => return Err(page("err.redirect")),
         };
         let state = p
