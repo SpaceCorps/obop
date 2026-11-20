@@ -826,7 +826,12 @@ impl Installer {
                 continue;
             }
             if let Some(old) = installed.get(&s.id) {
-                data.push((s.id.clone(), migrate::plan_data(old, &s.manifest, &count)));
+                let mut dp = migrate::plan_data(old, &s.manifest, &count);
+                // The plan says how many stored values a changed limit or format refuses (K46,
+                // U18).
+                migrate::count_stored_breaches(&mut dp, &s.manifest, &*self.backend)
+                    .map_err(|e| format!("the stored values of {} could not be read: {e}", s.id))?;
+                data.push((s.id.clone(), dp));
             }
         }
         // A plan made with a count the store refused would miss the data that blocks it.
@@ -846,6 +851,49 @@ impl Installer {
             plan.data.insert(id, dp);
         }
         Ok((plan, root.module.id))
+    }
+
+    /// `module.stored_limits` (K46): for every field of a registered model held to a length, a bound
+    /// or a format (the limits this instance enforces now, D90 and K45), how many records the model
+    /// holds, how many of them hold a value outside those limits, and the longest stored text.
+    /// `module` narrows it to the models of one module. Read-only; it reads every record of each
+    /// model it looks at.
+    pub fn stored_limits(&self, module: Option<&str>) -> Result<Vec<J>, String> {
+        let d = self.d()?;
+        let mut out = Vec::new();
+        for model in d.model_names() {
+            let owner = d.model_owner(&model).unwrap_or_default();
+            if module.is_some_and(|m| m != owner) {
+                continue;
+            }
+            let Some(def) = d.model_def(&model) else {
+                continue;
+            };
+            for f in def.fields.iter().filter(|f| migrate::has_limits(f)) {
+                let fit = migrate::stored_fit_of(&*self.backend, &model, f)?;
+                let l = f.declared_limits();
+                out.push(serde_json::json!({
+                    "module": owner,
+                    "model": model,
+                    "field": f.name,
+                    "max_length": f.effective_max_length(),
+                    "min_length": f.effective_min_length(),
+                    "min": l.min.map(|b| b.to_string()),
+                    "max": l.max.map(|b| b.to_string()),
+                    "pattern": f.effective_pattern().map(|p| p.name()),
+                    "records": fit.records,
+                    "outside": fit.outside,
+                    "longest": fit.longest,
+                }));
+            }
+        }
+        if let Some(m) = module
+            && out.is_empty()
+            && !d.module_ids().iter().any(|x| x == m)
+        {
+            return Err(format!("no module {m}"));
+        }
+        Ok(out)
     }
 
     /// `module_plan.preview` as data: the plan with how each dependency stands.
@@ -2532,6 +2580,10 @@ pub fn admin_module() -> Module {
             "Result of upgrade_all: the modules whose update was blocked, with why (a list)",
         ),
         list(
+            "stored_limits",
+            "Result of stored_limits: per field held to a limit, the records, how many hold a value outside the limits, and the longest text (a list)",
+        ),
+        list(
             "contents",
             "Models, fields, actions, approval steps and data classes the module declares",
         ),
@@ -2619,6 +2671,11 @@ pub fn admin_module() -> Module {
                         ADMIN_GROUP,
                     )
                     .approval(),
+                    CommandDef::new(
+                        "stored_limits",
+                        "Read-only: for every field held to a length, a bound or a format, how many records there are, how many hold a value outside the limits enforced now (set or lowered after they were written), and the longest stored text. Give id to look at one module; it reads every record of each model",
+                        ADMIN_GROUP,
+                    ),
                 ],
                 ext: Default::default(),
             },
@@ -2971,6 +3028,27 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
             refuse_skipped_dependencies(x)?;
             i.install_from_marketplace_outcome(&text(x, "id")?, &caller(x))
                 .map(|o| outcome_row(&o))
+        }),
+    );
+    // Read-only (K46): the stored values that the limits enforced now refuse.
+    let i = inst.clone();
+    d.register(
+        &m,
+        "module",
+        "stored_limits",
+        Box::new(move |input| {
+            let id = match input {
+                Value::Map(x) => match x.get("id") {
+                    Some(Value::Text(t)) if !t.is_empty() => Some(t.clone()),
+                    _ => None,
+                },
+                _ => None,
+            };
+            let rows = i.stored_limits(id.as_deref())?;
+            Ok(Value::map([(
+                "stored_limits",
+                Value::List(rows.iter().map(Value::from_json).collect()),
+            )]))
         }),
     );
     // Read-only: what an install would do. Admin only; agents may read it freely.
@@ -4486,6 +4564,98 @@ label = "Ota käyttöön"
             .find(|x| x.name == "fleet_vehicle_driver")
             .unwrap();
         assert!(driver.labels.is_empty(), "untranslated models stay bare");
+    }
+
+    /// K46: what the limits enforced now make of the stored values, by command.
+    #[test]
+    fn stored_limits_reports_the_values_outside_the_limits_enforced_now() {
+        let store = Store::open("memory:").unwrap();
+        let (d, inst) = setup(&store);
+        let pkg = "[module]
+id = \"limlog\"
+version = \"0.1.0\"
+name = \"L\"
+description = \"d\"
+license = \"MIT\"
+requires_core = \"^0.2.1\"
+[[model]]
+name = \"limlog_entry\"
+description = \"d\"
+read_group = \"limlog.user\"
+write_group = \"limlog.user\"
+[[model.field]]
+name = \"code\"
+description = \"d\"
+class = \"none\"
+max_length = 4
+[[model.field]]
+name = \"qty\"
+description = \"d\"
+class = \"none\"
+kind = \"number\"
+max = 9
+[[model.field]]
+name = \"done\"
+description = \"d\"
+class = \"none\"
+kind = \"bool\"
+";
+        inst.install(pkg, "upload", "root").unwrap();
+        // Written before the limits were set (stored directly, as an older version left them).
+        for (id, code, qty) in [("1", "AB", 3), ("2", "ABCDEFG", 12), ("3", "", 9)] {
+            let mut f = Fields::new();
+            f.insert("code".into(), J::from(code));
+            f.insert("qty".into(), J::from(qty));
+            store.backend().insert("limlog_entry", id, &f).unwrap();
+        }
+        let r = call(&d, &admin(), "module.stored_limits", by_id("limlog")).unwrap();
+        let rows = r.value.to_json()["stored_limits"].clone();
+        let row = |f: &str| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|x| x["field"] == f)
+                .cloned()
+                .unwrap_or_else(|| panic!("no row for {f}: {rows}"))
+        };
+        let code = row("code");
+        assert_eq!(
+            (
+                &code["max_length"],
+                &code["records"],
+                &code["outside"],
+                &code["longest"]
+            ),
+            (&J::from(4), &J::from(3), &J::from(1), &J::from(7)),
+            "{code}"
+        );
+        let qty = row("qty");
+        assert_eq!(
+            (&qty["max"], &qty["outside"]),
+            (&J::from("9"), &J::from(1)),
+            "{qty}"
+        );
+        assert!(qty["longest"].is_null(), "{qty}");
+        // A field held to nothing is not listed.
+        assert!(
+            !rows
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|x| x["field"] == "done"),
+            "{rows}"
+        );
+        // Only an administrator reads it; an unknown module is refused.
+        assert!(
+            call(
+                &d,
+                &Principal::user("sam", &["limlog.user"]),
+                "module.stored_limits",
+                by_id("limlog")
+            )
+            .is_err()
+        );
+        assert!(call(&d, &admin(), "module.stored_limits", by_id("nope")).is_err());
     }
 
     /// A package whose text field shows the label of an option of the select of another package

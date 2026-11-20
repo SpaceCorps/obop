@@ -225,6 +225,7 @@ export function Customize(p: Props) {
           index={view.rowsById}
           hrefFor={view.hrefFor}
           actions={view.actions}
+          token={p.token}
         />
       )}
     </>

@@ -760,6 +760,12 @@ async fn module_upgrade_moves_sign_to_the_bundled_version_with_sign_docuseal_ins
         .await;
     assert_ne!(s, 200, "{v}");
     assert!(v.to_string().contains("would break sign_docuseal"), "{v}");
+    // U61: the refusal says what to do: the dependant first, or Upgrade all.
+    assert!(
+        v.to_string()
+            .contains("upgrade sign_docuseal first, or upgrade every module together"),
+        "{v}"
+    );
     assert_eq!(snapshot(&f, &requests), before, "nothing was changed");
     // `sign_docuseal` first, then `sign`.
     let (s, v) = f

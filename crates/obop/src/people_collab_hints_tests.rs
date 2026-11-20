@@ -310,8 +310,11 @@ fn nobody_names_the_owner_of_leave_and_a_colleague_s_leave_is_refused_plainly() 
     }
     // hr.user filing for a colleague who has a login: a message of its own, no field named.
     let e = run(&app, &ann, "hr_leave_request.create", body(&ju, "")).unwrap_err();
+    // U19: a stable code of its own, so a client need not read the English text.
+    let c = obop_commands::errors::classify(&CallError::Handler(e.clone()));
+    assert_eq!((c.status, c.code), (400, "creator_blocked"), "{e}");
     assert_eq!(
-        e,
+        c.body["error"],
         "This employee has their own login, so the record would be theirs and out of your sight: ask someone with hr.manager to file it. Nothing was saved"
     );
     // Their own leave and leave filed by hr.manager are the employee's.

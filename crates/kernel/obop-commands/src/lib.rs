@@ -327,6 +327,10 @@ pub struct Dispatcher {
     /// Commands a module refuses for everyone (`refuse_always`): the metadata says the caller
     /// cannot do them (`can_delete: false`), so the interface agrees with the server.
     never: std::sync::RwLock<HashMap<String, String>>,
+    /// Transitions without a `from` whose coded guard lets them start only in some states
+    /// (`starts_only_in`, U76): command id to (module, states). `one_way` counts such an action
+    /// as a way out of those states only.
+    starts_in: std::sync::RwLock<HashMap<String, (String, Vec<String>)>>,
     /// The ids of the modules that the package installer registered (`as_package`): nothing else
     /// may register under them (K57), since the package's uninstall removes all that the id holds.
     packages: std::sync::RwLock<HashSet<String>>,
@@ -712,6 +716,7 @@ impl Dispatcher {
                     continue;
                 }
                 let never = self.never.read().unwrap();
+                let starts_in = self.starts_in.read().unwrap();
                 let can = |c: &str| {
                     let id = format!("{name}.{c}");
                     !never.contains_key(&id)
@@ -757,7 +762,16 @@ impl Dispatcher {
                                         && o.transition.is_some_and(|ot| {
                                             ot.field == t.field
                                                 && ot.to != t.to
-                                                && ot.from.is_none_or(|f| f == t.to)
+                                                && match ot.from {
+                                                    Some(f) => f == t.to,
+                                                    // A from-less action whose guard says where
+                                                    // it may start (U76).
+                                                    None => starts_in.get(oid).is_none_or(
+                                                        |(_, states)| {
+                                                            states.iter().any(|s| s == t.to)
+                                                        },
+                                                    ),
+                                                }
                                         })
                                 })
                             }),
@@ -1284,6 +1298,10 @@ impl Dispatcher {
         }
         self.order.write().unwrap().retain(|x| x != module);
         self.never.write().unwrap().retain(|_, m| m != module);
+        self.starts_in
+            .write()
+            .unwrap()
+            .retain(|_, (m, _)| m != module);
         self.packages.write().unwrap().remove(module);
         self.refresh_lock_models();
     }
@@ -1355,6 +1373,21 @@ impl Dispatcher {
             .write()
             .unwrap()
             .insert(id.to_string(), module.to_string());
+    }
+
+    /// Say that the transition `id` of `module`, which declares no `from`, can start only in
+    /// `states`, because a guard of its own refuses it elsewhere (a driver discards a trip that is
+    /// recording, ended or rejected, never a confirmed one). The guard still decides; this only
+    /// tells `meta`, so that `one_way` does not count the action as a way out of the other states
+    /// (U76). Removed with the module.
+    pub fn starts_only_in(&self, module: &str, id: &str, states: &[&str]) {
+        self.starts_in.write().unwrap().insert(
+            id.to_string(),
+            (
+                module.to_string(),
+                states.iter().map(|s| (*s).to_string()).collect(),
+            ),
+        );
     }
 
     /// Every permission group the registered models, fields and commands refer to (the
@@ -2550,6 +2583,7 @@ pub use accounts::{AccountsApi, NewUser};
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
 pub use brand::{DEFAULT_TITLE as DEFAULT_SITE_TITLE, FAVICON_KEY as SITE_FAVICON_KEY, SiteRead};
 pub use engine::bulk::has_stored_answer;
+pub use engine::crud::STAMP as ACTION_STAMP;
 pub use engine::{Actor, ClockFn};
 pub use inline_pdf::{INLINE_PDF_NAME, MAX_INLINE_PDF, inline_pdf};
 pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
@@ -2615,6 +2649,8 @@ mod masked_guess_tests;
 mod observe_tests;
 #[cfg(test)]
 mod one_way_tests;
+#[cfg(test)]
+mod pattern_fixture_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]

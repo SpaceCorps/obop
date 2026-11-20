@@ -1,0 +1,235 @@
+{
+  "_comment": "Shared by the back office (patterns.ts) and the server (obop-commands pattern_fixture_tests.rs, against obop-registry limits.rs): the IBAN lengths and VAT shapes the server checks, and cases both must answer alike (U18).",
+  "iban_lengths": {
+    "AD": 24,
+    "AE": 23,
+    "AL": 28,
+    "AT": 20,
+    "AZ": 28,
+    "BA": 20,
+    "BE": 16,
+    "BG": 22,
+    "BH": 22,
+    "BI": 27,
+    "BR": 29,
+    "BY": 28,
+    "CH": 21,
+    "CR": 22,
+    "CY": 28,
+    "CZ": 24,
+    "DE": 22,
+    "DJ": 27,
+    "DK": 18,
+    "DO": 28,
+    "EE": 20,
+    "EG": 29,
+    "ES": 24,
+    "FI": 18,
+    "FK": 18,
+    "FO": 18,
+    "FR": 27,
+    "GB": 22,
+    "GE": 22,
+    "GI": 23,
+    "GL": 18,
+    "GR": 27,
+    "GT": 28,
+    "HR": 21,
+    "HU": 28,
+    "IE": 22,
+    "IL": 23,
+    "IQ": 23,
+    "IS": 26,
+    "IT": 27,
+    "JO": 30,
+    "KW": 30,
+    "KZ": 20,
+    "LB": 28,
+    "LC": 32,
+    "LI": 21,
+    "LT": 20,
+    "LU": 20,
+    "LV": 21,
+    "LY": 25,
+    "MC": 27,
+    "MD": 24,
+    "ME": 22,
+    "MK": 19,
+    "MN": 20,
+    "MR": 27,
+    "MT": 31,
+    "MU": 30,
+    "NI": 28,
+    "NL": 18,
+    "NO": 15,
+    "OM": 23,
+    "PK": 24,
+    "PL": 28,
+    "PS": 29,
+    "PT": 25,
+    "QA": 29,
+    "RO": 24,
+    "RS": 22,
+    "RU": 33,
+    "SA": 24,
+    "SC": 31,
+    "SD": 18,
+    "SE": 24,
+    "SI": 19,
+    "SK": 24,
+    "SM": 27,
+    "SO": 23,
+    "ST": 25,
+    "SV": 28,
+    "TL": 23,
+    "TN": 24,
+    "TR": 26,
+    "UA": 29,
+    "VA": 22,
+    "VG": 24,
+    "XK": 20,
+    "YE": 30
+  },
+  "vat_shapes": {
+    "AT": "U99999999",
+    "BE": "9999999999",
+    "BG": "999999999|9999999999",
+    "CY": "99999999A",
+    "CZ": "99999999|999999999|9999999999",
+    "DE": "999999999",
+    "DK": "99999999",
+    "EE": "999999999",
+    "EL": "999999999",
+    "ES": "X9999999X",
+    "FI": "99999999",
+    "FR": "XX999999999",
+    "HR": "99999999999",
+    "HU": "99999999",
+    "IE": "9X99999A|9X99999AA",
+    "IT": "99999999999",
+    "LT": "999999999|999999999999",
+    "LU": "99999999",
+    "LV": "99999999999",
+    "MT": "99999999",
+    "NL": "999999999B99",
+    "PL": "9999999999",
+    "PT": "999999999",
+    "RO": "99|999|9999|99999|999999|9999999|99999999|999999999|9999999999",
+    "SE": "999999999999",
+    "SI": "99999999",
+    "SK": "9999999999",
+    "XI": "999999999|999999999999|GD999|HA999"
+  },
+  "cases": [
+    {
+      "pattern": "iban",
+      "value": "DE89 3704 0044 0532 0130 00",
+      "ok": true
+    },
+    {
+      "pattern": "iban",
+      "value": "de89370400440532013000",
+      "ok": true
+    },
+    {
+      "pattern": "iban",
+      "value": "GB82 WEST 1234 5698 7654 32",
+      "ok": true
+    },
+    {
+      "pattern": "iban",
+      "value": "DE00 1234",
+      "ok": false
+    },
+    {
+      "pattern": "iban",
+      "value": "DE89 3704 0044 0532 0130 01",
+      "ok": false
+    },
+    {
+      "pattern": "iban",
+      "value": "DE89 3704 0044 0532 0130 0",
+      "ok": false
+    },
+    {
+      "pattern": "iban",
+      "value": "XX12 3456 7890 1234 5",
+      "ok": false
+    },
+    {
+      "pattern": "iban",
+      "value": "DE89-3704-0044-0532-0130-00",
+      "ok": false
+    },
+    {
+      "pattern": "iban",
+      "value": "",
+      "ok": true
+    },
+    {
+      "pattern": "vat_id",
+      "value": "DE123456789",
+      "ok": true
+    },
+    {
+      "pattern": "vat_id",
+      "value": "DE 123 456 789",
+      "ok": true
+    },
+    {
+      "pattern": "vat_id",
+      "value": "DE12345678",
+      "ok": false
+    },
+    {
+      "pattern": "vat_id",
+      "value": "ATU12345678",
+      "ok": true
+    },
+    {
+      "pattern": "vat_id",
+      "value": "NL123456789B01",
+      "ok": true
+    },
+    {
+      "pattern": "vat_id",
+      "value": "de123456789",
+      "ok": false
+    },
+    {
+      "pattern": "vat_id",
+      "value": "GB123456789",
+      "ok": true
+    },
+    {
+      "pattern": "vat_id",
+      "value": "CHE123456789MWST",
+      "ok": false
+    },
+    {
+      "pattern": "vat_id",
+      "value": "SE123456789012",
+      "ok": true
+    },
+    {
+      "pattern": "vat_id",
+      "value": "",
+      "ok": true
+    },
+    {
+      "pattern": "currency_code",
+      "value": "EUR",
+      "ok": true
+    },
+    {
+      "pattern": "currency_code",
+      "value": "ZZZ",
+      "ok": false
+    },
+    {
+      "pattern": "currency_code",
+      "value": "eur",
+      "ok": false
+    }
+  ]
+}

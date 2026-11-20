@@ -579,6 +579,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
         // The instance currency (D95): the default `$instance.currency` and what the interface
         // shows a money value in when the record names none.
         "currency": d.currency(),
+        // The currency codes a write accepts (ISO 4217 as bundled, U5), so a picker offers no
+        // code the server refuses (U15).
+        "currencies": obop_registry::limits::ISO_4217,
         "modules": modules
     })
 }

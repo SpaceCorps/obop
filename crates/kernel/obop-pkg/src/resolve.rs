@@ -444,7 +444,9 @@ pub fn plan_install(world: &World<'_>, root: &Manifest, root_source: &'static st
                         cid,
                         "conflict",
                         format!(
-                            "{kind} {cid} to {v} would break {other}, which needs {cid} {}",
+                            "{kind} {cid} to {v} would break {other}, which needs {cid} {}: \
+                             upgrade {other} first, or upgrade every module together \
+                             (Upgrade all, module.upgrade_all)",
                             r.req
                         ),
                     );
@@ -927,7 +929,9 @@ mod tests {
         assert!(!p.ok());
         assert_eq!(
             p.blockers[0].message,
-            "upgrading projects to 2.0.0 would break timesheets, which needs projects >=0.2, <1"
+            "upgrading projects to 2.0.0 would break timesheets, which needs projects >=0.2, <1: \
+             upgrade timesheets first, or upgrade every module together \
+             (Upgrade all, module.upgrade_all)"
         );
         // An upgrade inside the range is fine.
         let p = f.plan(&m("projects", "0.9.0", "*", &[]));

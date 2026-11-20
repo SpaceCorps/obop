@@ -106,6 +106,9 @@ pub mod code {
     pub const READONLY_FIELD: &str = "readonly_field";
     /// D95: a ref names a record its field's `ref_filter` does not allow.
     pub const REF_NOT_ALLOWED: &str = "ref_not_allowed";
+    /// D58, U19: the record would belong to someone else under the model's access rule, so its
+    /// creator could not see it afterwards (leave filed for a colleague with a login).
+    pub const CREATOR_BLOCKED: &str = "creator_blocked";
     /// Step 2: the caller is known and may not do this.
     pub const DENIED: &str = "denied";
     /// Step 2: the caller must confirm their identity again.
@@ -271,6 +274,13 @@ pub const TABLE: &[Row] = &[
         hint: "The record named in the field does not satisfy the field's ref_filter (GET /api/meta). Nothing was changed. Pick a record that does, then retry.",
     },
     Row {
+        code: code::CREATOR_BLOCKED,
+        status: 400,
+        retry_after: None,
+        origin: "D58",
+        hint: "The record would be someone else's under the model's access rule, so you could not see it afterwards. Nothing was saved. Make it yours, or ask someone the message names to file it.",
+    },
+    Row {
         code: code::DENIED,
         status: 403,
         retry_after: None,
@@ -337,13 +347,18 @@ pub fn coded(code: &'static str, message: &str) -> String {
 
 /// `context: message`, for an engine that wraps the refusal of something it started (an effect of
 /// an action, the action a `set_state` effect starts) with where it happened. A refusal that
-/// carries the code `limit_violated` (D90) keeps its code first, so that the wrapped answer is
+/// carries the code `limit_violated` (D90), `immutable_record` or `creator_blocked` keeps its code
+/// first, so that the wrapped answer is
 /// still that code with its hint on every surface: `limit_violated: context: message`. Every other
 /// refusal is wrapped as it always was (an assertion is recognised by the text it noted, see
 /// `locale::assertion_behind`).
 pub(crate) fn wrap(context: &str, m: &str) -> String {
     match split_code(m) {
-        Some((r, rest)) if r.code == code::LIMIT_VIOLATED || r.code == code::IMMUTABLE_RECORD => {
+        Some((r, rest))
+            if r.code == code::LIMIT_VIOLATED
+                || r.code == code::IMMUTABLE_RECORD
+                || r.code == code::CREATOR_BLOCKED =>
+        {
             coded(r.code, &format!("{context}: {rest}"))
         }
         _ => format!("{context}: {m}"),
@@ -964,6 +979,7 @@ mod tests {
             ("limit_violated", 400),
             ("readonly_field", 400),
             ("ref_not_allowed", 400),
+            ("creator_blocked", 400),
             ("denied", 403),
             ("reauth_required", 400),
             ("incomplete", 409),
@@ -1381,5 +1397,22 @@ mod tests {
             coded(code::USE_SEARCH, "after is a search option"),
             "use_search: after is a search option"
         );
+    }
+
+    /// U19: a `creator_blocked` refusal met inside an action's effect keeps its code (and hint)
+    /// once the engine wraps it with where it happened, and its code does not leak into the text.
+    #[test]
+    fn a_wrapped_creator_blocked_refusal_keeps_its_code() {
+        let outer = "x_leave.file: effect 1 (create) failed, nothing was changed";
+        let m = wrap(
+            outer,
+            &coded(code::CREATOR_BLOCKED, "This employee has their own login"),
+        );
+        let c = classify(&CallError::Handler(m));
+        assert_eq!(c.code, "creator_blocked");
+        assert_eq!(c.status, 400);
+        let text = c.body["error"].as_str().unwrap();
+        assert!(text.starts_with(outer), "{text}");
+        assert!(!text.contains("creator_blocked:"), "{text}");
     }
 }

@@ -394,6 +394,10 @@ description = "Resultat av upgrade_all: de moduler som uppdaterades (en lista)"
 label = "Hoppades över"
 description = "Resultat av upgrade_all: de moduler vars uppdatering var blockerad, med skäl (en lista)"
 
+[labels.sv.model.module.field.stored_limits]
+label = "Lagrade värden utanför gränser"
+description = "Resultat av stored_limits: för varje fält med en gräns posterna, hur många som har ett värde utanför gränserna och den längsta texten (en lista)"
+
 [labels.sv.model.module.action.upgrade]
 label = "Uppgradera"
 description = "Uppdatera en installerad modul till den nyare version som marknadsplatsen erbjuder, med de beroenden planen behöver, i en enda atomär åtgärd. Ange id"
@@ -401,6 +405,10 @@ description = "Uppdatera en installerad modul till den nyare version som marknad
 [labels.sv.model.module.action.upgrade_all]
 label = "Uppgradera alla"
 description = "Uppdatera varje modul som har en nyare version som den här instansen kan ta emot; en modul vars uppdatering är blockerad lämnas orörd och rapporteras"
+
+[labels.sv.model.module.action.stored_limits]
+label = "Kontrollera lagrade värden"
+description = "Endast läsning: för varje fält med en längd, en gräns eller ett format antalet poster, hur många som har ett värde utanför de gränser som gäller nu (satta eller skärpta efter att de skrevs) och den längsta lagrade texten. Ange id för att titta på en modul; den läser varje post i varje modell den tittar på"
 
 [labels.sv.model.module.action.rollback]
 label = "Gå tillbaka"

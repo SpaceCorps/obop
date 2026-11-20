@@ -103,3 +103,49 @@ fn a_step_that_someone_else_decides_afterwards_is_not_one_way() {
         ]
     );
 }
+
+/// U76: a from-less action counts as a way out of every state, unless its own guard says where it
+/// may start (`starts_only_in`): a withdraw that its guard allows only before approval leaves
+/// approved a state with no way back.
+#[test]
+fn a_from_less_action_counts_only_where_its_guard_lets_it_start() {
+    let p = format!("w{}", &uuid::Uuid::now_v7().simple().to_string()[22..]);
+    let store = Store::open("memory:").unwrap();
+    let d = Arc::new(Dispatcher::new());
+    let mut module = module(&p);
+    module.models[0]
+        .commands
+        .push(CommandDef::new("withdraw", "Withdraw", EMP).transition("state", None, "archived"));
+    let v = obop_registry::check_module(&module);
+    assert!(v.is_empty(), "{v:?}");
+    d.register_crud(&module, &store);
+    for mo in &module.models {
+        for c in &mo.commands {
+            d.register_transition(&module, mo.name, c.name, &store);
+        }
+    }
+    let model = format!("{p}_leave");
+    let manager = Principal::user("max", &[EMP, MGR]);
+    let approve = |d: &Dispatcher| {
+        one_way_of(d, &manager, &model)
+            .into_iter()
+            .find(|(a, _)| a == "approve")
+            .unwrap()
+            .1
+    };
+    // Without a word from its guard, withdraw leaves approved too.
+    assert_eq!(approve(&d), Some(false));
+    let withdraw = format!("{model}.withdraw");
+    d.starts_only_in(&p, &withdraw, &["draft", "requested", "refused"]);
+    assert_eq!(approve(&d), Some(true));
+    // A state the guard names keeps its way out: refuse is still not one way.
+    let refuse = one_way_of(&d, &manager, &model)
+        .into_iter()
+        .find(|(a, _)| a == "refuse")
+        .unwrap()
+        .1;
+    assert_eq!(refuse, Some(false));
+    // Gone with the module.
+    d.unregister_module(&p);
+    assert!(d.starts_in.read().unwrap().is_empty());
+}
