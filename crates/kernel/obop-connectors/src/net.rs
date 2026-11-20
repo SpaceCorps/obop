@@ -115,6 +115,67 @@ impl Lookup for SystemLookup {
     }
 }
 
+/// A name resolution under limits of ours (N7): each lookup gets `deadline` and at most `cap`
+/// run at once. The system resolver cannot be cancelled, so a lookup runs on a thread of its own
+/// and the caller stops waiting at the deadline; a resolver that hangs then holds at most `cap`
+/// threads (counted until their lookup really returns), and a caller beyond them is answered at
+/// once instead of queueing behind them.
+pub struct BoundedLookup {
+    inner: Arc<dyn Lookup>,
+    deadline: Duration,
+    cap: usize,
+    in_flight: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl BoundedLookup {
+    /// The limits of the system resolver for every outbound client: five seconds, sixteen at once.
+    pub const DEADLINE: Duration = Duration::from_secs(5);
+    pub const CAP: usize = 16;
+
+    pub fn new(inner: Arc<dyn Lookup>, deadline: Duration, cap: usize) -> Self {
+        Self {
+            inner,
+            deadline,
+            cap,
+            in_flight: Arc::default(),
+        }
+    }
+
+    /// The lookups that have not returned yet (those given up at the deadline included).
+    pub fn in_flight(&self) -> usize {
+        self.in_flight.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl Lookup for BoundedLookup {
+    fn lookup(&self, host: &str, port: u16) -> std::io::Result<Vec<SocketAddr>> {
+        use std::sync::atomic::Ordering::SeqCst;
+        let busy = |what: &str| std::io::Error::new(std::io::ErrorKind::TimedOut, what.to_string());
+        if self
+            .in_flight
+            .try_update(SeqCst, SeqCst, |n| (n < self.cap).then_some(n + 1))
+            .is_err()
+        {
+            return Err(busy("too many name lookups in the air"));
+        }
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let (inner, n, host) = (self.inner.clone(), self.in_flight.clone(), host.to_string());
+        let spawned = std::thread::Builder::new()
+            .name("obop-lookup".into())
+            .spawn(move || {
+                let got = inner.lookup(&host, port);
+                n.fetch_sub(1, SeqCst);
+                let _ = tx.send(got);
+            });
+        if spawned.is_err() {
+            self.in_flight.fetch_sub(1, SeqCst);
+            return Err(busy("no thread for the name lookup"));
+        }
+        rx.recv_timeout(self.deadline)
+            .unwrap_or_else(|_| Err(busy("the name lookup took too long")))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetError {
     /// The URL is not acceptable (scheme, syntax, credentials in it).
@@ -252,7 +313,14 @@ pub struct Vetted {
 
 impl Client {
     pub fn new(cfg: ClientConfig) -> Self {
-        Self::with_lookup(cfg, Arc::new(SystemLookup))
+        Self::with_lookup(
+            cfg,
+            Arc::new(BoundedLookup::new(
+                Arc::new(SystemLookup),
+                BoundedLookup::DEADLINE,
+                BoundedLookup::CAP,
+            )),
+        )
     }
 
     pub fn with_lookup(cfg: ClientConfig, lookup: Arc<dyn Lookup>) -> Self {
@@ -1076,5 +1144,55 @@ mod tests {
         assert!(!host_matches("badexample.com", "*.example.com"));
         assert!(host_matches("EXAMPLE.com", "example.COM"));
         assert!(!host_matches("x", ""));
+    }
+
+    /// N7: a resolver that hangs holds a caller for the deadline only, and at most `cap` threads.
+    #[test]
+    fn a_hanging_resolver_is_given_up_at_the_deadline_and_capped() {
+        struct Hang(std::sync::mpsc::Receiver<()>);
+        // The receiver is behind a mutex so the double is Sync; it returns when the test lets it.
+        struct Gate(Mutex<Hang>);
+        impl Lookup for Gate {
+            fn lookup(&self, _: &str, port: u16) -> std::io::Result<Vec<SocketAddr>> {
+                let _ = self
+                    .0
+                    .lock()
+                    .unwrap()
+                    .0
+                    .recv_timeout(Duration::from_secs(10));
+                Ok(vec![SocketAddr::from(([93, 184, 216, 34], port))])
+            }
+        }
+        let (release, rx) = std::sync::mpsc::channel::<()>();
+        let b = BoundedLookup::new(
+            Arc::new(Gate(Mutex::new(Hang(rx)))),
+            Duration::from_millis(100),
+            2,
+        );
+        let t = std::time::Instant::now();
+        assert!(b.lookup("hangs.example", 443).is_err());
+        assert!(b.lookup("hangs.example", 443).is_err());
+        assert!(
+            t.elapsed() < Duration::from_secs(2),
+            "each caller waits the deadline only"
+        );
+        assert_eq!(b.in_flight(), 2, "both lookups still hold their thread");
+        // The third is refused at once: the cap, not another thread.
+        let t = std::time::Instant::now();
+        let e = b.lookup("hangs.example", 443).unwrap_err();
+        assert!(t.elapsed() < Duration::from_millis(50), "{e}");
+        assert!(e.to_string().contains("too many"), "{e}");
+        // The resolver comes back: the places are free again and a quick answer goes through.
+        drop(release);
+        let t = std::time::Instant::now();
+        while b.in_flight() > 0 && t.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(b.in_flight(), 0);
+        let one = vec![SocketAddr::from(([93, 184, 216, 34], 443))];
+        let fake = Fake(Mutex::new(vec![one]), Mutex::new(0));
+        let quick = BoundedLookup::new(Arc::new(fake), Duration::from_secs(1), 1);
+        assert!(quick.lookup("example.com", 443).is_ok());
+        assert_eq!(quick.in_flight(), 0);
     }
 }
