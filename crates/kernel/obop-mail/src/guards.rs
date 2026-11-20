@@ -275,6 +275,20 @@ fn audit_private_network(mail: Arc<Mail>) -> Box<obop_commands::Observer> {
 
 /// An answer of `get`, `list` or `search` of `outbound_mail` without the sealed body: a record,
 /// a list of records, or the `rows` of a search.
+/// Whether a `filter` or `order` of the input names `body`.
+fn names_body(input: &Value) -> bool {
+    let Value::Map(m) = input else {
+        return false;
+    };
+    ["filter", "order"].iter().any(|k| match m.get(*k) {
+        Some(Value::List(items)) => items.iter().any(|i| match i {
+            Value::Map(c) => matches!(c.get("field"), Some(Value::Text(f)) if f == "body"),
+            _ => false,
+        }),
+        _ => false,
+    })
+}
+
 fn without_body(v: Value) -> Value {
     match v {
         Value::Map(mut m) => {
@@ -322,10 +336,16 @@ pub fn install(d: &Arc<Dispatcher>, mail: &Arc<Mail>) {
     // The sealed body is read by the worker from the store, never through a command: the
     // administrator holds every group, `mail.system` included, so the field group alone would
     // hand it the ciphertext (docs/ISSUES.md U58). Taken out of every answer, for every caller.
+    // Nor is it a filter or a sort key: a `contains` on the sealed text would probe the ciphertext.
     for c in ["get", "list", "search"] {
         d.around(
             &format!("{OUTBOUND}.{c}"),
-            Box::new(|_, input, inner| inner(input).map(without_body)),
+            Box::new(|_, input, inner| {
+                if names_body(input) {
+                    return Err("the text of a message is never a filter or a sort key".into());
+                }
+                inner(input).map(without_body)
+            }),
         );
     }
     d.add_guard("mail", "mail_template.create", false, template_input());

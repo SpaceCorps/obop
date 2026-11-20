@@ -101,7 +101,8 @@ fn outbound() -> ModelDef {
             p("bcc", "Blind copy recipients, comma separated; never in a header", ADMIN),
             p("reply_to", "Where replies go; empty means the server's setting", ADMIN),
             p("subject", "Subject line", ADMIN),
-            F::new("body", "The text, sealed; erased once the message is sent or cancelled", Internal, true, SYSTEM)
+            // Group mail.sender, so the list's Send can ask for it (U66); no answer carries it.
+            F::new("body", "The text, sealed; erased once the message is sent or cancelled", Internal, true, SENDER)
                 .kind(FieldKind::LongText)
                 .hidden(),
             t("template", "Input of send: the template key to render; recorded", ADMIN),

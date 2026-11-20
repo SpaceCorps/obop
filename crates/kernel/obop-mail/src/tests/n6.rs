@@ -180,3 +180,68 @@ fn the_log_only_sink_records_each_delivery_and_opens_no_connection() {
         seen.lines
     );
 }
+
+#[test]
+fn a_sender_who_is_not_a_platform_administrator_is_offered_every_field_send_asks_for() {
+    // The list's Send builds its dialog from the fields of /api/meta: a field the caller's meta
+    // leaves out is not asked for, and the server refuses the send without it.
+    let r = rig();
+    let meta = r.d.meta(Surface::Rest, &admin());
+    let model = meta
+        .iter()
+        .flat_map(|m| m.models.iter())
+        .find(|m| m.name == OUTBOUND)
+        .expect("outbound_mail");
+    let send = model
+        .actions
+        .iter()
+        .find(|a| a.id == format!("{OUTBOUND}.send"))
+        .expect("send");
+    for need in send
+        .ui
+        .as_ref()
+        .map(|u| u.needs.clone())
+        .unwrap_or_default()
+    {
+        assert!(
+            model.fields.iter().any(|f| f.name == need.as_str()),
+            "{need} is asked for but not in the meta of a mail.admin and mail.sender"
+        );
+    }
+}
+
+#[test]
+fn nobody_filters_or_sorts_by_the_sealed_body() {
+    let r = rig();
+    r.server(&[("port", J::from(25_u16))]);
+    r.send(&[]).unwrap();
+    for p in [platform_admin(), admin()] {
+        for cmd in ["search", "list"] {
+            let by_filter = r.call(
+                &p,
+                &format!("{OUTBOUND}.{cmd}"),
+                Value::from_json(&serde_json::json!({
+                    "filter": [{"field": "body", "op": "contains", "value": "a"}]
+                })),
+            );
+            assert!(by_filter.is_err(), "{cmd} filter: {by_filter:?}");
+            let by_order = r.call(
+                &p,
+                &format!("{OUTBOUND}.{cmd}"),
+                Value::from_json(&serde_json::json!({
+                    "order": [{"field": "body", "dir": "asc"}]
+                })),
+            );
+            assert!(by_order.is_err(), "{cmd} order: {by_order:?}");
+        }
+        // Other filters still work.
+        let ok = r.call(
+            &p,
+            &format!("{OUTBOUND}.search"),
+            Value::from_json(&serde_json::json!({
+                "filter": [{"field": "status", "op": "eq", "value": "queued"}]
+            })),
+        );
+        assert!(ok.is_ok(), "{ok:?}");
+    }
+}

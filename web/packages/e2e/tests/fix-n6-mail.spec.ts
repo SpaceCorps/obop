@@ -111,7 +111,10 @@ test.describe("Mail, stream n6", () => {
     await dialog.getByLabel("To", { exact: false }).first().fill("kunde@example.org");
     await dialog.getByLabel("Subject", { exact: false }).first().fill(second);
     await dialog.locator("textarea").first().fill("Hallo aus der Liste.");
-    await dialog.getByRole("button", { name: /Send|Confirm|OK/ }).last().click();
+    await dialog
+      .getByRole("button", { name: /Send|Confirm|OK/ })
+      .last()
+      .click();
     await expect(async () => {
       const found = await api.run("root", "outbound_mail.search", {
         order: [{ field: "id", dir: "desc" }],
@@ -130,6 +133,42 @@ test.describe("Mail, stream n6", () => {
     }).toPass({ timeout: 20_000 });
   });
 
+  test("a mail sender who is not a platform administrator queues a message from the list", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    await signIn("mel", "/mail/outbound_mail");
+    const send = page.locator("[data-model-action='outbound_mail.send']");
+    await expect(send).toBeVisible();
+    await send.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const subject = uid("From mel");
+    await dialog.getByLabel("To", { exact: false }).first().fill("kunde@example.org");
+    await dialog.getByLabel("Subject", { exact: false }).first().fill(subject);
+    // The text is asked for (before, only a holder of mail.system was asked for it).
+    const text = dialog.locator("textarea");
+    await expect(text).toHaveCount(1);
+    await text.fill("Hallo von Mel.");
+    await dialog.getByRole("button", { name: /Send/ }).last().click();
+    await expect(dialog).toBeHidden();
+    await expect(async () => {
+      const found = await api.run("root", "outbound_mail.search", {
+        filter: [{ field: "subject", op: "eq", value: subject }],
+      });
+      expect(found.rows as unknown[]).toHaveLength(1);
+    }).toPass({ timeout: 15_000 });
+    // The sealed text is never a filter, for her or for an administrator.
+    const probe = await api.post(
+      "/api/outbound_mail/search",
+      { filter: [{ field: "body", op: "contains", value: "a" }] },
+      await api.token("mel"),
+    );
+    expect(probe.status).toBe(400);
+  });
+
   test("the last test is worded from its outcome with the server's answer as the detail", async ({
     page,
     signIn,
@@ -146,7 +185,7 @@ test.describe("Mail, stream n6", () => {
       .locator("[data-test-outcome=permanent]")
       .filter({ has: page.locator(".mail-detail") })
       .first();
-    await expect(line).toContainText("Not sent, refused");
+    await expect(line).toContainText("Not sent (refused)");
     await expect(line).toContainText("550");
   });
 });

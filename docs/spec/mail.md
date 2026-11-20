@@ -14,12 +14,12 @@ The same screens are reachable through the generated record pages (`#/mail/outbo
 
 ## 2. Models and commands
 
-Module `mail`, built in (`crates/kernel/obop-mail`). Permission groups (Proposed names, [CONVENTIONS.md](../CONVENTIONS.md) 4): `mail.admin` (servers, templates, the log, retry, cancel, test) and `mail.sender` (may queue a message). `mail.system` holds the stored body and is held by nobody. `mail.account_admin` of platform.md stays reserved for the W2 mailboxes.
+Module `mail`, built in (`crates/kernel/obop-mail`). Permission groups (Proposed names, [CONVENTIONS.md](../CONVENTIONS.md) 4): `mail.admin` (servers, templates, the log, retry, cancel, test) and `mail.sender` (may queue a message). `mail.system` holds the worker's own fields (the lease and the due time) and is held by nobody. `mail.account_admin` of platform.md stays reserved for the W2 mailboxes.
 
 | Model | Purpose | Notes |
 |---|---|---|
 | `mail_server` | A way out: SMTP relay or provider connection | `password` is data class `secret`: write-only, sealed with the instance key (`OBOP_SECRET_KEY` ring, purpose `mail-server-password`), never returned on any surface |
-| `outbound_mail` | The queue and the deliveries log | the body is sealed (purpose `outbound-mail:<id>`) in a field of group `mail.system` and erased once the message is sent or cancelled; no screen shows it, and `get`, `list` and `search` leave it out of every answer, also to `platform.admin` (which holds every group): only the worker reads it, from the store (U58). `last_error` and `server_reply` (like `mail_server.last_test_result`) are personal data of class `internal`, as the addresses are: a relay's answer often repeats the recipient, so an agent reads them masked |
+| `outbound_mail` | The queue and the deliveries log | the body is sealed (purpose `outbound-mail:<id>`) in a field of group `mail.sender` (so the list's Send asks a sender for it, U66) and erased once the message is sent or cancelled; no screen shows it, `get`, `list` and `search` leave it out of every answer, also to `platform.admin` (which holds every group), and refuse it as a filter or a sort key: only the worker reads it, from the store (U58). `last_error` and `server_reply` (like `mail_server.last_test_result`) are personal data of class `internal`, as the addresses are: a relay's answer often repeats the recipient, so an agent reads them masked |
 | `mail_template` | Subject and text per key and language | unique per key and language |
 
 | Command | Group | What it does |

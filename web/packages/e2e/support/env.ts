@@ -135,6 +135,13 @@ export const users = {
     password: "e2e mina password 1",
     groups: "base.user,mileage.driver,mileage.reviewer",
   },
+  // Sends mail and reads the deliveries (mail.admin, mail.sender) without platform.admin
+  // (tests/fix-n6-mail.spec.ts): the list's Send must ask her for every field it needs.
+  mel: {
+    name: "mel",
+    password: "e2e mel password 1",
+    groups: "base.user,mail.admin,mail.sender",
+  },
   cora: {
     name: "cora",
     password: "e2e cora password 1",

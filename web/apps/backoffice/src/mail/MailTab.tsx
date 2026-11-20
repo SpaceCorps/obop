@@ -15,7 +15,8 @@ import {
 import { call, search, type Row } from "../api.ts";
 import "./mail.css";
 import { href } from "../route.ts";
-import { serverMessage } from "../serverMessage.ts";
+import { optionLabel } from "../format.ts";
+import { findField, serverMessage } from "../serverMessage.ts";
 import { mailRefusal } from "./refusal.ts";
 
 /* Customize > Mail (docs/spec/mail.md): the mail servers (an SMTP relay, or a provider reached through
@@ -57,8 +58,14 @@ type Server = Row & {
   last_test_outcome?: string;
 };
 
-/** The words of a test's outcome; the server's own answer is the detail beside them. */
+/**
+ * The words of a test's outcome; the server's own answer is the detail beside them. They are the
+ * labels of the field's options in /api/meta, translated with the package, and these words only
+ * when the metadata has none.
+ */
 function testOutcome(code: string): string {
+  const field = findField("mail_server", "last_test_outcome");
+  if (code && field?.option_labels?.[code]) return optionLabel(code, field);
   if (code === "sent") return t("Sent");
   if (code === "temporary")
     return t("Not sent, the server could not be reached or asked to try later");
@@ -615,9 +622,9 @@ function ServersSection({
                   }
                 >
                   {testOutcome(s(r.last_test_outcome))
-                    ? t("Last test {when}: {outcome}", {
+                    ? t("Last test {when}: {result}", {
                         when: r.last_test_at ? fmt.dateTime(Date.parse(s(r.last_test_at))) : "",
-                        outcome: testOutcome(s(r.last_test_outcome)),
+                        result: testOutcome(s(r.last_test_outcome)),
                       })
                     : t("Last test {when}: {result}", {
                         when: r.last_test_at ? fmt.dateTime(Date.parse(s(r.last_test_at))) : "",
