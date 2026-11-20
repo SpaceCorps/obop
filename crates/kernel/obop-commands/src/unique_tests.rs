@@ -726,6 +726,49 @@ fn with_postgres_the_check_reads_the_same_few_rows_in_a_model_of_any_size() {
     the_check_costs_the_same_in_a_model_of_any_size(small.url(), large.url(), false);
 }
 
+/// Keys that cannot be valid (a fraction, a list, an object in a text field) are not asked ahead:
+/// the rows are refused by their type check, and no lookup of them reads the model (`find`).
+fn wrongly_typed_keys_are_not_looked_up(url: &str) {
+    let (_flaky, store) = tallied_over(url);
+    let b = Bench::over(store);
+    load(&b, 50);
+    obop_storage::testing::reset_unique_runs();
+    let rows = Value::List(
+        (0..30)
+            .map(|i| {
+                let code = match i % 3 {
+                    0 => Value::Num(format!("{i}.5")),
+                    1 => Value::List(vec![t("a")]),
+                    _ => m(vec![("x", t("y"))]),
+                };
+                m(vec![("code", code), ("note", t("bad"))])
+            })
+            .collect(),
+    );
+    let out = b.call(&Bench::user(), "bulk_create", m(vec![("rows", rows)]));
+    assert!(
+        out.as_ref().map(|o| created(&o.value) == 0).unwrap_or(true),
+        "{out:?}"
+    );
+    let runs = obop_storage::testing::unique_runs();
+    assert_eq!(runs.fallback, 0, "{runs:?}");
+}
+
+#[test]
+fn wrongly_typed_keys_of_a_bulk_call_read_no_model() {
+    wrongly_typed_keys_are_not_looked_up("sqlite::memory:");
+}
+
+#[test]
+fn with_postgres_wrongly_typed_keys_of_a_bulk_call_read_no_model() {
+    let Ok(base) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+        eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
+        return;
+    };
+    let db = obop_storage::testing::TestDb::create(&base).unwrap();
+    wrongly_typed_keys_are_not_looked_up(db.url());
+}
+
 // ---- the database as the last word ---------------------------------------------------------
 
 fn tallied_over(url: &str) -> (Arc<Flaky>, Store) {

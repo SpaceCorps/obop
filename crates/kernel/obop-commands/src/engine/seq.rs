@@ -282,12 +282,22 @@ pub(crate) fn check_unique(
 /// Ask the store at once for the keys the rows of a bulk create carry, one statement per rule on
 /// PostgreSQL (K36). The keys are read from the rows as given; a row whose key changes on the way
 /// (a default, a number, a canonical form) is asked about on its own when it is checked, so the
-/// answers are the same as without this.
+/// answers are the same as without this. Only keys of exact text (a text, a whole number, a
+/// yes/no) are asked ahead: any other value (a fraction, a list, an object) is refused by the
+/// row's checks before its key is looked up, and asking for it would read the model.
 pub(crate) fn prefetch_unique_keys<'r>(
     unit: &Unit<'_>,
     def: &ModelDef,
     rows: impl Iterator<Item = &'r Fields> + Clone,
 ) -> R<()> {
+    fn exact(v: &J) -> bool {
+        match v {
+            J::String(s) => !s.contains('\0'),
+            J::Number(n) => n.is_i64() || n.is_u64(),
+            J::Bool(_) => true,
+            _ => false,
+        }
+    }
     for (field, with) in unique_specs(def) {
         let keys: Vec<Vec<J>> = rows
             .clone()
@@ -299,7 +309,7 @@ pub(crate) fn prefetch_unique_keys<'r>(
                 };
                 let mut values = vec![value];
                 values.extend(with.iter().map(|w| norm(rec, w)));
-                Some(values)
+                values.iter().all(exact).then_some(values)
             })
             .collect();
         if keys.len() < 2 {
