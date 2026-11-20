@@ -17,6 +17,7 @@ export {
   formatMonth,
   formatNumber,
   formatPlainDate,
+  clock24,
   formatRelative,
   minorToDecimal,
   moneyInputText,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   dayInZone,
   fromZonedInput,
+  formatInstant,
   instantShort,
   offsetSeconds,
   toZonedInput,
@@ -145,9 +146,10 @@ describe("instants in the platform zone", () => {
 describe("instantShort", () => {
   it("gives the date and the time to the minute in the zone, and the whole value for a title", () => {
     const p = instantShort("2026-11-28T14:38:04.123262Z", "Europe/Stockholm", "en-US")!;
-    // ICU puts a narrow no-break space before AM/PM; the test reads any space there.
-    expect(p.text).toMatch(/^Nov 28, 2026, 3:38\sPM$/);
-    expect(p.full).toMatch(/^Nov 28, 2026, 3:38:04\sPM$/);
+    // The 24-hour clock in English too, as the week grid and the calendar (U16).
+    expect(p.text).toBe("Nov 28, 2026, 15:38");
+    expect(p.full).toBe("Nov 28, 2026, 15:38:04");
+    expect(formatInstant("2026-11-28T08:05:00Z", "UTC", "en-US")).toBe("Nov 28, 2026, 08:05:00");
   });
 
   it("is nothing for a value that is not an instant", () => {
