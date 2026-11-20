@@ -105,7 +105,42 @@ fn same_as_the_rule(b: &dyn Backend, model: &str) -> (usize, usize) {
             found += usize::from(!want.is_empty());
         }
     }
+    same_many_as_one_by_one(b, model);
     (asked, found)
+}
+
+/// K36: `find_unique_many` gives the records `find_unique` gives for its keys, together, once each.
+fn same_many_as_one_by_one(b: &dyn Backend, model: &str) {
+    let firsts: Vec<J> = corpus()
+        .into_iter()
+        .flatten()
+        .filter(|v| !matches!(v, J::Null) && *v != json!(""))
+        .collect();
+    let mut asks: Vec<(Vec<&str>, Vec<Vec<J>>)> =
+        vec![(vec!["a"], firsts.iter().map(|f| vec![f.clone()]).collect())];
+    for scope in scopes() {
+        asks.push((
+            vec!["a", "b"],
+            firsts
+                .iter()
+                .map(|f| vec![f.clone(), scope.clone()])
+                .collect(),
+        ));
+    }
+    for (fields, keys) in asks {
+        let mut want: Vec<String> = keys
+            .iter()
+            .flat_map(|values| ids(b.find_unique(model, &fields, values).unwrap()))
+            .collect();
+        want.sort();
+        want.dedup();
+        let mut got = ids(b.find_unique_many(model, &fields, &keys).unwrap());
+        got.sort();
+        let n = got.len();
+        got.dedup();
+        assert_eq!(n, got.len(), "{} {model}: a record twice", b.kind());
+        assert_eq!(got, want, "{} {model} {fields:?}", b.kind());
+    }
 }
 
 fn fill(b: &dyn Backend, model: &str) {
@@ -300,6 +335,64 @@ fn with_postgres_the_backend_runs_the_keyed_statement_for_text_integers_and_bool
         return;
     };
     the_way_of_each_kind_of_key(&*open(db.url()).unwrap(), true, false);
+}
+
+/// K36: PostgreSQL answers many keys of one rule with one statement, through the rule's index
+/// (the plan names it), and a key without exact text (a fraction) on its own.
+#[test]
+fn with_postgres_many_keys_of_a_rule_are_one_statement_on_its_index() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let b = open(db.url()).unwrap();
+    b.ensure_unique("obop_uq_many_a_b", "many", &["a", "b"])
+        .unwrap();
+    for i in 0..2_000 {
+        b.insert(
+            "many",
+            &format!("m{i:05}"),
+            &doc(&Some(json!(format!("k{i}"))), &Some(json!("s"))),
+        )
+        .unwrap();
+    }
+    let keys: Vec<Vec<J>> = (0..1_000)
+        .map(|i| vec![json!(format!("k{}", i * 3)), json!("s")])
+        .collect();
+    crate::testing::reset_unique_runs();
+    let got = b.find_unique_many("many", &["a", "b"], &keys).unwrap();
+    let runs = crate::testing::unique_runs();
+    assert_eq!(got.len(), 667, "k0, k3, ... k1998");
+    assert_eq!((runs.keyed, runs.fallback), (1, 0), "{runs:?}");
+    let sql = runs.last_sql.unwrap();
+    assert!(sql.contains("= ANY("), "{sql}");
+    // The plan of that statement uses the rule's index.
+    let mut c = db.connect();
+    c.batch_execute("ANALYZE obop_record").unwrap();
+    let texts: Vec<Vec<String>> = vec![
+        (0..1_000).map(|i| format!("k{}", i * 3)).collect(),
+        vec!["s".to_string()],
+    ];
+    let plan: Vec<String> = c
+        .query(&format!("EXPLAIN {sql}"), &[&texts[0], &texts[1]])
+        .unwrap()
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
+    assert!(
+        plan.iter().any(|l| l.contains("obop_uq_many_a_b")),
+        "{plan:#?}"
+    );
+    // A fraction has no exact text: it is asked on its own, by the default way.
+    crate::testing::reset_unique_runs();
+    let mixed = vec![vec![json!("k3"), json!("s")], vec![json!(1.5), json!("s")]];
+    assert_eq!(
+        b.find_unique_many("many", &["a", "b"], &mixed)
+            .unwrap()
+            .len(),
+        1
+    );
+    let runs = crate::testing::unique_runs();
+    assert_eq!((runs.keyed, runs.fallback), (1, 1), "{runs:?}");
 }
 
 // ---- the plan: the index serves the lookup --------------------------------------------------

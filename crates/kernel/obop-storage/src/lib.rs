@@ -377,6 +377,28 @@ pub trait Backend: Send + Sync {
             .filter(|(_, rec)| unique_matches(rec, fields, values))
             .collect())
     }
+    /// [`Backend::find_unique`] for many keys of one rule at once (K36): every record that
+    /// `find_unique` returns for one of `keys` (each as long as `fields`), once each, in no order.
+    /// The default asks `find_unique` for each key. PostgreSQL asks one statement for all of them
+    /// (`= ANY` over the keys, through the rule's index), so a bulk create of 1,000 rows pays one
+    /// round trip per rule instead of one per row; a key without exact text is asked on its own.
+    fn find_unique_many(
+        &self,
+        model: &str,
+        fields: &[&str],
+        keys: &[Vec<J>],
+    ) -> Result<Vec<(String, Fields)>> {
+        let mut out: Vec<(String, Fields)> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for values in keys {
+            for (id, rec) in self.find_unique(model, fields, values)? {
+                if seen.insert(id.clone()) {
+                    out.push((id, rec));
+                }
+            }
+        }
+        Ok(out)
+    }
     /// Make the database refuse two records of `model` that have the same non-empty `fields[0]`
     /// and the same values in the other `fields` (D57). `name` identifies the constraint in
     /// errors (`obop_uq_...`). Backends without indexes do nothing: the command layer checks on

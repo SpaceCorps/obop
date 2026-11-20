@@ -223,6 +223,14 @@ impl Backend for Guarded {
     ) -> Result<Vec<(String, Fields)>> {
         self.inner.find_unique(model, fields, values)
     }
+    fn find_unique_many(
+        &self,
+        model: &str,
+        fields: &[&str],
+        keys: &[Vec<J>],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.inner.find_unique_many(model, fields, keys)
+    }
     fn unique_indexes(&self) -> Result<Vec<String>> {
         self.inner.unique_indexes()
     }

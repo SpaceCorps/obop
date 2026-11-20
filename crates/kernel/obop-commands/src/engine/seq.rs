@@ -279,6 +279,39 @@ pub(crate) fn check_unique(
     check_unique_keys(unit, lookup, &unit.touched())
 }
 
+/// Ask the store at once for the keys the rows of a bulk create carry, one statement per rule on
+/// PostgreSQL (K36). The keys are read from the rows as given; a row whose key changes on the way
+/// (a default, a number, a canonical form) is asked about on its own when it is checked, so the
+/// answers are the same as without this.
+pub(crate) fn prefetch_unique_keys<'r>(
+    unit: &Unit<'_>,
+    def: &ModelDef,
+    rows: impl Iterator<Item = &'r Fields> + Clone,
+) -> R<()> {
+    for (field, with) in unique_specs(def) {
+        let keys: Vec<Vec<J>> = rows
+            .clone()
+            .filter_map(|rec| {
+                let value = match rec.get(field) {
+                    None | Some(J::Null) => return None,
+                    Some(J::String(s)) if s.is_empty() => return None,
+                    Some(v) => v.clone(),
+                };
+                let mut values = vec![value];
+                values.extend(with.iter().map(|w| norm(rec, w)));
+                Some(values)
+            })
+            .collect();
+        if keys.len() < 2 {
+            continue;
+        }
+        let mut fields = vec![field];
+        fields.extend(with.iter().copied());
+        unit.prefetch_unique(def.name, &fields, &keys)?;
+    }
+    Ok(())
+}
+
 /// Like `check_unique`, for the given records only (a bulk create checks each new row as it adds
 /// it, instead of every row again).
 pub(crate) fn check_unique_keys(

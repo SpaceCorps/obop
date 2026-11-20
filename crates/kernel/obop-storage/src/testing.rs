@@ -402,6 +402,10 @@ pub struct Reads {
     /// returned.
     pub keyed: u64,
     pub keyed_rows: u64,
+    /// Calls of `find_unique_many` (the keys of a bulk create asked at once, K36) and the keys
+    /// they asked about; their records count in `keyed_rows`.
+    pub keyed_many: u64,
+    pub keyed_many_keys: u64,
     /// Calls of `count`.
     pub counts: u64,
     /// Calls that read a short-lived value or a counter (`kv_get`, `kv_scan`, `counter_get`,
@@ -1007,6 +1011,20 @@ impl Backend for Flaky {
         let rows = self.inner.find_unique(model, fields, values)?;
         let mut r = self.reads.lock().unwrap();
         r.keyed += 1;
+        r.keyed_rows += rows.len() as u64;
+        Ok(rows)
+    }
+    fn find_unique_many(
+        &self,
+        model: &str,
+        fields: &[&str],
+        keys: &[Vec<J>],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.gate_m(false, model)?;
+        let rows = self.inner.find_unique_many(model, fields, keys)?;
+        let mut r = self.reads.lock().unwrap();
+        r.keyed_many += 1;
+        r.keyed_many_keys += keys.len() as u64;
         r.keyed_rows += rows.len() as u64;
         Ok(rows)
     }

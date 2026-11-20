@@ -163,6 +163,9 @@ pub(crate) struct Unit<'a> {
     undo: Vec<Undo>,
     /// The overlay by the keys of the uniqueness rules asked about so far, by model.
     keyed: RefCell<HashMap<String, Vec<Keyed>>>,
+    /// What the store answered for keys asked ahead (K36, `prefetch_unique`): by model and the
+    /// rule's fields, the stored records of each key text. A key not in it is asked of the store.
+    prefetched: RefCell<HashMap<(String, Vec<String>), HashMap<String, Vec<(String, Fields)>>>>,
     /// The definitions of the models, when the unit checks the immutability guards (D77): every
     /// unit the engine starts does (`Engine::unit`).
     guards: Option<DefLook<'a>>,
@@ -187,11 +190,39 @@ impl<'a> Unit<'a> {
             budget: MAX_EFFECT_RECORDS,
             undo: Vec::new(),
             keyed: RefCell::new(HashMap::new()),
+            prefetched: RefCell::new(HashMap::new()),
             guards: None,
             tickets: Vec::new(),
             #[cfg(test)]
             examined: std::cell::Cell::new(0),
         }
+    }
+
+    /// Ask the store once for the stored records of many keys of one rule (K36: a bulk create
+    /// asks for the keys of all its rows before it checks them one by one), and answer
+    /// `find_unique` for those keys from that answer. The unit's own writes are still found as
+    /// before. A key that a row ends up with and that was not asked ahead is asked of the store.
+    pub fn prefetch_unique(&self, model: &str, fields: &[&str], keys: &[Vec<J>]) -> R<()> {
+        let stored = self.backend.find_unique_many(model, fields, keys)?;
+        let mut by_key: HashMap<String, Vec<(String, Fields)>> = HashMap::new();
+        for values in keys {
+            let hits = stored
+                .iter()
+                .filter(|(_, rec)| unique_matches(rec, fields, values))
+                .cloned()
+                .collect();
+            by_key.insert(key_text(values), hits);
+        }
+        let rule = (
+            model.to_string(),
+            fields.iter().map(|f| (*f).to_string()).collect(),
+        );
+        self.prefetched
+            .borrow_mut()
+            .entry(rule)
+            .or_default()
+            .extend(by_key);
+        Ok(())
     }
 
     /// This unit, checking the immutability guards (D77) of the models `look` finds before every
@@ -491,7 +522,19 @@ impl Reads for Unit<'_> {
         // What is stored and the unit has not touched counts as it is stored. A stored record the
         // unit changed or deleted is judged by the unit's version, found below.
         let mut out: Vec<(String, Fields)> = Vec::new();
-        for (id, f) in self.backend.find_unique(model, fields, values)? {
+        let ahead = self
+            .prefetched
+            .borrow()
+            .iter()
+            .find(|((m, f), _)| {
+                m == model && f.iter().map(String::as_str).eq(fields.iter().copied())
+            })
+            .and_then(|(_, by_key)| by_key.get(&key_text(values)).cloned());
+        let stored = match ahead {
+            Some(rows) => rows,
+            None => self.backend.find_unique(model, fields, values)?,
+        };
+        for (id, f) in stored {
             if !self.overlay.contains_key(&(model.to_string(), id.clone())) {
                 out.push((id, f));
             }

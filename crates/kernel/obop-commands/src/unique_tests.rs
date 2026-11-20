@@ -672,9 +672,14 @@ fn the_check_costs_the_same_in_a_model_of_any_size(small_url: &str, large_url: &
     let (large, large_runs) = work_in(large_url, 20_000);
     eprintln!("2,000 rows: {small:?}, {small_runs:?}");
     eprintln!("20,000 rows: {large:?}, {large_runs:?}");
-    // Every created row asked once for each of the two rules; the refused one only about the
-    // first, which it broke.
-    let asked = 2 * (20 + 50) + 1;
+    // Every single create asked once for each of the two rules; the refused one only about the
+    // first, which it broke. The bulk create asked for the keys of its 50 rows once per rule
+    // (K36), and its rows found their keys in that answer.
+    let asked = 2 * 20 + 1;
+    let bulk_keys = 2 * 50;
+    // The statements the backend ran: SQLite answers the keys of the bulk create one by one (a
+    // local file, no round trip), PostgreSQL in one statement per rule.
+    let statements = asked + if sqlite { bulk_keys } else { 2 };
     for (r, runs) in [(&small, &small_runs), (&large, &large_runs)] {
         // No read of the whole model, and no lookup on one field (a scan, on both databases).
         // (The one call of `list` is the sweep of expired idempotency answers after a bulk
@@ -682,11 +687,12 @@ fn the_check_costs_the_same_in_a_model_of_any_size(small_url: &str, large_url: &
         assert_eq!((r.list_rows, r.scan_rows, r.finds), (0, 0, 0), "{r:?}");
         assert_eq!(r.scans, 0, "{r:?}");
         assert_eq!(r.keyed, asked, "{r:?}");
+        assert_eq!((r.keyed_many, r.keyed_many_keys), (2, bulk_keys), "{r:?}");
         // And the answers held at most the one twin.
         assert!(r.keyed_rows <= 2, "{r:?}");
         // The backend ran its keyed statement for every one of them: it did not go the way of
         // `find`, which would give the same answers at the cost of the model.
-        assert_eq!((runs.keyed, runs.fallback), (asked, 0), "{runs:?}");
+        assert_eq!((runs.keyed, runs.fallback), (statements, 0), "{runs:?}");
     }
     // The same work reads the same, whatever the size of the model.
     assert_eq!(small, large);
@@ -696,7 +702,7 @@ fn the_check_costs_the_same_in_a_model_of_any_size(small_url: &str, large_url: &
         // 120,026 steps for one statement over 20,000 rows, see `obop-storage`'s
         // `the_work_sqlite_does_for_the_keyed_statement_does_not_grow_with_the_model`.)
         assert!(small_runs.vm_steps > 0, "{small_runs:?}");
-        assert!(small_runs.vm_steps < 100 * asked, "{small_runs:?}");
+        assert!(small_runs.vm_steps < 100 * statements, "{small_runs:?}");
         assert!(
             large_runs.vm_steps <= small_runs.vm_steps + small_runs.vm_steps / 10,
             "{small_runs:?} {large_runs:?}"

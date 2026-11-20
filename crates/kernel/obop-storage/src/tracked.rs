@@ -404,6 +404,14 @@ impl Backend for Tracked {
     ) -> Result<Vec<(String, Fields)>> {
         self.inner.find_unique(model, fields, values)
     }
+    fn find_unique_many(
+        &self,
+        model: &str,
+        fields: &[&str],
+        keys: &[Vec<J>],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.inner.find_unique_many(model, fields, keys)
+    }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         self.inner.ensure_unique(name, model, fields)
     }
