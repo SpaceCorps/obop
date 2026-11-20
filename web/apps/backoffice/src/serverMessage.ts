@@ -563,7 +563,22 @@ const RULES: Rule[] = [
   [/^.*: field has no description$/, () => t("Every field needs a description")],
   [/^.*: command has no description$/, () => t("Every action needs a description")],
   [/^.*: model has no description$/, () => t("Every model needs a description")],
-  // The CSV reader and the header check of an import (obop-commands csv.rs, bulk.rs; J9).
+  [/^no (\w+) \S+$/, (m) => t("No such {model} record", { model: modelName(m[1]!) })],
+  [/^invalid username or password$/, () => t("Invalid username or password")],
+  [
+    /^too many attempts, try again in a minute$/,
+    () => t("Too many attempts. Try again in a minute."),
+  ],
+  [/^invalid token$/, () => t("The value is not valid for this field")],
+  [/^not found$/, () => t("Not found")],
+];
+
+/**
+ * The CSV reader and the header check of an import (obop-commands csv.rs, bulk.rs; J9). They are
+ * worded in every language, English too: the server's text is lower case, names the model by its
+ * code name and is written for agents.
+ */
+const IMPORT_RULES: Rule[] = [
   [
     /^the file is larger than (\d+) KiB; split it into smaller files$/,
     (m) => t("The file is larger than {size} KiB. Split it into smaller files.", { size: m[1]! }),
@@ -640,14 +655,6 @@ const RULES: Rule[] = [
         },
       ),
   ],
-  [/^no (\w+) \S+$/, (m) => t("No such {model} record", { model: modelName(m[1]!) })],
-  [/^invalid username or password$/, () => t("Invalid username or password")],
-  [
-    /^too many attempts, try again in a minute$/,
-    () => t("Too many attempts. Try again in a minute."),
-  ],
-  [/^invalid token$/, () => t("The value is not valid for this field")],
-  [/^not found$/, () => t("Not found")],
 ];
 
 /**
@@ -700,7 +707,7 @@ export function serverMessage(raw: string | undefined | null): string {
   const rows = invalidRows(raw);
   if (rows) return rows;
   const text = withoutAssertion(raw);
-  for (const [re, fn] of [...FIELD_RULES, ...GUARD_RULES]) {
+  for (const [re, fn] of [...FIELD_RULES, ...GUARD_RULES, ...IMPORT_RULES]) {
     const m = re.exec(text);
     if (m) return fn(m);
   }

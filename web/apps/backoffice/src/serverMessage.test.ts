@@ -558,6 +558,18 @@ describe("the errors of an import", () => {
     expect(serverMessage("line 4: 2 column(s), but the header has 3")).toContain("4");
   });
 
+  it("are sentences in English too, with the model by its name", async () => {
+    await setLanguage("en", false);
+    registerMeta([{ id: "sales", name: "Sales", models: [line] }]);
+    for (const raw of READER) expect(serverMessage(raw), raw).not.toBe(raw);
+    expect(serverMessage("line 2: text after the closing quote of a cell")).toBe(
+      "Line 2: there is text after the closing quote of a cell.",
+    );
+    const unknown = serverMessage(READER.at(-1)!);
+    expect(unknown).toMatch(/^The column “qtx” is not a field of /);
+    expect(unknown).not.toContain("sale_line");
+  });
+
   it("name the field of a cell by its label, in English too", async () => {
     await setLanguage("en", false);
     registerMeta([{ id: "sales", name: "Sales", models: [line] }]);
