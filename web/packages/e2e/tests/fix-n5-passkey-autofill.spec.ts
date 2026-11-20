@@ -60,6 +60,13 @@ async function passkeyAlone(page: Page, user: UserName) {
 }
 
 test.describe("passkey autofill and username-first (E7c)", () => {
+  test("a browser with no authenticator says nothing about the offer", async ({ page }) => {
+    await page.goto(`${origin()}/`);
+    await expect(page.getByLabel("Username")).toHaveAttribute("autocomplete", "username webauthn");
+    await page.waitForTimeout(1_500);
+    await expect(page.locator(".notice")).toHaveCount(0);
+  });
+
   test("the username field offers passkeys in its autofill, and picking one signs in", async ({
     page,
   }) => {

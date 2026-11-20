@@ -162,6 +162,9 @@ export function SignIn({
         onDone(r.value.token, r.value.user ?? "", !!r.value.mfa_enrolment_required);
         return;
       }
+      // The browser ended the offer itself (no authenticator, not supported): nobody picked a key,
+      // so nothing is said; the passkey button still works.
+      if (r.kind !== "server") return;
       // A key picked from the autofill that did not sign in: the offer ends with the message, so
       // that a refusal is not asked for again and again; the passkey button offers it once more.
       passkeyFailed(r);
