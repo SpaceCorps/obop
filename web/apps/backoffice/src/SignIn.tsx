@@ -221,7 +221,15 @@ export function SignIn({
     setAsking(false);
     if (r.ok) onDone(r.value.token, r.value.user ?? "", !!r.value.mfa_enrolment_required);
     else {
-      passkeyFailed(r);
+      // With a name typed the browser offers only that name's keys: a typo or another person's
+      // name looks the same to the browser as a cancel, so say both.
+      if (r.kind === "cancelled" && typed.trim())
+        setError(() =>
+          t(
+            "No passkey was used. This device may have no passkey for that username: check it, or clear the field to choose any passkey on this device.",
+          ),
+        );
+      else passkeyFailed(r);
       setRearm((n) => n + 1);
     }
   }

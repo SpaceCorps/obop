@@ -1,4 +1,5 @@
-import { type CDPSession, type Page } from "@playwright/test";
+import { createHash, randomBytes } from "node:crypto";
+import { request as playwrightRequest, type CDPSession, type Page } from "@playwright/test";
 import { users, type UserName } from "../support/env.ts";
 import { expect, test } from "../support/fixtures.ts";
 
@@ -8,6 +9,8 @@ import { expect, test } from "../support/fixtures.ts";
 // instance of tests/passkeys.spec.ts (reached as localhost, a valid relying party id); tess and
 // quinn have no passkeys in any other spec there.
 const origin = () => `http://localhost:${process.env.OBOP_E2E_PASSKEY_PORT}`;
+const apiOrigin = () => `http://127.0.0.1:${process.env.OBOP_E2E_PASSKEY_PORT}`;
+const CALLBACK = "http://127.0.0.1:53682/callback";
 const SECURITY = "/#/customize/security?tab=security";
 
 type Virtual = { cdp: CDPSession; id: string };
@@ -36,6 +39,32 @@ async function signInWithPassword(page: Page, user: UserName) {
 }
 
 const form = (page: Page) => page.locator("form.tf-form");
+
+/** Register an MCP client and return the address of its authorization page (the OAuth sign-in). */
+async function authorizeUrl(): Promise<string> {
+  const request = await playwrightRequest.newContext({ baseURL: apiOrigin() });
+  const reg = await request.post("/oauth/register", {
+    data: {
+      client_name: "Autofill Claude",
+      redirect_uris: [CALLBACK],
+      token_endpoint_auth_method: "none",
+    },
+  });
+  expect(reg.status()).toBe(201);
+  const clientId = ((await reg.json()) as { client_id: string }).client_id;
+  const challenge = createHash("sha256")
+    .update(randomBytes(32).toString("base64url"))
+    .digest("base64url");
+  return `${origin()}/oauth/authorize?${new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: CALLBACK,
+    state: "s1",
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    resource: `${origin()}/mcp`,
+  })}`;
+}
 
 /** Sign in, add a passkey and allow signing in with it alone. */
 async function passkeyAlone(page: Page, user: UserName) {
@@ -91,6 +120,13 @@ test.describe("passkey autofill and username-first (E7c)", () => {
     expect(await page.evaluate(() => (window as unknown as { asked: string[] }).asked)).toContain(
       "conditional",
     );
+
+    // The OAuth sign-in page of an MCP client offers the same autofill: picking the key goes on to
+    // the consent page without a name or a button (the virtual authenticator answers the offer at
+    // once, so the sign-in page is gone before it can be looked at).
+    await page.goto(await authorizeUrl());
+    await expect(page.getByRole("heading", { name: "Connect Autofill Claude?" })).toBeVisible();
+    await expect(page.getByText(`Signed in as ${users.tess.name}.`)).toBeVisible();
   });
 
   test("a key that does not keep the name signs in after the name is typed", async ({
@@ -120,10 +156,26 @@ test.describe("passkey autofill and username-first (E7c)", () => {
     });
     expect((await again.json()).publicKey.allowCredentials).toEqual(ids);
 
+    // Another name typed: the browser has no key for it, and the page says to check the name.
+    await page.getByLabel("Username").fill("nobody-x");
+    await page.getByRole("button", { name: "Sign in with a passkey" }).click();
+    await expect(page.getByText("This device may have no passkey for that username")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.locator(".topbar")).toHaveCount(0);
+
     // The name typed: the key is asked for and signs in.
     await page.getByLabel("Username").fill(users.quinn.name);
     await page.getByRole("button", { name: "Sign in with a passkey" }).click();
     await expect(page.locator(".topbar")).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem("obop-user"))).toBe(users.quinn.name);
+
+    // The OAuth sign-in page: the name typed goes with the passkey button, and the key that does
+    // not keep the name signs in there too.
+    await page.goto(await authorizeUrl());
+    await page.getByLabel("Username").fill(users.quinn.name);
+    await page.getByRole("button", { name: "Sign in with a passkey" }).click();
+    await expect(page.getByRole("heading", { name: "Connect Autofill Claude?" })).toBeVisible();
+    await expect(page.getByText(`Signed in as ${users.quinn.name}.`)).toBeVisible();
   });
 });

@@ -136,7 +136,8 @@ code{overflow-wrap:anywhere}
 /// there, if any, so that a key that does not keep the name is asked for (username-first). The
 /// button ends the autofill offer first: a browser has one request waiting at a time. A page that
 /// shows an error (a passkey or password that was just refused) makes no offer, so that a key the
-/// browser answers with at once cannot post the same refusal again and again.
+/// browser answers with at once cannot post the same refusal again and again. Nor does a page
+/// reached by an IP address: passkeys need a host name, and the server refuses the challenge.
 pub const PASSKEY_JS: &str = r#"(function(){
 var f=document.getElementById('pk');
 if(!f||!window.PublicKeyCredential||!navigator.credentials){return;}
@@ -152,7 +153,7 @@ return fetch(f.dataset.options,{method:'POST',body:body,credentials:'same-origin
 .then(function(r){if(!r.ok){throw 0;}return r.json();})
 .then(function(o){var p=o.publicKey;p.challenge=d(p.challenge);p.allowCredentials=(p.allowCredentials||[]).map(function(c){c.id=d(c.id);return c;});return p;});}
 function send(c){var r=c.response;f.elements.credential.value=JSON.stringify({id:c.id,rawId:e(c.rawId),type:c.type,clientExtensionResults:c.getClientExtensionResults?c.getClientExtensionResults():{},response:{clientDataJSON:e(r.clientDataJSON),authenticatorData:e(r.authenticatorData),signature:e(r.signature),userHandle:r.userHandle?e(r.userHandle):null}});f.submit();}
-if(u&&!document.querySelector('.error[role=alert]:not([hidden])')&&window.AbortController&&PublicKeyCredential.isConditionalMediationAvailable){
+if(u&&!/^[\d.]+$|^\[|:/.test(location.hostname)&&!document.querySelector('.error[role=alert]:not([hidden])')&&window.AbortController&&PublicKeyCredential.isConditionalMediationAvailable){
 PublicKeyCredential.isConditionalMediationAvailable().then(function(ok){if(!ok){return;}
 var a=new AbortController();ac=a;return opts('').then(function(p){if(a.signal.aborted){return;}return navigator.credentials.get({publicKey:p,mediation:'conditional',signal:a.signal}).then(function(c){if(c){send(c);}});});})
 .catch(function(){});}
