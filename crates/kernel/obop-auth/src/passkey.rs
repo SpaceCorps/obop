@@ -541,11 +541,13 @@ impl Auth {
         }
     }
 
+    /// A sign-in by passkey alone, with who it was for and the credential epoch the check of the
+    /// assertion compared: the baseline of an OAuth flow that it seats (L19).
     fn login_passwordless(
         &self,
         ctx: &WebauthnCtx,
         credential: &J,
-    ) -> Result<LoginOutcome, MfaError> {
+    ) -> Result<(LoginOutcome, String, Epoch), MfaError> {
         let (name, _, epoch) = self.verify_assertion(ctx, "login", credential, true)?;
         // An account that signs in with Microsoft only (D91) has no passkey sign-in of its own.
         if self.is_sso_only(&name).map_err(MfaError::Unavailable)? {
@@ -564,8 +566,10 @@ impl Auth {
             &name,
             "signed in with a passkey alone",
         );
-        self.session_outcome(&name, false, &epoch)
-            .map_err(SessionError::mfa)
+        let out = self
+            .session_outcome(&name, false, &epoch)
+            .map_err(SessionError::mfa)?;
+        Ok((out, name, epoch))
     }
 }
 
@@ -1020,7 +1024,23 @@ impl PasskeyApi for Auth {
         self.pk_limit(ctx, "verify", VERIFY_PER_IP)?;
         match mfa_token {
             Some(tok) => self.login_second(ctx, tok, credential),
-            None => self.login_passwordless(ctx, credential),
+            None => self.login_passwordless(ctx, credential).map(|(out, _, _)| out),
+        }
+    }
+
+    fn passkey_login_seen(
+        &self,
+        ctx: &WebauthnCtx,
+        mfa_token: Option<&str>,
+        credential: &J,
+    ) -> Result<(LoginOutcome, Option<(String, Option<String>)>), MfaError> {
+        self.site(ctx)?;
+        self.pk_limit(ctx, "verify", VERIFY_PER_IP)?;
+        match mfa_token {
+            Some(tok) => self.login_second(ctx, tok, credential).map(|out| (out, None)),
+            None => self
+                .login_passwordless(ctx, credential)
+                .map(|(out, name, epoch)| (out, Some((name, epoch)))),
         }
     }
 

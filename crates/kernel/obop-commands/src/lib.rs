@@ -2495,6 +2495,20 @@ pub trait PasskeyApi: Send + Sync {
         mfa_token: Option<&str>,
         credential: &serde_json::Value,
     ) -> Result<LoginOutcome, MfaError>;
+    /// [`PasskeyApi::passkey_login`], with, for a sign-in by passkey alone, who it was for and the
+    /// credential epoch the check of the assertion compared: the baseline an OAuth flow keeps, so
+    /// that a change of credentials that commits after the check is seen by the later compares
+    /// (docs/ISSUES.md L19). `None` for the second step, whose epoch the first step read.
+    #[allow(clippy::type_complexity)]
+    fn passkey_login_seen(
+        &self,
+        ctx: &WebauthnCtx,
+        mfa_token: Option<&str>,
+        credential: &serde_json::Value,
+    ) -> Result<(LoginOutcome, Option<(String, Option<String>)>), MfaError> {
+        self.passkey_login(ctx, mfa_token, credential)
+            .map(|out| (out, None))
+    }
     /// The second-step methods a pending sign-in offers: `totp` and `passkey`.
     fn methods(&self, mfa_token: &str) -> Vec<&'static str>;
 }

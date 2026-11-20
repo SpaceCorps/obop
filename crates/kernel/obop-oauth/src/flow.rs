@@ -673,8 +673,16 @@ impl OAuth {
         )
         .map_err(|e| FlowError::Busy(e.retry_after.unwrap_or(60)))?;
         let api = self.auth.passkeys().ok_or(FlowError::Forbidden)?;
-        match api.passkey_login(ctx, mfa_token, credential) {
-            Ok(out) => self.after_login(id, &mut rec, out),
+        match api.passkey_login_seen(ctx, mfa_token, credential) {
+            Ok((out, seen)) => {
+                // A sign-in by passkey alone: the epoch its check compared is the baseline (L19),
+                // never one read after it.
+                if let Some((user, epoch)) = seen {
+                    rec["pre_user"] = J::from(user);
+                    rec["pre_epoch"] = epoch.map_or(J::Null, J::from);
+                }
+                self.after_login(id, &mut rec, out)
+            }
             Err(obop_commands::MfaError::Locked(_)) => {
                 self.count_attempt(id, &mut rec)?;
                 let _ = self.flow_put(id, &rec);
@@ -754,16 +762,12 @@ impl OAuth {
     fn seat(&self, rec: &mut J, who: &str) -> Result<(), FlowError> {
         if Class::of_record(rec).is_mobile() {
             // The epoch read before the credential was looked at, when it is for the same person:
-            // a sign-in by password, with or without a second factor, or by Microsoft (the epoch
-            // its sign-in compared). A sign-in by passkey alone has no earlier read, because the
-            // person is known only once the assertion has been checked, so the epoch is read
-            // here, after it. A credential change (a passkey removed, a reset, a new password)
-            // that commits between the check of the assertion and this read, the few
-            // milliseconds of resolving and revoking one session, is therefore not seen by the
-            // later compares, which hold this baseline: that sign-in can finish for a credential
-            // that had just been removed, and ends with the next change of credentials or by
-            // revoking the device (docs/ISSUES.md L19). The exchange of the code closes every
-            // other window, atomically.
+            // a sign-in by password, with or without a second factor, by Microsoft (the epoch its
+            // sign-in compared) or by passkey alone (the epoch the check of the assertion
+            // compared, L19). A credential change that commits after that read is seen by the
+            // later compares, which hold this baseline. Only a flow with no such read for this
+            // person reads the epoch here; the exchange of the code closes every other window,
+            // atomically.
             let epoch = if rec["pre_user"].as_str() == Some(who) {
                 rec["pre_epoch"].as_str().map(String::from)
             } else {
