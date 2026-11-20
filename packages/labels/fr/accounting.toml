@@ -256,9 +256,9 @@ done = "Écriture annulée"
 
 [labels.fr.model.accounting_move.action.reverse]
 label = "Extourner"
-description = "Marque une écriture comptabilisée comme extournée ; l’écriture inverse est saisie séparément (approbateur uniquement)"
-confirm = "Marquer cette écriture comme extournée ? Passez l'écriture inverse séparément."
-done = "Écriture marquée comme extournée"
+description = "Marque une écriture comptabilisée comme extournée et crée l’écriture inverse en brouillon, à comptabiliser par un approbateur (approbateur uniquement)"
+confirm = "Extourner cette écriture ? Un brouillon avec les lignes inverses est créé, à comptabiliser par un approbateur."
+done = "Écriture extournée ; l’écriture inverse est un brouillon"
 
 [labels.fr.model.accounting_move_line]
 name = "Ligne d’écriture"
