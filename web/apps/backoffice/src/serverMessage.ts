@@ -23,7 +23,7 @@ function modelName(name: string): string {
 }
 
 /** The field of a model as `/api/meta` described it, or `undefined` when either is unknown. */
-function findField(model: string, field: string): FieldMeta | undefined {
+export function findField(model: string, field: string): FieldMeta | undefined {
   for (const m of modules) {
     const f = m.models.find((x) => x.name === model)?.fields.find((x) => x.name === field);
     if (f) return f;
@@ -225,11 +225,44 @@ const FIELD_RULES: Rule[] = [
       }),
   ],
   [
-    /^(\w+)\.(\w+) must be the id of an existing (\w+) record$/,
+    // A save and an import row add the id that was not found ("; there is no party x").
+    /^(\w+)\.(\w+) must be the id of an existing (\w+) record(?:; there is no \w+ (.+))?$/s,
+    (m) => {
+      const v = { field: fieldName(m[1]!, m[2]!), model: modelName(m[3]!) };
+      return m[4] === undefined
+        ? t("{field} must point to an existing {model} record", v)
+        : t("{field} must point to an existing {model} record, not “{value}”", {
+            ...v,
+            value: m[4],
+          });
+    },
+  ],
+  // A cell of an imported file that is not of the field's kind (bulk_create, J9).
+  [
+    /^(\w+)\.(\w+) must be (a whole number|a whole number of minor currency units such as cents, without a decimal point|true or false), not "(.*)"$/s,
+    (m) => {
+      const v = { field: fieldName(m[1]!, m[2]!), value: m[4]! };
+      if (m[3] === "true or false") return t("{field} must be yes or no, not “{value}”", v);
+      if (m[3] === "a whole number") return t("{field} must be a whole number, not “{value}”", v);
+      return t("{field} must be an amount in cents, without a decimal point, not “{value}”", v);
+    },
+  ],
+  [
+    /^(\w+)\.(\w+) is an image or file; upload it and attach it with create or update, bulk_create does not take those$/,
     (m) =>
-      t("{field} must point to an existing {model} record", {
+      t("{field} is an image or a file, which an import cannot fill. Add it on the record.", {
         field: fieldName(m[1]!, m[2]!),
-        model: modelName(m[3]!),
+      }),
+  ],
+  [
+    /^(\w+)\.(\w+) is computed and read-only$/,
+    (m) => t("{field} is calculated and cannot be set", { field: fieldName(m[1]!, m[2]!) }),
+  ],
+  [
+    /^(\w+)\.(\w+) is a number the system assigns and cannot be set$/,
+    (m) =>
+      t("{field} is a number the system assigns and cannot be set", {
+        field: fieldName(m[1]!, m[2]!),
       }),
   ],
   [
@@ -309,6 +342,19 @@ const GUARD_RULES: Rule[] = [
 ];
 
 const RULES: Rule[] = [
+  // Mail (obop-mail): a message queued with no server to send it.
+  [
+    /^no mail server is set up: add one under Customize, Mail$/,
+    () => t("No mail server is set up: add one under Customize, Mail"),
+  ],
+  [
+    /^no mail server sends messages of the kind (\w+): list it on a server or mark one as the default$/,
+    (m) =>
+      t(
+        "No mail server sends messages of the kind {kind}: list it on a server or mark one as the default",
+        { kind: m[1]! },
+      ),
+  ],
   [
     /^unknown field (\w+)\.(\w+)$/,
     (m) => t("Unknown field: {field}", { field: fieldName(m[1]!, m[2]!) }),
@@ -546,6 +592,90 @@ const RULES: Rule[] = [
 ];
 
 /**
+ * The CSV reader and the header check of an import (obop-commands csv.rs, bulk.rs; J9). They are
+ * worded in every language, English too: the server's text is lower case, names the model by its
+ * code name and is written for agents.
+ */
+const IMPORT_RULES: Rule[] = [
+  [
+    /^the file is larger than (\d+) KiB; split it into smaller files$/,
+    (m) => t("The file is larger than {size} KiB. Split it into smaller files.", { size: m[1]! }),
+  ],
+  [
+    /^the file contains a NUL character; it is not a CSV text file$/,
+    () => t("The file contains a NUL character, so it is not a CSV text file."),
+  ],
+  [
+    /^the file is empty: the first line must name the fields$/,
+    () => t("The file is empty. Its first line must name the fields."),
+  ],
+  [/^more than (\d+) columns$/, (m) => t("The file has more than {max} columns.", { max: m[1]! })],
+  [
+    /^more than (\d+) rows(?:; split the file .*)?$/,
+    (m) =>
+      t("The file has more than {max} rows. Split it into files of at most {max} rows.", {
+        max: m[1]!,
+      }),
+  ],
+  [
+    /^line (\d+): column (\d+) has no name$/,
+    (m) => t("Line {line}: column {column} has no name.", { line: m[1]!, column: m[2]! }),
+  ],
+  [
+    /^line (\d+): the column "(.*)" appears twice$/,
+    (m) => t("Line {line}: the column “{column}” appears twice.", { line: m[1]!, column: m[2]! }),
+  ],
+  [
+    /^line (\d+): (\d+) column\(s\), but the header has (\d+)$/,
+    (m) =>
+      t("Line {line} has {count} columns, but the first line has {header}.", {
+        line: m[1]!,
+        count: m[2]!,
+        header: m[3]!,
+      }),
+  ],
+  [
+    /^line (\d+): a cell is longer than (\d+) KiB$/,
+    (m) => t("Line {line}: a cell is longer than {size} KiB.", { line: m[1]!, size: m[2]! }),
+  ],
+  [
+    /^line (\d+): a quote is opened but never closed$/,
+    (m) => t("Line {line}: a quote is opened but never closed.", { line: m[1]! }),
+  ],
+  [
+    /^line (\d+): text after the closing quote of a cell$/,
+    (m) => t("Line {line}: there is text after the closing quote of a cell.", { line: m[1]! }),
+  ],
+  [
+    /^line (\d+): a quote inside an unquoted cell; wrap the cell in quotes and double the quote$/,
+    (m) =>
+      t(
+        "Line {line}: a cell has a quote but is not in quotes. Put the cell in quotes and write the quote twice.",
+        { line: m[1]! },
+      ),
+  ],
+  [
+    /^the column "id" cannot be imported: /,
+    () =>
+      t(
+        "The column “id” cannot be imported: the system gives each record its id. A reference is written as the id of the record it points to.",
+      ),
+  ],
+  [
+    /^unknown column "(.*)": the columns must be field names of (\w+) \((.*)\)$/,
+    (m) =>
+      t(
+        "The column “{column}” is not a field of {model}. The columns must be field names: {fields}",
+        {
+          column: m[1]!,
+          model: modelName(m[2]!),
+          fields: m[3]!,
+        },
+      ),
+  ],
+];
+
+/**
  * The refusal of an assertion without the engine's suffix: the server writes
  * `<message> (assertion <expression> failed)` (B12), or `<message> (rule <key> failed)` for a
  * rule of the model (D88), and a person needs only the message. When several assertions of an
@@ -554,6 +684,33 @@ const RULES: Rule[] = [
  */
 export function withoutAssertion(raw: string): string {
   return raw.replace(/ \((?:assertion .+?|rule [a-z_]+) failed\)(?=; |$)/gs, "");
+}
+
+/**
+ * The refusal of an all-or-nothing import (bulk_create, J9): "2 of 5 row(s) are invalid, so nothing
+ * was created. row 1 (line 2): <error>; row 4: <code>: <error>; and 3 more (use dry_run ...)". Each
+ * listed row keeps its number and line and gets its own message translated; the code a refusal
+ * carries (D90) and the hint for agents are left out. `null` for any other message.
+ */
+function invalidRows(raw: string): string | null {
+  const m = /^(\d+) of (\d+) row\(s\) are invalid, so nothing was created\. (.*)$/s.exec(raw);
+  if (!m) return null;
+  const head = t(
+    "{failed, plural, one {# of {total} rows is not valid} other {# of {total} rows are not valid}}, so nothing was imported.",
+    { failed: Number(m[1]), total: m[2]! },
+  );
+  const parts = m[3]!.split(/; (?=row \d+(?: \(line \d+\))?: |and \d+ more \(use dry_run)/);
+  const listed = parts.map((part) => {
+    const more = /^and (\d+) more \(use dry_run/.exec(part);
+    if (more) return t("and {count} more", { count: more[1]! });
+    const row = /^row (\d+)(?: \(line (\d+)\))?: (?:[a-z][a-z_]*: )?(.*)$/s.exec(part);
+    if (!row) return part;
+    const error = serverMessage(row[3]!);
+    return row[2]
+      ? t("Row {row} (line {line}): {error}", { row: row[1]!, line: row[2], error })
+      : t("Row {row}: {error}", { row: row[1]!, error });
+  });
+  return `${head} ${listed.join("; ")}`;
 }
 
 /** Translate a server message when its pattern is known, else return it unchanged. */
@@ -565,8 +722,10 @@ export function serverMessage(raw: string | undefined | null): string {
   // A step of an action that failed says which step; the person needs what was wrong.
   const step = /^\w+\.\w+: effect \d+ \([\w ]+\) failed, nothing was changed: (.+)$/s.exec(raw);
   if (step) return serverMessage(step[1]);
+  const rows = invalidRows(raw);
+  if (rows) return rows;
   const text = withoutAssertion(raw);
-  for (const [re, fn] of [...FIELD_RULES, ...GUARD_RULES]) {
+  for (const [re, fn] of [...FIELD_RULES, ...GUARD_RULES, ...IMPORT_RULES]) {
     const m = re.exec(text);
     if (m) return fn(m);
   }

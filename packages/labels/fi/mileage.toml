@@ -190,3 +190,6 @@ label = "Hylkäys"
 
 [labels.fi.model.mileage_trip.section.recorded_by_the_app]
 label = "Sovelluksen tallentama"
+
+[labels.fi.model.mileage_trip.filter.to_review]
+label = "Tarkistettavat"

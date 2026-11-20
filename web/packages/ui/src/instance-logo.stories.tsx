@@ -1,10 +1,12 @@
 // A story for `InstanceLogo` in Component Story Format 3, written with no dependency on Storybook:
-// this repository has no Storybook yet (docs/DECISIONS.md, Q42), so nothing renders or checks this
-// file today; `vitest` does not collect it and the `InstanceLogo` tests cover the component. When
-// Storybook is added, its story glob picks the file up as it is.
+// the web Storybook (`web/apps/storybook`, OR-34 g) picks it up through its story glob over
+// `web/packages/*/src` and renders it; CI builds it with `vp run build-storybook`. `vitest` does not
+// collect it; the `InstanceLogo` tests cover the component.
 //
 // The artwork is an `<img>` of the logo route (`/api/brand/logo.svg`), which a Storybook has no
 // server for: the stories show the frame, the name and the sizes, and the image as a broken one.
+// The design system, so the story is drawn with the classes the apps load.
+import "./styles.css";
 import { InstanceLogo, type InstanceLogoProps } from "./instance-logo.tsx";
 import type { PageBrand } from "./brand.ts";
 

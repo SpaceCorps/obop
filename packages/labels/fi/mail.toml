@@ -125,6 +125,7 @@ description = "Milloin se on vuorossa, sekunteina vuodesta 1970"
 [labels.fi.model.outbound_mail.action.send]
 label = "Lähetä"
 description = "Lisää viesti jonoon: to, subject ja body tai template sekä language ja vars; palauttaa sen tunnisteen. Työprosessi lähettää sen kutsun jälkeen"
+done = "Viesti lisätty jonoon"
 
 [labels.fi.model.outbound_mail.action.retry]
 label = "Lähetä uudelleen"
@@ -229,6 +230,15 @@ description = "Milloin viimeisin testiviesti lähetettiin"
 [labels.fi.model.mail_server.field.last_test_result]
 label = "Viimeisimmän testin tulos"
 description = "Mitä palvelin vastasi viimeisimpään testiviestiin"
+
+[labels.fi.model.mail_server.field.last_test_outcome]
+label = "Viimeisimmän testin lopputulos"
+description = "Miten viimeisin testi päättyi: lähetetty, tilapäisesti lähettämättä tai hylätty"
+
+[labels.fi.model.mail_server.field.last_test_outcome.options]
+sent = "Lähetetty"
+temporary = "Ei lähetetty (tilapäinen)"
+permanent = "Ei lähetetty (hylätty)"
 
 [labels.fi.model.mail_server.field.test_recipient]
 label = "Testin vastaanottaja"

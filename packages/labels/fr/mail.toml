@@ -125,6 +125,7 @@ description = "Quand il est dû, en secondes depuis 1970"
 [labels.fr.model.outbound_mail.action.send]
 label = "Envoyer"
 description = "Mettre un message en file : to, subject et body, ou template avec language et vars ; renvoie son identifiant. Le processus l’envoie après l’appel"
+done = "Message mis en file d’attente"
 
 [labels.fr.model.outbound_mail.action.retry]
 label = "Renvoyer"
@@ -229,6 +230,15 @@ description = "Quand le dernier message de test a été envoyé"
 [labels.fr.model.mail_server.field.last_test_result]
 label = "Résultat du dernier test"
 description = "Ce que le serveur a répondu au dernier message de test"
+
+[labels.fr.model.mail_server.field.last_test_outcome]
+label = "Issue du dernier test"
+description = "Comment le dernier test s’est terminé : envoyé, non envoyé pour l’instant ou refusé"
+
+[labels.fr.model.mail_server.field.last_test_outcome.options]
+sent = "Envoyé"
+temporary = "Non envoyé (temporaire)"
+permanent = "Non envoyé (refusé)"
 
 [labels.fr.model.mail_server.field.test_recipient]
 label = "Destinataire du test"

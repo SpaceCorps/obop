@@ -737,6 +737,15 @@
             "format": "date-time",
             "type": "string"
           },
+          "last_test_outcome": {
+            "description": "How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)",
+            "enum": [
+              "sent",
+              "temporary",
+              "permanent"
+            ],
+            "type": "string"
+          },
           "last_test_result": {
             "description": "What the server answered to the last test message (personal data: agents see it masked)",
             "type": "string"
@@ -1245,6 +1254,10 @@
           },
           "steps": {
             "description": "The modules to install or upgrade, dependencies first (a list)",
+            "type": "string"
+          },
+          "stored_limits": {
+            "description": "Result of stored_limits: per field held to a limit, the records, how many hold a value outside the limits, and the longest text (a list)",
             "type": "string"
           },
           "summary": {
@@ -16516,6 +16529,15 @@
                           "format": "date-time",
                           "type": "string"
                         },
+                        "last_test_outcome": {
+                          "description": "How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)",
+                          "enum": [
+                            "sent",
+                            "temporary",
+                            "permanent"
+                          ],
+                          "type": "string"
+                        },
                         "last_test_result": {
                           "description": "What the server answered to the last test message (personal data: agents see it masked)",
                           "maxLength": 2048,
@@ -16792,6 +16814,15 @@
                     "description": "When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
+                    "type": "string"
+                  },
+                  "last_test_outcome": {
+                    "description": "How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)",
+                    "enum": [
+                      "sent",
+                      "temporary",
+                      "permanent"
+                    ],
                     "type": "string"
                   },
                   "last_test_result": {
@@ -17789,6 +17820,15 @@
                     "description": "When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
+                    "type": "string"
+                  },
+                  "last_test_outcome": {
+                    "description": "How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)",
+                    "enum": [
+                      "sent",
+                      "temporary",
+                      "permanent"
+                    ],
                     "type": "string"
                   },
                   "last_test_result": {
@@ -23736,6 +23776,130 @@
           }
         ],
         "summary": "Search module records with filter, order, limit and offset",
+        "tags": [
+          "Customize"
+        ]
+      }
+    },
+    "/api/module/stored_limits": {
+      "post": {
+        "operationId": "module.stored_limits",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/module"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read-only: for every field held to a length, a bound or a format, how many records there are, how many hold a value outside the limits enforced now (set or lowered after they were written), and the longest stored text. Give id to look at one module; it reads every record of each model",
         "tags": [
           "Customize"
         ]

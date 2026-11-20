@@ -497,3 +497,44 @@ async fn metrics_report_the_wal_archiver_only_when_the_database_is_a_postgres_se
     assert!(!r.body.contains("obop_wal_archive_lag_seconds"));
     assert_eq!(value(&r.body, "obop_wal_archive_failed_total"), 0.0);
 }
+
+/// U43, K31: the gauge of a held change feed. A store without a feed that can be held back
+/// (memory, SQLite) has no series; a stand-in for a PostgreSQL server held back for 90.5 s shows
+/// it in seconds; the PostgreSQL reading itself is tested in obop-storage (`pg_hist_tests`).
+#[tokio::test]
+async fn metrics_report_how_long_the_change_feed_is_held_back() {
+    let f = fixture(MetricsAccess::token(TOKEN));
+    let r = send(&f.router, ok_metrics()).await;
+    assert!(
+        !r.body.contains("obop_history_feed_lag_seconds"),
+        "{}",
+        r.body
+    );
+
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    flaky.report_history_lag(Some(90_500));
+    let app = App::with_store(obop_commands::Store::over(backend));
+    stamp(&app);
+    let auth = Arc::new(Auth::with_test_params(app.store.backend()));
+    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    state.set_metrics_access(MetricsAccess::token(TOKEN));
+    let router = obop_http::router(state, None);
+    let r = send(&router, ok_metrics()).await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(
+        r.body
+            .contains("# TYPE obop_history_feed_lag_seconds gauge"),
+        "{}",
+        r.body
+    );
+    assert_eq!(value(&r.body, "obop_history_feed_lag_seconds"), 90.5);
+    // The help texts are for an operator: no internal issue id (K31, U43) in any of them.
+    for help in r.body.lines().filter(|l| l.starts_with("# HELP")) {
+        let id = help.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| {
+            w.len() > 1
+                && w.starts_with(|c: char| c.is_ascii_uppercase())
+                && w[1..].chars().all(|c| c.is_ascii_digit())
+        });
+        assert!(!id, "{help}");
+    }
+}

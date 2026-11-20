@@ -684,6 +684,11 @@ pub struct Shell {
     /// process has one).
     noted: Arc<AtomicBool>,
     sink: Sink,
+    /// Test seam (K25): a body the next `ask` puts in place of the file's own, keeping the length
+    /// the file service declared, so a file that grows between its stat and its read is reached
+    /// without a race.
+    #[cfg(test)]
+    grown: Arc<std::sync::Mutex<Option<Bytes>>>,
 }
 
 impl Shell {
@@ -726,6 +731,8 @@ impl Shell {
                 use std::io::Write;
                 let _ = writeln!(std::io::stderr(), "{line}");
             }),
+            #[cfg(test)]
+            grown: Arc::default(),
         }
     }
 
@@ -768,10 +775,16 @@ impl Shell {
 
     /// The answer of the file service to a request, as it gives it.
     async fn ask(&self, req: Request) -> Response {
-        match self.files.clone().oneshot(req).await {
+        let resp = match self.files.clone().oneshot(req).await {
             Ok(r) => r.into_response(),
             Err(never) => match never {},
+        };
+        #[cfg(test)]
+        if let Some(body) = self.grown.lock().unwrap().take() {
+            let (parts, _) = resp.into_parts();
+            return Response::from_parts(parts, Body::from(body));
         }
+        resp
     }
 
     /// The brand for display, asked on a blocking thread: the cache-hit path of the reader takes a
@@ -892,7 +905,8 @@ impl Shell {
             Err(Unread::TooLarge) => {
                 // The file service declares the length it read from the file's metadata, and that
                 // was within the limit, so this is a file that grew between that look and the read
-                // (no test reaches it without a race). Too large to rewrite: send it as it is,
+                // (`a_shell_that_grows_past_the_limit_while_read_is_sent_unchanged` reaches it
+                // through a test seam). Too large to rewrite: send it as it is,
                 // from a fresh answer because the first was partly read.
                 return for_method(no_cache(self.ask(asked.plain()).await), &asked);
             }
@@ -1436,6 +1450,37 @@ mod tests {
         assert_eq!(
             headers[header::CONTENT_LENGTH].to_str().unwrap(),
             big.len().to_string()
+        );
+    }
+
+    /// K25 (b): a shell that is longer when read than the length the file service declared (a file
+    /// that grew between the stat and the read) is too large to rewrite: it is asked for again and
+    /// sent as the file is, untagged and whole.
+    #[tokio::test]
+    async fn a_shell_that_grows_past_the_limit_while_read_is_sent_unchanged() {
+        let build = Build::new("grown");
+        let mut shell = Shell::new(build.path(), Some("sv"));
+        shell.limit = PAGE.len() + 10;
+        *shell.grown.lock().unwrap() = Some(Bytes::from(vec![b'x'; PAGE.len() + 11]));
+        let (status, headers, body) = get(&shell, "GET", "/", &[]).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            body,
+            PAGE.as_bytes(),
+            "the file as it is, from a fresh read"
+        );
+        assert_eq!(
+            headers[header::CONTENT_LENGTH].to_str().unwrap(),
+            PAGE.len().to_string()
+        );
+        assert_eq!(headers[header::CACHE_CONTROL], "no-cache");
+        assert!(shell.grown.lock().unwrap().is_none(), "the seam was used");
+        // The next answer, read whole, is rewritten as before.
+        let (_, _, body) = get(&shell, "GET", "/", &[]).await;
+        assert!(
+            String::from_utf8(body)
+                .unwrap()
+                .contains("obop-default-language")
         );
     }
 

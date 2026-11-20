@@ -106,6 +106,9 @@ pub mod code {
     pub const READONLY_FIELD: &str = "readonly_field";
     /// D95: a ref names a record its field's `ref_filter` does not allow.
     pub const REF_NOT_ALLOWED: &str = "ref_not_allowed";
+    /// D58, U19: the record would belong to someone else under the model's access rule, so its
+    /// creator could not see it afterwards (leave filed for a colleague with a login).
+    pub const CREATOR_BLOCKED: &str = "creator_blocked";
     /// Step 2: the caller is known and may not do this.
     pub const DENIED: &str = "denied";
     /// Step 2: the caller must confirm their identity again.
@@ -135,6 +138,10 @@ pub mod code {
     pub const INVALID_TOKEN: &str = "invalid_token";
     /// A handler refused with text that carries no known code.
     pub const BAD_REQUEST: &str = "bad_request";
+    /// The record does not exist, or the caller may not see it (the same answer for both, so a
+    /// caller cannot probe for records it may not read). Status 400, as the plain refusal it
+    /// replaces (`no MODEL ID`); the text is unchanged (L30).
+    pub const RECORD_NOT_FOUND: &str = "record_not_found";
 }
 
 /// One kind of refusal: its code, its HTTP status and what it tells the caller.
@@ -271,6 +278,20 @@ pub const TABLE: &[Row] = &[
         hint: "The record named in the field does not satisfy the field's ref_filter (GET /api/meta). Nothing was changed. Pick a record that does, then retry.",
     },
     Row {
+        code: code::CREATOR_BLOCKED,
+        status: 400,
+        retry_after: None,
+        origin: "D58",
+        hint: "The record would be someone else's under the model's access rule, so you could not see it afterwards. Nothing was saved. Make it yours, or ask someone the message names to file it.",
+    },
+    Row {
+        code: code::RECORD_NOT_FOUND,
+        status: 400,
+        retry_after: None,
+        origin: "L30",
+        hint: "No such record, or your account may not see it. Nothing was changed. Check the id; a record that was deleted, or that is hidden from you, answers the same.",
+    },
+    Row {
         code: code::DENIED,
         status: 403,
         retry_after: None,
@@ -337,13 +358,20 @@ pub fn coded(code: &'static str, message: &str) -> String {
 
 /// `context: message`, for an engine that wraps the refusal of something it started (an effect of
 /// an action, the action a `set_state` effect starts) with where it happened. A refusal that
-/// carries the code `limit_violated` (D90) keeps its code first, so that the wrapped answer is
-/// still that code with its hint on every surface: `limit_violated: context: message`. Every other
+/// carries the code `limit_violated` (D90), `immutable_record`, `creator_blocked` or
+/// `record_not_found` (L30) keeps its code first, so that the wrapped answer is still that code
+/// with its hint on every surface: `limit_violated: context: message`, and its text is the one it
+/// had before the code. Every other
 /// refusal is wrapped as it always was (an assertion is recognised by the text it noted, see
 /// `locale::assertion_behind`).
 pub(crate) fn wrap(context: &str, m: &str) -> String {
     match split_code(m) {
-        Some((r, rest)) if r.code == code::LIMIT_VIOLATED || r.code == code::IMMUTABLE_RECORD => {
+        Some((r, rest))
+            if r.code == code::LIMIT_VIOLATED
+                || r.code == code::IMMUTABLE_RECORD
+                || r.code == code::CREATOR_BLOCKED
+                || r.code == code::RECORD_NOT_FOUND =>
+        {
             coded(r.code, &format!("{context}: {rest}"))
         }
         _ => format!("{context}: {m}"),
@@ -378,7 +406,8 @@ pub struct Classified {
     /// Seconds to wait (`Retry-After`), for the refusals that mean "later".
     pub retry_after: Option<u32>,
     /// What the CLI prints after `error: `. The errors that have always existed print their
-    /// `Debug` form (`Handler("no lead nope")`, documented in the CLI guide).
+    /// `Debug` form (`Handler("name is required")`; a record that is not there, since L30,
+    /// `Handler("record_not_found: no lead nope")`).
     pub cli: String,
     /// The hint the answer carries, for a surface that shows it apart from the body (the JSON-RPC
     /// error of `/mcp`). The errors that have always existed have none.
@@ -771,6 +800,13 @@ pub fn plain(m: &str) -> &str {
     split_code(m).map_or(m, |(_, rest)| rest)
 }
 
+/// The refusal for a record that does not exist or that the caller may not see:
+/// `record_not_found: no MODEL ID`, which every surface answers as 400 with the code
+/// `record_not_found` and the text `no MODEL ID` it always had (L30).
+pub fn no_record(model: &str, id: &str) -> String {
+    coded(code::RECORD_NOT_FOUND, &format!("no {model} {id}"))
+}
+
 /// The `origin` of the three storage rows.
 const STORAGE_ORIGIN: &str = "D74";
 
@@ -906,6 +942,28 @@ mod tests {
         }
     }
 
+    /// L30: a record that does not exist, or that the caller may not see, is answered with a code,
+    /// the status and the text it had before (`no MODEL ID`), also when an effect wraps it.
+    #[test]
+    fn a_missing_record_has_a_code_and_keeps_its_words() {
+        let c = classify(&CallError::Handler(no_record("mileage_trip", "t-1")));
+        assert_eq!((c.status, c.code), (400, "record_not_found"));
+        assert_eq!(c.body["error"], json!("no mileage_trip t-1"));
+        assert_eq!(c.body["code"], json!("record_not_found"));
+        let wrapped = wrap(
+            "lead.win: effect 1 (change) failed",
+            &no_record("lead", "x"),
+        );
+        let c = classify(&CallError::Handler(wrapped));
+        assert_eq!(c.code, "record_not_found");
+        assert_eq!(
+            c.body["error"],
+            json!("lead.win: effect 1 (change) failed: no lead x")
+        );
+        // A bulk row names it without the code.
+        assert_eq!(plain(&no_record("lead", "x")), "no lead x");
+    }
+
     #[test]
     fn every_variant_has_an_answer() {
         for e in every_variant() {
@@ -964,6 +1022,8 @@ mod tests {
             ("limit_violated", 400),
             ("readonly_field", 400),
             ("ref_not_allowed", 400),
+            ("creator_blocked", 400),
+            ("record_not_found", 400),
             ("denied", 403),
             ("reauth_required", 400),
             ("incomplete", 409),
@@ -1381,5 +1441,22 @@ mod tests {
             coded(code::USE_SEARCH, "after is a search option"),
             "use_search: after is a search option"
         );
+    }
+
+    /// U19: a `creator_blocked` refusal met inside an action's effect keeps its code (and hint)
+    /// once the engine wraps it with where it happened, and its code does not leak into the text.
+    #[test]
+    fn a_wrapped_creator_blocked_refusal_keeps_its_code() {
+        let outer = "x_leave.file: effect 1 (create) failed, nothing was changed";
+        let m = wrap(
+            outer,
+            &coded(code::CREATOR_BLOCKED, "This employee has their own login"),
+        );
+        let c = classify(&CallError::Handler(m));
+        assert_eq!(c.code, "creator_blocked");
+        assert_eq!(c.status, 400);
+        let text = c.body["error"].as_str().unwrap();
+        assert!(text.starts_with(outer), "{text}");
+        assert!(!text.contains("creator_blocked:"), "{text}");
     }
 }

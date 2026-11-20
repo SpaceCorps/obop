@@ -88,6 +88,8 @@ mod modules_describe;
 mod modules_tests;
 #[cfg(test)]
 mod oauth_tests;
+#[cfg(test)]
+mod one_way_tests;
 mod openapi_cmd;
 #[cfg(test)]
 mod openapi_tests;
@@ -1233,7 +1235,8 @@ fn agent_token(o: &Opts, user: &str, scopes: Option<&str>, label: Option<&str>) 
     })?;
     let auth = Auth::new(app.store.backend());
     let owner = auth
-        .principal(user)
+        .try_principal(user)
+        .map_err(|e| fail(&format!("cannot read the user {user}: {e}")))?
         .ok_or_else(|| fail(&format!("no user {user}")))?;
     let t = auth
         .issue_agent_token_by_operator(
@@ -1496,10 +1499,11 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     }
     app.connectors.start();
     app.mail.start();
-    // A private trip keeps no route (docs/spec/mobile.md 5.6): those stored before that rule lose it.
-    match mileage::drop_private_routes(&app.store) {
-        Ok(0) => {}
-        Ok(n) => eprintln!("mileage: removed the route of {n} private trips"),
+    // A private trip keeps no route (docs/spec/mobile.md 5.6): those stored before that rule lose
+    // it, once per database (recorded in the migration ledger as `mileage/0001`, U81).
+    match mileage::drop_private_routes_once(&app.store) {
+        Ok(None | Some(0)) => {}
+        Ok(Some(n)) => eprintln!("mileage: removed the route of {n} private trips"),
         Err(e) => eprintln!("mileage: the routes of private trips were not removed: {e}"),
     }
     // Scheduled backups with an off-host copy and retention, when OBOP_BACKUP_SCHEDULE is set.
@@ -3118,7 +3122,7 @@ mod tests {
         let _guard = obop_storage::testing::TempPath::dir("obop-check");
         let dir = _guard.path().to_path_buf();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.3.4", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.5", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),

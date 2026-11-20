@@ -188,6 +188,32 @@ fn is_made_by(tag: &str, name: &str) -> bool {
     rest.is_empty() || rest == "-wal" || rest == "-shm" || rest.starts_with('.')
 }
 
+/// The names the tests of four tags made before they used [`TempPath`] (K52 d): the brand tests'
+/// `<tag>-<pid>-<nanos>` (or `-<n>`) and the fixed directory `obop-sign-race`. Their own sweepers
+/// are gone, so what an older run left is swept here, by the same age rule.
+fn is_legacy(tag: &str, name: &str) -> bool {
+    const LEGACY: [&str; 4] = [
+        "obop-brand-cli",
+        "obop-brand-http",
+        "obop-brand-rt",
+        "obop-sign-race",
+    ];
+    if !LEGACY.contains(&tag) {
+        return false;
+    }
+    if name == tag {
+        return tag == "obop-sign-race";
+    }
+    let Some(rest) = name.strip_prefix(tag).and_then(|r| r.strip_prefix('-')) else {
+        return false;
+    };
+    let parts: Vec<&str> = rest.split('-').collect();
+    parts.len() == 2
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// Remove what earlier runs of `tag` left in the temporary directory more than [`LEFTOVER_AGE`]
 /// ago (a file that something held open when its test ended, or a run that was killed).
 fn sweep_old(tag: &str) {
@@ -196,7 +222,8 @@ fn sweep_old(tag: &str) {
     };
     let now = std::time::SystemTime::now();
     for entry in entries.flatten() {
-        if !is_made_by(tag, &entry.file_name().to_string_lossy()) {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !is_made_by(tag, &name) && !is_legacy(tag, &name) {
             continue;
         }
         let old = entry
@@ -307,6 +334,9 @@ pub struct Flaky {
     apply_skip: AtomicI64,
     kv_new_budget: AtomicI64,
     kv_put_budget: AtomicI64,
+    counter_budget: AtomicI64,
+    /// A refused counter is a fault of the pool (noted, D74), not a plain error.
+    counter_busy: AtomicBool,
     /// -1: off; n: calls to let through before one is refused.
     once: AtomicI64,
     /// Calls still to refuse after the first one of a run (see refuse_calls_after).
@@ -344,6 +374,11 @@ pub struct Flaky {
     /// Run once, right before the next read of a short-lived value whose key starts with the
     /// prefix.
     before_kv_get: std::sync::Mutex<Option<(String, AfterInsert)>>,
+    /// What `history_lag_ms` answers instead of the wrapped store (see
+    /// [`Flaky::report_history_lag`]).
+    history_lag: std::sync::Mutex<Option<Option<i64>>>,
+    /// Run once, right after the next successful update of the model.
+    after_update: std::sync::Mutex<Option<(String, AfterInsert)>>,
 }
 
 /// A batch as `apply_tracked` received it: the context, the steps and the tracked models.
@@ -370,6 +405,10 @@ pub struct Reads {
     /// returned.
     pub keyed: u64,
     pub keyed_rows: u64,
+    /// Calls of `find_unique_many` (the keys of a bulk create asked at once, K36) and the keys
+    /// they asked about; their records count in `keyed_rows`.
+    pub keyed_many: u64,
+    pub keyed_many_keys: u64,
     /// Calls of `count`.
     pub counts: u64,
     /// Calls that read a short-lived value or a counter (`kv_get`, `kv_scan`, `counter_get`,
@@ -394,6 +433,8 @@ impl Flaky {
             apply_skip: AtomicI64::new(0),
             kv_new_budget: AtomicI64::new(0),
             kv_put_budget: AtomicI64::new(0),
+            counter_budget: AtomicI64::new(0),
+            counter_busy: AtomicBool::new(false),
             once: AtomicI64::new(-1),
             run_left: AtomicI64::new(0),
             run_len: AtomicI64::new(0),
@@ -410,6 +451,8 @@ impl Flaky {
             before_apply: std::sync::Mutex::new(None),
             before_kv_swap: std::sync::Mutex::new(None),
             before_kv_get: std::sync::Mutex::new(None),
+            history_lag: std::sync::Mutex::new(None),
+            after_update: std::sync::Mutex::new(None),
         })
     }
 
@@ -419,6 +462,12 @@ impl Flaky {
         let f = Flaky::new(crate::open("memory:").expect("memory backend"));
         let g = guarded(f.clone());
         (f, g)
+    }
+
+    /// A stand-in for a PostgreSQL server whose change feed is held back: `history_lag_ms`
+    /// answers `lag` from now on instead of asking the wrapped store (U43).
+    pub fn report_history_lag(&self, lag: Option<i64>) {
+        *self.history_lag.lock().unwrap_or_else(|e| e.into_inner()) = Some(lag);
     }
 
     pub fn set(&self, mode: Mode) {
@@ -496,6 +545,7 @@ impl Flaky {
     pub fn allow_models(&self) {
         *self.target.lock().unwrap() = None;
         *self.after_get.lock().unwrap() = None;
+        *self.after_update.lock().unwrap() = None;
         *self.insert_error.lock().unwrap() = None;
         *self.get_error.lock().unwrap() = None;
         self.after_write.store(0, SeqCst);
@@ -505,6 +555,8 @@ impl Flaky {
         self.apply_skip.store(0, SeqCst);
         self.kv_new_budget.store(0, SeqCst);
         self.kv_put_budget.store(0, SeqCst);
+        self.counter_budget.store(0, SeqCst);
+        self.counter_busy.store(false, SeqCst);
         self.once.store(-1, SeqCst);
         self.run_left.store(0, SeqCst);
         self.run_len.store(0, SeqCst);
@@ -542,6 +594,12 @@ impl Flaky {
     /// Run `then` once, right after the next successful insert into `model`.
     pub fn after_the_next_insert_into(&self, model: &str, then: AfterInsert) {
         *self.after_insert.lock().unwrap() = Some((model.to_string(), then));
+    }
+
+    /// Run `then` once, right after the next successful update of `model` (another request doing
+    /// its part, or the store starting to refuse, once a change has committed).
+    pub fn after_the_next_update_of(&self, model: &str, then: AfterInsert) {
+        *self.after_update.lock().unwrap() = Some((model.to_string(), then));
     }
 
     /// Fail every insert into `model` with `message`, a server error that is neither a duplicate
@@ -584,6 +642,20 @@ impl Flaky {
     /// Refuse the next `n` `kv_put` calls (short-lived values: plans, sessions) and nothing else.
     pub fn refuse_kv_put(&self, n: i64) {
         self.kv_put_budget.store(n, SeqCst);
+    }
+
+    /// Refuse the next `n` `counter_add` calls (the counts of the rate limits) and nothing else,
+    /// with a plain error of the statement (no fault is noted).
+    pub fn refuse_counters(&self, n: i64) {
+        self.counter_busy.store(false, SeqCst);
+        self.counter_budget.store(n, SeqCst);
+    }
+
+    /// As [`Flaky::refuse_counters`], as a pool with every connection in use: the fault is noted
+    /// on the request (D74), so the request is answered 503.
+    pub fn refuse_counters_busy(&self, n: i64) {
+        self.counter_busy.store(true, SeqCst);
+        self.counter_budget.store(n, SeqCst);
     }
 
     /// Let `skip` calls of any kind through, then refuse the one after them, once: a refusal at
@@ -822,6 +894,16 @@ impl Backend for Flaky {
             _ => None,
         });
         let done = self.inner.update(model, id, patch)?;
+        let hook = {
+            let mut g = self.after_update.lock().unwrap();
+            match &*g {
+                Some((m, _)) if m == model && done => g.take().map(|(_, f)| f),
+                _ => None,
+            }
+        };
+        if let Some(f) = hook {
+            f(&*self.inner);
+        }
         if lost == Ok(0) {
             self.refused.fetch_add(1, SeqCst);
             fault::note_in_flight();
@@ -907,6 +989,13 @@ impl Backend for Flaky {
         self.gate(false)?;
         self.inner.history_stats()
     }
+    fn history_lag_ms(&self) -> Result<Option<i64>> {
+        self.gate(false)?;
+        if let Some(lag) = *self.history_lag.lock().unwrap_or_else(|e| e.into_inner()) {
+            return Ok(lag);
+        }
+        self.inner.history_lag_ms()
+    }
     fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
         self.gate(true)?;
         self.inner.history_ensure_partition(month)
@@ -946,6 +1035,20 @@ impl Backend for Flaky {
         r.keyed_rows += rows.len() as u64;
         Ok(rows)
     }
+    fn find_unique_many(
+        &self,
+        model: &str,
+        fields: &[&str],
+        keys: &[Vec<J>],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.gate_m(false, model)?;
+        let rows = self.inner.find_unique_many(model, fields, keys)?;
+        let mut r = self.reads.lock().unwrap();
+        r.keyed_many += 1;
+        r.keyed_many_keys += keys.len() as u64;
+        r.keyed_rows += rows.len() as u64;
+        Ok(rows)
+    }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         self.ask(model);
         self.gate(true)?;
@@ -966,6 +1069,18 @@ impl Backend for Flaky {
         self.inner.lock(key)
     }
     fn counter_add(&self, key: &str, ttl_ms: u64, extend: bool) -> Result<u64> {
+        if self
+            .counter_budget
+            .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
+            .is_ok()
+        {
+            self.refused.fetch_add(1, SeqCst);
+            if !self.counter_busy.load(SeqCst) {
+                return Err("the counter could not be written".into());
+            }
+            fault::note(Fault::Busy);
+            return Err(Fault::Busy.message("all database connections are in use, try again"));
+        }
         self.gate(true)?;
         self.inner.counter_add(key, ttl_ms, extend)
     }
@@ -1681,6 +1796,30 @@ mod temp_path_tests {
         let shown = dir.path().to_path_buf();
         drop(dir);
         assert!(!shown.exists());
+    }
+
+    /// K52 (d): the names four tests made before they used `TempPath` are swept too, and no
+    /// other name of those tags, nor any name of another tag.
+    #[test]
+    fn the_legacy_names_of_the_brand_and_sign_race_tests_are_swept() {
+        for (tag, name) in [
+            ("obop-brand-cli", "obop-brand-cli-4242-1793696487850123456"),
+            ("obop-brand-http", "obop-brand-http-4242-3"),
+            ("obop-brand-rt", "obop-brand-rt-4242-1793696487850123456"),
+            ("obop-sign-race", "obop-sign-race"),
+        ] {
+            assert!(is_legacy(tag, name), "{name}");
+        }
+        for (tag, name) in [
+            ("obop-brand-cli", "obop-brand-cli"),
+            ("obop-brand-cli", "obop-brand-cli-x-4242"),
+            ("obop-brand-cli", "obop-brand-cli-4242"),
+            ("obop-brand-cli", "obop-brand-cli-1-2-3"),
+            ("obop-model", "obop-model-4242-3"),
+            ("obop-model", "obop-model"),
+        ] {
+            assert!(!is_legacy(tag, name), "{name}");
+        }
     }
 
     #[test]

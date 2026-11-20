@@ -9,7 +9,7 @@ type Check =
   | { state: "idle" }
   | { state: "checking" }
   | { state: "plan"; plan: Plan }
-  | { state: "error"; message: string };
+  | { state: "error"; message: string }; // the server's text, worded where it is drawn (D9)
 
 /**
  * "Upload your own package": choose an obop.toml (or paste its text) and see at once, from
@@ -46,9 +46,7 @@ export function UploadArea({
       void preview(token, { manifest: text }).then((r) => {
         if (!live) return;
         setCheck(
-          "plan" in r
-            ? { state: "plan", plan: r.plan }
-            : { state: "error", message: serverMessage(r.error) },
+          "plan" in r ? { state: "plan", plan: r.plan } : { state: "error", message: r.error },
         );
       });
     }, 350);
@@ -117,7 +115,7 @@ export function UploadArea({
         {check.state === "checking" && <p className="hint">{t("Checking the package…")}</p>}
         {check.state === "error" && (
           <Notice tone="danger" title={t("This package cannot be read")}>
-            {check.message}
+            {serverMessage(check.message)}
           </Notice>
         )}
         {plan && (

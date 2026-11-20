@@ -219,7 +219,7 @@ export type QuickCtx = {
   user?: string;
   /** YYYY-MM-DD in the instance's zone. */
   today: string;
-  /** The first day of the week, 1 Monday ... 7 Sunday (fmt.firstDay()). */
+  /** The first day of the week, 1 Monday ... 7 Sunday (firstDayOfWeek()). */
   firstDay?: number;
 };
 

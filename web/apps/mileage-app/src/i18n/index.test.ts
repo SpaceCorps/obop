@@ -62,12 +62,16 @@ describe("sentences for the system the app runs on", () => {
     expect(tOn("web", "guide.body")).toBe(t("guide.body"));
   });
 
-  test("the way out of the Failed screen is the system's own: Clear storage on Android, deleting the app on iOS", () => {
-    expect(tOn("android", "error.database.hint")).toContain("Clear storage");
-    const ios = tOn("ios", "error.database.hint");
-    expect(ios).not.toMatch(/Clear storage|Settings, Apps|Storage/);
-    expect(ios).toContain("delete the app");
-    expect(ios).toContain("which deletes the trips that were not sent");
+  test("the way out of the Failed screen is its own button on both systems, named as the button is (L34)", () => {
+    const button = t("error.database.erase");
+    for (const os of ["android", "ios"] as const) {
+      const hint = tOn(os, "error.database.hint");
+      expect(hint).toContain(button);
+      expect(hint).toContain("which deletes the trips that were not sent");
+      expect(hint).not.toMatch(/Clear storage|Settings, Apps|delete the app/);
+    }
+    // On an iPhone the hint still says to unlock the phone first.
+    expect(tOn("ios", "error.database.hint")).toContain("unlock it once");
   });
 
   test("a sentence without an iOS version is the same on iOS, and placeholders are filled", () => {

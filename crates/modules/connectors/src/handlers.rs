@@ -41,7 +41,7 @@ fn virtual_model(d: &Dispatcher, m: &Module, model: &'static str, rows: Rows) {
                 .into_iter()
                 .find(|(i, _)| i == id)
                 .map(|(i, f)| row(&i, &f))
-                .ok_or_else(|| format!("no {model} {id}"))
+                .ok_or_else(|| obop_commands::errors::no_record(model, id))
         }),
     );
     let (r, dd) = (rows.clone(), def.clone());
@@ -143,7 +143,7 @@ fn set(rt: &Runtime, model: &str, id: &str, pairs: &[(&str, J)]) -> Result<(), S
     if rt.backend.update(model, id, &fields_of(pairs))? {
         Ok(())
     } else {
-        Err(format!("no {model} {id}"))
+        Err(obop_commands::errors::no_record(model, id))
     }
 }
 
@@ -326,9 +326,9 @@ fn consent_create(rt: &Runtime, input: &Value) -> Result<Value, String> {
     let id = txt(m, "connection");
     let (c, p) = rt
         .connection(id)
-        .map_err(|_| format!("no connection {id}"))?;
+        .map_err(|_| obop_commands::errors::no_record("connection", id))?;
     if !a.admin && c.owner_user != a.id {
-        return Err(format!("no connection {id}"));
+        return Err(obop_commands::errors::no_record("connection", id));
     }
     if c.state == "revoked" {
         return Err("the connection is revoked; start a new one".into());
@@ -409,7 +409,7 @@ fn render(rt: &Runtime, input: &Value) -> Result<Value, String> {
     if model.is_empty() {
         return Err("choose the model to preview".into());
     }
-    if blocked_model(model) || !rt.dispatcher.has_model(model) {
+    if blocked_model(model) || !rt.dispatcher()?.has_model(model) {
         return Err(format!("{model} cannot be previewed"));
     }
     // The connection to preview: an existing one (its real pseudonyms), or a stand-in built from
@@ -454,7 +454,7 @@ fn render(rt: &Runtime, input: &Value) -> Result<Value, String> {
     let mut v = obop_commands::Vault::new();
     let rows: Vec<Map<String, J>> = if txt(m, "record_id").is_empty() {
         let r = rt
-            .dispatcher
+            .dispatcher()?
             .call(
                 obop_commands::Surface::Rest,
                 &reader,
@@ -472,7 +472,7 @@ fn render(rt: &Runtime, input: &Value) -> Result<Value, String> {
         }
     } else {
         let r = rt
-            .dispatcher
+            .dispatcher()?
             .call(
                 obop_commands::Surface::Rest,
                 &reader,
@@ -691,14 +691,13 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, store: &Store, rt: &Arc<Runtime>
             // can finish the work, and "only the active record can be withdrawn").
             let conn = str_of(&rec, "connection").to_string();
             if r.backend.get(CONNECTION, &conn)?.is_some() {
+                // The revocation withdraws every active consent of the connection, this one
+                // included (it was active above). It is not read again: a refused read after the
+                // work was done would answer "partial, repeat it", and the repeat would be refused
+                // as "only the active record can be withdrawn" (K19).
                 revoke_connection(&r, &conn, &who)?;
-            }
-            // A consent of a connection that is gone, or one that the revocation did not reach.
-            let still_active = r
-                .backend
-                .get(CONSENT, &id)?
-                .is_some_and(|k| str_of(&k, "state") == "active");
-            if still_active {
+            } else {
+                // A consent of a connection that is gone.
                 obop_storage::fault::needed(|| withdraw_consent(&r, &id, &who))?;
             }
             Ok(Value::map([

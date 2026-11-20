@@ -111,3 +111,12 @@ label = "Solicitado por"
 
 [labels.es.model.expenses_expense.section.payment]
 label = "Pago"
+
+[labels.es.model.expenses_expense.filter.my_claims]
+label = "Mis gastos"
+
+[labels.es.model.expenses_expense.filter.to_approve]
+label = "Por aprobar"
+
+[labels.es.model.expenses_expense.filter.to_pay]
+label = "Por pagar"

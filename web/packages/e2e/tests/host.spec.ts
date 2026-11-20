@@ -98,7 +98,9 @@ test.describe("inside the host app", () => {
     expect(await page.evaluate(() => typeof window.PublicKeyCredential)).toBe("function");
     await expect(passkeyButton(page)).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign in with Microsoft" })).toHaveCount(0);
-    expect(host.paramsOf("host.info")).toEqual([{}]);
+    // The host records the call when the page's message reaches it: wait for that, not for the
+    // page's attribute alone (U77).
+    await expect.poll(() => host.paramsOf("host.info")).toEqual([{}]);
     // The receiver is the page's own and cannot be replaced by a script.
     const receiver = await page.evaluate(() => {
       const before = (window as unknown as { __obopHost: unknown }).__obopHost;

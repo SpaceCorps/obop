@@ -106,7 +106,7 @@ impl Store {
         if self.backend.update(model, id, &to_fields(&fields))? {
             Ok(())
         } else {
-            Err(format!("no {model} {id}"))
+            Err(crate::errors::no_record(model, id))
         }
     }
 }

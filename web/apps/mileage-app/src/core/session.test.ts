@@ -347,12 +347,22 @@ describe("the session", () => {
     expect(needsRegistration(installed, "http://h", now)).toBe(false);
   });
 
-  test("only the 400 error page of the authorization page means that the instance does not know the client", () => {
-    expect(clientUnknown(400)).toBe(true);
-    // The sign-in page (200), a redirect to it, a server in trouble, or no answer at all: go on.
-    for (const status of [200, 302, 404, 500, 503, null]) {
-      expect(clientUnknown(status)).toBe(false);
+  test("an instance that answers in JSON is believed by its error: only invalid_client means that it does not know the client", () => {
+    expect(clientUnknown({ status: 400, error: "invalid_client" })).toBe(true);
+    // Another refusal is not cured by a new registration, and a known client gets "ok".
+    for (const error of ["invalid_request", "invalid_scope", "unsupported_response_type"]) {
+      expect(clientUnknown({ status: 400, error })).toBe(false);
     }
+    expect(clientUnknown({ status: 200, error: null })).toBe(false);
+  });
+
+  test("an older instance that answers with its page: only the 400 error page means that it does not know the client", () => {
+    expect(clientUnknown({ status: 400, error: null })).toBe(true);
+    // The sign-in page (200), a redirect to it, a server in trouble, or no answer at all: go on.
+    for (const status of [200, 302, 404, 500, 503]) {
+      expect(clientUnknown({ status, error: null })).toBe(false);
+    }
+    expect(clientUnknown(null)).toBe(false);
   });
 
   test("a busy server or a rate limit does not end the sign-in", async () => {

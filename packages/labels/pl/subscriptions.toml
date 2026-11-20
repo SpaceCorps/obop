@@ -123,3 +123,9 @@ label = "Rozliczenia"
 
 [labels.pl.model.subscriptions_subscription.section.cancellation]
 label = "Anulowanie"
+
+[labels.pl.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "Okres próbny kończy się w tym tygodniu"
+
+[labels.pl.model.subscriptions_subscription.filter.invoice_due]
+label = "Faktura do wystawienia"

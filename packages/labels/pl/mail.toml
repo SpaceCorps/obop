@@ -125,6 +125,7 @@ description = "Kiedy przypada, w sekundach od 1970"
 [labels.pl.model.outbound_mail.action.send]
 label = "Wyślij"
 description = "Dodaj wiadomość do kolejki: to, subject i body albo template z language i vars; zwraca jej identyfikator. Proces wysyła ją po wywołaniu"
+done = "Wiadomość dodana do kolejki"
 
 [labels.pl.model.outbound_mail.action.retry]
 label = "Wyślij ponownie"
@@ -229,6 +230,15 @@ description = "Kiedy wysłano ostatnią wiadomość testową"
 [labels.pl.model.mail_server.field.last_test_result]
 label = "Wynik ostatniego testu"
 description = "Co serwer odpowiedział na ostatnią wiadomość testową"
+
+[labels.pl.model.mail_server.field.last_test_outcome]
+label = "Rezultat ostatniego testu"
+description = "Jak zakończył się ostatni test: wysłano, tymczasowo nie wysłano lub odrzucono"
+
+[labels.pl.model.mail_server.field.last_test_outcome.options]
+sent = "Wysłano"
+temporary = "Nie wysłano (tymczasowo)"
+permanent = "Nie wysłano (odrzucono)"
 
 [labels.pl.model.mail_server.field.test_recipient]
 label = "Odbiorca testu"

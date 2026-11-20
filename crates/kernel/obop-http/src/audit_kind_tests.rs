@@ -84,7 +84,7 @@ const BUILT_FORMAT: &str = "{kind}_failed";
 
 /// Kinds that reach a writer through a constant, a `match` arm or a variable, with the file that
 /// holds the literal.
-const VIA: [(&str, &str); 14] = [
+const VIA: [(&str, &str); 15] = [
     ("module_install", "kernel/obop-pkg/src/installer.rs"),
     ("module_update", "kernel/obop-pkg/src/installer.rs"),
     (
@@ -105,6 +105,11 @@ const VIA: [(&str, &str); 14] = [
     ("oidc_provider_cleared", "kernel/obop-auth/src/oidc/mod.rs"),
     ("oidc_bind", "kernel/obop-auth/src/oidc/mod.rs"),
     ("oidc_cancelled", "kernel/obop-auth/src/oidc/mod.rs"),
+    // A `match` arm, written in the batch of the update (UB14).
+    (
+        "sign_link_restored",
+        "kernel/obop-commands/src/sign/link.rs",
+    ),
 ];
 
 /// Whether a file's code holds `kind` as a string literal.

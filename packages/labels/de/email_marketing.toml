@@ -170,3 +170,6 @@ label = "Zeitplan"
 
 [labels.de.model.email_marketing_campaign.section.results]
 label = "Ergebnisse"
+
+[labels.de.model.email_marketing_contact.filter.may_be_mailed]
+label = "Darf angeschrieben werden"

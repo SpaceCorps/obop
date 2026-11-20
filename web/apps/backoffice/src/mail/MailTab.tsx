@@ -11,11 +11,13 @@ import {
   Textarea,
   fmt,
   t,
+  useWorded,
 } from "@obop/ui";
 import { call, search, type Row } from "../api.ts";
 import "./mail.css";
 import { href } from "../route.ts";
-import { serverMessage } from "../serverMessage.ts";
+import { optionLabel } from "../format.ts";
+import { findField, serverMessage } from "../serverMessage.ts";
 import { mailRefusal } from "./refusal.ts";
 
 /* Customize > Mail (docs/spec/mail.md): the mail servers (an SMTP relay, or a provider reached through
@@ -53,7 +55,24 @@ type Server = Row & {
   footer?: string;
   last_test_at?: string | null;
   last_test_result?: string;
+  /** How the last test ended (U63): sent, temporary or permanent; empty before 2026-11. */
+  last_test_outcome?: string;
 };
+
+/**
+ * The words of a test's outcome; the server's own answer is the detail beside them. They are the
+ * labels of the field's options in /api/meta, translated with the package, and these words only
+ * when the metadata has none.
+ */
+function testOutcome(code: string): string {
+  const field = findField("mail_server", "last_test_outcome");
+  if (code && field?.option_labels?.[code]) return optionLabel(code, field);
+  if (code === "sent") return t("Sent");
+  if (code === "temporary")
+    return t("Not sent, the server could not be reached or asked to try later");
+  if (code === "permanent") return t("Not sent, refused");
+  return "";
+}
 
 type Draft = {
   id?: string;
@@ -165,7 +184,7 @@ function ServerForm({
   // The button that opened the form is gone or below it: the keyboard starts at the first field.
   useEffect(() => form.current?.querySelector<HTMLInputElement>("input")?.focus(), []);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
   const mailConnections = connections.filter((c) => MAIL_PROVIDERS.has(s(c.provider)));
 
@@ -200,7 +219,7 @@ function ServerForm({
     const r = await call(token, d.id ? "mail_server.update" : "mail_server.create", body);
     setSaving(false);
     if (r.kind === "ok") onDone(d.id ? t("Mail server saved.") : t("Mail server added."));
-    else setError(message(r, t("Could not save the mail server.")));
+    else setError(() => message(r, t("Could not save the mail server.")));
   }
 
   return (
@@ -417,7 +436,7 @@ function TestSend({
 }) {
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: () => string } | null>(null);
   async function send() {
     setBusy(true);
     setResult(null);
@@ -426,9 +445,10 @@ function TestSend({
       test_recipient: to.trim(),
     });
     setBusy(false);
+    const sentTo = to.trim();
     if (r.kind === "ok")
-      setResult({ ok: true, text: t("The test message was sent to {to}.", { to: to.trim() }) });
-    else setResult({ ok: false, text: message(r, t("The test message was not sent.")) });
+      setResult({ ok: true, text: () => t("The test message was sent to {to}.", { to: sentTo }) });
+    else setResult({ ok: false, text: () => message(r, t("The test message was not sent.")) });
     onDone();
   }
   return (
@@ -454,7 +474,7 @@ function TestSend({
       </Button>
       {result && (
         <p className={result.ok ? "hint" : "hint mail-error"} role="status">
-          {result.text}
+          {result.text()}
         </p>
       )}
     </form>
@@ -478,7 +498,7 @@ function ServersSection({
   const section = useRef<HTMLElement>(null);
   const [rows, setRows] = useState<Server[] | null>(null);
   const [connections, setConnections] = useState<Row[]>([]);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useWorded();
   const [editing, setEditing] = useState<Draft | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   // Which button opened the form ("add" or a server's id), to hand the keyboard back to it.
@@ -503,7 +523,7 @@ function ServersSection({
       limit: 200,
     });
     if ("error" in r)
-      setProblem(serverMessage(r.error) || t("The mail servers could not be loaded."));
+      setProblem(() => serverMessage(r.error) || t("The mail servers could not be loaded."));
     else {
       setProblem(null);
       setRows(r.rows as Server[]);
@@ -592,12 +612,33 @@ function ServersSection({
               )}
               {s(r.last_test_result) && (
                 <div
-                  className={s(r.last_test_result).startsWith("sent") ? "hint" : "hint mail-error"}
+                  data-test-outcome={s(r.last_test_outcome)}
+                  className={
+                    (
+                      s(r.last_test_outcome)
+                        ? s(r.last_test_outcome) === "sent"
+                        : s(r.last_test_result).startsWith("sent")
+                    )
+                      ? "hint"
+                      : "hint mail-error"
+                  }
                 >
-                  {t("Last test {when}: {result}", {
-                    when: r.last_test_at ? fmt.dateTime(Date.parse(s(r.last_test_at))) : "",
-                    result: s(r.last_test_result),
-                  })}
+                  {testOutcome(s(r.last_test_outcome))
+                    ? t("Last test {when}: {result}", {
+                        when: r.last_test_at ? fmt.dateTime(Date.parse(s(r.last_test_at))) : "",
+                        result: testOutcome(s(r.last_test_outcome)),
+                      })
+                    : t("Last test {when}: {result}", {
+                        when: r.last_test_at ? fmt.dateTime(Date.parse(s(r.last_test_at))) : "",
+                        result: s(r.last_test_result),
+                      })}
+                  {testOutcome(s(r.last_test_outcome)) && (
+                    <span className="mail-detail">
+                      {/* A separator, not parentheses: the outcome's label may end in one. */}
+                      {" · "}
+                      {s(r.last_test_result).replace(/^(sent|failed): /, "")}
+                    </span>
+                  )}
                 </div>
               )}
               <div className="actionrow">
@@ -642,7 +683,7 @@ function DeliveriesSection({
 }) {
   const id = useId();
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useWorded();
   const [busy, setBusy] = useState<string | null>(null);
   const load = useCallback(async () => {
     const r = await search(token, "outbound_mail", {
@@ -654,7 +695,7 @@ function DeliveriesSection({
       limit: 50,
     });
     if ("error" in r)
-      setProblem(serverMessage(r.error) || t("The deliveries could not be loaded."));
+      setProblem(() => serverMessage(r.error) || t("The deliveries could not be loaded."));
     else {
       setProblem(null);
       setRows(r.rows);

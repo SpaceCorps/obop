@@ -190,3 +190,6 @@ label = "Descarte"
 
 [labels.es.model.mileage_trip.section.recorded_by_the_app]
 label = "Registrado por la aplicación"
+
+[labels.es.model.mileage_trip.filter.to_review]
+label = "Por revisar"

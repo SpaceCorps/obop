@@ -108,3 +108,12 @@ label = "Dokument"
 
 [labels.sv.model.documents_document.section.where_it_is_kept]
 label = "Förvaringsplats"
+
+[labels.sv.model.documents_document.filter.expiring_soon]
+label = "Går snart ut"
+
+[labels.sv.model.documents_document.filter.drafts]
+label = "Utkast"
+
+[labels.sv.model.documents_document.filter.confidential]
+label = "Konfidentiella"

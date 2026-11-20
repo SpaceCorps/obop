@@ -152,7 +152,7 @@ impl Auth {
         let limited = self
             .settled(|| {
                 Ok(self.must_change_password(name)?
-                    || (self.enrolment_required_for(groups) && !self.has_second_factor(name)?))
+                    || (self.enrolment_required_for(groups)? && !self.has_second_factor(name)?))
             })
             .and_then(|r: Result<bool, String>| r.map_err(MfaError::Unavailable))
             .map_err(|e| match e {

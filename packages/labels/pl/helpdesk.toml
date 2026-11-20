@@ -160,3 +160,15 @@ label = "Obsługa"
 
 [labels.pl.model.helpdesk_ticket.section.resolution]
 label = "Rozwiązanie"
+
+[labels.pl.model.helpdesk_ticket.filter.not_closed]
+label = "Niezamknięte"
+
+[labels.pl.model.helpdesk_ticket.filter.unassigned]
+label = "Nieprzypisane"
+
+[labels.pl.model.helpdesk_ticket.filter.mine]
+label = "Moje"
+
+[labels.pl.model.helpdesk_ticket.filter.overdue]
+label = "Po terminie"

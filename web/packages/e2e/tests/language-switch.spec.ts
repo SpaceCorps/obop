@@ -284,8 +284,8 @@ test.describe("switching the language with the account menu, on a screen that st
   test("an open record: its related-record buttons follow", async ({ page, signIn, api, uid }) => {
     const party = await api.create("root", "party", { name: uid("Related") });
     await signIn("root", `/base/party?id=${party.id}`);
+    const buttons = page.locator(".smart .smartbtn:not(.smart-more)");
     const smart = async () => {
-      const buttons = page.locator(".smart .smartbtn:not(.smart-more)");
       // A new party has no related records yet: the buttons at zero wait behind the last button.
       const more = page.locator(".smart .smart-more");
       await expect(more).toBeVisible();
@@ -304,6 +304,9 @@ test.describe("switching the language with the account menu, on a screen that st
     // The panel is the same one: no navigation, no reload.
     await expect(page.locator("aside.record")).toBeVisible();
     await expect(page.getByRole("group", { name: say("sv", "Related records") })).toBeVisible();
+    // The group's name can change before its buttons do: wait for their own re-render (U77).
+    // A count reads alike in both languages; a title does not.
+    await expect(buttons.first()).not.toHaveAttribute("title", english[0]!.title ?? "");
     const swedish = await smart();
     expect(swedish, "the buttons are in Swedish").not.toEqual(english);
 

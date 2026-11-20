@@ -129,6 +129,9 @@ pub struct Entry {
     pub restore_point: Option<String>,
     /// What the step reported, or why it failed. Never a secret: steps report counts and places.
     pub note: String,
+    /// How many times a step failed for this reason, folded into this one `failed` row (K5);
+    /// 1 for every other row. Stored only on a failed row.
+    pub attempts: u64,
 }
 
 impl Entry {
@@ -158,6 +161,9 @@ impl Entry {
             "restore_point".into(),
             self.restore_point.as_deref().map_or(J::Null, J::from),
         );
+        if self.status == Status::Failed {
+            f.insert("attempts".into(), J::from(self.attempts));
+        }
         f
     }
 
@@ -182,6 +188,7 @@ impl Entry {
             backup_id: s("backup_id"),
             restore_point: s("restore_point"),
             note: s("note").unwrap_or_default(),
+            attempts: f.get("attempts").and_then(J::as_u64).unwrap_or(1).max(1),
         })
     }
 
@@ -235,12 +242,11 @@ pub fn failed_attempt(backend: &dyn Backend, mut row: Entry) -> Op {
         attempts = f.get("attempts").and_then(J::as_u64).unwrap_or(1) + 1;
         row.id = id.clone();
     }
-    let mut fields = row.to_fields();
-    fields.insert("attempts".into(), J::from(attempts));
+    row.attempts = attempts;
     Op::Put {
         model: MODEL.into(),
-        id: row.id,
-        fields,
+        id: row.id.clone(),
+        fields: row.to_fields(),
     }
 }
 
@@ -360,6 +366,7 @@ pub fn package_entries(
                 by: by.to_string(),
                 role: "application".into(),
                 app_version: obop_types::CORE_VERSION.into(),
+                attempts: 1,
                 backup_id: backup_id.map(String::from),
                 restore_point: None,
                 note: if rollback {
@@ -394,6 +401,7 @@ mod tests {
             by: "operator".into(),
             role: "application".into(),
             app_version: "0.2.0".into(),
+            attempts: 1,
             backup_id: Some("b.jsonl.gz".into()),
             restore_point: None,
             note: "n".into(),

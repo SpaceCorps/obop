@@ -109,3 +109,8 @@ es = "Spanish"
 
 [labels.en.model.mail_template.field.body]
 label = "Text"
+
+[labels.en.model.mail_server.field.last_test_outcome.options]
+sent = "Sent"
+temporary = "Not sent (temporary)"
+permanent = "Not sent (refused)"

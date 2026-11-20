@@ -190,3 +190,6 @@ label = "Odrzucenie"
 
 [labels.pl.model.mileage_trip.section.recorded_by_the_app]
 label = "Zapisane przez aplikację"
+
+[labels.pl.model.mileage_trip.filter.to_review]
+label = "Do sprawdzenia"

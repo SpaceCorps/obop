@@ -170,10 +170,10 @@ async fn the_upgrade_from_0_2_0_is_additive_and_keeps_every_record() {
         .installer
         .install_outcome(&new_text, "marketplace", "test")
         .unwrap();
-    // The bundled package is 0.3.0 (0.2.2 added the switch `show_history`, 0.2.3 rewords one help,
-    // 0.2.4 adds the D95 hints, 0.2.5 the row rule and the manager's decline and expiry, 0.3.0 the evidence check); the
+    // The bundled package is 0.3.1 (0.2.2 added the switch `show_history`, 0.2.3 rewords one help,
+    // 0.2.4 adds the D95 hints, 0.2.5 the row rule and the manager's decline and expiry, 0.3.0 the evidence check, 0.3.1 the labels of R17); the
     // upgrade from 0.2.0 still goes in one step.
-    assert_eq!(out.root.version, "0.3.0");
+    assert_eq!(out.root.version, "0.3.1");
 
     // Nothing was rewritten.
     assert_eq!(snapshot(&f, &requests), before);
@@ -760,6 +760,12 @@ async fn module_upgrade_moves_sign_to_the_bundled_version_with_sign_docuseal_ins
         .await;
     assert_ne!(s, 200, "{v}");
     assert!(v.to_string().contains("would break sign_docuseal"), "{v}");
+    // U61: the refusal says what to do: the dependant first, or Upgrade all.
+    assert!(
+        v.to_string()
+            .contains("upgrade sign_docuseal first, or upgrade every module together"),
+        "{v}"
+    );
     assert_eq!(snapshot(&f, &requests), before, "nothing was changed");
     // `sign_docuseal` first, then `sign`.
     let (s, v) = f
@@ -783,7 +789,7 @@ async fn module_upgrade_moves_sign_to_the_bundled_version_with_sign_docuseal_ins
             .module
             .version
     };
-    assert_eq!(version("sign"), "0.3.0");
+    assert_eq!(version("sign"), "0.3.1");
     assert_eq!(
         version("sign_docuseal"),
         obop_pkg::manifest::Manifest::parse(&Bundled.fetch("sign_docuseal").unwrap())

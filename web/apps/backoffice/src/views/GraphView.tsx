@@ -7,7 +7,9 @@ import { fieldTitle } from "../labels.ts";
 import { stateFieldOf, toneClassOf } from "../presentation.ts";
 import { domainOf, type Cond, type GraphCfg, type Lookup } from "../query.ts";
 import {
+  addsUp,
   cellValue,
+  combine,
   compactMeasure,
   currenciesOf,
   defaultRows,
@@ -55,8 +57,7 @@ export function chartPoints(
   for (const r of rows) {
     const k = r.keys[0] ?? "";
     const c = cells.get(k) ?? { count: 0, value: 0 };
-    c.count += r.count;
-    c.value += r.value;
+    combine(m, c, r);
     cells.set(k, c);
   }
   const present = [...cells.keys()];
@@ -93,7 +94,11 @@ export function GraphView(p: ViewProps) {
   const dims = useMemo(() => dimensionsOf(fields), [fields]);
   const { opts, measure: m, index, setup } = useMeasures(model, fields, cfg.measure);
   const dim = parseDim(cfg.dim, dims) ?? defaultRows(model, dims, index, setup);
-  const type = cfg.type ?? (dim && isDated(dim.field) ? "line" : "bar");
+  // A donut and a share need parts of a whole: an average, smallest or largest value is drawn as
+  // bars or a line instead, and the data table has no Share column (K1).
+  const parts = addsUp(m);
+  const series = dim && isDated(dim.field) ? "line" : "bar";
+  const type = cfg.type === "pie" && !parts ? series : (cfg.type ?? series);
   const [asTable, setAsTable] = useState(false);
   const lk = useTitleLookup();
   const [pickedCur, setPickedCur] = useState<string | undefined>();
@@ -127,7 +132,7 @@ export function GraphView(p: ViewProps) {
         : [],
     // The refs stand for the dimension and the currencies; ref labels arrive with `version`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [report.rows, dimKey, curs.join(), model, lk, d.lang],
+    [report.rows, dimKey, curs.join(), model, lk, d.lang, d.locale],
   );
 
   if (!dim) return <p className="hint pad">{t("Nothing to group these records by.")}</p>;
@@ -137,6 +142,13 @@ export function GraphView(p: ViewProps) {
   const undated = isDated(dim.field) && all.some((x) => x.key === "" && x.value !== 0);
   const data = isDated(dim.field) ? all.filter((x) => x.key !== "") : all;
   const format = (n: number) => formatMeasure(m, n, cur);
+  // "Other" of a smallest or a largest value is the smallest or the largest of the rest, not a sum.
+  const merge =
+    m?.op === "min"
+      ? (v: number[]) => Math.min(...v)
+      : m?.op === "max"
+        ? (v: number[]) => Math.max(...v)
+        : undefined;
   const total = all.reduce((n, x) => n + Math.max(x.value, 0), 0);
   const name = t("{measure} by {dimension}", {
     measure: measureTitle(m),
@@ -165,7 +177,7 @@ export function GraphView(p: ViewProps) {
     <div className="graph">
       <div className="viewbar">
         <div className="switcher" role="group" aria-label={t("Chart type")}>
-          {(["bar", "line", "pie"] as const).map((k) => (
+          {(parts ? (["bar", "line", "pie"] as const) : (["bar", "line"] as const)).map((k) => (
             <button key={k} aria-pressed={type === k} onClick={() => set({ type: k })}>
               {k === "bar" ? t("Bar") : k === "line" ? t("Line") : t("Pie")}
             </button>
@@ -206,7 +218,7 @@ export function GraphView(p: ViewProps) {
                       {byCur.length > 1 ? `${measureTitle(m)} (${x.cur})` : measureTitle(m)}
                     </th>
                   ))}
-                  {byCur.length === 1 && (
+                  {byCur.length === 1 && parts && (
                     <th scope="col" className="num">
                       {t("Share")}
                     </th>
@@ -222,7 +234,7 @@ export function GraphView(p: ViewProps) {
                         {formatMeasure(m, c.data[i]?.value ?? 0, c.cur)}
                       </td>
                     ))}
-                    {byCur.length === 1 && (
+                    {byCur.length === 1 && parts && (
                       <td className="num">
                         {total ? fmt.percent(Math.max(x.value, 0) / total, 0) : "–"}
                       </td>
@@ -257,6 +269,7 @@ export function GraphView(p: ViewProps) {
               ordered={isDated(dim.field)}
               colors={colors}
               maxHeight={type === "pie" ? undefined : 360}
+              merge={merge}
             />
             {undated && (
               <p className="chart-note">
@@ -267,9 +280,21 @@ export function GraphView(p: ViewProps) {
             )}
             {data.length > MAX_BARS && type === "bar" && !isDated(dim.field) && (
               <p className="chart-note">
-                {t("The {count} largest are shown; the rest are added up as Other.", {
-                  count: keep,
-                })}
+                {m?.op === "min"
+                  ? t(
+                      "The {count} largest are shown; Other shows the smallest value of the rest.",
+                      {
+                        count: keep,
+                      },
+                    )
+                  : m?.op === "max"
+                    ? t(
+                        "The {count} largest are shown; Other shows the largest value of the rest.",
+                        { count: keep },
+                      )
+                    : t("The {count} largest are shown; the rest are added up as Other.", {
+                        count: keep,
+                      })}
               </p>
             )}
           </figure>

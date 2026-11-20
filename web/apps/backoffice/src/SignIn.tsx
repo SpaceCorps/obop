@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   InstanceLogo,
   LanguageSelect,
@@ -27,7 +27,14 @@ import {
 import { SignInNotes } from "./host/SignInNotes.tsx";
 import { useHost } from "./host/useHost.ts";
 import { passkeyMessage } from "./Passkeys.tsx";
-import { passkeysSupported, signInWithPasskey } from "./passkeys.ts";
+import {
+  autofillAvailable,
+  passkeyAutofill,
+  passkeysSupported,
+  signInWithPasskey,
+  type Outcome,
+  type SignedIn,
+} from "./passkeys.ts";
 import { storageFaultMessage } from "./serverMessage.ts";
 import { Button, Icon, Input, Notice } from "./ui.tsx";
 
@@ -82,6 +89,12 @@ export function SignIn({
   // name stand in the aside instead of the product's own copy, and its message sits under the hint.
   const brand = pageBrand();
   const message = brandMessageIn(brand, i18n.lang);
+  const form = useRef<HTMLFormElement>(null);
+  // The passkeys offered in the autofill of the username field (E7c): the offer that waits now,
+  // ended before a button asks the browser (it takes one request at a time); `rearm` starts a new
+  // one after a button's request is done.
+  const offer = useRef<AbortController | null>(null);
+  const [rearm, setRearm] = useState(0);
 
   // The Back button of the browser restores this page as it was left, from its back/forward cache
   // (`persisted`), with the button still waiting: it must be usable again.
@@ -127,6 +140,45 @@ export function SignIn({
     });
   }, [onDone]);
 
+  // Offer passkeys in the autofill while the password form is shown. The challenge of an offer lives
+  // two minutes on the server, so a new offer replaces it every 100 seconds.
+  useEffect(() => {
+    if (step) return;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = async () => {
+      if (!live || !(await autofillAvailable()) || !live) return;
+      const c = new AbortController();
+      offer.current = c;
+      timer = setTimeout(() => {
+        c.abort();
+        void arm();
+      }, 100_000);
+      const r = await passkeyAutofill(c.signal);
+      clearTimeout(timer);
+      if (offer.current === c) offer.current = null;
+      if (!live || r === null) return;
+      if (r.ok) {
+        onDone(r.value.token, r.value.user ?? "", !!r.value.mfa_enrolment_required);
+        return;
+      }
+      // The browser ended the offer itself (no authenticator, not supported): nobody picked a key,
+      // so nothing is said; the passkey button still works.
+      if (r.kind !== "server") return;
+      // A key picked from the autofill that did not sign in: the offer ends with the message, so
+      // that a refusal is not asked for again and again; the passkey button offers it once more.
+      passkeyFailed(r);
+    };
+    void arm();
+    return () => {
+      live = false;
+      clearTimeout(timer);
+      offer.current?.abort();
+      offer.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, rearm]);
+
   /** Signed in: the login kept is the one the server names for the session (U11), else `fallback`. */
   async function finish(token: string, fallback: string, enrolment: boolean) {
     onDone(token, (await signedInLogin(token)) ?? fallback, enrolment);
@@ -155,14 +207,36 @@ export function SignIn({
     else setError(() => storageFaultMessage(r.status, r.code) ?? t("Invalid username or password"));
   }
 
-  /** Sign in with a passkey alone (the person allowed it in Security). */
+  /**
+   * Sign in with a passkey alone (the person allowed it in Security). With a name typed, the keys
+   * of that name are asked for (a key that does not keep the name works too).
+   */
   async function passwordless() {
     setAsking(true);
     setError(null);
-    const r = await signInWithPasskey();
+    offer.current?.abort();
+    offer.current = null;
+    const typed = form.current ? String(new FormData(form.current).get("username") ?? "") : "";
+    const r = await signInWithPasskey(undefined, typed);
     setAsking(false);
     if (r.ok) onDone(r.value.token, r.value.user ?? "", !!r.value.mfa_enrolment_required);
-    else if (r.kind === "cancelled") setError(() => passkeyMessage(r));
+    else {
+      // With a name typed the browser offers only that name's keys: a typo or another person's
+      // name looks the same to the browser as a cancel, so say both.
+      if (r.kind === "cancelled" && typed.trim())
+        setError(() =>
+          t(
+            "No passkey was used. This device may have no passkey for that username: check it, or clear the field to choose any passkey on this device.",
+          ),
+        );
+      else passkeyFailed(r);
+      setRearm((n) => n + 1);
+    }
+  }
+
+  /** Why a passkey alone did not sign in. */
+  function passkeyFailed(r: Exclude<Outcome<SignedIn>, { ok: true }>) {
+    if (r.kind === "cancelled") setError(() => passkeyMessage(r));
     else if (r.kind === "server" && r.status === 429) setError(() => passkeyMessage(r));
     else if (r.kind === "server" && storageFaultMessage(r.status, r.code))
       setError(() => storageFaultMessage(r.status, r.code) ?? "");
@@ -259,7 +333,7 @@ export function SignIn({
           <LanguageSelect value={i18n.lang} onChange={(l) => void i18n.setLanguage(l)} />
         </div>
       ) : (
-        <form className="signin" onSubmit={(e) => void password(e)}>
+        <form ref={form} className="signin" onSubmit={(e) => void password(e)}>
           <h1 className="signin-logo">
             <InstanceLogo variant="full" size={30} />
           </h1>
@@ -275,7 +349,13 @@ export function SignIn({
               </p>
             )}
           </div>
-          <Input label={t("Username")} name="username" autoComplete="username" required autoFocus />
+          <Input
+            label={t("Username")}
+            name="username"
+            autoComplete="username webauthn"
+            required
+            autoFocus
+          />
           <Input
             label={t("Password")}
             name="password"

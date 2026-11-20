@@ -370,3 +370,9 @@ description = "Kwota pola w öre"
 [labels.pl.model.accounting_se_vat_report_line.field.vouchers]
 label = "Dowody"
 description = "Odniesienia do dowodów składających się na kwotę, po jednym w wierszu, aby kontrolujący mógł ją prześledzić"
+
+[labels.pl.model.accounting_se_vat_box.filter.unverified]
+label = "Niezweryfikowane"
+
+[labels.pl.model.accounting_se_vat_code.filter.unverified]
+label = "Niezweryfikowane"

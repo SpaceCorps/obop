@@ -266,20 +266,67 @@ export type SignedIn = {
   mfa_enrolment_required?: boolean;
 };
 
-/** Sign in with a passkey: the second step of a pending sign-in, or on its own (usernameless). */
-export async function signInWithPasskey(mfaToken?: string): Promise<Outcome<SignedIn>> {
+/**
+ * Sign in with a passkey: the second step of a pending sign-in, or on its own. On its own with a
+ * `username` typed it asks for that name's keys (username-first, E7c: for keys that do not keep the
+ * name, some hardware keys); without one the browser offers the keys that keep it (usernameless).
+ */
+export async function signInWithPasskey(
+  mfaToken?: string,
+  username?: string,
+): Promise<Outcome<SignedIn>> {
+  const name = username?.trim();
   const opts = await call<RequestJson>(
     "POST",
     "/api/auth/login/passkey/options",
     null,
-    mfaToken ? { mfa_token: mfaToken } : {},
+    mfaToken ? { mfa_token: mfaToken } : name ? { username: name } : {},
   );
   if (!opts.ok) return opts;
-  const got = await ceremony(() => navigator.credentials.get(requestOptions(opts.value)));
+  return answer(opts.value, mfaToken);
+}
+
+async function answer(
+  opts: RequestJson,
+  mfaToken?: string,
+  extra?: { mediation: "conditional"; signal: AbortSignal },
+): Promise<Outcome<SignedIn>> {
+  const got = await ceremony(() =>
+    navigator.credentials.get({ ...requestOptions(opts), ...extra }),
+  );
   if (!got.ok) return got;
   if (!got.value) return browserFailure(new DOMException("", "NotAllowedError"));
   return call<SignedIn>("POST", "/api/auth/login/passkey", null, {
     ...(mfaToken ? { mfa_token: mfaToken } : {}),
     credential: assertionJson(got.value as PublicKeyCredential),
   });
+}
+
+/** Whether the browser can offer passkeys in the autofill of the username field (E7c). */
+export async function autofillAvailable(): Promise<boolean> {
+  if (!passkeysSupported()) return false;
+  const pkc = window.PublicKeyCredential as unknown as {
+    isConditionalMediationAvailable?: () => Promise<boolean>;
+  };
+  try {
+    return (await pkc.isConditionalMediationAvailable?.()) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Offer the passkeys of this site in the autofill of the username field (conditional mediation,
+ * E7c): resolves when the person picks one (signed in, or why not), or with `null` when `signal`
+ * ends the offer first. Only one request to the browser can wait at a time, so the page ends the
+ * offer before it asks with a button.
+ */
+export async function passkeyAutofill(signal: AbortSignal): Promise<Outcome<SignedIn> | null> {
+  // Passkeys need a host name (the server refuses an address such as 127.0.0.1): no offer there.
+  if (/^[\d.]+$|^\[|:/.test(location.hostname)) return null;
+  const opts = await call<RequestJson>("POST", "/api/auth/login/passkey/options", null, {});
+  // Nothing was picked yet: a refused offer (busy, unavailable) is no message, only no autofill.
+  if (signal.aborted || !opts.ok) return null;
+  const r = await answer(opts.value, undefined, { mediation: "conditional", signal });
+  return signal.aborted ? null : r;
 }

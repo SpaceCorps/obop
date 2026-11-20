@@ -285,8 +285,12 @@ async fn login_options(State(s): Shared, parts: Parts, Json(b): Json<J>) -> Resp
             Ok(a) => a,
             Err(r) => return r,
         };
-        api.passkey_login_options(&c, text(&b, "mfa_token"))
-            .map_or_else(mfa_error, |j| no_store(Json(j).into_response()))
+        // `{username}` (and no `mfa_token`): username-first, for keys that do not keep the name.
+        let got = match (text(&b, "mfa_token"), text(&b, "username")) {
+            (None, Some(name)) => api.passkey_login_options_for(&c, name),
+            (tok, _) => api.passkey_login_options(&c, tok),
+        };
+        got.map_or_else(mfa_error, |j| no_store(Json(j).into_response()))
     })
     .await
 }

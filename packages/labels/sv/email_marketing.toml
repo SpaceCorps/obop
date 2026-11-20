@@ -170,3 +170,6 @@ label = "Schema"
 
 [labels.sv.model.email_marketing_campaign.section.results]
 label = "Resultat"
+
+[labels.sv.model.email_marketing_contact.filter.may_be_mailed]
+label = "Får e-post"

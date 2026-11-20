@@ -40,6 +40,11 @@ export type ChartProps = {
   colors?: "single" | "tone" | "palette";
   /** The tallest the drawing gets, in px; its width is the container's. */
   maxHeight?: number;
+  /**
+   * How the value of the folded "Other" group is made from the values of the rest: their sum when
+   * absent, the smallest or the largest of them for a smallest or a largest value.
+   */
+  merge?: (values: number[]) => number;
   className?: string;
 };
 
@@ -133,13 +138,19 @@ export function niceTicks(
   return { lo: bottom, hi: top, ticks };
 }
 
-/** The top groups by value and the rest added up as "Other". */
-export function foldOther(data: ChartDatum[], keep: number): ChartDatum[] {
+const sum = (values: number[]) => values.reduce((n, v) => n + v, 0);
+
+/** The top groups by value and the rest added up (or `merge`d) as "Other". */
+export function foldOther(
+  data: ChartDatum[],
+  keep: number,
+  merge: (values: number[]) => number = sum,
+): ChartDatum[] {
   if (data.length <= keep + 1) return data;
   const sorted = [...data].sort((a, b) => b.value - a.value);
   const rest = sorted.slice(keep);
   const top = sorted.slice(0, keep);
-  const other = rest.reduce((n, x) => n + x.value, 0);
+  const other = merge(rest.map((x) => x.value));
   // "None" is shown after the named groups, whatever its size.
   return [
     ...top.filter((x) => x.key !== ""),
@@ -317,7 +328,7 @@ function Cartesian(p: Inner & { compact: (n: number) => string }) {
 
 function Horizontal(p: Inner & { compact: (n: number) => string }) {
   const { width: W, textW } = p;
-  const data = p.data.length > MAX_BARS ? foldOther(p.data, TOP_BARS) : [...p.data];
+  const data = p.data.length > MAX_BARS ? foldOther(p.data, TOP_BARS, p.merge) : [...p.data];
   if (p.data.length <= MAX_BARS)
     data.sort((a, b) => Number(a.key === "") - Number(b.key === "") || b.value - a.value);
   const rowH = 30;
@@ -409,7 +420,7 @@ function arc(cx: number, cy: number, r0: number, r1: number, a0: number, a1: num
 }
 
 function Donut(p: Inner) {
-  const all = p.data.length > TOP_SLICES + 1 ? foldOther(p.data, TOP_SLICES) : p.data;
+  const all = p.data.length > TOP_SLICES + 1 ? foldOther(p.data, TOP_SLICES, p.merge) : p.data;
   const total = all.reduce((n, d) => n + Math.max(d.value, 0), 0);
   const size = Math.round(Math.max(150, Math.min(p.width, 240)));
   const c = size / 2;

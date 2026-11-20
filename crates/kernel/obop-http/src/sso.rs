@@ -550,12 +550,16 @@ pub(crate) fn is_flow_id(s: &str) -> bool {
 // ---- GET /api/auth/sso ----------------------------------------------------------------------
 
 /// Reads of whether Microsoft sign-in is offered, per client address and minute (N19: the route
-/// had no limit of its own). The sign-in page reads it once per load.
+/// had no limit of its own). The sign-in page reads it once per load. The minute slides (UB4): a
+/// fixed one let twice as many through across its end.
 pub(crate) const STATUS_PER_MIN: u64 = 60;
 
 pub(crate) async fn status(State(s): Shared, parts: Parts) -> Response {
     blocking(move || {
-        if limited(&s, "status", &client_ip(&s, &parts), STATUS_PER_MIN) {
+        let key = format!("rl:sso:status:{}", client_ip(&s, &parts));
+        if obop_storage::limit::hit_sliding(&*s.shared.backend, &key, STATUS_PER_MIN, 60_000)
+            .is_err()
+        {
             return api_error(
                 StatusCode::TOO_MANY_REQUESTS,
                 "too many requests, try again in a minute",

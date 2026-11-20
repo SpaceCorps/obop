@@ -111,3 +111,12 @@ label = "Begärt av"
 
 [labels.sv.model.expenses_expense.section.payment]
 label = "Betalning"
+
+[labels.sv.model.expenses_expense.filter.my_claims]
+label = "Mina utlägg"
+
+[labels.sv.model.expenses_expense.filter.to_approve]
+label = "Att godkänna"
+
+[labels.sv.model.expenses_expense.filter.to_pay]
+label = "Att betala"

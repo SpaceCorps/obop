@@ -503,7 +503,7 @@ impl Auth {
         // Read until no read of it was refused: a policy read as "not required" because the store
         // refused the lookup would free a session that still owes its two-factor enrolment.
         let still_limited = self
-            .settled(|| Ok(self.enrolment_required_for(&groups) && !self.has_second_factor(name)?))
+            .settled(|| Ok(self.enrolment_required_for(&groups)? && !self.has_second_factor(name)?))
             .and_then(|r: Result<bool, String>| r.map_err(MfaError::Unavailable))
             .map_err(|e| match e {
                 MfaError::Unavailable(m) => {

@@ -342,6 +342,7 @@ describe("the keys of the catalogue and the sources", () => {
   test("the families that the sources build keys from are the ones this test knows", () => {
     expect([...families].sort()).toEqual([
       "account.device.state",
+      "error.database.detail",
       "purpose",
       "signin.error",
       "state",
@@ -374,6 +375,16 @@ describe("the keys of the catalogue and the sources", () => {
     expect(under("trip.check")).toEqual(["low_accuracy", "route_removed", "seq_gap", "speed_jump"]);
     // account.device.state.*: the states of a device on the instance.
     expect(under("account.device.state")).toEqual(["active", "revoked"]);
+    // error.database.detail.*: the words of DatabaseProblem (core/open-outbox.ts) but "other",
+    // which is shown as the error says it.
+    const outbox = sources.find((s) => s.path === "src/core/open-outbox.ts")!.text;
+    const problems = /export type DatabaseProblem =([^;]+);/.exec(outbox)![1]!;
+    expect(under("error.database.detail")).toEqual(
+      [...problems.matchAll(/"(\w+)"/g)]
+        .map((m) => m[1]!)
+        .filter((w) => w !== "other")
+        .sort(),
+    );
   });
 
   test("the problem sentences that TripDetail picks by the code of the refusal exist", () => {

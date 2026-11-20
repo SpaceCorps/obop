@@ -196,3 +196,12 @@ label = "Wysłany plik"
 
 [labels.pl.model.sign_request.section.evidence]
 label = "Dowody"
+
+[labels.pl.model.sign_request.filter.waiting_for_signature]
+label = "Czekają na podpis"
+
+[labels.pl.model.sign_request.filter.signed]
+label = "Podpisane"
+
+[labels.pl.model.sign_request.filter.expiring_soon]
+label = "Wkrótce wygasają"

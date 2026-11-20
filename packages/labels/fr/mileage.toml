@@ -190,3 +190,6 @@ label = "Abandon"
 
 [labels.fr.model.mileage_trip.section.recorded_by_the_app]
 label = "Enregistré par l'application"
+
+[labels.fr.model.mileage_trip.filter.to_review]
+label = "À vérifier"

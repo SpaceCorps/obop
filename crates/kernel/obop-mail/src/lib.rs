@@ -47,6 +47,18 @@ impl Failure {
     }
 }
 
+/// The code of how a test message ended: `sent`, `temporary` or `permanent`.
+pub fn test_outcome(r: &Result<String, Failure>) -> &'static str {
+    match r {
+        Ok(_) => "sent",
+        Err(Failure::Temporary(_)) => "temporary",
+        Err(Failure::Permanent(_)) => "permanent",
+    }
+}
+
+/// The reply recorded for a delivery of the log-only sink (`Config::log_only`).
+pub const LOGGED_ONLY: &str = "logged only, not sent (OBOP_MAIL_SINK=log)";
+
 /// Seconds after failed attempt 1, 2, ... before the next; after the last the message fails.
 pub const BACKOFF_SECS: [u64; 5] = [60, 300, 1800, 7200, 21_600];
 /// A claim lasts this long; a worker that died leaves its messages to another after it.
@@ -68,6 +80,10 @@ pub struct Config {
     pub retention_days: u64,
     /// The name given in `EHLO`: the host of `OBOP_PUBLIC_URL`, else `localhost`.
     pub helo: String,
+    /// The log-only sink (`OBOP_MAIL_SINK=log`, docs/ISSUES.md U55): no message leaves the
+    /// server; each delivery is recorded as handled with a reply that says it was only logged.
+    /// For the hosted sandbox and demos; an operator's setting, never a record.
+    pub log_only: bool,
 }
 
 impl Default for Config {
@@ -75,6 +91,7 @@ impl Default for Config {
         Self {
             retention_days: 90,
             helo: "localhost".into(),
+            log_only: false,
         }
     }
 }
@@ -95,6 +112,16 @@ impl Config {
             .and_then(|u| u.host_str().map(str::to_string))
         {
             c.helo = h;
+        }
+        match std::env::var("OBOP_MAIL_SINK").unwrap_or_default().trim() {
+            "" => {}
+            "log" => {
+                c.log_only = true;
+                eprintln!(
+                    "mail: OBOP_MAIL_SINK=log: no message leaves this server; deliveries are only logged"
+                );
+            }
+            other => eprintln!("mail: OBOP_MAIL_SINK={other:?} is not known (use log); ignored"),
         }
         c
     }
@@ -570,6 +597,16 @@ impl Mail {
 
     /// Send `msg` through the server `sf`.
     pub fn deliver(&self, sf: &Fields, msg: &mime::Message) -> Result<String, Failure> {
+        if self.cfg.log_only {
+            // The log-only sink: no connection is opened, to a relay or to a provider. The line
+            // names the message and the server, never an address or the text.
+            eprintln!(
+                "mail: logged only, not sent: message {} through server {:?}",
+                msg.message_id,
+                text(sf, "name")
+            );
+            return Ok(LOGGED_ONLY.into());
+        }
         match text(sf, "kind") {
             "smtp" => {
                 let security = smtp::Security::parse(text(sf, "security"))
@@ -702,8 +739,9 @@ impl Mail {
             .map_err(|_| "only a queued message can be cancelled".to_string())
     }
 
-    /// Send a test message through `server` now; the answer is recorded on the server and the
-    /// message in the log.
+    /// Send a test message through `server` now; the answer is recorded on the server
+    /// (`last_test_result`, and its outcome code `last_test_outcome`, one of
+    /// [`meta::TEST_OUTCOMES`]) and the message in the log.
     pub fn test_send(&self, server: &str, to: &str, by: &str) -> Result<String, String> {
         address::check(to.trim())?;
         let sf = self
@@ -762,10 +800,13 @@ impl Mail {
         let mut p = Fields::new();
         p.insert("last_test_at".into(), instant(now).into());
         p.insert("last_test_result".into(), result.clone().into());
+        // The outcome as a code that every surface words from its labels (docs/ISSUES.md U63);
+        // the result above stays the server's own words, shown as the detail.
+        p.insert("last_test_outcome".into(), test_outcome(&outcome).into());
         self.backend.update(SERVER, server, &p)?;
         match outcome {
             Ok(_) => Ok(result),
-            Err(e) => Err(format!("the test message was not sent: {}", e.text())),
+            Err(e) => Err(format!("The test message was not sent: {}", e.text())),
         }
     }
 

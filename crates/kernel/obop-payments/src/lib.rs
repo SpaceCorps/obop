@@ -147,7 +147,9 @@ impl Default for Config {
 
 pub struct Payments {
     backend: Arc<dyn Backend>,
-    d: Arc<Dispatcher>,
+    /// Weak (U41): the dispatcher holds these payments through the handlers `install` adds, so
+    /// a strong reference would keep both, and the store, alive after the app is dropped.
+    d: std::sync::Weak<Dispatcher>,
     client: Client,
     keys: Arc<dyn StripeKeySource>,
     cfg: Config,
@@ -194,7 +196,7 @@ impl Payments {
         Arc::new(Payments {
             fake: Fake::new(backend.clone()),
             backend,
-            d,
+            d: Arc::downgrade(&d),
             client,
             keys,
             cfg,
@@ -212,6 +214,8 @@ impl Payments {
 
     fn run(&self, command: &str, id: &str) -> Result<(), String> {
         self.d
+            .upgrade()
+            .ok_or("the server is shutting down; try again")?
             .call(
                 Surface::Rest,
                 &Self::service(),
@@ -787,8 +791,11 @@ impl Payments {
             _ => None,
         };
         // Cancel: the state flips, then the open payment is closed and the stock goes back.
+        let Some(d) = self.d.upgrade() else {
+            return;
+        };
         let me = self.clone();
-        self.d.around(
+        d.around(
             "ecommerce_order.cancel",
             Box::new(move |_, input, inner| {
                 // A pending order whose payment already succeeded (the follow-up of the event
@@ -832,7 +839,7 @@ impl Payments {
         );
         // Marked paid by hand (a bank transfer arrived): the payment record follows.
         let me = self.clone();
-        self.d.around(
+        d.around(
             "ecommerce_order.mark_paid",
             Box::new(move |_, input, inner| {
                 let out = inner(input)?;
@@ -850,7 +857,7 @@ impl Payments {
             ("ecommerce_order.refund_delivered", false),
         ] {
             let me = self.clone();
-            self.d.around(
+            d.around(
                 cmd,
                 Box::new(move |_, input, inner| {
                     let id = order_id(input);

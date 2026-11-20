@@ -1476,3 +1476,25 @@ fn an_agent_token_given_through_the_administrator_group_ends_with_it_and_is_logg
         ("root", "root", "label \"ops\"")
     );
 }
+
+/// K19: `obop agent-token` must tell a read the store refused from an unknown account; the
+/// lenient `principal` says `None` to both.
+#[test]
+fn try_principal_tells_a_refused_read_from_an_unknown_account() {
+    use obop_storage::testing::Mode;
+    let (r, flaky) = flaky_rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    assert!(r.a.try_principal("ada").unwrap().is_some());
+    assert!(r.a.try_principal("nobody").unwrap().is_none());
+    flaky.refuse_model("auth_user", Mode::Reads);
+    let (got, _) = request(|| r.a.try_principal("ada"));
+    assert!(
+        got.as_ref().is_err_and(|e| e.starts_with("storage_busy")),
+        "{got:?}"
+    );
+    assert!(
+        r.a.principal("ada").is_none(),
+        "the lenient lookup hides it"
+    );
+    flaky.allow_models();
+}

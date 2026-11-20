@@ -123,3 +123,9 @@ label = "Facturation"
 
 [labels.fr.model.subscriptions_subscription.section.cancellation]
 label = "Annulation"
+
+[labels.fr.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "Essai finissant cette semaine"
+
+[labels.fr.model.subscriptions_subscription.filter.invoice_due]
+label = "Facture à émettre"

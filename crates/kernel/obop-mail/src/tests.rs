@@ -277,6 +277,10 @@ struct Rig {
 const T0: u64 = 1_795_000_000;
 
 fn rig_with(allow_loopback: bool) -> Rig {
+    rig_cfg(allow_loopback, Config::default())
+}
+
+fn rig_cfg(allow_loopback: bool, cfg: Config) -> Rig {
     let store = Store::new();
     let d = Arc::new(Dispatcher::new());
     let rt = Runtime::with_providers(
@@ -292,11 +296,7 @@ fn rig_with(allow_loopback: bool) -> Rig {
     );
     let clock = Arc::new(AtomicU64::new(T0));
     let c2 = clock.clone();
-    let mail = Mail::with_clock(
-        rt,
-        Config::default(),
-        Arc::new(move || c2.load(Ordering::SeqCst)),
-    );
+    let mail = Mail::with_clock(rt, cfg, Arc::new(move || c2.load(Ordering::SeqCst)));
     mail.trust_certificate(test_cert().0.clone());
     mail.register(&d, &store);
     Rig { d, mail, clock }
@@ -1175,6 +1175,21 @@ fn graph_and_gmail_send_with_the_connection_s_oauth_token() {
     }
 }
 
+mod n6;
 mod private_network;
 mod review;
 mod second_review;
+
+// The list's Send queues a message; the worker sends it later. Its note must not say "done".
+#[test]
+fn send_says_the_message_was_queued_in_every_language() {
+    let m = meta::module();
+    let model = m.models.iter().find(|x| x.name == "outbound_mail").unwrap();
+    let send = model.commands.iter().find(|c| c.name == "send").unwrap();
+    let done = send.ui.as_ref().and_then(|u| u.done.clone());
+    assert_eq!(done.as_deref(), Some("Message queued"));
+    let tr = &m.translations.models["outbound_mail"].dones["send"];
+    for lang in ["de", "fr", "pl", "fi", "sv", "es"] {
+        assert!(tr.get(lang).is_some_and(|s| !s.is_empty()), "{lang}");
+    }
+}

@@ -50,6 +50,14 @@ use obop_values::datetime::Instant;
 use serde_json::Value as J;
 use std::sync::{Arc, RwLock};
 
+/// The wording digest the signer's page carries as `words` for this request as stored (the
+/// title, the message and the requested name). `pub` for the tests of the `obop` binary, which
+/// post the form as a page would.
+#[doc(hidden)]
+pub fn page_wording(req: &Fields) -> String {
+    evidence::wording_digest(req)
+}
+
 /// SHA-256 of `bytes` as lower-case hex: the form of a blob id and of a document hash.
 pub fn sha256_hex(bytes: &[u8]) -> String {
     token::sha256_hex(bytes)
@@ -86,6 +94,17 @@ pub const DOOR_OWNED: [&str; 10] = [
     "signer_user_agent",
     "signature_reference",
 ];
+
+/// The models whose guards act in `Dispatcher::invoke` (the wrappers of this module): an action
+/// effect writes through the engine and skips them, so only an action of `sign` itself may write
+/// them (docs/ISSUES.md O35). The install gate refuses an effect of another package on them, and
+/// the engine refuses it again when it runs.
+pub const OWN_EFFECTS_ONLY: [&str; 2] = ["sign_request", "sign_link"];
+
+/// Whether an action effect of `module` may write `model` as far as this module is concerned.
+pub fn effect_may_write_from(model: &str, module: &str) -> bool {
+    !OWN_EFFECTS_ONLY.contains(&model) || module == "sign"
+}
 
 type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
 

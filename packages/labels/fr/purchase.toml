@@ -149,3 +149,12 @@ description = "Montant de la ligne : quantité multipliée par le prix unitaire 
 [labels.fr.model.purchase_order_line.field.receipt_quantity]
 label = "Quantité à réceptionner"
 description = "Unités que la réception met en stock : la quantité reçue si elle est indiquée, sinon la quantité commandée"
+
+[labels.fr.model.purchase_order.filter.to_send]
+label = "À envoyer"
+
+[labels.fr.model.purchase_order.filter.to_receive]
+label = "À réceptionner"
+
+[labels.fr.model.purchase_order.filter.late]
+label = "En retard"

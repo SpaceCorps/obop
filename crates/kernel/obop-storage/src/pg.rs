@@ -370,6 +370,35 @@ pub(crate) fn unique_lookup_sql(model: &str, fields: &[&str]) -> Result<String> 
     ))
 }
 
+/// The statement of [`Backend::find_unique_many`] (K36): each column of the rule's index compared
+/// with `= ANY` of a bound array of texts, so the index answers all the keys in one statement. The
+/// answer holds every record of the cross product of the arrays; the caller keeps the records that
+/// match one of its keys.
+pub(crate) fn unique_lookup_many_sql(model: &str, fields: &[&str]) -> Result<String> {
+    let model = ident(model)?;
+    let tests: Vec<String> = unique_columns(fields)?
+        .iter()
+        .enumerate()
+        .map(|(i, column)| format!("{column} = ANY(${}::text[])", i + 1))
+        .collect();
+    Ok(format!(
+        "SELECT id, data FROM obop_record WHERE model = '{model}' AND {} ORDER BY seq",
+        tests.join(" AND ")
+    ))
+}
+
+/// The key of a record under `fields` as [`unique_matches`] reads it (a missing or null later field
+/// is the empty text), written as one text; `None` without a first value.
+fn unique_key_of(rec: &Fields, fields: &[&str]) -> Option<String> {
+    let (first, rest) = fields.split_first()?;
+    let mut values = vec![rec.get(*first).filter(|v| !v.is_null())?.clone()];
+    values.extend(rest.iter().map(|f| match rec.get(*f) {
+        None | Some(J::Null) => J::from(""),
+        Some(v) => v.clone(),
+    }));
+    Some(J::Array(values).to_string())
+}
+
 /// The text the index column holds for each value, as the bound texts of the lookup; `None` when a
 /// value has no exact text (a fraction, a list, an object, a NUL, or an empty first value, which
 /// the index treats as no value at all), and the caller then reads with `find` instead.
@@ -650,6 +679,9 @@ impl Backend for Pg {
     fn history_stats(&self) -> Result<HistoryStats> {
         pg_hist::stats(self)
     }
+    fn history_lag_ms(&self) -> Result<Option<i64>> {
+        pg_hist::lag_ms(self)
+    }
     fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
         pg_hist::ensure_partition(self, month)
     }
@@ -708,6 +740,56 @@ impl Backend for Pg {
             .into_iter()
             .filter(|(_, rec)| unique_matches(rec, fields, values))
             .collect())
+    }
+    fn find_unique_many(
+        &self,
+        model: &str,
+        fields: &[&str],
+        keys: &[Vec<J>],
+    ) -> Result<Vec<(String, Fields)>> {
+        let sql = unique_lookup_many_sql(model, fields).ok();
+        // The keys the statement can carry, as their texts per column and their own key text;
+        // the others are asked one by one, as `find_unique` asks them.
+        let mut columns: Vec<Vec<String>> = vec![Vec::new(); fields.len()];
+        let mut wanted = std::collections::HashSet::new();
+        let mut alone: Vec<&Vec<J>> = Vec::new();
+        for values in keys {
+            unique_head(fields, values)?;
+            match (&sql, unique_texts(values)) {
+                (Some(_), Some(texts)) => {
+                    for (col, t) in columns.iter_mut().zip(texts) {
+                        col.push(t);
+                    }
+                    wanted.insert(J::Array(values.clone()).to_string());
+                }
+                _ => alone.push(values),
+            }
+        }
+        for col in &mut columns {
+            col.sort_unstable();
+            col.dedup();
+        }
+        let mut out: Vec<(String, Fields)> = Vec::new();
+        if let (Some(sql), false) = (&sql, wanted.is_empty()) {
+            let rows = self.main.read(Class::List, |c| {
+                let params: Vec<&(dyn postgres::types::ToSql + Sync)> =
+                    columns.iter().map(|t| t as _).collect();
+                rows_with_id(c.query(sql, &params)?)
+            })?;
+            #[cfg(any(test, feature = "test-support"))]
+            crate::testing::note_keyed(sql, 0);
+            out.extend(rows.into_iter().filter(|(_, rec)| {
+                unique_key_of(rec, fields).is_some_and(|k| wanted.contains(&k))
+            }));
+        }
+        for values in alone {
+            for (id, rec) in self.find_unique(model, fields, values)? {
+                if !out.iter().any(|(i, _)| *i == id) {
+                    out.push((id, rec));
+                }
+            }
+        }
+        Ok(out)
     }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         let sql = unique_index_sql(ident(name)?, model, fields)?;

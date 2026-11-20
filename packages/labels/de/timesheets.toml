@@ -63,3 +63,9 @@ done = "Freigegeben"
 label = "Zurückweisen"
 description = "Einen eingereichten Eintrag zurück auf Entwurf setzen (nur Führungskräfte)"
 done = "Zurück in den Entwurf gesetzt"
+
+[labels.de.model.timesheets_entry.filter.mine]
+label = "Meine"
+
+[labels.de.model.timesheets_entry.filter.to_approve]
+label = "Zu genehmigen"

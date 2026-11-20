@@ -208,6 +208,15 @@ impl Auth {
         self.user_principal(&name.trim().to_lowercase())
     }
 
+    /// As [`Auth::principal`], telling a read the store refused (`Err`) from an account that does
+    /// not exist or is disabled (`Ok(None)`), for an operator command that must not report the one
+    /// as the other (K19).
+    pub fn try_principal(&self, name: &str) -> Result<Option<Principal>, String> {
+        let name = name.trim().to_lowercase();
+        self.backend.get("auth_user", &name)?;
+        Ok(self.user_principal(&name))
+    }
+
     fn user_principal(&self, name: &str) -> Option<Principal> {
         let u = self.backend.get("auth_user", name).ok()??;
         // A disabled account holds no principal: its sessions and agent tokens stop working at
@@ -759,6 +768,8 @@ mod lockout_tests;
 mod mfa_tests;
 #[cfg(test)]
 mod passkey_tests;
+#[cfg(test)]
+mod policy_fault_tests;
 #[cfg(test)]
 mod signin_fault_tests;
 

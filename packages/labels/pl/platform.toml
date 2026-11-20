@@ -394,6 +394,10 @@ description = "Wynik upgrade_all: moduły, które zaktualizowano (lista)"
 label = "Pominięte"
 description = "Wynik upgrade_all: moduły, których aktualizacja była zablokowana, z powodem (lista)"
 
+[labels.pl.model.module.field.stored_limits]
+label = "Zapisane wartości poza limitami"
+description = "Wynik stored_limits: dla każdego pola z limitem rekordy, ile z nich ma wartość poza limitami i najdłuższy tekst (lista)"
+
 [labels.pl.model.module.action.upgrade]
 label = "Uaktualnij"
 description = "Zaktualizuj zainstalowany moduł do nowszej wersji oferowanej przez marketplace razem z zależnościami potrzebnymi planowi, w jednej atomowej operacji. Podaj id"
@@ -401,6 +405,10 @@ description = "Zaktualizuj zainstalowany moduł do nowszej wersji oferowanej prz
 [labels.pl.model.module.action.upgrade_all]
 label = "Uaktualnij wszystko"
 description = "Zaktualizuj każdy moduł, który ma nowszą wersję możliwą do przyjęcia przez tę instancję; moduł z zablokowaną aktualizacją pozostaje bez zmian i jest zgłaszany"
+
+[labels.pl.model.module.action.stored_limits]
+label = "Sprawdź zapisane wartości"
+description = "Tylko odczyt: dla każdego pola z długością, granicą lub formatem liczba rekordów, ile z nich ma wartość poza obecnie obowiązującymi limitami (ustawionymi lub zaostrzonymi po zapisie) oraz najdłuższy zapisany tekst. Podaj id, aby sprawdzić jeden moduł; odczytuje każdy rekord każdego sprawdzanego modelu"
 
 [labels.pl.model.module.action.rollback]
 label = "Wycofaj"

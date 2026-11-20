@@ -263,3 +263,6 @@ description = "Passet vars kassalåda betalade ut kontanterna för en återbetal
 
 [labels.sv.model.pos_session.section.cash_count]
 label = "Kassaräkning"
+
+[labels.sv.model.pos_session.filter.open]
+label = "Öppna"

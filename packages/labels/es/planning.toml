@@ -98,3 +98,12 @@ message = "El turno termina antes de empezar: indique una hora de fin posterior 
 
 [labels.es.model.planning_shift.rule.no_double_shift]
 message = "El empleado ya tiene un turno a esa hora: elija otra hora u otro empleado"
+
+[labels.es.model.planning_shift.filter.open_shifts]
+label = "Turnos libres"
+
+[labels.es.model.planning_shift.filter.not_published]
+label = "Sin publicar"
+
+[labels.es.model.planning_shift.filter.coming_up]
+label = "Próximos"

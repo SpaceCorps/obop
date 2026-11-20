@@ -370,3 +370,9 @@ description = "Montant de la case en öre"
 [labels.fr.model.accounting_se_vat_report_line.field.vouchers]
 label = "Pièces"
 description = "Références aux pièces qui composent le montant, une par ligne, pour qu'un contrôleur puisse les suivre"
+
+[labels.fr.model.accounting_se_vat_box.filter.unverified]
+label = "Non vérifiées"
+
+[labels.fr.model.accounting_se_vat_code.filter.unverified]
+label = "Non vérifiés"

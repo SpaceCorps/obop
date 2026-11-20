@@ -359,8 +359,10 @@ fn every_file_balances_and_the_things_taken_out_by_cfg_test_are_the_few_known() 
     // A `#[cfg(test)]` on something that is not an item takes out that thing only, but it is
     // the place where the stripping is least sure, so each one is listed: a new one is a decision
     // to read (the test prints where it is and how many lines were taken out).
-    const KNOWN: [(&str, usize); 2] = [
+    const KNOWN: [(&str, usize); 3] = [
         ("kernel/obop-commands/src/engine/unit.rs", 4),
+        // The test seam of K25 (b): a field, its value and the swap in `ask`.
+        ("kernel/obop-http/src/shell.rs", 3),
         ("kernel/obop-storage/src/pg.rs", 2),
     ];
     let mut found: BTreeMap<String, Vec<String>> = BTreeMap::new();

@@ -316,3 +316,6 @@ label = "Contenido"
 
 [labels.es.model.website_blog_post.section.cover_picture]
 label = "Imagen de portada"
+
+[labels.es.model.website_form_submission.filter.new]
+label = "Nuevos"

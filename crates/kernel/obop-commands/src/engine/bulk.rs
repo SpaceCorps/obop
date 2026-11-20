@@ -567,6 +567,13 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
 
     let look = lookup_fn(eng);
     let mut unit = eng.unit_with_cap(MAX_BULK_ROWS * 4);
+    // The keys of all the rows in one question per rule (K36), before the rows are checked.
+    let given: Vec<obop_storage::Fields> = rows
+        .iter()
+        .filter_map(|r| r.fields.as_ref().ok())
+        .map(|f| f.iter().map(|(k, v)| (k.clone(), v.to_json())).collect())
+        .collect();
+    seq::prefetch_unique_keys(&unit, def, given.iter())?;
     let mut ids: Vec<Option<String>> = Vec::with_capacity(rows.len());
     let mut errors: Vec<ListedError> = Vec::new();
     let mut failed = 0usize;

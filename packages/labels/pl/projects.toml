@@ -197,3 +197,9 @@ description = "Otwórz ponownie zakończone zadanie, z powrotem do zrobienia"
 [labels.pl.model.projects_task.action.reopen_cancelled]
 label = "Otwórz ponownie"
 description = "Otwórz ponownie anulowane zadanie, z powrotem do zrobienia"
+
+[labels.pl.model.projects_task.filter.open]
+label = "Otwarte"
+
+[labels.pl.model.projects_task.filter.overdue]
+label = "Po terminie"

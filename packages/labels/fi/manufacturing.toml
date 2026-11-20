@@ -146,3 +146,9 @@ description = "Kulutettava tuote"
 [labels.fi.model.manufacturing_order_line.field.quantity]
 label = "Määrä"
 description = "Komponentin yksiköt, jotka koko tilaus käyttää"
+
+[labels.fi.model.manufacturing_order.filter.in_progress]
+label = "Käynnissä"
+
+[labels.fi.model.manufacturing_order.filter.late]
+label = "Myöhässä"

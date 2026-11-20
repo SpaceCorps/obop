@@ -118,3 +118,9 @@ label = "Bokning"
 
 [labels.sv.model.appointments_appointment.section.resource_and_time]
 label = "Resurs och tid"
+
+[labels.sv.model.appointments_appointment.filter.today]
+label = "I dag"
+
+[labels.sv.model.appointments_appointment.filter.coming_up]
+label = "Kommande"

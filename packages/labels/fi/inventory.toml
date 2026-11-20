@@ -156,3 +156,27 @@ description = "Asiakirja, josta siirto on peräisin, esimerkiksi ostotilauksen n
 [labels.fi.model.inventory_move.field.lot]
 label = "Erä"
 description = "Siirretty erä, kun tuotetta seurataan erinä; vahvistus muuttaa tämän erän varastonimikettä (luodaan, jos puuttuu)"
+
+[labels.fi.model.inventory_item.filter.low_stock]
+label = "Vähissä"
+
+[labels.fi.model.inventory_item.filter.in_stock]
+label = "Varastossa"
+
+[labels.fi.model.inventory_move.filter.to_do]
+label = "Tehtävänä"
+
+[labels.fi.model.inventory_move.filter.receipts]
+label = "Vastaanotot"
+
+[labels.fi.model.inventory_move.filter.deliveries]
+label = "Toimitukset"
+
+[labels.fi.model.inventory_move.filter.stock_counts]
+label = "Inventaariot"
+
+[labels.fi.model.inventory_move.filter.scrap]
+label = "Romutukset"
+
+[labels.fi.model.inventory_move.filter.late]
+label = "Myöhässä"

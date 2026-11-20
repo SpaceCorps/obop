@@ -141,6 +141,14 @@ impl OAuth {
                     ));
                 }
             }
+            // The operator's list of the hosts MCP clients may send a code to (E1c).
+            if !class.is_mobile() && !self.cfg.mcp_redirect_allowed(u) {
+                return Err(OAuthError::new(
+                    400,
+                    "invalid_redirect_uri",
+                    "this instance accepts only the applications its operator listed (OBOP_OAUTH_MCP_REDIRECT_HOSTS), and this redirect host is not one of them",
+                ));
+            }
             if !redirect_uris.iter().any(|x| x == u) {
                 redirect_uris.push(u.to_string());
             }
@@ -249,6 +257,15 @@ impl OAuth {
 
     /// The registered client, unless unknown or expired.
     pub fn client(&self, id: &str) -> Option<Client> {
+        self.client_from(id, None)
+    }
+
+    /// As `client`, for a request from `ip` (counted on its own when a document must be read).
+    pub(crate) fn client_from(&self, id: &str, ip: Option<&str>) -> Option<Client> {
+        // An address is a client that described itself (E7i), when the operator allows it.
+        if id.starts_with("https://") || id.starts_with("http://") {
+            return self.cimd_client(id, ip);
+        }
         if !id.starts_with("oc_") || id.len() > 64 {
             return None;
         }

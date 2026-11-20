@@ -18,6 +18,7 @@ use tower::ServiceExt;
 
 mod address;
 pub(crate) mod brand;
+mod cimd;
 mod mobile;
 
 const HOST: &str = "inst.test";

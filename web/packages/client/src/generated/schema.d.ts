@@ -2518,6 +2518,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/module/stored_limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read-only: for every field held to a length, a bound or a format, how many records there are, how many hold a value outside the limits enforced now (set or lowered after they were written), and the longest stored text. Give id to look at one module; it reads every record of each model */
+        post: operations["module.stored_limits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/module/uninstall": {
         parameters: {
             query?: never;
@@ -4476,6 +4493,11 @@ export interface components {
              * @example 2026-03-29T01:30:00.000000Z
              */
             last_test_at?: string;
+            /**
+             * @description How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)
+             * @enum {string}
+             */
+            last_test_outcome?: "sent" | "temporary" | "permanent";
             /** @description What the server answered to the last test message (personal data: agents see it masked) */
             last_test_result?: string;
             /** @description A name that tells the servers apart */
@@ -4758,6 +4780,8 @@ export interface components {
             source?: string;
             /** @description The modules to install or upgrade, dependencies first (a list) */
             steps?: string;
+            /** @description Result of stored_limits: per field held to a limit, the records, how many hold a value outside the limits, and the longest text (a list) */
+            stored_limits?: string;
             /** @description One line about the module, shown on its card */
             summary?: string;
             /** @description Link to where support is given */
@@ -13555,6 +13579,11 @@ export interface operations {
                          * @example 2026-03-29T01:30:00.000000Z
                          */
                         last_test_at?: string;
+                        /**
+                         * @description How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)
+                         * @enum {string}
+                         */
+                        last_test_outcome?: "sent" | "temporary" | "permanent";
                         /** @description What the server answered to the last test message (personal data: agents see it masked) */
                         last_test_result?: string;
                         /** @description A name that tells the servers apart */
@@ -13698,6 +13727,11 @@ export interface operations {
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     last_test_at?: string;
+                    /**
+                     * @description How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)
+                     * @enum {string}
+                     */
+                    last_test_outcome?: "sent" | "temporary" | "permanent";
                     /** @description What the server answered to the last test message (personal data: agents see it masked) */
                     last_test_result?: string;
                     /** @description A name that tells the servers apart */
@@ -14257,6 +14291,11 @@ export interface operations {
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     last_test_at?: string;
+                    /**
+                     * @description How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)
+                     * @enum {string}
+                     */
+                    last_test_outcome?: "sent" | "temporary" | "permanent";
                     /** @description What the server answered to the last test message (personal data: agents see it masked) */
                     last_test_result?: string;
                     /** @description A name that tells the servers apart */
@@ -17573,6 +17612,84 @@ export interface operations {
                             rows?: components["schemas"]["module"][];
                             total?: number;
                         };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "module.stored_limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["module"];
                     };
                 };
             };

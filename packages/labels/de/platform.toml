@@ -394,6 +394,10 @@ description = "Ergebnis von upgrade_all: die Module, die aktualisiert wurden (ei
 label = "Übersprungen"
 description = "Ergebnis von upgrade_all: die Module, deren Update blockiert war, mit Begründung (eine Liste)"
 
+[labels.de.model.module.field.stored_limits]
+label = "Gespeicherte Grenzwerte"
+description = "Ergebnis von stored_limits: je Feld mit einer Grenze die Datensätze, wie viele einen Wert außerhalb der Grenzen halten, und der längste Text (eine Liste)"
+
 [labels.de.model.module.action.upgrade]
 label = "Aktualisieren"
 description = "Ein installiertes Modul auf die neuere Version aus dem Marktplatz aktualisieren, samt den Abhängigkeiten, die der Plan braucht, in einem atomaren Vorgang. id angeben"
@@ -401,6 +405,10 @@ description = "Ein installiertes Modul auf die neuere Version aus dem Marktplatz
 [labels.de.model.module.action.upgrade_all]
 label = "Alle aktualisieren"
 description = "Jedes Modul aktualisieren, für das diese Instanz eine neuere Version übernehmen kann; ein Modul mit blockiertem Update bleibt unverändert und wird gemeldet"
+
+[labels.de.model.module.action.stored_limits]
+label = "Gespeicherte Werte prüfen"
+description = "Nur lesend: für jedes Feld mit einer Länge, einer Grenze oder einem Format, wie viele Datensätze es gibt, wie viele einen Wert außerhalb der jetzt geltenden Grenzen halten (gesetzt oder verschärft, nachdem sie geschrieben wurden), und der längste gespeicherte Text. id angeben, um ein Modul anzusehen; es liest jeden Datensatz jedes betrachteten Modells"
 
 [labels.de.model.module.action.rollback]
 label = "Zurücksetzen"

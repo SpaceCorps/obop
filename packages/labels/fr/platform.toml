@@ -394,6 +394,10 @@ description = "Résultat de upgrade_all : les modules qui ont été mis à jour 
 label = "Ignorés"
 description = "Résultat de upgrade_all : les modules dont la mise à jour était bloquée, avec la raison (une liste)"
 
+[labels.fr.model.module.field.stored_limits]
+label = "Valeurs hors limites"
+description = "Résultat de stored_limits : pour chaque champ soumis à une limite, les enregistrements, combien ont une valeur hors des limites, et le texte le plus long (une liste)"
+
 [labels.fr.model.module.action.upgrade]
 label = "Mettre à niveau"
 description = "Mettre à jour un module installé vers la version plus récente proposée par la place de marché, avec les dépendances que le plan requiert, en une seule opération atomique. Indiquer id"
@@ -401,6 +405,10 @@ description = "Mettre à jour un module installé vers la version plus récente 
 [labels.fr.model.module.action.upgrade_all]
 label = "Tout mettre à niveau"
 description = "Mettre à jour chaque module pour lequel cette instance peut prendre une version plus récente ; un module dont la mise à jour est bloquée reste en l'état et est signalé"
+
+[labels.fr.model.module.action.stored_limits]
+label = "Vérifier les valeurs enregistrées"
+description = "Lecture seule : pour chaque champ soumis à une longueur, une borne ou un format, le nombre d'enregistrements, combien ont une valeur hors des limites appliquées maintenant (fixées ou resserrées après leur écriture), et le texte enregistré le plus long. Indiquez id pour examiner un module ; la commande lit chaque enregistrement de chaque modèle examiné"
 
 [labels.fr.model.module.action.rollback]
 label = "Revenir en arrière"

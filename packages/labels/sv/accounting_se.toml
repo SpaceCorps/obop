@@ -370,3 +370,9 @@ description = "Rutans belopp i öre"
 [labels.sv.model.accounting_se_vat_report_line.field.vouchers]
 label = "Verifikationer"
 description = "Hänvisningar till verifikationerna som utgör beloppet, en per rad, så att en granskare kan följa det"
+
+[labels.sv.model.accounting_se_vat_box.filter.unverified]
+label = "Ej verifierade"
+
+[labels.sv.model.accounting_se_vat_code.filter.unverified]
+label = "Ej verifierade"

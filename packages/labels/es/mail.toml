@@ -125,6 +125,7 @@ description = "Cuándo toca, en segundos desde 1970"
 [labels.es.model.outbound_mail.action.send]
 label = "Enviar"
 description = "Poner un mensaje en cola: to, subject y body, o template con language y vars; devuelve su id. El proceso lo envía después de la llamada"
+done = "Mensaje puesto en cola"
 
 [labels.es.model.outbound_mail.action.retry]
 label = "Enviar de nuevo"
@@ -229,6 +230,15 @@ description = "Cuándo se envió el último mensaje de prueba"
 [labels.es.model.mail_server.field.last_test_result]
 label = "Resultado de la última prueba"
 description = "Lo que respondió el servidor al último mensaje de prueba"
+
+[labels.es.model.mail_server.field.last_test_outcome]
+label = "Desenlace de la última prueba"
+description = "Cómo terminó la última prueba: enviado, no enviado por ahora o rechazado"
+
+[labels.es.model.mail_server.field.last_test_outcome.options]
+sent = "Enviado"
+temporary = "No enviado (temporal)"
+permanent = "No enviado (rechazado)"
 
 [labels.es.model.mail_server.field.test_recipient]
 label = "Destinatario de prueba"

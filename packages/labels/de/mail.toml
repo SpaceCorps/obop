@@ -125,6 +125,7 @@ description = "Wann es fällig ist, in Sekunden seit 1970"
 [labels.de.model.outbound_mail.action.send]
 label = "Senden"
 description = "Eine Nachricht einreihen: to, subject und body oder template mit language und vars; gibt ihre ID zurück. Der Worker sendet sie nach dem Aufruf"
+done = "Nachricht eingereiht"
 
 [labels.de.model.outbound_mail.action.retry]
 label = "Erneut senden"
@@ -229,6 +230,15 @@ description = "Wann die letzte Testnachricht gesendet wurde"
 [labels.de.model.mail_server.field.last_test_result]
 label = "Letztes Testergebnis"
 description = "Was der Server auf die letzte Testnachricht antwortete"
+
+[labels.de.model.mail_server.field.last_test_outcome]
+label = "Ergebnis des letzten Tests"
+description = "Wie der letzte Test endete: gesendet, vorübergehend nicht gesendet oder abgelehnt"
+
+[labels.de.model.mail_server.field.last_test_outcome.options]
+sent = "Gesendet"
+temporary = "Nicht gesendet (vorübergehend)"
+permanent = "Nicht gesendet (abgelehnt)"
 
 [labels.de.model.mail_server.field.test_recipient]
 label = "Testempfänger"

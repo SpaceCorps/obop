@@ -63,3 +63,9 @@ done = "Approuvé"
 label = "Rejeter"
 description = "Renvoie une saisie soumise en brouillon (responsable uniquement)"
 done = "Renvoyé en brouillon"
+
+[labels.fr.model.timesheets_entry.filter.mine]
+label = "Les miens"
+
+[labels.fr.model.timesheets_entry.filter.to_approve]
+label = "À approuver"

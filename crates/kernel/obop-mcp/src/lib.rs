@@ -516,6 +516,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             if let Some(w) = a.one_way {
                                 o["one_way"] = json!(w);
                             }
+                            if a.whole_model {
+                                o["whole_model"] = json!(true);
+                            }
                             translations(&mut o, &a.labels, &a.descriptions);
                             if let Some(u) = &a.ui {
                                 o["ui"] = ui::action_ui(u);
@@ -579,6 +582,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
         // The instance currency (D95): the default `$instance.currency` and what the interface
         // shows a money value in when the record names none.
         "currency": d.currency(),
+        // The currency codes a write accepts (ISO 4217 as bundled, U5), so a picker offers no
+        // code the server refuses (U15).
+        "currencies": obop_registry::limits::ISO_4217,
         "modules": modules
     })
 }

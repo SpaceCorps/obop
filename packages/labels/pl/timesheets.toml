@@ -63,3 +63,9 @@ done = "Zatwierdzono"
 label = "Zwróć do poprawy"
 description = "Zwraca przesłany wpis do wersji roboczej (tylko kierownik)"
 done = "Odesłano do szkicu"
+
+[labels.pl.model.timesheets_entry.filter.mine]
+label = "Moje"
+
+[labels.pl.model.timesheets_entry.filter.to_approve]
+label = "Do zatwierdzenia"

@@ -817,6 +817,37 @@ fn checkout_creates_one_order_with_lines_priced_by_the_server() {
     assert!(h.contains("data-clear-cart") && h.contains("we will contact you"));
 }
 
+/// G10: an order line records the title the buyer saw: the listing's translation in the
+/// buyer's language, and the default title where the listing has none.
+#[test]
+fn an_order_line_keeps_the_title_in_the_language_of_the_checkout() {
+    let s = shop();
+    let sencha = listing(&s, "sencha-green-tea");
+    let teapot = listing(&s, "stoneware-teapot");
+    let std = methods(&s)
+        .into_iter()
+        .find(|m| m.text("name") == "Standard delivery")
+        .unwrap();
+    let lines = [(sencha.id.as_str(), "1"), (teapot.id.as_str(), "1")];
+    let r = post(
+        &s,
+        "/shop/checkout",
+        &order_fields(&lines, &[("shipping_method_id", &std.id), ("lang", "de")]),
+    );
+    assert_eq!(r.status, 303, "{}", text(&r));
+    let mut got: Vec<String> = s
+        .store
+        .backend()
+        .list("ecommerce_order_line")
+        .unwrap()
+        .into_iter()
+        .map(|(_, l)| l["description"].as_str().unwrap().to_string())
+        .collect();
+    got.sort();
+    // The Sencha has a German translation, the teapot has none.
+    assert_eq!(got, ["Sencha Grüntee, 100 g", "Stoneware Teapot, 0.8 l"]);
+}
+
 #[test]
 fn security_checkout_never_trusts_prices_totals_or_state_from_the_browser() {
     let s = shop();
@@ -2015,6 +2046,40 @@ fn the_seed_never_overwrites_existing_site_settings() {
     assert_eq!(v["site"]["title"], "Mine");
     assert_eq!(v["site"]["tagline"], "Small-batch tea, ceramics and gifts");
     assert_eq!(v["theme"]["accent"], "#123456");
+}
+
+/// K19: settings the seed cannot read as a JSON object are refused, not replaced, and the seed
+/// creates nothing.
+#[test]
+fn the_seed_refuses_settings_that_are_not_an_object_and_changes_nothing() {
+    for raw in [r#"[1, 2]"#, r#"{"site": "a text"}"#, "not json"] {
+        let store = Store::new();
+        let d = Arc::new(Dispatcher::new());
+        base::register(&d, &store);
+        product::register(&d, &store);
+        let inst = Installer::new(
+            store.clone(),
+            &d,
+            vec![base::module(), product::module()],
+            Arc::new(Bundled),
+        );
+        for id in ["website", "ecommerce"] {
+            inst.install(&Bundled.fetch(id).unwrap(), "marketplace", "test")
+                .unwrap();
+        }
+        let mut f = obop_storage::Fields::new();
+        f.insert("value".into(), serde_json::Value::String(raw.into()));
+        let b = store.backend();
+        if !b.update("obop_setting", "instance", &f).unwrap() {
+            b.insert("obop_setting", "instance", &f).unwrap();
+        }
+        let e = seed::seed(&store, &d).unwrap_err();
+        assert!(e.contains("not a JSON object"), "{raw}: {e}");
+        let kept = b.get("obop_setting", "instance").unwrap().unwrap();
+        assert_eq!(kept["value"], raw, "the settings are as they were");
+        assert_eq!(store.count("website_page"), 0);
+        assert_eq!(store.count("ecommerce_listing"), 0);
+    }
 }
 
 // ---- Golden pins of the shop (S1a-0 of the branding work, docs/spec/branding.md) -----------------

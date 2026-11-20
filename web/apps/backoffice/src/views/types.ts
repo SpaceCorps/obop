@@ -1,3 +1,4 @@
+import type { Wording } from "@obop/ui";
 import type { FieldMeta, ModelMeta, Row, ServerFilter, ServerOrder } from "../api.ts";
 import type { Collected } from "../bulk.ts";
 import type { Cond, ViewState } from "../query.ts";
@@ -21,11 +22,14 @@ export type ViewProps = {
   onOpen: (id: string) => void;
   canCreate: boolean;
   canUpdate: boolean;
-  /** Returns an error message, or null when it worked. */
-  update: (id: string, patch: Record<string, unknown>) => Promise<string | null>;
-  create: (body: Record<string, unknown>) => Promise<string | null>;
-  /** Move a record along a governed field through its action; returns a message, or null when it worked. */
-  moveState: (id: string, field: string, to: string) => Promise<string | null>;
+  /**
+   * Returns the words of what went wrong, or null when it worked. They are worded when they are
+   * drawn, so a message a view keeps follows a language switch (D9).
+   */
+  update: (id: string, patch: Record<string, unknown>) => Promise<Wording | null>;
+  create: (body: Record<string, unknown>) => Promise<Wording | null>;
+  /** Move a record along a governed field through its action; returns the words, or null when it worked. */
+  moveState: (id: string, field: string, to: string) => Promise<Wording | null>;
   /** The server's total for the current search (the length of `rows` when the page is everything). */
   total: number;
   /** Paging of the list: present only where the list pages. */

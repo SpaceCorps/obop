@@ -114,6 +114,35 @@ fn database_urls(
     })
 }
 
+/// U48: with `sslmode=verify-full` an instance checks the name it connects to, which is the
+/// separate instance host when one is set; a cell certificate that does not name it fails every
+/// new instance at start. Before anything is created the control plane connects to that host
+/// with the cell's own settings (`connect`, given the admin URL with the host replaced) and
+/// refuses when that fails. Nothing to check for another `sslmode` or the admin host itself.
+fn check_instance_host(
+    admin_url: &str,
+    instance_host: Option<&str>,
+    connect: impl Fn(&str) -> Result<(), String>,
+) -> Result<(), String> {
+    let (host, host_and_db) = split_url(admin_url)?;
+    let Some(other) = instance_host.filter(|h| *h != host) else {
+        return Ok(());
+    };
+    let verify_full = admin_url
+        .split_once('?')
+        .is_some_and(|(_, q)| q.split('&').any(|kv| kv == "sslmode=verify-full"));
+    if !verify_full {
+        return Ok(());
+    }
+    let at = admin_url.len() - host_and_db.len();
+    let probe = format!("{}{other}{}", &admin_url[..at], &host_and_db[host.len()..]);
+    connect(&probe).map_err(|e| {
+        format!(
+            "the cell uses sslmode=verify-full and the instance host {other} (OBOP_CELL_INSTANCE_HOST) does not pass that check: the cell's certificate must name {other} too, or use sslmode=verify-ca for the cell (docs/DEPLOY.md); nothing was created ({e})"
+        )
+    })
+}
+
 fn ident(slug: &str) -> Result<String, String> {
     if slug.is_empty()
         || !slug
@@ -148,6 +177,9 @@ impl CellDb for PgCell {
         let name = ident(slug)?;
         // Checked before anything is created.
         split_url(&self.admin_url)?;
+        check_instance_host(&self.admin_url, self.instance_host.as_deref(), |url| {
+            obop_storage::tls::connect(url).map(|_| ())
+        })?;
         let pw = random_password();
         let mut c = obop_storage::tls::connect(&self.admin_url)?;
         // `name` is restricted to [a-z0-9_] by `ident`, so interpolating it is safe.
@@ -674,6 +706,36 @@ mod tests {
         assert_eq!(u.control, "postgres://obop_x:pw@db/obop_x?sslmode=require");
         let u = database_urls("postgres://a:b@db:5432/postgres", None, "obop_x", "pw").unwrap();
         assert_eq!(u.instance, "postgres://obop_x:pw@db:5432/obop_x");
+    }
+
+    #[test]
+    fn verify_full_with_a_separate_instance_host_is_checked_before_anything_is_made() {
+        let admin = "postgres://admin:x@db.example.com:5432/postgres?sslmode=verify-full&sslrootcert=/etc/obop/ca.pem";
+        let asked = std::cell::RefCell::new(Vec::new());
+        let refuse = |url: &str| -> Result<(), String> {
+            asked.borrow_mut().push(url.to_string());
+            Err("certificate name mismatch".into())
+        };
+        let e = check_instance_host(admin, Some("db.internal:5432"), refuse).unwrap_err();
+        assert!(
+            e.contains("verify-ca") && e.contains("db.internal:5432"),
+            "{e}"
+        );
+        assert!(!e.contains("admin:x"), "no credentials in the message: {e}");
+        assert_eq!(
+            asked.borrow().as_slice(),
+            [
+                "postgres://admin:x@db.internal:5432/postgres?sslmode=verify-full&sslrootcert=/etc/obop/ca.pem"
+            ]
+        );
+        // The host passes the check.
+        assert!(check_instance_host(admin, Some("db.internal:5432"), |_| Ok(())).is_ok());
+        // Nothing to check: verify-ca, no instance host, the admin host itself.
+        let never = |_: &str| -> Result<(), String> { panic!("no check expected") };
+        let ca = admin.replace("verify-full", "verify-ca");
+        assert!(check_instance_host(&ca, Some("db.internal:5432"), never).is_ok());
+        assert!(check_instance_host(admin, None, never).is_ok());
+        assert!(check_instance_host(admin, Some("db.example.com:5432"), never).is_ok());
     }
 
     type Asked = std::rc::Rc<std::cell::RefCell<Vec<String>>>;

@@ -149,3 +149,12 @@ description = "Importe de la línea: cantidad por precio unitario (unidad menor 
 [labels.es.model.purchase_order_line.field.receipt_quantity]
 label = "Cantidad a recibir"
 description = "Unidades que la recepción pone en stock: la cantidad recibida si se indica, si no la cantidad pedida"
+
+[labels.es.model.purchase_order.filter.to_send]
+label = "Por enviar"
+
+[labels.es.model.purchase_order.filter.to_receive]
+label = "Por recibir"
+
+[labels.es.model.purchase_order.filter.late]
+label = "Retrasados"

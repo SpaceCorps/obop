@@ -118,3 +118,9 @@ label = "Rendez-vous"
 
 [labels.fr.model.appointments_appointment.section.resource_and_time]
 label = "Ressource et horaire"
+
+[labels.fr.model.appointments_appointment.filter.today]
+label = "Aujourd'hui"
+
+[labels.fr.model.appointments_appointment.filter.coming_up]
+label = "À venir"

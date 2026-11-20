@@ -197,3 +197,9 @@ description = "Öppna en klar uppgift igen, tillbaka till att göra"
 [labels.sv.model.projects_task.action.reopen_cancelled]
 label = "Öppna igen"
 description = "Öppna en annullerad uppgift igen, tillbaka till att göra"
+
+[labels.sv.model.projects_task.filter.open]
+label = "Öppna"
+
+[labels.sv.model.projects_task.filter.overdue]
+label = "Försenade"

@@ -316,3 +316,6 @@ label = "Inhalt"
 
 [labels.de.model.website_blog_post.section.cover_picture]
 label = "Titelbild"
+
+[labels.de.model.website_form_submission.filter.new]
+label = "Neu"

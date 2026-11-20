@@ -394,6 +394,10 @@ description = "upgrade_all-toiminnon tulos: päivitetyt moduulit (luettelo)"
 label = "Ohitetut"
 description = "upgrade_all-toiminnon tulos: moduulit, joiden päivitys oli estetty, syineen (luettelo)"
 
+[labels.fi.model.module.field.stored_limits]
+label = "Tallennetut arvot rajojen ulkopuolella"
+description = "stored_limits-komennon tulos: jokaiselle rajatulle kentälle tietueet, kuinka monessa on arvo rajojen ulkopuolella, ja pisin teksti (luettelo)"
+
 [labels.fi.model.module.action.upgrade]
 label = "Päivitä"
 description = "Päivitä asennettu moduuli moduulikaupan tarjoamaan uudempaan versioon suunnitelman tarvitsemine riippuvuuksineen yhtenä atomisena toimintona. Anna id"
@@ -401,6 +405,10 @@ description = "Päivitä asennettu moduuli moduulikaupan tarjoamaan uudempaan ve
 [labels.fi.model.module.action.upgrade_all]
 label = "Päivitä kaikki"
 description = "Päivitä jokainen moduuli, jolla on uudempi versio, jonka tämä instanssi voi ottaa; moduuli, jonka päivitys on estetty, jää ennalleen ja siitä ilmoitetaan"
+
+[labels.fi.model.module.action.stored_limits]
+label = "Tarkista tallennetut arvot"
+description = "Vain luku: jokaiselle kentälle, jolla on pituus, raja tai muoto, tietueiden määrä, kuinka monessa on arvo nyt voimassa olevien rajojen ulkopuolella (asetettu tai tiukennettu kirjoittamisen jälkeen), ja pisin tallennettu teksti. Anna id tarkastellaksesi yhtä moduulia; komento lukee jokaisen tarkasteltavan mallin jokaisen tietueen"
 
 [labels.fi.model.module.action.rollback]
 label = "Palauta"

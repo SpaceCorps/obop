@@ -4,7 +4,7 @@
 // points come from `mileage_point.search`, the call an agent makes; Confirm and Reject stay the
 // trip's own action buttons.
 import { useEffect, useMemo, useState } from "react";
-import { Icon, fmt, t } from "@obop/ui";
+import { Icon, clock24, fmt, t } from "@obop/ui";
 import { LOAD_LIMIT, getTime, search, type Row } from "../../api.ts";
 import type { RecordExtProps } from "../../extensions.ts";
 import { useData } from "../../data.tsx";
@@ -32,7 +32,7 @@ const inZone = (iso: unknown, o: Intl.DateTimeFormatOptions): string => {
   const zone = getTime().zone;
   try {
     return new Intl.DateTimeFormat(fmt.locale, {
-      ...o,
+      ...clock24(o),
       timeZone: knownZone(zone) ? zone : "UTC",
     }).format(new Date(iso));
   } catch {
@@ -75,7 +75,8 @@ export function TripReview({ model, row, value }: RecordExtProps) {
   }, [d.token, row.id, row.purpose, row.point_count]);
 
   const pts = useMemo(() => (points.kind === "ready" ? pointsOf(points.rows) : []), [points]);
-  const drawn = useMemo(() => drawRoute(pts, W, H, 24), [pts]);
+  const startedAt = typeof row.started_at === "string" ? row.started_at : null;
+  const drawn = useMemo(() => drawRoute(pts, W, H, 24, startedAt), [pts, startedAt]);
   const poor = pts.filter((p) => !accepted(p)).length;
   const km = kmOf(row.distance_m);
   const minutes = minutesBetween(row.started_at, row.ended_at);

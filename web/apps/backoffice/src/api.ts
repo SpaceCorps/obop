@@ -20,6 +20,9 @@ export type Command = {
   to?: string | null;
   /** Whether no action of the model, whoever may run it, leaves `to` (#102); set by the server. */
   one_way?: boolean;
+  /** A command of the model as a whole that takes no record id (U66): the list offers it, the
+   * record panel does not; set by the server. */
+  whole_model?: boolean;
   /** D95 hints for the record panel (PROPOSED); absent until the package declares them. */
   ui?: ActionUi;
 };
@@ -361,6 +364,19 @@ let instanceCurrency = "";
 export function getInstanceCurrency(): string {
   return instanceCurrency;
 }
+let serverCurrencies: string[] = [];
+/**
+ * The currency codes the server accepts (`currencies` of `/api/meta`, its bundled ISO 4217 list,
+ * U15); empty until the metadata has been read or from an older server.
+ */
+export function getServerCurrencies(): string[] {
+  return serverCurrencies;
+}
+export function setServerCurrencies(codes: unknown): void {
+  serverCurrencies = Array.isArray(codes)
+    ? codes.filter((c): c is string => typeof c === "string")
+    : [];
+}
 
 export type Reply =
   | { kind: "ok"; value: unknown; denied: string[] }
@@ -428,10 +444,12 @@ export async function meta(
     core_version?: string;
     time?: { zone?: string; tzdb_version?: string };
     currency?: string;
+    currencies?: string[];
   } | null;
   if (!body || !Array.isArray(body.modules)) return "failed";
   if (body.core_version) coreVersion = body.core_version;
   if (body.currency) instanceCurrency = body.currency;
+  setServerCurrencies(body.currencies);
   setTime(body.time?.zone, body.time?.tzdb_version);
   const modules = body.modules;
   // An older server may not send the kind yet: money by name, everything else text.
@@ -788,17 +806,20 @@ export function restorePlace(): void {
 /**
  * The waits, in milliseconds, before the sign-in page asks again whether Microsoft is offered
  * after the answer 429 (the read is limited per address and minute, N19: an office behind one
- * address could hit it, and a Microsoft-only person would see no button). Tests set them to 0.
+ * address could hit it, and a Microsoft-only person would see no button). After the `delays` it
+ * goes on asking every `slow` milliseconds, at most `slowTries` more times (UB4: it used to stop
+ * after about 65 seconds, and the button stayed hidden until a reload). Tests set them to 0.
  */
-export const ssoRetry = { delays: [15_000, 20_000, 30_000] };
+export const ssoRetry = { delays: [15_000, 20_000, 30_000], slow: 60_000, slowTries: 30 };
 
 /** Whether the sign-in page offers Sign in with Microsoft. Nothing is offered on any doubt. */
 export async function ssoEnabled(): Promise<boolean> {
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetch("/api/auth/sso");
-      if (res.status === 429 && attempt < ssoRetry.delays.length) {
-        await new Promise((done) => setTimeout(done, ssoRetry.delays[attempt]));
+      if (res.status === 429 && attempt < ssoRetry.delays.length + ssoRetry.slowTries) {
+        const wait = ssoRetry.delays[attempt] ?? ssoRetry.slow;
+        await new Promise((done) => setTimeout(done, wait));
         continue;
       }
       if (!res.ok) return false;

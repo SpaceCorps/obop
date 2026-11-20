@@ -408,3 +408,30 @@ message = "Une autre période couvre déjà certains de ces jours : commencez ce
 [labels.fr.model.accounting_move_line.field.settled]
 label = "Réglé"
 description = "Si une transaction bancaire règle ce poste client ou fournisseur (son settles_line_id le désigne) ; calculé, donc une ligne comptabilisée l'affiche aussi"
+
+[labels.fr.model.accounting_account.filter.reconcilable]
+label = "Lettrables"
+
+[labels.fr.model.accounting_account.filter.in_use]
+label = "Utilisés"
+
+[labels.fr.model.accounting_period.filter.open]
+label = "Ouvertes"
+
+[labels.fr.model.accounting_move.filter.drafts]
+label = "Brouillons"
+
+[labels.fr.model.accounting_move.filter.posted]
+label = "Comptabilisées"
+
+[labels.fr.model.accounting_move_line.filter.open_items]
+label = "Écritures ouvertes"
+
+[labels.fr.model.accounting_move_line.filter.overdue]
+label = "En retard"
+
+[labels.fr.model.accounting_move_line.filter.due_in_30_days]
+label = "Échéance sous 30 jours"
+
+[labels.fr.model.accounting_bank_statement_line.filter.to_match]
+label = "À rapprocher"

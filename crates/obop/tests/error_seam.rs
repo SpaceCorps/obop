@@ -110,7 +110,8 @@ fn a_failed_call_prints_the_error_line_the_cli_guide_documents() {
     assert_eq!(out.status.code(), Some(1));
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
-        err.lines().any(|l| l == "error: Handler(\"no lead nope\")"),
+        err.lines()
+            .any(|l| l == "error: Handler(\"record_not_found: no lead nope\")"),
         "{err}"
     );
 }

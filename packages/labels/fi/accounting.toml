@@ -408,3 +408,30 @@ message = "Toinen kausi kattaa jo osan näistä päivistä: aloita tämä sen vi
 [labels.fi.model.accounting_move_line.field.settled]
 label = "Suoritettu"
 description = "Kuittaako jokin pankkitapahtuma tämän saatava- tai velkaerän (sen settles_line_id nimeää sen); laskettu, joten myös kirjattu rivi näyttää sen"
+
+[labels.fi.model.accounting_account.filter.reconcilable]
+label = "Täsmäytettävät"
+
+[labels.fi.model.accounting_account.filter.in_use]
+label = "Käytössä"
+
+[labels.fi.model.accounting_period.filter.open]
+label = "Avoimet"
+
+[labels.fi.model.accounting_move.filter.drafts]
+label = "Luonnokset"
+
+[labels.fi.model.accounting_move.filter.posted]
+label = "Kirjatut"
+
+[labels.fi.model.accounting_move_line.filter.open_items]
+label = "Avoimet erät"
+
+[labels.fi.model.accounting_move_line.filter.overdue]
+label = "Myöhässä"
+
+[labels.fi.model.accounting_move_line.filter.due_in_30_days]
+label = "Erääntyy 30 päivässä"
+
+[labels.fi.model.accounting_bank_statement_line.filter.to_match]
+label = "Kohdistettavat"

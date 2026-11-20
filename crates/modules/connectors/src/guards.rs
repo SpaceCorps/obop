@@ -89,10 +89,10 @@ fn own_record(model: &'static str, backend: Arc<dyn Backend>) -> Guard {
         let id = txt(&m, "id").to_string();
         let rec = backend
             .get(model, &id)?
-            .ok_or_else(|| format!("no {model} {id}"))?;
+            .ok_or_else(|| obop_commands::errors::no_record(model, &id))?;
         if !p.allows(ADMIN) && str_of(&rec, "owner_user") != owner_id(p) {
             // The same words as for a record that is not there.
-            return Err(format!("no {model} {id}"));
+            return Err(obop_commands::errors::no_record(model, &id));
         }
         put_actor(p, &mut m);
         Ok(Verdict {
@@ -131,7 +131,7 @@ pub(crate) fn validate_allowlist(rt: &Runtime, text: &str) -> Result<String, Str
             ));
         }
         let meta = rt
-            .dispatcher
+            .dispatcher()?
             .model_fields(&model)
             .ok_or_else(|| format!("unknown model {model}"))?;
         let names: Vec<&str> = fields
@@ -196,7 +196,7 @@ fn validate_config(rt: &Runtime, p: &Provider, text: &str) -> Result<String, Str
         }
     }
     if let Some(model) = cfg.get("target_model").and_then(J::as_str)
-        && (blocked_model(model) || !rt.dispatcher.has_model(model))
+        && (blocked_model(model) || !rt.dispatcher()?.has_model(model))
     {
         return Err(format!(
             "target_model {model} is not a model connectors may write"
@@ -484,7 +484,7 @@ fn normalise(
         for k in pol.fields.keys() {
             let (model, field) = k.split_once('.').unwrap_or((k, ""));
             let known = rt
-                .dispatcher
+                .dispatcher()?
                 .model_fields(model)
                 .is_some_and(|fs| fs.iter().any(|f| f.name == field));
             if !known {
@@ -494,7 +494,8 @@ fn normalise(
         let class_of = |key: &str| {
             let (model, field) = key.split_once('.')?;
             let f = rt
-                .dispatcher
+                .dispatcher()
+                .ok()?
                 .model_fields(model)?
                 .into_iter()
                 .find(|f| f.name == field)?;
@@ -532,7 +533,7 @@ fn connection_input(rt: Arc<Runtime>, create: bool) -> Guard {
             Some(
                 rt.backend
                     .get(CONNECTION, &id)?
-                    .ok_or_else(|| format!("no connection {id}"))?,
+                    .ok_or_else(|| obop_commands::errors::no_record("connection", &id))?,
             )
         };
         let (v, raised) = normalise(&rt, p, input, existing.as_ref())?;

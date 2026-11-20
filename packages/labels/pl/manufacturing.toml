@@ -146,3 +146,9 @@ description = "Zużywany produkt"
 [labels.pl.model.manufacturing_order_line.field.quantity]
 label = "Ilość"
 description = "Liczba sztuk komponentu zużywana przez całe zlecenie"
+
+[labels.pl.model.manufacturing_order.filter.in_progress]
+label = "W toku"
+
+[labels.pl.model.manufacturing_order.filter.late]
+label = "Opóźnione"

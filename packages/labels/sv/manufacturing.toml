@@ -146,3 +146,9 @@ description = "Produkten som förbrukas"
 [labels.sv.model.manufacturing_order_line.field.quantity]
 label = "Antal"
 description = "Antal enheter av komponenten som hela ordern förbrukar"
+
+[labels.sv.model.manufacturing_order.filter.in_progress]
+label = "Pågående"
+
+[labels.sv.model.manufacturing_order.filter.late]
+label = "Försenade"

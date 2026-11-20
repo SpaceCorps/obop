@@ -125,6 +125,7 @@ description = "När det ska göras, i sekunder sedan 1970"
 [labels.sv.model.outbound_mail.action.send]
 label = "Skicka"
 description = "Köa ett meddelande: to, subject och body, eller template med language och vars; returnerar dess id. Arbetsprocessen skickar det efter anropet"
+done = "Meddelandet har köats"
 
 [labels.sv.model.outbound_mail.action.retry]
 label = "Skicka igen"
@@ -229,6 +230,15 @@ description = "När det senaste testmeddelandet skickades"
 [labels.sv.model.mail_server.field.last_test_result]
 label = "Senaste testresultat"
 description = "Vad servern svarade på det senaste testmeddelandet"
+
+[labels.sv.model.mail_server.field.last_test_outcome]
+label = "Utfall av senaste test"
+description = "Hur det senaste testet slutade: skickat, tillfälligt inte skickat eller avvisat"
+
+[labels.sv.model.mail_server.field.last_test_outcome.options]
+sent = "Skickat"
+temporary = "Inte skickat (tillfälligt)"
+permanent = "Inte skickat (avvisat)"
 
 [labels.sv.model.mail_server.field.test_recipient]
 label = "Testmottagare"

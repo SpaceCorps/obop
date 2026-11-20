@@ -550,6 +550,7 @@ mod tests {
                     to: "posted",
                 }),
                 one_way: None,
+                whole_model: false,
                 labels: Default::default(),
                 descriptions: Default::default(),
                 ui: None,

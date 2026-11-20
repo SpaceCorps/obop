@@ -1,6 +1,6 @@
 [module]
 id = "helpdesk"
-version = "0.5.2"
+version = "0.5.3"
 name = "Helpdesk"
 description = "Support tickets with priority, severity, service-level targets and an open, in progress, resolved and closed flow. Targets are recorded, not enforced or timed automatically. Every ticket gets a number from a series when it is created."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["helpdesk", "tickets", "support", "sla"]
 categories = ["services"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "0.5.2: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). A ticket is named by its subject, with its number above it on a card and next to the requester in the form."
+changelog = "0.5.3: the quick filters of the lists are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.5.2: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). A ticket is named by its subject, with its number above it on a card and next to the requester in the form."
 home = "helpdesk_ticket"
 
 [[model]]

@@ -696,16 +696,15 @@ async fn post_from_peer_with(
     name: &str,
     more: &[(&str, &str)],
 ) -> Resp {
-    let body = [
-        ("name", name),
-        ("agree", "1"),
-        ("doc", &f.file),
-        ("lang", "en"),
-    ]
-    .iter()
-    .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
-    .collect::<Vec<_>>()
-    .join("&");
+    let body = f.form_body(
+        path,
+        &[
+            ("name", name),
+            ("agree", "1"),
+            ("doc", &f.file),
+            ("lang", "en"),
+        ],
+    );
     let mut b = Request::post(path)
         .header("host", HOST)
         .header("origin", ORIGIN)

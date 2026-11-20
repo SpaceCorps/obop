@@ -926,7 +926,10 @@ fn the_wrong_role_is_refused_whatever_the_state() {
         // Another driver cannot act on the trip of ann, and cannot tell it from a missing one.
         for a in ["end", "submit", "discard"] {
             let theirs = r.refused(&bob, &format!("mileage_trip.{a}"), json!({"id": ended}));
-            assert!(theirs.starts_with("no mileage_trip"), "{a}: {theirs}");
+            assert!(
+                theirs.starts_with("record_not_found: no mileage_trip"),
+                "{a}: {theirs}"
+            );
         }
         // A driver is not a reviewer; an administrator is not one by being an administrator.
         for a in ["confirm", "reject", "reopen"] {
@@ -1782,7 +1785,7 @@ fn a_batch_that_was_stored_is_answered_again_after_the_trip_has_ended() {
         other["rows"] = json!([walk_row(&id, 11)]);
         r.refused(&ann, "mileage_point.bulk_create", other);
         let e = r.refused(&bob, "mileage_point.bulk_create", batch.clone());
-        assert!(e.starts_with("no mileage_trip"), "{e}");
+        assert!(e.starts_with("record_not_found: no mileage_trip"), "{e}");
         // Also after a discard.
         let id2 = r.recording(&ann);
         let rows: Vec<J> = (1..=3).map(|s| walk_row(&id2, s)).collect();
@@ -2144,7 +2147,10 @@ fn a_reviewer_or_administrator_without_the_driver_group_acts_on_nothing() {
             (&only_adm, "mileage_trip.discard_stuck", &stuck),
         ] {
             let e = r.refused(who, cmd, json!({"id": id}));
-            assert!(e.starts_with("no mileage_trip"), "{cmd}: {e}");
+            assert!(
+                e.starts_with("record_not_found: no mileage_trip"),
+                "{cmd}: {e}"
+            );
         }
         assert_eq!(r.state(&review), "in_review");
         assert_eq!(r.state(&rejected), "rejected");
@@ -2199,7 +2205,10 @@ fn the_handler_checks_the_roles_and_the_approver_again_whatever_the_guard_let_th
         // with only the base group they are not a reviewer.
         for groups in [&[REVIEWER][..], &[ADMIN], &[]] {
             let e = call("confirm", &review, &["reviewer"], Some(("dan", groups))).unwrap_err();
-            assert!(e.starts_with("no mileage_trip"), "{groups:?}: {e}");
+            assert!(
+                e.starts_with("record_not_found: no mileage_trip"),
+                "{groups:?}: {e}"
+            );
         }
         let e = call("confirm", &review, &["reviewer"], Some(("dan", &[DRIVER]))).unwrap_err();
         assert!(e.contains("only a reviewer"), "{e}");
@@ -2424,7 +2433,7 @@ fn an_approver_without_the_driver_group_stands_behind_nothing() {
         let plan = propose(r, &rex_agent, "mileage_trip.confirm", &id);
         let refused = r.d.approve(&dan, &mut Vault::new(), &plan);
         assert!(
-            matches!(refused, Err(CallError::Handler(ref m)) if m.starts_with("no mileage_trip")),
+            matches!(refused, Err(CallError::Handler(ref m)) if m.starts_with("record_not_found: no mileage_trip")),
             "{refused:?}"
         );
         assert_eq!(r.state(&id), "in_review");
@@ -2438,7 +2447,7 @@ fn an_approver_without_the_driver_group_stands_behind_nothing() {
         let plan = propose(r, &ada_agent, "mileage_trip.discard_stuck", &stuck);
         let refused = r.d.approve(&eve, &mut Vault::new(), &plan);
         assert!(
-            matches!(refused, Err(CallError::Handler(ref m)) if m.starts_with("no mileage_trip")),
+            matches!(refused, Err(CallError::Handler(ref m)) if m.starts_with("record_not_found: no mileage_trip")),
             "{refused:?}"
         );
         assert_eq!(r.state(&stuck), "recording");
@@ -2516,7 +2525,7 @@ fn the_discard_an_agent_proposed_is_approved_only_by_the_driver_of_the_trip() {
             )
         };
         let e = call("bob", &[DRIVER]).unwrap_err();
-        assert!(e.starts_with("no mileage_trip"), "{e}");
+        assert!(e.starts_with("record_not_found: no mileage_trip"), "{e}");
         let e = call("ada", &[DRIVER, ADMIN]).unwrap_err();
         assert!(
             e.contains("only the driver of a trip can discard it"),
@@ -2581,7 +2590,7 @@ fn what_the_dispatcher_stamps_about_the_approver_cannot_be_sent_by_a_client() {
             "mileage_trip.confirm",
             json!({"id": other, "_actor_mileage_reviewer": true, "_actor_mileage_admin": true}),
         );
-        assert!(e.starts_with("no mileage_trip"), "{e}");
+        assert!(e.starts_with("record_not_found: no mileage_trip"), "{e}");
         assert_eq!(r.state(&other), "in_review");
     });
 }
@@ -2760,7 +2769,7 @@ fn a_replay_is_the_callers_own_and_the_key_is_not_shared_with_another_driver() {
         // The key belongs to the person: Bob, sending Ann's batch under Ann's key, has no stored
         // answer to be handed, and the trip is not his.
         let e = r.refused(&bob, "mileage_point.bulk_create", batch.clone());
-        assert!(e.starts_with("no mileage_trip"), "{e}");
+        assert!(e.starts_with("record_not_found: no mileage_trip"), "{e}");
         assert_eq!(r.points_stored(&id), 3);
     });
 }
@@ -3107,11 +3116,11 @@ fn a_private_trip_stays_out_of_a_reviewers_view() {
             json!({"id": id, "purpose": "private"}),
         );
         let missing = r.refused(&rev, "mileage_trip.get", json!({"id": id}));
-        assert_eq!(missing, format!("no mileage_trip {id}"));
+        assert_eq!(missing, format!("record_not_found: no mileage_trip {id}"));
         let listed = r.ok(&rev, "mileage_trip.list", json!({}));
         assert!(!listed.to_string().contains(&id), "{listed}");
         let refused = r.refused(&rev, "mileage_trip.reopen", json!({"id": id}));
-        assert_eq!(refused, format!("no mileage_trip {id}"));
+        assert_eq!(refused, format!("record_not_found: no mileage_trip {id}"));
         // Its driver and an administrator still read it.
         assert_eq!(
             r.ok(&ann, "mileage_trip.get", json!({"id": id}))["state"],
@@ -3357,5 +3366,48 @@ fn private_trips_stored_with_a_route_lose_it_once_at_start() {
         assert_eq!(r.points_stored(&business), 10);
         // Nothing is left for a second start.
         assert_eq!(crate::drop_private_routes(&r.store), Ok(0));
+    });
+}
+
+/// U81: `serve` runs the removal once per database; the migration ledger records it, and later
+/// starts do not search the private trips again, even when one holds a route.
+#[test]
+fn the_removal_of_old_private_routes_runs_once_and_is_recorded_in_the_ledger() {
+    use obop_migrate::ledger;
+    use obop_storage::Op;
+    each_rig(|r| {
+        let ann = driver("ann");
+        let db = r.store.backend();
+        let make_private = |id: &str| {
+            let mut patch = obop_storage::Fields::new();
+            patch.insert("purpose".into(), J::from("private"));
+            db.apply_checked(&[Op::Patch {
+                model: TRIP.into(),
+                id: id.to_string(),
+                patch,
+                expect: vec![],
+            }])
+            .unwrap();
+        };
+        let old = r.ended(&ann);
+        make_private(&old);
+        assert_eq!(crate::drop_private_routes_once(&r.store), Ok(Some(1)));
+        assert_eq!(r.points_stored(&old), 0);
+        let row = db
+            .get(ledger::MODEL, crate::PRIVATE_ROUTES_STEP)
+            .unwrap()
+            .expect("the ledger row");
+        let e = ledger::Entry::from_fields(crate::PRIVATE_ROUTES_STEP, &row).unwrap();
+        assert_eq!(
+            (e.module.as_str(), e.kind.as_str(), e.step.as_str()),
+            ("mileage", "rust", "0001")
+        );
+        assert_eq!(e.status, ledger::Status::Applied);
+        assert_eq!(e.note, "1 private trip(s) cleared");
+        // A later start does nothing: a route written behind the module's back is not searched for.
+        let later = r.ended(&ann);
+        make_private(&later);
+        assert_eq!(crate::drop_private_routes_once(&r.store), Ok(None));
+        assert_eq!(r.points_stored(&later), 10);
     });
 }

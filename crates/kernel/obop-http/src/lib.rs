@@ -43,6 +43,8 @@ mod addr_scan_tests;
 #[cfg(test)]
 mod audit_kind_tests;
 #[cfg(test)]
+mod auth_platform_login_tests;
+#[cfg(test)]
 mod brand_scan_tests;
 #[cfg(test)]
 mod error_tests;
@@ -128,7 +130,15 @@ impl HttpState {
         oauth_config: obop_oauth::OAuthConfig,
     ) -> Arc<Self> {
         let shared = shared::SharedState::for_dispatcher(&dispatcher);
+        let cimd = oauth_config
+            .cimd_hosts
+            .is_some()
+            .then_some(oauth_config.cimd_allow_loopback);
         let oauth = obop_oauth::OAuth::new(shared.backend.clone(), auth.clone(), oauth_config);
+        // Client ID Metadata Documents (E7i) are read only where the operator listed hosts.
+        if let (Some(o), Some(loopback)) = (&oauth, cimd) {
+            o.set_cimd_fetcher(oauth::cimd_fetcher(loopback));
+        }
         Arc::new(Self {
             dispatcher,
             auth,
@@ -1284,6 +1294,8 @@ fn p_login_blocking(api: Arc<dyn PlatformApi>, b: J) -> Response {
         b["password"].as_str().unwrap_or(""),
     ) {
         Ok(out) => mfa::outcome(api.authenticator().as_deref(), out),
+        // A refused read of the account is no wrong password, as on the instance login (UB2).
+        Err(e) if obop_storage::fault::Fault::is_transient(&e) => unavailable(&e),
         Err(e) if e.contains("too many") => err(StatusCode::TOO_MANY_REQUESTS, e),
         Err(e) => err(StatusCode::UNAUTHORIZED, e),
     }

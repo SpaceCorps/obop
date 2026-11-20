@@ -3,7 +3,7 @@
 // materials scaled to the order's quantity (`manufacturing_order_line.bulk_create`, the call an
 // agent makes). Finishing the order moves the stock (the package's `finish` effects).
 import { useEffect, useState } from "react";
-import { fmt, t } from "@obop/ui";
+import { fmt, t, useWorded } from "@obop/ui";
 import { aggregate, search, type Row } from "../../api.ts";
 import type { RecordExtProps } from "../../extensions.ts";
 import { useData } from "../../data.tsx";
@@ -68,7 +68,7 @@ export function Components({ row }: RecordExtProps) {
   const d = useData();
   const [needs, setNeeds] = useState<Need[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useWorded();
   const location = String(row.location_id ?? "");
   const open = row.state !== "done" && row.state !== "cancelled";
   const lineMeta = d.models.get(LINE)?.model;
@@ -98,7 +98,9 @@ export function Components({ row }: RecordExtProps) {
     });
     if ("error" in bom || "error" in parts) {
       setBusy(false);
-      setError(serverMessage("error" in bom ? bom.error : (parts as { error: string }).error));
+      setError(() =>
+        serverMessage("error" in bom ? bom.error : (parts as { error: string }).error),
+      );
       return;
     }
     const perRun = Number((bom.rows[0] as Row | undefined)?.quantity ?? 1);
@@ -110,12 +112,12 @@ export function Components({ row }: RecordExtProps) {
     }));
     if (!rows.length) {
       setBusy(false);
-      setError(t("The bill of materials has no components yet."));
+      setError(() => t("The bill of materials has no components yet."));
       return;
     }
     const r = await d.run(`${LINE}.bulk_create`, { rows, mode: "all_or_nothing" });
     setBusy(false);
-    if (r.kind === "error") setError(serverMessage(r.message));
+    if (r.kind === "error") setError(() => serverMessage(r.message));
     else {
       await d.changed(LINE);
       d.notify(t("{count} components added", { count: String(rows.length) }), "ok");

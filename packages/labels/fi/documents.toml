@@ -108,3 +108,12 @@ label = "Asiakirja"
 
 [labels.fi.model.documents_document.section.where_it_is_kept]
 label = "Säilytyspaikka"
+
+[labels.fi.model.documents_document.filter.expiring_soon]
+label = "Vanhenee pian"
+
+[labels.fi.model.documents_document.filter.drafts]
+label = "Luonnokset"
+
+[labels.fi.model.documents_document.filter.confidential]
+label = "Luottamukselliset"

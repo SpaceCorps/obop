@@ -175,6 +175,21 @@ fn a_step_that_keeps_failing_for_the_same_reason_keeps_one_failed_row() {
         .collect();
     assert_eq!(failed.len(), 1, "{failed:?}");
     assert_eq!(failed[0].1["attempts"], 5);
+    // U45: the count reaches the readers of the ledger, `migrate status` and `verify`.
+    let m = Migrator::with_steps(b.clone(), ring(), failing());
+    let row = m
+        .ledger()
+        .unwrap()
+        .into_iter()
+        .find(|r| r.id.starts_with("core/0002/failed-"))
+        .unwrap();
+    assert_eq!(row.attempts, 5);
+    let v = m.verify().unwrap();
+    assert!(
+        v.notes.iter().any(|n| n.contains("failed 5 time(s)")),
+        "{:?}",
+        v.notes
+    );
     // Another reason is a row of its own.
     let mut other = marking();
     other[1].run = Run::Ops(|_| Err("another reason".into()));

@@ -63,3 +63,9 @@ done = "Godkänd"
 label = "Avvisa"
 description = "Skicka tillbaka en inskickad registrering till utkast (endast chef)"
 done = "Skickad tillbaka till utkast"
+
+[labels.sv.model.timesheets_entry.filter.mine]
+label = "Mina"
+
+[labels.sv.model.timesheets_entry.filter.to_approve]
+label = "Att godkänna"

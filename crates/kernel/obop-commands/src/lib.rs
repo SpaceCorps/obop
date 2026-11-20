@@ -191,6 +191,9 @@ pub struct CommandInfo {
     /// a step that a manager decides afterwards (a leave request) has a way out. `None` in the
     /// command catalog and for an action that is not a transition.
     pub one_way: Option<bool>,
+    /// The command is about the model as a whole and takes no record id (`CommandDef::of_model`,
+    /// docs/ISSUES.md U66): the record panel leaves it out.
+    pub whole_model: bool,
 }
 
 /// What a guard decides about one call (D48).
@@ -327,6 +330,10 @@ pub struct Dispatcher {
     /// Commands a module refuses for everyone (`refuse_always`): the metadata says the caller
     /// cannot do them (`can_delete: false`), so the interface agrees with the server.
     never: std::sync::RwLock<HashMap<String, String>>,
+    /// Transitions without a `from` whose coded guard lets them start only in some states
+    /// (`starts_only_in`, U76): command id to (module, states). `one_way` counts such an action
+    /// as a way out of those states only.
+    starts_in: std::sync::RwLock<HashMap<String, (String, Vec<String>)>>,
     /// The ids of the modules that the package installer registered (`as_package`): nothing else
     /// may register under them (K57), since the package's uninstall removes all that the id holds.
     packages: std::sync::RwLock<HashSet<String>>,
@@ -629,6 +636,7 @@ impl Dispatcher {
                     descriptions: Texts::new(),
                     ui: None,
                     one_way: None,
+                    whole_model: false,
                 }
             })
             .collect()
@@ -666,6 +674,7 @@ impl Dispatcher {
                 descriptions: Texts::new(),
                 ui: None,
                 one_way: None,
+                whole_model: false,
             })
             .collect();
         out.sort_by(|a, b| a.id.cmp(&b.id));
@@ -712,6 +721,7 @@ impl Dispatcher {
                     continue;
                 }
                 let never = self.never.read().unwrap();
+                let starts_in = self.starts_in.read().unwrap();
                 let can = |c: &str| {
                     let id = format!("{name}.{c}");
                     !never.contains_key(&id)
@@ -747,6 +757,11 @@ impl Dispatcher {
                                 .iter()
                                 .find(|d| d.name == &id[name.len() + 1..])
                                 .and_then(|d| d.ui.clone()),
+                            whole_model: m
+                                .def
+                                .commands
+                                .iter()
+                                .any(|d| d.name == &id[name.len() + 1..] && d.whole_model),
                             one_way: c.transition.map(|t| {
                                 // Every action of the model counts, also one this caller may not
                                 // run; one refused for everyone does not.
@@ -757,7 +772,16 @@ impl Dispatcher {
                                         && o.transition.is_some_and(|ot| {
                                             ot.field == t.field
                                                 && ot.to != t.to
-                                                && ot.from.is_none_or(|f| f == t.to)
+                                                && match ot.from {
+                                                    Some(f) => f == t.to,
+                                                    // A from-less action whose guard says where
+                                                    // it may start (U76).
+                                                    None => starts_in.get(oid).is_none_or(
+                                                        |(_, states)| {
+                                                            states.iter().any(|s| s == t.to)
+                                                        },
+                                                    ),
+                                                }
                                         })
                                 })
                             }),
@@ -1284,6 +1308,10 @@ impl Dispatcher {
         }
         self.order.write().unwrap().retain(|x| x != module);
         self.never.write().unwrap().retain(|_, m| m != module);
+        self.starts_in
+            .write()
+            .unwrap()
+            .retain(|_, (m, _)| m != module);
         self.packages.write().unwrap().remove(module);
         self.refresh_lock_models();
     }
@@ -1355,6 +1383,21 @@ impl Dispatcher {
             .write()
             .unwrap()
             .insert(id.to_string(), module.to_string());
+    }
+
+    /// Say that the transition `id` of `module`, which declares no `from`, can start only in
+    /// `states`, because a guard of its own refuses it elsewhere (a driver discards a trip that is
+    /// recording, ended or rejected, never a confirmed one). The guard still decides; this only
+    /// tells `meta`, so that `one_way` does not count the action as a way out of the other states
+    /// (U76). Removed with the module.
+    pub fn starts_only_in(&self, module: &str, id: &str, states: &[&str]) {
+        self.starts_in.write().unwrap().insert(
+            id.to_string(),
+            (
+                module.to_string(),
+                states.iter().map(|s| (*s).to_string()).collect(),
+            ),
+        );
     }
 
     /// Every permission group the registered models, fields and commands refer to (the
@@ -2488,6 +2531,17 @@ pub trait PasskeyApi: Send + Sync {
         ctx: &WebauthnCtx,
         mfa_token: Option<&str>,
     ) -> Result<serde_json::Value, MfaError>;
+    /// Request options for signing in with a passkey alone after the person typed a name
+    /// (username-first, E7c): the passkeys of that name that may sign in, or stand-in ids that are
+    /// the same on every ask when there are none, so the answer does not say whether the name
+    /// exists. For keys that do not keep the name themselves (some hardware keys).
+    fn passkey_login_options_for(
+        &self,
+        _ctx: &WebauthnCtx,
+        _username: &str,
+    ) -> Result<serde_json::Value, MfaError> {
+        Err(MfaError::Invalid("not offered here".into()))
+    }
     /// Verify the assertion: the second step with `mfa_token`, else passwordless sign-in.
     fn passkey_login(
         &self,
@@ -2495,6 +2549,20 @@ pub trait PasskeyApi: Send + Sync {
         mfa_token: Option<&str>,
         credential: &serde_json::Value,
     ) -> Result<LoginOutcome, MfaError>;
+    /// [`PasskeyApi::passkey_login`], with, for a sign-in by passkey alone, who it was for and the
+    /// credential epoch the check of the assertion compared: the baseline an OAuth flow keeps, so
+    /// that a change of credentials that commits after the check is seen by the later compares
+    /// (docs/ISSUES.md L19). `None` for the second step, whose epoch the first step read.
+    #[allow(clippy::type_complexity)]
+    fn passkey_login_seen(
+        &self,
+        ctx: &WebauthnCtx,
+        mfa_token: Option<&str>,
+        credential: &serde_json::Value,
+    ) -> Result<(LoginOutcome, Option<(String, Option<String>)>), MfaError> {
+        self.passkey_login(ctx, mfa_token, credential)
+            .map(|out| (out, None))
+    }
     /// The second-step methods a pending sign-in offers: `totp` and `passkey`.
     fn methods(&self, mfa_token: &str) -> Vec<&'static str>;
 }
@@ -2525,6 +2593,7 @@ pub use accounts::{AccountsApi, NewUser};
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
 pub use brand::{DEFAULT_TITLE as DEFAULT_SITE_TITLE, FAVICON_KEY as SITE_FAVICON_KEY, SiteRead};
 pub use engine::bulk::has_stored_answer;
+pub use engine::crud::STAMP as ACTION_STAMP;
 pub use engine::{Actor, ClockFn};
 pub use inline_pdf::{INLINE_PDF_NAME, MAX_INLINE_PDF, inline_pdf};
 pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
@@ -2590,6 +2659,8 @@ mod masked_guess_tests;
 mod observe_tests;
 #[cfg(test)]
 mod one_way_tests;
+#[cfg(test)]
+mod pattern_fixture_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]

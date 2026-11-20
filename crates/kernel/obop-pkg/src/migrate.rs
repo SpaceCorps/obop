@@ -34,8 +34,8 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {
     /// `model_added`, `model_removed`, `field_added`, `field_removed`, `field_retyped`,
-    /// `field_reshaped`, `field_limits`, `field_required`, `option_added`, `option_removed`, `action_added`,
-    /// `action_removed`.
+    /// `field_reshaped`, `field_limits`, `field_readonly`, `field_required`, `option_added`,
+    /// `option_removed`, `action_added`, `action_removed`.
     pub kind: &'static str,
     pub model: String,
     pub field: Option<String>,
@@ -307,6 +307,27 @@ pub fn diff(old: &Manifest, new: &Manifest) -> Vec<Change> {
                                     held_old.change_to(&held_new),
                                     held_old.text(),
                                     held_new.text()
+                                ),
+                                false,
+                            ));
+                        }
+                        // U23: a field callers could write becomes one only the server sets.
+                        // Stored values stay valid, so it never blocks, but a create or update
+                        // that names it is refused from now on (`readonly_field`).
+                        let fixed = |f: &FieldM| f.readonly || f.computed.is_some();
+                        if fixed(nf) && !fixed(of) {
+                            out.push(ch(
+                                "field_readonly",
+                                &nm.name,
+                                Some(&nf.name),
+                                format!(
+                                    "{} becomes {}: create and update may no longer set it",
+                                    nf.name,
+                                    if nf.computed.is_some() {
+                                        "computed"
+                                    } else {
+                                        "readonly"
+                                    }
                                 ),
                                 false,
                             ));
@@ -706,6 +727,123 @@ fn canonical_default(new: &Manifest, s: &mut Step) {
     if let Some(c) = canonical {
         s.value = Some(J::from(c));
     }
+}
+
+/// What the stored values of one field make of the limits it declares (K46, U18): how many records
+/// the model holds, how many of them hold a value the limits refuse, and the longest stored text in
+/// characters (text and longtext fields only).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StoredFit {
+    pub records: usize,
+    pub outside: usize,
+    pub longest: Option<usize>,
+}
+
+/// Check every stored value of `f` on `model` against the limits and the format `f` declares (the
+/// rules of a write: an empty value is not checked). A computed or numbered field stores nothing a
+/// caller wrote, so it has nothing to report.
+pub fn stored_fit(backend: &dyn Backend, model: &str, f: &FieldM) -> Result<StoredFit, String> {
+    if f.computed.is_some() || f.kind == "sequence" {
+        return Ok(StoredFit::default());
+    }
+    stored_fit_of(backend, model, &probe(f)?)
+}
+
+/// As [`stored_fit`], for a field as the registry holds it (K46: what the running instance
+/// enforces, also for a built-in module that has no manifest).
+pub fn stored_fit_of(
+    backend: &dyn Backend,
+    model: &str,
+    def: &obop_registry::FieldDef,
+) -> Result<StoredFit, String> {
+    use obop_registry::FieldKind as K;
+    if def.computed.is_some() || def.sequence.is_some() {
+        return Ok(StoredFit::default());
+    }
+    let rows = backend.list(model)?;
+    let mut out = StoredFit {
+        records: rows.len(),
+        ..StoredFit::default()
+    };
+    for (_, r) in &rows {
+        let Some(v) = r.get(def.name) else {
+            continue;
+        };
+        let outside = match (&def.kind, v) {
+            (K::Text | K::LongText, J::String(s)) => {
+                let n = obop_registry::char_count(s);
+                out.longest = Some(out.longest.map_or(n, |l| l.max(n)));
+                !s.is_empty() && def.check_text(s).is_err()
+            }
+            (K::Number | K::Money, J::Number(n)) => {
+                n.as_i64().is_some_and(|n| def.check_int(n).is_err())
+            }
+            (K::Decimal { .. }, J::String(s)) => {
+                obop_values::Decimal::parse(s).is_ok_and(|d| def.check_decimal(d).is_err())
+            }
+            (K::Date, J::String(s)) => !s.is_empty() && def.check_date(s).is_err(),
+            _ => false,
+        };
+        if outside {
+            out.outside += 1;
+        }
+    }
+    Ok(out)
+}
+
+/// Whether a field is held to a limit or a format that a stored value could fall outside: a written
+/// text or longtext field (it always has a maximum length, D90), and a field that declares a bound
+/// or a format.
+pub fn has_limits(def: &obop_registry::FieldDef) -> bool {
+    use obop_registry::FieldKind as K;
+    if def.computed.is_some() || def.sequence.is_some() {
+        return false;
+    }
+    match def.kind {
+        K::Text | K::LongText => true,
+        K::Number | K::Money | K::Decimal { .. } | K::Date => {
+            let l = def.declared_limits();
+            l.min.is_some() || l.max.is_some()
+        }
+        _ => false,
+    }
+}
+
+/// Count, for every `field_limits` change of `plan`, the stored values the new limits refuse
+/// (K46, U18): the change says how many there are, and a warning names a field that has some.
+/// Nothing blocks: by D90 a stored value is not re-checked until a write changes it.
+pub fn count_stored_breaches(
+    plan: &mut DataPlan,
+    new: &Manifest,
+    backend: &dyn Backend,
+) -> Result<(), String> {
+    for c in &mut plan.changes {
+        if c.kind != "field_limits" {
+            continue;
+        }
+        let Some(f) = c.field.as_deref().and_then(|f| field_of(new, &c.model, f)) else {
+            continue;
+        };
+        let fit = stored_fit(backend, &c.model, f)?;
+        if fit.records == 0 {
+            continue;
+        }
+        c.detail.push_str(&format!(
+            "; {} of {} stored record(s) hold a value outside them",
+            fit.outside, fit.records
+        ));
+        if let Some(l) = fit.longest {
+            c.detail
+                .push_str(&format!("; the longest stored value has {l} characters"));
+        }
+        if fit.outside > 0 {
+            plan.warnings.push(format!(
+                "{}.{}: {} stored record(s) hold a value the new limits refuse. They stay readable, and editable in their other fields; that value can only be replaced by one that fits",
+                c.model, f.name, fit.outside
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// The data side of an update: what differs, which steps run, what stops it.
@@ -1317,6 +1455,120 @@ mod tests {
         // A step for another starting version does not apply.
         let p = plan_data(&m("0.3.0", &field("title", ""), ""), &new, &|_| 5);
         assert!(p.steps.is_empty());
+    }
+
+    #[test]
+    fn the_plan_counts_the_stored_values_a_new_limit_or_format_refuses() {
+        // K46, U18: an IBAN format, a shorter text and a smaller maximum, against stored records.
+        let fields = |iban: &str, name: &str, qty: &str| {
+            format!(
+                "{}{}{}",
+                field("iban", iban),
+                field("name", name),
+                field("qty", &format!("kind = \"number\"\n{qty}"))
+            )
+        };
+        let old = m("0.1.0", &fields("", "", ""), "");
+        let new = m(
+            "0.2.0",
+            &fields("pattern = \"iban\"", "max_length = 5", "max = 10"),
+            "",
+        );
+        // The same answer from every store (K46): memory, SQLite and, when it is set,
+        // PostgreSQL in a scratch database of its own.
+        let pg = obop_storage::testing::TestDb::new();
+        let mut urls = vec!["memory:".to_string(), "sqlite::memory:".to_string()];
+        urls.extend(pg.as_ref().map(|d| d.url().to_string()));
+        for url in &urls {
+            let b = obop_storage::open(url).unwrap();
+            for (id, iban, name, qty) in [
+                ("1", "DE89 3704 0044 0532 0130 00", "short", 3),
+                ("2", "DE00 1234", "much longer", 12),
+                ("3", "", "", 10),
+            ] {
+                b.apply_checked(&[Op::Insert {
+                    model: "mig_item".into(),
+                    id: id.into(),
+                    fields: rec(&[
+                        ("iban", J::from(iban)),
+                        ("name", J::from(name)),
+                        ("qty", J::from(qty)),
+                    ]),
+                }])
+                .unwrap();
+            }
+            let mut p = plan_data(&old, &new, &|_| 3);
+            count_stored_breaches(&mut p, &new, &*b).unwrap();
+            let detail = |f: &str| {
+                p.changes
+                    .iter()
+                    .find(|c| c.kind == "field_limits" && c.field.as_deref() == Some(f))
+                    .map(|c| c.detail.clone())
+                    .unwrap_or_else(|| panic!("no field_limits for {f}: {:?}", p.changes))
+            };
+            assert!(
+                detail("iban").contains("1 of 3 stored record(s) hold a value outside them"),
+                "{}",
+                detail("iban")
+            );
+            assert!(
+                detail("name").contains("1 of 3 stored record(s)"),
+                "{}",
+                detail("name")
+            );
+            assert!(
+                detail("name").contains("the longest stored value has 11 characters"),
+                "{}",
+                detail("name")
+            );
+            assert!(
+                detail("qty").contains("1 of 3 stored record(s)"),
+                "{}",
+                detail("qty")
+            );
+            assert!(!detail("qty").contains("longest"), "{}", detail("qty"));
+            // Shown, never blocking; a warning names each field that has such values.
+            assert!(p.blockers.is_empty(), "{:?}", p.blockers);
+            for f in ["iban", "name", "qty"] {
+                assert!(
+                    p.warnings
+                        .iter()
+                        .any(|w| w.starts_with(&format!("mig_item.{f}: 1 stored record(s)"))),
+                    "{:?}",
+                    p.warnings
+                );
+            }
+        }
+        // A model with no records says nothing more.
+        let empty = obop_storage::open("memory:").unwrap();
+        let mut q = plan_data(&old, &new, &|_| 0);
+        count_stored_breaches(&mut q, &new, &*empty).unwrap();
+        assert!(
+            q.warnings.is_empty() && !q.changes.iter().any(|c| c.detail.contains("stored record"))
+        );
+    }
+
+    #[test]
+    fn a_field_that_becomes_readonly_or_computed_is_shown_and_never_blocks() {
+        // U23: hr 0.4.1 to 0.5.0 made `hr_leave_request.requested_by` readonly.
+        let old = m("0.1.0", &field("by", ""), "");
+        let ro = m("0.2.0", &field("by", "readonly = true"), "");
+        let p = plan_data(&old, &ro, &|_| 5);
+        let c: Vec<&Change> = p
+            .changes
+            .iter()
+            .filter(|c| c.kind == "field_readonly")
+            .collect();
+        assert_eq!(c.len(), 1, "{:?}", p.changes);
+        assert_eq!(c[0].field.as_deref(), Some("by"));
+        assert!(!c[0].breaking && p.blockers.is_empty(), "{:?}", p.blockers);
+        assert_eq!(
+            c[0].detail,
+            "by becomes readonly: create and update may no longer set it"
+        );
+        // Unchanged, or the other way round: nothing to show.
+        assert!(diff(&ro, &ro).is_empty());
+        assert!(!diff(&ro, &old).iter().any(|c| c.kind == "field_readonly"));
     }
 
     fn dec(p: u8, s: u8, extra: &str) -> String {

@@ -106,13 +106,15 @@ export function pickAction(
  * An action that is not offered at all for this record: marking a request signed by hand when it is
  * about a Document, because the signer signs it through the link and the server refuses the manual
  * step. Its button is left out of the panel; the step in the status bar and the kanban are greyed
- * out with `notForRecord`.
+ * out with `notForRecord`. A command of the model as a whole (`whole_model`, U66) is never one of a
+ * record: the list offers it (ModelActions.tsx).
  */
 export function hiddenForRecord(
   model: ModelMeta,
   action: Command,
   row: Record<string, unknown>,
 ): boolean {
+  if (action.whole_model) return true;
   return model.name === "sign_request" && action.id === SIGN_BY_HAND && isDocumentRequest(row);
 }
 

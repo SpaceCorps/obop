@@ -75,3 +75,9 @@ label = "Artykuł"
 
 [labels.pl.model.knowledge_article.section.details]
 label = "Szczegóły"
+
+[labels.pl.model.knowledge_article.filter.published]
+label = "Opublikowane"
+
+[labels.pl.model.knowledge_article.filter.drafts]
+label = "Wersje robocze"

@@ -196,3 +196,12 @@ label = "Gesendete Datei"
 
 [labels.de.model.sign_request.section.evidence]
 label = "Nachweise"
+
+[labels.de.model.sign_request.filter.waiting_for_signature]
+label = "Warten auf Unterschrift"
+
+[labels.de.model.sign_request.filter.signed]
+label = "Unterschrieben"
+
+[labels.de.model.sign_request.filter.expiring_soon]
+label = "Läuft bald ab"

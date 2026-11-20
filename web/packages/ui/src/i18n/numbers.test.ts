@@ -2,7 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   LANG_INFO,
   REGIONS,
+  clock24,
   currencyExponent,
+  formatDateTime,
   formatMoney,
   formatPlainDate,
   formatRelative,
@@ -149,5 +151,20 @@ describe("separators and dates", () => {
     expect(formatRelative(now - 3 * 86400_000, "en-US", now)).toBe("3 days ago");
     expect(formatRelative(now - 3 * 86400_000, "de-DE", now)).toBe("vor 3 Tagen");
     expect(formatRelative(now + 2 * 3600_000, "fr-FR", now)).toBe("dans 2 heures");
+  });
+});
+
+describe("times of day (U16)", () => {
+  it("uses the 24-hour clock in English, as the week grid and the calendar do", () => {
+    const at = new Date(2026, 10, 28, 14, 30);
+    expect(formatDateTime(at, "en-US")).toBe("Nov 28, 2026, 14:30");
+    expect(formatDateTime(new Date(2026, 10, 28, 9, 5), "en-GB")).toBe("28 Nov 2026, 09:05");
+  });
+
+  it("adds the clock only where a time is shown, and keeps one a caller chose", () => {
+    expect(clock24({ dateStyle: "medium" })).toEqual({ dateStyle: "medium" });
+    expect(clock24({ hour: "2-digit" })).toEqual({ hour: "2-digit", hourCycle: "h23" });
+    expect(clock24({ timeStyle: "short" })).toEqual({ timeStyle: "short", hourCycle: "h23" });
+    expect(clock24({ hour: "numeric", hour12: true })).toEqual({ hour: "numeric", hour12: true });
   });
 });
