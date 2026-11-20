@@ -303,6 +303,8 @@ fn trip() -> ModelDef {
             .approval()
             .primary()
             .not_by("driver")
+            // No action moves a confirmed trip on, though discard has no `from` (#102, U12).
+            .confirm("Confirm this trip? From now on it counts, and no action takes it back.")
             .done("Trip confirmed"),
             CommandDef::new(
                 "reject",

@@ -73,18 +73,24 @@ refused = "Rechazado"
 [labels.es.model.expenses_expense.action.submit]
 label = "Presentar"
 description = "Enviar la solicitud para su aprobación"
+done = "Presentado para aprobación"
 
 [labels.es.model.expenses_expense.action.approve]
 label = "Aprobar"
 description = "Aprobar una solicitud enviada (solo responsables)"
+done = "Gasto aprobado"
 
 [labels.es.model.expenses_expense.action.pay]
 label = "Pagar"
 description = "Registrar el reembolso como pagado (solo finanzas); la fecha de pago es hoy si no se indica otra"
+confirm = "¿Registrar este gasto como pagado?"
+done = "Gasto marcado como pagado"
 
 [labels.es.model.expenses_expense.action.refuse]
 label = "Rechazar"
 description = "Rechazar una solicitud enviada (solo responsables)"
+confirm = "¿Rechazar este gasto? Un gasto rechazado ya no se puede modificar."
+done = "Gasto rechazado"
 
 [labels.es.model.expenses_expense.field.number]
 label = "Número"
@@ -93,3 +99,15 @@ description = "Número de gasto como EXP-2026-0042, asignado al crear la nota; l
 [labels.es.model.expenses_expense.field.receipt]
 description = "Foto o escaneo del justificante (PDF o imagen); solo lo descarga quien puede leer la nota"
 label = "Justificante"
+
+[labels.es.model.expenses_expense.section.expense]
+label = "Gasto"
+
+[labels.es.model.expenses_expense.section.notes]
+label = "Notas"
+
+[labels.es.model.expenses_expense.section.claimed_by]
+label = "Solicitado por"
+
+[labels.es.model.expenses_expense.section.payment]
+label = "Pago"

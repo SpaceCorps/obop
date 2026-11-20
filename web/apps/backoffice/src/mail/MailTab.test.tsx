@@ -51,3 +51,52 @@ it("asks for the connections only of a person who may list them", async () => {
   await settle();
   expect(asked).toContain("/api/connection/search");
 });
+
+it("sends the private network switch only when a person turns it on, and warns while it is on", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const path = new URL(url, "http://localhost").pathname;
+      if (path === "/api/mail_server/create") bodies.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ value: { rows: [], id: "s1" }, denied: [] }), {
+        status: 200,
+      });
+    }),
+  );
+  act(() => root.render(<MailTab token="tok" notify={() => {}} readsConnections={false} />));
+  await settle();
+  const open = async () => {
+    const add = [...container.querySelectorAll("button")].find(
+      (b) => b.textContent === "Add mail server",
+    );
+    act(() => add!.click());
+    await settle();
+    const form = container.querySelector("form")!;
+    const sw = [...form.querySelectorAll<HTMLInputElement>("input[role=switch]")].find((i) =>
+      i.closest("label")?.textContent?.includes("own network"),
+    )!;
+    return { form, sw };
+  };
+  const submit = async (form: HTMLFormElement) => {
+    await act(async () =>
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+    );
+    await settle();
+  };
+  let { form, sw } = await open();
+  expect(sw.checked).toBe(false);
+  expect(form.textContent).toContain("a relay on a private address is refused");
+  act(() => sw.click());
+  expect(form.textContent).toContain("a password can travel unencrypted");
+  act(() => sw.click());
+  await submit(form);
+  expect(bodies).toHaveLength(1);
+  expect(bodies[0]).not.toHaveProperty("allow_private_network");
+
+  ({ form, sw } = await open());
+  act(() => sw.click());
+  await submit(form);
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1]).toHaveProperty("allow_private_network", true);
+});

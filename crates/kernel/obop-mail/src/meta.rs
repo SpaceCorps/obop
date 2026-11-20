@@ -46,6 +46,8 @@ fn server() -> ModelDef {
             t("port", "SMTP: port (587 for STARTTLS, 465 for TLS)", ADMIN).kind(FieldKind::Number),
             t("security", "SMTP: starttls, tls or none (none sends no password)", ADMIN)
                 .select(&["starttls", "tls", "none"]),
+            t("allow_private_network", "SMTP: the relay may be on the business's own network (a private address such as 10.0.0.5), and security none is accepted there; off by default, set only by a person (docs/spec/mail.md 6)", ADMIN)
+                .kind(FieldKind::Bool),
             p("username", "SMTP: user name; empty means no authentication", ADMIN),
             F::new("password", "SMTP: password; write-only, stored encrypted, never returned", Secret, false, ADMIN)
                 .kind(FieldKind::LongText),

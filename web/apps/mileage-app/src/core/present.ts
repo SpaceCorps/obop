@@ -1,7 +1,9 @@
 import { formatNumber, t, tp, type MessageKey, type PluralKey } from "../i18n/index.ts";
 import type { SignalNote } from "./signal.ts";
 import { hasWork } from "./store.ts";
-import type { LocalTrip, ServerState } from "./types.ts";
+
+export { canChangePurpose } from "./store.ts";
+import type { LocalTrip, Purpose, ServerState } from "./types.ts";
 
 /** What a trip is, in the words the driver sees (the keys of `state.*` in the catalogue). */
 export type TripStatus = "recording" | "uploading" | "waiting" | "problem" | ServerState;
@@ -136,7 +138,10 @@ export function integrityLines(flags: string): string[] {
     const [name, count] = flag.split(":");
     const n = Number(count);
     if (
-      (name === "seq_gap" || name === "speed_jump" || name === "low_accuracy") &&
+      (name === "seq_gap" ||
+        name === "speed_jump" ||
+        name === "low_accuracy" ||
+        name === "route_removed") &&
       Number.isInteger(n) &&
       n > 0
     ) {
@@ -146,6 +151,14 @@ export function integrityLines(flags: string): string[] {
     }
   }
   return lines;
+}
+
+/**
+ * Whether choosing `purpose` must be confirmed first: marking a trip private removes its route from
+ * the server for good (docs/spec/mobile.md 5.6), and changing it back does not bring it back.
+ */
+export function confirmsPurpose(trip: LocalTrip, purpose: Purpose): boolean {
+  return purpose === "private" && trip.purpose !== "private";
 }
 
 /**

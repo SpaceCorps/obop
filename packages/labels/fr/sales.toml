@@ -37,10 +37,13 @@ description = "Code de devise ISO 4217"
 [labels.fr.model.sale_order.action.confirm]
 label = "Confirmer"
 description = "Confirme une commande en brouillon"
+done = "Commande confirmée ; un brouillon de facture est prêt"
 
 [labels.fr.model.sale_order.action.cancel]
 label = "Annuler"
 description = "Annule une commande"
+confirm = "Annuler cette commande ?"
+done = "Commande annulée"
 
 [labels.fr.model.sale_order.action.reset_to_draft]
 label = "Remettre en brouillon"

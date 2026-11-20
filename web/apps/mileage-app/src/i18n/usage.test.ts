@@ -371,7 +371,7 @@ describe("the keys of the catalogue and the sources", () => {
     const union = /export type SignInFailure =([^;]+);/.exec(auth)![1]!;
     expect(under("signin.error")).toEqual([...union.matchAll(/"(\w+)"/g)].map((m) => m[1]!).sort());
     // trip.check.*: the flags of the integrity check that present.ts knows.
-    expect(under("trip.check")).toEqual(["low_accuracy", "seq_gap", "speed_jump"]);
+    expect(under("trip.check")).toEqual(["low_accuracy", "route_removed", "seq_gap", "speed_jump"]);
     // account.device.state.*: the states of a device on the instance.
     expect(under("account.device.state")).toEqual(["active", "revoked"]);
   });

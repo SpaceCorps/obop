@@ -2,7 +2,14 @@ import { t } from "@obop/ui";
 import { search, type FieldMeta, type ModelMeta, type Row, type ServerFilter } from "../api.ts";
 import { isEmpty } from "../format.ts";
 import { fieldTitle } from "../labels.ts";
-import { currencySplit, dimensionsOf, type Dim, type MeasureSel } from "../reports.ts";
+import {
+  BUCKETS,
+  currencySplit,
+  dimensionsOf,
+  type Bucket,
+  type Dim,
+  type MeasureSel,
+} from "../reports.ts";
 import { fetchReport, type ReportAnswer } from "../useAggregate.ts";
 import { parseFilter, toServerFilter, type Condition } from "./filter.ts";
 
@@ -19,6 +26,8 @@ export type Widget = {
   measure_field?: string | null;
   aggregate: "count" | "sum";
   group_by?: string | null;
+  /** The period a date or date-and-time split counts per (dashboards 0.4.0); empty is month. */
+  period?: Bucket | null;
   filter?: string | null;
   position?: number | null;
 };
@@ -46,6 +55,8 @@ export type Resolved =
       filter: ServerFilter[];
       measure?: FieldMeta;
       dim?: FieldMeta;
+      /** The period of a dated split, when the widget names one (K1). */
+      period?: Bucket;
     };
 
 /**
@@ -85,19 +96,22 @@ export function resolve(w: Widget, models: Map<string, { model: ModelMeta }>): R
       };
   } else if (w.kind !== "kpi" && w.kind !== "table")
     return { ok: false, reason: "invalid", detail: t("This chart needs a field to group by") };
-  return { ok: true, model, conds: parsed.conds, filter: sf.filter, measure, dim };
+  const period = BUCKETS.find((b) => b === w.period);
+  return { ok: true, model, conds: parsed.conds, filter: sf.filter, measure, dim, period };
 }
 
 /** What a resolved widget measures: the count, or the sum of its field. */
 export const widgetMeasure = (r: Extract<Resolved, { ok: true }>): MeasureSel =>
   r.measure ? { field: r.measure, op: "sum" } : null;
 
-/** What a resolved widget splits by: its field, a date or instant by month. */
+/** What a resolved widget splits by: its field, a date or instant by its period (month unless set). */
 export const widgetDim = (r: Extract<Resolved, { ok: true }>): Dim | undefined =>
   r.dim
     ? {
         field: r.dim,
-        ...(r.dim.kind === "date" || r.dim.kind === "datetime" ? { bucket: "month" as const } : {}),
+        ...(r.dim.kind === "date" || r.dim.kind === "datetime"
+          ? { bucket: r.period ?? ("month" as const) }
+          : {}),
       }
     : undefined;
 

@@ -210,6 +210,19 @@ impl Platform {
         notes: &str,
         min_from: &str,
     ) -> Result<Release, String> {
+        self.publish_release_signed(version, image, notes, min_from, None)
+    }
+
+    /// Publish (or replace) a release, signed with the release key when one is given (H7: a
+    /// PKCS#8 Ed25519 document; the signature is stored with the release and served in the feed).
+    pub fn publish_release_signed(
+        &self,
+        version: &str,
+        image: &str,
+        notes: &str,
+        min_from: &str,
+        signing_key: Option<&[u8]>,
+    ) -> Result<Release, String> {
         let v = obop_pkg::semver::Version::parse(version)
             .map_err(|_| "the version must look like 0.2.1".to_string())?;
         if v.is_prerelease() {
@@ -226,7 +239,10 @@ impl Platform {
         if notes.chars().count() > 8000 {
             return Err("the notes are longer than 8000 characters".into());
         }
-        let r = Release::new(version, image, notes, now(), min_from);
+        let mut r = Release::new(version, image, notes, now(), min_from);
+        if let Some(k) = signing_key {
+            r = r.signed_with(k)?;
+        }
         let mut f = Fields::new();
         for (k, v) in [
             ("version", r.version.as_str()),
@@ -238,6 +254,9 @@ impl Platform {
         }
         f.insert("published_at".into(), J::from(r.published_at));
         f.insert("withdrawn".into(), J::from(false));
+        if !r.signature.is_empty() {
+            f.insert("signature".into(), J::from(r.signature.as_str()));
+        }
         self.backend
             .apply_checked(&[Op::Put {
                 model: RELEASES.into(),
@@ -559,11 +578,13 @@ impl Platform {
 
 fn release_of(f: &Fields) -> Option<Release> {
     let t = |k: &str| f.get(k).and_then(J::as_str).unwrap_or("").to_string();
-    Some(Release::new(
+    let mut r = Release::new(
         &t("version"),
         &t("image"),
         &t("notes"),
         f.get("published_at").and_then(J::as_u64).unwrap_or(0),
         &t("min_from"),
-    ))
+    );
+    r.signature = t("signature");
+    Some(r)
 }

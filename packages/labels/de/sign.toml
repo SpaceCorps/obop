@@ -132,10 +132,13 @@ expired = "Abgelaufen"
 [labels.de.model.sign_request.action.send]
 label = "Senden"
 description = "Die Anfrage an den Unterzeichner senden"
+done = "An den Unterzeichner gesendet"
 
 [labels.de.model.sign_request.action.sign]
 label = "Unterzeichnen"
 description = "Von Hand festhalten, dass der Unterzeichner unterzeichnet hat; nur für eine Anfrage ohne Dokument, denn eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über den Link"
+confirm = "Festhalten, dass der Unterzeichner unterschrieben hat? Eine Anfrage zu einem Dokument wird stattdessen über ihren Signaturlink unterschrieben."
+done = "Als unterschrieben markiert"
 
 [labels.de.model.sign_request.action.sign.assert.document_request]
 message = "Eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über den Link; sie kann nicht von Hand als unterzeichnet markiert werden"
@@ -143,14 +146,19 @@ message = "Eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über 
 [labels.de.model.sign_request.action.decline]
 label = "Ablehnen"
 description = "Festhalten, dass der Unterzeichner abgelehnt hat"
+confirm = "Festhalten, dass der Unterzeichner abgelehnt hat?"
+done = "Als abgelehnt markiert"
 
 [labels.de.model.sign_request.action.expire]
 label = "Ablaufen lassen"
 description = "Festhalten, dass die Anfrage ohne Unterschrift abgelaufen ist"
+confirm = "Festhalten, dass die Anfrage ohne Unterschrift abgelaufen ist?"
+done = "Als abgelaufen markiert"
 
 [labels.de.model.sign_request.action.send_document]
 label = "Dokument senden"
 description = "Eine Anfrage zu einem Dokument in Dokumente senden: nimmt den SHA-256 des PDF, hält eine exakte Kopie fest und setzt die Anfrage auf gesendet; danach den Unterschriftslink erstellen"
+done = "Gesendet. Erstellen Sie als Nächstes den Signaturlink."
 
 [labels.de.model.sign_link]
 name = "Unterschriftslink"
@@ -176,3 +184,15 @@ description = "Wann der Link widerrufen wurde (UTC); setzen Sie den Wert, um den
 [labels.de.model.sign_link.field.link]
 label = "Link-Adresse"
 description = "Der Link selbst: nur in der Antwort von create, einmal angezeigt, nie gespeichert und nie von get, list oder search zurückgegeben"
+
+[labels.de.model.sign_request.section.request]
+label = "Anliegen"
+
+[labels.de.model.sign_request.section.options]
+label = "Optionen"
+
+[labels.de.model.sign_request.section.sent_file]
+label = "Gesendete Datei"
+
+[labels.de.model.sign_request.section.evidence]
+label = "Nachweise"

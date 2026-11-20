@@ -39,13 +39,25 @@ description = "Data wystawienia faktury (YYYY-MM-DD)"
 label = "Termin płatności"
 description = "Data, do której należy zapłacić (YYYY-MM-DD); nie wcześniej niż data wystawienia"
 
+[labels.pl.model.invoice.field.our_reference]
+label = "Nasz znak"
+description = "Nasz znak na fakturze, tekst dowolny"
+
+[labels.pl.model.invoice.field.their_reference]
+label = "Wasz znak"
+description = "Znak klienta na fakturze, tekst dowolny"
+
 [labels.pl.model.invoice.action.post]
 label = "Zaksięguj"
 description = "Księguje fakturę roboczą i nadaje jej kolejny numer z serii"
+confirm = "Zaksięgować tę fakturę? Otrzyma numer i nie będzie można jej już zmienić."
+done = "Faktura zaksięgowana"
 
 [labels.pl.model.invoice.action.cancel]
 label = "Anuluj"
 description = "Anuluje fakturę roboczą"
+confirm = "Anulować ten projekt faktury?"
+done = "Faktura anulowana"
 
 [labels.pl.model.invoice.field.party_id]
 label = "Kontrahent"
@@ -83,3 +95,6 @@ description = "Cena jednej jednostki w jednostkach podrzędnych waluty"
 [labels.pl.model.invoice_line.field.amount_minor]
 label = "Kwota"
 description = "Kwota pozycji w jednostkach podrzędnych waluty: ilość razy cena jednostkowa"
+
+[labels.pl.model.invoice.section.invoice]
+label = "Faktura"

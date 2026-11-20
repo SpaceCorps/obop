@@ -107,18 +107,23 @@ cancelled = "Peruutettu"
 [labels.fi.model.field_service_job.action.depart]
 label = "Olen matkalla"
 description = "Asentaja on matkalla kohteeseen"
+done = "Matkalla"
 
 [labels.fi.model.field_service_job.action.start]
 label = "Aloita työ"
 description = "Asentaja on saapunut ja aloittanut työn"
+done = "Työ aloitettu"
 
 [labels.fi.model.field_service_job.action.complete]
 label = "Merkitse työ valmiiksi"
 description = "Päätä työtehtävä; jos allekirjoitus vaaditaan, kirjaa ensin allekirjoittaja ja allekirjoituspäivä"
+confirm = "Merkitäänkö tämä työ valmiiksi? Valmista työtä ei voi enää muuttaa."
+done = "Työ valmis"
 
 [labels.fi.model.field_service_job.action.cancel]
 label = "Peruuta"
 description = "Peruuta työtehtävä, jota ei ole aloitettu"
+confirm = "Perutaanko tämä työ? Sitä ei voi sen jälkeen muuttaa."
 
 [labels.fi.model.field_service_part]
 name = "Varaosa"
@@ -150,3 +155,18 @@ description = "Huomautus osasta, esimerkiksi sarjanumero"
 
 [labels.fi.model.field_service_job.action.complete.assert.signed]
 message = "Asiakkaan on ensin kuitattava tämä työtehtävä: täytä allekirjoittaja ja päivä"
+
+[labels.fi.model.field_service_job.section.job]
+label = "Työ"
+
+[labels.fi.model.field_service_job.section.customer_and_site]
+label = "Asiakas ja kohde"
+
+[labels.fi.model.field_service_job.section.schedule]
+label = "Aikataulu"
+
+[labels.fi.model.field_service_job.section.sign_off]
+label = "Kuittaus"
+
+[labels.fi.model.field_service_job.section.report]
+label = "Ilmoitus"

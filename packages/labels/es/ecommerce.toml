@@ -298,26 +298,35 @@ refunded = "Reembolsado"
 [labels.es.model.ecommerce_order.action.mark_paid]
 label = "Marcar como pagado"
 description = "El pago ha llegado"
+done = "Marcado como pagado"
 
 [labels.es.model.ecommerce_order.action.ship]
 label = "Enviar"
 description = "El paquete se entregó al transportista"
+confirm = "¿Marcar este pedido como enviado? Añada primero el número de seguimiento si lo hay."
+done = "Enviado"
 
 [labels.es.model.ecommerce_order.action.deliver]
 label = "Entregar"
 description = "El paquete llegó al comprador"
+done = "Entregado"
 
 [labels.es.model.ecommerce_order.action.cancel]
 label = "Cancelar"
 description = "Cancelar un pedido que nunca se pagó"
+confirm = "¿Cancelar este pedido? Su stock vuelve a los anuncios y ya no se podrá modificar."
 
 [labels.es.model.ecommerce_order.action.refund]
 label = "Reembolsar"
 description = "Devolver el dinero de un pedido pagado que no se entregó (solo responsables)"
+confirm = "¿Reembolsar este pedido? El dinero vuelve al comprador y el stock a los anuncios."
+done = "Reembolsado"
 
 [labels.es.model.ecommerce_order.action.refund_delivered]
 label = "Reembolsar tras la entrega"
 description = "Devolver el dinero de un pedido entregado, por ejemplo tras una devolución (solo responsables)"
+confirm = "¿Reembolsar este pedido entregado? El dinero vuelve al comprador; la mercancía no vuelve a la estantería."
+done = "Reembolsado"
 
 [labels.es.model.ecommerce_order_line]
 name = "Línea de pedido"
@@ -552,7 +561,36 @@ description = "Ids de los eventos del proveedor ya aplicados, en JSON, para que 
 [labels.es.model.ecommerce_payment.action.mark_failed]
 label = "Marcar como fallido"
 description = "El proveedor informa de que el pago falló"
+confirm = "¿Marcar este pago como fallido?"
 
 [labels.es.model.ecommerce_payment.action.cancel]
 label = "Cancelar"
 description = "Dejar de esperar este pago"
+confirm = "¿Dejar de esperar este pago?"
+
+[labels.es.model.ecommerce_listing.section.in_the_shop]
+label = "En la tienda"
+
+[labels.es.model.ecommerce_listing.section.stock]
+label = "Existencias"
+
+[labels.es.model.ecommerce_listing.section.product_page]
+label = "Página del producto"
+
+[labels.es.model.ecommerce_listing.section.advanced]
+label = "Avanzado"
+
+[labels.es.model.ecommerce_order.section.customer]
+label = "Cliente"
+
+[labels.es.model.ecommerce_order.section.delivery]
+label = "Entrega"
+
+[labels.es.model.ecommerce_order.section.amounts]
+label = "Importes"
+
+[labels.es.model.ecommerce_order.section.payment]
+label = "Pago"
+
+[labels.es.model.ecommerce_order.section.checkout_record]
+label = "Registro de cobro"

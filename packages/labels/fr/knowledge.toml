@@ -57,11 +57,21 @@ archived = "Archivé"
 [labels.fr.model.knowledge_article.action.publish]
 label = "Publier"
 description = "Publie l’article (responsable uniquement)"
+done = "L'article est publié"
 
 [labels.fr.model.knowledge_article.action.unpublish]
 label = "Dépublier"
 description = "Remet l’article en brouillon"
+done = "L'article est revenu au brouillon"
 
 [labels.fr.model.knowledge_article.action.archive]
 label = "Archiver"
 description = "Archive un article devenu obsolète"
+confirm = "Archiver cet article ? Aucune étape ne le fait revenir."
+done = "L'article est archivé"
+
+[labels.fr.model.knowledge_article.section.article]
+label = "Contenu de l'article"
+
+[labels.fr.model.knowledge_article.section.details]
+label = "Détails"

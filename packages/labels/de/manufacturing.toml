@@ -91,6 +91,7 @@ cancelled = "Storniert"
 [labels.de.model.manufacturing_order.action.confirm]
 label = "Bestätigen"
 description = "Einen Auftragsentwurf bestätigen, damit die Produktion geplant werden kann; dafür braucht er das Fertigprodukt, einen Produktionsort und mindestens eine Komponentenzeile"
+done = "Bestellung bestätigt"
 
 [labels.de.model.manufacturing_order.action.confirm.assert.has_product]
 message = "Wählen Sie zuerst das Fertigprodukt: Beim Abschluss des Auftrags wird es am Produktionsort eingelagert"
@@ -104,14 +105,19 @@ message = "Fügen Sie zuerst die Komponenten hinzu: Ein Auftrag ohne Komponenten
 [labels.de.model.manufacturing_order.action.start]
 label = "Starten"
 description = "Die Produktion eines bestätigten Auftrags starten"
+done = "Produktion gestartet"
 
 [labels.de.model.manufacturing_order.action.finish]
 label = "Fertigstellen"
 description = "Die Produktion als abgeschlossen markieren: mit einem Produktionsort entsteht je Komponente eine Lagerbewegung im Entwurf, die sie dort entnimmt, und eine, die das Fertigprodukt dort einbucht, mit der Auftragsnummer als Herkunftsbeleg, zur Validierung durch das Lager (erfordert die Gruppe inventory.user)"
+confirm = "Produktion als fertig markieren? Lagerbewegungen entnehmen die Komponenten und buchen das fertige Produkt am Produktionsort ein. Ein erledigter Auftrag kann nicht mehr geändert werden."
+done = "Produktion abgeschlossen"
 
 [labels.de.model.manufacturing_order.action.cancel]
 label = "Stornieren"
 description = "Einen Auftrag stornieren, der noch nicht bestätigt wurde"
+confirm = "Diesen Auftrag stornieren?"
+done = "Auftrag storniert"
 
 [labels.de.model.manufacturing_order.field.product_id]
 label = "Produkt"

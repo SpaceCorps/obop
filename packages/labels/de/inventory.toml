@@ -124,10 +124,14 @@ cancelled = "Storniert"
 [labels.de.model.inventory_move.action.validate]
 label = "Validieren"
 description = "Bestätigen, dass die Ware wirklich bewegt wurde: die Menge verlässt den Bestand am Quellort und kommt beim Bestand am Zielort an (nur Lagerleiter); eine erledigte Bewegung lässt sich nicht rückgängig machen"
+confirm = "Diese Lagerbewegung bestätigen? Der Bestand ändert sich sofort, und eine erledigte Bewegung kann nicht rückgängig gemacht werden."
+done = "Bestand aktualisiert"
 
 [labels.de.model.inventory_move.action.cancel]
 label = "Stornieren"
 description = "Eine Bewegung im Entwurf stornieren"
+confirm = "Diese Lagerbewegung stornieren?"
+done = "Lagerbewegung storniert"
 
 [labels.de.model.inventory_item.field.below_reorder]
 description = "Ob der Bestand Aufmerksamkeit braucht: die Menge ist unter null oder erreicht oder unterschreitet den Meldebestand"

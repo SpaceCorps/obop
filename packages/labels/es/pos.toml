@@ -91,6 +91,8 @@ closed = "Cerrado"
 [labels.es.model.pos_session.action.close]
 label = "Cerrar"
 description = "Cerrar la sesión una vez contado el cajón (solo responsables)"
+confirm = "¿Cerrar esta sesión? Cuente primero el efectivo del cajón; una sesión cerrada no se puede modificar."
+done = "Sesión cerrada"
 
 [labels.es.model.pos_session.action.close.assert.difference_explained]
 message = "La diferencia de caja no está explicada: indica el motivo en la nota antes de cerrar"
@@ -144,14 +146,18 @@ cancelled = "Cancelado"
 [labels.es.model.pos_order.action.pay]
 label = "Pagar"
 description = "La venta está pagada por completo: se rechaza hasta que los pagos cubran el total; crea un movimiento de stock en borrador por línea (requiere el grupo inventory.user)"
+done = "Venta pagada"
 
 [labels.es.model.pos_order.action.cancel]
 label = "Cancelar"
 description = "Cancelar una venta que nunca se pagó"
+confirm = "¿Cancelar esta venta? Conserva su número de ticket y después ya no se podrá modificar."
 
 [labels.es.model.pos_order.action.refund]
 label = "Reembolsar"
 description = "Reembolsar al cliente una venta pagada (solo responsables)"
+confirm = "¿Reembolsar esta venta al cliente?"
+done = "Venta reembolsada"
 
 [labels.es.model.pos_order_line]
 name = "Línea de venta"
@@ -254,3 +260,6 @@ description = "La parte de los pagos hecha en efectivo (unidad monetaria mínima
 [labels.es.model.pos_order.field.refund_session_id]
 label = "Reembolsada en la sesión"
 description = "La sesión de cuyo cajón salió el efectivo de un reembolso, fijada por el servidor cuando se reembolsa una venta de una sesión cerrada: la sesión abierta entonces en la caja de la venta; vacía si la sesión de la venta seguía abierta"
+
+[labels.es.model.pos_session.section.cash_count]
+label = "Arqueo de caja"

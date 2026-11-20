@@ -124,10 +124,14 @@ cancelled = "Annullerad"
 [labels.sv.model.inventory_move.action.validate]
 label = "Validera"
 description = "Bekräfta att varorna verkligen flyttats: antalet lämnar posten på källplatsen och kommer till posten på målplatsen (endast lagerchefer); en genomförd rörelse kan inte ångras"
+confirm = "Validera den här förflyttningen? Lagret ändras nu, och en klar förflyttning kan inte ångras."
+done = "Lagret uppdaterat"
 
 [labels.sv.model.inventory_move.action.cancel]
 label = "Annullera"
 description = "Annullera en rörelse i utkast"
+confirm = "Avbryta den här förflyttningen?"
+done = "Förflyttningen avbruten"
 
 [labels.sv.model.inventory_item.field.below_reorder]
 description = "Om posten behöver uppmärksamhet: antalet är under noll, eller på eller under beställningspunkten"
