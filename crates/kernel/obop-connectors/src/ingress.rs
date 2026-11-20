@@ -12,7 +12,7 @@
 use obop_commands::{CallError, Dispatcher, Principal, Surface, Value, Vault};
 use obop_storage::{Backend, Fields};
 use serde_json::{Map, Value as J};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use crate::catalog::Provider;
 use crate::egress::{Egress, Refusal};
@@ -44,14 +44,15 @@ impl Outcome {
 pub struct Ingress {
     backend: Arc<dyn Backend>,
     egress: Arc<Egress>,
-    dispatcher: Arc<Dispatcher>,
+    /// Weak, as the runtime's (U41).
+    dispatcher: Weak<Dispatcher>,
 }
 
 impl Ingress {
     pub fn new(
         backend: Arc<dyn Backend>,
         egress: Arc<Egress>,
-        dispatcher: Arc<Dispatcher>,
+        dispatcher: Weak<Dispatcher>,
     ) -> Self {
         Self {
             backend,
@@ -242,8 +243,12 @@ impl Ingress {
                 .map(|f| str_of(&f, "record").to_string()),
             None => None,
         };
+        let d = self
+            .dispatcher
+            .upgrade()
+            .ok_or("the server is shutting down; try again")?;
         let call = |cmd: &str, input: Value| {
-            self.dispatcher.call(
+            d.call(
                 Surface::Rest,
                 principal,
                 &mut Vault::new(),

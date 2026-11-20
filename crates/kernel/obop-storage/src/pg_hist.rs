@@ -374,7 +374,7 @@ impl State {
     }
 
     /// Does the part exist? Looks again, at most once a second, while it did not.
-    fn require(&self, c: &mut Client) -> Result<()> {
+    pub(crate) fn require(&self, c: &mut Client) -> Result<()> {
         if self.ready.load(Ordering::Acquire) {
             return Ok(());
         }
@@ -385,7 +385,15 @@ impl State {
             }
             *last = Some(Instant::now());
         }
-        if check(c)? {
+        // A "missing" answer can be the session's own old lookup (K22): the transaction began
+        // before another process committed the part. Asked once more after reading what was
+        // committed since, it is the truth of now.
+        let mut found = check(c)?;
+        if !found {
+            schema::see_now(c).map_err(|e| describe(&e))?;
+            found = check(c)?;
+        }
+        if found {
             self.ready.store(true, Ordering::Release);
             Ok(())
         } else {
@@ -991,6 +999,21 @@ pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
     page.horizon_lag_ms = lag.map(|ms| ms.max(0));
     page.foreign_entries = foreign;
     Ok(page)
+}
+
+/// The light reading of [`HELD_BACK`] for `/metrics` (U43): `None` before the history table
+/// exists, else the milliseconds the feed is held back (0 when nothing is).
+pub(crate) fn lag_ms(pg: &Pg) -> Result<Option<i64>> {
+    pg.main.read(Class::Aggregate, |c| {
+        if !table_exists(c)? {
+            return Ok(None);
+        }
+        Ok(Some(
+            c.query_one(HELD_BACK, &[])?
+                .get::<_, Option<i64>>(0)
+                .map_or(0, |ms| ms.max(0)),
+        ))
+    })
 }
 
 /// Counts and ages, without reading the entries.

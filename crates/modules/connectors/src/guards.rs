@@ -131,7 +131,7 @@ pub(crate) fn validate_allowlist(rt: &Runtime, text: &str) -> Result<String, Str
             ));
         }
         let meta = rt
-            .dispatcher
+            .dispatcher()?
             .model_fields(&model)
             .ok_or_else(|| format!("unknown model {model}"))?;
         let names: Vec<&str> = fields
@@ -196,7 +196,7 @@ fn validate_config(rt: &Runtime, p: &Provider, text: &str) -> Result<String, Str
         }
     }
     if let Some(model) = cfg.get("target_model").and_then(J::as_str)
-        && (blocked_model(model) || !rt.dispatcher.has_model(model))
+        && (blocked_model(model) || !rt.dispatcher()?.has_model(model))
     {
         return Err(format!(
             "target_model {model} is not a model connectors may write"
@@ -484,7 +484,7 @@ fn normalise(
         for k in pol.fields.keys() {
             let (model, field) = k.split_once('.').unwrap_or((k, ""));
             let known = rt
-                .dispatcher
+                .dispatcher()?
                 .model_fields(model)
                 .is_some_and(|fs| fs.iter().any(|f| f.name == field));
             if !known {
@@ -494,7 +494,8 @@ fn normalise(
         let class_of = |key: &str| {
             let (model, field) = key.split_once('.')?;
             let f = rt
-                .dispatcher
+                .dispatcher()
+                .ok()?
                 .model_fields(model)?
                 .into_iter()
                 .find(|f| f.name == field)?;

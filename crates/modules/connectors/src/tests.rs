@@ -2944,6 +2944,42 @@ fn a_withdrawal_the_store_refused_is_a_partial_request_and_repeating_it_finishes
     );
 }
 
+/// K19: a withdrawal whose work is complete is answered as complete. A read of the consent that
+/// the store refuses after the revocation withdrew it must not turn the answer into "partial,
+/// repeat it" (the repeat would be refused, the consent being withdrawn already).
+#[test]
+fn a_withdrawal_that_finished_its_work_is_not_answered_partial() {
+    use obop_storage::fault;
+    let (e, flaky, inner) = flaky_env();
+    seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "webhook_out", false);
+    let id = ready(&e, &admin(), &r);
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    let k = ok(&e, &admin(), "consent.list", json!({}))[0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // Once the consent is withdrawn, every read of a consent is refused.
+    let f = flaky.clone();
+    flaky.after_the_next_update_of(
+        obop_connectors::model::CONSENT,
+        Box::new(move |_| f.fail_gets_of(obop_connectors::model::CONSENT, "storage_busy: test")),
+    );
+    fault::begin_request(Default::default());
+    let done = raw(&e, &admin(), "consent.withdraw", json!({"id": k}));
+    let out = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    assert!(done.is_ok(), "the work is complete: {done:?}");
+    assert!(!out.partial, "{out:?}");
+    assert_eq!(consent_state(&inner, &k), "withdrawn");
+    assert_eq!(
+        inner.get("connection", &id).unwrap().unwrap()["state"],
+        "revoked"
+    );
+}
+
 #[test]
 fn a_revocation_that_could_not_read_the_consents_is_a_partial_request_and_not_revoked() {
     use obop_storage::fault;

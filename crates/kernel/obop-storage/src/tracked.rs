@@ -376,6 +376,9 @@ impl Backend for Tracked {
     fn history_stats(&self) -> Result<HistoryStats> {
         self.inner.history_stats()
     }
+    fn history_lag_ms(&self) -> Result<Option<i64>> {
+        self.inner.history_lag_ms()
+    }
     fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
         self.inner.history_ensure_partition(month)
     }
@@ -400,6 +403,14 @@ impl Backend for Tracked {
         values: &[J],
     ) -> Result<Vec<(String, Fields)>> {
         self.inner.find_unique(model, fields, values)
+    }
+    fn find_unique_many(
+        &self,
+        model: &str,
+        fields: &[&str],
+        keys: &[Vec<J>],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.inner.find_unique_many(model, fields, keys)
     }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         self.inner.ensure_unique(name, model, fields)

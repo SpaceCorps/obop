@@ -266,6 +266,9 @@ fn platform(sub: &str, args: &mut Vec<String>) -> Exit {
                         .and_then(|()| f.sync_all())
                         .map_err(|e| fail(&format!("cannot write {out}: {e}")))?;
                     println!("wrote the release key to {out}; keep it secret and off this server");
+                    if let Some(w) = PRIVATE_FILE_WARNING {
+                        eprintln!("warning: {w}");
+                    }
                     println!("public key: {public}");
                     Ok(())
                 }
@@ -350,8 +353,21 @@ fn platform(sub: &str, args: &mut Vec<String>) -> Exit {
     }
 }
 
+/// What `release keygen` says where the file it writes is not made owner-only (U75): on Windows
+/// the file inherits the folder's access list, so the key belongs on a Unix host.
+#[cfg(unix)]
+const PRIVATE_FILE_WARNING: Option<&str> = None;
+#[cfg(not(unix))]
+const PRIVATE_FILE_WARNING: Option<&str> = Some(
+    "on this system the key file inherits the access rights of its folder and is not made \
+     readable by its owner only; make release keys on a Unix host (mode 0600), or restrict the \
+     file yourself",
+);
+
 /// A new file that only its owner can read, created that way (mode 0600 on Unix, never wider for
 /// a moment); an existing file is never overwritten. The release key of `release keygen` (H7).
+/// Elsewhere (Windows) the file takes its folder's access list and the command prints
+/// `PRIVATE_FILE_WARNING`.
 fn create_private_file(path: &std::path::Path) -> std::io::Result<std::fs::File> {
     let mut o = std::fs::OpenOptions::new();
     o.write(true).create_new(true);
@@ -377,7 +393,14 @@ mod private_file_tests {
             use std::os::unix::fs::PermissionsExt;
             let mode = std::fs::metadata(&p).unwrap().permissions().mode() & 0o777;
             assert_eq!(mode, 0o600, "{mode:o}");
+            assert!(super::PRIVATE_FILE_WARNING.is_none());
         }
+        // Not made owner-only off Unix (U75): the command says so instead of claiming it.
+        #[cfg(not(unix))]
+        assert!(super::PRIVATE_FILE_WARNING.is_some_and(|w| w.contains("Unix host")));
+        // One sentence with single spaces (a lost line continuation left runs of them).
+        #[cfg(not(unix))]
+        assert!(super::PRIVATE_FILE_WARNING.is_some_and(|w| !w.contains("  ")));
         assert!(super::create_private_file(&p).is_err(), "never overwritten");
         let _ = std::fs::remove_dir_all(&dir);
     }

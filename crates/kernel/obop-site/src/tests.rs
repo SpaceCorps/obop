@@ -2017,6 +2017,40 @@ fn the_seed_never_overwrites_existing_site_settings() {
     assert_eq!(v["theme"]["accent"], "#123456");
 }
 
+/// K19: settings the seed cannot read as a JSON object are refused, not replaced, and the seed
+/// creates nothing.
+#[test]
+fn the_seed_refuses_settings_that_are_not_an_object_and_changes_nothing() {
+    for raw in [r#"[1, 2]"#, r#"{"site": "a text"}"#, "not json"] {
+        let store = Store::new();
+        let d = Arc::new(Dispatcher::new());
+        base::register(&d, &store);
+        product::register(&d, &store);
+        let inst = Installer::new(
+            store.clone(),
+            &d,
+            vec![base::module(), product::module()],
+            Arc::new(Bundled),
+        );
+        for id in ["website", "ecommerce"] {
+            inst.install(&Bundled.fetch(id).unwrap(), "marketplace", "test")
+                .unwrap();
+        }
+        let mut f = obop_storage::Fields::new();
+        f.insert("value".into(), serde_json::Value::String(raw.into()));
+        let b = store.backend();
+        if !b.update("obop_setting", "instance", &f).unwrap() {
+            b.insert("obop_setting", "instance", &f).unwrap();
+        }
+        let e = seed::seed(&store, &d).unwrap_err();
+        assert!(e.contains("not a JSON object"), "{raw}: {e}");
+        let kept = b.get("obop_setting", "instance").unwrap().unwrap();
+        assert_eq!(kept["value"], raw, "the settings are as they were");
+        assert_eq!(store.count("website_page"), 0);
+        assert_eq!(store.count("ecommerce_listing"), 0);
+    }
+}
+
 // ---- Golden pins of the shop (S1a-0 of the branding work, docs/spec/branding.md) -----------------
 
 /// `text` with every record id (a UUID, `8-4-4-4-12` hexadecimal digits) written `<id>`. The shop

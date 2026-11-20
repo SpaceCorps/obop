@@ -1233,7 +1233,8 @@ fn agent_token(o: &Opts, user: &str, scopes: Option<&str>, label: Option<&str>) 
     })?;
     let auth = Auth::new(app.store.backend());
     let owner = auth
-        .principal(user)
+        .try_principal(user)
+        .map_err(|e| fail(&format!("cannot read the user {user}: {e}")))?
         .ok_or_else(|| fail(&format!("no user {user}")))?;
     let t = auth
         .issue_agent_token_by_operator(
