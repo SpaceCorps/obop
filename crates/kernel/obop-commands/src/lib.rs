@@ -2488,6 +2488,17 @@ pub trait PasskeyApi: Send + Sync {
         ctx: &WebauthnCtx,
         mfa_token: Option<&str>,
     ) -> Result<serde_json::Value, MfaError>;
+    /// Request options for signing in with a passkey alone after the person typed a name
+    /// (username-first, E7c): the passkeys of that name that may sign in, or stand-in ids that are
+    /// the same on every ask when there are none, so the answer does not say whether the name
+    /// exists. For keys that do not keep the name themselves (some hardware keys).
+    fn passkey_login_options_for(
+        &self,
+        _ctx: &WebauthnCtx,
+        _username: &str,
+    ) -> Result<serde_json::Value, MfaError> {
+        Err(MfaError::Invalid("not offered here".into()))
+    }
     /// Verify the assertion: the second step with `mfa_token`, else passwordless sign-in.
     fn passkey_login(
         &self,

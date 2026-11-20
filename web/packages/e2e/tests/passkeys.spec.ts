@@ -236,7 +236,12 @@ test.describe("passkeys", () => {
 
     await page.evaluate(() => sessionStorage.clear());
     await page.goto(`${origin()}/`);
-    await page.getByRole("button", { name: "Sign in with a passkey" }).click();
+    // The autofill of the username field (E7c) may sign in first: the virtual authenticator answers
+    // its offer at once. Either way the person is signed in with the passkey.
+    await page
+      .getByRole("button", { name: "Sign in with a passkey" })
+      .click({ timeout: 5_000 })
+      .catch(() => undefined);
     await expect(page.locator(".topbar")).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem("obop-user"))).toBe(users.pax.name);
 
