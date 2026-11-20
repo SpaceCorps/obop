@@ -304,6 +304,13 @@ pub trait Backend: Send + Sync {
     fn history_stats(&self) -> Result<HistoryStats> {
         Ok(HistoryStats::default())
     }
+    /// How long, in milliseconds, the change feed is held back now (the `horizon_lag_ms` of
+    /// [`HistoryStats`] alone, U43): one indexed query, light enough for every scrape of
+    /// `/metrics`. `None` when the store has no history to hold back (no table yet, or a store
+    /// whose feed is never held back).
+    fn history_lag_ms(&self) -> Result<Option<i64>> {
+        Ok(None)
+    }
     /// Make the partition of the month `YYYY-MM` (UTC) of the history, and move into it the
     /// entries of that month that landed in the default partition. Idempotent. A store without
     /// partitions does nothing. PostgreSQL refuses a month before 2000 or more than a year ahead.

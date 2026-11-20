@@ -88,6 +88,8 @@ struct Gauges {
     queue: Option<(u64, u64, u64)>,
     backups: Option<BackupGauges>,
     wal: Option<WalGauges>,
+    /// Milliseconds the change feed is held back (U43), when the store keeps a feed that can be.
+    history_lag_ms: Option<i64>,
 }
 
 /// What the catalogue says about backups and drills (D73), read with the other gauges.
@@ -512,6 +514,7 @@ fn gauges(s: &HttpState) -> Gauges {
                 lag: a.last_archived_age,
                 failed: a.failed_count,
             }),
+        history_lag_ms: s.shared.backend.history_lag_ms().ok().flatten(),
         backups: obop_ops::schedule::stats(&*s.shared.backend, now)
             .ok()
             .map(|st| BackupGauges {
@@ -525,6 +528,12 @@ fn gauges(s: &HttpState) -> Gauges {
     };
     *s.ops.gauges.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), v));
     v
+}
+
+/// Milliseconds as seconds with three decimals, never negative.
+fn history_lag_seconds(ms: i64) -> String {
+    let ms = ms.max(0);
+    format!("{}.{:03}", ms / 1000, ms % 1000)
 }
 
 type PoolReading = fn(&obop_storage::pool::PoolStats) -> f64;
@@ -815,6 +824,18 @@ fn render_rest(s: &HttpState, mut t: String) -> String {
             "obop_backup_last_run_failed",
             "1 when the last scheduled backup run reported a failure (a backup or its copy).",
             Some(u64::from(b.last_run_failed)),
+        );
+    }
+    if let Some(ms) = g.history_lag_ms {
+        let _ = writeln!(
+            t,
+            "# HELP obop_history_feed_lag_seconds Seconds the change feed is held back by the oldest open transaction of the PostgreSQL server (K31; alert above 60)."
+        );
+        let _ = writeln!(t, "# TYPE obop_history_feed_lag_seconds gauge");
+        let _ = writeln!(
+            t,
+            "obop_history_feed_lag_seconds {}",
+            history_lag_seconds(ms)
         );
     }
     if let Some(w) = g.wal {

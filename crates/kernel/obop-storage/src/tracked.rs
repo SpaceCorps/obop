@@ -376,6 +376,9 @@ impl Backend for Tracked {
     fn history_stats(&self) -> Result<HistoryStats> {
         self.inner.history_stats()
     }
+    fn history_lag_ms(&self) -> Result<Option<i64>> {
+        self.inner.history_lag_ms()
+    }
     fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
         self.inner.history_ensure_partition(month)
     }

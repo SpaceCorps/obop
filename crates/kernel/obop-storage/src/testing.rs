@@ -344,6 +344,9 @@ pub struct Flaky {
     /// Run once, right before the next read of a short-lived value whose key starts with the
     /// prefix.
     before_kv_get: std::sync::Mutex<Option<(String, AfterInsert)>>,
+    /// What `history_lag_ms` answers instead of the wrapped store (see
+    /// [`Flaky::report_history_lag`]).
+    history_lag: std::sync::Mutex<Option<Option<i64>>>,
 }
 
 /// A batch as `apply_tracked` received it: the context, the steps and the tracked models.
@@ -410,6 +413,7 @@ impl Flaky {
             before_apply: std::sync::Mutex::new(None),
             before_kv_swap: std::sync::Mutex::new(None),
             before_kv_get: std::sync::Mutex::new(None),
+            history_lag: std::sync::Mutex::new(None),
         })
     }
 
@@ -419,6 +423,12 @@ impl Flaky {
         let f = Flaky::new(crate::open("memory:").expect("memory backend"));
         let g = guarded(f.clone());
         (f, g)
+    }
+
+    /// A stand-in for a PostgreSQL server whose change feed is held back: `history_lag_ms`
+    /// answers `lag` from now on instead of asking the wrapped store (U43).
+    pub fn report_history_lag(&self, lag: Option<i64>) {
+        *self.history_lag.lock().unwrap_or_else(|e| e.into_inner()) = Some(lag);
     }
 
     pub fn set(&self, mode: Mode) {
@@ -906,6 +916,13 @@ impl Backend for Flaky {
     fn history_stats(&self) -> Result<HistoryStats> {
         self.gate(false)?;
         self.inner.history_stats()
+    }
+    fn history_lag_ms(&self) -> Result<Option<i64>> {
+        self.gate(false)?;
+        if let Some(lag) = *self.history_lag.lock().unwrap_or_else(|e| e.into_inner()) {
+            return Ok(lag);
+        }
+        self.inner.history_lag_ms()
     }
     fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
         self.gate(true)?;

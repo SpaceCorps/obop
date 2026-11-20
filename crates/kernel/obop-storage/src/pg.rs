@@ -650,6 +650,9 @@ impl Backend for Pg {
     fn history_stats(&self) -> Result<HistoryStats> {
         pg_hist::stats(self)
     }
+    fn history_lag_ms(&self) -> Result<Option<i64>> {
+        pg_hist::lag_ms(self)
+    }
     fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
         pg_hist::ensure_partition(self, month)
     }
