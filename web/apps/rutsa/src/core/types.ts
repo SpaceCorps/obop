@@ -28,6 +28,12 @@ export interface Trip {
   distanceM: number | null;
   /** The segment the next positions belong to: 1 at Start, one more after each Resume. */
   segment: number;
+  /**
+   * When the current segment began: the start of the trip, or the last Resume. A position older
+   * than this (by more than `EARLY_FIX_MS` of `@obop/trip-core`) is not stored. A trip added by
+   * hand has no segments, and this is its start.
+   */
+  segmentStartedAt: number;
   /** Where the trip began and ended, as the driver wrote it (manual trips); `null` when not given. */
   from: string | null;
   to: string | null;

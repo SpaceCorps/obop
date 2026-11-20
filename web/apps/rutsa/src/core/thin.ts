@@ -34,24 +34,26 @@ export function keepFix(last: Anchor | null, fix: Anchor, thinning: Thinning): b
 
 /**
  * The fixes of one delivery that are stored, in time order. The location service can deliver a
- * batch out of order, repeat a fix, or hand over a cached position from before Start, so a fix is
- * dropped when it is not plausible, when it is not later than the last stored one, when it is older
- * than the start of the trip by more than `EARLY_FIX_MS` (the rule `analyseTrack` of
- * `@obop/trip-core` applies too), or when the thinning drops it.
+ * batch out of order, repeat a fix, or hand over a cached position from before Start or Resume (on
+ * Resume often the place where the trip paused), so a fix is dropped when it is not plausible, when
+ * it is not later than the last stored one, when it is older than the start of the segment by more
+ * than `EARLY_FIX_MS` (the rule `analyseTrack` of `@obop/trip-core` applies too), or when the
+ * thinning drops it.
  *
  * `last` is the last stored fix of the trip, read in the same transaction as the write (`null` when
- * the trip has none yet); `startedAt` is the start of the trip in milliseconds.
+ * the trip has none yet); `since` is the start of the trip's current segment in milliseconds: the
+ * start of the trip, or of the last Resume.
  *
  * In `mileage-app` this is part of `appendFixes` of its store; here it is pure, so the store only
  * writes what it returns.
  */
 export function acceptFixes(
   last: Anchor | null,
-  startedAt: number,
+  since: number,
   incoming: readonly NewFix[],
   thinning: Thinning = RECORDING_THINNING,
 ): NewFix[] {
-  const notBefore = startedAt - EARLY_FIX_MS;
+  const notBefore = since - EARLY_FIX_MS;
   let anchor = last;
   const kept: NewFix[] = [];
   const ordered = [...incoming].sort((a, b) => a.t - b.t);

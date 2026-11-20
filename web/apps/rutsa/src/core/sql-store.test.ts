@@ -49,6 +49,7 @@ describe("starting and recording", () => {
       endedAt: null,
       distanceM: null,
       segment: 1,
+      segmentStartedAt: T0,
       from: null,
       to: null,
       note: null,
@@ -125,6 +126,47 @@ describe("pause, resume and the distance", () => {
     expect(ended.distanceM).toBeCloseTo(2000, 0);
   });
 
+  test("each segment starts at Start or at its Resume", async () => {
+    const trip = await store.startTrip(T0);
+    expect(trip.segmentStartedAt).toBe(T0);
+    await store.pauseTrip(trip.id, T0 + MIN);
+    expect((await store.resumeTrip(trip.id, T0 + 5 * MIN)).segmentStartedAt).toBe(T0 + 5 * MIN);
+    await store.pauseTrip(trip.id, T0 + 6 * MIN);
+    // A clock set back during the pause: the segment does not start before the one before it.
+    expect((await store.resumeTrip(trip.id, T0 + 2 * MIN)).segmentStartedAt).toBe(T0 + 5 * MIN);
+    expect((await store.getTrip(trip.id))?.segmentStartedAt).toBe(T0 + 5 * MIN);
+  });
+
+  test("after Resume a position taken during the pause is not stored, one just before Resume is", async () => {
+    const trip = await store.startTrip(T0);
+    await store.appendFixes(trip.id, drive(2, 5000, 10));
+    await store.pauseTrip(trip.id, T0 + MIN);
+    await store.resumeTrip(trip.id, T0 + 5 * MIN);
+    const duringPause = { t: T0 + 2 * MIN, lat: north(100), lon: 18, accuracyM: 5, speedMps: null };
+    const justBefore = {
+      t: T0 + 5 * MIN - 5000,
+      lat: north(4000),
+      lon: 18,
+      accuracyM: 5,
+      speedMps: null,
+    };
+    expect(await store.appendFixes(trip.id, [duringPause, justBefore])).toBe(1);
+    const points = await store.points(trip.id);
+    expect(points.filter((p) => p.segment === 2).map((p) => p.t)).toEqual([justBefore.t]);
+  });
+
+  test("the cached position of the pause, handed over first after Resume, adds nothing: 2 km, not 6", async () => {
+    const trip = await store.startTrip(T0);
+    // 1 km north, then a pause at the 1 km mark while the car goes on to the 5 km mark.
+    await store.appendFixes(trip.id, drive(21, 5000, 10));
+    await store.pauseTrip(trip.id, T0 + 2 * MIN);
+    await store.resumeTrip(trip.id, T0 + 5 * MIN);
+    const cached = { t: T0 + 2 * MIN, lat: north(1000), lon: 18, accuracyM: 5, speedMps: null };
+    await store.appendFixes(trip.id, [cached, ...drive(21, 5000, 10, 5 * MIN, 5000)]);
+    const ended = await store.stopTrip(trip.id, T0 + 7 * MIN);
+    expect(ended.distanceM).toBeCloseTo(2000, 0);
+  });
+
   test("a trip with no fixes ends with 0 m", async () => {
     const trip = await store.startTrip(T0);
     expect((await store.stopTrip(trip.id, T0 + MIN)).distanceM).toBe(0);
@@ -184,6 +226,8 @@ describe("trips added by hand", () => {
       from: "Office",
       to: "Customer AB",
       note: null,
+      // No segments: it has no positions.
+      segmentStartedAt: T0,
     });
     // A trip added by hand does not block recording.
     expect(await store.activeTrip()).toBeNull();
@@ -222,13 +266,16 @@ describe("reading and deleting", () => {
     expect(await store.getTrip("nobody")).toBeNull();
   });
 
-  test("deleting an ended trip deletes its points too", async () => {
+  test("deleting an ended trip deletes its points and segments too", async () => {
     const trip = await store.startTrip(T0);
     await store.appendFixes(trip.id, drive(3, 5000, 10));
-    await store.stopTrip(trip.id, T0 + MIN);
+    await store.pauseTrip(trip.id, T0 + MIN);
+    await store.resumeTrip(trip.id, T0 + 2 * MIN);
+    await store.stopTrip(trip.id, T0 + 3 * MIN);
     await store.deleteTrip(trip.id);
     expect(await store.getTrip(trip.id)).toBeNull();
     expect(await db.one("SELECT COUNT(*) AS n FROM point")).toEqual({ n: 0 });
+    expect(await db.one("SELECT COUNT(*) AS n FROM segment")).toEqual({ n: 0 });
   });
 
   test("a trip that records or is paused is not deleted; one that does not exist is not found", async () => {

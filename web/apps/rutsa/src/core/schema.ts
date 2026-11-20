@@ -77,6 +77,35 @@ export const MIGRATIONS: readonly Migration[] = [
       await tx.exec("CREATE INDEX point_segment ON point (trip_id, segment)");
     },
   },
+  {
+    version: 2,
+    description: "the start of each segment of a recorded trip",
+    up: async (tx) => {
+      // A segment starts at Start or at a Resume. A position older than the start of its segment
+      // (by more than `EARLY_FIX_MS`) is not stored: after Resume the phone often hands over first
+      // the cached position of the place where the trip paused, and the jump from there would
+      // count the road driven during the pause.
+      await tx.exec(`
+        CREATE TABLE segment (
+          trip_id TEXT NOT NULL REFERENCES trip (id) ON DELETE CASCADE,
+          segment INTEGER NOT NULL CHECK (segment >= 1),
+          started_at INTEGER NOT NULL,
+          PRIMARY KEY (trip_id, segment)
+        ) STRICT, WITHOUT ROWID
+      `);
+      // The trips recorded before this version did not keep the time of a Resume: each of their
+      // segments starts with the trip, which is the rule they were recorded under. A trip added by
+      // hand has no positions and no segments.
+      await tx.exec(`
+        WITH RECURSIVE s (trip_id, n, segments, trip_start) AS (
+          SELECT id, 1, segment, started_at FROM trip WHERE source = 'recorded'
+          UNION ALL
+          SELECT trip_id, n + 1, segments, trip_start FROM s WHERE n < segments
+        )
+        INSERT INTO segment (trip_id, segment, started_at) SELECT trip_id, n, trip_start FROM s
+      `);
+    },
+  },
 ];
 
 /** The version of the tables this build works with. */

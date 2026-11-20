@@ -34,8 +34,10 @@ export interface TripRepository {
   pauseTrip(tripId: string, at: number): Promise<Trip>;
 
   /**
-   * `paused` to `recording`, in a new segment, so the distance does not count a straight line
-   * across the pause. Throws `TripStateError` from any other state.
+   * `paused` to `recording`, in a new segment that starts at `at` (not before the segment before
+   * it, should the clock have been set back), so the distance does not count a straight line
+   * across the pause, and a position from before `at` is not stored. Throws `TripStateError` from
+   * any other state.
    */
   resumeTrip(tripId: string, at: number): Promise<Trip>;
 

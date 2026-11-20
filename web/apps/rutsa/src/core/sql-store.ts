@@ -42,6 +42,8 @@ interface TripRow {
   ended_at: number | null;
   distance_m: number | null;
   segment: number;
+  /** `null` for a trip added by hand, which has no segments. */
+  segment_started_at: number | null;
   from_text: string | null;
   to_text: string | null;
   note: string | null;
@@ -58,8 +60,10 @@ interface PointRow {
   speed_mps: number | null;
 }
 
-const TRIP_COLUMNS =
-  "id, state, source, started_at, ended_at, distance_m, segment, from_text, to_text, note";
+const TRIP_COLUMNS = `id, state, source, started_at, ended_at, distance_m, segment,
+  (SELECT s.started_at FROM segment s WHERE s.trip_id = trip.id AND s.segment = trip.segment)
+    AS segment_started_at,
+  from_text, to_text, note`;
 const ACTIVE = "state IN ('recording', 'paused')";
 
 function isState(value: string): value is TripState {
@@ -83,6 +87,7 @@ function toTrip(row: TripRow): Trip {
     endedAt: row.ended_at,
     distanceM: row.distance_m,
     segment: row.segment,
+    segmentStartedAt: row.segment_started_at ?? row.started_at,
     from: row.from_text,
     to: row.to_text,
     note: row.note,
@@ -110,9 +115,15 @@ function text(value: string | null | undefined): string | null {
 
 /**
  * The distance of a recorded trip: `analyseTrack` of `@obop/trip-core` over each segment on its own,
- * summed, so a pause adds no straight line from where the trip paused to where it went on.
+ * summed, so a pause adds no straight line from where the trip paused to where it went on. Each
+ * segment is analysed from its own start (`starts`, by segment number; the start of the trip where
+ * a segment has none), the same rule `acceptFixes` applied when its positions were stored.
  */
-export function recordedDistanceM(points: readonly StoredPoint[], startedAt: number): number {
+export function recordedDistanceM(
+  points: readonly StoredPoint[],
+  starts: ReadonlyMap<number, number>,
+  startedAt: number,
+): number {
   const segments = new Map<number, Fix[]>();
   for (const p of points) {
     const fixes = segments.get(p.segment) ?? [];
@@ -120,8 +131,8 @@ export function recordedDistanceM(points: readonly StoredPoint[], startedAt: num
     segments.set(p.segment, fixes);
   }
   let total = 0;
-  for (const fixes of segments.values()) {
-    total += analyseTrack(fixes, { startedAt }).distanceM;
+  for (const [segment, fixes] of segments) {
+    total += analyseTrack(fixes, { startedAt: starts.get(segment) ?? startedAt }).distanceM;
   }
   return total;
 }
@@ -158,6 +169,10 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
           "INSERT INTO trip (id, state, source, started_at, segment) VALUES (?, 'recording', 'recorded', ?, 1)",
           [id, at],
         );
+        await tx.run("INSERT INTO segment (trip_id, segment, started_at) VALUES (?, 1, ?)", [
+          id,
+          at,
+        ]);
         return mustRead(tx, id);
       }),
 
@@ -178,7 +193,7 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
           "SELECT seq, t, lat, lon FROM point WHERE trip_id = ? ORDER BY seq DESC LIMIT 1",
           [tripId],
         );
-        const kept = acceptFixes(last ?? null, trip.startedAt, fixes, thinning);
+        const kept = acceptFixes(last ?? null, trip.segmentStartedAt, fixes, thinning);
         let seq = (last?.seq ?? 0) + 1;
         for (const fix of kept) {
           await tx.run(
@@ -199,12 +214,21 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
         return mustRead(tx, tripId);
       }),
 
-    resumeTrip: (tripId) =>
+    resumeTrip: (tripId, at) =>
       db.transaction(async (tx) => {
         const trip = await mustRead(tx, tripId);
         if (trip.state !== "paused") throw new TripStateError(tripId, trip.state, "resumed");
-        await tx.run("UPDATE trip SET state = 'recording', segment = segment + 1 WHERE id = ?", [
+        const segment = trip.segment + 1;
+        // A clock set back during the pause must not start a segment before the one before it.
+        const startedAt = Math.max(at, trip.segmentStartedAt);
+        await tx.run("UPDATE trip SET state = 'recording', segment = ? WHERE id = ?", [
+          segment,
           tripId,
+        ]);
+        await tx.run("INSERT INTO segment (trip_id, segment, started_at) VALUES (?, ?, ?)", [
+          tripId,
+          segment,
+          startedAt,
         ]);
         return mustRead(tx, tripId);
       }),
@@ -213,7 +237,15 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
       db.transaction(async (tx) => {
         const trip = await mustRead(tx, tripId);
         if (trip.state === "ended") throw new TripStateError(tripId, trip.state, "stopped");
-        const distanceM = recordedDistanceM(await readPoints(tx, tripId), trip.startedAt);
+        const starts = await tx.all<{ segment: number; started_at: number }>(
+          "SELECT segment, started_at FROM segment WHERE trip_id = ?",
+          [tripId],
+        );
+        const distanceM = recordedDistanceM(
+          await readPoints(tx, tripId),
+          new Map(starts.map((s) => [s.segment, s.started_at])),
+          trip.startedAt,
+        );
         // A clock set back during the trip must not leave an end before the start.
         const endedAt = Math.max(at, trip.startedAt);
         await tx.run("UPDATE trip SET state = 'ended', ended_at = ?, distance_m = ? WHERE id = ?", [
@@ -269,7 +301,7 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
       db.transaction(async (tx) => {
         const trip = await mustRead(tx, tripId);
         if (trip.state !== "ended") throw new TripStateError(tripId, trip.state, "deleted");
-        // The points go with it (ON DELETE CASCADE, schema.ts).
+        // The points and the segments go with it (ON DELETE CASCADE, schema.ts).
         await tx.run("DELETE FROM trip WHERE id = ?", [tripId]);
       }),
   };

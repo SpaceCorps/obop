@@ -25,6 +25,7 @@ const trip = (startIso: string, distanceM: number | null, minutes = 30): Trip =>
     endedAt: distanceM === null ? null : startedAt + minutes * MIN,
     distanceM,
     segment: 1,
+    segmentStartedAt: startedAt,
     from: null,
     to: null,
     note: null,

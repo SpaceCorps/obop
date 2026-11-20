@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, test } from "vite-plus/test";
 import { memoryDb } from "../test-support/memory-db.ts";
-import { SCHEMA_VERSION, SchemaError, migrate, schemaVersion, type Migration } from "./schema.ts";
+import {
+  MIGRATIONS,
+  SCHEMA_VERSION,
+  SchemaError,
+  migrate,
+  schemaVersion,
+  type Migration,
+} from "./schema.ts";
 import type { SqlDb, SqlValue } from "./sql.ts";
 
 const tables = async (db: SqlDb): Promise<string[]> =>
@@ -16,7 +23,7 @@ describe("migrate", () => {
     expect(await schemaVersion(db)).toBe(0);
     expect(await migrate(db)).toEqual({ from: 0, to: SCHEMA_VERSION });
     expect(await schemaVersion(db)).toBe(SCHEMA_VERSION);
-    expect(await tables(db)).toEqual(["point", "trip"]);
+    expect(await tables(db)).toEqual(["point", "segment", "trip"]);
   });
 
   test("a file that is up to date is left as it is, with its trips", async () => {
@@ -61,6 +68,40 @@ describe("migrate", () => {
     await expect(migrate(db, failing)).rejects.toThrow("broken migration");
     expect(await schemaVersion(db)).toBe(0);
     expect(await tables(db)).toEqual([]);
+  });
+
+  test("a file of version 1 keeps its trips and points, and its recorded trips get their segments", async () => {
+    const db = memoryDb();
+    expect(await migrate(db, MIGRATIONS.slice(0, 1))).toEqual({ from: 0, to: 1 });
+    // An ended trip that was paused once (two segments), a paused one and one added by hand.
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, segment) VALUES ('a', 'ended', 'recorded', 1000, 9000, 120, 2)",
+    );
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, segment) VALUES ('p', 'paused', 'recorded', 10000, 1)",
+    );
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m) VALUES ('m', 'ended', 'manual', 20000, 30000, 5000)",
+    );
+    await db.run(
+      "INSERT INTO point (trip_id, seq, segment, t, lat, lon) VALUES ('a', 1, 1, 1000, 59.3, 18), ('a', 2, 2, 8000, 59.4, 18)",
+    );
+
+    expect(await migrate(db)).toEqual({ from: 1, to: SCHEMA_VERSION });
+    expect(await schemaVersion(db)).toBe(2);
+    expect(
+      await db.all("SELECT trip_id, segment, started_at FROM segment ORDER BY trip_id, segment"),
+    ).toEqual([
+      { trip_id: "a", segment: 1, started_at: 1000 },
+      { trip_id: "a", segment: 2, started_at: 1000 },
+      { trip_id: "p", segment: 1, started_at: 10000 },
+    ]);
+    expect(await db.all("SELECT id, distance_m FROM trip ORDER BY id")).toEqual([
+      { id: "a", distance_m: 120 },
+      { id: "m", distance_m: 5000 },
+      { id: "p", distance_m: null },
+    ]);
+    expect(await db.one("SELECT COUNT(*) AS n FROM point")).toEqual({ n: 2 });
   });
 
   test("migrations must be numbered 1, 2, 3 ... in order", async () => {
@@ -164,6 +205,19 @@ describe("the rules of the tables", () => {
     await expect(point({ seq: 2, lat: 91 })).rejects.toThrow();
     await expect(point({ seq: 2, lon: -181 })).rejects.toThrow();
     await expect(point({ seq: 2, accuracy_m: -5 })).rejects.toThrow();
+  });
+
+  test("a segment belongs to a trip that exists, once per number, from 1, and goes with its trip", async () => {
+    const segment = (values: SqlValue[]) =>
+      db.run("INSERT INTO segment (trip_id, segment, started_at) VALUES (?, ?, ?)", values);
+    await expect(segment(["nobody", 1, 1_000])).rejects.toThrow();
+    await trip({});
+    await segment(["t1", 1, 1_000]);
+    await expect(segment(["t1", 1, 2_000])).rejects.toThrow();
+    await expect(segment(["t1", 0, 2_000])).rejects.toThrow();
+    await segment(["t1", 2, 2_000]);
+    await db.run("DELETE FROM trip WHERE id = ?", ["t1"]);
+    expect(await db.one("SELECT COUNT(*) AS n FROM segment")).toEqual({ n: 0 });
   });
 
   test("a column takes only its own type (STRICT)", async () => {

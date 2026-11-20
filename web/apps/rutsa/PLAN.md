@@ -10,7 +10,8 @@ Rutsa runs on a phone without a server or a sign-in. The driver presses Start, d
 Stop, and sees the trip in the list with the right kilometres. A trip can also be added by hand.
 Everything is stored on the phone in an encrypted database.
 
-Covers: BR-2 (manual Start and Stop), BR-14 (recording visible, pause), BR-28 (manual trip),
+Covers: BR-2 (manual Start and Stop), BR-14 (recording visible, pause), BR-28 (manual trip,
+without the purpose, which comes with the classification of stage 2),
 BR-23 (minimal look for the prototype), US-2. BR-16 in part: one code base for both systems,
 checked on the Android emulator first; iOS needs a Mac.
 
@@ -252,3 +253,13 @@ D23).
   ends and deletes its trip (`deleteTrip` takes only an ended one). `App.tsx` has a temporary
   panel (Start, Pause, Resume, Stop, the state and the points) so C3 and C4 can be tried on the
   emulator before block D, which replaces it.
+- 2026-11-20: an audit of B and C against the spec, the callers in `mileage-app`, our own additions
+  and the edge cases found that after Resume the phone may hand over first the cached position of
+  the pause, and the jump from there counted the road driven during the pause. Fixed outside the
+  list of commits (`fix(rutsa): drop positions from before a resume`): migration 2 adds the table
+  `segment` (the start of each segment; the trips of version 1 get their segments at the start of
+  the trip), `acceptFixes` and the distance at Stop take the start of the segment, and a trip has
+  `segmentStartedAt`, which C5 uses for the health of a recording. The tests the audit found
+  missing (the app config as prebuild gets it, the native permissions, the task and the recorder,
+  the Keychain class, a failed open of the database) come in the next commit,
+  `test(rutsa): native wiring and app config`.
