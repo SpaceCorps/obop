@@ -117,6 +117,17 @@ export default defineConfig({
       timeout: 60_000,
     },
     {
+      // The same accounts as the Microsoft sign-in instance, with nothing set up: the spec of the
+      // administrator's screen configures it through the page.
+      command: "node support/serve.ts ssoadmin",
+      url: `http://127.0.0.1:${process.env.OBOP_E2E_SSOADMIN_PORT}/`,
+      reuseExistingServer: false,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 60_000,
+    },
+    {
       // A tiny marketplace the update specs fill with newer versions of their modules.
       command: "node support/serve.ts market",
       url: `${market}/index.json`,

@@ -177,6 +177,28 @@ if (kind === "app" || kind === "passkeys" || kind === "language" || kind === "br
   ];
   extraEnv.OBOP_PUBLIC_URL = `http://127.0.0.1:${process.env.OBOP_E2E_SSO_PORT}`;
   extraEnv.OBOP_OIDC_TEST_AUTHORITY = authority;
+} else if (kind === "ssoadmin") {
+  // The administrator's screen for Microsoft sign-in (tests/sso-admin.spec.ts): the accounts of the
+  // sso instance and the same stand-in for Microsoft as its authority, but nothing configured and
+  // nobody bound: the spec does all of that through the page.
+  const db = `sqlite://${join(dir, "ssoadmin.sqlite")}`;
+  for (const u of Object.values(sso.users))
+    run(
+      ["admin", "create", u.name, "--groups", u.groups, "--db", db],
+      `${u.password}
+`,
+    );
+  args = [
+    "serve",
+    "--addr",
+    `127.0.0.1:${process.env.OBOP_E2E_SSOADMIN_PORT}`,
+    "--db",
+    db,
+    "--static",
+    backofficeDist,
+  ];
+  extraEnv.OBOP_PUBLIC_URL = `http://127.0.0.1:${process.env.OBOP_E2E_SSOADMIN_PORT}`;
+  extraEnv.OBOP_OIDC_TEST_AUTHORITY = `http://127.0.0.1:${process.env.OBOP_E2E_IDP_PORT}`;
 } else if (kind === "shop") {
   // A web shop: public site at /, back office at /admin/, the two shop packages, demo content
   // with generated pictures, and the demo payment provider (no money moves, no card is asked).
@@ -265,7 +287,10 @@ if (kind === "app" || kind === "passkeys" || kind === "language" || kind === "br
     "--static",
     siteDir,
   ];
-} else throw new Error("usage: serve.ts app|passkeys|language|brand|sso|idp|shop|platform|market");
+} else
+  throw new Error(
+    "usage: serve.ts app|passkeys|language|brand|sso|ssoadmin|idp|shop|platform|market",
+  );
 
 // Connectors: the specs run a receiver on loopback, which is refused unless the operator allows it.
 // The secret key is a 32-byte key in the form two-factor authentication and connectors both accept.

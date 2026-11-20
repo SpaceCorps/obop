@@ -178,6 +178,8 @@ export const sso = {
   },
 } as const;
 export const ssoUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_SSO_PORT}`;
+/** The instance of tests/sso-admin.spec.ts: the same accounts, but no Microsoft sign-in set up. */
+export const ssoAdminUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_SSOADMIN_PORT}`;
 export const idpUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_IDP_PORT}`;
 
 export const appUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;

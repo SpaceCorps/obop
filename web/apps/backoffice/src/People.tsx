@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Input, Notice, Table, t } from "@obop/ui";
 import { MIN_PASSWORD, account, reason, type Failure, type Notify } from "./SecurityAccount.tsx";
+import { MicrosoftDialog } from "./PeopleSso.tsx";
+import { readSso, type SsoState } from "./SsoAdmin.tsx";
 
 /* D69: the people of the instance, for administrators: create a person, choose their permission
    groups, disable, enable, reset a password, and offboard (disable and end every session, agent
@@ -17,6 +19,10 @@ type Person = {
   mfa_enabled: boolean;
   must_change_password: boolean;
   sessions: number;
+  /** Signs in with Microsoft only (D91). */
+  sso_only?: boolean;
+  /** The object id at Microsoft the account is bound to; absent when it is not bound. */
+  sso_oid?: string | null;
 };
 
 /** The groups an account can be given, sorted with the administrator group first. */
@@ -271,8 +277,25 @@ function GroupsDialog({
 }
 
 /** Administrators: the people of the instance. */
-export function PeopleSection({ token, notify }: { token: string; notify: Notify }) {
+export function PeopleSection({
+  token,
+  notify,
+  refreshKey = 0,
+  me,
+  onSignedOut,
+}: {
+  token: string;
+  notify: Notify;
+  /** Who is signed in: a change of their own Microsoft sign-in says so. */
+  me?: string;
+  /** Changes when Microsoft sign-in was set up, changed or removed: the column follows. */
+  refreshKey?: number;
+  /** The server no longer knows this session (401), or an own change ended it: go to sign-in. */
+  onSignedOut?: () => void;
+}) {
   const id = useId();
+  const [sso, setSso] = useState<SsoState>({ kind: "loading" });
+  const [microsoft, setMicrosoft] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[] | null>(null);
   const [resetting, setResetting] = useState<string | null>(null);
   const [temp, setTemp] = useState("");
@@ -283,11 +306,19 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
   const [offboarding, setOffboarding] = useState<Person | null>(null);
   const [note, setNote] = useState("");
   const [offError, setOffError] = useState<string | null>(null);
+  // Read at the moment of use: the parent may pass a new function at every render.
+  const signedOut = useRef(onSignedOut);
+  signedOut.current = onSignedOut;
   const load = useCallback(async () => {
     const r = await account<{ users: Person[] }>(token, "GET", "/users");
+    // A 401 is a signed-out session, not an empty list: never draw it as a table with no one in it.
+    if (!r.ok && r.status === 401 && signedOut.current) return signedOut.current();
     setPeople(r.ok ? r.value.users : []);
   }, [token]);
   useEffect(() => void load(), [load]);
+  useEffect(() => {
+    void readSso(token).then(setSso);
+  }, [token, refreshKey]);
   const failed = (r: Failure) =>
     reason(r) || (r.status === 400 ? r.message : "") || t("Could not save");
   async function toggle(p: Person) {
@@ -334,6 +365,11 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
       void load();
     } else setOffError(failed(r));
   }
+  // An instance that does not use Microsoft sees no change: the column and the button need a
+  // provider or at least one binding.
+  const microsoftShown =
+    sso.kind === "set" || (people ?? []).some((p) => p.sso_oid || p.sso_only === true);
+  const shownPerson = people?.find((p) => p.name === microsoft) ?? null;
   return (
     <section className="stack" aria-labelledby={`${id}-h`}>
       <div className="people-head">
@@ -354,6 +390,7 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
               <th scope="col">{t("Two-factor")}</th>
               <th scope="col">{t("Sessions")}</th>
               <th scope="col">{t("Status")}</th>
+              {microsoftShown && <th scope="col">{t("Microsoft")}</th>}
               <th scope="col">
                 <span className="sr-only">{t("Actions")}</span>
               </th>
@@ -385,6 +422,26 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
                     <Badge tone="success">{t("Active")}</Badge>
                   )}
                 </td>
+                {microsoftShown && (
+                  <td data-label={t("Microsoft")}>
+                    {/* The cell is the control: its words are the state, its name has the person. */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="sso-cell"
+                      aria-label={
+                        p.sso_only
+                          ? t("Microsoft sign-in for {user}: Microsoft only", { user: p.name })
+                          : p.sso_oid
+                            ? t("Microsoft sign-in for {user}: bound", { user: p.name })
+                            : t("Microsoft sign-in for {user}: not bound", { user: p.name })
+                      }
+                      onClick={() => setMicrosoft(p.name)}
+                    >
+                      {p.sso_only ? t("Microsoft only") : p.sso_oid ? t("Bound") : t("Not bound")}
+                    </Button>
+                  </td>
+                )}
                 <td className="cell-actions">
                   <div className="actionrow">
                     <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
@@ -507,6 +564,18 @@ export function PeopleSection({ token, notify }: { token: string; notify: Notify
             notify(t("Groups of {user} saved.", { user: editing.name }));
             void load();
           }}
+        />
+      )}
+      {shownPerson && (
+        <MicrosoftDialog
+          token={token}
+          person={shownPerson}
+          sso={sso}
+          me={me}
+          notify={notify}
+          onClose={() => setMicrosoft(null)}
+          onDone={() => void load()}
+          onSignedOut={onSignedOut}
         />
       )}
       {offboarding && (

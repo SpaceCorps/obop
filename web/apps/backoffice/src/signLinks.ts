@@ -154,14 +154,17 @@ export function copiedWholeLink(input: HTMLInputElement, href: string): boolean 
 }
 
 /** The text of a link that cannot be copied by the clipboard API: select it for the person. */
-export function selectAll(input: HTMLInputElement | null): void {
+export function selectAll(input: HTMLInputElement | HTMLTextAreaElement | null): void {
   if (!input) return;
   input.focus();
   input.select();
 }
 
 /** Put `text` on the clipboard. `false` when the browser refuses (then the field is selected). */
-export async function copyText(text: string, input: HTMLInputElement | null): Promise<boolean> {
+export async function copyText(
+  text: string,
+  input: HTMLInputElement | HTMLTextAreaElement | null,
+): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;
