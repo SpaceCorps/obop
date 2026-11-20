@@ -25,6 +25,12 @@ pub const MAX_DOCUMENT: usize = 5 * 1024;
 pub const CACHE_SECS: u64 = 3600;
 /// Fetches of documents per minute, for the whole instance.
 pub const FETCHES_PER_MINUTE: u64 = 30;
+/// Fetches of documents per minute that one client address may cause, so that one address cannot
+/// use up the instance's budget and keep every other new client out.
+pub const FETCHES_PER_ADDRESS: u64 = 5;
+/// How long an address whose document could not be read or was refused is not read again, in
+/// seconds: asking for the same bad address again costs no fetch.
+pub const REFUSED_SECS: u64 = 300;
 
 /// Whether a host is on the operator's list: an exact name, or `*.suffix` for its subdomains.
 fn listed(host: &str, hosts: &[String]) -> bool {
@@ -117,6 +123,10 @@ fn cache_key(id: &str) -> String {
     format!("oauth:cimd:{}", &sha_hex(id)[..40])
 }
 
+fn refused_key(id: &str) -> String {
+    format!("oauth:cimd:bad:{}", &sha_hex(id)[..40])
+}
+
 impl OAuth {
     /// Let the server read Client ID Metadata Documents through `fetch` (the hardened outbound
     /// client). Without it, or without the operator's host list, an address is no client.
@@ -130,8 +140,10 @@ impl OAuth {
     }
 
     /// The client an address names, from the cache or read now; `None` when the address is not
-    /// one this instance reads, or its document cannot be used.
-    pub(crate) fn cimd_client(&self, id: &str) -> Option<Client> {
+    /// one this instance reads, or its document cannot be used. `ip` is the address of the client
+    /// that asked (the authorization request), whose fetches are counted on their own as well as
+    /// for the instance; an address that failed is not read again for `REFUSED_SECS`.
+    pub(crate) fn cimd_client(&self, id: &str, ip: Option<&str>) -> Option<Client> {
         let hosts = self.cfg.cimd_hosts.as_deref()?;
         let fetch = self.cimd.get()?;
         document_host(id, hosts, self.cfg.cimd_allow_loopback)?;
@@ -141,12 +153,30 @@ impl OAuth {
         {
             return Some(c);
         }
+        let refused = refused_key(id);
+        if let Ok(Some(_)) = self.backend.kv_get(&refused) {
+            return None;
+        }
+        if let Some(ip) = ip {
+            self.limit(
+                &format!("oauth:rl:cimd:{}", &sha_hex(ip)[..24]),
+                FETCHES_PER_ADDRESS,
+                60_000,
+            )
+            .ok()?;
+        }
         self.limit("oauth:rl:cimd:all", FETCHES_PER_MINUTE, 60_000)
             .ok()?;
+        let forget = || {
+            let _ = self
+                .backend
+                .kv_put(&refused, "1", Some(REFUSED_SECS * 1000));
+        };
         let body = match fetch(id) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("oauth: the client metadata document could not be read: {e}");
+                forget();
                 return None;
             }
         };
@@ -158,6 +188,7 @@ impl OAuth {
             }
             Err(e) => {
                 eprintln!("oauth: the client metadata document was refused: {e}");
+                forget();
                 None
             }
         }

@@ -130,23 +130,38 @@ code{overflow-wrap:anywhere}
 
 /// The passkey step of the sign-in pages: ask `data-options` for a challenge, let the browser
 /// answer it (`navigator.credentials.get`), and post the answer with the page's own form. It holds
-/// nothing of the request: the flow id, the CSRF token and the texts are in the form.
+/// nothing of the request: the flow id, the CSRF token and the texts are in the form. On the first
+/// step (no `mfa_token`) it also offers the passkeys of this site in the autofill of the username
+/// field (conditional mediation, E7c) while the page is open, and the button sends the name typed
+/// there, if any, so that a key that does not keep the name is asked for (username-first). The
+/// button ends the autofill offer first: a browser has one request waiting at a time. A page that
+/// shows an error (a passkey or password that was just refused) makes no offer, so that a key the
+/// browser answers with at once cannot post the same refusal again and again.
 pub const PASSKEY_JS: &str = r#"(function(){
 var f=document.getElementById('pk');
 if(!f||!window.PublicKeyCredential||!navigator.credentials){return;}
 function d(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4){s+='=';}var b=atob(s),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++){a[i]=b.charCodeAt(i);}return a.buffer;}
 function e(b){var a=new Uint8Array(b),s='';for(var i=0;i<a.length;i++){s+=String.fromCharCode(a[i]);}return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
-var btn=document.getElementById('pkbtn'),err=document.getElementById('pkerr');
+var btn=document.getElementById('pkbtn'),err=document.getElementById('pkerr'),u=f.elements.mfa_token?null:document.getElementById('u'),ac=null;
 f.hidden=false;
 function fail(){err.hidden=false;btn.disabled=false;}
+function opts(name){var body=new URLSearchParams();
+['flow','csrf','mfa_token'].forEach(function(n){var i=f.elements[n];if(i){body.set(n,i.value);}});
+if(name){body.set('username',name);}
+return fetch(f.dataset.options,{method:'POST',body:body,credentials:'same-origin',headers:{'Accept':'application/json'}})
+.then(function(r){if(!r.ok){throw 0;}return r.json();})
+.then(function(o){var p=o.publicKey;p.challenge=d(p.challenge);p.allowCredentials=(p.allowCredentials||[]).map(function(c){c.id=d(c.id);return c;});return p;});}
+function send(c){var r=c.response;f.elements.credential.value=JSON.stringify({id:c.id,rawId:e(c.rawId),type:c.type,clientExtensionResults:c.getClientExtensionResults?c.getClientExtensionResults():{},response:{clientDataJSON:e(r.clientDataJSON),authenticatorData:e(r.authenticatorData),signature:e(r.signature),userHandle:r.userHandle?e(r.userHandle):null}});f.submit();}
+if(u&&!document.querySelector('.error[role=alert]:not([hidden])')&&window.AbortController&&PublicKeyCredential.isConditionalMediationAvailable){
+PublicKeyCredential.isConditionalMediationAvailable().then(function(ok){if(!ok){return;}
+var a=new AbortController();ac=a;return opts('').then(function(p){if(a.signal.aborted){return;}return navigator.credentials.get({publicKey:p,mediation:'conditional',signal:a.signal}).then(function(c){if(c){send(c);}});});})
+.catch(function(){});}
 btn.addEventListener('click',function(){
 err.hidden=true;btn.disabled=true;
-var body=new URLSearchParams();
-['flow','csrf','mfa_token'].forEach(function(n){var i=f.elements[n];if(i){body.set(n,i.value);}});
-fetch(f.dataset.options,{method:'POST',body:body,credentials:'same-origin',headers:{'Accept':'application/json'}})
-.then(function(r){if(!r.ok){throw 0;}return r.json();})
-.then(function(o){var p=o.publicKey;p.challenge=d(p.challenge);p.allowCredentials=(p.allowCredentials||[]).map(function(c){c.id=d(c.id);return c;});return navigator.credentials.get({publicKey:p});})
-.then(function(c){var r=c.response;f.elements.credential.value=JSON.stringify({id:c.id,rawId:e(c.rawId),type:c.type,clientExtensionResults:c.getClientExtensionResults?c.getClientExtensionResults():{},response:{clientDataJSON:e(r.clientDataJSON),authenticatorData:e(r.authenticatorData),signature:e(r.signature),userHandle:r.userHandle?e(r.userHandle):null}});f.submit();})
+if(ac){ac.abort();ac=null;}
+opts(u?u.value.trim():'')
+.then(function(p){return navigator.credentials.get({publicKey:p});})
+.then(send)
 .catch(fail);
 });
 })();"#;
@@ -366,7 +381,7 @@ pub fn login_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
     let body = format!(
         "<h1>{h1}</h1><p>{lead}</p>{message}{err}{microsoft}\
 <form method=\"post\" action=\"/oauth/authorize/login\">{hidden}\
-<label for=\"u\">{user}</label><input id=\"u\" name=\"username\" type=\"text\" autocomplete=\"username\" autocapitalize=\"none\" spellcheck=\"false\" required autofocus>\
+<label for=\"u\">{user}</label><input id=\"u\" name=\"username\" type=\"text\" autocomplete=\"username webauthn\" autocapitalize=\"none\" spellcheck=\"false\" required autofocus>\
 <label for=\"p\">{pw}</label><input id=\"p\" name=\"password\" type=\"password\" autocomplete=\"current-password\" required>\
 <div class=\"row\"><button class=\"primary\" type=\"submit\">{submit}</button></div></form>{pk}",
         h1 = esc(t(l, "login.title")),
@@ -730,6 +745,34 @@ mod tests {
         // Without a passkey for the pending sign-in the second-step page has no script at all.
         let r = mfa_page(&ctx, "t", None, false);
         assert!(!r.html.contains("<script") && !r.csp.contains("script-src"));
+    }
+
+    /// E7c: the username field of the sign-in page offers passkeys in its autofill, and the script
+    /// asks for that offer (conditional mediation) and sends the name typed with the button.
+    #[test]
+    fn the_username_field_offers_passkeys_in_its_autofill() {
+        let ctx = FlowCtx {
+            id: "f".into(),
+            csrf: "c".into(),
+            lang: "en".into(),
+            client_name: "App".into(),
+            redirect_origin: "https://a.test".into(),
+            redirect_host: "a.test".into(),
+            redirect_form: RedirectForm::Web,
+            user: None,
+            class: crate::client::Class::Mcp,
+            groups: vec![],
+            preselected: vec![],
+            microsoft: false,
+            max_days: 90,
+            brand: std::sync::Arc::new(Shown::not_set(None)),
+        };
+        let r = login_page(&ctx, None);
+        assert!(r.html.contains("autocomplete=\"username webauthn\""));
+        assert!(PASSKEY_JS.contains("mediation:'conditional'"));
+        assert!(PASSKEY_JS.contains("body.set('username',name)"));
+        // The second step has no username field: its script finds none and offers no autofill.
+        assert!(!mfa_page(&ctx, "t", None, true).html.contains("id=\"u\""));
     }
 
     fn phone_ctx(

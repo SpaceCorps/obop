@@ -135,3 +135,45 @@ fn a_credential_change_after_the_check_of_a_passkey_alone_ends_the_phones_sign_i
     assert!(runs_that_fired > 0, "the change never fired");
     assert!(in_window > 0, "no change landed after the check");
 }
+
+/// E7c on the OAuth sign-in page: with a name typed, the options are that name's keys
+/// (username-first, for a key that does not keep the name), and the same stand-ins for any name
+/// without one; a key without a user handle then signs in for the typed name.
+#[test]
+fn the_sign_in_page_asks_for_the_keys_of_the_name_typed() {
+    let r = rig_on(Flaky::memory().1, "ada", OAuthConfig::default());
+    let (mut key, _, _) = passwordless(&r);
+    let c = r.mobile_client();
+    let v =
+        r.o.validate_authorize(BASE, &r.mobile_params(&c, APP))
+            .unwrap();
+    let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
+    let ids = |name: Option<&str>| -> Vec<String> {
+        let o =
+            r.o.passkey_options_for(&ctx(), &id, &binder, &csrf, None, name)
+                .unwrap();
+        o["publicKey"]["allowCredentials"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|c| c["id"].as_str().unwrap().to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    assert!(ids(None).is_empty(), "usernameless without a name");
+    assert!(ids(Some("  ")).is_empty(), "a blank name is no name");
+    let mine = ids(Some("ada"));
+    assert_eq!(mine.len(), 1);
+    let other = ids(Some("nobody"));
+    assert!(!other.is_empty() && !other.contains(&mine[0]));
+    assert_eq!(other, ids(Some("nobody")), "the same stand-ins every time");
+    key.send_user_handle = false;
+    let opts =
+        r.o.passkey_options_for(&ctx(), &id, &binder, &csrf, None, Some("ada"))
+            .unwrap();
+    let step =
+        r.o.login_passkey(&ctx(), &id, &binder, &csrf, None, &key.get(&opts, ORIGIN));
+    assert_eq!(step, Ok(LoginOut::Consent));
+}

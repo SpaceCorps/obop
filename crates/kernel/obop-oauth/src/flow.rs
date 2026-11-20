@@ -262,11 +262,22 @@ impl OAuth {
         base: &str,
         p: &AuthorizeParams,
     ) -> Result<Validated, AuthzError> {
+        self.validate_authorize_from(base, p, None)
+    }
+
+    /// As `validate_authorize`, for a request from the client address `ip`: a metadata document
+    /// the request makes the server read is counted against that address too (E7i).
+    pub fn validate_authorize_from(
+        &self,
+        base: &str,
+        p: &AuthorizeParams,
+        ip: Option<&str>,
+    ) -> Result<Validated, AuthzError> {
         let page = |key| AuthzError::Page { key };
         let client = p
             .client_id
             .as_deref()
-            .and_then(|id| self.client(id))
+            .and_then(|id| self.client_from(id, ip))
             .ok_or(page("err.client"))?;
         let matches = |u: &str| match client.class {
             // A client registered before the operator listed the hosts is held to the list too.
@@ -650,13 +661,32 @@ impl OAuth {
         csrf: &str,
         mfa_token: Option<&str>,
     ) -> Result<J, FlowError> {
+        self.passkey_options_for(ctx, id, binder, csrf, mfa_token, None)
+    }
+
+    /// As `passkey_options`; with a `username` typed on the page and no `mfa_token`, the options
+    /// of that name (username-first, E7c: its keys, or the same stand-in ids for any name that
+    /// has none, so the answer does not say whether the name exists).
+    pub fn passkey_options_for(
+        &self,
+        ctx: &obop_commands::WebauthnCtx,
+        id: &str,
+        binder: &str,
+        csrf: &str,
+        mfa_token: Option<&str>,
+        username: Option<&str>,
+    ) -> Result<J, FlowError> {
         let _ = self.load(id, binder, Some(csrf))?;
         let api = self.auth.passkeys().ok_or(FlowError::Forbidden)?;
-        api.passkey_login_options(ctx, mfa_token)
-            .map_err(|e| match e {
-                obop_commands::MfaError::Locked(_) => FlowError::Busy(60),
-                _ => FlowError::Forbidden,
-            })
+        let name = username.map(str::trim).filter(|n| !n.is_empty());
+        match (mfa_token, name) {
+            (None, Some(name)) => api.passkey_login_options_for(ctx, name),
+            _ => api.passkey_login_options(ctx, mfa_token),
+        }
+        .map_err(|e| match e {
+            obop_commands::MfaError::Locked(_) => FlowError::Busy(60),
+            _ => FlowError::Forbidden,
+        })
     }
 
     /// The browser's answer to a passkey request: signs in without a password, or completes the

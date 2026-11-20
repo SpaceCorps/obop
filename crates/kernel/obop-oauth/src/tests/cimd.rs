@@ -164,3 +164,57 @@ fn a_fetch_that_fails_is_no_client_and_fetches_are_capped_for_the_instance() {
     }
     assert_eq!(*n.lock().unwrap(), crate::cimd::FETCHES_PER_MINUTE as usize);
 }
+
+/// A fetcher that answers the good document at `ID` and a failure everywhere else.
+fn serve_one_good(r: &Rig) -> Arc<Mutex<Vec<String>>> {
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let seen = asked.clone();
+    let text = doc(ID).to_string().into_bytes();
+    r.o.set_cimd_fetcher(Arc::new(move |url: &str| {
+        seen.lock().unwrap().push(url.to_string());
+        if url == ID {
+            Ok(text.clone())
+        } else {
+            Err("the document answered 404".to_string())
+        }
+    }));
+    asked
+}
+
+#[test]
+fn bogus_addresses_from_one_client_cannot_use_up_the_budget_of_the_instance() {
+    let r = rig_with(hosts("app.example"));
+    let asked = serve_one_good(&r);
+    // One address asks for 31 addresses that do not exist (the review's reproduction).
+    for i in 0..31 {
+        let p = r.params(&format!("https://app.example/bogus{i}.json"), REDIRECT);
+        assert!(
+            r.o.validate_authorize_from(BASE, &p, Some("198.51.100.7"))
+                .is_err()
+        );
+    }
+    assert_eq!(
+        asked.lock().unwrap().len(),
+        crate::cimd::FETCHES_PER_ADDRESS as usize,
+        "one address is counted on its own"
+    );
+    // A real client from another address still signs in.
+    let p = r.params(ID, REDIRECT);
+    assert!(
+        r.o.validate_authorize_from(BASE, &p, Some("203.0.113.9"))
+            .is_ok()
+    );
+}
+
+#[test]
+fn an_address_whose_document_failed_is_not_read_again_for_a_while() {
+    let r = rig_with(hosts("app.example"));
+    let asked = serve_one_good(&r);
+    let bad = "https://app.example/bogus.json";
+    for i in 0..20 {
+        let p = r.params(bad, REDIRECT);
+        let ip = format!("198.51.100.{i}");
+        assert!(r.o.validate_authorize_from(BASE, &p, Some(&ip)).is_err());
+    }
+    assert_eq!(asked.lock().unwrap().len(), 1, "read once, then remembered");
+}
