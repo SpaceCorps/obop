@@ -81,8 +81,7 @@ pub struct Logo {
     inline_memo: std::sync::OnceLock<(u32, String)>,
 }
 
-/// How many times this thread printed an inline logo (the test of BRN4).
-#[cfg(test)]
+/// How many times this thread printed an inline logo (read by the test of BRN4; one add per logo).
 pub(crate) mod prints {
     thread_local! {
         pub(crate) static INLINE_PRINTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -91,11 +90,6 @@ pub(crate) mod prints {
     pub(crate) fn note() {
         INLINE_PRINTS.with(|n| n.set(n.get() + 1));
     }
-}
-
-#[cfg(not(test))]
-mod prints {
-    pub(crate) fn note() {}
 }
 
 impl Logo {
