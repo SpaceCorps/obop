@@ -130,6 +130,7 @@
   "{field} must be yes or no": "{field} doit valoir oui ou non",
   "{field} must be yes or no, not “{value}”": "{field} doit être oui ou non, pas « {value} »",
   "{field} must point to an existing {model} record": "{field} doit désigner un enregistrement existant ({model})",
+  "{field} must point to an existing {model} record, not “{value}”": "{field} doit désigner un enregistrement existant ({model}), pas « {value} »",
   "{field} not {values}": "{field} n’est pas {values}",
   "{field} of {model}": "{field} ({model})",
   "{field} options": "Options : {field}",

@@ -130,6 +130,7 @@
   "{field} must be yes or no": "{field} on oltava kyllä tai ei",
   "{field} must be yes or no, not “{value}”": "{field} on oltava kyllä tai ei, ei ”{value}”",
   "{field} must point to an existing {model} record": "{field} on viitattava olemassa olevaan tietueeseen ({model})",
+  "{field} must point to an existing {model} record, not “{value}”": "{field} on viitattava olemassa olevaan tietueeseen ({model}), ei ”{value}”",
   "{field} not {values}": "{field} ei ole {values}",
   "{field} of {model}": "{field} ({model})",
   "{field} options": "{field}: vaihtoehdot",

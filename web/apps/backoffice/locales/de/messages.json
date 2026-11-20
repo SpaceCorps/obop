@@ -130,6 +130,7 @@
   "{field} must be yes or no": "{field} muss Ja oder Nein sein",
   "{field} must be yes or no, not “{value}”": "{field} muss ja oder nein sein, nicht „{value}“",
   "{field} must point to an existing {model} record": "{field} muss auf einen vorhandenen Datensatz verweisen ({model})",
+  "{field} must point to an existing {model} record, not “{value}”": "{field} muss auf einen vorhandenen Datensatz verweisen ({model}), nicht „{value}“",
   "{field} not {values}": "{field} nicht {values}",
   "{field} of {model}": "{field} ({model})",
   "{field} options": "Optionen für {field}",

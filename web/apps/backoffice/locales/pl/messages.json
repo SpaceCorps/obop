@@ -130,6 +130,7 @@
   "{field} must be yes or no": "Pole „{field}” musi mieć wartość tak lub nie",
   "{field} must be yes or no, not “{value}”": "{field} musi mieć wartość tak lub nie, a nie „{value}”",
   "{field} must point to an existing {model} record": "Pole „{field}” musi wskazywać istniejący rekord typu „{model}”",
+  "{field} must point to an existing {model} record, not “{value}”": "Pole „{field}” musi wskazywać istniejący rekord typu „{model}”, a nie „{value}”",
   "{field} not {values}": "{field} nie jest: {values}",
   "{field} of {model}": "{field} ({model})",
   "{field} options": "Opcje pola „{field}”",

@@ -130,6 +130,7 @@
   "{field} must be yes or no": "machine-drafted",
   "{field} must be yes or no, not “{value}”": "machine-drafted",
   "{field} must point to an existing {model} record": "machine-drafted",
+  "{field} must point to an existing {model} record, not “{value}”": "machine-drafted",
   "{field} not {values}": "machine-drafted",
   "{field} of {model}": "machine-drafted",
   "{field} options": "machine-drafted",

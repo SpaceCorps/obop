@@ -130,6 +130,7 @@
   "{field} must be yes or no": "{field} måste vara ja eller nej",
   "{field} must be yes or no, not “{value}”": "{field} måste vara ja eller nej, inte ”{value}”",
   "{field} must point to an existing {model} record": "{field} måste peka på en befintlig post av typen {model}",
+  "{field} must point to an existing {model} record, not “{value}”": "{field} måste peka på en befintlig post av typen {model}, inte ”{value}”",
   "{field} not {values}": "{field} inte {values}",
   "{field} of {model}": "{field} för {model}",
   "{field} options": "Alternativ för {field}",

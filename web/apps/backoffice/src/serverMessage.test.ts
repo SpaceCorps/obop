@@ -443,6 +443,33 @@ describe("server messages without engine text", () => {
       ),
     ).toBe("Customer is required");
   });
+
+  // The server adds the id it did not find to the sentence (crud.rs, store.rs): a save and an
+  // import row both send it, and the sentence must still be translated (J9).
+  const missing =
+    "sale_order.customer_id must be the id of an existing party record; there is no party not-an-id";
+
+  it("names the field and the value of a reference that points nowhere", async () => {
+    await setLanguage("en", false);
+    registerMeta([{ id: "sales", name: "Sales", models: [order] }]);
+    expect(serverMessage(missing)).toBe(
+      "Customer must point to an existing Party record, not “not-an-id”",
+    );
+    expect(serverMessage("sale_order.customer_id must be the id of an existing party record")).toBe(
+      "Customer must point to an existing Party record",
+    );
+  });
+
+  for (const lang of LANGS)
+    it(`${lang}: translates a reference that points nowhere`, async () => {
+      provideCatalogue(lang, read(lang));
+      await setLanguage(lang, false);
+      const out = serverMessage(missing);
+      expect(out).not.toContain("must be the id");
+      expect(out).not.toContain("customer_id");
+      expect(out).toContain("not-an-id");
+      expect(out).not.toMatch(/[{}]/);
+    });
 });
 
 describe("paying an invoice that is not in the ledger", () => {

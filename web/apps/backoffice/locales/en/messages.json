@@ -130,6 +130,7 @@
   "{field} must be yes or no": "{field} must be yes or no",
   "{field} must be yes or no, not “{value}”": "{field} must be yes or no, not “{value}”",
   "{field} must point to an existing {model} record": "{field} must point to an existing {model} record",
+  "{field} must point to an existing {model} record, not “{value}”": "{field} must point to an existing {model} record, not “{value}”",
   "{field} not {values}": "{field} not {values}",
   "{field} of {model}": "{field} of {model}",
   "{field} options": "{field} options",

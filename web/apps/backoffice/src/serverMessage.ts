@@ -225,12 +225,17 @@ const FIELD_RULES: Rule[] = [
       }),
   ],
   [
-    /^(\w+)\.(\w+) must be the id of an existing (\w+) record$/,
-    (m) =>
-      t("{field} must point to an existing {model} record", {
-        field: fieldName(m[1]!, m[2]!),
-        model: modelName(m[3]!),
-      }),
+    // A save and an import row add the id that was not found ("; there is no party x").
+    /^(\w+)\.(\w+) must be the id of an existing (\w+) record(?:; there is no \w+ (.+))?$/s,
+    (m) => {
+      const v = { field: fieldName(m[1]!, m[2]!), model: modelName(m[3]!) };
+      return m[4] === undefined
+        ? t("{field} must point to an existing {model} record", v)
+        : t("{field} must point to an existing {model} record, not “{value}”", {
+            ...v,
+            value: m[4],
+          });
+    },
   ],
   // A cell of an imported file that is not of the field's kind (bulk_create, J9).
   [
