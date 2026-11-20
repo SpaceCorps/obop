@@ -105,6 +105,11 @@ fn is_loopback(ip: IpAddr) -> bool {
 /// Name resolution, replaceable in tests.
 pub trait Lookup: Send + Sync {
     fn lookup(&self, host: &str, port: u16) -> std::io::Result<Vec<SocketAddr>>;
+
+    /// The deadline and the cap this lookup runs under, when it has limits of ours (N7).
+    fn limits(&self) -> Option<(Duration, usize)> {
+        None
+    }
 }
 
 pub struct SystemLookup;
@@ -148,6 +153,10 @@ impl BoundedLookup {
 }
 
 impl Lookup for BoundedLookup {
+    fn limits(&self) -> Option<(Duration, usize)> {
+        Some((self.deadline, self.cap))
+    }
+
     fn lookup(&self, host: &str, port: u16) -> std::io::Result<Vec<SocketAddr>> {
         use std::sync::atomic::Ordering::SeqCst;
         let busy = |what: &str| std::io::Error::new(std::io::ErrorKind::TimedOut, what.to_string());
@@ -321,6 +330,11 @@ impl Client {
                 BoundedLookup::CAP,
             )),
         )
+    }
+
+    /// The deadline and the cap of this client's name lookups (`None`: the lookup has none).
+    pub fn lookup_limits(&self) -> Option<(Duration, usize)> {
+        self.lookup.limits()
     }
 
     pub fn with_lookup(cfg: ClientConfig, lookup: Arc<dyn Lookup>) -> Self {
@@ -1194,5 +1208,17 @@ mod tests {
         let quick = BoundedLookup::new(Arc::new(fake), Duration::from_secs(1), 1);
         assert!(quick.lookup("example.com", 443).is_ok());
         assert_eq!(quick.in_flight(), 0);
+    }
+
+    /// N7: every outbound client of the server resolves under the limits, not the bare resolver.
+    #[test]
+    fn a_new_client_resolves_under_the_deadline_and_the_cap() {
+        let c = Client::new(ClientConfig::default());
+        assert_eq!(
+            c.lookup_limits(),
+            Some((BoundedLookup::DEADLINE, BoundedLookup::CAP))
+        );
+        assert_eq!(BoundedLookup::DEADLINE, Duration::from_secs(5));
+        assert_eq!(BoundedLookup::CAP, 16);
     }
 }
