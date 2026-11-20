@@ -619,13 +619,13 @@ Changes made on the code and the tests of fix round 1. Run with `-p obop-oauth -
 
 | Id | Source change | Result |
 |---|---|---|
-| F1 | a failed step leaves the earlier pending second step in place | dies: 1 failing: phone_a_later_failed_step_ends_a_second_step_that_an_earlier_one_left_pending |
-| F2 | the reload of the second step does not ask whether the binding and the provider stand | dies: 1 failing: a_reloaded_second_step_is_refused_for_an_account_unbound_or_a_provider_gone_since |
-| F3 | the reload of the second step does not ask whether the account is still bound | dies: 1 failing: a_reloaded_second_step_is_refused_for_an_account_unbound_or_a_provider_gone_since |
-| F4 | the callback writes the flow with a fresh lifetime instead of keeping the row's | dies: 2 failing: the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it, the_write_is_tried_again_after_a_change_and_gives_up_after_three |
-| F5 | the word pwchange is not carried from the session outcome | dies: 1 failing: phone_a_bound_account_that_must_choose_a_new_password_is_told_so_after_microsoft |
-| F6 | the verifier cookie of the round trip lives a year | dies: 2 failing: flow_the_flow_lives_ten_minutes_and_the_one_time_code_one_minute, phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_and_no_longer |
-| F7 | the two texts of two words of the step are the same | dies: 1 failing: the_microsoft_step_and_the_cap_are_worded_in_every_language |
+| F1 | a failed step leaves the earlier pending second step in place | done (checked 2026-11-20: dies; a failed step removes `mfa_pending` in `flow.rs`; the test is on main) |
+| F2 | the reload of the second step does not ask whether the binding and the provider stand | done (checked 2026-11-20: dies; `second_step_for_flow` asks `binding_holds`; the test is in `oidc/tests.rs` on main) |
+| F3 | the reload of the second step does not ask whether the account is still bound | done (checked 2026-11-20: dies; the still-bound check is intact; the test is in `oidc/tests.rs` on main) |
+| F4 | the callback writes the flow with a fresh lifetime instead of keeping the row's | done (checked 2026-11-20: dies; `microsoft_done` swaps and keeps the lifetime; both tests in `tests/microsoft.rs` on main) |
+| F5 | the word pwchange is not carried from the session outcome | done (checked 2026-11-20: dies; the `pwchange` word is carried in `flow.rs`; the test is on main) |
+| F6 | the verifier cookie of the round trip lives a year | done (checked 2026-11-20: dies; the round-trip cookie lives `FLOW_TTL_MS / 1000` in `sso.rs`; both tests on main) |
+| F7 | the two texts of two words of the step are the same | done (checked 2026-11-20: dies; the test is in `obop-oauth/src/page.rs` on main) |
 
 #### Mutations of the delta check of `7d141a9`
 
@@ -671,12 +671,12 @@ The other rows round 2 ran, by whose they are: the delta check's own (a11b, a10)
 | a11b | after a won swap the callback writes the record again with a 100 ms lifetime | delta check (died before only by accident) | dies: `the_callback_writes_with_a_compare_and_set_and_never_with_a_put` |
 | a10 | after a won swap the callback writes the record again with a fresh lifetime (renew) | delta check (died before in the timed test) | dies: `the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it`, `the_callback_writes_with_a_compare_and_set_and_never_with_a_put` |
 | e02b | the window of the reload is not per address (one key for everybody) | writer, round 2 | dies: `phone_the_reload_of_a_pending_second_step_spends_the_sign_in_window_of_its_address` |
-| A9 | the general clamp at the exchange allows 900 days (tampered code record) | independent check of `7d4f56c`; round 2 added `a_code_that_says_900_days_gives_an_mcp_grant_of_90_days` (the mobile class is bounded by the cap that follows, so only the MCP class sees it) | dies: `a_code_that_says_900_days_gives_an_mcp_grant_of_90_days` |
+| A9 | the general clamp at the exchange allows 900 days (tampered code record) | independent check of `7d4f56c`; round 2 added `a_code_that_says_900_days_gives_an_mcp_grant_of_90_days` (the mobile class is bounded by the cap that follows, so only the MCP class sees it) | done (checked 2026-11-20: dies; `a_code_that_says_900_days_gives_an_mcp_grant_of_90_days` in `oauth_tests.rs` on main) |
 | A21 | account_of does not compare the tenant of the identity with the provider's tenant | independent check of `7d4f56c`; equivalent (`binding_holds` compares the tenant again at the end of the sign-in) | duplicate of A21 of the check of 7d4f56c (2026-11-17) |
 | B6 | the exchange's cap read for the same subject with a space appended (exact change of the first run) | independent check of `7d4f56c`; equivalent (`Auth::is_microsoft_only` trims the name) | duplicate of B6 of the check of 7d4f56c (2026-11-17) |
-| B6b | the exchange's cap read for a different subject (the client id) | writer, round 2 (what the first B6 row said it was) | dies: `a_bad_verifier_a_replayed_code_and_an_expired_code_leave_no_device_or_end_the_family`, `a_device_that_is_not_in_force_is_no_principal_and_an_unreadable_one_is_none_either` |
-| F2b | F2 with only the obop binary run: the reload of the second step does not ask whether the binding and the provider stand | writer, round 2 (shows that `phone_a_provider_switched_off_between_the_hop_and_the_reload_ends_the_second_step` dies too) | dies: `phone_a_provider_switched_off_between_the_hop_and_the_reload_ends_the_second_step` |
-| F8 | the callback tries the swap four times, not three (only the obop binary run) | writer, round 2 (shows that `phone_three_lost_races_write_nothing_and_the_person_sees_the_general_failure` dies) | dies: `phone_three_lost_races_write_nothing_and_the_person_sees_the_general_failure` |
+| B6b | the exchange's cap read for a different subject (the client id) | writer, round 2 (what the first B6 row said it was) | done (checked 2026-11-20: dies; the cap is read for the grant owner in `token.rs`; both tests in `tests/mobile.rs` on main) |
+| F2b | F2 with only the obop binary run: the reload of the second step does not ask whether the binding and the provider stand | writer, round 2 (shows that `phone_a_provider_switched_off_between_the_hop_and_the_reload_ends_the_second_step` dies too) | done (checked 2026-11-20: dies; the test is in `sso_tests/phone.rs` on main) |
+| F8 | the callback tries the swap four times, not three (only the obop binary run) | writer, round 2 (shows that `phone_three_lost_races_write_nothing_and_the_person_sees_the_general_failure` dies) | done (checked 2026-11-20: dies; the swap is tried three times in `flow.rs`; the test is in `sso_tests/phone.rs` on main) |
 
 A note on two false kills. In the first batch of round 2, a18 and B6 were reported as dying by `the_break_glass_command_resets_a_user_in_a_real_database` and `the_sale_flow_is_atomic_on_a_real_sqlite_file`. Neither change touches what those tests do. Both tests name a temporary database after the process id (`obop-mfa-cli-<pid>` and `obop-model-<pid>.db` in the temp directory) and do not remove an old one first, so a reused process id meets a leftover of an earlier run (there were 1,714 such leftovers on the machine); they pass on the unchanged tree, and the two changes were run again, with the results in the tables above (both survive). Pre-existing and not changed here (a follow-up: remove the path before opening it). The delta check saw the same two tests fail once each in its flake runs.
 
@@ -709,9 +709,9 @@ The limits of the rig: did the change of the rig of K47 (a fresh address for eac
 
 | Id | Change | Result | With the `7d141a9` test files |
 |---|---|---|---|
-| L1 | `login_per_ip` 30 to 1,000,000 | dies: the two reload tests of the sso rig | dies (the reload test) |
-| L2 | the window of the tap (`oauth_start`, 30 a minute) made 100 times larger | dies: `phone_the_taps_of_an_app_have_windows_of_their_own` | dies |
-| L3 | the window of the callback (`oauth_cb`, 60 a minute) made 100 times larger | dies: `failures_the_callbacks_that_spent_a_flow_are_limited_per_address` and `phone_the_callbacks_of_an_app_have_windows_of_their_own` | dies, the same two |
+| L1 | `login_per_ip` 30 to 1,000,000 | dies: the two reload tests of the sso rig | done (checked 2026-11-20: dies; `login_per_ip` 30; the reload tests are on main) |
+| L2 | the window of the tap (`oauth_start`, 30 a minute) made 100 times larger | dies: `phone_the_taps_of_an_app_have_windows_of_their_own` | done (checked 2026-11-20: dies; window `oauth_start` 30 a minute in `oauth.rs`; the test is on main) |
+| L3 | the window of the callback (`oauth_cb`, 60 a minute) made 100 times larger | dies: `failures_the_callbacks_that_spent_a_flow_are_limited_per_address` and `phone_the_callbacks_of_an_app_have_windows_of_their_own` | done (checked 2026-11-20: dies; window `oauth_cb` 60 a minute in `sso.rs`; both tests on main) |
 | L4 | `MAX_FAILURES` 5 to 5,000 (the lockout) | dies: tests of `obop-auth` | done (verified on main 02d167d4, 2026-11-17: MAX_FAILURES 5 in obop-auth lib.rs:32; lockout pinned by brand.rs test) |
 | L5 | `authorize_per_ip` 60 to 1,000,000 (the check removed in `begin` is L12) | **survives** | done (verified on main 02d167d4, 2026-11-17: address.rs per_address pins authorize at 60; first 429 trusted and untrusted) |
 | L6 | `token_per_ip_minute` 120 to 1,000,000 (the check removed in the token endpoint is L13) | **survives** | done (verified on main 02d167d4, 2026-11-17: address.rs per_address pins token and revoke at 120 a minute) |
