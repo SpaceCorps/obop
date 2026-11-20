@@ -256,9 +256,9 @@ done = "Verifikation makulerad"
 
 [labels.sv.model.accounting_move.action.reverse]
 label = "Återför"
-description = "Markera en bokförd verifikation som återförd; motverifikationen bokförs separat (endast godkännare)"
-confirm = "Markera den här verifikationen som vänd? Bokför den motsatta verifikationen separat."
-done = "Verifikation markerad som vänd"
+description = "Markera en bokförd verifikation som återförd och skapa motverifikationen som utkast som en godkännare bokför (endast godkännare)"
+confirm = "Återföra den här verifikationen? Ett utkast med motsatta rader skapas som en godkännare bokför."
+done = "Verifikationen återförd; motverifikationen är ett utkast"
 
 [labels.sv.model.accounting_move_line]
 name = "Verifikationsrad"

@@ -256,9 +256,9 @@ done = "Vienti peruttu"
 
 [labels.fi.model.accounting_move.action.reverse]
 label = "Vastakirjaa"
-description = "Merkitse kirjattu kirjaus vastakirjatuksi; vastakirjaus tehdään erikseen (vain hyväksyjä)"
-confirm = "Merkitäänkö tämä vienti käännetyksi? Kirjaa vastakkainen vienti erikseen."
-done = "Vienti merkitty käännetyksi"
+description = "Merkitse kirjattu kirjaus vastakirjatuksi ja luo vastakirjaus luonnoksena, jonka hyväksyjä kirjaa (vain hyväksyjä)"
+confirm = "Vastakirjataanko tämä vienti? Vastakkaisilla riveillä luodaan luonnos, jonka hyväksyjä kirjaa."
+done = "Vienti vastakirjattu; vastakkainen vienti on luonnos"
 
 [labels.fi.model.accounting_move_line]
 name = "Kirjausrivi"
