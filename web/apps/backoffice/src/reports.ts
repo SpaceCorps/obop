@@ -278,6 +278,13 @@ export function orderDimKeys(d: Dim, keys: readonly string[], lk: Lookup): strin
 /** A sum, an average, the smallest or the largest value of a field; the record count is `null`. */
 export type Measure = { field: FieldMeta; op: "sum" | "avg" | "min" | "max" };
 export type MeasureSel = Measure | null;
+
+/**
+ * Whether the values of a measure are parts of a whole: a count or a sum. Only then do a donut, its
+ * total and a share of the total mean something; the averages, smallest or largest values of the
+ * groups do not add up to anything (K1).
+ */
+export const addsUp = (m: MeasureSel): boolean => !m || m.op === "sum";
 export type MeasureOptions = { sums: FieldMeta[]; avgs: FieldMeta[] };
 
 /** Numbers the server keeps for itself, positions and coordinates: never a measure. */

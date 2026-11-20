@@ -7,6 +7,7 @@ import { fieldTitle } from "../labels.ts";
 import { stateFieldOf, toneClassOf } from "../presentation.ts";
 import { domainOf, type Cond, type GraphCfg, type Lookup } from "../query.ts";
 import {
+  addsUp,
   cellValue,
   combine,
   compactMeasure,
@@ -93,7 +94,11 @@ export function GraphView(p: ViewProps) {
   const dims = useMemo(() => dimensionsOf(fields), [fields]);
   const { opts, measure: m, index, setup } = useMeasures(model, fields, cfg.measure);
   const dim = parseDim(cfg.dim, dims) ?? defaultRows(model, dims, index, setup);
-  const type = cfg.type ?? (dim && isDated(dim.field) ? "line" : "bar");
+  // A donut and a share need parts of a whole: an average, smallest or largest value is drawn as
+  // bars or a line instead, and the data table has no Share column (K1).
+  const parts = addsUp(m);
+  const series = dim && isDated(dim.field) ? "line" : "bar";
+  const type = cfg.type === "pie" && !parts ? series : (cfg.type ?? series);
   const [asTable, setAsTable] = useState(false);
   const lk = useTitleLookup();
   const [pickedCur, setPickedCur] = useState<string | undefined>();
@@ -172,7 +177,7 @@ export function GraphView(p: ViewProps) {
     <div className="graph">
       <div className="viewbar">
         <div className="switcher" role="group" aria-label={t("Chart type")}>
-          {(["bar", "line", "pie"] as const).map((k) => (
+          {(parts ? (["bar", "line", "pie"] as const) : (["bar", "line"] as const)).map((k) => (
             <button key={k} aria-pressed={type === k} onClick={() => set({ type: k })}>
               {k === "bar" ? t("Bar") : k === "line" ? t("Line") : t("Pie")}
             </button>
@@ -213,7 +218,7 @@ export function GraphView(p: ViewProps) {
                       {byCur.length > 1 ? `${measureTitle(m)} (${x.cur})` : measureTitle(m)}
                     </th>
                   ))}
-                  {byCur.length === 1 && (
+                  {byCur.length === 1 && parts && (
                     <th scope="col" className="num">
                       {t("Share")}
                     </th>
@@ -229,7 +234,7 @@ export function GraphView(p: ViewProps) {
                         {formatMeasure(m, c.data[i]?.value ?? 0, c.cur)}
                       </td>
                     ))}
-                    {byCur.length === 1 && (
+                    {byCur.length === 1 && parts && (
                       <td className="num">
                         {total ? fmt.percent(Math.max(x.value, 0) / total, 0) : "–"}
                       </td>

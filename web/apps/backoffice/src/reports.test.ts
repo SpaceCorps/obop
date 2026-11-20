@@ -7,6 +7,7 @@ import { kpiValues } from "./charts/KpiTile.tsx";
 import { indexModels } from "./presentation.ts";
 import type { Lookup } from "./query.ts";
 import {
+  addsUp,
   bucketLabel,
   cellValue,
   currenciesOf,
@@ -462,6 +463,16 @@ describe("the smallest and the largest value", () => {
       { keys: ["draft"], currency: undefined, count: 2, value: 40 },
     ]);
     expect(reportFromRows(recs, [dim], max)[0]!.value).toBe(90);
+  });
+});
+
+describe("a measure that adds up", () => {
+  it("is a count or a sum; a donut and a share of an average or an extreme mean nothing", () => {
+    const amount = order.fields[3]!;
+    expect(addsUp(null)).toBe(true);
+    expect(addsUp({ field: amount, op: "sum" })).toBe(true);
+    for (const op of ["avg", "min", "max"] as const)
+      expect(addsUp({ field: amount, op }), op).toBe(false);
   });
 });
 
