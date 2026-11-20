@@ -102,6 +102,7 @@ pub fn drop_private_routes_once(store: &Store) -> Result<Option<usize>, String> 
             backup_id: None,
             restore_point: None,
             note: format!("{cleared} private trip(s) cleared"),
+            attempts: 1,
         };
         db.apply(&[entry.put()])?;
     }
