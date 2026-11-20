@@ -464,3 +464,16 @@ describe("the smallest and the largest value", () => {
     expect(reportFromRows(recs, [dim], max)[0]!.value).toBe(90);
   });
 });
+
+describe("Other of a smallest or a largest value", () => {
+  it("is the smallest or the largest of the rest, not their sum", () => {
+    const data = [9, 8, 7, 6, 5, 4, 3, 2, 1, 12].map((value, i) => ({
+      key: `k${i}`,
+      label: `k${i}`,
+      value,
+    }));
+    const largest = (v: number[]) => Math.max(...v);
+    expect(foldOther(data, 8, largest)[8]).toMatchObject({ key: OTHER_KEY, value: 2 });
+    expect(foldOther(data, 8)[8]).toMatchObject({ key: OTHER_KEY, value: 3 });
+  });
+});

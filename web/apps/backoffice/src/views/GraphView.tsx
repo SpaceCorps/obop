@@ -137,6 +137,13 @@ export function GraphView(p: ViewProps) {
   const undated = isDated(dim.field) && all.some((x) => x.key === "" && x.value !== 0);
   const data = isDated(dim.field) ? all.filter((x) => x.key !== "") : all;
   const format = (n: number) => formatMeasure(m, n, cur);
+  // "Other" of a smallest or a largest value is the smallest or the largest of the rest, not a sum.
+  const merge =
+    m?.op === "min"
+      ? (v: number[]) => Math.min(...v)
+      : m?.op === "max"
+        ? (v: number[]) => Math.max(...v)
+        : undefined;
   const total = all.reduce((n, x) => n + Math.max(x.value, 0), 0);
   const name = t("{measure} by {dimension}", {
     measure: measureTitle(m),
@@ -257,6 +264,7 @@ export function GraphView(p: ViewProps) {
               ordered={isDated(dim.field)}
               colors={colors}
               maxHeight={type === "pie" ? undefined : 360}
+              merge={merge}
             />
             {undated && (
               <p className="chart-note">
@@ -267,9 +275,21 @@ export function GraphView(p: ViewProps) {
             )}
             {data.length > MAX_BARS && type === "bar" && !isDated(dim.field) && (
               <p className="chart-note">
-                {t("The {count} largest are shown; the rest are added up as Other.", {
-                  count: keep,
-                })}
+                {m?.op === "min"
+                  ? t(
+                      "The {count} largest are shown; Other shows the smallest value of the rest.",
+                      {
+                        count: keep,
+                      },
+                    )
+                  : m?.op === "max"
+                    ? t(
+                        "The {count} largest are shown; Other shows the largest value of the rest.",
+                        { count: keep },
+                      )
+                    : t("The {count} largest are shown; the rest are added up as Other.", {
+                        count: keep,
+                      })}
               </p>
             )}
           </figure>
