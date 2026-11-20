@@ -599,6 +599,7 @@ impl Mail {
                     username: text(sf, "username").into(),
                     password,
                     helo: self.cfg.helo.clone(),
+                    private_network: sf.get("allow_private_network") == Some(&J::Bool(true)),
                 };
                 let trust = self.trust.read().map(|t| t.clone()).unwrap_or_default();
                 smtp::send(&self.rt.client, &trust, &relay, msg)

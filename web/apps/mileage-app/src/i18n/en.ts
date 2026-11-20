@@ -219,6 +219,13 @@ export const en = {
   "trip.distance": "Distance",
   "trip.distance.pending": "The server has not counted it yet",
   "trip.purpose": "Purpose",
+  "trip.purpose.change": "You can change the purpose until the trip is submitted.",
+  "trip.private.note":
+    "A private trip is not submitted for review: no reviewer reads it. The server keeps its distance and times, not its route. If the trip was for work, change the purpose.",
+  "trip.private.confirm.title": "Mark the trip private?",
+  "trip.private.confirm.message":
+    "A private trip keeps its distance and times, not its route. The route is removed from the server for good, also if you change the purpose back.",
+  "trip.private.confirm": "Mark private",
   "trip.state": "State",
   "trip.checks": "Checks by the server",
   "trip.check.seq_gap.one": "{count} gap in the numbering of the points",
@@ -227,6 +234,9 @@ export const en = {
   "trip.check.speed_jump.other": "{count} points skipped for impossible jumps",
   "trip.check.low_accuracy.one": "{count} point skipped for low accuracy",
   "trip.check.low_accuracy.other": "{count} points skipped for low accuracy",
+  "trip.check.route_removed.one": "Route removed when the trip was marked private ({count} point)",
+  "trip.check.route_removed.other":
+    "Route removed when the trip was marked private ({count} points)",
   "trip.submit": "Submit for review",
   "trip.submit.hint": "Sends the trip to a reviewer",
   "trip.discard": "Discard trip",

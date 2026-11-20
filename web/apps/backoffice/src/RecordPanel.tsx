@@ -13,7 +13,7 @@ import { fromEdit, relocaleNumber, sameAsStored, toEdit, validate, type Edit } f
 import { recordExtensionOf, withoutOverridden } from "./extensions.ts";
 import { FormBody, flushLines, linesDirty, newLinesRegistry } from "./FormBody.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
-import { actionTitle, fieldTitle } from "./labels.ts";
+import { actionDone, actionTitle, fieldTitle } from "./labels.ts";
 import { extendTrail, trailStore } from "./lastRecord.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
@@ -45,7 +45,14 @@ import { RecordHeader } from "./RecordHeader.tsx";
 import { RelatedChips } from "./RelatedChips.tsx";
 import { nav, useRoute } from "./route.ts";
 import "./registrations.ts";
-import { canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
+import {
+  canMove,
+  initialOption,
+  isGoverned,
+  moveRecord,
+  namedQuestionOf,
+  questionOf,
+} from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -383,6 +390,15 @@ export function RecordPanel({
           body[f.name] = r.value;
       } else if (changed(f)) body[f.name] = r.value;
     }
+    // A change the app wants a yes for (an extension's `confirmSave`) is asked first; Keep editing
+    // saves nothing and leaves the form as it is.
+    if (row && !creating) {
+      for (const ask of ext.confirmSave) {
+        const question = ask(row, body);
+        if (question && nav.ask && !(await nav.ask(question, t("Save"), t("Keep editing"))))
+          return null;
+      }
+    }
     setBusy(true);
     // Until the server has answered, a way out (Escape, a link, Back) waits; it goes on when this
     // function is over, so after `onSaved` has put the saved record in the address.
@@ -459,7 +475,7 @@ export function RecordPanel({
 
   /** An action button was pressed: ask first when it needs words or a confirm, else run it. */
   const asks = (a: Command) =>
-    needsOf(a).length > 0 || !!a.ui?.confirm || actions.danger.some((x) => x.id === a.id);
+    needsOf(a).length > 0 || !!questionOf(model, a) || actions.danger.some((x) => x.id === a.id);
   function requestAction(a: Command) {
     if (!row || busy) return;
     if (asks(a)) setAsking(a);
@@ -482,7 +498,7 @@ export function RecordPanel({
       const f = a.field ? model.fields.find((x) => x.name === a.field) : undefined;
       const now = { ...row, ...after } as Row;
       d.notify(
-        a.ui?.done ??
+        actionDone(a) ??
           (f && a.to
             ? t("{model} {name} is now {state}", {
                 model: title,
@@ -597,7 +613,7 @@ export function RecordPanel({
         )}
         {!creating &&
           ext.panels.map((Panel, i) => (
-            <Panel key={i} model={model} fields={fields} row={row} busy={busy} />
+            <Panel key={i} model={model} fields={fields} row={row} busy={busy} value={value} />
           ))}
         <FormBody
           focusField={focusField}
@@ -644,13 +660,12 @@ export function RecordPanel({
             label={actionLabelFor(asking, inSentence(title))}
             needs={needsOf(asking)}
             question={
-              asking.ui?.confirm ??
-              (actions.danger.some((x) => x.id === asking.id)
-                ? t("{action} “{name}”?", {
-                    action: actionLabelFor(asking, inSentence(title)),
-                    name: label,
-                  })
-                : undefined)
+              // The package's question; for a danger action without one, the one that names the
+              // record (with the no-way-back sentence when it is one); else the question of a
+              // step with no way back (#102).
+              actions.danger.some((x) => x.id === asking.id)
+                ? namedQuestionOf(model, asking, actionLabelFor(asking, inSentence(title)), label)
+                : questionOf(model, asking)
             }
             danger={actions.danger.some((x) => x.id === asking.id)}
             currency={currency}

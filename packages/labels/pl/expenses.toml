@@ -73,18 +73,24 @@ refused = "Odrzucone"
 [labels.pl.model.expenses_expense.action.submit]
 label = "Prześlij"
 description = "Przesyła wniosek do zatwierdzenia"
+done = "Przesłano do zatwierdzenia"
 
 [labels.pl.model.expenses_expense.action.approve]
 label = "Zatwierdź"
 description = "Zatwierdza przesłany wniosek (tylko kierownik)"
+done = "Wniosek zatwierdzony"
 
 [labels.pl.model.expenses_expense.action.pay]
 label = "Zapłać"
 description = "Rejestruje zwrot jako opłacony (tylko dział finansów); data wypłaty to dziś, jeśli nie podano innej"
+confirm = "Zapisać ten wniosek jako zapłacony?"
+done = "Wniosek oznaczony jako zapłacony"
 
 [labels.pl.model.expenses_expense.action.refuse]
 label = "Odrzuć"
 description = "Odrzuca przesłany wniosek (tylko kierownik)"
+confirm = "Odrzucić ten wniosek? Odrzuconego wniosku nie można już zmienić."
+done = "Wniosek odrzucony"
 
 [labels.pl.model.expenses_expense.field.number]
 label = "Numer"
@@ -93,3 +99,15 @@ description = "Numer wniosku, np. EXP-2026-0042, nadawany przy utworzeniu wniosk
 [labels.pl.model.expenses_expense.field.receipt]
 description = "Zdjęcie lub skan paragonu (PDF lub obraz); do pobrania tylko dla osób, które mogą czytać wniosek"
 label = "Paragon"
+
+[labels.pl.model.expenses_expense.section.expense]
+label = "Wydatek"
+
+[labels.pl.model.expenses_expense.section.notes]
+label = "Notatki"
+
+[labels.pl.model.expenses_expense.section.claimed_by]
+label = "Zgłaszający"
+
+[labels.pl.model.expenses_expense.section.payment]
+label = "Płatność"

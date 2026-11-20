@@ -47,6 +47,7 @@ archived = "Arkiverad"
 [labels.sv.model.website_page.action.publish]
 label = "Publicera"
 description = "Gör sidan offentlig (endast chef)"
+done = "Publicerad"
 
 [labels.sv.model.website_page.action.unpublish]
 label = "Avpublicera"
@@ -55,6 +56,7 @@ description = "Ta ner sidan och återställ den till utkast"
 [labels.sv.model.website_page.action.archive]
 label = "Arkivera"
 description = "Ta en publicerad sida ur bruk för gott"
+confirm = "Arkivera den här sidan? Den tas ner för gott, dess adress svarar att den är borta och den kan inte längre ändras."
 
 [labels.sv.model.website_menu_item]
 name = "Menyval"
@@ -137,6 +139,7 @@ archived = "Arkiverat"
 [labels.sv.model.website_blog_post.action.publish]
 label = "Publicera"
 description = "Gör inlägget offentligt (endast chef)"
+done = "Publicerad"
 
 [labels.sv.model.website_blog_post.action.unpublish]
 label = "Avpublicera"
@@ -145,6 +148,7 @@ description = "Ta ner inlägget och återställ det till utkast"
 [labels.sv.model.website_blog_post.action.archive]
 label = "Arkivera"
 description = "Ta ett publicerat inlägg ur bruk"
+confirm = "Arkivera det här inlägget? Det tas ner för gott och kan inte längre ändras."
 
 [labels.sv.model.website_form_submission]
 name = "Formulärsvar"
@@ -195,10 +199,12 @@ spam = "Skräppost"
 [labels.sv.model.website_form_submission.action.handle]
 label = "Hantera"
 description = "Markera meddelandet som besvarat eller åtgärdat"
+done = "Markerad som hanterad"
 
 [labels.sv.model.website_form_submission.action.mark_spam]
 label = "Markera som skräppost"
 description = "Markera meddelandet som skräppost"
+done = "Markerad som skräp"
 
 [labels.sv.model.website_page_translation]
 name = "Sidöversättning"
@@ -295,3 +301,18 @@ description = "Bild överst i inlägget och i länkförhandsvisningar (PNG, JPEG
 [labels.sv.model.website_blog_post.field.cover_alt]
 label = "Omslagsbildens beskrivning"
 description = "Text som beskriver omslagsbilden för dem som inte kan se den"
+
+[labels.sv.model.website_page.section.content]
+label = "Innehåll"
+
+[labels.sv.model.website_page.section.cover_picture]
+label = "Omslagsbild"
+
+[labels.sv.model.website_page.section.search_engines]
+label = "Sökmotorer"
+
+[labels.sv.model.website_blog_post.section.content]
+label = "Innehåll"
+
+[labels.sv.model.website_blog_post.section.cover_picture]
+label = "Omslagsbild"

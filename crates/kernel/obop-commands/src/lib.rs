@@ -193,6 +193,12 @@ pub struct CommandInfo {
     pub descriptions: Texts,
     /// `[model.action.ui]` (D95); `None` in the command catalog and when none is declared.
     pub ui: Option<Arc<obop_registry::ActionUi>>,
+    /// Set in `meta` for a transition (#102): whether no other action of the model, whatever
+    /// group may run it, moves the field out of the state this one reaches. The back office asks
+    /// before such a step. It is decided here because `meta` lists only the caller's actions, and
+    /// a step that a manager decides afterwards (a leave request) has a way out. `None` in the
+    /// command catalog and for an action that is not a transition.
+    pub one_way: Option<bool>,
 }
 
 /// What a guard decides about one call (D48).
@@ -537,6 +543,13 @@ pub struct ModelInfo {
     pub guard_messages: Texts,
     /// The label of each filter the package declares, by its English label, per language (U10).
     pub filter_labels: BTreeMap<String, Texts>,
+    /// The label of each form section the package declares, by its English label, per language
+    /// (R17).
+    pub section_labels: BTreeMap<String, Texts>,
+    /// Action name -> the question of its `ui.confirm` per language (R17).
+    pub confirm_labels: BTreeMap<String, Texts>,
+    /// Action name -> the note of its `ui.done` per language (R17).
+    pub done_labels: BTreeMap<String, Texts>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -635,6 +648,7 @@ impl Dispatcher {
                     labels: Texts::new(),
                     descriptions: Texts::new(),
                     ui: None,
+                    one_way: None,
                 }
             })
             .collect()
@@ -680,6 +694,7 @@ impl Dispatcher {
                 labels: Texts::new(),
                 descriptions: Texts::new(),
                 ui: None,
+                one_way: None,
             })
             .collect();
         out.sort_by(|a, b| a.id.cmp(&b.id));
@@ -765,6 +780,20 @@ impl Dispatcher {
                                 .iter()
                                 .find(|d| d.name == &id[name.len() + 1..])
                                 .and_then(|d| d.ui.clone()),
+                            one_way: c.transition.map(|t| {
+                                // Every action of the model counts, also one this caller may not
+                                // run; one refused for everyone does not.
+                                !cmds.iter().any(|(oid, o)| {
+                                    oid != id
+                                        && o.model == name.as_str()
+                                        && !never.contains_key(oid)
+                                        && o.transition.is_some_and(|ot| {
+                                            ot.field == t.field
+                                                && ot.to != t.to
+                                                && ot.from.is_none_or(|f| f == t.to)
+                                        })
+                                })
+                            }),
                         }
                     })
                     .collect();
@@ -821,6 +850,22 @@ impl Dispatcher {
                                 .collect()
                         })
                         .unwrap_or_default(),
+                    section_labels: m
+                        .def
+                        .ui()
+                        .map(|u| {
+                            u.sections
+                                .iter()
+                                .filter_map(|x| {
+                                    let key = obop_registry::labels::filter_key(&x.label);
+                                    let t = mtr.and_then(|t| t.sections.get(&key))?;
+                                    Some((x.label.clone(), t.clone()))
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    confirm_labels: mtr.map(|t| t.confirms.clone()).unwrap_or_default(),
+                    done_labels: mtr.map(|t| t.dones.clone()).unwrap_or_default(),
                     name: name.clone(),
                     description: m.description,
                     labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
@@ -1379,6 +1424,28 @@ impl Dispatcher {
             .is_some_and(|m| m.generated_writes)
     }
 
+    /// The unique indexes of `backend` (`obop_uq_...`) that no registered model declares: left
+    /// by an uninstalled module or a removed rule (docs/ISSUES.md K41, D78). They keep enforcing
+    /// and their violations come out as raw storage text. Only read here; `obop storage
+    /// prune-indexes` lists them and drops them when an operator asks.
+    pub fn orphaned_unique_indexes(
+        &self,
+        backend: &dyn obop_storage::Backend,
+    ) -> Result<Vec<String>, String> {
+        let want: HashSet<String> = self
+            .models
+            .read()
+            .unwrap()
+            .values()
+            .flat_map(|m| engine::seq::index_names(&m.def))
+            .collect();
+        Ok(backend
+            .unique_indexes()?
+            .into_iter()
+            .filter(|n| !want.contains(n))
+            .collect())
+    }
+
     /// The names of the models that have a command registered right now, sorted. The installer
     /// takes them when it starts: every model that exists before any package is registered is a
     /// built-in one, and no package may declare its name.
@@ -1753,8 +1820,19 @@ impl Dispatcher {
             .iter()
             .map(|(_, o)| o.clone())
             .collect();
-        for o in observers {
-            o(&c.id, p, &input, &out);
+        if !observers.is_empty() {
+            // Never a secret or a value shown once: an observer may forward what it sees (U46).
+            let fields = self
+                .models
+                .read()
+                .unwrap()
+                .get(c.model)
+                .map(|m| m.fields.clone())
+                .unwrap_or_default();
+            let (seen_in, seen_out) = observe::for_observers(&c.id, &fields, &input, &out);
+            for o in observers {
+                o(&c.id, p, &seen_in, &seen_out);
+            }
         }
         let mut denied = Vec::new();
         let value = match out {
@@ -2405,6 +2483,7 @@ pub mod import_map;
 pub mod inline_pdf;
 pub mod json;
 mod kinds;
+mod observe;
 pub mod pay;
 pub mod plans;
 pub mod public;
@@ -2478,6 +2557,10 @@ mod limits_tests;
 mod mask_restore_tests;
 #[cfg(test)]
 mod masked_guess_tests;
+#[cfg(test)]
+mod observe_tests;
+#[cfg(test)]
+mod one_way_tests;
 #[cfg(test)]
 mod plans_tests;
 #[cfg(test)]

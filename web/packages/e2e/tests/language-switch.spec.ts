@@ -489,7 +489,11 @@ test.describe("a record panel that stays open while the language changes", () =>
         { name: "title", required: true },
         { name: "state", kind: "select", options: ["new", "doing", "done"] },
       ],
-      actions: [{ name: "start", field: "state", from: "new", to: "doing" }],
+      // A way back from doing, so Start is no step that asks first (#102).
+      actions: [
+        { name: "start", field: "state", from: "new", to: "doing" },
+        { name: "reset", field: "state", from: "doing", to: "new" },
+      ],
     });
     const rec = await api.create("root", model, { title: uid("Stale"), state: "new" });
     await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
@@ -626,7 +630,11 @@ test.describe("a record panel that stays open while the language changes", () =>
         { name: "title", required: true },
         { name: "state", kind: "select", options: ["new", "doing", "done"] },
       ],
-      actions: [{ name: "start", field: "state", from: "new", to: "doing" }],
+      // A way back from doing, so Start is no step that asks first (#102).
+      actions: [
+        { name: "start", field: "state", from: "new", to: "doing" },
+        { name: "reset", field: "state", from: "doing", to: "new" },
+      ],
     });
     const rec = await api.create("root", model, { title: uid("Button"), state: "new" });
     await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);

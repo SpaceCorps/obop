@@ -60,6 +60,7 @@ description = "Przenosi zaplanowany projekt do statusu aktywnego"
 [labels.pl.model.projects_project.action.finish]
 label = "Zakończ"
 description = "Oznacza aktywny projekt jako wykonany"
+done = "Projekt zakończony"
 
 [labels.pl.model.projects_project.action.reopen]
 label = "Otwórz ponownie"
@@ -102,6 +103,7 @@ description = "Oznacza oczekujący kamień milowy jako osiągnięty"
 [labels.pl.model.projects_milestone.action.miss]
 label = "Oznacz jako nieosiągnięte"
 description = "Rejestruje, że oczekujący kamień milowy nie został osiągnięty"
+confirm = "Zapisać ten kamień milowy jako nieosiągnięty?"
 
 [labels.pl.model.projects_task]
 name = "Zadanie"
@@ -166,6 +168,7 @@ description = "Oznacza zadanie w toku jako wykonane"
 [labels.pl.model.projects_task.action.cancel]
 label = "Anuluj"
 description = "Odrzuca zadanie, którego nigdy nie rozpoczęto"
+confirm = "Anulować to zadanie?"
 
 [labels.pl.model.projects_project.field.estimate_minutes]
 label = "Szacowany czas (min)"

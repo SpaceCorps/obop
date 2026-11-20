@@ -322,7 +322,11 @@ export function defaultFilter(model: ModelMeta, fields: FieldMeta[], ctx: QuickC
   if (!label) return null;
   const i = (model.ui?.filter ?? []).findIndex((s) => s.label === label);
   const q = quickFilters(model, fields, ctx).find((x) => x.key === `saved:${i}`);
-  return q ? q.conds : null;
+  if (!q) return null;
+  // A reader who sees a field masked (an agent) cannot filter on it: the server refuses that.
+  const masked = (c: Cond) =>
+    "f" in c && model.fields.some((f) => f.name === c.f && f.masked === true);
+  return q.conds.some(masked) ? null : q.conds;
 }
 
 /**
@@ -431,7 +435,7 @@ function compare(f: FieldMeta, op: string, v: string | number | boolean): Cond |
   }
   if ((f.kind === "select" || f.kind === "ref" || f.kind === "text") && typeof v === "string") {
     if (op === "==") return { op: "is", f: f.name, v: [v] };
-    if (op === "!=" && f.kind !== "text") return { op: "isnot", f: f.name, v: [v] };
+    if (op === "!=") return { op: "isnot", f: f.name, v: [v] };
     return null;
   }
   const dateLike = isDate(f) && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);

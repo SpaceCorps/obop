@@ -47,15 +47,22 @@ lost = "Przegrane"
 [labels.pl.model.lead.action.qualify]
 label = "Zakwalifikuj"
 description = "Przenosi nowy lead do etapu zakwalifikowanych"
+done = "Lead zakwalifikowany"
 
 [labels.pl.model.lead.action.mark_won]
 label = "Oznacz jako wygrane"
 description = "Przenosi lead do etapu wygranych"
+done = "Oznaczono jako wygrane"
 
 [labels.pl.model.lead.action.mark_lost]
 label = "Oznacz jako przegrane"
 description = "Przenosi lead do etapu przegranych"
+confirm = "Oznaczyć ten lead jako utracony?"
+done = "Oznaczono jako utracone"
 
 [labels.pl.model.lead.action.reopen]
 label = "Otwórz ponownie"
 description = "Przenosi lead z powrotem do etapu nowych"
+
+[labels.pl.model.lead.section.why_it_was_lost]
+label = "Dlaczego utracono"

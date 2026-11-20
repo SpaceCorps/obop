@@ -60,14 +60,18 @@ retired = "Réformé"
 [labels.fr.model.fleet_vehicle.action.dispatch]
 label = "Mettre en service"
 description = "Met en service un véhicule disponible"
+done = "Le véhicule est en service"
 
 [labels.fr.model.fleet_vehicle.action.return_to_pool]
 label = "Remettre à disposition"
 description = "Remet un véhicule en service dans le parc des véhicules disponibles"
+done = "Le véhicule est de retour dans le parc"
 
 [labels.fr.model.fleet_vehicle.action.retire]
 label = "Réformer"
 description = "Retire définitivement un véhicule disponible du parc (nécessite l’approbateur)"
+confirm = "Retirer ce véhicule pour de bon ? Aucune étape ne le fait revenir."
+done = "Le véhicule est retiré"
 
 [labels.fr.model.fleet_vehicle_driver]
 name = "Conducteur"
@@ -101,10 +105,13 @@ suspended = "Suspendu"
 [labels.fr.model.fleet_vehicle_driver.action.suspend]
 label = "Suspendre"
 description = "Marque un conducteur comme suspendu, par exemple après l’expiration de son permis"
+confirm = "Suspendre ce conducteur ?"
+done = "Le conducteur est suspendu"
 
 [labels.fr.model.fleet_vehicle_driver.action.reactivate]
 label = "Réactiver"
 description = "Remet un conducteur suspendu au statut actif"
+done = "Le conducteur est de nouveau actif"
 
 [labels.fr.model.fleet_vehicle_service]
 name = "Intervention sur véhicule"
@@ -158,15 +165,20 @@ cancelled = "Annulée"
 [labels.fr.model.fleet_vehicle_service.action.complete]
 label = "Terminer"
 description = "Marque une opération prévue comme terminée"
+done = "L'entretien est terminé"
 
 [labels.fr.model.fleet_vehicle_service.action.cancel]
 label = "Annuler"
 description = "Annule une opération prévue"
+confirm = "Annuler cet entretien ?"
+done = "L'entretien est annulé"
 
 [labels.fr.model.fleet_vehicle.action.send_to_workshop]
 label = "Envoyer à l'atelier"
 description = "Envoyer un véhicule disponible à l'atelier pour un entretien ou une réparation"
+done = "Le véhicule est à l'atelier"
 
 [labels.fr.model.fleet_vehicle.action.back_in_service]
 label = "Retour de l'atelier"
 description = "Remettre un véhicule revenu de l'atelier parmi les véhicules disponibles"
+done = "Le véhicule est de retour dans le parc"

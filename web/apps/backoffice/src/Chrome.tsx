@@ -35,13 +35,13 @@ import { appHomeOf } from "./extensions.ts";
 import { hostMenuItems } from "./host/menu.ts";
 import "./registrations.ts";
 import { productDocsVisible } from "./productDocs.ts";
-import { actionTitle, appTitle, modelTitle } from "./labels.ts";
+import { actionConfirm, actionTitle, appTitle, modelTitle } from "./labels.ts";
 import { appMenu, groupApps, homeHref, onLauncher, pluralTitle } from "./nav.ts";
 import { nextActions, searchFieldsOf, titleOf } from "./presentation.ts";
 import { recentRecords } from "./recent.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { shortcut } from "./keys.ts";
-import { notForRecord } from "./workflow.ts";
+import { notForRecord, questionOf } from "./workflow.ts";
 import { ApprovalsButton } from "./approvals/ApprovalsEntry.tsx";
 import { approvalsHref } from "./approvals/route.ts";
 import { notifySent } from "./approvals/sent.ts";
@@ -561,7 +561,8 @@ export function Palette({
       data.notify(t("You have unsaved changes. Save or discard them first."), "info");
       return;
     }
-    if (a.ui?.confirm && !(await data.confirm(a.ui.confirm, name, t("Cancel")))) return;
+    const question = openModel ? questionOf(openModel, a) : actionConfirm(a);
+    if (question && !(await data.confirm(question, name, t("Cancel")))) return;
     const r = await data.run(a.id, { id: openRow.id });
     if (r.kind === "ok") data.notify(t("{name} done", { name }));
     else if (r.kind === "approval") notifySent(data.notify, r.planId);
@@ -733,7 +734,11 @@ export function Palette({
               e.preventDefault();
               setSel((s) => Math.max(s - 1, 0));
             }
-            if (e.key === "Enter") go(hits[sel]);
+            // Its default would press the Cancel of a question the action opens (and focuses).
+            if (e.key === "Enter") {
+              e.preventDefault();
+              go(hits[sel]);
+            }
           }}
         />
         {waiting && <Spinner size={16} label={t("Searching records")} />}

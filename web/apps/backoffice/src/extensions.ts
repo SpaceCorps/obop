@@ -67,6 +67,12 @@ export type RecordExtension = {
    * of `actions` runs the same command with a screen of its own (a receipt with the quantities).
    */
   overrides?: string[];
+  /**
+   * Asked before the form saves a change to a saved record: a sentence when the change needs a yes
+   * first (Mileage: marking a trip private removes its route for good), else null. The form asks
+   * it with Save and Keep editing; Keep editing saves nothing.
+   */
+  confirmSave?: ((row: Row, changes: Record<string, unknown>) => string | null)[];
 };
 
 export const recordExtensions: Record<string, RecordExtension> = {};
@@ -79,10 +85,17 @@ export function registerRecordExtension(model: string, ext: RecordExtension): vo
     panels: [...(had.panels ?? []), ...(ext.panels ?? [])],
     sections: [...(had.sections ?? []), ...(ext.sections ?? [])],
     overrides: [...(had.overrides ?? []), ...(ext.overrides ?? [])],
+    confirmSave: [...(had.confirmSave ?? []), ...(ext.confirmSave ?? [])],
   };
 }
 
-const NONE: Required<RecordExtension> = { actions: [], panels: [], sections: [], overrides: [] };
+const NONE: Required<RecordExtension> = {
+  actions: [],
+  panels: [],
+  sections: [],
+  overrides: [],
+  confirmSave: [],
+};
 
 /** What `model` adds to its record panel; empty lists when nothing is registered. */
 export function recordExtensionOf(model: string): Required<RecordExtension> {

@@ -60,6 +60,7 @@ description = "Fait passer un projet prévu à actif"
 [labels.fr.model.projects_project.action.finish]
 label = "Achever"
 description = "Marque un projet actif comme terminé"
+done = "Projet terminé"
 
 [labels.fr.model.projects_project.action.reopen]
 label = "Rouvrir"
@@ -102,6 +103,7 @@ description = "Marque un jalon en attente comme atteint"
 [labels.fr.model.projects_milestone.action.miss]
 label = "Marquer manqué"
 description = "Enregistre qu’un jalon en attente a été manqué"
+confirm = "Enregistrer ce jalon comme manqué ?"
 
 [labels.fr.model.projects_task]
 name = "Tâche"
@@ -166,6 +168,7 @@ description = "Marque une tâche en cours comme terminée"
 [labels.fr.model.projects_task.action.cancel]
 label = "Annuler"
 description = "Abandonne une tâche qui n’a jamais été commencée"
+confirm = "Annuler cette tâche ?"
 
 [labels.fr.model.projects_project.field.estimate_minutes]
 label = "Minutes estimées"

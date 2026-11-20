@@ -47,15 +47,22 @@ lost = "Verloren"
 [labels.de.model.lead.action.qualify]
 label = "Qualifizieren"
 description = "Einen neuen Lead in die Phase „Qualifiziert“ verschieben"
+done = "Lead qualifiziert"
 
 [labels.de.model.lead.action.mark_won]
 label = "Als gewonnen markieren"
 description = "Den Lead in die Phase „Gewonnen“ verschieben"
+done = "Als gewonnen markiert"
 
 [labels.de.model.lead.action.mark_lost]
 label = "Als verloren markieren"
 description = "Den Lead in die Phase „Verloren“ verschieben"
+confirm = "Diesen Lead als verloren markieren?"
+done = "Als verloren markiert"
 
 [labels.de.model.lead.action.reopen]
 label = "Wieder öffnen"
 description = "Den Lead zurück in die Phase „Neu“ verschieben"
+
+[labels.de.model.lead.section.why_it_was_lost]
+label = "Warum er verloren ging"

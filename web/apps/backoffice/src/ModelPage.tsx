@@ -10,7 +10,7 @@ import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.t
 import { defaultFilter } from "./filters.ts";
 import { csvCell, download, plainText, rowCurrency, visibleFields } from "./format.ts";
 import { ImportDialog } from "./ImportDialog.tsx";
-import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
+import { actionTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { PHONE_QUERY, useMedia } from "./media.ts";
 import { pluralTitle } from "./plural.ts";
 import { defaultView, listColumns, newDefaults } from "./presentation.ts";
@@ -38,7 +38,7 @@ import { kanbanField } from "./views/KanbanView.tsx";
 import { listOrder } from "./views/listLayout.ts";
 import { VIEW_REGISTRY, viewOf } from "./views/registry.ts";
 import type { ViewProps } from "./views/types.ts";
-import { governedNames, moveRecord } from "./workflow.ts";
+import { canMove, governedNames, moveRecord, questionOf } from "./workflow.ts";
 
 /** What a page that wraps ModelPage (a registration of extensions.ts) may do with it. */
 export type ModelPageApi = {
@@ -212,15 +212,26 @@ export function ModelPage({
   }, [store.denied]);
 
   const base = useMemo(() => ({ app: route.app, model: route.model }), [route.app, route.model]);
+  // The search in the address was set on this page (the person's own, also an empty one).
+  const chose = useRef(false);
   const put = useCallback(
     (
-      patch: { view?: string; id?: string; st?: string; page?: string; full?: string },
+      patch: {
+        view?: string;
+        id?: string;
+        st?: string;
+        page?: string;
+        full?: string;
+        field?: string;
+      },
       replace = false,
     ) => {
       const id = patch.id ?? route.id;
+      if (patch.st !== undefined) chose.current = true;
       go(
         {
           ...base,
+          ...(patch.field ? { field: patch.field } : {}),
           view: patch.view ?? route.view,
           id,
           st: patch.st ?? route.st,
@@ -253,19 +264,26 @@ export function ModelPage({
   );
 
   // A favorite marked default applies when the model opens without any search of its own; else the
-  // package's default filter (`ui.default_filter`), which the person removes like any other.
+  // package's default filter (`ui.default_filter`), which the person removes like any other. It
+  // applies again whenever the address loses its search from outside (the sidebar entry of the
+  // model, a link), not when the person cleared the search on this page (`chose`).
   useEffect(() => {
-    if (route.st) return;
+    if (route.st) {
+      chose.current = false;
+      return;
+    }
+    if (chose.current) return;
     const fav = loadFavorites(model.name).find((f) => f.isDefault);
     if (fav) {
       put({ st: encodeState(fav.state), view: fav.view }, true);
       return;
     }
     const preset = defaultFilter(model, fields, { user, today: today() });
-    if (preset) put({ st: encodeState({ ...decodeState(""), facets: preset }) }, true);
-    // only on first open of this model
+    // The field a link names (`&field=`, Q19) stays, so the record it opens still focuses it.
+    if (preset)
+      put({ st: encodeState({ ...decodeState(""), facets: preset }), field: route.field }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [route.st]);
 
   const setView = (v: string) => {
     try {
@@ -395,6 +413,10 @@ export function ModelPage({
     const f = model.fields.find((x) => x.name === field);
     const row = (serverMode || aggMode ? srv.rows : rows).find((r) => r.id === id);
     if (!f || !row) return t("Record not found");
+    // A list cell asks what the action's button asks (#102, #104); a cancel leaves the value.
+    const step = canMove(model, f, row[field] as string | undefined, to, title, row).action;
+    const question = step && questionOf(model, step);
+    if (question && !(await d.confirm(question, actionTitle(step), t("Cancel")))) return null;
     const out = await moveRecord(d.run, model, f, row, to, title);
     return out.kind === "ok" ? null : serverMessage(out.message);
   };

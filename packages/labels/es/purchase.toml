@@ -82,18 +82,25 @@ cancelled = "Cancelado"
 [labels.es.model.purchase_order.action.send]
 label = "Enviar"
 description = "Enviar un pedido en borrador al proveedor como solicitud de presupuesto"
+done = "Marcado como enviado"
 
 [labels.es.model.purchase_order.action.confirm]
 label = "Confirmar"
 description = "Comprometer el pedido con el proveedor (solo responsables)"
+confirm = "¿Confirmar este pedido con el proveedor?"
+done = "Pedido confirmado"
 
 [labels.es.model.purchase_order.action.receive]
 label = "Recibir"
 description = "Registrar que llegó la mercancía: se crea un movimiento de stock en borrador por línea para que el almacén lo valide (requiere el grupo inventory.user)"
+confirm = "¿Recibir la mercancía? Con una ubicación de recepción indicada, se crea un movimiento de stock en borrador por cada línea para que el almacén lo valide, y el pedido ya no se podrá modificar."
+done = "Pedido recibido"
 
 [labels.es.model.purchase_order.action.cancel]
 label = "Cancelar"
 description = "Cancelar un pedido que aún no se envió"
+confirm = "¿Cancelar este pedido?"
+done = "Pedido cancelado"
 
 [labels.es.model.purchase_order_line]
 name = "Línea de pedido"

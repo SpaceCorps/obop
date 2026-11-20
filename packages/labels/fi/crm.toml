@@ -47,15 +47,22 @@ lost = "Hävitty"
 [labels.fi.model.lead.action.qualify]
 label = "Kvalifioi"
 description = "Siirrä uusi liidi kvalifioituun vaiheeseen"
+done = "Liidi kvalifioitu"
 
 [labels.fi.model.lead.action.mark_won]
 label = "Merkitse voitetuksi"
 description = "Siirrä liidi voitettuun vaiheeseen"
+done = "Merkitty voitetuksi"
 
 [labels.fi.model.lead.action.mark_lost]
 label = "Merkitse hävityksi"
 description = "Siirrä liidi hävittyyn vaiheeseen"
+confirm = "Merkitäänkö tämä liidi menetetyksi?"
+done = "Merkitty menetetyksi"
 
 [labels.fi.model.lead.action.reopen]
 label = "Avaa uudelleen"
 description = "Siirrä liidi takaisin uuteen vaiheeseen"
+
+[labels.fi.model.lead.section.why_it_was_lost]
+label = "Miksi se menetettiin"

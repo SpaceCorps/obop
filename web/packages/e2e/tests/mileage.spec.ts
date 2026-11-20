@@ -133,6 +133,10 @@ test.describe("mileage review", () => {
       .locator(".actionrow")
       .getByRole("button", { name: /^Confirm/ })
       .click();
+    // No action moves a confirmed trip on: the button asks first (#102).
+    const asked = page.getByRole("alertdialog");
+    await expect(asked).toContainText("From now on it counts");
+    await asked.getByRole("button", { name: /^Confirm/ }).click();
     await expect(record.locator("[aria-current=step]")).toContainText("Confirmed");
 
     // The totals now hold the distance the server computed, and not before.

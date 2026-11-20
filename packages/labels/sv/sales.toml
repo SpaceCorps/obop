@@ -37,10 +37,13 @@ description = "Valutakod enligt ISO 4217"
 [labels.sv.model.sale_order.action.confirm]
 label = "Bekräfta"
 description = "Bekräfta en order i utkast"
+done = "Ordern bekräftad; ett fakturautkast är klart"
 
 [labels.sv.model.sale_order.action.cancel]
 label = "Annullera"
 description = "Annullera en order"
+confirm = "Avbryta den här ordern?"
+done = "Ordern avbruten"
 
 [labels.sv.model.sale_order.action.reset_to_draft]
 label = "Återställ till utkast"

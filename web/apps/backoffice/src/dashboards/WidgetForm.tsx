@@ -20,11 +20,14 @@ import { fieldTitle, modelTitle } from "../labels.ts";
 import { stateFieldOf, summable, type MetaIndex } from "../presentation.ts";
 import { useReportIndex } from "../views/PivotView.tsx";
 import {
+  BUCKETS,
+  bucketName,
   currenciesOf,
   defaultRows,
   dimensionsOf,
   formatMeasure,
   isDated,
+  type Bucket,
   type MeasureSel,
 } from "../reports.ts";
 import { useReportRows } from "../useAggregate.ts";
@@ -73,6 +76,8 @@ type Draft = {
   aggregate: "count" | "sum";
   measure_field: string;
   group_by: string;
+  /** The period of a dated split; empty is month. */
+  period: Bucket | "";
   conds: Condition[];
   raw: string | null;
 };
@@ -99,6 +104,48 @@ function presets(
   const rows = defaultRows(model, dims, ix?.index, ix?.setup);
   const ref = rows && rows.field.kind === "ref" ? rows.field : undefined;
   return { money, split, date, ref, state: state && dims.find((f) => f.name === state.name) };
+}
+
+/**
+ * The templates a model suggests: one click sets what to show, add up, split by and per which
+ * period. Each sets the whole tile, so "Per month of" also puts a chosen period back to month (K1).
+ */
+export function suggestionsOf(
+  model: ModelMeta,
+  fields: FieldMeta[],
+  ix?: { index: MetaIndex; setup: (model: string) => boolean },
+): { label: string; values: Partial<Draft> }[] {
+  const pre = presets(model, fields, ix);
+  const sum = pre.money
+    ? { aggregate: "sum" as const, measure_field: pre.money.name }
+    : { aggregate: "count" as const, measure_field: "" };
+  const out: { label: string; values: Partial<Draft> }[] = [
+    {
+      label: t("Number of records"),
+      values: { kind: "kpi", aggregate: "count", measure_field: "", group_by: "", period: "" },
+    },
+  ];
+  if (pre.money)
+    out.push({
+      label: t("Total {field}", { field: inSentence(fieldTitle(pre.money)) }),
+      values: { kind: "kpi", ...sum, group_by: "", period: "" },
+    });
+  if (pre.state)
+    out.push({
+      label: t("By {field}", { field: inSentence(fieldTitle(pre.state)) }),
+      values: { kind: "bar", ...sum, group_by: pre.state.name, period: "" },
+    });
+  if (pre.date)
+    out.push({
+      label: t("Per month of {field}", { field: inSentence(fieldTitle(pre.date)) }),
+      values: { kind: "line", ...sum, group_by: pre.date.name, period: "" },
+    });
+  if (pre.ref)
+    out.push({
+      label: t("Top {field}", { field: inSentence(fieldTitle(pre.ref)) }),
+      values: { kind: "bar", ...sum, group_by: pre.ref.name, period: "" },
+    });
+  return out;
 }
 
 /** A title from what the tile shows, until the person writes their own. */
@@ -132,6 +179,7 @@ export function WidgetForm(p: {
     aggregate: w?.aggregate ?? "count",
     measure_field: w?.measure_field ?? "",
     group_by: w?.group_by ?? "",
+    period: w?.period ?? "",
     conds: "conds" in parsed ? parsed.conds : [],
     raw: "error" in parsed ? (w?.filter ?? "") : null,
   }));
@@ -159,6 +207,9 @@ export function WidgetForm(p: {
   );
   const dims = dimensionsOf(fields);
   const chart = isChart(draft.kind);
+  // A date or date-and-time split counts per a period (K1): day, week, ISO week, month or year.
+  const splitField = dims.find((f) => f.name === draft.group_by);
+  const dated = !!splitField && isDated(splitField);
   const text = draft.raw ?? formatFilter(draft.conds);
   const title = titled ? draft.title : autoTitle(draft, model, moduleId);
 
@@ -201,41 +252,11 @@ export function WidgetForm(p: {
   }
 
   // The templates a model suggests: one click sets what to show, add up and split by.
-  const templates = useMemo(() => {
-    if (!model) return [];
-    const pre = presets(model, fields, ix);
-    const sum = pre.money
-      ? { aggregate: "sum" as const, measure_field: pre.money.name }
-      : { aggregate: "count" as const, measure_field: "" };
-    const out: { label: string; values: Partial<Draft> }[] = [
-      {
-        label: t("Number of records"),
-        values: { kind: "kpi", aggregate: "count", measure_field: "", group_by: "" },
-      },
-    ];
-    if (pre.money)
-      out.push({
-        label: t("Total {field}", { field: inSentence(fieldTitle(pre.money)) }),
-        values: { kind: "kpi", ...sum, group_by: "" },
-      });
-    if (pre.state)
-      out.push({
-        label: t("By {field}", { field: inSentence(fieldTitle(pre.state)) }),
-        values: { kind: "bar", ...sum, group_by: pre.state.name },
-      });
-    if (pre.date)
-      out.push({
-        label: t("Per month of {field}", { field: inSentence(fieldTitle(pre.date)) }),
-        values: { kind: "line", ...sum, group_by: pre.date.name },
-      });
-    if (pre.ref)
-      out.push({
-        label: t("Top {field}", { field: inSentence(fieldTitle(pre.ref)) }),
-        values: { kind: "bar", ...sum, group_by: pre.ref.name },
-      });
-    return out;
+  const templates = useMemo(
+    () => (model ? suggestionsOf(model, fields, ix) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, fields, d.lang]);
+    [model, fields, d.lang],
+  );
 
   // The live sentence: what the tile will show, with the numbers of today.
   const checked = useMemo(() => {
@@ -287,6 +308,7 @@ export function WidgetForm(p: {
       aggregate: draft.aggregate,
       measure_field: draft.aggregate === "sum" ? draft.measure_field : null,
       group_by: draft.group_by || null,
+      period: dated ? draft.period || null : null,
       filter: text.trim() || null,
     });
     setBusy(false);
@@ -408,7 +430,22 @@ export function WidgetForm(p: {
             <option value="">{chart ? t("Choose a field") : t("Nothing")}</option>
             {dims.map((f) => (
               <option key={f.name} value={f.name}>
-                {isDated(f) ? t("{field} (month)", { field: fieldTitle(f) }) : fieldTitle(f)}
+                {fieldTitle(f)}
+              </option>
+            ))}
+          </Select>
+        )}
+        {draft.kind !== "kpi" && dated && (
+          <Select
+            label={t("Period")}
+            value={draft.period || "month"}
+            onChange={(e) =>
+              set({ period: e.target.value === "month" ? "" : (e.target.value as Bucket) })
+            }
+          >
+            {BUCKETS.map((b) => (
+              <option key={b} value={b}>
+                {bucketName(b)}
               </option>
             ))}
           </Select>
@@ -566,7 +603,10 @@ function Sentence(p: {
     draft.kind === "kpi" || !by
       ? ""
       : isDated(by)
-        ? t("One value per month of {field}.", { field: inSentence(fieldTitle(by)) })
+        ? t("One value per {period} of {field}.", {
+            period: inSentence(bucketName(draft.period || "month")),
+            field: inSentence(fieldTitle(by)),
+          })
         : t("One value per {field}.", { field: inSentence(fieldTitle(by)) });
   return (
     <div className="wsentence" role="status" aria-live="polite">

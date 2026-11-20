@@ -11,7 +11,7 @@ import type { App } from "../../Chrome.tsx";
 import { useData } from "../../data.tsx";
 import { formatDate, isoDate, optionLabel } from "../../format.ts";
 import { notifySent } from "../../approvals/sent.ts";
-import { actionTitle } from "../../labels.ts";
+import { actionConfirm, actionTitle } from "../../labels.ts";
 import { clockText, linkOf, shownNumber } from "../../inputs/display.ts";
 import { serverMessage } from "../../serverMessage.ts";
 import { myEmployee } from "../hr/LeavePage.tsx";
@@ -72,8 +72,8 @@ export function MyDay({ app }: { app: App }) {
   const command = (action: string) => model?.actions.find((c) => c.id === `${JOB}.${action}`);
   const run = async (job: Row, action: string, done: string) => {
     const cmd = command(action);
-    if (cmd?.ui?.confirm && !(await d.confirm(cmd.ui.confirm, actionTitle(cmd), t("Cancel"))))
-      return;
+    const question = cmd && actionConfirm(cmd);
+    if (cmd && question && !(await d.confirm(question, actionTitle(cmd), t("Cancel")))) return;
     setWorking(job.id);
     try {
       const r = await d.run(`${JOB}.${action}`, { id: job.id });

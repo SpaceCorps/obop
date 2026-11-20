@@ -88,6 +88,20 @@ pub fn module() -> Module {
                         "invoicing.user",
                     )
                     .kind(FieldKind::Date),
+                    F::new(
+                        "our_reference",
+                        "Our reference printed on the invoice (Var referens), free text",
+                        NoClass,
+                        false,
+                        "invoicing.user",
+                    ),
+                    F::new(
+                        "their_reference",
+                        "The customer's reference printed on the invoice (Er referens), free text",
+                        NoClass,
+                        false,
+                        "invoicing.user",
+                    ),
                 ],
                 commands: vec![
                     CommandDef::new(
@@ -97,8 +111,8 @@ pub fn module() -> Module {
                     )
                     .transition("state", Some("draft"), "posted")
                     .assertion_msg(
-                        "total_minor > 0",
-                        "Add at least one line with an amount before posting the invoice.",
+                        "total_minor != 0",
+                        "Add at least one line with an amount before posting the invoice (a credit invoice has a negative total).",
                     )
                     .assertion_msg(
                         "!is_set(due_date) || !is_set(issue_date) || due_date >= issue_date",
@@ -129,6 +143,27 @@ pub fn module() -> Module {
                 card: vec!["number".into(), "party_id".into(), "total_minor".into()],
                 card_sum: Some("total_minor".into()),
                 quick_create: vec!["party_id".into()],
+                // One open group of every field: with the references the form has more than seven
+                // fields, and the generated grouping would hide the number in a closed group.
+                sections: vec![obop_registry::ui::UiSection {
+                    label: "Invoice".into(),
+                    fields: [
+                        "party_id",
+                        "number",
+                        "state",
+                        "issue_date",
+                        "due_date",
+                        "currency",
+                        "total_minor",
+                        "our_reference",
+                        "their_reference",
+                        "sale_order_id",
+                    ]
+                    .map(String::from)
+                    .to_vec(),
+                    collapsed: false,
+                    show_in: vec![],
+                }],
                 order: Some("number desc".into()),
                 default_view: Some("list".into()),
                 ..Default::default()

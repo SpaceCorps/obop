@@ -107,18 +107,23 @@ cancelled = "Annullerad"
 [labels.sv.model.field_service_job.action.depart]
 label = "Jag åker nu"
 description = "Teknikern är på väg"
+done = "På väg"
 
 [labels.sv.model.field_service_job.action.start]
 label = "Börja arbeta"
 description = "Teknikern har kommit fram och påbörjat arbetet"
+done = "Arbetet påbörjat"
 
 [labels.sv.model.field_service_job.action.complete]
 label = "Slutför uppdraget"
 description = "Avsluta uppdraget; om signatur krävs, registrera först vem som signerat och när"
+confirm = "Slutföra det här uppdraget? Ett slutfört uppdrag kan inte längre ändras."
+done = "Uppdraget klart"
 
 [labels.sv.model.field_service_job.action.cancel]
 label = "Annullera"
 description = "Annullera ett uppdrag som inte har påbörjats"
+confirm = "Ställa in det här uppdraget? Det kan inte ändras efteråt."
 
 [labels.sv.model.field_service_part]
 name = "Reservdel"
@@ -150,3 +155,18 @@ description = "Kommentar om delen, till exempel serienummer"
 
 [labels.sv.model.field_service_job.action.complete.assert.signed]
 message = "Kunden måste först godkänna uppdraget: fyll i vem som skrev under och vilken dag"
+
+[labels.sv.model.field_service_job.section.job]
+label = "Uppdrag"
+
+[labels.sv.model.field_service_job.section.customer_and_site]
+label = "Kund och plats"
+
+[labels.sv.model.field_service_job.section.schedule]
+label = "Schema"
+
+[labels.sv.model.field_service_job.section.sign_off]
+label = "Kundens godkännande"
+
+[labels.sv.model.field_service_job.section.report]
+label = "Deklaration"

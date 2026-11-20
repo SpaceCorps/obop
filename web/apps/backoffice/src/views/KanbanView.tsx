@@ -16,7 +16,7 @@ import { useData } from "../data.tsx";
 import { fromEdit, toEdit, type Edit } from "../edit.ts";
 import { readPref, writePref } from "../favorites.ts";
 import { isEmpty, isState } from "../format.ts";
-import { actionTitle, fieldTitle } from "../labels.ts";
+import { actionDone, actionTitle, fieldTitle } from "../labels.ts";
 import { PHONE_QUERY, useMedia } from "../media.ts";
 import { currencyOf, newDefaults, nextActions } from "../presentation.ts";
 import { domainOf, groupDomain, groupKey, groupLabel, groupable } from "../query.ts";
@@ -31,6 +31,7 @@ import {
   isGoverned,
   moveRecord,
   notForRecord,
+  questionOf,
 } from "../workflow.ts";
 import { AggState } from "./AggState.tsx";
 import { BoardCard, cardTitle, usePresentCtx, type NextStep } from "./BoardCard.tsx";
@@ -389,6 +390,9 @@ export function KanbanView(p: ViewProps) {
       // An action that needs input the card does not have asks for it, as its button does (D95).
       const step = canMove(model, gf, row[gf.name] as string, key, noun, row).action;
       if (step?.ui?.needs?.some((n) => isEmpty(row[n]))) return setAsking({ row, action: step });
+      // A drop asks what the action's button asks: its confirm, or a step with no way back (#102).
+      const question = step && questionOf(model, step);
+      if (question && !(await d.confirm(question, actionTitle(step), t("Cancel")))) return;
       const out = await moveRecord(d.run, model, gf, row, key, noun);
       if (out.kind === "approval") notifySent(d.notify, out.planId);
       else if (out.kind === "error") d.notify(out.message, "error");
@@ -419,19 +423,20 @@ export function KanbanView(p: ViewProps) {
         // An action that needs input the card does not have opens the record (D95 `needs`).
         if (a.ui?.needs?.some((n) => isEmpty(r[n]))) return p.onOpen(r.id);
         void (async () => {
-          if (a.ui?.confirm && !(await d.confirm(a.ui.confirm, name))) return;
+          const question = questionOf(model, a);
+          if (question && !(await d.confirm(question, name, t("Cancel")))) return;
           setBusyId(r.id);
           if (a.field === gf.name && a.to) {
             const out = await moveRecord(d.run, model, gf, r, a.to, noun);
             setBusyId(null);
-            if (out.kind === "ok") d.notify(a.ui?.done ?? t("{name} done", { name }));
+            if (out.kind === "ok") d.notify(actionDone(a) ?? t("{name} done", { name }));
             else if (out.kind === "approval") notifySent(d.notify, out.planId);
             else d.notify(out.message, "error");
             return;
           }
           const reply = await d.run(a.id, { id: r.id });
           setBusyId(null);
-          if (reply.kind === "ok") d.notify(a.ui?.done ?? t("{name} done", { name }));
+          if (reply.kind === "ok") d.notify(actionDone(a) ?? t("{name} done", { name }));
           else if (reply.kind === "approval") notifySent(d.notify, reply.planId);
           else d.notify(serverMessage(reply.message), "error");
         })();
@@ -882,7 +887,7 @@ export function KanbanView(p: ViewProps) {
     setBusyId(row.id);
     const reply = await d.run(action.id, { id: row.id, ...values });
     setBusyId(null);
-    if (reply.kind === "ok") d.notify(action.ui?.done ?? t("{name} done", { name }));
+    if (reply.kind === "ok") d.notify(actionDone(action) ?? t("{name} done", { name }));
     else if (reply.kind === "approval") notifySent(d.notify, reply.planId);
     else d.notify(serverMessage(reply.message), "error");
   }
@@ -899,7 +904,7 @@ export function KanbanView(p: ViewProps) {
           needs={(asking.action.ui?.needs ?? [])
             .map((n) => model.fields.find((f) => f.name === n))
             .filter((f): f is FieldMeta => !!f)}
-          question={asking.action.ui?.confirm}
+          question={questionOf(model, asking.action)}
           danger={!!asking.action.ui?.danger}
           currency={currencyOf(asking.row, model, ctx)}
           onCancel={() => setAsking(null)}
