@@ -38,7 +38,7 @@ import {
 const UI: Record<string, string> = {
   "packages/ui/src/index.ts": 'export * from "./i18n/index.ts";',
   "packages/ui/src/i18n/index.ts":
-    'export { t, fmt, compareText, getLang, setLanguage } from "./store.ts";',
+    'export { t, fmt, compareText, firstDayOfWeek, getLang, setLanguage } from "./store.ts";',
   "packages/ui/src/i18n/store.ts": `
     const S = { lang: "en", messages: {} as Record<string, string>, region: "auto" };
     export function translate(id: string) { return S.messages[id] ?? id; }
@@ -47,6 +47,7 @@ const UI: Record<string, string> = {
     export function formatLocale() { return S.region === "auto" ? S.lang : S.region; }
     export const fmt = { money: (n: number) => String(n) + formatLocale() };
     export function compareText(a: string, b: string) { return a.localeCompare(b, formatLocale()); }
+    export function firstDayOfWeek() { return new Intl.Locale(formatLocale()).language === "en" ? 7 : 1; }
     export async function setLanguage(lang: string) { S.lang = lang; }
   `,
 };
@@ -228,8 +229,24 @@ describe("what counts as translating", () => {
     expect(f("const v = useMemo(() => fmt.money(1), [m, d.locale]);")).toEqual([]);
   });
 
+  it("holds a memo that counts weeks from the first day of the region to the locale (D14)", () => {
+    const g = (body: string) =>
+      flagged({
+        "apps/x/src/a.tsx": `import { t, firstDayOfWeek } from "@obop/ui";\n${body}`,
+      });
+    // the quick filters of FilterPanel: the labels are translated, the weeks start by the region
+    const memo = (deps: string) =>
+      `const v = useMemo(() => { const ctx = { firstDay: firstDayOfWeek() }; return t("This week") + ctx.firstDay; }, ${deps});`;
+    expect(g(memo("[meta, today, lang]"))).toEqual([
+      "apps/x/src/a.tsx:2 follows the region with firstDayOfWeek; the dependencies name lang but not locale",
+    ]);
+    expect(g(memo("[meta, today, lang, locale]"))).toEqual([]);
+    // fmt formats with the region too, but is not held to it
+    expect(f("const v = useMemo(() => fmt.money(1), [m, lang]);")).toEqual([]);
+  });
+
   it("holds a memo that sorts to the locale, which follows the region (D14)", () => {
-    const why = "sorts with compareText; the dependencies name lang but not locale";
+    const why = "follows the region with compareText; the dependencies name lang but not locale";
     expect(f("const v = useMemo(() => rows.sort(compareText), [rows, d.lang]);")).toEqual([
       `apps/x/src/a.tsx:2 ${why}`,
     ]);

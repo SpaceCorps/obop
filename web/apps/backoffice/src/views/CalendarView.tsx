@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fmt, inSentence, t } from "@obop/ui";
+import { firstDayOfWeek, fmt, inSentence, t } from "@obop/ui";
 import { LOAD_LIMIT, getTime, search, type Row, type ServerFilter } from "../api.ts";
 import { fromZonedInput } from "../instants.ts";
 import { matches, PHONE_QUERY, useMedia } from "../media.ts";
@@ -35,7 +35,7 @@ export { dateFields } from "./calendarModel.ts";
 /** First day of the week containing `d` (Monday in most of Europe, Sunday in the US): from the format locale. */
 function weekStart(d: Date): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const first = fmt.firstDay() % 7; // 0 = Sunday ... 6 = Saturday
+  const first = firstDayOfWeek() % 7; // 0 = Sunday ... 6 = Saturday
   x.setDate(x.getDate() - ((x.getDay() - first + 7) % 7));
   return x;
 }

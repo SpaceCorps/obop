@@ -34,6 +34,7 @@ export {
   CTX,
   DEFAULT_LANGUAGE_META,
   compareText,
+  firstDayOfWeek,
   fmt,
   formatLocale,
   getCurrency,

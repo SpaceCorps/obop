@@ -28,8 +28,9 @@
 // `// i18n-memo-ok: <reason>` in a comment directly above its statement or inside the call; the
 // reason needs three word characters.
 //
-// A memo that sorts with the collation (`compareText`, however far) names the locale, which
-// follows the region, and not only the language (ISSUES.md D14).
+// A memo that sorts with the collation or counts weeks from the first day of the week
+// (`compareText`, `firstDayOfWeek`, however far) names the locale, which follows the region,
+// and not only the language (ISSUES.md D14).
 //
 // Not read (the shapes are listed in ISSUES.md D14): `useCallback`, `useEffect`, an initial
 // `useState(() => t(...))`, state that holds a finished translated string, namespace and default
@@ -537,12 +538,12 @@ export const SEEDS = [
 ];
 
 /**
- * The collation of the store. It follows the region, which a person can set apart from the
- * language, so a memo that sorts with it (however far) names the locale, not only the language
- * (ISSUES.md D14). The number and date formats follow the region too, but nearly every text does
- * (`t` formats its numbers), so only the collation is held to it.
+ * The collation and the first day of the week of the store. They follow the region, which a
+ * person can set apart from the language, so a memo that sorts or counts weeks with them (however
+ * far) names the locale, not only the language (ISSUES.md D14). The formatters of `fmt` follow the
+ * region too, but nearly every text uses one (`t` formats its numbers), so they are not held to it.
  */
-export const REGION_SEEDS = ["compareText"];
+export const REGION_SEEDS = ["compareText", "firstDayOfWeek"];
 
 /**
  * Functions of the store that read the state without showing it: they apply or save a choice, or
@@ -1157,7 +1158,7 @@ export function usesTranslators(a: Analysis, path: string, hook: Hook): string[]
   return uses(a, a, path, hook);
 }
 
-/** What a hook uses that sorts with the collation of the region (`compareText`); empty when nothing. */
+/** What a hook uses that follows the region (`compareText`, `firstDayOfWeek`); empty when nothing. */
 export function usesRegional(a: Analysis, path: string, hook: Hook): string[] {
   return uses(a, a.regional, path, hook);
 }
@@ -1204,11 +1205,11 @@ export function problem(a: Analysis, path: string, h: Hook): string | null {
   if (!h.deps.startsWith("[")) return "the dependencies are not a list the guard can read";
   if (!namesLanguage(h.deps))
     return `uses ${uses.join(", ")}; the dependencies do not name lang or locale`;
-  // The collation follows the region, which a person can set apart from the language: a memo
-  // that sorts names the locale, not only the language.
+  // The collation and the first day of the week follow the region, which a person can set apart
+  // from the language: a memo that uses them names the locale, not only the language.
   const regional = usesRegional(a, path, h);
   return regional.length && !LOCALE_DEP.test(h.deps)
-    ? `sorts with ${regional.join(", ")}; the dependencies name lang but not locale`
+    ? `follows the region with ${regional.join(", ")}; the dependencies name lang but not locale`
     : null;
 }
 
