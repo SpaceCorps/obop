@@ -337,6 +337,70 @@ fn a_loopback_server_without_a_token_serves_metrics_to_a_direct_caller_only() {
     assert!(!has_header(&r, "vary") || !header_value(&r, "vary").to_lowercase().contains("origin"));
 }
 
+/// U74: the control plane (`platform serve`) applies the same rule to `/metrics` as an instance,
+/// over a real socket: 401 without the token, 200 with it, and open to a direct loopback caller
+/// when no token is set. The community and status routes are merged in as `main.rs` does.
+#[test]
+fn the_control_plane_serves_metrics_with_and_without_a_token() {
+    let start_platform = |env: &[(&str, &str)]| {
+        let port = free_port();
+        let child = obop()
+            .args([
+                "platform",
+                "serve",
+                "--provisioner",
+                "fake",
+                "--addr",
+                &format!("127.0.0.1:{port}"),
+                "--db",
+                "memory:",
+            ])
+            .env("OBOP_STATUS_INTERVAL_SECS", "3600")
+            .envs(env.iter().copied())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn obop platform serve");
+        let s = Server { child, port };
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while TcpStream::connect(("127.0.0.1", port)).is_err() {
+            assert!(
+                Instant::now() < deadline,
+                "obop platform serve did not come up"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        s
+    };
+    let s = start_platform(&[("OBOP_METRICS_TOKEN", "scrape-token-0123456789")]);
+    assert_eq!(http(s.port, "GET", "/metrics", &[]).0, 401);
+    assert_eq!(
+        http(
+            s.port,
+            "GET",
+            "/metrics",
+            &[("Authorization", "Bearer not-the-token-0123456789")]
+        )
+        .0,
+        401
+    );
+    let (st, r) = http(
+        s.port,
+        "GET",
+        "/metrics",
+        &[("Authorization", "Bearer scrape-token-0123456789")],
+    );
+    assert_eq!(st, 200, "{r}");
+    assert!(r.contains("obop_build_info"), "{r}");
+    // The merged routes still answer next to it.
+    assert_eq!(http(s.port, "GET", "/status", &[]).0, 200);
+    drop(s);
+    let s = start_platform(&[]);
+    let (st, r) = http(s.port, "GET", "/metrics", &[]);
+    assert_eq!(st, 200, "{r}");
+    assert!(r.contains("obop_build_info"), "{r}");
+}
+
 /// A typo in the backup timer's settings stops the start before the database is opened: an old
 /// database that would be migrated (and, without OBOP_BACKUP_DIR, without a backup) is left as it
 /// was, and the message names the setting.
