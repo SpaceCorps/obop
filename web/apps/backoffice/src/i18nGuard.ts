@@ -288,7 +288,7 @@ export function hooks(src: string, masked: string = code(src)): Hook[] {
     // `deps!`, a conditional): `problem()` says when it is not a list it can read. It is not them
     // when the text before the comma is not yet a whole argument (`new Map<string, string>(...)`).
     // A list after the last comma is the dependencies whatever comes before it (`rows.length<3 ?
-    // t("a") : t("b"), [rows]`), unless it is a tuple type that a `>` closes (`Map<string, [a, b]>`).
+    // t(yes) : t(no), [rows]`), unless it is a tuple type that a `>` closes (`Map<string, [a, b]>`).
     if (
       last !== undefined &&
       (depsList(masked.slice(last + 1, end)) || argumentComplete(masked.slice(start, last)))
@@ -1035,7 +1035,7 @@ export function analyse(sources: Source[]): Analysis {
     // does, so a local `const t = (s) => s` is not a use of the imported `t`.
     // The level of the body is counted from its own `{`, so a wrapper call around the function
     // (`useCallback((m) => { const t = ...; }, [])`) adds no level (D14b). Only a function has
-    // parameters: `const x = (t("a") + "b")` has none.
+    // parameters: `const x = (t(key) + "b")` has none.
     const text = file.masked.slice(d.start, d.end);
     const base = file.depth[d.start]!;
     const shadow = new Set<string>();
