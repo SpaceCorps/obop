@@ -370,3 +370,9 @@ description = "Betrag des Feldes in Öre"
 [labels.de.model.accounting_se_vat_report_line.field.vouchers]
 label = "Belege"
 description = "Verweise auf die Belege, die den Betrag ergeben, einer pro Zeile, damit ein Prüfer ihn nachvollziehen kann"
+
+[labels.de.model.accounting_se_vat_box.filter.unverified]
+label = "Ungeprüft"
+
+[labels.de.model.accounting_se_vat_code.filter.unverified]
+label = "Ungeprüft"

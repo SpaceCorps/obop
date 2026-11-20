@@ -170,3 +170,6 @@ label = "Aikataulu"
 
 [labels.fi.model.email_marketing_campaign.section.results]
 label = "Tulokset"
+
+[labels.fi.model.email_marketing_contact.filter.may_be_mailed]
+label = "Postitus sallittu"

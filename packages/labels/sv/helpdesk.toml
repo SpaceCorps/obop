@@ -160,3 +160,15 @@ label = "Hantering"
 
 [labels.sv.model.helpdesk_ticket.section.resolution]
 label = "Lösning"
+
+[labels.sv.model.helpdesk_ticket.filter.not_closed]
+label = "Ej stängda"
+
+[labels.sv.model.helpdesk_ticket.filter.unassigned]
+label = "Ej tilldelade"
+
+[labels.sv.model.helpdesk_ticket.filter.mine]
+label = "Mina"
+
+[labels.sv.model.helpdesk_ticket.filter.overdue]
+label = "Försenade"

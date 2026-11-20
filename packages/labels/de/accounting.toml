@@ -408,3 +408,30 @@ message = "Eine andere Periode umfasst bereits einige dieser Tage: Beginnen Sie 
 [labels.de.model.accounting_move_line.field.settled]
 label = "Beglichen"
 description = "Ob eine Banktransaktion diesen Forderungs- oder Verbindlichkeitsposten begleicht (ihr settles_line_id nennt ihn); berechnet, daher zeigt es auch eine gebuchte Zeile"
+
+[labels.de.model.accounting_account.filter.reconcilable]
+label = "Abstimmbar"
+
+[labels.de.model.accounting_account.filter.in_use]
+label = "In Verwendung"
+
+[labels.de.model.accounting_period.filter.open]
+label = "Offen"
+
+[labels.de.model.accounting_move.filter.drafts]
+label = "Entwürfe"
+
+[labels.de.model.accounting_move.filter.posted]
+label = "Gebucht"
+
+[labels.de.model.accounting_move_line.filter.open_items]
+label = "Offene Posten"
+
+[labels.de.model.accounting_move_line.filter.overdue]
+label = "Überfällig"
+
+[labels.de.model.accounting_move_line.filter.due_in_30_days]
+label = "Fällig in 30 Tagen"
+
+[labels.de.model.accounting_bank_statement_line.filter.to_match]
+label = "Zuzuordnen"

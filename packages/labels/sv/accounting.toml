@@ -408,3 +408,30 @@ message = "En annan period täcker redan några av dessa dagar: låt den här b�
 [labels.sv.model.accounting_move_line.field.settled]
 label = "Reglerad"
 description = "Om en banktransaktion reglerar den här kund- eller leverantörsposten (dess settles_line_id anger den); beräknad, så även en bokförd rad visar det"
+
+[labels.sv.model.accounting_account.filter.reconcilable]
+label = "Avstämningsbara"
+
+[labels.sv.model.accounting_account.filter.in_use]
+label = "Används"
+
+[labels.sv.model.accounting_period.filter.open]
+label = "Öppna"
+
+[labels.sv.model.accounting_move.filter.drafts]
+label = "Utkast"
+
+[labels.sv.model.accounting_move.filter.posted]
+label = "Bokförda"
+
+[labels.sv.model.accounting_move_line.filter.open_items]
+label = "Öppna poster"
+
+[labels.sv.model.accounting_move_line.filter.overdue]
+label = "Förfallna"
+
+[labels.sv.model.accounting_move_line.filter.due_in_30_days]
+label = "Förfaller inom 30 dagar"
+
+[labels.sv.model.accounting_bank_statement_line.filter.to_match]
+label = "Att matcha"

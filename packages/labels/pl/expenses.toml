@@ -111,3 +111,12 @@ label = "Zgłaszający"
 
 [labels.pl.model.expenses_expense.section.payment]
 label = "Płatność"
+
+[labels.pl.model.expenses_expense.filter.my_claims]
+label = "Moje wnioski"
+
+[labels.pl.model.expenses_expense.filter.to_approve]
+label = "Do zatwierdzenia"
+
+[labels.pl.model.expenses_expense.filter.to_pay]
+label = "Do zapłaty"

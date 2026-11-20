@@ -75,3 +75,9 @@ label = "Artículo"
 
 [labels.es.model.knowledge_article.section.details]
 label = "Detalles"
+
+[labels.es.model.knowledge_article.filter.published]
+label = "Publicados"
+
+[labels.es.model.knowledge_article.filter.drafts]
+label = "Borradores"

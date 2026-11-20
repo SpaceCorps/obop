@@ -316,3 +316,6 @@ label = "Sisältö"
 
 [labels.fi.model.website_blog_post.section.cover_picture]
 label = "Kansikuva"
+
+[labels.fi.model.website_form_submission.filter.new]
+label = "Uudet"

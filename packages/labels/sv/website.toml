@@ -316,3 +316,6 @@ label = "Innehåll"
 
 [labels.sv.model.website_blog_post.section.cover_picture]
 label = "Omslagsbild"
+
+[labels.sv.model.website_form_submission.filter.new]
+label = "Nya"

@@ -75,3 +75,9 @@ label = "Contenu de l'article"
 
 [labels.fr.model.knowledge_article.section.details]
 label = "Détails"
+
+[labels.fr.model.knowledge_article.filter.published]
+label = "Publiés"
+
+[labels.fr.model.knowledge_article.filter.drafts]
+label = "Brouillons"

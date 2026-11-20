@@ -263,3 +263,6 @@ description = "La sesión de cuyo cajón salió el efectivo de un reembolso, fij
 
 [labels.es.model.pos_session.section.cash_count]
 label = "Arqueo de caja"
+
+[labels.es.model.pos_session.filter.open]
+label = "Abiertas"

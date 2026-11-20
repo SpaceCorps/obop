@@ -170,3 +170,9 @@ label = "Kundens godkännande"
 
 [labels.sv.model.field_service_job.section.report]
 label = "Deklaration"
+
+[labels.sv.model.field_service_job.filter.today]
+label = "I dag"
+
+[labels.sv.model.field_service_job.filter.not_done]
+label = "Inte klara"

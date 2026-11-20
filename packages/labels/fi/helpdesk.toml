@@ -160,3 +160,15 @@ label = "Käsittely"
 
 [labels.fi.model.helpdesk_ticket.section.resolution]
 label = "Ratkaisu"
+
+[labels.fi.model.helpdesk_ticket.filter.not_closed]
+label = "Sulkemattomat"
+
+[labels.fi.model.helpdesk_ticket.filter.unassigned]
+label = "Ei käsittelijää"
+
+[labels.fi.model.helpdesk_ticket.filter.mine]
+label = "Omat"
+
+[labels.fi.model.helpdesk_ticket.filter.overdue]
+label = "Myöhässä"

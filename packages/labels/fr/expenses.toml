@@ -111,3 +111,12 @@ label = "Demandé par"
 
 [labels.fr.model.expenses_expense.section.payment]
 label = "Paiement"
+
+[labels.fr.model.expenses_expense.filter.my_claims]
+label = "Mes notes de frais"
+
+[labels.fr.model.expenses_expense.filter.to_approve]
+label = "À approuver"
+
+[labels.fr.model.expenses_expense.filter.to_pay]
+label = "À payer"

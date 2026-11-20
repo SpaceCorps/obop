@@ -3118,7 +3118,7 @@ mod tests {
         let _guard = obop_storage::testing::TempPath::dir("obop-check");
         let dir = _guard.path().to_path_buf();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.3.4", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.5", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),

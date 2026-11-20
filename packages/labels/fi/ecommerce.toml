@@ -594,3 +594,15 @@ label = "Maksu"
 
 [labels.fi.model.ecommerce_order.section.checkout_record]
 label = "Kassatapahtuma"
+
+[labels.fi.model.ecommerce_listing.filter.in_the_shop]
+label = "Kaupassa"
+
+[labels.fi.model.ecommerce_listing.filter.out_of_stock]
+label = "Loppu varastosta"
+
+[labels.fi.model.ecommerce_order.filter.to_ship]
+label = "Lähetettävät"
+
+[labels.fi.model.ecommerce_order.filter.waiting_for_payment]
+label = "Odottaa maksua"

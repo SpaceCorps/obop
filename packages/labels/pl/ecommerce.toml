@@ -594,3 +594,15 @@ label = "Płatność"
 
 [labels.pl.model.ecommerce_order.section.checkout_record]
 label = "Zapis transakcji"
+
+[labels.pl.model.ecommerce_listing.filter.in_the_shop]
+label = "W sklepie"
+
+[labels.pl.model.ecommerce_listing.filter.out_of_stock]
+label = "Brak w magazynie"
+
+[labels.pl.model.ecommerce_order.filter.to_ship]
+label = "Do wysłania"
+
+[labels.pl.model.ecommerce_order.filter.waiting_for_payment]
+label = "Czekają na płatność"

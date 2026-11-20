@@ -156,3 +156,27 @@ description = "El documento del que procede el movimiento, por ejemplo un númer
 [labels.es.model.inventory_move.field.lot]
 label = "Lote"
 description = "El lote que se mueve, cuando el producto se controla por lotes; al validar cambia el artículo de stock de ese lote (se crea si falta)"
+
+[labels.es.model.inventory_item.filter.low_stock]
+label = "Stock bajo"
+
+[labels.es.model.inventory_item.filter.in_stock]
+label = "En stock"
+
+[labels.es.model.inventory_move.filter.to_do]
+label = "Por hacer"
+
+[labels.es.model.inventory_move.filter.receipts]
+label = "Recepciones"
+
+[labels.es.model.inventory_move.filter.deliveries]
+label = "Entregas"
+
+[labels.es.model.inventory_move.filter.stock_counts]
+label = "Recuentos"
+
+[labels.es.model.inventory_move.filter.scrap]
+label = "Desechos"
+
+[labels.es.model.inventory_move.filter.late]
+label = "Retrasados"

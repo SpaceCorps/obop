@@ -316,3 +316,6 @@ label = "Treść"
 
 [labels.pl.model.website_blog_post.section.cover_picture]
 label = "Zdjęcie okładki"
+
+[labels.pl.model.website_form_submission.filter.new]
+label = "Nowe"

@@ -63,3 +63,9 @@ done = "Hyväksytty"
 label = "Hylkää"
 description = "Palauta lähetetty tuntikirjaus luonnokseksi (vain esihenkilö)"
 done = "Palautettu luonnokseksi"
+
+[labels.fi.model.timesheets_entry.filter.mine]
+label = "Omat"
+
+[labels.fi.model.timesheets_entry.filter.to_approve]
+label = "Hyväksyttävät"

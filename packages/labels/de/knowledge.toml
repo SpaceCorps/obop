@@ -75,3 +75,9 @@ label = "Artikel"
 
 [labels.de.model.knowledge_article.section.details]
 label = "Einzelheiten"
+
+[labels.de.model.knowledge_article.filter.published]
+label = "Veröffentlicht"
+
+[labels.de.model.knowledge_article.filter.drafts]
+label = "Entwürfe"

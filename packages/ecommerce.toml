@@ -1,6 +1,6 @@
 [module]
 id = "ecommerce"
-version = "0.6.1"
+version = "0.6.2"
 name = "eCommerce"
 description = "An online shop: categories, product listings with translations, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. When the instance runs with the public site enabled, visitors browse the published listings and place orders without an account; the server prices every order from the published listing and never trusts the browser. Orders take stock off the listing at checkout, apply discount codes and tax rates on the server, and are paid by bank transfer, by card through Stripe Checkout or in a local demo mode; the payment record, the provider reference and refunds are kept with the order. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data and are never public. Needs the Products package."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["shop", "orders", "storefront"]
 categories = ["sales"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "0.6.1: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). The app opens on Orders, newest first, with the setup models under Configuration. A new listing takes its title, price and SKU from the product, and Published reads Show in shop. What checkout computes on an order (the totals, the tax, the day it was placed, how long its stock is held) can no longer be typed over, and a delivered, cancelled or refunded order and its lines can no longer be changed, except its tracking number and contact."
+changelog = "0.6.2: the quick filters of the lists are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.6.1: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). The app opens on Orders, newest first, with the setup models under Configuration. A new listing takes its title, price and SKU from the product, and Published reads Show in shop. What checkout computes on an order (the totals, the tax, the day it was placed, how long its stock is held) can no longer be typed over, and a delivered, cancelled or refunded order and its lines can no longer be changed, except its tracking number and contact."
 home = "ecommerce_order"
 
 [module.dependencies]

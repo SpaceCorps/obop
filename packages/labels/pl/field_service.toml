@@ -170,3 +170,9 @@ label = "Odbiór"
 
 [labels.pl.model.field_service_job.section.report]
 label = "Deklaracja"
+
+[labels.pl.model.field_service_job.filter.today]
+label = "Dzisiaj"
+
+[labels.pl.model.field_service_job.filter.not_done]
+label = "Nieukończone"

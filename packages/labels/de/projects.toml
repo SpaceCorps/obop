@@ -197,3 +197,9 @@ description = "Eine erledigte Aufgabe wieder öffnen, zurück zu offen"
 [labels.de.model.projects_task.action.reopen_cancelled]
 label = "Wieder öffnen"
 description = "Eine stornierte Aufgabe wieder öffnen, zurück zu offen"
+
+[labels.de.model.projects_task.filter.open]
+label = "Offen"
+
+[labels.de.model.projects_task.filter.overdue]
+label = "Überfällig"

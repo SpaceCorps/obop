@@ -123,3 +123,9 @@ label = "Laskutus"
 
 [labels.fi.model.subscriptions_subscription.section.cancellation]
 label = "Peruutus"
+
+[labels.fi.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "Kokeilu päättyy tällä viikolla"
+
+[labels.fi.model.subscriptions_subscription.filter.invoice_due]
+label = "Laskutettavat"

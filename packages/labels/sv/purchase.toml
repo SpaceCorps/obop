@@ -149,3 +149,12 @@ description = "Radbelopp: antal gånger styckpris (valutans minsta enhet)"
 [labels.sv.model.purchase_order_line.field.receipt_quantity]
 label = "Antal att ta emot"
 description = "Antal enheter som inleveransen lägger i lager: det mottagna antalet om det anges, annars det beställda antalet"
+
+[labels.sv.model.purchase_order.filter.to_send]
+label = "Att skicka"
+
+[labels.sv.model.purchase_order.filter.to_receive]
+label = "Att ta emot"
+
+[labels.sv.model.purchase_order.filter.late]
+label = "Försenade"

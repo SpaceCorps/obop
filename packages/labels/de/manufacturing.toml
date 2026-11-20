@@ -146,3 +146,9 @@ description = "Das verbrauchte Produkt"
 [labels.de.model.manufacturing_order_line.field.quantity]
 label = "Menge"
 description = "Stückzahl der Komponente, die der ganze Auftrag verbraucht"
+
+[labels.de.model.manufacturing_order.filter.in_progress]
+label = "In Arbeit"
+
+[labels.de.model.manufacturing_order.filter.late]
+label = "Verspätet"

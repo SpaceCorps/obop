@@ -27,6 +27,9 @@ pub enum SlotKind {
     ActionConfirm,
     /// The note shown after an action ran (`done` under the action; R17).
     ActionDone,
+    /// The label of a quick filter the package declares (`filter.<key>` under the model, the key
+    /// in `option`; U68).
+    FilterLabel,
 }
 
 /// One thing a translator fills in, with its English source text.
@@ -95,6 +98,15 @@ pub fn slots(module: &Module) -> Vec<Slot> {
                 "",
                 &filter_key(&sec.label),
                 &sec.label,
+            );
+        }
+        for fl in m.ui().map(|u| u.filters.as_slice()).unwrap_or_default() {
+            push(
+                SlotKind::FilterLabel,
+                m.name,
+                "",
+                &filter_key(&fl.label),
+                &fl.label,
             );
         }
         for f in &m.fields {
@@ -174,6 +186,9 @@ impl Slot {
             SlotKind::SectionLabel => model
                 .and_then(|m| m.sections.get(&self.option))
                 .and_then(|x| x.get(lang)),
+            SlotKind::FilterLabel => model
+                .and_then(|m| m.filters.get(&self.option))
+                .and_then(|x| x.get(lang)),
             SlotKind::ActionConfirm => model
                 .and_then(|m| m.confirms.get(&self.item))
                 .and_then(|x| x.get(lang)),
@@ -195,6 +210,9 @@ impl Slot {
         if self.kind == SlotKind::SectionLabel {
             return format!("{}.section.{}.label", self.model, self.option);
         }
+        if self.kind == SlotKind::FilterLabel {
+            return format!("{}.filter.{}.label", self.model, self.option);
+        }
         if self.kind == SlotKind::AssertMessage {
             return format!(
                 "{}.{}.assert.{}.message",
@@ -212,7 +230,7 @@ impl Slot {
             SlotKind::ActionLabel => "label",
             SlotKind::ActionDescription => "description",
             SlotKind::AssertMessage | SlotKind::GuardMessage | SlotKind::RuleMessage => "message",
-            SlotKind::SectionLabel => "label",
+            SlotKind::SectionLabel | SlotKind::FilterLabel => "label",
             SlotKind::ActionConfirm => "confirm",
             SlotKind::ActionDone => "done",
         };
@@ -302,6 +320,10 @@ pub fn template(module: &Module, lang: &str) -> String {
                     "labels.{lang}.model.{model}.section.{}",
                     toml_key(&s.option)
                 ),
+                "label",
+            ),
+            SlotKind::FilterLabel => (
+                format!("labels.{lang}.model.{model}.filter.{}", toml_key(&s.option)),
                 "label",
             ),
             SlotKind::ActionConfirm => (
@@ -506,6 +528,54 @@ mod tests {
             module().translated(&["[labels.de.model.shop_itemm]\nname = \"x\""])
         });
         assert!(bad.is_err());
+    }
+
+    /// U68: a quick filter the package declares is a slot, so `--complete` asks for its label.
+    #[test]
+    fn a_declared_filter_is_a_slot_of_the_template_and_of_completeness() {
+        let mut m = module();
+        let model = m.models.remove(0).with_ui(crate::ModelUi {
+            filters: vec![crate::ui::UiFilter {
+                label: "On sale".into(),
+                filter: crate::Filter::parse("state = \"on_sale\"").unwrap(),
+            }],
+            ..Default::default()
+        });
+        m.models.push(model);
+        let slot = slots(&m)
+            .into_iter()
+            .find(|s| s.kind == SlotKind::FilterLabel)
+            .expect("the filter has a slot");
+        assert_eq!(slot.option, "on_sale");
+        assert_eq!(slot.english, "On sale");
+        assert_eq!(slot.path(), "shop_item.filter.on_sale.label");
+        let t = template(&m, "de");
+        assert!(
+            t.contains("[labels.de.model.shop_item.filter.on_sale]\nlabel = \"On sale\"\n"),
+            "{t}"
+        );
+        let labels = Translations::parse_labels(&t).unwrap();
+        check_labels(&labels, &Shape::of(&m)).unwrap();
+        let tr = Translations::from_labels(&labels);
+        assert!(
+            incomplete(&m, &tr, "de", &[])
+                .iter()
+                .any(|p| p
+                    == "shop_item.filter.on_sale.label (de): identical to English \"On sale\"")
+        );
+        assert!(
+            incomplete(&m, &Translations::default(), "de", &[])
+                .iter()
+                .any(|p| p == "shop_item.filter.on_sale.label (de): missing")
+        );
+        let done = t.replace("label = \"On sale\"", "label = \"Im Angebot\"");
+        let tr = Translations::from_labels(&Translations::parse_labels(&done).unwrap());
+        assert!(
+            !incomplete(&m, &tr, "de", &[])
+                .iter()
+                .any(|p| p.contains("filter"))
+        );
+        assert_eq!(slot.get(&tr, "de"), Some("Im Angebot"));
     }
 
     #[test]

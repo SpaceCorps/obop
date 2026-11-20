@@ -111,3 +111,12 @@ label = "Eingereicht von"
 
 [labels.de.model.expenses_expense.section.payment]
 label = "Zahlung"
+
+[labels.de.model.expenses_expense.filter.my_claims]
+label = "Meine Abrechnungen"
+
+[labels.de.model.expenses_expense.filter.to_approve]
+label = "Zu genehmigen"
+
+[labels.de.model.expenses_expense.filter.to_pay]
+label = "Zu zahlen"

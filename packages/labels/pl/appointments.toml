@@ -118,3 +118,9 @@ label = "Wizyta"
 
 [labels.pl.model.appointments_appointment.section.resource_and_time]
 label = "Zasób i czas"
+
+[labels.pl.model.appointments_appointment.filter.today]
+label = "Dzisiaj"
+
+[labels.pl.model.appointments_appointment.filter.coming_up]
+label = "Nadchodzące"

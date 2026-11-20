@@ -160,3 +160,15 @@ label = "Traitement"
 
 [labels.fr.model.helpdesk_ticket.section.resolution]
 label = "Résolution"
+
+[labels.fr.model.helpdesk_ticket.filter.not_closed]
+label = "Non clos"
+
+[labels.fr.model.helpdesk_ticket.filter.unassigned]
+label = "Non assignés"
+
+[labels.fr.model.helpdesk_ticket.filter.mine]
+label = "Les miens"
+
+[labels.fr.model.helpdesk_ticket.filter.overdue]
+label = "En retard"

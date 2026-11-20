@@ -170,3 +170,6 @@ label = "Harmonogram"
 
 [labels.pl.model.email_marketing_campaign.section.results]
 label = "Wyniki"
+
+[labels.pl.model.email_marketing_contact.filter.may_be_mailed]
+label = "Zgoda na wysyłkę"

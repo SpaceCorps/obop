@@ -197,3 +197,9 @@ description = "Reabrir una tarea completada, de vuelta a pendiente"
 [labels.es.model.projects_task.action.reopen_cancelled]
 label = "Reabrir"
 description = "Reabrir una tarea cancelada, de vuelta a pendiente"
+
+[labels.es.model.projects_task.filter.open]
+label = "Abiertas"
+
+[labels.es.model.projects_task.filter.overdue]
+label = "Vencidas"

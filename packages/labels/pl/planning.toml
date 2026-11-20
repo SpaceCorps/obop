@@ -98,3 +98,12 @@ message = "Zmiana kończy się, zanim się zacznie: ustaw godzinę zakończenia 
 
 [labels.pl.model.planning_shift.rule.no_double_shift]
 message = "Pracownik ma już zmianę w tym czasie: wybierz inną godzinę lub innego pracownika"
+
+[labels.pl.model.planning_shift.filter.open_shifts]
+label = "Wolne zmiany"
+
+[labels.pl.model.planning_shift.filter.not_published]
+label = "Nieopublikowane"
+
+[labels.pl.model.planning_shift.filter.coming_up]
+label = "Nadchodzące"

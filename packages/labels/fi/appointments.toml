@@ -118,3 +118,9 @@ label = "Tapaaminen"
 
 [labels.fi.model.appointments_appointment.section.resource_and_time]
 label = "Resurssi ja aika"
+
+[labels.fi.model.appointments_appointment.filter.today]
+label = "Tänään"
+
+[labels.fi.model.appointments_appointment.filter.coming_up]
+label = "Tulossa"
