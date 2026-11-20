@@ -22,12 +22,23 @@ export function answered(page: Page, wanted: (url: string) => boolean): () => Pr
   return async () => {
     try {
       // The bound is the answer's, not the screen's: a request the server never answers still fails.
+      // A timeout names what was still open (or that nothing was sent), so a failure on a machine
+      // nobody can look at says which request it waited for.
       await expect
         .poll(() => sent > 0 && open.size === 0, {
-          message: "the screen's requests are answered",
+          message: `the screen's requests are answered (a request still open or none sent)`,
           timeout: 30_000,
         })
-        .toBe(true);
+        .toBe(true)
+        .catch((e: unknown) => {
+          const waiting = [...open].map((r) => `${r.method()} ${r.url()}`);
+          throw new Error(
+            `the screen's requests are not answered: ${sent} sent, ${waiting.length} still open${
+              waiting.length ? `: ${waiting.join(", ")}` : ""
+            }`,
+            { cause: e },
+          );
+        });
     } finally {
       page.off("request", start);
       page.off("requestfinished", end);
