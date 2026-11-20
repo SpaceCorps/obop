@@ -30,12 +30,13 @@ export function pointsOf(rows: readonly Row[]): Point[] {
     const lon = num(r.lon);
     if (lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
     const seq = num(r.seq);
-    const t = typeof r.recorded_at === "string" ? Date.parse(r.recorded_at) : Number.NaN;
+    // Not named `t`: that is the translation function of this file.
+    const at = typeof r.recorded_at === "string" ? Date.parse(r.recorded_at) : Number.NaN;
     out.push({
       lat,
       lon,
       accuracy: num(r.accuracy_m),
-      ...(seq !== null && Number.isFinite(t) ? { seq, t } : {}),
+      ...(seq !== null && Number.isFinite(at) ? { seq, t: at } : {}),
     });
   }
   return out;
