@@ -56,7 +56,7 @@ export function StoredLimits({ token, module }: { token: string; module: string 
     | { kind: "idle" }
     | { kind: "busy" }
     | { kind: "done"; rows: StoredLimit[] }
-    | { kind: "error"; message: string }
+    | { kind: "error"; message: () => string }
   >({ kind: "idle" });
   const run = async () => {
     setState({ kind: "busy" });
@@ -64,8 +64,9 @@ export function StoredLimits({ token, module }: { token: string; module: string 
     if (r.kind === "ok") {
       const v = r.value as { stored_limits?: StoredLimit[] } | null;
       setState({ kind: "done", rows: v?.stored_limits ?? [] });
-    } else if (r.kind === "error") setState({ kind: "error", message: serverMessage(r.message) });
-    else setState({ kind: "error", message: t("The check needs an approval.") });
+    } else if (r.kind === "error")
+      setState({ kind: "error", message: () => serverMessage(r.message) });
+    else setState({ kind: "error", message: () => t("The check needs an approval.") });
   };
   const bad = state.kind === "done" ? outsideFirst(state.rows) : [];
   return (
@@ -86,7 +87,7 @@ export function StoredLimits({ token, module }: { token: string; module: string 
       <div>
         {state.kind === "error" && (
           <Notice tone="danger" title={t("The check failed")}>
-            {state.message}
+            {state.message()}
           </Notice>
         )}
         {state.kind === "done" && bad.length === 0 && (
