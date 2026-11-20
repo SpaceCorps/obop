@@ -528,4 +528,13 @@ async fn metrics_report_how_long_the_change_feed_is_held_back() {
         r.body
     );
     assert_eq!(value(&r.body, "obop_history_feed_lag_seconds"), 90.5);
+    // The help texts are for an operator: no internal issue id (K31, U43) in any of them.
+    for help in r.body.lines().filter(|l| l.starts_with("# HELP")) {
+        let id = help.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| {
+            w.len() > 1
+                && w.starts_with(|c: char| c.is_ascii_uppercase())
+                && w[1..].chars().all(|c| c.is_ascii_digit())
+        });
+        assert!(!id, "{help}");
+    }
 }

@@ -1001,7 +1001,6 @@ pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
     Ok(page)
 }
 
-/// Counts and ages, without reading the entries.
 /// The light reading of [`HELD_BACK`] for `/metrics` (U43): `None` before the history table
 /// exists, else the milliseconds the feed is held back (0 when nothing is).
 pub(crate) fn lag_ms(pg: &Pg) -> Result<Option<i64>> {
@@ -1017,6 +1016,7 @@ pub(crate) fn lag_ms(pg: &Pg) -> Result<Option<i64>> {
     })
 }
 
+/// Counts and ages, without reading the entries.
 pub(crate) fn stats(pg: &Pg) -> Result<HistoryStats> {
     let mut s = pg.main.read(Class::Aggregate, |c| {
         if !table_exists(c)? {

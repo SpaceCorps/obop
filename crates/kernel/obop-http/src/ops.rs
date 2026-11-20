@@ -829,7 +829,7 @@ fn render_rest(s: &HttpState, mut t: String) -> String {
     if let Some(ms) = g.history_lag_ms {
         let _ = writeln!(
             t,
-            "# HELP obop_history_feed_lag_seconds Seconds the change feed is held back by the oldest open transaction of the PostgreSQL server (K31; alert above 60)."
+            "# HELP obop_history_feed_lag_seconds Seconds the change feed is held back by the oldest open transaction of the PostgreSQL server (alert above 60)."
         );
         let _ = writeln!(t, "# TYPE obop_history_feed_lag_seconds gauge");
         let _ = writeln!(

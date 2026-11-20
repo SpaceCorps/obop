@@ -359,7 +359,9 @@ fn platform(sub: &str, args: &mut Vec<String>) -> Exit {
 const PRIVATE_FILE_WARNING: Option<&str> = None;
 #[cfg(not(unix))]
 const PRIVATE_FILE_WARNING: Option<&str> = Some(
-    "on this system the key file inherits the access rights of its folder and is not made      readable by its owner only; make release keys on a Unix host (mode 0600), or restrict the      file yourself",
+    "on this system the key file inherits the access rights of its folder and is not made \
+     readable by its owner only; make release keys on a Unix host (mode 0600), or restrict the \
+     file yourself",
 );
 
 /// A new file that only its owner can read, created that way (mode 0600 on Unix, never wider for
@@ -396,6 +398,9 @@ mod private_file_tests {
         // Not made owner-only off Unix (U75): the command says so instead of claiming it.
         #[cfg(not(unix))]
         assert!(super::PRIVATE_FILE_WARNING.is_some_and(|w| w.contains("Unix host")));
+        // One sentence with single spaces (a lost line continuation left runs of them).
+        #[cfg(not(unix))]
+        assert!(super::PRIVATE_FILE_WARNING.is_some_and(|w| !w.contains("  ")));
         assert!(super::create_private_file(&p).is_err(), "never overwritten");
         let _ = std::fs::remove_dir_all(&dir);
     }
