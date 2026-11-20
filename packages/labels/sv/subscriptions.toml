@@ -123,3 +123,9 @@ label = "Fakturering"
 
 [labels.sv.model.subscriptions_subscription.section.cancellation]
 label = "Annullering"
+
+[labels.sv.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "Provperioden slutar denna vecka"
+
+[labels.sv.model.subscriptions_subscription.filter.invoice_due]
+label = "Ska faktureras"

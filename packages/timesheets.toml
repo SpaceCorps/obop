@@ -1,11 +1,11 @@
 [module]
 id = "timesheets"
-version = "0.4.2"
+version = "0.4.3"
 name = "Timesheets"
 description = "Time spent on project tasks, entered in minutes, with a billable flag and an approval step. Approving and rejecting an entry need a human approval; agents may only propose them. Needs the Projects package. A worker sees and edits only their own entries; timesheets.manager sees all."
 author = "SpaceCorps"
 summary = "Time spent on project tasks in minutes, with a billable flag and an approval step."
-changelog = "0.4.2: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). Time entries open on a week grid: one line per task, a column per day, hours typed straight into the cells, and Submit week sends the drafts of the week for approval."
+changelog = "0.4.3: the quick filters of the lists are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.4.2: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). Time entries open on a week grid: one line per task, a column per day, hours typed straight into the cells, and Submit week sends the drafts of the week for approval."
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
 repository = "https://github.com/SpaceCorps/obop"

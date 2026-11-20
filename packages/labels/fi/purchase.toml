@@ -149,3 +149,12 @@ description = "Rivin summa: määrä kertaa yksikköhinta (valuutan pienin yksik
 [labels.fi.model.purchase_order_line.field.receipt_quantity]
 label = "Vastaanotettava määrä"
 description = "Yksiköt, jotka vastaanotto vie varastoon: vastaanotettu määrä, jos se on annettu, muuten tilattu määrä"
+
+[labels.fi.model.purchase_order.filter.to_send]
+label = "Lähetettävät"
+
+[labels.fi.model.purchase_order.filter.to_receive]
+label = "Vastaanotettavat"
+
+[labels.fi.model.purchase_order.filter.late]
+label = "Myöhässä"

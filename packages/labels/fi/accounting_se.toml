@@ -370,3 +370,9 @@ description = "Ruudun summa örinä"
 [labels.fi.model.accounting_se_vat_report_line.field.vouchers]
 label = "Tositteet"
 description = "Viittaukset summan muodostaviin tositteisiin, yksi riviä kohti, jotta tarkastaja voi seurata sitä"
+
+[labels.fi.model.accounting_se_vat_box.filter.unverified]
+label = "Tarkistamattomat"
+
+[labels.fi.model.accounting_se_vat_code.filter.unverified]
+label = "Tarkistamattomat"

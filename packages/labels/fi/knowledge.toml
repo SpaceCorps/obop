@@ -75,3 +75,9 @@ label = "Artikkeli"
 
 [labels.fi.model.knowledge_article.section.details]
 label = "Tiedot"
+
+[labels.fi.model.knowledge_article.filter.published]
+label = "Julkaistut"
+
+[labels.fi.model.knowledge_article.filter.drafts]
+label = "Luonnokset"

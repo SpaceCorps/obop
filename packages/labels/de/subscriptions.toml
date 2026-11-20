@@ -123,3 +123,9 @@ label = "Abrechnung"
 
 [labels.de.model.subscriptions_subscription.section.cancellation]
 label = "Stornierung"
+
+[labels.de.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "Testphase endet diese Woche"
+
+[labels.de.model.subscriptions_subscription.filter.invoice_due]
+label = "Rechnung fällig"

@@ -75,3 +75,9 @@ label = "Artikel"
 
 [labels.sv.model.knowledge_article.section.details]
 label = "Detaljer"
+
+[labels.sv.model.knowledge_article.filter.published]
+label = "Publicerade"
+
+[labels.sv.model.knowledge_article.filter.drafts]
+label = "Utkast"

@@ -197,3 +197,9 @@ description = "Rouvrir une tâche terminée, de retour à faire"
 [labels.fr.model.projects_task.action.reopen_cancelled]
 label = "Rouvrir"
 description = "Rouvrir une tâche annulée, de retour à faire"
+
+[labels.fr.model.projects_task.filter.open]
+label = "Ouvertes"
+
+[labels.fr.model.projects_task.filter.overdue]
+label = "En retard"

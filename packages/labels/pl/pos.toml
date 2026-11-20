@@ -263,3 +263,6 @@ description = "Sesja, z której szuflady wypłacono gotówkę zwrotu, ustawiana 
 
 [labels.pl.model.pos_session.section.cash_count]
 label = "Liczenie gotówki"
+
+[labels.pl.model.pos_session.filter.open]
+label = "Otwarte"

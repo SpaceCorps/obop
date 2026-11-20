@@ -13,7 +13,7 @@ categories = ["productivity"]
 maturity = "experimental"
 requires_core = "^0.2.2"
 home = "sign_request"
-changelog = "The translated section titles, questions and done notes of the back office reach an instance that already had Sign. The signing page now carries the version of the texts it showed, and a form without it, or from a page whose texts changed since, is shown again before anything is signed. Revoking a link and its line in the security log are stored together."
+changelog = "The translated section titles, questions, done notes and list quick filters of the back office (filters machine-drafted in German, French, Polish, Finnish, Swedish and Spanish) reach an instance that already had Sign. The signing page now carries the version of the texts it showed, and a form without it, or from a page whose texts changed since, is shown again before anything is signed. Revoking a link and its line in the security log are stored together."
 
 [module.dependencies]
 documents = ">=0.3, <1"

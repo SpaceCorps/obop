@@ -108,3 +108,12 @@ label = "Document"
 
 [labels.fr.model.documents_document.section.where_it_is_kept]
 label = "Lieu de conservation"
+
+[labels.fr.model.documents_document.filter.expiring_soon]
+label = "Expire bientôt"
+
+[labels.fr.model.documents_document.filter.drafts]
+label = "Brouillons"
+
+[labels.fr.model.documents_document.filter.confidential]
+label = "Confidentiels"

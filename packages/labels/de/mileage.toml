@@ -190,3 +190,6 @@ label = "Verwerfen"
 
 [labels.de.model.mileage_trip.section.recorded_by_the_app]
 label = "Von der App erfasst"
+
+[labels.de.model.mileage_trip.filter.to_review]
+label = "Zu prüfen"

@@ -170,3 +170,9 @@ label = "Abnahme"
 
 [labels.de.model.field_service_job.section.report]
 label = "Meldung"
+
+[labels.de.model.field_service_job.filter.today]
+label = "Heute"
+
+[labels.de.model.field_service_job.filter.not_done]
+label = "Nicht erledigt"

@@ -196,3 +196,12 @@ label = "Archivo enviado"
 
 [labels.es.model.sign_request.section.evidence]
 label = "Pruebas"
+
+[labels.es.model.sign_request.filter.waiting_for_signature]
+label = "Pendientes de firma"
+
+[labels.es.model.sign_request.filter.signed]
+label = "Firmadas"
+
+[labels.es.model.sign_request.filter.expiring_soon]
+label = "Caducan pronto"

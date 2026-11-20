@@ -108,3 +108,12 @@ label = "Dokument"
 
 [labels.pl.model.documents_document.section.where_it_is_kept]
 label = "Miejsce przechowywania"
+
+[labels.pl.model.documents_document.filter.expiring_soon]
+label = "Wkrótce wygasają"
+
+[labels.pl.model.documents_document.filter.drafts]
+label = "Wersje robocze"
+
+[labels.pl.model.documents_document.filter.confidential]
+label = "Poufne"

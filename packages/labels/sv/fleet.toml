@@ -182,3 +182,21 @@ done = "Fordonet är på verkstad"
 label = "Tillbaka från verkstaden"
 description = "Återföra ett fordon från verkstaden till de tillgängliga fordonen"
 done = "Fordonet är tillbaka i poolen"
+
+[labels.sv.model.fleet_vehicle.filter.available]
+label = "Tillgängliga"
+
+[labels.sv.model.fleet_vehicle.filter.in_the_workshop]
+label = "På verkstad"
+
+[labels.sv.model.fleet_vehicle_driver.filter.licence_expiring]
+label = "Körkort går ut"
+
+[labels.sv.model.fleet_vehicle_driver.filter.suspended]
+label = "Avstängda"
+
+[labels.sv.model.fleet_vehicle_service.filter.planned]
+label = "Planerade"
+
+[labels.sv.model.fleet_vehicle_service.filter.done]
+label = "Utförda"

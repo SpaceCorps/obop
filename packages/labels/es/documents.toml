@@ -108,3 +108,12 @@ label = "Documento"
 
 [labels.es.model.documents_document.section.where_it_is_kept]
 label = "Dónde se guarda"
+
+[labels.es.model.documents_document.filter.expiring_soon]
+label = "Caducan pronto"
+
+[labels.es.model.documents_document.filter.drafts]
+label = "Borradores"
+
+[labels.es.model.documents_document.filter.confidential]
+label = "Confidenciales"

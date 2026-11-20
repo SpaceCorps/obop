@@ -170,3 +170,9 @@ label = "Conformidad"
 
 [labels.es.model.field_service_job.section.report]
 label = "Declaración"
+
+[labels.es.model.field_service_job.filter.today]
+label = "Hoy"
+
+[labels.es.model.field_service_job.filter.not_done]
+label = "Sin terminar"

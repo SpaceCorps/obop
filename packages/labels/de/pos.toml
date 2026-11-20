@@ -263,3 +263,6 @@ description = "Die Sitzung, aus deren Schublade das Bargeld einer Erstattung aus
 
 [labels.de.model.pos_session.section.cash_count]
 label = "Kassenzählung"
+
+[labels.de.model.pos_session.filter.open]
+label = "Offen"

@@ -108,3 +108,12 @@ label = "Dokument"
 
 [labels.de.model.documents_document.section.where_it_is_kept]
 label = "Aufbewahrungsort"
+
+[labels.de.model.documents_document.filter.expiring_soon]
+label = "Läuft bald ab"
+
+[labels.de.model.documents_document.filter.drafts]
+label = "Entwürfe"
+
+[labels.de.model.documents_document.filter.confidential]
+label = "Vertraulich"

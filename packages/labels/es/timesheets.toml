@@ -63,3 +63,9 @@ done = "Aprobado"
 label = "Rechazar"
 description = "Devolver a borrador un registro enviado (solo responsables)"
 done = "Devuelto a borrador"
+
+[labels.es.model.timesheets_entry.filter.mine]
+label = "Míos"
+
+[labels.es.model.timesheets_entry.filter.to_approve]
+label = "Por aprobar"

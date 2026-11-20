@@ -118,3 +118,9 @@ label = "Termin"
 
 [labels.de.model.appointments_appointment.section.resource_and_time]
 label = "Ressource und Zeit"
+
+[labels.de.model.appointments_appointment.filter.today]
+label = "Heute"
+
+[labels.de.model.appointments_appointment.filter.coming_up]
+label = "Demnächst"

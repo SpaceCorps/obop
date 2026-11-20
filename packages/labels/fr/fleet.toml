@@ -182,3 +182,21 @@ done = "Le véhicule est à l'atelier"
 label = "Retour de l'atelier"
 description = "Remettre un véhicule revenu de l'atelier parmi les véhicules disponibles"
 done = "Le véhicule est de retour dans le parc"
+
+[labels.fr.model.fleet_vehicle.filter.available]
+label = "Disponibles"
+
+[labels.fr.model.fleet_vehicle.filter.in_the_workshop]
+label = "À l'atelier"
+
+[labels.fr.model.fleet_vehicle_driver.filter.licence_expiring]
+label = "Permis bientôt expiré"
+
+[labels.fr.model.fleet_vehicle_driver.filter.suspended]
+label = "Suspendus"
+
+[labels.fr.model.fleet_vehicle_service.filter.planned]
+label = "Planifiés"
+
+[labels.fr.model.fleet_vehicle_service.filter.done]
+label = "Effectués"

@@ -408,3 +408,30 @@ message = "Otro período ya cubre algunos de estos días: empiece este después 
 [labels.es.model.accounting_move_line.field.settled]
 label = "Liquidado"
 description = "Si una transacción bancaria liquida esta partida a cobrar o a pagar (su settles_line_id la indica); calculado, así que también una línea contabilizada lo muestra"
+
+[labels.es.model.accounting_account.filter.reconcilable]
+label = "Conciliables"
+
+[labels.es.model.accounting_account.filter.in_use]
+label = "En uso"
+
+[labels.es.model.accounting_period.filter.open]
+label = "Abiertos"
+
+[labels.es.model.accounting_move.filter.drafts]
+label = "Borradores"
+
+[labels.es.model.accounting_move.filter.posted]
+label = "Contabilizados"
+
+[labels.es.model.accounting_move_line.filter.open_items]
+label = "Partidas abiertas"
+
+[labels.es.model.accounting_move_line.filter.overdue]
+label = "Vencidas"
+
+[labels.es.model.accounting_move_line.filter.due_in_30_days]
+label = "Vencen en 30 días"
+
+[labels.es.model.accounting_bank_statement_line.filter.to_match]
+label = "Por conciliar"

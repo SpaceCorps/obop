@@ -118,3 +118,9 @@ label = "Cita"
 
 [labels.es.model.appointments_appointment.section.resource_and_time]
 label = "Recurso y hora"
+
+[labels.es.model.appointments_appointment.filter.today]
+label = "Hoy"
+
+[labels.es.model.appointments_appointment.filter.coming_up]
+label = "Próximas"

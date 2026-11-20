@@ -123,3 +123,9 @@ label = "Facturación"
 
 [labels.es.model.subscriptions_subscription.section.cancellation]
 label = "Cancelación"
+
+[labels.es.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "La prueba termina esta semana"
+
+[labels.es.model.subscriptions_subscription.filter.invoice_due]
+label = "Factura pendiente"

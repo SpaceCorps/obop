@@ -263,3 +263,6 @@ description = "Istunto, jonka laatikosta palautuksen käteinen maksettiin, palve
 
 [labels.fi.model.pos_session.section.cash_count]
 label = "Kassan laskenta"
+
+[labels.fi.model.pos_session.filter.open]
+label = "Avoimet"

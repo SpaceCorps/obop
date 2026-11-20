@@ -146,3 +146,9 @@ description = "El producto consumido"
 [labels.es.model.manufacturing_order_line.field.quantity]
 label = "Cantidad"
 description = "Unidades del componente que usa toda la orden"
+
+[labels.es.model.manufacturing_order.filter.in_progress]
+label = "En curso"
+
+[labels.es.model.manufacturing_order.filter.late]
+label = "Retrasadas"

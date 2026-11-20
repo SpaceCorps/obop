@@ -197,3 +197,9 @@ description = "Avaa valmis tehtävä uudelleen, takaisin tekemättömäksi"
 [labels.fi.model.projects_task.action.reopen_cancelled]
 label = "Avaa uudelleen"
 description = "Avaa peruutettu tehtävä uudelleen, takaisin tekemättömäksi"
+
+[labels.fi.model.projects_task.filter.open]
+label = "Avoimet"
+
+[labels.fi.model.projects_task.filter.overdue]
+label = "Myöhässä"

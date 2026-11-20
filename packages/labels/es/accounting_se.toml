@@ -370,3 +370,9 @@ description = "Importe de la casilla en öre"
 [labels.es.model.accounting_se_vat_report_line.field.vouchers]
 label = "Asientos"
 description = "Referencias a los asientos que forman el importe, una por línea, para que un revisor pueda seguirlo"
+
+[labels.es.model.accounting_se_vat_box.filter.unverified]
+label = "Sin verificar"
+
+[labels.es.model.accounting_se_vat_code.filter.unverified]
+label = "Sin verificar"

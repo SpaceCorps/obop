@@ -170,3 +170,9 @@ label = "Validation client"
 
 [labels.fr.model.field_service_job.section.report]
 label = "Déclaration"
+
+[labels.fr.model.field_service_job.filter.today]
+label = "Aujourd'hui"
+
+[labels.fr.model.field_service_job.filter.not_done]
+label = "Non terminées"

@@ -156,3 +156,27 @@ description = "Dokument, z którego pochodzi ruch, na przykład numer zamówieni
 [labels.pl.model.inventory_move.field.lot]
 label = "Partia"
 description = "Przesuwana partia, gdy produkt jest śledzony w partiach; zatwierdzenie zmienia pozycję magazynową tej partii (tworzoną, gdy jej brak)"
+
+[labels.pl.model.inventory_item.filter.low_stock]
+label = "Niski stan"
+
+[labels.pl.model.inventory_item.filter.in_stock]
+label = "Na stanie"
+
+[labels.pl.model.inventory_move.filter.to_do]
+label = "Do zrobienia"
+
+[labels.pl.model.inventory_move.filter.receipts]
+label = "Przyjęcia"
+
+[labels.pl.model.inventory_move.filter.deliveries]
+label = "Wydania"
+
+[labels.pl.model.inventory_move.filter.stock_counts]
+label = "Inwentaryzacje"
+
+[labels.pl.model.inventory_move.filter.scrap]
+label = "Złomowanie"
+
+[labels.pl.model.inventory_move.filter.late]
+label = "Opóźnione"

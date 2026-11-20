@@ -263,3 +263,6 @@ description = "La session dont le tiroir a versé l’espèce d’un rembourseme
 
 [labels.fr.model.pos_session.section.cash_count]
 label = "Comptage de caisse"
+
+[labels.fr.model.pos_session.filter.open]
+label = "Ouvertes"

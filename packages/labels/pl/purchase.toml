@@ -149,3 +149,12 @@ description = "Kwota pozycji: ilość razy cena jednostkowa (w jednostkach podrz
 [labels.pl.model.purchase_order_line.field.receipt_quantity]
 label = "Ilość do przyjęcia"
 description = "Liczba sztuk, które przyjęcie wprowadza na stan: ilość przyjęta, jeśli podana, w przeciwnym razie ilość zamówiona"
+
+[labels.pl.model.purchase_order.filter.to_send]
+label = "Do wysłania"
+
+[labels.pl.model.purchase_order.filter.to_receive]
+label = "Do przyjęcia"
+
+[labels.pl.model.purchase_order.filter.late]
+label = "Opóźnione"

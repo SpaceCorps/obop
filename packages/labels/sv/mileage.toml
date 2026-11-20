@@ -190,3 +190,6 @@ label = "Kassering"
 
 [labels.sv.model.mileage_trip.section.recorded_by_the_app]
 label = "Registrerat av appen"
+
+[labels.sv.model.mileage_trip.filter.to_review]
+label = "Att granska"

@@ -160,3 +160,15 @@ label = "Gestión"
 
 [labels.es.model.helpdesk_ticket.section.resolution]
 label = "Resolución"
+
+[labels.es.model.helpdesk_ticket.filter.not_closed]
+label = "Sin cerrar"
+
+[labels.es.model.helpdesk_ticket.filter.unassigned]
+label = "Sin asignar"
+
+[labels.es.model.helpdesk_ticket.filter.mine]
+label = "Míos"
+
+[labels.es.model.helpdesk_ticket.filter.overdue]
+label = "Vencidos"

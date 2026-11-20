@@ -1,6 +1,6 @@
 [module]
 id = "pos"
-version = "0.7.2"
+version = "0.7.3"
 name = "Point of Sale"
 description = "Shop tills: a point-of-sale configuration, sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change is still entered; the expected cash and the cash difference of a session are computed from its paid sales, and the cash control and refund settings of a point of sale are only recorded: nothing checks them. Paying also creates a draft stock move per line from the stock location of the till, for the warehouse to validate. A new session proposes the cash counted when the till last closed. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["pos", "retail", "till"]
 categories = ["sales"]
 maturity = "experimental"
 requires_core = "^0.2.2"
-changelog = "0.7.2: a refund writes the session whose drawer pays it out (Refunded in session) together with the refund, in one write, instead of just after it. 0.7.1: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.7.0: a cash sale refunded after its session closed is paid out of the session open at its till then, and that session expects that much less cash (Refunded in session); with no session open at the till such a refund is refused. 0.6.0: A till has a stock location, and its sessions and sales take it, so a paid sale moves stock. The expected cash of a session is computed on the server (opening cash plus the cash payments of its paid sales) and so is the cash difference once the closing cash is counted; closing keeps the expected cash, so refunding one of its sales later does not change a closed session (the expected cash entered by earlier versions is kept the same way). A new session opens with the cash counted when its till last closed (the till's usual opening cash when it never closed), and closing stamps the closing instant. The app opens on Sessions; a till is called a till and sits under Configuration. A new session starts today, for you, with the till's opening cash; a new sale goes to the one open session, dated today; a line takes the product's name and price. Closing a session stamps the closing day. A paid, refunded or cancelled sale, its lines and its payments can no longer be changed, and neither can a closed session except its note. A session whose counted cash differs from the expected cash closes only with a note that explains the difference."
+changelog = "0.7.3: the quick filters of the lists are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.7.2: a refund writes the session whose drawer pays it out (Refunded in session) together with the refund, in one write, instead of just after it. 0.7.1: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.7.0: a cash sale refunded after its session closed is paid out of the session open at its till then, and that session expects that much less cash (Refunded in session); with no session open at the till such a refund is refused. 0.6.0: A till has a stock location, and its sessions and sales take it, so a paid sale moves stock. The expected cash of a session is computed on the server (opening cash plus the cash payments of its paid sales) and so is the cash difference once the closing cash is counted; closing keeps the expected cash, so refunding one of its sales later does not change a closed session (the expected cash entered by earlier versions is kept the same way). A new session opens with the cash counted when its till last closed (the till's usual opening cash when it never closed), and closing stamps the closing instant. The app opens on Sessions; a till is called a till and sits under Configuration. A new session starts today, for you, with the till's opening cash; a new sale goes to the one open session, dated today; a line takes the product's name and price. Closing a session stamps the closing day. A paid, refunded or cancelled sale, its lines and its payments can no longer be changed, and neither can a closed session except its note. A session whose counted cash differs from the expected cash closes only with a note that explains the difference."
 home = "pos_session"
 
 [module.dependencies]
@@ -282,8 +282,7 @@ write_group = "pos.user"
   [model.guard]
   immutable_when = ["paid", "refunded", "cancelled"]
   mutable_fields = ["note"]
-  # The refund writes the drawer that pays it out with the move (U20).
-  exit_to = [{ to = "refunded", action = "refund", may_change = ["refund_session_id"] }]
+  exit_to = ["refunded"]
   message = "A paid, refunded or cancelled sale cannot be changed. Refund it to reverse it."
 
   [[model.field]]

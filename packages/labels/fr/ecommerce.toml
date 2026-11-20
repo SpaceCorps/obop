@@ -594,3 +594,15 @@ label = "Paiement"
 
 [labels.fr.model.ecommerce_order.section.checkout_record]
 label = "Trace du paiement"
+
+[labels.fr.model.ecommerce_listing.filter.in_the_shop]
+label = "En boutique"
+
+[labels.fr.model.ecommerce_listing.filter.out_of_stock]
+label = "En rupture de stock"
+
+[labels.fr.model.ecommerce_order.filter.to_ship]
+label = "À expédier"
+
+[labels.fr.model.ecommerce_order.filter.waiting_for_payment]
+label = "En attente de paiement"

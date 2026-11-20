@@ -149,3 +149,12 @@ description = "Positionsbetrag: Menge mal Stückpreis (kleinste Währungseinheit
 [labels.de.model.purchase_order_line.field.receipt_quantity]
 label = "Eingangsmenge"
 description = "Stückzahl, die der Wareneingang ins Lager bucht: die erhaltene Menge, wenn angegeben, sonst die bestellte Menge"
+
+[labels.de.model.purchase_order.filter.to_send]
+label = "Zu senden"
+
+[labels.de.model.purchase_order.filter.to_receive]
+label = "Zu empfangen"
+
+[labels.de.model.purchase_order.filter.late]
+label = "Verspätet"

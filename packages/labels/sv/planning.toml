@@ -98,3 +98,12 @@ message = "Passet slutar innan det börjar: ange en sluttid efter starten"
 
 [labels.sv.model.planning_shift.rule.no_double_shift]
 message = "Medarbetaren har redan ett pass vid den tiden: välj en annan tid eller en annan medarbetare"
+
+[labels.sv.model.planning_shift.filter.open_shifts]
+label = "Lediga pass"
+
+[labels.sv.model.planning_shift.filter.not_published]
+label = "Ej publicerade"
+
+[labels.sv.model.planning_shift.filter.coming_up]
+label = "Kommande"
