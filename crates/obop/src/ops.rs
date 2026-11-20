@@ -90,10 +90,7 @@ pub fn guard_database(backend: &Arc<dyn Backend>, url: &str) -> Exit {
             .ok()
             .filter(|d| !d.trim().is_empty());
         let keys = crate::backup_cli::backup_keys().map_err(|e| fail(&e))?;
-        // Uploaded files that cannot be opened are not "no files": a backup without them would be
-        // answered as good.
-        let blobs =
-            Some(Arc::new(blob_catalog(backend, url)?) as Arc<dyn obop_storage::blob::Blobs>);
+        let blobs = backup_blobs(backend, url, dir.as_deref())?;
         let need_bytes = dir
             .as_ref()
             .and_then(|_| database_bytes(backend.kind(), url));
@@ -374,6 +371,23 @@ pub(crate) fn server_info(url: &str, kind: &str) -> Option<Arc<dyn obop_ops::pga
     }
 }
 
+/// The uploaded files a self-migrating start backs up with the records: opened only when there
+/// is a backup directory to back up into (K19), so a start that takes no backup never fails on a
+/// file store it does not need. Uploaded files that cannot be opened are not "no files": with a
+/// directory, a backup without them would be answered as good, so that is an error.
+fn backup_blobs(
+    backend: &Arc<dyn Backend>,
+    url: &str,
+    dir: Option<&str>,
+) -> Result<Option<Arc<dyn obop_storage::blob::Blobs>>, ExitCode> {
+    match dir {
+        None => Ok(None),
+        Some(_) => Ok(Some(
+            Arc::new(blob_catalog(backend, url)?) as Arc<dyn obop_storage::blob::Blobs>
+        )),
+    }
+}
+
 /// The store of uploaded pictures and files for the database at `url`: its records are in the
 /// database, its bytes where `OBOP_BLOB_STORE`, `OBOP_BLOB_DIR` and the URL say (D60).
 pub(crate) fn blob_catalog(
@@ -557,6 +571,18 @@ mod tests {
             dispatch(&args(&["platform", "serve"])).is_none(),
             "the rest of platform is main's"
         );
+    }
+
+    /// K19: a self-migrating start without a backup directory takes no backup, so it does not
+    /// open the uploaded-file store (one that cannot be opened no longer stops that start); with
+    /// a directory a store that cannot be opened still stops it.
+    #[test]
+    fn the_file_store_is_opened_for_a_start_backup_only_when_there_is_a_backup_directory() {
+        let backend = obop_storage::open("memory:").unwrap();
+        let unopenable = "nosuchscheme://nowhere";
+        assert!(blob_catalog(&backend, unopenable).is_err(), "the premise");
+        assert!(matches!(backup_blobs(&backend, unopenable, None), Ok(None)));
+        assert!(backup_blobs(&backend, unopenable, Some("backups")).is_err());
     }
 
     #[test]

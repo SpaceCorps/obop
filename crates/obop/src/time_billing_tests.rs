@@ -333,7 +333,7 @@ fn the_project_gives_the_customer_and_the_rate_and_lines_can_be_per_task() {
         json!({"project": "WEB", "from": "2026-09-01", "to": "2026-09-30",
         "hourly_rate_minor": 100, "per": "week"}),
     ));
-    assert!(m.contains("per must be entry or task"), "{m}");
+    assert!(m.contains("per must be entry, task or hours"), "{m}");
 }
 
 #[test]
@@ -363,4 +363,54 @@ fn the_project_rate_is_not_billed_in_another_currency() {
     assert_eq!(f.run(eur).unwrap()["net"], json!(60_000));
     sek["hourly_rate_minor"] = json!(70_000);
     assert_eq!(f.run(sek).unwrap()["net"], json!(70_000));
+}
+
+#[test]
+fn per_hours_bills_one_line_of_whole_hours_and_links_every_entry_once() {
+    let f = fixture();
+    // 95 h 59 min over four days (an entry is capped at 24 h).
+    for (d, m) in [
+        ("2026-09-02", 1_440),
+        ("2026-09-03", 1_440),
+        ("2026-09-04", 1_440),
+        ("2026-09-05", 1_439),
+    ] {
+        f.entry(d, m, true, true);
+    }
+    let mut input = f.input(false);
+    input["per"] = json!("hours");
+    let r = f.run(input.clone()).unwrap();
+    assert_eq!(r["lines"].as_array().unwrap().len(), 1, "{r}");
+    assert_eq!(r["entries"], json!(4));
+    // 96 whole hours at 900.00.
+    assert_eq!(r["net"], json!(96 * 90_000));
+    assert_eq!(
+        r["lines"][0]["description"],
+        json!("Datakonsult - Website, 2026-09-01 till 2026-09-30")
+    );
+    let inv = rows(&f.app, "invoice");
+    assert_eq!(inv.len(), 1);
+    let lines = rows(&f.app, "invoice_line");
+    assert_eq!(lines[0].1["quantity"], json!(96));
+    assert_eq!(lines[0].1["unit_price_minor"], json!(90_000));
+    assert_eq!(rows(&f.app, "time_billing").len(), 4);
+    // Nothing is left to bill a second time.
+    assert!(refusal(f.run(input)).contains("no approved, billable, unbilled"));
+}
+
+#[test]
+fn per_hours_keeps_exact_hours_and_uses_a_given_description() {
+    let f = fixture();
+    f.entry("2026-09-02", 480, true, true);
+    let mut input = f.input(true);
+    input["per"] = json!("hours");
+    input["description"] = json!("Datakonsult - Utveckla plattformen");
+    let r = f.run(input).unwrap();
+    assert_eq!(r["net"], json!(8 * 90_000));
+    assert_eq!(
+        r["lines"][0]["description"],
+        json!("Datakonsult - Utveckla plattformen")
+    );
+    // A dry run writes nothing.
+    assert!(rows(&f.app, "invoice").is_empty());
 }

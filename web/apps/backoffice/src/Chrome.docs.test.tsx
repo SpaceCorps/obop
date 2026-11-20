@@ -113,6 +113,17 @@ describe("the command palette", () => {
     setProductDocsHidden(true);
     expect((await hits("custom module")).join("|")).not.toContain("How to write a custom module");
   });
+
+  // An action may open a question (one way, or a package confirm) that focuses its Cancel. The
+  // browser's own work for that Enter would then press Cancel and close the question at once, so
+  // the palette keeps the key to itself.
+  it("keeps the Enter that picks a hit from reaching whatever opens next", async () => {
+    await hits("customize");
+    const input = document.querySelector<HTMLInputElement>(".palette input")!;
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    await act(async () => input.dispatchEvent(enter));
+    expect(enter.defaultPrevented).toBe(true);
+  });
 });
 
 describe("the name of the top bar link", () => {

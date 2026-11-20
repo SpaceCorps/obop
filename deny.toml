@@ -38,4 +38,3 @@ version = 2
 # Every advisory fails the check, unmaintained and unsound ones included, until it is fixed or a
 # person records here why it does not apply (`ignore = [{ id = "RUSTSEC-...", reason = "..." }]`).
 yanked = "deny"
-ignore = []

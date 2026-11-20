@@ -2050,7 +2050,7 @@ test.describe("crawlers and agents", () => {
     expect(sv).toContain(messages.sv.apps.store.purposeEnglish);
     expect(sv).toContain("Fakturering");
     expect(app).toContain("### Models");
-    expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.5.1`);
+    expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.5.2`);
     // The page breaks a table token after an underscore or a dot with <wbr>; the copy, and
     // llms-full.txt which agents read, keep the plain token in backticks and no HTML tag.
     expect(app).toContain("`requester_email`");
@@ -2647,7 +2647,7 @@ test.describe("accessibility", () => {
           [
             "/apps/accounting/",
             13,
-            ["A Apache-2.0", "A packages/accounting.toml", "BUTTON", "SUMMARY Show 3 more actions"],
+            ["A Apache-2.0", "A packages/accounting.toml", "BUTTON", "SUMMARY Show 4 more actions"],
           ],
           ["/apps/invoicing/", 10, ["A Apache-2.0", "A crates/modules/invoicing"]],
         ] as const) {
@@ -2872,7 +2872,7 @@ test.describe("accessibility", () => {
       "/apps/helpdesk/ A packages/helpdesk.toml",
       "/apps/helpdesk/ BUTTON",
       "/apps/invoicing/ A crates/modules/invoicing",
-      "/apps/accounting/ SUMMARY Show 3 more actions",
+      "/apps/accounting/ SUMMARY Show 4 more actions",
       "/apps/accounting/ SUMMARY Show 5 more things it ke",
       "/apps/accounting/ SUMMARY Information",
       "/apps/accounting/ SUMMARY For developers",

@@ -976,6 +976,24 @@ impl Manifest {
                                 .flat_map(|u| &u.filter)
                                 .map(|f| obop_registry::labels::filter_key(&f.label))
                                 .collect(),
+                            sections: m
+                                .ui
+                                .iter()
+                                .flat_map(|u| &u.section)
+                                .map(|s| obop_registry::labels::filter_key(&s.label))
+                                .collect(),
+                            confirms: m
+                                .action
+                                .iter()
+                                .filter(|a| a.ui.as_ref().is_some_and(|u| u.confirm.is_some()))
+                                .map(|a| a.name.clone())
+                                .collect(),
+                            dones: m
+                                .action
+                                .iter()
+                                .filter(|a| a.ui.as_ref().is_some_and(|u| u.done.is_some()))
+                                .map(|a| a.name.clone())
+                                .collect(),
                         },
                     )
                 })

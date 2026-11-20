@@ -302,6 +302,8 @@ const USAGE: &str = "usage: obop <command>
                                                 configured). A lent scratch database is emptied again, uploaded files included.
                                                 --record-later keeps the result for a script that has one more check to make;
                                                 --record-from adds that check and records it
+  storage prune-indexes [--db URL] [--yes]     list the unique indexes (obop_uq_*) that no installed model declares, and
+                                                drop them with --yes (each logged as storage_index_dropped)
   storage check [--db URL] [--plane NAME] [--strict]
                                                 WAL archiving, TLS and durability settings of the PostgreSQL host; age of the last
                                                 verified backup, its off-host copy and its drill; the storage-encryption attestation
@@ -323,7 +325,8 @@ const USAGE: &str = "usage: obop <command>
                                                 managed instances: back up (OBOP_BACKUP_DIR), then ask the control plane (OBOP_UPDATE_URL,
                                                 OBOP_UPDATE_TOKEN) to upgrade this instance to a published release
   update rollback --yes                         ask the control plane to put the previous version back
-  platform release publish --version V --image REF [--notes T | --notes-file F] [--min-from V] [--db URL]
+  platform release publish --version V --image REF [--notes T | --notes-file F] [--min-from V] [--signing-key FILE] [--db URL]
+  platform release keygen --out FILE            a new release key (Ed25519, PKCS#8) for --signing-key; prints the public key
   platform release list | withdraw V            the releases instances read at /api/releases
   platform register-instance SLUG --url URL [--external-id ID] [--image REF] [--token-stdin]
   platform update-token SLUG [--revoke]         register an instance this control plane did not create, or issue a new update token
@@ -1493,6 +1496,12 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     }
     app.connectors.start();
     app.mail.start();
+    // A private trip keeps no route (docs/spec/mobile.md 5.6): those stored before that rule lose it.
+    match mileage::drop_private_routes(&app.store) {
+        Ok(0) => {}
+        Ok(n) => eprintln!("mileage: removed the route of {n} private trips"),
+        Err(e) => eprintln!("mileage: the routes of private trips were not removed: {e}"),
+    }
     // Scheduled backups with an off-host copy and retention, when OBOP_BACKUP_SCHEDULE is set.
     backup_cli::start_scheduler(scheduler, app.store.backend(), app.store.blobs());
     // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
@@ -1768,8 +1777,15 @@ fn platform_serve(
         ),
         std::time::Duration::from_secs(interval),
     );
-    let router = obop_http::platform_router(Arc::new(obop_platform::Api(platform)), static_dir)
-        .merge(obop_http::community::router(community));
+    // /metrics of the control plane: the same rule as an instance (I6, D67).
+    let metrics =
+        obop_http::ops::MetricsAccess::from_env(is_loopback(addr)).map_err(|e| fail(&e))?;
+    let router = obop_http::platform_router_with_metrics(
+        Arc::new(obop_platform::Api(platform)),
+        static_dir,
+        metrics,
+        obop_http::community::router(community),
+    );
     eprintln!("obop platform listening on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     rt.block_on(obop_http::serve(addr, router))
@@ -3102,7 +3118,7 @@ mod tests {
         let _guard = obop_storage::testing::TempPath::dir("obop-check");
         let dir = _guard.path().to_path_buf();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.3.3", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.4", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),
@@ -4359,6 +4375,27 @@ mod bundled_packages {
         assert!(widget("kpi", "count").is_ok());
         assert!(widget("gauge", "sum").is_err());
         assert!(widget("kpi", "average").is_err());
+        // dashboards 0.4.0 (K1): the period of a dated split is one of the server's buckets.
+        let period = |p: &str| {
+            call(
+                &app,
+                &admin,
+                "dashboards_widget.create",
+                Value::map([
+                    ("dashboard_id", Value::Text(id_of(&board))),
+                    ("title", Value::text("Orders per ISO week")),
+                    ("kind", Value::text("line")),
+                    ("model_name", Value::text("sale_order")),
+                    ("aggregate", Value::text("count")),
+                    ("group_by", Value::text("date_order")),
+                    ("period", Value::text(p)),
+                ]),
+            )
+        };
+        for p in ["day", "week", "iso_week", "month", "year"] {
+            period(p).unwrap_or_else(|e| panic!("{p}: {e:?}"));
+        }
+        assert!(period("fortnight").is_err());
     }
 
     /// The tutorial module of docs/MODULES.md installs, upgrades and fails exactly as the

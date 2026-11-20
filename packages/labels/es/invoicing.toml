@@ -39,13 +39,25 @@ description = "Fecha en que se emite la factura (YYYY-MM-DD)"
 label = "Fecha de vencimiento"
 description = "Fecha en que vence el pago (YYYY-MM-DD); no anterior a la fecha de emisión"
 
+[labels.es.model.invoice.field.our_reference]
+label = "Nuestra referencia"
+description = "Nuestra referencia impresa en la factura, texto libre"
+
+[labels.es.model.invoice.field.their_reference]
+label = "Su referencia"
+description = "Referencia del cliente impresa en la factura, texto libre"
+
 [labels.es.model.invoice.action.post]
 label = "Contabilizar"
 description = "Contabilizar una factura en borrador y asignarle el siguiente número de la serie"
+confirm = "¿Contabilizar esta factura? Recibe su número y ya no se podrá modificar."
+done = "Factura contabilizada"
 
 [labels.es.model.invoice.action.cancel]
 label = "Cancelar"
 description = "Cancelar una factura en borrador"
+confirm = "¿Cancelar este borrador de factura?"
+done = "Factura cancelada"
 
 [labels.es.model.invoice.field.party_id]
 label = "Tercero"
@@ -83,3 +95,6 @@ description = "Precio de una unidad en unidades menores de la moneda"
 [labels.es.model.invoice_line.field.amount_minor]
 label = "Importe"
 description = "Importe de la línea en unidades menores: cantidad por precio unitario"
+
+[labels.es.model.invoice.section.invoice]
+label = "Factura"

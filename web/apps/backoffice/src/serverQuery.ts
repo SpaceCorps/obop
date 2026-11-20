@@ -55,7 +55,8 @@ function convert(c: Cond, f: FieldMeta | undefined): ServerFilter[] | null {
         : [{ field: f.name, op: "in", value: c.v }];
     }
     case "isnot": {
-      if (f.kind !== "select" && f.kind !== "ref") return null;
+      // A text is compared exactly, as the browser does (a package's `name != "[erased]"`).
+      if (f.kind !== "select" && f.kind !== "ref" && f.kind !== "text") return null;
       return c.v.map((v): ServerFilter =>
         v === ""
           ? { field: f.name, op: "is_null", value: false }

@@ -124,10 +124,14 @@ cancelled = "Annulé"
 [labels.fr.model.inventory_move.action.validate]
 label = "Valider"
 description = "Confirme que les marchandises ont réellement bougé : la quantité quitte l’article source et arrive à l’article de destination (gestionnaires de stock uniquement) ; un mouvement terminé ne peut pas être annulé"
+confirm = "Valider ce mouvement ? Le stock change tout de suite et un mouvement terminé ne peut pas être annulé."
+done = "Stock mis à jour"
 
 [labels.fr.model.inventory_move.action.cancel]
 label = "Annuler"
 description = "Annule un mouvement en brouillon"
+confirm = "Annuler ce mouvement ?"
+done = "Mouvement annulé"
 
 [labels.fr.model.inventory_item.field.below_reorder]
 description = "Indique si l’article demande attention : la quantité est négative, ou au niveau de réapprovisionnement ou en dessous"

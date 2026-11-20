@@ -890,10 +890,12 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
 /// server starts (or put back after a failed upgrade): a field or model that has a reserved name
 /// (D75) is left alone, because the module was installed when the name was free. It stays an
 /// ordinary field of an untracked model, and the next upgrade of the module is refused by
-/// [`check_module`] until the name is changed. Everything else is checked as before.
+/// [`check_module`] until the name is changed. An action effect that writes a constant outside
+/// its field's limits (K44 c) is let through too: the action is refused when it runs. Everything
+/// else is checked as before.
 pub fn check_installed_module(m: &Module) -> Vec<Violation> {
     let mut v = check_basics(m, false);
-    v.extend(rules::check_rules(m, &|_| None, false));
+    v.extend(rules::check_installed_rules(m, &|_| None));
     v.extend(ui::check(m, &|_| None, false));
     v.extend(guard::check(m, &|_| None, false));
     v

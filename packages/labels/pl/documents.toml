@@ -87,10 +87,13 @@ archived = "Zarchiwizowane"
 [labels.pl.model.documents_document.action.publish]
 label = "Opublikuj"
 description = "Czyni dokument roboczy aktualną wersją"
+done = "Dokument jest opublikowany"
 
 [labels.pl.model.documents_document.action.archive]
 label = "Archiwizuj"
 description = "Archiwizuje opublikowany dokument (tylko kierownik)"
+confirm = "Zarchiwizować ten dokument? Żaden krok go nie przywróci."
+done = "Dokument jest zarchiwizowany"
 
 [labels.pl.model.documents_document.field.attachment]
 label = "Plik"
@@ -99,3 +102,9 @@ description = "Sam plik dokumentu (PDF, obraz, tekst, arkusz lub dokument biurow
 [labels.pl.model.documents_document.field.open_to_all]
 label = "Otwarty dla wszystkich"
 description = "Czy każdy z prawem odczytu dokumentów może go zobaczyć: prawda dla dokumentów publicznych i wewnętrznych"
+
+[labels.pl.model.documents_document.section.document]
+label = "Dokument"
+
+[labels.pl.model.documents_document.section.where_it_is_kept]
+label = "Miejsce przechowywania"

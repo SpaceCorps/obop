@@ -152,6 +152,16 @@ export function fieldTitleByName(name: string, fields?: FieldMeta[]): string {
 }
 
 /** The label of an action (a state transition or a command) on a record. */
+/** The question asked before an action runs, in the language of the screen (R17). */
+export const actionConfirm = (c: Pick<Command, "ui">): string | undefined =>
+  c.ui?.confirm
+    ? labelFor({ labels: c.ui.confirm_labels ?? {} }, getLang(), c.ui.confirm)
+    : undefined;
+
+/** The note shown after an action ran, in the language of the screen (R17). */
+export const actionDone = (c: Pick<Command, "ui">): string | undefined =>
+  c.ui?.done ? labelFor({ labels: c.ui.done_labels ?? {} }, getLang(), c.ui.done) : undefined;
+
 export function actionTitle(c: Pick<Command, "id" | "labels">): string {
   const en = label(c.id.split(".")[1] ?? c.id);
   return labelFor(c, getLang(), humanised(tx("action", en), en));

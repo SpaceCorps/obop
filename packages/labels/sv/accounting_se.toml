@@ -132,10 +132,14 @@ description = "Varifrån rutan kommer och vad som kontrollerats, till exempel up
 [labels.sv.model.accounting_se_vat_box.action.verify]
 label = "Verifiera"
 description = "Markera rutan som kontrollerad mot SKV 4700 (endast godkännare); registrerar vem som verifierade och när"
+confirm = "Markera den här rutan som kontrollerad mot blankett SKV 4700?"
+done = "Ruta kontrollerad"
 
 [labels.sv.model.accounting_se_vat_box.action.unverify]
 label = "Ta bort verifiering"
 description = "Dra tillbaka verifieringen av rutan (endast godkännare)"
+confirm = "Återkalla kontrollen av den här rutan?"
+done = "Kontrollen återkallad"
 
 [labels.sv.model.accounting_se_vat_code]
 name = "Momskod"
@@ -232,10 +236,14 @@ description = "Varifrån koden kommer och vad som kontrollerats, till exempel up
 [labels.sv.model.accounting_se_vat_code.action.verify]
 label = "Verifiera"
 description = "Markera koden som kontrollerad mot SKV 4700 (endast godkännare); registrerar vem som verifierade och när"
+confirm = "Markera den här momskoden som kontrollerad mot blankett SKV 4700?"
+done = "Momskoden kontrollerad"
 
 [labels.sv.model.accounting_se_vat_code.action.unverify]
 label = "Ta bort verifiering"
 description = "Dra tillbaka verifieringen av koden (endast godkännare)"
+confirm = "Återkalla kontrollen av den här momskoden?"
+done = "Kontrollen återkallad"
 
 [labels.sv.model.accounting_se_vat_report]
 name = "Momsrapport"
@@ -307,14 +315,18 @@ filed = "Inlämnad"
 [labels.sv.model.accounting_se_vat_report.action.propose]
 label = "Föreslå"
 description = "Föreslå rapporten för godkännande; agenter får göra detta"
+done = "Föreslagen för godkännande"
 
 [labels.sv.model.accounting_se_vat_report.action.withdraw]
 label = "Dra tillbaka"
 description = "Skicka en föreslagen rapport tillbaka till utkast"
+done = "Tillbaka till utkast"
 
 [labels.sv.model.accounting_se_vat_report.action.approve]
 label = "Godkänn"
 description = "Godkänn rapporten (endast godkännare; rutorna måste vara bekräftade som kontrollerade mot SKV 4700)"
+confirm = "Godkänna den här momsdeklarationen? Den kan inte längre ändras."
+done = "Momsdeklarationen godkänd"
 
 [labels.sv.model.accounting_se_vat_report.action.approve.assert.boxes_checked]
 message = "Rutorna har inte bekräftats som kontrollerade mot SKV 4700"
@@ -322,6 +334,8 @@ message = "Rutorna har inte bekräftats som kontrollerade mot SKV 4700"
 [labels.sv.model.accounting_se_vat_report.action.record_filed]
 label = "Registrera inlämning"
 description = "Registrera att deklarationen lämnats in till Skatteverket utanför det här systemet (endast godkännare)"
+confirm = "Registrera att den här deklarationen lämnades in till Skatteverket?"
+done = "Registrerad som inlämnad"
 
 [labels.sv.model.accounting_se_vat_report_line]
 name = "Momsrapportrad"

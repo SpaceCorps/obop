@@ -298,26 +298,35 @@ refunded = "Remboursée"
 [labels.fr.model.ecommerce_order.action.mark_paid]
 label = "Marquer payé"
 description = "Le paiement est arrivé"
+done = "Marqué comme payé"
 
 [labels.fr.model.ecommerce_order.action.ship]
 label = "Expédier"
 description = "Le colis a été remis au transporteur"
+confirm = "Marquer cette commande comme expédiée ? Ajoutez d'abord le numéro de suivi s'il y en a un."
+done = "Expédiée"
 
 [labels.fr.model.ecommerce_order.action.deliver]
 label = "Livrer"
 description = "Le colis est arrivé chez le client"
+done = "Livrée"
 
 [labels.fr.model.ecommerce_order.action.cancel]
 label = "Annuler"
 description = "Annule une commande qui n’a jamais été payée"
+confirm = "Annuler cette commande ? Son stock retourne aux annonces et elle ne pourra plus être modifiée."
 
 [labels.fr.model.ecommerce_order.action.refund]
 label = "Rembourser"
 description = "Rend l’argent d’une commande payée mais non livrée (responsable uniquement)"
+confirm = "Rembourser cette commande ? L'argent retourne à l'acheteur et le stock aux annonces."
+done = "Remboursé"
 
 [labels.fr.model.ecommerce_order.action.refund_delivered]
 label = "Rembourser (livré)"
 description = "Rend l’argent d’une commande livrée, par exemple après un retour (responsable uniquement)"
+confirm = "Rembourser cette commande livrée ? L'argent retourne à l'acheteur ; la marchandise ne retourne pas en rayon."
+done = "Remboursé"
 
 [labels.fr.model.ecommerce_order_line]
 name = "Ligne de commande"
@@ -552,7 +561,36 @@ description = "Identifiants des événements du prestataire déjà appliqués, e
 [labels.fr.model.ecommerce_payment.action.mark_failed]
 label = "Marquer comme échoué"
 description = "Le prestataire signale que le paiement a échoué"
+confirm = "Marquer ce paiement comme échoué ?"
 
 [labels.fr.model.ecommerce_payment.action.cancel]
 label = "Annuler"
 description = "Ne plus attendre ce paiement"
+confirm = "Ne plus attendre ce paiement ?"
+
+[labels.fr.model.ecommerce_listing.section.in_the_shop]
+label = "Dans la boutique"
+
+[labels.fr.model.ecommerce_listing.section.stock]
+label = "Stocks"
+
+[labels.fr.model.ecommerce_listing.section.product_page]
+label = "Page produit"
+
+[labels.fr.model.ecommerce_listing.section.advanced]
+label = "Avancé"
+
+[labels.fr.model.ecommerce_order.section.customer]
+label = "Client"
+
+[labels.fr.model.ecommerce_order.section.delivery]
+label = "Livraison"
+
+[labels.fr.model.ecommerce_order.section.amounts]
+label = "Montants"
+
+[labels.fr.model.ecommerce_order.section.payment]
+label = "Paiement"
+
+[labels.fr.model.ecommerce_order.section.checkout_record]
+label = "Trace du paiement"

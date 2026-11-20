@@ -1,7 +1,13 @@
 import { ObopApiError, ObopNetworkError, retryDelayMs } from "@obop/client";
 import type { TripApi } from "./api.ts";
-import { hasWork, type OutboxStore, type TripPatch } from "./store.ts";
-import { MAX_BATCH_POINTS, type LocalTrip, type Problem, type RemoteTrip } from "./types.ts";
+import { canChangePurpose, hasWork, type OutboxStore, type TripPatch } from "./store.ts";
+import {
+  MAX_BATCH_POINTS,
+  type LocalTrip,
+  type Problem,
+  type Purpose,
+  type RemoteTrip,
+} from "./types.ts";
 import { pointRow, pointsKey, tripKey } from "./values.ts";
 
 /** How a call failed, reduced to what the outbox does about it. */
@@ -118,6 +124,13 @@ export interface Engine {
   refreshTrip(clientTripId: string): Promise<void>;
   /** Reads the driver's own trips from the server (those recorded elsewhere too). */
   refreshRemote(limit?: number): Promise<void>;
+  /**
+   * The driver changes the purpose of a trip that is not submitted (`canChangePurpose`). While the
+   * phone still has to end the trip the change is stored and goes with the end; once the server
+   * holds the ended (or rejected) trip it is sent at once, and a failure is thrown to the caller
+   * with nothing changed on the phone.
+   */
+  changePurpose(clientTripId: string, purpose: Purpose): Promise<void>;
 }
 
 export interface EngineOptions {
@@ -340,10 +353,23 @@ export function createEngine({
     });
   }
 
+  /**
+   * A purpose the driver changed while the end was on its way (or whose sending failed) goes to the
+   * server before the phone marks the end done: once it is done, the purpose follows the server,
+   * and a change that was not sent would be lost.
+   */
+  async function sendPurpose(t: LocalTrip, id: string, server: RemoteTrip): Promise<void> {
+    const now = await store.getTrip(t.clientTripId);
+    if (!now || server.purpose === null || now.purpose === server.purpose) return;
+    if (server.state !== "ended" && server.state !== "rejected") return;
+    await call("end", () => api.updateTrip(id, { purpose: now.purpose }));
+  }
+
   async function end(t: LocalTrip, id: string): Promise<void> {
     const server = await call("end", () => api.getTrip(id));
     if (server.state !== "recording") {
       // A repeat of a call whose answer was lost: the trip is ended already.
+      await sendPurpose(t, id, server);
       await store.patchTrip(t.clientTripId, {
         endDone: true,
         attempts: 0,
@@ -358,6 +384,9 @@ export function createEngine({
         endedAt: t.endedAt ?? undefined,
         expectedPoints: t.expectedPoints ?? 0,
         lastSeq: t.lastSeq ?? 0,
+        // A purpose the driver changed while the trip was on the phone (a private trip loses its
+        // route on the server at the end, so the purpose must be there first).
+        purpose: t.purpose,
       }),
     );
     let ended: RemoteTrip;
@@ -381,6 +410,10 @@ export function createEngine({
       }
       throw error;
     }
+    // The driver changed the purpose again while the end was on its way: the server holds the
+    // ended trip now, so it is sent as a change of its own. A failure leaves the end not done, and
+    // the next attempt finds the trip ended and sends it again.
+    await sendPurpose(t, id, ended);
     // The server has the route and the distance; the phone does not keep the route. One
     // transaction: a kill between the two would leave the route on the phone for good.
     await store.patchTrip(t.clientTripId, {
@@ -527,7 +560,32 @@ export function createEngine({
       // The answer belongs to the sign-in the call was made under: when that has changed, it is
       // not written (the trip is not the new sign-in's, and the row may be gone).
       if (identity !== undefined && identity() !== started) return;
-      await store.patchTrip(clientTripId, fromServer(server));
+      // The purpose follows the server once the phone has nothing of it left to send.
+      const settled = t.origin === "server" || t.endDone;
+      await store.patchTrip(clientTripId, {
+        ...fromServer(server),
+        ...(settled && server.purpose !== null ? { purpose: server.purpose } : {}),
+      });
+    },
+
+    async changePurpose(clientTripId, purpose) {
+      const t = await store.getTrip(clientTripId);
+      if (!t || !canChangePurpose(t)) throw new Error("the purpose of this trip cannot be changed");
+      if (t.purpose === purpose) return;
+      if (t.origin === "device" && !t.endDone) {
+        await store.patchTrip(clientTripId, { purpose });
+        return;
+      }
+      if (t.serverId === null) throw new Error("the server does not hold this trip yet");
+      const id = t.serverId;
+      const started = identity?.();
+      await api.updateTrip(id, { purpose });
+      const server = await api.getTrip(id);
+      if (identity !== undefined && identity() !== started) return;
+      await store.patchTrip(clientTripId, {
+        purpose: server.purpose ?? purpose,
+        ...fromServer(server),
+      });
     },
 
     async refreshRemote(limit = 50) {

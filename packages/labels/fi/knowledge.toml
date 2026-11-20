@@ -57,11 +57,21 @@ archived = "Arkistoitu"
 [labels.fi.model.knowledge_article.action.publish]
 label = "Julkaise"
 description = "Julkaise artikkeli (vain esihenkilö)"
+done = "Artikkeli on julkaistu"
 
 [labels.fi.model.knowledge_article.action.unpublish]
 label = "Peru julkaisu"
 description = "Palauta artikkeli luonnokseksi"
+done = "Artikkeli on taas luonnos"
 
 [labels.fi.model.knowledge_article.action.archive]
 label = "Arkistoi"
 description = "Arkistoi vanhentunut artikkeli"
+confirm = "Arkistoidaanko tämä artikkeli? Mikään vaihe ei palauta sitä."
+done = "Artikkeli on arkistoitu"
+
+[labels.fi.model.knowledge_article.section.article]
+label = "Artikkeli"
+
+[labels.fi.model.knowledge_article.section.details]
+label = "Tiedot"

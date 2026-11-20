@@ -199,6 +199,10 @@ fn trip_reads(d: &Dispatcher, db: Arc<dyn Backend>, clock: Clock) {
             &id,
             Box::new(move |p, input, inner| {
                 let mut out = inner(input)?;
+                if command == "update" {
+                    // One wrapper per command: the route of a trip made private goes here too.
+                    out = crate::handlers::after_update(&db, input, out)?;
+                }
                 let who = policy::Who::of(p);
                 // An agent's token never receives a position (its class is withheld from agents
                 // and the answer says so, D40), so only a person's read is shaped here.

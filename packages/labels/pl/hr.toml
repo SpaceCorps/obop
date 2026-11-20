@@ -119,10 +119,13 @@ offboarded = "Zatrudnienie zakończone"
 [labels.pl.model.hr_employee.action.activate]
 label = "Aktywuj"
 description = "Kończy wdrażanie i oznacza pracownika jako aktywnego"
+done = "Pracownik jest teraz aktywny"
 
 [labels.pl.model.hr_employee.action.offboard]
 label = "Zakończ zatrudnienie"
 description = "Kończy kartotekę zatrudnienia; cofnąć można tylko decyzją działu kadr"
+confirm = "Zakończyć zatrudnienie tego pracownika? Rekord i jego dane zostają, a żaden krok tego nie cofa."
+done = "Zatrudnienie pracownika zakończone"
 
 [labels.pl.model.hr_leave_request]
 name = "Wniosek urlopowy"
@@ -181,14 +184,18 @@ refused = "Odrzucone"
 [labels.pl.model.hr_leave_request.action.request]
 label = "Złóż wniosek"
 description = "Przekazuje wniosek przełożonemu"
+done = "Wysłano do zatwierdzenia"
 
 [labels.pl.model.hr_leave_request.action.approve]
 label = "Zatwierdź"
 description = "Zatwierdza złożony wniosek urlopowy (tylko kierownik)"
+done = "Urlop zatwierdzony"
 
 [labels.pl.model.hr_leave_request.action.refuse]
 label = "Odrzuć"
 description = "Odrzuca złożony wniosek urlopowy (tylko kierownik)"
+confirm = "Odrzucić ten wniosek urlopowy?"
+done = "Urlop odrzucony"
 
 [labels.pl.model.hr_employee.field.photo]
 label = "Zdjęcie"
@@ -235,3 +242,24 @@ label = "Nadchodzące"
 
 [labels.pl.model.hr_leave_request.filter.not_refused]
 label = "Nieodrzucone"
+
+[labels.pl.model.hr_employee.section.work]
+label = "Praca"
+
+[labels.pl.model.hr_employee.section.employment]
+label = "Zatrudnienie"
+
+[labels.pl.model.hr_employee.section.private]
+label = "Prywatne"
+
+[labels.pl.model.hr_employee.section.pay]
+label = "Wynagrodzenie"
+
+[labels.pl.model.hr_employee.section.sensitive]
+label = "Poufne"
+
+[labels.pl.model.hr_leave_request.section.leave]
+label = "Urlop"
+
+[labels.pl.model.hr_leave_request.section.sick_leave]
+label = "Zwolnienie lekarskie"

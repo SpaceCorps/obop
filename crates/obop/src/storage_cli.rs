@@ -365,6 +365,53 @@ Waiting for the browser (5 minutes)..."
             );
             Ok(())
         }
+        Some("prune-indexes") => {
+            // K41 (D78 index prune, PROPOSED): the unique indexes no registered model declares.
+            // A dry run unless --yes; never run by a start or an install.
+            let yes = has(args, "--yes");
+            if !args.is_empty() {
+                return Err(usage());
+            }
+            let app = crate::open_app_with(
+                &crate::Opts {
+                    db: Some(url.clone()),
+                    token: None,
+                    demo: false,
+                    dev_auth: false,
+                    public_site: false,
+                    trust_proxy: false,
+                    admin_prefix: "/admin".into(),
+                },
+                false,
+            )?;
+            let backend = app.store.backend();
+            let orphans = app
+                .dispatcher
+                .orphaned_unique_indexes(&*backend)
+                .map_err(|e| fail(&format!("error: {e}")))?;
+            if orphans.is_empty() {
+                println!("no orphaned unique index: every obop_uq_ index belongs to a model");
+                return Ok(());
+            }
+            for name in &orphans {
+                if yes {
+                    backend
+                        .drop_unique_index(name)
+                        .map_err(|e| fail(&format!("error: could not drop {name}: {e}")))?;
+                    record_event(&backend, "storage_index_dropped", name);
+                    println!("dropped {name}");
+                } else {
+                    println!("would drop {name}");
+                }
+            }
+            if !yes {
+                println!(
+                    "{} orphaned unique index(es); nothing was changed. Run again with --yes to drop them (each is logged)",
+                    orphans.len()
+                );
+            }
+            Ok(())
+        }
         Some("show") => {
             if !args.is_empty() {
                 return Err(usage());

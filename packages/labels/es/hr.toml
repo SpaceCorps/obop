@@ -119,10 +119,13 @@ offboarded = "Desvinculado"
 [labels.es.model.hr_employee.action.activate]
 label = "Activar"
 description = "Completar la incorporación y marcar al empleado como activo"
+done = "El empleado ya está activo"
 
 [labels.es.model.hr_employee.action.offboard]
 label = "Desvincular"
 description = "Cerrar el registro laboral; solo se revierte con una decisión de RR. HH."
+confirm = "¿Dar de baja a este empleado? La ficha y sus datos se conservan, y ningún paso la devuelve."
+done = "El empleado está dado de baja"
 
 [labels.es.model.hr_leave_request]
 name = "Solicitud de ausencia"
@@ -181,14 +184,18 @@ refused = "Rechazado"
 [labels.es.model.hr_leave_request.action.request]
 label = "Solicitar"
 description = "Enviar la solicitud al responsable"
+done = "Enviado para aprobación"
 
 [labels.es.model.hr_leave_request.action.approve]
 label = "Aprobar"
 description = "Aprobar una ausencia solicitada (solo responsables)"
+done = "Ausencia aprobada"
 
 [labels.es.model.hr_leave_request.action.refuse]
 label = "Rechazar"
 description = "Rechazar una ausencia solicitada (solo responsables)"
+confirm = "¿Rechazar esta solicitud de ausencia?"
+done = "Ausencia rechazada"
 
 [labels.es.model.hr_employee.field.photo]
 label = "Foto"
@@ -235,3 +242,24 @@ label = "Próximas"
 
 [labels.es.model.hr_leave_request.filter.not_refused]
 label = "No rechazadas"
+
+[labels.es.model.hr_employee.section.work]
+label = "Trabajo"
+
+[labels.es.model.hr_employee.section.employment]
+label = "Empleo"
+
+[labels.es.model.hr_employee.section.private]
+label = "Privado"
+
+[labels.es.model.hr_employee.section.pay]
+label = "Retribución"
+
+[labels.es.model.hr_employee.section.sensitive]
+label = "Confidencial"
+
+[labels.es.model.hr_leave_request.section.leave]
+label = "Ausencia"
+
+[labels.es.model.hr_leave_request.section.sick_leave]
+label = "Baja por enfermedad"

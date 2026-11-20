@@ -164,6 +164,14 @@ export function checkNotes(integrity: unknown, total: number, ended: boolean): N
               n: n("before_start"),
             }),
     });
+  if (flags.route_removed)
+    notes.push({
+      tone: "warn",
+      text: t(
+        "The route was removed when the trip was marked private ({n} points): the distance cannot be checked against a route.",
+        { n: n("route_removed") },
+      ),
+    });
   if (flags.reanchor)
     notes.push({
       tone: "warn",
@@ -178,7 +186,8 @@ export function checkNotes(integrity: unknown, total: number, ended: boolean): N
   const flagged = Object.keys(flags).length > 0;
   if (!notes.length && flagged)
     notes.push({ tone: "warn", text: t("The check of the track found something to look at.") });
-  if (!flagged && ended)
+  // A track of no points is not clean: there is nothing to judge.
+  if (!flagged && ended && total > 0)
     notes.push({
       tone: "ok",
       text: t("The track is clean: all {total} points were used for the distance.", {
