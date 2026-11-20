@@ -174,7 +174,7 @@ impl<'a> Gate<'a> {
     pub fn load(&self, def: &ModelDef, id: &str) -> R<Fields> {
         match self.reads.get(def.name, id)? {
             Some(rec) if self.visible(def, &rec) => Ok(rec),
-            _ => Err(format!("no {} {id}", def.name)),
+            _ => Err(crate::errors::no_record(def.name, id)),
         }
     }
 }
@@ -342,8 +342,13 @@ mod tests {
         };
         assert_eq!(ids(&admin, &project).len(), 4);
         let gate = Gate::new(&reads, &lookup, &ann);
-        assert!(gate.load(&project, "theirs").unwrap_err() == "no t_project theirs");
-        assert!(gate.load(&project, "ghost").unwrap_err() == "no t_project ghost");
+        // Hidden and missing answer alike, with the code `record_not_found` (L30).
+        assert!(
+            gate.load(&project, "theirs").unwrap_err() == "record_not_found: no t_project theirs"
+        );
+        assert!(
+            gate.load(&project, "ghost").unwrap_err() == "record_not_found: no t_project ghost"
+        );
         assert!(creator_blocked(&gate, &project, &rec(&[("owner", "bob".into())])).is_some());
         assert!(creator_blocked(&gate, &project, &rec(&[("owner", "ann".into())])).is_none());
     }

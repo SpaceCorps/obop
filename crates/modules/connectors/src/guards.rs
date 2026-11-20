@@ -89,10 +89,10 @@ fn own_record(model: &'static str, backend: Arc<dyn Backend>) -> Guard {
         let id = txt(&m, "id").to_string();
         let rec = backend
             .get(model, &id)?
-            .ok_or_else(|| format!("no {model} {id}"))?;
+            .ok_or_else(|| obop_commands::errors::no_record(model, &id))?;
         if !p.allows(ADMIN) && str_of(&rec, "owner_user") != owner_id(p) {
             // The same words as for a record that is not there.
-            return Err(format!("no {model} {id}"));
+            return Err(obop_commands::errors::no_record(model, &id));
         }
         put_actor(p, &mut m);
         Ok(Verdict {
@@ -533,7 +533,7 @@ fn connection_input(rt: Arc<Runtime>, create: bool) -> Guard {
             Some(
                 rt.backend
                     .get(CONNECTION, &id)?
-                    .ok_or_else(|| format!("no connection {id}"))?,
+                    .ok_or_else(|| obop_commands::errors::no_record("connection", &id))?,
             )
         };
         let (v, raised) = normalise(&rt, p, input, existing.as_ref())?;

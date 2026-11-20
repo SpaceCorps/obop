@@ -424,7 +424,7 @@ impl<'a> Unit<'a> {
     /// Merge `patch` into an existing record.
     pub fn merge(&mut self, model: &str, id: &str, patch: Fields) -> R<()> {
         let Some(mut cur) = self.get(model, id)? else {
-            return Err(format!("no {model} {id}"));
+            return Err(crate::errors::no_record(model, id));
         };
         if let Some(def) = self.guarded_def(model) {
             let look = |n: &str| self.guards.as_ref().and_then(|l| l(n));
@@ -451,7 +451,7 @@ impl<'a> Unit<'a> {
 
     pub fn delete(&mut self, model: &str, id: &str) -> R<()> {
         let Some(cur) = self.get(model, id)? else {
-            return Err(format!("no {model} {id}"));
+            return Err(crate::errors::no_record(model, id));
         };
         if let Some(def) = self.guarded_def(model) {
             let look = |n: &str| self.guards.as_ref().and_then(|l| l(n));

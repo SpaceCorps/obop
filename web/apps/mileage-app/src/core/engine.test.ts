@@ -545,7 +545,26 @@ describe("a refusal that is not a missing trip", () => {
     expect(await store.pointCount("c1")).toBe(4);
   });
 
-  test("only the plain 400 of the module means that the server does not have the trip", async () => {
+  test("the code record_not_found means that the server does not have the trip, whatever its words", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 6);
+    await engine.drain();
+    await store.patchTrip("c1", { endDone: false, problem: null });
+    server.fail(
+      "getTrip",
+      apiError(400, { code: "record_not_found", message: "keine mileage_trip 01ab" }),
+      1,
+    );
+    await engine.drain();
+    expect((await store.getTrip("c1"))!.problem).toMatchObject({ code: "gone" });
+    // The same code on a 404 (a proxy, a hidden command) is not taken for it.
+    await store.clearProblem("c1");
+    server.fail("getTrip", apiError(404, { code: "record_not_found", message: "not found" }), 1);
+    await engine.drain();
+    expect((await store.getTrip("c1"))!.problem).toMatchObject({ code: "unknown" });
+  });
+
+  test("an older server's plain 400 with the words still means that it does not have the trip", async () => {
     const { store, server, engine } = await rig();
     await recordAndStop(store, 6);
     await engine.drain();

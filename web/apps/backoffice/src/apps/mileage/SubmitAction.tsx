@@ -13,16 +13,26 @@ import { Button } from "../../ui.tsx";
 
 export const SUBMIT = "mileage_trip.submit";
 
-/** Whether the trip gets a Submit button: ended and not private. */
-export function offersSubmit(row: { state?: unknown; purpose?: unknown }): boolean {
-  return row.state === "ended" && row.purpose !== "private";
+/**
+ * Whether the trip gets a Submit button: ended and not private, by the purpose the form holds now
+ * when it is given (`drafted`). A trip that the form marks private, not saved yet, has no Submit
+ * either (U80): the save would remove the route and the server would refuse the submit.
+ */
+export function offersSubmit(
+  row: { state?: unknown; purpose?: unknown },
+  drafted?: unknown,
+): boolean {
+  const purpose = drafted === undefined || drafted === "" ? row.purpose : drafted;
+  return row.state === "ended" && row.purpose !== "private" && purpose !== "private";
 }
 
-export function SubmitAction({ model, row, busy, saveFirst }: RecordExtProps) {
+export function SubmitAction({ model, fields, row, busy, saveFirst, value }: RecordExtProps) {
   const d = useData();
   const [running, setRunning] = useState(false);
   const submit: Command | undefined = model.actions.find((a) => a.id === SUBMIT);
-  if (!submit || !offersSubmit(row)) return null;
+  const purposeField = fields.find((f) => f.name === "purpose");
+  const drafted = purposeField && value ? value(purposeField) : undefined;
+  if (!submit || !offersSubmit(row, drafted)) return null;
 
   async function run() {
     setRunning(true);

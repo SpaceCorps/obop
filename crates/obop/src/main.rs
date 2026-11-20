@@ -1499,10 +1499,11 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     }
     app.connectors.start();
     app.mail.start();
-    // A private trip keeps no route (docs/spec/mobile.md 5.6): those stored before that rule lose it.
-    match mileage::drop_private_routes(&app.store) {
-        Ok(0) => {}
-        Ok(n) => eprintln!("mileage: removed the route of {n} private trips"),
+    // A private trip keeps no route (docs/spec/mobile.md 5.6): those stored before that rule lose
+    // it, once per database (recorded in the migration ledger as `mileage/0001`, U81).
+    match mileage::drop_private_routes_once(&app.store) {
+        Ok(None | Some(0)) => {}
+        Ok(Some(n)) => eprintln!("mileage: removed the route of {n} private trips"),
         Err(e) => eprintln!("mileage: the routes of private trips were not removed: {e}"),
     }
     // Scheduled backups with an off-host copy and retention, when OBOP_BACKUP_SCHEDULE is set.

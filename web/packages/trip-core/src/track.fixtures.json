@@ -89,7 +89,8 @@
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
-        "last_seq": 10
+        "last_seq": 10,
+        "stretches": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]
       }
     },
     {
@@ -105,7 +106,8 @@
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": null,
-        "last_seq": null
+        "last_seq": null,
+        "stretches": []
       }
     },
     {
@@ -129,7 +131,8 @@
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
-        "last_seq": 1
+        "last_seq": 1,
+        "stretches": [[1]]
       }
     },
     {
@@ -181,7 +184,8 @@
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
-        "last_seq": 5
+        "last_seq": 5,
+        "stretches": [[1, 2, 3, 4, 5]]
       }
     },
     {
@@ -210,7 +214,8 @@
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
-        "last_seq": 2
+        "last_seq": 2,
+        "stretches": [[1, 2]]
       }
     },
     {
@@ -262,7 +267,8 @@
         "seq_gaps": 0,
         "integrity": "speed_jump:1",
         "first_seq": 1,
-        "last_seq": 5
+        "last_seq": 5,
+        "stretches": [[1, 2, 4, 5]]
       }
     },
     {
@@ -300,7 +306,8 @@
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
-        "last_seq": 3
+        "last_seq": 3,
+        "stretches": [[1, 2, 3]]
       }
     },
     {
@@ -334,7 +341,8 @@
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
-        "last_seq": 2
+        "last_seq": 2,
+        "stretches": [[1, 2]]
       }
     },
     {
@@ -385,7 +393,8 @@
         "seq_gaps": 0,
         "integrity": "low_accuracy:2",
         "first_seq": 1,
-        "last_seq": 4
+        "last_seq": 4,
+        "stretches": [[1, 3, 4]]
       }
     },
     {
@@ -430,7 +439,8 @@
         "seq_gaps": 2,
         "integrity": "seq_gap:2",
         "first_seq": 1,
-        "last_seq": 6
+        "last_seq": 6,
+        "stretches": [[1, 2, 5, 6]]
       }
     },
     {
@@ -482,7 +492,8 @@
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
-        "last_seq": 5
+        "last_seq": 5,
+        "stretches": [[1, 2, 3, 4, 5]]
       }
     },
     {
@@ -527,7 +538,8 @@
         "seq_gaps": 0,
         "integrity": "speed_jump:1",
         "first_seq": 1,
-        "last_seq": 4
+        "last_seq": 4,
+        "stretches": [[1, 3, 4]]
       }
     },
     {
@@ -558,7 +570,8 @@
         "seq_gaps": 0,
         "integrity": "",
         "first_seq": 1,
-        "last_seq": 2
+        "last_seq": 2,
+        "stretches": [[1, 2]]
       }
     },
     {
@@ -659,7 +672,8 @@
         "seq_gaps": 0,
         "integrity": "reanchor:1",
         "first_seq": 5,
-        "last_seq": 12
+        "last_seq": 12,
+        "stretches": [[5, 6, 7, 8, 9, 10, 11, 12]]
       }
     },
     {
@@ -718,7 +732,8 @@
         "seq_gaps": 0,
         "integrity": "speed_jump:2",
         "first_seq": 1,
-        "last_seq": 6
+        "last_seq": 6,
+        "stretches": [[1, 2, 5, 6]]
       }
     },
     {
@@ -766,7 +781,8 @@
         "seq_gaps": 0,
         "integrity": "before_start:1",
         "first_seq": 2,
-        "last_seq": 4
+        "last_seq": 4,
+        "stretches": [[2, 3, 4]]
       }
     }
   ]

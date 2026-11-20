@@ -158,13 +158,15 @@ const INCOMPLETE_NOTICE = 5;
 const serverWords = (state: string): string => state.replace("_", " ");
 
 /**
- * The server says it has no such trip for this person (a restored backup, a hidden trip): the plain
- * 400 "no mileage_trip X" of the module (`Gate::load` in obop-commands; docs/ISSUES.md L30). A 404
- * is not that: the server sends it for a command that is forbidden to this person, not installed or
- * not on this surface (`errors.rs`, `Kind::Hidden`), and a proxy sends it too.
+ * The server says it has no such trip for this person (a restored backup, a hidden trip): a 400
+ * with the code `record_not_found` (`errors.rs` in obop-commands; docs/ISSUES.md L30), and from an
+ * older server that has no code for it, the plain 400 "no mileage_trip X". The calls after the
+ * create are all about one trip, so a missing record there is the trip. A 404 is not that: the
+ * server sends it for a command that is forbidden to this person, not installed or not on this
+ * surface (`errors.rs`, `Kind::Hidden`), and a proxy sends it too.
  */
 const isGone = (f: Extract<Failure, { kind: "refused" }>): boolean =>
-  /^\s*no mileage_trip\b/i.test(f.message);
+  (f.status === 400 && f.code === "record_not_found") || /^\s*no mileage_trip\b/i.test(f.message);
 
 /** The sign-in changed while a pass ran: nothing more is sent under the old one. */
 class Interrupted extends Error {}

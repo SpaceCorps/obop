@@ -1,7 +1,7 @@
 import { Banner, Button, Field, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
 import { t, type MessageKey } from "../../i18n/index.ts";
-import { SignInError, signIn, type SignInFailure } from "../../native/auth.ts";
+import { SignInError, resumeSignIn, signIn, type SignInFailure } from "../../native/auth.ts";
 import { defaultServer } from "../../native/default-server.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { useSignOutUntold } from "../hooks.ts";
@@ -28,6 +28,24 @@ export function SignIn({
   const untold = useSignOutUntold(rt);
   useEffect(() => () => rt.setSignOutUntold(false), [rt]);
   const unsure = expired && rt.session.endedBy() === "unsure";
+
+  // A sign-in that the system ended the app in the middle of is finished here, when the redirect
+  // started the app again (docs/ISSUES.md L32). Tried once: the pending sign-in is then removed.
+  useEffect(() => {
+    let live = true;
+    resumeSignIn(rt, () => {
+      if (live) setBusy(true);
+    })
+      .catch((error: unknown) => {
+        if (live) setFailure(error instanceof SignInError ? error.reason : "failed");
+      })
+      .finally(() => {
+        if (live) setBusy(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [rt]);
 
   const submit = async () => {
     setBusy(true);
