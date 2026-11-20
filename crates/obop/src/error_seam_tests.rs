@@ -280,11 +280,15 @@ fn a_refused_command_line_call_prints_the_word_and_exits_with_75() {
     let p = admin();
     let by_id = input(&[("id", "nope")]);
 
-    // An error of the command itself keeps the documented line and status 1.
+    // An error of the command itself keeps the documented line and status 1 (a missing record
+    // carries its code since L30).
     let e = crate::dispatch_call(&app, &p, "lead.get", &by_id).unwrap_err();
     assert_eq!(
         e,
-        ("error: Handler(\"no lead nope\")".to_string(), 1),
+        (
+            "error: Handler(\"record_not_found: no lead nope\")".to_string(),
+            1
+        ),
         "an error of the call itself"
     );
 
@@ -485,10 +489,23 @@ async fn input_that_begins_with_a_code_word_cannot_forge_a_fault_or_a_row() {
             (s, b["value"]["title"].as_str()),
             (200, Some(value.as_str()))
         );
-        // An id that begins with it is an ordinary 400: no record of that name.
+        // An id that begins with it is an ordinary 400: no record of that name, with the code of
+        // a missing record (L30), never the word the id begins with. An id that begins with that
+        // code itself is set apart like any echo of a code (`input refused: ...`, no code).
+        let echoed = w == "record_not_found";
+        let missing = if echoed {
+            format!("input refused: record_not_found: no lead {value}")
+        } else {
+            format!("no lead {value}")
+        };
         let (s, h, b) = post(&r, "/api/lead/get", json!({"id": value})).await;
         assert_eq!(s, 400, "{w}: {b}");
-        assert_eq!(b, json!({"error": format!("no lead {value}")}), "{w}");
+        assert_eq!(b["error"], json!(missing), "{w}");
+        if echoed {
+            assert!(b.get("code").is_none(), "{w}: {b}");
+        } else {
+            assert_eq!(b["code"], json!("record_not_found"), "{w}");
+        }
         assert!(h.get("retry-after").is_none() && h.get("x-obop-applied").is_none());
         // A refusal that echoes the input first is set apart, and is a 400 too. The text of a
         // storage row is not read from text at all (a fault needs a fault noted), so it is left
@@ -509,7 +526,15 @@ async fn input_that_begins_with_a_code_word_cannot_forge_a_fault_or_a_row() {
             crate::dispatch_call(&app, &p, "lead.get", &input(&[("id", &value)])).unwrap_err();
         assert_eq!(
             (line.as_str(), status),
-            (format!("error: Handler(\"no lead {value}\")").as_str(), 1),
+            (
+                if echoed {
+                    format!("error: Handler(\"{missing}\")")
+                } else {
+                    format!("error: Handler(\"record_not_found: no lead {value}\")")
+                }
+                .as_str(),
+                1
+            ),
             "{w}"
         );
         let (line, status) =
@@ -532,11 +557,11 @@ async fn input_that_begins_with_a_code_word_cannot_forge_a_fault_or_a_row() {
         // The stdio server.
         let reply = stdio_call(&app, &p, "lead__get", json!({"id": value}));
         assert_eq!(reply["result"]["isError"], true, "{w}: {reply}");
-        assert_eq!(
-            reply["result"]["structuredContent"],
-            json!({"error": format!("no lead {value}")}),
-            "{w}"
-        );
+        let sc = &reply["result"]["structuredContent"];
+        assert_eq!(sc["error"], json!(missing), "{w}");
+        if !echoed {
+            assert_eq!(sc["code"], json!("record_not_found"), "{w}");
+        }
     }
 }
 

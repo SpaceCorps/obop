@@ -690,7 +690,7 @@ fn employees_see_only_their_own_leave_requests_and_expenses() {
     assert_eq!(list(&app, &emp_b, "hr_leave_request").len(), 1);
     assert_eq!(list(&app, &hr_mgr, "hr_leave_request").len(), 2);
     let e = run(&app, &emp_a, "hr_leave_request.get", json!({"id": lb})).unwrap_err();
-    assert_eq!(e, format!("no hr_leave_request {lb}"));
+    assert_eq!(e, format!("record_not_found: no hr_leave_request {lb}"));
     ok(&app, &emp_a, "hr_leave_request.request", json!({"id": la}));
     assert!(
         run(&app, &emp_a, "hr_leave_request.approve", json!({"id": la})).is_err(),
