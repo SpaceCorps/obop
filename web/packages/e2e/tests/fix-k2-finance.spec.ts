@@ -184,15 +184,25 @@ test.describe("finance flows of stream k2", () => {
         await allow.check();
         await expect(page.getByText("Expense settings saved")).toBeVisible();
         expect((await api.run("root", "expenses_setting.get", {})).allow_self_approval).toBe(true);
-        // The switch keeps the keyboard focus through the save: Space turns it off again.
+        // The switch keeps the keyboard focus through the save: Space turns it off again. The
+        // screen takes one change at a time, so each press waits for the answer of its save: the
+        // server may hold the new value before the screen has taken its answer (U65).
+        const saved = () =>
+          page.waitForResponse((r) => r.url().includes("/api/expenses_setting/update"));
         await expect(allow).toBeFocused();
+        let answer = saved();
         await page.keyboard.press("Space");
+        await answer;
+        await expect(allow).toHaveAttribute("aria-busy", "false");
         await expect(allow).not.toBeChecked();
         await expect
           .poll(async () => (await api.run("root", "expenses_setting.get", {})).allow_self_approval)
           .toBe(false);
         await allow.focus();
+        answer = saved();
         await page.keyboard.press("Space");
+        await answer;
+        await expect(allow).toHaveAttribute("aria-busy", "false");
         await expect(allow).toBeChecked();
         await expect
           .poll(async () => (await api.run("root", "expenses_setting.get", {})).allow_self_approval)
