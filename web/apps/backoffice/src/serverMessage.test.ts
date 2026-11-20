@@ -506,3 +506,98 @@ describe("billing a period without time to bill", () => {
       expect(out).not.toBe(raw);
     });
 });
+
+// The errors of an import (J9): the CSV reader, the header check, the cells and the all-or-nothing
+// refusal. Their translations come with the next catalogue extraction; until then a language
+// without them shows the English sentence of the rule, never the server's raw text.
+describe("the errors of an import", () => {
+  const qty: FieldMeta = {
+    name: "qty",
+    kind: "number",
+    description: "",
+    class: "none",
+    personal_data: false,
+    required: false,
+    labels: { en: "Quantity" },
+  };
+  const line: ModelMeta = {
+    name: "sale_line",
+    description: "",
+    can_create: true,
+    can_update: true,
+    can_delete: true,
+    fields: [qty],
+    actions: [],
+  };
+  const READER = [
+    "the file is larger than 1024 KiB; split it into smaller files",
+    "the file contains a NUL character; it is not a CSV text file",
+    "the file is empty: the first line must name the fields",
+    "more than 200 columns",
+    "more than 1000 rows; split the file (at most 1000 rows per import)",
+    "line 1: column 3 has no name",
+    'line 1: the column "qty" appears twice',
+    "line 4: 2 column(s), but the header has 3",
+    "line 4: a cell is longer than 64 KiB",
+    "line 4: a quote is opened but never closed",
+    "line 4: text after the closing quote of a cell",
+    "line 4: a quote inside an unquoted cell; wrap the cell in quotes and double the quote",
+    'the column "id" cannot be imported: ids are assigned by the system, and references are written as the id of the record they point to',
+    'unknown column "qtx": the columns must be field names of sale_line (qty, name)',
+  ];
+
+  it("are sentences in another language, not the server's text", async () => {
+    provideCatalogue("de", read("de"));
+    await setLanguage("de", false);
+    registerMeta([{ id: "sales", name: "Sales", models: [line] }]);
+    for (const raw of READER) {
+      const out = serverMessage(raw);
+      expect(out, raw).not.toBe(raw);
+      expect(out, raw).not.toMatch(/[{}]/);
+    }
+    expect(serverMessage("line 4: 2 column(s), but the header has 3")).toContain("4");
+  });
+
+  it("name the field of a cell by its label, in English too", async () => {
+    await setLanguage("en", false);
+    registerMeta([{ id: "sales", name: "Sales", models: [line] }]);
+    expect(serverMessage('sale_line.qty must be a whole number, not "abc"')).toBe(
+      "Quantity must be a whole number, not “abc”",
+    );
+    expect(serverMessage('sale_line.qty must be true or false, not "maybe"')).toBe(
+      "Quantity must be yes or no, not “maybe”",
+    );
+    expect(
+      serverMessage(
+        'sale_line.qty must be a whole number of minor currency units such as cents, without a decimal point, not "1.5"',
+      ),
+    ).toBe("Quantity must be an amount in cents, without a decimal point, not “1.5”");
+    expect(serverMessage("sale_line.qty is computed and read-only")).toBe(
+      "Quantity is calculated and cannot be set",
+    );
+  });
+
+  it("list each refused row with its own message and drop the hint for agents", async () => {
+    await setLanguage("en", false);
+    registerMeta([{ id: "sales", name: "Sales", models: [line] }]);
+    expect(
+      serverMessage(
+        "3 of 5 row(s) are invalid, so nothing was created. " +
+          'row 1 (line 2): sale_line.qty must be a whole number, not "x"; ' +
+          "row 4: limit_violated: sale_line.qty must be at most 10; this is 12; " +
+          "and 1 more (use dry_run for the full list)",
+      ),
+    ).toBe(
+      "3 of 5 rows are not valid, so nothing was imported. " +
+        "Row 1 (line 2): Quantity must be a whole number, not “x”; " +
+        "Row 4: Quantity must be at most 10; this is 12; and 1 more",
+    );
+    expect(
+      serverMessage(
+        "1 of 1 row(s) are invalid, so nothing was created. row 1 (line 2): sale_line.qty is required",
+      ),
+    ).toBe(
+      "1 of 1 rows is not valid, so nothing was imported. Row 1 (line 2): Quantity is required",
+    );
+  });
+});
