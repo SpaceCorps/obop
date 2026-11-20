@@ -282,7 +282,8 @@ write_group = "pos.user"
   [model.guard]
   immutable_when = ["paid", "refunded", "cancelled"]
   mutable_fields = ["note"]
-  exit_to = ["refunded"]
+  # The refund writes the drawer that pays it out with the move (U20).
+  exit_to = [{ to = "refunded", action = "refund", may_change = ["refund_session_id"] }]
   message = "A paid, refunded or cancelled sale cannot be changed. Refund it to reverse it."
 
   [[model.field]]
