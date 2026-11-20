@@ -307,7 +307,11 @@ fn a_refund_after_closing_does_not_change_the_closed_session() {
     // closed, and the open one expects that much less cash.
     let next = ok(&f.a, "pos_session.create", json!({"config_id": f.till}));
     assert_eq!(next["opening_cash"], json!(12_500));
-    ok(&f.a, "pos_order.refund", json!({"id": kept}));
+    // U20: the drawer is written by the refund itself, in its own unit, so the answer of the
+    // refund names it (pos 0.7.1 wrote it afterwards, in a separate write).
+    let refunded = ok(&f.a, "pos_order.refund", json!({"id": kept}));
+    assert_eq!(refunded["state"], json!("refunded"), "{refunded}");
+    assert_eq!(refunded["refund_session_id"], json!(id(&next)), "{refunded}");
     let after = ok(&f.a, "pos_session.get", json!({"id": s}));
     assert_eq!(
         (
@@ -323,7 +327,12 @@ fn a_refund_after_closing_does_not_change_the_closed_session() {
     assert_eq!(open["expected_cash"], json!(12_500 - 2_500), "{open}");
     // A sale of the open session refunded in it is not subtracted twice.
     let here = f.sale(&id(&next), 1, &[("cash", 2_500)], true);
-    ok(&f.a, "pos_order.refund", json!({"id": here}));
+    // A client cannot hand the action a drawer of its own: the server's key is dropped.
+    ok(
+        &f.a,
+        "pos_order.refund",
+        json!({"id": here, obop_commands::ACTION_STAMP: {"refund_session_id": s}}),
+    );
     let open = ok(&f.a, "pos_session.get", json!({"id": id(&next)}));
     assert_eq!(open["expected_cash"], json!(10_000), "{open}");
     assert!(ok(&f.a, "pos_order.get", json!({"id": here}))["refund_session_id"].is_null());

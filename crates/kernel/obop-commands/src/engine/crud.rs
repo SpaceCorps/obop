@@ -712,6 +712,21 @@ pub(crate) fn transition(
     Ok(Value::Map(out))
 }
 
+/// The input key under which a server-side wrapper of an action hands it fields to write with
+/// the move (U20: the drawer a POS refund is paid out of). It starts with the actor prefix, which
+/// the dispatcher strips from what a client sends.
+pub const STAMP: &str = "_actor_stamp";
+
+fn stamp_of(input: &Value) -> Fields {
+    match input {
+        Value::Map(m) => match m.get(STAMP) {
+            Some(Value::Map(f)) => f.iter().map(|(k, v)| (k.clone(), v.to_json())).collect(),
+            _ => Fields::new(),
+        },
+        _ => Fields::new(),
+    }
+}
+
 /// What an action does in its unit: the fields it needs, its assertions, the new state, the
 /// numbers and the effects, and the uniqueness of everything the unit has written. Returns what
 /// the action changed on its record.
@@ -754,13 +769,34 @@ fn act(
             unit.merge(def.name, id, changed)?;
         }
     }
+    // Fields a wrapper on the server sets with the action (`STAMP`, U20): written in the same
+    // unit, so they are stored together with the move or not at all. A client cannot send them
+    // (the dispatcher drops every `_actor` key of a call); the immutability guard still holds, so
+    // a frozen record takes them only as `may_change` of the action's `exit_to` edge.
+    let mut stamp = stamp_of(input);
+    let mut stamped = Fields::new();
+    if !stamp.is_empty() {
+        let cur = Gate::new(&*unit, &look, actor).load(def, id)?;
+        kinds::canonicalise(def, &mut stamp, Path::Write)?;
+        stamped = stamp
+            .into_iter()
+            .filter(|(k, v)| cur.get(k) != Some(v))
+            .collect();
+        if !stamped.is_empty() {
+            unit.merge(def.name, id, stamped.clone())?;
+        }
+    }
     {
         let rec = Gate::new(&*unit, &look, actor).load(def, id)?;
         if let Some(n) = hints::need_missing(cmd, &rec) {
             return Err(hints::need_message(def, cmd, n));
         }
     }
-    let patch = run_action(eng, actor, unit, def, cmd, id, 0)?;
+    let mut patch = run_action(eng, actor, unit, def, cmd, id, 0)?;
     seq::check_unique(unit, &look)?;
+    // The answer names what the move changed, the stamped fields included.
+    for (k, v) in stamped {
+        patch.entry(k).or_insert(v);
+    }
     Ok(patch)
 }
