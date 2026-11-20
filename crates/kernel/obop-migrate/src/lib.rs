@@ -432,6 +432,7 @@ impl Migrator {
             by: self.actor.clone(),
             role: "application".into(),
             app_version: obop_types::CORE_VERSION.into(),
+            attempts: 1,
             backup_id: opts.backup_id.clone(),
             restore_point: opts.restore_point.clone(),
             note: note.to_string(),
@@ -520,13 +521,10 @@ impl Migrator {
                 ));
             }
         }
-        let failed = rows
-            .iter()
-            .filter(|r| r.status == ledger::Status::Failed)
-            .count();
-        if failed > 0 {
+        for r in rows.iter().filter(|r| r.status == ledger::Status::Failed) {
             v.notes.push(format!(
-                "{failed} failed attempt(s) are recorded in the ledger"
+                "step {} ({}) failed {} time(s) for one reason, last at {}: {}",
+                r.step, r.name, r.attempts, r.at, r.note
             ));
         }
         v.notes.push(format!(
