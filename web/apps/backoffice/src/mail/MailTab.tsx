@@ -11,6 +11,7 @@ import {
   Textarea,
   fmt,
   t,
+  useWorded,
 } from "@obop/ui";
 import { call, search, type Row } from "../api.ts";
 import "./mail.css";
@@ -478,7 +479,7 @@ function ServersSection({
   const section = useRef<HTMLElement>(null);
   const [rows, setRows] = useState<Server[] | null>(null);
   const [connections, setConnections] = useState<Row[]>([]);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useWorded();
   const [editing, setEditing] = useState<Draft | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   // Which button opened the form ("add" or a server's id), to hand the keyboard back to it.
@@ -503,7 +504,7 @@ function ServersSection({
       limit: 200,
     });
     if ("error" in r)
-      setProblem(serverMessage(r.error) || t("The mail servers could not be loaded."));
+      setProblem(() => serverMessage(r.error) || t("The mail servers could not be loaded."));
     else {
       setProblem(null);
       setRows(r.rows as Server[]);
@@ -642,7 +643,7 @@ function DeliveriesSection({
 }) {
   const id = useId();
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useWorded();
   const [busy, setBusy] = useState<string | null>(null);
   const load = useCallback(async () => {
     const r = await search(token, "outbound_mail", {
@@ -654,7 +655,7 @@ function DeliveriesSection({
       limit: 50,
     });
     if ("error" in r)
-      setProblem(serverMessage(r.error) || t("The deliveries could not be loaded."));
+      setProblem(() => serverMessage(r.error) || t("The deliveries could not be loaded."));
     else {
       setProblem(null);
       setRows(r.rows);

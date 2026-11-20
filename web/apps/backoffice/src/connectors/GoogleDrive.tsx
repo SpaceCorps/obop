@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Badge, t } from "@obop/ui";
+import { Badge, t, useWorded } from "@obop/ui";
 import type { Reply } from "../api.ts";
 import { useData, useRows } from "../data.tsx";
 import { request } from "../net.ts";
@@ -35,7 +35,7 @@ type SharedDrive = { id: string; name: string };
 type PolicyRow = { id: string; provider: string };
 
 function useDriveSettings(token: string, version: number) {
-  const [state, setState] = useState<{ settings?: DriveSettings; error?: string }>({});
+  const [state, setState] = useState<{ settings?: DriveSettings; failed?: boolean }>({});
   const [again, setAgain] = useState(0);
   useEffect(() => {
     let live = true;
@@ -45,12 +45,14 @@ function useDriveSettings(token: string, version: number) {
         return (await r.json()) as { settings?: DriveSettings };
       })
       .then((v) => live && setState({ settings: v.settings }))
-      .catch(() => live && setState({ error: t("Could not read the state of the connection.") }));
+      .catch(() => live && setState({ failed: true }));
     return () => {
       live = false;
     };
   }, [token, version, again]);
-  return { ...state, reload: () => setAgain((n) => n + 1) };
+  // The sentence is worded when it is drawn, so it follows a language switch (D9).
+  const error = state.failed ? t("Could not read the state of the connection.") : undefined;
+  return { settings: state.settings, error, reload: () => setAgain((n) => n + 1) };
 }
 
 const tone = (s: DriveSettings["state"]) =>
@@ -82,7 +84,7 @@ export function GoogleDrive() {
   const [writeGroup, setWriteGroup] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [drives, setDrives] = useState<SharedDrive[] | null>(null);
-  const [drivesError, setDrivesError] = useState("");
+  const [drivesError, setDrivesError] = useWorded();
   const [drivesAgain, setDrivesAgain] = useState(0);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState<{
@@ -105,7 +107,7 @@ export function GoogleDrive() {
         return (await r.json()) as { drives?: SharedDrive[] };
       })
       .then((v) => live && setDrives(v.drives ?? []))
-      .catch(() => live && setDrivesError(t("Could not read your shared drives.")));
+      .catch(() => live && setDrivesError(() => t("Could not read your shared drives.")));
     return () => {
       live = false;
     };

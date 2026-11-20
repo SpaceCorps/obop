@@ -346,7 +346,7 @@ export function ListView(p: ViewProps) {
         ? t("{ok} updated, {failed} failed: {reason}", {
             ok: ids.length - failed.length,
             failed: failed.length,
-            reason: failed[0] ?? "",
+            reason: failed[0]?.() ?? "",
           })
         : t("{count, plural, one {Set {field} on # record} other {Set {field} on # records}}", {
             count: ids.length,

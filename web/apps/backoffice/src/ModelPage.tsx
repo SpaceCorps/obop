@@ -413,8 +413,8 @@ export function ModelPage({
     for (const f of model.fields) if (f.computed || f.sequence) delete body[f.name];
     const r = await d.run(`${model.name}.update`, { id, ...body });
     if (r.kind === "ok") return null;
-    if (r.kind === "approval") return approval("change", r.planId);
-    return serverMessage(r.message);
+    if (r.kind === "approval") return () => approval("change", r.planId);
+    return () => serverMessage(r.message);
   };
   const create: ViewProps["create"] = async (body) => {
     // A quick create (a kanban card) starts from the same values as the full form.
@@ -428,19 +428,19 @@ export function ModelPage({
       d.notify(t("{model} created", { model: title }));
       return null;
     }
-    if (r.kind === "approval") return approval("create", r.planId);
-    return serverMessage(r.message);
+    if (r.kind === "approval") return () => approval("create", r.planId);
+    return () => serverMessage(r.message);
   };
   const moveState: ViewProps["moveState"] = async (id, field, to) => {
     const f = model.fields.find((x) => x.name === field);
     const row = (serverMode || aggMode ? srv.rows : rows).find((r) => r.id === id);
-    if (!f || !row) return t("Record not found");
+    if (!f || !row) return () => t("Record not found");
     // A list cell asks what the action's button asks (#102, #104); a cancel leaves the value.
     const step = canMove(model, f, row[field] as string | undefined, to, title, row).action;
     const question = step && questionOf(model, step);
     if (question && !(await d.confirm(question, actionTitle(step), t("Cancel")))) return null;
     const out = await moveRecord(d.run, model, f, row, to, title);
-    return out.kind === "ok" ? null : serverMessage(out.message);
+    return out.kind === "ok" ? null : () => serverMessage(out.message);
   };
   const drill = (conds: Cond[]) =>
     put({

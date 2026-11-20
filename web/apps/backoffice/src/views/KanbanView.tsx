@@ -7,7 +7,17 @@ import {
   type KeyboardEvent,
   type TouchEvent,
 } from "react";
-import { getCurrency, inSentence, panelId, t, tabId, Tabs, useI18n, type MenuItem } from "@obop/ui";
+import {
+  getCurrency,
+  inSentence,
+  panelId,
+  t,
+  tabId,
+  Tabs,
+  useI18n,
+  type MenuItem,
+  type Wording,
+} from "@obop/ui";
 import { search, type Command, type FieldMeta, type Row, type ServerFilter } from "../api.ts";
 import { ActionDialog } from "../ActionDialog.tsx";
 import { Cell, FieldInput } from "../fields.tsx";
@@ -197,7 +207,8 @@ type Quick = {
   key: string;
   values: Record<string, Edit>;
   errors: Record<string, string>;
-  error?: string;
+  /** The server's refusal, worded when drawn so that it follows a language switch (D9). */
+  error?: Wording;
   busy?: boolean;
 };
 
@@ -399,7 +410,7 @@ export function KanbanView(p: ViewProps) {
     }
     const value = key === "" ? null : gf.kind === "bool" ? key === "true" : key;
     const err = await p.update(id, { [gf.name]: value });
-    if (err) d.notify(err, "error");
+    if (err) d.notify(err(), "error");
   }
   const drop = (e: DragEvent, key: string) => {
     e.preventDefault();
@@ -532,7 +543,7 @@ export function KanbanView(p: ViewProps) {
       return setQuick(null);
     }
     // The server's words, made a sentence for a person (B10); shown in the form, not only a toast.
-    setQuick({ ...quick, busy: false, error: serverMessage(r.message) });
+    setQuick({ ...quick, busy: false, error: () => serverMessage(r.message) });
   }
 
   // ---- keyboard ----
@@ -773,7 +784,7 @@ export function KanbanView(p: ViewProps) {
             })}
             {quick.error && (
               <p className="error banner" role="alert">
-                {quick.error}
+                {quick.error()}
               </p>
             )}
             <div className="actionrow">

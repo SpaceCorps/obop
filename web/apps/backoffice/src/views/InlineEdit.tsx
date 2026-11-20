@@ -1,4 +1,4 @@
-import { useWorded } from "@obop/ui";
+import { useWorded, type Wording } from "@obop/ui";
 import { useRef, useState } from "react";
 import type { FieldMeta, Row } from "../api.ts";
 import { fromEdit, sameAsStored, toEdit, type Edit } from "../edit.ts";
@@ -14,7 +14,7 @@ import { rowCurrency } from "../format.ts";
 export function InlineEdit(props: {
   field: FieldMeta;
   row: Row;
-  update: (id: string, patch: Record<string, unknown>) => Promise<string | null>;
+  update: (id: string, patch: Record<string, unknown>) => Promise<Wording | null>;
   done: () => void;
   /** Saved: go on to the next (1) or previous (-1) editable cell of the row. */
   advance?: (dir: 1 | -1) => void;
@@ -41,7 +41,7 @@ export function InlineEdit(props: {
     setBusy(true);
     const err = await props.update(row.id, { [f.name]: r.value });
     setBusy(false);
-    if (err) setError(() => err);
+    if (err) setError(err);
     else finish();
   }
 

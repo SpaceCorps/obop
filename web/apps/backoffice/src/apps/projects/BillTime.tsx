@@ -5,7 +5,7 @@
 // `time_billing__create_invoice`): "Preview" is its dry run, "Create draft invoice" the real one.
 // The customer and the rate are the project's unless changed here; the invoice stays a draft.
 import { useState } from "react";
-import { fmt, getCurrency, t } from "@obop/ui";
+import { fmt, getCurrency, t, useWorded } from "@obop/ui";
 import type { FieldMeta, ModelMeta, Reply } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import type { Edit } from "../../edit.ts";
@@ -94,7 +94,7 @@ function BillDialog({
   const [to, setTo] = useState(period.to);
   const [per, setPer] = useState<"entry" | "task">("task");
   const [plan, setPlan] = useState<Planned | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useWorded();
   const [working, setWorking] = useState(false);
 
   const minor = rate.trim() ? fmt.parseMoney(rate, cur)?.minor : undefined;
@@ -111,16 +111,16 @@ function BillDialog({
     // A project without a customer or a rate has them asked here; the server would answer with
     // its own field names (customer, hourly_rate_minor).
     if (!String(customer ?? "").trim()) {
-      setError(t("Choose the customer to bill"));
+      setError(() => t("Choose the customer to bill"));
       return;
     }
     if (!rate.trim() || minor === undefined) {
-      setError(rateHint(cur));
+      setError(() => rateHint(cur));
       return;
     }
     const day = /^\d{4}-\d{2}-\d{2}$/;
     if (!day.test(from) || !day.test(to)) {
-      setError(t("Enter the first and the last day of the period as dates"));
+      setError(() => t("Enter the first and the last day of the period as dates"));
       return;
     }
     setWorking(true);
@@ -129,7 +129,7 @@ function BillDialog({
     setWorking(false);
     if (r.kind !== "ok") {
       setPlan(null);
-      setError(failure(r));
+      setError(() => failure(r));
       return;
     }
     const p = r.value as Planned;

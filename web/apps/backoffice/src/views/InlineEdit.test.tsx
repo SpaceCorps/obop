@@ -26,7 +26,7 @@ let root: Root;
 let outside: HTMLButtonElement;
 
 async function mount(f: FieldMeta, row: Row) {
-  const update = vi.fn(async () => null as string | null);
+  const update = vi.fn(async () => null as (() => string) | null);
   const done = vi.fn();
   await act(async () => {
     root.render(

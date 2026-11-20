@@ -363,7 +363,7 @@ export function CalendarView(p: ViewProps) {
                   delete rest[e.row.id];
                   return rest;
                 });
-                d.notify(err, "error");
+                d.notify(err(), "error");
               });
             }
           : undefined
