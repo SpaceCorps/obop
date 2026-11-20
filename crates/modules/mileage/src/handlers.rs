@@ -402,20 +402,21 @@ pub(crate) fn after_update(db: &Db, input: &Value, mut out: Value) -> Result<Val
 }
 
 /// Private trips stored before a private trip lost its route (by an earlier build of the module)
-/// keep their points. Run once when the server starts: every private trip that
-/// is no longer recording loses its route as `after_update` would remove it. A trip that changes
-/// in between is left for the next start. The answer is the number of trips cleared.
-pub fn drop_private_routes(db: &Db) -> Result<usize, String> {
+/// keep their points. Every private trip that is no longer recording loses its route as
+/// `after_update` would remove it. A trip that changes in between is left as it is and counted in
+/// the second number (cleared, left).
+pub fn drop_private_routes(db: &Db) -> Result<(usize, usize), String> {
     let mut cleared = 0;
+    let mut left = 0;
     for (id, trip) in db.find(policy::TRIP, "purpose", &J::from(policy::PRIVATE))? {
         match clear_route(db, &id, &trip) {
             Ok(Some(_)) => cleared += 1,
             Ok(None) => {}
-            Err(e) if e.starts_with(code::STATE_CONFLICT) => {}
+            Err(e) if e.starts_with(code::STATE_CONFLICT) => left += 1,
             Err(e) => return Err(e),
         }
     }
-    Ok(cleared)
+    Ok((cleared, left))
 }
 
 /// The answer of an action: the trip as `get` gives it (its computed fields filled in), as the

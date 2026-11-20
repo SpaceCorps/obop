@@ -1153,6 +1153,7 @@ name = "mileage"
 version = "0.2.2"
 dependencies = [
  "obop-commands",
+ "obop-migrate",
  "obop-registry",
  "obop-storage",
  "obop-types",
