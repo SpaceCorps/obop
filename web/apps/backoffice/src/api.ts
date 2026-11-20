@@ -643,7 +643,7 @@ async function send(token: string, path: string, body: object): Promise<Reply> {
 export type LoginResult =
   | { kind: "session"; token: string; enrolment: boolean; user?: string }
   | { kind: "mfa"; mfaToken: string; methods: string[]; user?: string }
-  | { kind: "error"; status: number; code: string };
+  | { kind: "error"; status: number; code: string; message?: string };
 
 async function loginStep(path: string, body: object): Promise<LoginResult> {
   try {
@@ -660,6 +660,7 @@ async function loginStep(path: string, body: object): Promise<LoginResult> {
       methods?: string[];
       user?: string;
       code?: string;
+      error?: string;
     };
     if (res.ok && json.mfa_required && json.mfa_token)
       return {
@@ -675,7 +676,12 @@ async function loginStep(path: string, body: object): Promise<LoginResult> {
         enrolment: !!json.mfa_enrolment_required,
         ...(json.user ? { user: json.user } : {}),
       };
-    return { kind: "error", status: res.status, code: json.code ?? "" };
+    return {
+      kind: "error",
+      status: res.status,
+      code: json.code ?? "",
+      ...(typeof json.error === "string" ? { message: json.error } : {}),
+    };
   } catch {
     return { kind: "error", status: 0, code: "network" };
   }
@@ -808,6 +814,45 @@ export async function ssoEnabled(): Promise<boolean> {
       return false;
     }
   }
+}
+
+/**
+ * Whether this instance has no account yet, so the sign-in page offers to create the first
+ * administrator with the set-up code from the server log (D96). Nothing is offered on any doubt: a
+ * refused or odd answer is "closed", and the normal sign-in form shows.
+ */
+export type SetupState =
+  | { open: false }
+  | { open: true; codeActive: boolean; needsSecretKey: boolean };
+
+export async function setupStatus(): Promise<SetupState> {
+  try {
+    const res = await fetch("/api/auth/setup", { cache: "no-store" });
+    if (!res.ok) return { open: false };
+    const json = (await res.json().catch(() => ({}))) as {
+      open?: unknown;
+      code_active?: unknown;
+      needs_secret_key?: unknown;
+    };
+    if (json.open !== true) return { open: false };
+    return {
+      open: true,
+      codeActive: json.code_active === true,
+      needsSecretKey: json.needs_secret_key === true,
+    };
+  } catch {
+    return { open: false };
+  }
+}
+
+/** Create the first administrator: the same answer as a password sign-in (D96). */
+export function setupCreate(body: {
+  code: string;
+  username: string;
+  password: string;
+  instance_name?: string;
+}): Promise<LoginResult> {
+  return loginStep("/api/auth/setup", body);
 }
 
 /** Where the button sends the browser: the server starts the flow and redirects to Microsoft. */

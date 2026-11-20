@@ -128,6 +128,8 @@ mod vat_tests;
 // that crate's tests and uses nothing of it): the scan of the tables the program names needs the
 // real `App`, which only this crate has. What this crate's scan does not use is left alone.
 #[cfg(test)]
+mod setup_tests;
+#[cfg(test)]
 #[allow(dead_code)]
 #[path = "../../kernel/obop-http/src/src_scan.rs"]
 mod src_scan;
@@ -851,7 +853,13 @@ fn authenticator(app: &App, o: &Opts) -> Arc<dyn Authenticator> {
     if o.dev_auth {
         Arc::new(DevAuth)
     } else {
-        let auth: Arc<dyn Authenticator> = Arc::new(Auth::new(app.store.backend()));
+        let a = Auth::new(app.store.backend());
+        // The set-up page (D96): the first administrator gets what `obop admin create NAME
+        // --all-groups` gives, and nothing is turned on if that list has no administrator group.
+        if let Err(e) = a.enable_setup(app.all_groups()) {
+            eprintln!("the set-up page is off: {e}");
+        }
+        let auth: Arc<dyn Authenticator> = Arc::new(a);
         // The account administration commands (D69) run as the identity provider the instance
         // serves with.
         app.register_accounts(auth.clone());
@@ -1184,8 +1192,10 @@ fn admin_create(o: &Opts, user: &str, groups: Option<&str>, all: bool) -> Exit {
         .lock()
         .read_line(&mut pw)
         .map_err(|e| fail(&e.to_string()))?;
+    // The lock of the set-up page, so the two cannot both make a first account, and a line in the
+    // security log (D96).
     Auth::new(app.store.backend())
-        .create_user(user, pw.trim_end_matches(['\r', '\n']), &groups)
+        .create_user_from_cli(user, pw.trim_end_matches(['\r', '\n']), &groups)
         .map_err(|e| fail(&e))?;
     println!(
         "created {user} with groups: {}",
@@ -1396,6 +1406,27 @@ fn is_loopback(addr: &str) -> bool {
         .is_some_and(|(host, _)| matches!(host, "127.0.0.1" | "localhost" | "[::1]"))
 }
 
+/// At the start of `obop serve` with no account: make a set-up code and print it with the two ways
+/// to make the first administrator (D96). The code is printed here and nowhere else.
+fn announce_setup(auth: &Auth) {
+    const SHELL: &str = "From a shell: obop admin create NAME --all-groups";
+    match auth.open_setup() {
+        Ok(obop_auth::SetupOpened::Closed) => {}
+        Ok(obop_auth::SetupOpened::Code(code)) => {
+            eprintln!("Set-up code: {code}");
+            eprintln!(
+                "No users yet. Open this instance in a browser and enter the set-up code to create the first administrator. The code works once and for 60 minutes; restart the server to get a new one. {SHELL}"
+            );
+        }
+        Ok(obop_auth::SetupOpened::NeedsSecretKey) => eprintln!(
+            "No users yet, and OBOP_SECRET_KEY is not set, so the set-up page cannot create the first administrator: set it and restart the server to get a set-up code. {SHELL} (or try --dev-auth on localhost)"
+        ),
+        Err(e) => eprintln!(
+            "could not tell whether any account exists ({e}); no set-up code was made. {SHELL}"
+        ),
+    }
+}
+
 fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let addr = addr.unwrap_or("127.0.0.1:8080");
     // The fixed dev tokens are public knowledge: they never leave this machine.
@@ -1429,10 +1460,9 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
         eprintln!("{note}");
     }
     let auth = authenticator(&app, o);
-    if !o.dev_auth && Auth::new(app.store.backend()).user_count() == 0 {
-        eprintln!(
-            "no users yet: create one with `obop admin create NAME --all-groups` (or try --dev-auth on localhost)"
-        );
+    // No code where the routes are off (`--dev-auth`, or a set-up that could not be turned on).
+    if auth.setup().is_some() {
+        announce_setup(&Auth::new(app.store.backend()));
     }
     // The agent tokens of accounts bound to Microsoft end within 90 days (N18); a binding made by
     // an older build left them without an end. A store that refuses this stops the start, as a

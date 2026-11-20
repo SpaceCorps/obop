@@ -341,11 +341,13 @@ async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_
 // the error schema. Again on `fix/w2b-h2` (N18, 2026-11-17), on purpose: the `expires_at` of a row of
 // `listAgentTokens`. Again on `fix/issues-w2c` (K55, second review), on purpose: the query parameters
 // `model`, `record` and `field` of `downloadBlob` and its description; repinned when main (PR 151)
-// was merged in, as the document now carries both changes.
+// was merged in, as the document now carries both changes. Again on `feat/first-admin-setup` (D96,
+// 2026-11-16, merged with main on 2026-11-18 twice), on purpose: the path `/api/auth/setup` and
+// three more kinds in the description of `security_event.kind`.
 #[rustfmt::skip]
 const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
-    ("dev/openapi", "7fd3031bb8812f7ebbd6421c63b252994a8c89ae6de8698bef4f68d4d7cdef9e"),
-    ("auth/openapi", "6bc3e7d62a721db38a651cfa53a04ae8056c9c6602eeed38459de26526bf8dff"),
+    ("dev/openapi", "fbb98141e88fd6092eda9293ba57145e8ffd9bf8c9f3767ea7a6a91af70e37fc"),
+    ("auth/openapi", "9e06cc4541c985c2fd3ecc9e51e13038ee839b9990fa4e05a7213e2db410c873"),
 ];
 
 /// With a brand row in the store the anonymous document is the one an instance with no row sends,

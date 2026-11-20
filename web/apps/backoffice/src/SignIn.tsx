@@ -18,16 +18,19 @@ import {
   login,
   loginMfa,
   rememberPlace,
+  setupStatus,
   signedInLogin,
   ssoEnabled,
   ssoExchange,
   takeSsoReturn,
+  type SetupState,
   type SsoErrorWord,
 } from "./api.ts";
 import { SignInNotes } from "./host/SignInNotes.tsx";
 import { useHost } from "./host/useHost.ts";
 import { passkeyMessage } from "./Passkeys.tsx";
 import { passkeysSupported, signInWithPasskey } from "./passkeys.ts";
+import { SetUp } from "./SetUp.tsx";
 import { storageFaultMessage } from "./serverMessage.ts";
 import { Button, Icon, Input, Notice } from "./ui.tsx";
 
@@ -91,6 +94,17 @@ export function SignIn({
     };
     window.addEventListener("pageshow", restored);
     return () => window.removeEventListener("pageshow", restored);
+  }, []);
+
+  // An instance with no account yet shows the set-up page instead of the form (D96). Until the
+  // answer is in, and on any doubt, the form shows.
+  const [setup, setSetup] = useState<SetupState>({ open: false });
+  useEffect(() => {
+    let live = true;
+    void setupStatus().then((s) => live && setSetup(s));
+    return () => {
+      live = false;
+    };
   }, []);
 
   // The button is shown only where an administrator turned the sign-in on.
@@ -241,7 +255,14 @@ export function SignIn({
           </>
         )}
       </aside>
-      {step ? (
+      {setup.open && !step ? (
+        <SetUp
+          codeActive={setup.codeActive}
+          needsSecretKey={setup.needsSecretKey}
+          onDone={onDone}
+          onClosed={() => setSetup({ open: false })}
+        />
+      ) : step ? (
         <div className="signin">
           <h1 className="signin-logo">
             <InstanceLogo variant="full" size={30} />
