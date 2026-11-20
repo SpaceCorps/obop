@@ -256,9 +256,9 @@ done = "Zapis anulowany"
 
 [labels.pl.model.accounting_move.action.reverse]
 label = "Wystornuj"
-description = "Oznacza zaksięgowaną operację jako wystornowaną; operacja przeciwna jest księgowana osobno (tylko osoba zatwierdzająca)"
-confirm = "Oznaczyć ten zapis jako odwrócony? Zaksięguj zapis przeciwny osobno."
-done = "Zapis oznaczony jako odwrócony"
+description = "Oznacza zaksięgowaną operację jako wystornowaną i tworzy operację przeciwną jako wersję roboczą do zaksięgowania przez osobę zatwierdzającą (tylko osoba zatwierdzająca)"
+confirm = "Wystornować ten zapis? Zostanie utworzona wersja robocza z liniami przeciwnymi do zaksięgowania przez osobę zatwierdzającą."
+done = "Zapis wystornowany; zapis przeciwny jest wersją roboczą"
 
 [labels.pl.model.accounting_move_line]
 name = "Pozycja operacji"
