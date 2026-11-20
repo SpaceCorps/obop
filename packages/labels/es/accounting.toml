@@ -256,9 +256,9 @@ done = "Asiento cancelado"
 
 [labels.es.model.accounting_move.action.reverse]
 label = "Revertir"
-description = "Marcar un asiento contabilizado como revertido; el asiento contrario se registra aparte (solo aprobadores)"
-confirm = "¿Marcar este asiento como revertido? Registre el asiento contrario por separado."
-done = "Asiento marcado como revertido"
+description = "Marcar un asiento contabilizado como revertido y crear el asiento contrario como borrador para que lo contabilice un aprobador (solo aprobadores)"
+confirm = "¿Revertir este asiento? Se crea un borrador con las líneas contrarias para que lo contabilice un aprobador."
+done = "Asiento revertido; el asiento contrario es un borrador"
 
 [labels.es.model.accounting_move_line]
 name = "Línea de movimiento"

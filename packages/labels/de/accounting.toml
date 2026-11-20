@@ -256,9 +256,9 @@ done = "Buchung storniert"
 
 [labels.de.model.accounting_move.action.reverse]
 label = "Storno buchen"
-description = "Eine gebuchte Buchung als storniert kennzeichnen; die Gegenbuchung wird separat erfasst (nur Genehmigende)"
-confirm = "Diese Buchung als storniert markieren? Buchen Sie die Gegenbuchung separat."
-done = "Buchung als storniert markiert"
+description = "Eine gebuchte Buchung als storniert kennzeichnen und die Gegenbuchung als Entwurf anlegen, den eine genehmigende Person bucht (nur Genehmigende)"
+confirm = "Diese Buchung stornieren? Ein Entwurf mit den Gegenzeilen wird angelegt, den eine genehmigende Person bucht."
+done = "Buchung storniert; die Gegenbuchung ist ein Entwurf"
 
 [labels.de.model.accounting_move_line]
 name = "Buchungszeile"
