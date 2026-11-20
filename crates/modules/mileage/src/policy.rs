@@ -303,9 +303,10 @@ pub fn reads_positions(who: &Who, trip_driver: &str) -> bool {
     who.admin || (!who.id.is_empty() && trip_driver == who.id)
 }
 
-/// The refusal for a record the caller may not see: the words of a record that does not exist.
+/// The refusal for a record the caller may not see: the answer for a record that does not exist,
+/// with the code `record_not_found` and the words `no MODEL ID` (L30).
 pub fn no_such(model: &str, id: &str) -> String {
-    format!("no {model} {id}")
+    obop_commands::errors::no_record(model, id)
 }
 
 fn word(action: &str) -> &str {

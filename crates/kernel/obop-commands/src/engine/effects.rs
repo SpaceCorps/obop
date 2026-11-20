@@ -326,8 +326,8 @@ impl Runner<'_> {
     /// The record with its computed fields, as `$self` sees it.
     fn me(&self, unit: &Unit<'_>, def: &ModelDef, id: &str) -> R<Fields> {
         let look = |n: &str| self.look(n);
-        let mut rec =
-            Reads::get(unit, def.name, id)?.ok_or_else(|| format!("no {} {id}", def.name))?;
+        let mut rec = Reads::get(unit, def.name, id)?
+            .ok_or_else(|| crate::errors::no_record(def.name, id))?;
         Computer::new(unit, &look, false).fill(def, id, &mut rec);
         Ok(rec)
     }
