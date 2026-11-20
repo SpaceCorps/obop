@@ -168,6 +168,18 @@ pub fn take_state(
     ))
 }
 
+/// End every flow that was started for `connection` and not finished (K19): a revocation must
+/// not be followed by a callback that stores tokens. Returns how many were ended.
+pub fn end_flows(backend: &dyn Backend, connection: &str) -> Result<usize, String> {
+    let mut n = 0;
+    for (state, _) in backend.find(STATE_MODEL, "connection", &J::from(connection))? {
+        if backend.delete(STATE_MODEL, &state)? {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
 fn token_request(
     client: &Client,
     cfg: &OAuthConfig,

@@ -63,14 +63,28 @@ pub struct Summary(pub Vec<String>);
 /// Merge `site` settings into the instance settings without touching the other keys.
 fn set_site_defaults(store: &Store, site: J) -> Result<(), String> {
     let backend = store.backend();
-    let mut all: serde_json::Map<String, J> = backend
+    // Settings that are not what the seed understands are left as they are (K19): rewriting them
+    // would drop what an administrator stored there.
+    let refuse = |what: &str| {
+        format!(
+            "the {what} settings are not a JSON object, so the seed leaves them and the site as they are; correct them first (obop settings)"
+        )
+    };
+    let mut all: serde_json::Map<String, J> = match backend
         .get("obop_setting", "instance")?
-        .and_then(|f| f.get("value").and_then(J::as_str).map(String::from))
-        .and_then(|v| serde_json::from_str(&v).ok())
-        .unwrap_or_default();
+        .and_then(|f| f.get("value").cloned())
+    {
+        None => serde_json::Map::new(),
+        Some(J::String(v)) => match serde_json::from_str(&v) {
+            Ok(J::Object(o)) => o,
+            _ => return Err(refuse("instance")),
+        },
+        Some(_) => return Err(refuse("instance")),
+    };
     let mut current = match all.remove("site") {
+        None => serde_json::Map::new(),
         Some(J::Object(o)) => o,
-        _ => serde_json::Map::new(),
+        Some(_) => return Err(refuse("site")),
     };
     if let J::Object(new) = site {
         for (k, v) in new {

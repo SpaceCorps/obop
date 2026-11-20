@@ -84,6 +84,9 @@ pub struct Runtime {
     started: AtomicBool,
 }
 
+/// Why an OAuth flow of a revoked connection stores nothing.
+const REVOKED: &str = "the connection was revoked; start a new one";
+
 /// The key prefix of the notes that an erasure is owed.
 const ERASURE_OWED: &str = "connectors.erase:";
 
@@ -1333,6 +1336,11 @@ impl Runtime {
     pub fn oauth_callback(&self, state: &str, code: &str) -> Result<String, String> {
         let (pending, verifier) = oauth::take_state(&*self.backend, &self.secrets, state)?;
         let (c, p) = self.connection(&pending.connection)?;
+        // A connection revoked while its flow was open gets no tokens (K19): the code is not
+        // even exchanged.
+        if c.state == "revoked" {
+            return Err(REVOKED.into());
+        }
         let cfg = self.oauth_config(&c, &p)?;
         let hosts = self.oauth_hosts(&p, &cfg);
         let tokens = oauth::exchange_code(&self.client, &cfg, code, &verifier, &hosts)?;
@@ -1377,6 +1385,15 @@ impl Runtime {
         // What the provider did cannot be taken back.
         obop_storage::fault::external_change();
         obop_storage::fault::needed(|| {
+            // Asked again right before the write: the connection may have been revoked while the
+            // provider answered (K19), and a revoked connection keeps no tokens.
+            match self.backend.get(CONNECTION, &c.id)? {
+                None => return Err(format!("no connection {}", c.id)),
+                Some(now) if now.get("state").and_then(J::as_str) == Some("revoked") => {
+                    return Err(REVOKED.into());
+                }
+                Some(_) => {}
+            }
             if self.backend.update(CONNECTION, &c.id, &f)? {
                 Ok(())
             } else {
@@ -1524,6 +1541,8 @@ impl Runtime {
         f.insert("credentials_hint".into(), "revoked".into());
         f.insert("oauth_tokens".into(), "".into());
         needed(|| self.backend.update(CONNECTION, connection, &f).map(|_| ()))?;
+        // A flow started before the revocation cannot finish after it (K19).
+        needed(|| oauth::end_flows(&*self.backend, connection))?;
         needed(|| self.queue.drop_connection(connection))?;
         needed(|| self.egress.forget_connection(connection))
     }

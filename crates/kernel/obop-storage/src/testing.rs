@@ -188,6 +188,32 @@ fn is_made_by(tag: &str, name: &str) -> bool {
     rest.is_empty() || rest == "-wal" || rest == "-shm" || rest.starts_with('.')
 }
 
+/// The names the tests of four tags made before they used [`TempPath`] (K52 d): the brand tests'
+/// `<tag>-<pid>-<nanos>` (or `-<n>`) and the fixed directory `obop-sign-race`. Their own sweepers
+/// are gone, so what an older run left is swept here, by the same age rule.
+fn is_legacy(tag: &str, name: &str) -> bool {
+    const LEGACY: [&str; 4] = [
+        "obop-brand-cli",
+        "obop-brand-http",
+        "obop-brand-rt",
+        "obop-sign-race",
+    ];
+    if !LEGACY.contains(&tag) {
+        return false;
+    }
+    if name == tag {
+        return tag == "obop-sign-race";
+    }
+    let Some(rest) = name.strip_prefix(tag).and_then(|r| r.strip_prefix('-')) else {
+        return false;
+    };
+    let parts: Vec<&str> = rest.split('-').collect();
+    parts.len() == 2
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// Remove what earlier runs of `tag` left in the temporary directory more than [`LEFTOVER_AGE`]
 /// ago (a file that something held open when its test ended, or a run that was killed).
 fn sweep_old(tag: &str) {
@@ -196,7 +222,8 @@ fn sweep_old(tag: &str) {
     };
     let now = std::time::SystemTime::now();
     for entry in entries.flatten() {
-        if !is_made_by(tag, &entry.file_name().to_string_lossy()) {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !is_made_by(tag, &name) && !is_legacy(tag, &name) {
             continue;
         }
         let old = entry
@@ -347,6 +374,8 @@ pub struct Flaky {
     /// What `history_lag_ms` answers instead of the wrapped store (see
     /// [`Flaky::report_history_lag`]).
     history_lag: std::sync::Mutex<Option<Option<i64>>>,
+    /// Run once, right after the next successful update of the model.
+    after_update: std::sync::Mutex<Option<(String, AfterInsert)>>,
 }
 
 /// A batch as `apply_tracked` received it: the context, the steps and the tracked models.
@@ -414,6 +443,7 @@ impl Flaky {
             before_kv_swap: std::sync::Mutex::new(None),
             before_kv_get: std::sync::Mutex::new(None),
             history_lag: std::sync::Mutex::new(None),
+            after_update: std::sync::Mutex::new(None),
         })
     }
 
@@ -506,6 +536,7 @@ impl Flaky {
     pub fn allow_models(&self) {
         *self.target.lock().unwrap() = None;
         *self.after_get.lock().unwrap() = None;
+        *self.after_update.lock().unwrap() = None;
         *self.insert_error.lock().unwrap() = None;
         *self.get_error.lock().unwrap() = None;
         self.after_write.store(0, SeqCst);
@@ -552,6 +583,12 @@ impl Flaky {
     /// Run `then` once, right after the next successful insert into `model`.
     pub fn after_the_next_insert_into(&self, model: &str, then: AfterInsert) {
         *self.after_insert.lock().unwrap() = Some((model.to_string(), then));
+    }
+
+    /// Run `then` once, right after the next successful update of `model` (another request doing
+    /// its part, or the store starting to refuse, once a change has committed).
+    pub fn after_the_next_update_of(&self, model: &str, then: AfterInsert) {
+        *self.after_update.lock().unwrap() = Some((model.to_string(), then));
     }
 
     /// Fail every insert into `model` with `message`, a server error that is neither a duplicate
@@ -832,6 +869,16 @@ impl Backend for Flaky {
             _ => None,
         });
         let done = self.inner.update(model, id, patch)?;
+        let hook = {
+            let mut g = self.after_update.lock().unwrap();
+            match &*g {
+                Some((m, _)) if m == model && done => g.take().map(|(_, f)| f),
+                _ => None,
+            }
+        };
+        if let Some(f) = hook {
+            f(&*self.inner);
+        }
         if lost == Ok(0) {
             self.refused.fetch_add(1, SeqCst);
             fault::note_in_flight();
@@ -1698,6 +1745,30 @@ mod temp_path_tests {
         let shown = dir.path().to_path_buf();
         drop(dir);
         assert!(!shown.exists());
+    }
+
+    /// K52 (d): the names four tests made before they used `TempPath` are swept too, and no
+    /// other name of those tags, nor any name of another tag.
+    #[test]
+    fn the_legacy_names_of_the_brand_and_sign_race_tests_are_swept() {
+        for (tag, name) in [
+            ("obop-brand-cli", "obop-brand-cli-4242-1793696487850123456"),
+            ("obop-brand-http", "obop-brand-http-4242-3"),
+            ("obop-brand-rt", "obop-brand-rt-4242-1793696487850123456"),
+            ("obop-sign-race", "obop-sign-race"),
+        ] {
+            assert!(is_legacy(tag, name), "{name}");
+        }
+        for (tag, name) in [
+            ("obop-brand-cli", "obop-brand-cli"),
+            ("obop-brand-cli", "obop-brand-cli-x-4242"),
+            ("obop-brand-cli", "obop-brand-cli-4242"),
+            ("obop-brand-cli", "obop-brand-cli-1-2-3"),
+            ("obop-model", "obop-model-4242-3"),
+            ("obop-model", "obop-model"),
+        ] {
+            assert!(!is_legacy(tag, name), "{name}");
+        }
     }
 
     #[test]

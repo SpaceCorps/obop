@@ -691,14 +691,13 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, store: &Store, rt: &Arc<Runtime>
             // can finish the work, and "only the active record can be withdrawn").
             let conn = str_of(&rec, "connection").to_string();
             if r.backend.get(CONNECTION, &conn)?.is_some() {
+                // The revocation withdraws every active consent of the connection, this one
+                // included (it was active above). It is not read again: a refused read after the
+                // work was done would answer "partial, repeat it", and the repeat would be refused
+                // as "only the active record can be withdrawn" (K19).
                 revoke_connection(&r, &conn, &who)?;
-            }
-            // A consent of a connection that is gone, or one that the revocation did not reach.
-            let still_active = r
-                .backend
-                .get(CONSENT, &id)?
-                .is_some_and(|k| str_of(&k, "state") == "active");
-            if still_active {
+            } else {
+                // A consent of a connection that is gone.
                 obop_storage::fault::needed(|| withdraw_consent(&r, &id, &who))?;
             }
             Ok(Value::map([

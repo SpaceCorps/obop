@@ -1014,6 +1014,56 @@ async fn start_fake_connection(r: &Rig, port: u16) -> String {
     url_pairs(url.query().unwrap())["state"].clone()
 }
 
+/// K19: a connection revoked while its OAuth flow is open gets no tokens. The revocation ends the
+/// pending flow, so the callback finds no state; and a callback that already holds the connection
+/// when it is revoked refuses to store what the provider answered.
+#[tokio::test]
+async fn a_revoked_connection_gets_no_tokens_from_a_flow_that_was_open() {
+    let (fake, end) = fake_oauth();
+    let r = rig_with(vec![fake]);
+    let state = start_fake_connection(&r, end.port).await;
+    let b = r.store.backend();
+    let (id, _) = b
+        .list("connection")
+        .unwrap()
+        .into_iter()
+        .find(|(_, f)| f["provider"] == "fake_oauth")
+        .unwrap();
+    assert_eq!(
+        b.find("connector_oauth_state", "connection", &J::from(id.as_str()))
+            .unwrap()
+            .len(),
+        1,
+        "the flow is open"
+    );
+    r.ok("dev-admin", "connection.revoke", json!({"id": id}))
+        .await;
+    assert!(
+        b.find("connector_oauth_state", "connection", &J::from(id.as_str()))
+            .unwrap()
+            .is_empty(),
+        "the revocation ended the flow"
+    );
+    let _ = answer_of(&r, &format!("/oauth/callback?state={state}&code=code-1")).await;
+    let stored = b.get("connection", &id).unwrap().unwrap();
+    assert_eq!(
+        stored["oauth_tokens"], "",
+        "no tokens on a revoked connection"
+    );
+    // The callback that loaded the connection before it was revoked: the write is refused.
+    let (c, _) = r.rt.connection(&id).unwrap();
+    let tokens = obop_connectors::oauth::Tokens::from_json(&json!({
+        "access_token": "a", "refresh_token": "r", "expires_at": 4_000_000_000u64
+    }))
+    .unwrap();
+    let e = r.rt.store_tokens(&c, &tokens).unwrap_err();
+    assert!(e.contains("revoked"), "{e}");
+    assert_eq!(
+        b.get("connection", &id).unwrap().unwrap()["oauth_tokens"],
+        ""
+    );
+}
+
 /// `GET /oauth/callback` answers with one page in five ways (`page()` in `obop-http`'s
 /// `connectors.rs`): the provider said no, the account is connected (to Google Drive or to any
 /// other connection), the answer could not be completed, and the bare address. This pins four of
