@@ -56,12 +56,8 @@ async fn a_revoke_is_not_stored_without_its_line_in_the_security_log() {
         // the line is part of the batch of the revoke.
         flaky.fail_inserts_into("security_event", "the log is full");
         let before = f.events_of("sign_link_revoked").len();
-        let body = if who == "admin" {
-            json!({"id": link, "revoked_at": "2030-01-01T00:00:00Z"})
-        } else {
-            json!({"id": link, "revoked_at": "2030-01-01T00:00:00Z"})
-        };
-        let (s, v) = f.api(who, "/api/sign_link/update", body.clone()).await;
+        let body = json!({"id": link, "revoked_at": "2030-01-01T00:00:00Z"});
+        let (s, v) = f.api(who, "/api/sign_link/update", body).await;
         assert_eq!(s, 200, "{who}: {v}");
         let revoked = !f.record("sign_link", &link)["revoked_at"].is_null();
         assert!(revoked, "{who}");
@@ -76,6 +72,7 @@ async fn a_revoke_is_not_stored_without_its_line_in_the_security_log() {
         let (f, flaky, link, _) = sent_flaky().await;
         let before = f.events_of("sign_link_revoked").len();
         flaky.refuse_applies(100);
+        let body = json!({"id": link, "revoked_at": "2030-01-01T00:00:00Z"});
         let (s, _) = f.api(who, "/api/sign_link/update", body).await;
         flaky.refuse_applies(0);
         let revoked = !f
