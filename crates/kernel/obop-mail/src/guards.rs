@@ -63,6 +63,7 @@ fn server_input(mail: Arc<Mail>, create: bool) -> Guard {
             "password_set",
             "last_test_at",
             "last_test_result",
+            "last_test_outcome",
             "test_recipient",
         ] {
             m.remove(k);
@@ -272,6 +273,22 @@ fn audit_private_network(mail: Arc<Mail>) -> Box<obop_commands::Observer> {
     })
 }
 
+/// An answer of `get`, `list` or `search` of `outbound_mail` without the sealed body: a record,
+/// a list of records, or the `rows` of a search.
+fn without_body(v: Value) -> Value {
+    match v {
+        Value::Map(mut m) => {
+            m.remove("body");
+            if let Some(rows) = m.remove("rows") {
+                m.insert("rows".into(), without_body(rows));
+            }
+            Value::Map(m)
+        }
+        Value::List(rows) => Value::List(rows.into_iter().map(without_body).collect()),
+        other => other,
+    }
+}
+
 pub fn install(d: &Arc<Dispatcher>, mail: &Arc<Mail>) {
     d.observe("mail", audit_private_network(mail.clone()));
     d.add_guard(
@@ -300,6 +317,15 @@ pub fn install(d: &Arc<Dispatcher>, mail: &Arc<Mail>) {
             "mail",
             &format!("{OUTBOUND}.{c}"),
             "messages are queued with outbound_mail.send",
+        );
+    }
+    // The sealed body is read by the worker from the store, never through a command: the
+    // administrator holds every group, `mail.system` included, so the field group alone would
+    // hand it the ciphertext (docs/ISSUES.md U58). Taken out of every answer, for every caller.
+    for c in ["get", "list", "search"] {
+        d.around(
+            &format!("{OUTBOUND}.{c}"),
+            Box::new(|_, input, inner| inner(input).map(without_body)),
         );
     }
     d.add_guard("mail", "mail_template.create", false, template_input());

@@ -737,6 +737,15 @@
             "format": "date-time",
             "type": "string"
           },
+          "last_test_outcome": {
+            "description": "How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)",
+            "enum": [
+              "sent",
+              "temporary",
+              "permanent"
+            ],
+            "type": "string"
+          },
           "last_test_result": {
             "description": "What the server answered to the last test message (personal data: agents see it masked)",
             "type": "string"
@@ -16516,6 +16525,15 @@
                           "format": "date-time",
                           "type": "string"
                         },
+                        "last_test_outcome": {
+                          "description": "How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)",
+                          "enum": [
+                            "sent",
+                            "temporary",
+                            "permanent"
+                          ],
+                          "type": "string"
+                        },
                         "last_test_result": {
                           "description": "What the server answered to the last test message (personal data: agents see it masked)",
                           "maxLength": 2048,
@@ -16792,6 +16810,15 @@
                     "description": "When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
+                    "type": "string"
+                  },
+                  "last_test_outcome": {
+                    "description": "How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)",
+                    "enum": [
+                      "sent",
+                      "temporary",
+                      "permanent"
+                    ],
                     "type": "string"
                   },
                   "last_test_result": {
@@ -17789,6 +17816,15 @@
                     "description": "When the last test message was sent (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
+                    "type": "string"
+                  },
+                  "last_test_outcome": {
+                    "description": "How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)",
+                    "enum": [
+                      "sent",
+                      "temporary",
+                      "permanent"
+                    ],
                     "type": "string"
                   },
                   "last_test_result": {

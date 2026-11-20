@@ -230,6 +230,15 @@ description = "När det senaste testmeddelandet skickades"
 label = "Senaste testresultat"
 description = "Vad servern svarade på det senaste testmeddelandet"
 
+[labels.sv.model.mail_server.field.last_test_outcome]
+label = "Utfall av senaste test"
+description = "Hur det senaste testet slutade: skickat, tillfälligt inte skickat eller avvisat"
+
+[labels.sv.model.mail_server.field.last_test_outcome.options]
+sent = "Skickat"
+temporary = "Inte skickat (tillfälligt)"
+permanent = "Inte skickat (avvisat)"
+
 [labels.sv.model.mail_server.field.test_recipient]
 label = "Testmottagare"
 description = "Indata till test_send: adressen testmeddelandet går till; sparas aldrig"

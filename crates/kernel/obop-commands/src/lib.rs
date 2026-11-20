@@ -191,6 +191,9 @@ pub struct CommandInfo {
     /// a step that a manager decides afterwards (a leave request) has a way out. `None` in the
     /// command catalog and for an action that is not a transition.
     pub one_way: Option<bool>,
+    /// The command is about the model as a whole and takes no record id (`CommandDef::of_model`,
+    /// docs/ISSUES.md U66): the record panel leaves it out.
+    pub whole_model: bool,
 }
 
 /// What a guard decides about one call (D48).
@@ -629,6 +632,7 @@ impl Dispatcher {
                     descriptions: Texts::new(),
                     ui: None,
                     one_way: None,
+                    whole_model: false,
                 }
             })
             .collect()
@@ -666,6 +670,7 @@ impl Dispatcher {
                 descriptions: Texts::new(),
                 ui: None,
                 one_way: None,
+                whole_model: false,
             })
             .collect();
         out.sort_by(|a, b| a.id.cmp(&b.id));
@@ -747,6 +752,11 @@ impl Dispatcher {
                                 .iter()
                                 .find(|d| d.name == &id[name.len() + 1..])
                                 .and_then(|d| d.ui.clone()),
+                            whole_model: m
+                                .def
+                                .commands
+                                .iter()
+                                .any(|d| d.name == &id[name.len() + 1..] && d.whole_model),
                             one_way: c.transition.map(|t| {
                                 // Every action of the model counts, also one this caller may not
                                 // run; one refused for everyone does not.

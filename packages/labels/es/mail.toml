@@ -230,6 +230,15 @@ description = "Cuándo se envió el último mensaje de prueba"
 label = "Resultado de la última prueba"
 description = "Lo que respondió el servidor al último mensaje de prueba"
 
+[labels.es.model.mail_server.field.last_test_outcome]
+label = "Desenlace de la última prueba"
+description = "Cómo terminó la última prueba: enviado, no enviado por ahora o rechazado"
+
+[labels.es.model.mail_server.field.last_test_outcome.options]
+sent = "Enviado"
+temporary = "No enviado (temporal)"
+permanent = "No enviado (rechazado)"
+
 [labels.es.model.mail_server.field.test_recipient]
 label = "Destinatario de prueba"
 description = "Entrada de test_send: la dirección del mensaje de prueba; nunca se guarda"

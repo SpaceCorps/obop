@@ -53,7 +53,18 @@ type Server = Row & {
   footer?: string;
   last_test_at?: string | null;
   last_test_result?: string;
+  /** How the last test ended (U63): sent, temporary or permanent; empty before 2026-11. */
+  last_test_outcome?: string;
 };
+
+/** The words of a test's outcome; the server's own answer is the detail beside them. */
+function testOutcome(code: string): string {
+  if (code === "sent") return t("Sent");
+  if (code === "temporary")
+    return t("Not sent, the server could not be reached or asked to try later");
+  if (code === "permanent") return t("Not sent, refused");
+  return "";
+}
 
 type Draft = {
   id?: string;
@@ -592,12 +603,32 @@ function ServersSection({
               )}
               {s(r.last_test_result) && (
                 <div
-                  className={s(r.last_test_result).startsWith("sent") ? "hint" : "hint mail-error"}
+                  data-test-outcome={s(r.last_test_outcome)}
+                  className={
+                    (
+                      s(r.last_test_outcome)
+                        ? s(r.last_test_outcome) === "sent"
+                        : s(r.last_test_result).startsWith("sent")
+                    )
+                      ? "hint"
+                      : "hint mail-error"
+                  }
                 >
-                  {t("Last test {when}: {result}", {
-                    when: r.last_test_at ? fmt.dateTime(Date.parse(s(r.last_test_at))) : "",
-                    result: s(r.last_test_result),
-                  })}
+                  {testOutcome(s(r.last_test_outcome))
+                    ? t("Last test {when}: {outcome}", {
+                        when: r.last_test_at ? fmt.dateTime(Date.parse(s(r.last_test_at))) : "",
+                        outcome: testOutcome(s(r.last_test_outcome)),
+                      })
+                    : t("Last test {when}: {result}", {
+                        when: r.last_test_at ? fmt.dateTime(Date.parse(s(r.last_test_at))) : "",
+                        result: s(r.last_test_result),
+                      })}
+                  {testOutcome(s(r.last_test_outcome)) && (
+                    <span className="mail-detail">
+                      {" "}
+                      ({s(r.last_test_result).replace(/^(sent|failed): /, "")})
+                    </span>
+                  )}
                 </div>
               )}
               <div className="actionrow">

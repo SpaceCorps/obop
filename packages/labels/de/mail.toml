@@ -230,6 +230,15 @@ description = "Wann die letzte Testnachricht gesendet wurde"
 label = "Letztes Testergebnis"
 description = "Was der Server auf die letzte Testnachricht antwortete"
 
+[labels.de.model.mail_server.field.last_test_outcome]
+label = "Ergebnis des letzten Tests"
+description = "Wie der letzte Test endete: gesendet, vorübergehend nicht gesendet oder abgelehnt"
+
+[labels.de.model.mail_server.field.last_test_outcome.options]
+sent = "Gesendet"
+temporary = "Nicht gesendet (vorübergehend)"
+permanent = "Nicht gesendet (abgelehnt)"
+
 [labels.de.model.mail_server.field.test_recipient]
 label = "Testempfänger"
 description = "Eingabe von test_send: die Adresse der Testnachricht; nie gespeichert"

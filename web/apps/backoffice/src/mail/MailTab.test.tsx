@@ -100,3 +100,45 @@ it("sends the private network switch only when a person turns it on, and warns w
   expect(bodies).toHaveLength(2);
   expect(bodies[1]).toHaveProperty("allow_private_network", true);
 });
+
+it("words the outcome of the last test and keeps the server's answer as the detail", async () => {
+  const servers = [
+    {
+      id: "s1",
+      name: "Relay",
+      kind: "smtp",
+      host: "smtp.example.org",
+      last_test_at: "2026-11-20T10:00:00Z",
+      last_test_result: "failed: 550 no such user",
+      last_test_outcome: "permanent",
+    },
+    {
+      id: "s2",
+      name: "Old",
+      kind: "smtp",
+      host: "smtp.example.org",
+      last_test_at: "2026-11-20T10:00:00Z",
+      last_test_result: "sent 250 ok",
+    },
+  ];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const path = new URL(url, "http://localhost").pathname;
+      const rows = path === "/api/mail_server/search" ? servers : [];
+      return new Response(JSON.stringify({ value: { rows }, denied: [] }), { status: 200 });
+    }),
+  );
+  act(() => root.render(<MailTab token="tok" notify={() => {}} readsConnections={false} />));
+  await settle();
+  const refused = container.querySelector("[data-test-outcome=permanent]")!;
+  expect(refused.textContent).toContain("Not sent, refused");
+  // The server's words are the detail, without obop's own English prefix.
+  expect(refused.textContent).toContain("(550 no such user)");
+  expect(refused.textContent).not.toContain("failed:");
+  expect(refused.className).toContain("mail-error");
+  // A server tested before the outcome code existed shows the server's words as before.
+  const old = container.querySelector("[data-test-outcome='']")!;
+  expect(old.textContent).toContain("sent 250 ok");
+  expect(old.className).not.toContain("mail-error");
+});

@@ -9,6 +9,7 @@ import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.t
 import { defaultFilter } from "./filters.ts";
 import { csvCell, download, plainText, rowCurrency, visibleFields } from "./format.ts";
 import { ImportDialog } from "./ImportDialog.tsx";
+import { ModelActions } from "./ModelActions.tsx";
 import { actionTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { PHONE_QUERY, useMedia } from "./media.ts";
 import { pluralTitle } from "./plural.ts";
@@ -665,6 +666,7 @@ export function ModelPage({
                 </label>
               )}
               {appExtra}
+              <ModelActions model={model} />
             </>
           }
         />
