@@ -19,7 +19,9 @@ import {
   dimensionsOf,
   fillPeriods,
   formatMeasure,
+  groupSum,
   matrixOf,
+  measureAggs,
   measureFilter,
   measureOptions,
   measureRef,
@@ -399,5 +401,66 @@ describe("chart helpers", () => {
     expect(folded[0]!.value).toBe(12);
     expect(folded[8]).toMatchObject({ key: OTHER_KEY, value: 1 + 2 + 3 + 4 });
     expect(foldOther(data.slice(0, 9), 8)).toHaveLength(9);
+  });
+});
+
+// The server has the smallest and the largest value of a field (K1): the pivot and the graph offer
+// them for every field they sum or average, and their margins take the smallest or the largest cell.
+describe("the smallest and the largest value", () => {
+  const amount = order.fields[3]!;
+  const opts = measureOptions(order, order.fields);
+  const dim: Dim = { field: state };
+  const min = { field: amount, op: "min" } as const;
+  const max = { field: amount, op: "max" } as const;
+
+  it("are read from and written to the address, for a summed or an averaged field", () => {
+    expect(parseMeasure("min:total_minor", opts)).toEqual(min);
+    expect(parseMeasure("max:unit_price_minor", opts)).toEqual({
+      field: order.fields[4],
+      op: "max",
+    });
+    expect(parseMeasure("min:nothing", opts)).toBeUndefined();
+    expect(measureRef(min)).toBe("min:total_minor");
+    expect(measureRef(max)).toBe("max:total_minor");
+    expect(measureTitle(min)).toBe("Smallest Total");
+    expect(measureTitle(max)).toBe("Largest Total");
+  });
+
+  it("are asked of the server by name, without the groups that have no value", () => {
+    expect(measureAggs(min)).toEqual([{ op: "count" }, { op: "min", field: "total_minor" }]);
+    expect(measureFilter(max)).toEqual([{ field: "total_minor", op: "is_null", value: false }]);
+    const g: AggGroup = {
+      key: { state: "draft" },
+      count: 2,
+      measures: { "min:total_minor": 50, "sum:total_minor": 150 },
+    };
+    expect(groupSum(g, min)).toBe(50);
+  });
+
+  it("take the smallest or the largest of their groups, in the pivot margins too", () => {
+    const groups: AggGroup[] = [
+      { key: { state: "draft" }, count: 1, measures: { "min:total_minor": 300 } },
+      { key: { state: "draft" }, count: 2, measures: { "min:total_minor": 100 } },
+      { key: { state: "confirmed" }, count: 1, measures: { "min:total_minor": 700 } },
+    ];
+    const rows = reportFromGroups(groups, [dim], min);
+    expect(rows).toEqual([
+      { keys: ["draft"], currency: undefined, count: 3, value: 100 },
+      { keys: ["confirmed"], currency: undefined, count: 1, value: 700 },
+    ]);
+    const mx = matrixOf(rows, [dim], lk, false, min);
+    expect(cellValue(min, mx.grand(undefined))).toBe(100);
+    const big = matrixOf(rows, [dim], lk, false, max);
+    expect(cellValue(max, big.grand(undefined))).toBe(700);
+    // Records in the browser: an empty value is no value, not a zero.
+    const recs = [
+      { id: "1", state: "draft", total_minor: 40 },
+      { id: "2", state: "draft" },
+      { id: "3", state: "draft", total_minor: 90 },
+    ];
+    expect(reportFromRows(recs, [dim], min)).toEqual([
+      { keys: ["draft"], currency: undefined, count: 2, value: 40 },
+    ]);
+    expect(reportFromRows(recs, [dim], max)[0]!.value).toBe(90);
   });
 });

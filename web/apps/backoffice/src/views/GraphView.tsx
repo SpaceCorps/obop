@@ -8,6 +8,7 @@ import { stateFieldOf, toneClassOf } from "../presentation.ts";
 import { domainOf, type Cond, type GraphCfg, type Lookup } from "../query.ts";
 import {
   cellValue,
+  combine,
   compactMeasure,
   currenciesOf,
   defaultRows,
@@ -55,8 +56,7 @@ export function chartPoints(
   for (const r of rows) {
     const k = r.keys[0] ?? "";
     const c = cells.get(k) ?? { count: 0, value: 0 };
-    c.count += r.count;
-    c.value += r.value;
+    combine(m, c, r);
     cells.set(k, c);
   }
   const present = [...cells.keys()];

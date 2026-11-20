@@ -275,8 +275,8 @@ export function orderDimKeys(d: Dim, keys: readonly string[], lk: Lookup): strin
 
 // ---- measures ----------------------------------------------------------------------------------
 
-/** A sum or an average of a field; the record count is `null`. */
-export type Measure = { field: FieldMeta; op: "sum" | "avg" };
+/** A sum, an average, the smallest or the largest value of a field; the record count is `null`. */
+export type Measure = { field: FieldMeta; op: "sum" | "avg" | "min" | "max" };
 export type MeasureSel = Measure | null;
 export type MeasureOptions = { sums: FieldMeta[]; avgs: FieldMeta[] };
 
@@ -316,9 +316,9 @@ export function measureOptions(
   return { sums, avgs };
 }
 
-/** The address form of a measure: `count`, `field` (a sum) or `avg:field`. */
+/** The address form of a measure: `count`, `field` (a sum), `avg:field`, `min:field` or `max:field`. */
 export const measureRef = (m: MeasureSel): string =>
-  !m ? "count" : m.op === "avg" ? `avg:${m.field.name}` : m.field.name;
+  !m ? "count" : m.op === "sum" ? m.field.name : `${m.op}:${m.field.name}`;
 
 /**
  * A measure from its address form: `null` for the count, undefined when the text names nothing on
@@ -331,6 +331,12 @@ export function parseMeasure(
 ): MeasureSel | undefined {
   if (!ref) return undefined;
   if (ref === "count") return null;
+  // The smallest and the largest value are offered for every field that is summed or averaged.
+  const extreme = /^(min|max):(.+)$/.exec(ref);
+  if (extreme) {
+    const f = [...opts.sums, ...opts.avgs].find((x) => x.name === extreme[2]);
+    return f ? { field: f, op: extreme[1] as "min" | "max" } : undefined;
+  }
   const avg = ref.startsWith("avg:");
   const name = avg ? ref.slice(4) : ref;
   const sum = opts.sums.find((f) => f.name === name);
@@ -389,38 +395,76 @@ export function currencySplit(
   return ref ? { field: ref.name, path } : null;
 }
 
-/** The measures to ask the server for: always the count, and the sum of the field. */
+/** Whether a measure is the smallest or the largest value: its groups combine by taking one. */
+const isExtreme = (m: MeasureSel): m is Measure & { op: "min" | "max" } =>
+  m?.op === "min" || m?.op === "max";
+
+/**
+ * The measures to ask the server for: always the count, and the sum of the field (an average is
+ * that sum over the count), or its smallest or largest value.
+ */
 export const measureAggs = (m: MeasureSel): AggMeasure[] =>
-  m ? [{ op: "count" }, { op: "sum", field: m.field.name }] : [{ op: "count" }];
+  !m
+    ? [{ op: "count" }]
+    : [{ op: "count" }, { op: isExtreme(m) ? m.op : "sum", field: m.field.name }];
 
-/** An average counts only the records that have a value. */
+/**
+ * An average counts only the records that have a value; the smallest and the largest value leave
+ * out the groups that have none, which would otherwise show a zero.
+ */
 export const measureFilter = (m: MeasureSel): ServerFilter[] =>
-  m?.op === "avg" ? [{ field: m.field.name, op: "is_null", value: false }] : [];
+  m && m.op !== "sum" ? [{ field: m.field.name, op: "is_null", value: false }] : [];
 
-/** The summed value of a server group; a decimal's exact sum arrives as text (D72). */
+/**
+ * The value of a server group for its measure: the sum (the numerator of an average), the smallest
+ * or the largest value, or the count. A decimal arrives as exact text (D72).
+ */
 export function groupSum(g: AggGroup, m: MeasureSel): number {
   if (!m) return g.count;
-  const v = g.measures[`sum:${m.field.name}`] as unknown;
+  const v = g.measures[`${isExtreme(m) ? m.op : "sum"}:${m.field.name}`] as unknown;
   const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : 0;
   return Number.isFinite(n) ? n : 0;
 }
 
-/** A cell of a report: how many records and the sum of the measure over them. */
+/**
+ * A cell of a report: how many records and the measure over them (the sum, or the smallest or the
+ * largest value).
+ */
 export type Cell = { count: number; value: number };
 
-/** What a cell shows: the count, the sum, or the average (sum over count). */
+/**
+ * Add the records of `x` to the cell `c`: counts and sums add up, a smallest or a largest value
+ * keeps the smaller or the larger of the two (a cell without records has no value yet).
+ */
+export function combine(m: MeasureSel, c: Cell, x: Cell): void {
+  if (isExtreme(m) && c.count > 0)
+    c.value = m.op === "min" ? Math.min(c.value, x.value) : Math.max(c.value, x.value);
+  else if (isExtreme(m)) c.value = x.value;
+  else c.value += x.value;
+  c.count += x.count;
+}
+
+/** What a cell shows: the count, the sum, the average (sum over count), the smallest or the largest. */
 export function cellValue(m: MeasureSel, c: Cell | undefined): number {
   if (!c) return 0;
   if (!m) return c.count;
   return m.op === "avg" ? (c.count ? c.value / c.count : 0) : c.value;
 }
 
-/** "Count", "Sum of Total", "Average of Unit price". */
+/** "Count", "Sum of Total", "Average of Unit price", "Smallest Total", "Largest Total". */
 export function measureTitle(m: MeasureSel): string {
   if (!m) return t("Count");
-  return m.op === "avg"
-    ? t("Average of {field}", { field: fieldTitle(m.field) })
-    : t("Sum of {field}", { field: fieldTitle(m.field) });
+  const field = fieldTitle(m.field);
+  switch (m.op) {
+    case "avg":
+      return t("Average of {field}", { field });
+    case "min":
+      return t("Smallest {field}", { field });
+    case "max":
+      return t("Largest {field}", { field });
+    default:
+      return t("Sum of {field}", { field });
+  }
 }
 
 const unit = (n: number, u: string, digits = 1) =>
@@ -564,13 +608,12 @@ export function reportFromRows(
   const acc = new Map<string, ReportRow>();
   for (const r of rows) {
     const raw = m ? r[m.field.name] : undefined;
-    if (m?.op === "avg" && isEmpty(raw)) continue;
+    if (m && m.op !== "sum" && isEmpty(raw)) continue;
     const keys = dims.map((d) => dimKeyOf(d, r, opts.zone));
     const currency = isMoney(m) ? opts.currencyOf?.(r) : undefined;
     const id = JSON.stringify([keys, currency ?? null]);
     const cell = acc.get(id) ?? { keys, currency, count: 0, value: 0 };
-    cell.count += 1;
-    cell.value += m ? Number(raw) || 0 : 1;
+    combine(m, cell, { count: 1, value: m ? Number(raw) || 0 : 1 });
     acc.set(id, cell);
   }
   return [...acc.values()];
@@ -593,8 +636,7 @@ export function reportFromGroups(
     const currency = isMoney(m) ? currencyOf?.(g.split) : undefined;
     const id = JSON.stringify([keys, currency ?? null]);
     const cell = acc.get(id) ?? { keys, currency, count: 0, value: 0 };
-    cell.count += g.count;
-    cell.value += groupSum(g, m);
+    combine(m, cell, { count: g.count, value: groupSum(g, m) });
     acc.set(id, cell);
   }
   return [...acc.values()];
@@ -622,23 +664,23 @@ export type Matrix = {
 };
 
 const k3 = (r: string, c: string, cur: string | undefined) => `${r}\u0001${c}\u0001${cur ?? ""}`;
-const add = (m: Map<string, Cell>, k: string, x: ReportRow) => {
-  const c = m.get(k) ?? { count: 0, value: 0 };
-  c.count += x.count;
-  c.value += x.value;
-  m.set(k, c);
-};
-
 /**
  * Lay a report out as a pivot. Sums and counts add up, so the margins come from the cells; an
- * average's margins are the margins' sum over their count, which is exact.
+ * average's margins are the margins' sum over their count, which is exact; the margin of a
+ * smallest or a largest value is the smallest or the largest of its cells, exact too.
  */
 export function matrixOf(
   rows: readonly ReportRow[],
   dims: readonly [Dim, Dim?],
   lk: Lookup,
   fill = false,
+  m: MeasureSel = null,
 ): Matrix {
+  const add = (to: Map<string, Cell>, k: string, x: ReportRow) => {
+    const c = to.get(k) ?? { count: 0, value: 0 };
+    combine(m, c, x);
+    to.set(k, c);
+  };
   const [rowD, colD] = dims;
   const cells = new Map<string, Cell>();
   const rt = new Map<string, Cell>();
