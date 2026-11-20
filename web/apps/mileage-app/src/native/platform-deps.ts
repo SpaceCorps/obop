@@ -1,6 +1,6 @@
 import type { DeviceInfo, OAuthDeps } from "@obop/client";
 import * as Crypto from "expo-crypto";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import { deviceName } from "../core/device.ts";
 import { hostConfig } from "./host.ts";
 
@@ -20,3 +20,7 @@ export const appVersion = (): string => hostConfig().identity.version;
 export function deviceInfo(): DeviceInfo {
   return { name: deviceName(Platform), platform: Platform.OS, appVersion: appVersion() };
 }
+
+/** The address the app was started with (a redirect of the system browser), or `null`. */
+export const initialUrl = async (): Promise<string | null> =>
+  (await Linking.getInitialURL()) ?? null;
