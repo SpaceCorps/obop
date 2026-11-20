@@ -147,6 +147,15 @@ fn the_metadata_carries_the_hints() {
     let (d, p) = rig();
     let meta = meta_json(&d, Surface::Rest, &p);
     assert_eq!(meta["currency"], "EUR");
+    // U15: the list a currency picker offers is the one the server checks.
+    let codes: Vec<&str> = meta["currencies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_str().unwrap())
+        .collect();
+    assert_eq!(codes, obop_registry::limits::ISO_4217);
+    assert!(codes.contains(&"EUR") && !codes.contains(&"XTS"));
     let line = meta["modules"][0]["models"]
         .as_array()
         .unwrap()

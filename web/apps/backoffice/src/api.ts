@@ -361,6 +361,19 @@ let instanceCurrency = "";
 export function getInstanceCurrency(): string {
   return instanceCurrency;
 }
+let serverCurrencies: string[] = [];
+/**
+ * The currency codes the server accepts (`currencies` of `/api/meta`, its bundled ISO 4217 list,
+ * U15); empty until the metadata has been read or from an older server.
+ */
+export function getServerCurrencies(): string[] {
+  return serverCurrencies;
+}
+export function setServerCurrencies(codes: unknown): void {
+  serverCurrencies = Array.isArray(codes)
+    ? codes.filter((c): c is string => typeof c === "string")
+    : [];
+}
 
 export type Reply =
   | { kind: "ok"; value: unknown; denied: string[] }
@@ -428,10 +441,12 @@ export async function meta(
     core_version?: string;
     time?: { zone?: string; tzdb_version?: string };
     currency?: string;
+    currencies?: string[];
   } | null;
   if (!body || !Array.isArray(body.modules)) return "failed";
   if (body.core_version) coreVersion = body.core_version;
   if (body.currency) instanceCurrency = body.currency;
+  setServerCurrencies(body.currencies);
   setTime(body.time?.zone, body.time?.tzdb_version);
   const modules = body.modules;
   // An older server may not send the kind yet: money by name, everything else text.

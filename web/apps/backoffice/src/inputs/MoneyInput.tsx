@@ -3,6 +3,7 @@
 // chosen from the ISO codes, the instance's own first.
 import { useId } from "react";
 import { fmt, getCurrency, t } from "@obop/ui";
+import { getServerCurrencies } from "../api.ts";
 import { useTypedText, type BaseInputProps } from "./common.ts";
 import { TypedBox } from "./TypedBox.tsx";
 
@@ -91,8 +92,14 @@ export function MoneyInput({
 const COMMON = ["EUR", "USD", "GBP", "CHF", "SEK", "NOK", "DKK", "PLN", "CZK", "JPY", "CAD", "AUD"];
 
 let allCodes: string[] | null = null;
-/** Every ISO 4217 code this browser knows, else the common ones. */
+/**
+ * The codes the server accepts (its ISO 4217 list in `/api/meta`, U15), so the select offers no
+ * code a save would refuse; from an older server, every code this browser knows, else the common
+ * ones.
+ */
 export function currencyCodes(): string[] {
+  const server = getServerCurrencies();
+  if (server.length) return server;
   if (allCodes) return allCodes;
   try {
     const intl = Intl as unknown as { supportedValuesOf?: (k: string) => string[] };
