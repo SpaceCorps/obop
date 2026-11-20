@@ -34,8 +34,8 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {
     /// `model_added`, `model_removed`, `field_added`, `field_removed`, `field_retyped`,
-    /// `field_reshaped`, `field_limits`, `field_required`, `option_added`, `option_removed`, `action_added`,
-    /// `action_removed`.
+    /// `field_reshaped`, `field_limits`, `field_readonly`, `field_required`, `option_added`,
+    /// `option_removed`, `action_added`, `action_removed`.
     pub kind: &'static str,
     pub model: String,
     pub field: Option<String>,
@@ -307,6 +307,23 @@ pub fn diff(old: &Manifest, new: &Manifest) -> Vec<Change> {
                                     held_old.change_to(&held_new),
                                     held_old.text(),
                                     held_new.text()
+                                ),
+                                false,
+                            ));
+                        }
+                        // U23: a field callers could write becomes one only the server sets.
+                        // Stored values stay valid, so it never blocks, but a create or update
+                        // that names it is refused from now on (`readonly_field`).
+                        let fixed = |f: &FieldM| f.readonly || f.computed.is_some();
+                        if fixed(nf) && !fixed(of) {
+                            out.push(ch(
+                                "field_readonly",
+                                &nm.name,
+                                Some(&nf.name),
+                                format!(
+                                    "{} becomes {}: create and update may no longer set it",
+                                    nf.name,
+                                    if nf.computed.is_some() { "computed" } else { "readonly" }
                                 ),
                                 false,
                             ));
@@ -1317,6 +1334,25 @@ mod tests {
         // A step for another starting version does not apply.
         let p = plan_data(&m("0.3.0", &field("title", ""), ""), &new, &|_| 5);
         assert!(p.steps.is_empty());
+    }
+
+    #[test]
+    fn a_field_that_becomes_readonly_or_computed_is_shown_and_never_blocks() {
+        // U23: hr 0.4.1 to 0.5.0 made `hr_leave_request.requested_by` readonly.
+        let old = m("0.1.0", &field("by", ""), "");
+        let ro = m("0.2.0", &field("by", "readonly = true"), "");
+        let p = plan_data(&old, &ro, &|_| 5);
+        let c: Vec<&Change> = p.changes.iter().filter(|c| c.kind == "field_readonly").collect();
+        assert_eq!(c.len(), 1, "{:?}", p.changes);
+        assert_eq!(c[0].field.as_deref(), Some("by"));
+        assert!(!c[0].breaking && p.blockers.is_empty(), "{:?}", p.blockers);
+        assert_eq!(
+            c[0].detail,
+            "by becomes readonly: create and update may no longer set it"
+        );
+        // Unchanged, or the other way round: nothing to show.
+        assert!(diff(&ro, &ro).is_empty());
+        assert!(!diff(&ro, &old).iter().any(|c| c.kind == "field_readonly"));
     }
 
     fn dec(p: u8, s: u8, extra: &str) -> String {
