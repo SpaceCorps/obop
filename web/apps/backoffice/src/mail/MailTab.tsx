@@ -166,7 +166,7 @@ function ServerForm({
   // The button that opened the form is gone or below it: the keyboard starts at the first field.
   useEffect(() => form.current?.querySelector<HTMLInputElement>("input")?.focus(), []);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useWorded();
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
   const mailConnections = connections.filter((c) => MAIL_PROVIDERS.has(s(c.provider)));
 
@@ -201,7 +201,7 @@ function ServerForm({
     const r = await call(token, d.id ? "mail_server.update" : "mail_server.create", body);
     setSaving(false);
     if (r.kind === "ok") onDone(d.id ? t("Mail server saved.") : t("Mail server added."));
-    else setError(message(r, t("Could not save the mail server.")));
+    else setError(() => message(r, t("Could not save the mail server.")));
   }
 
   return (
@@ -418,7 +418,7 @@ function TestSend({
 }) {
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: () => string } | null>(null);
   async function send() {
     setBusy(true);
     setResult(null);
@@ -427,9 +427,10 @@ function TestSend({
       test_recipient: to.trim(),
     });
     setBusy(false);
+    const sentTo = to.trim();
     if (r.kind === "ok")
-      setResult({ ok: true, text: t("The test message was sent to {to}.", { to: to.trim() }) });
-    else setResult({ ok: false, text: message(r, t("The test message was not sent.")) });
+      setResult({ ok: true, text: () => t("The test message was sent to {to}.", { to: sentTo }) });
+    else setResult({ ok: false, text: () => message(r, t("The test message was not sent.")) });
     onDone();
   }
   return (
@@ -455,7 +456,7 @@ function TestSend({
       </Button>
       {result && (
         <p className={result.ok ? "hint" : "hint mail-error"} role="status">
-          {result.text}
+          {result.text()}
         </p>
       )}
     </form>

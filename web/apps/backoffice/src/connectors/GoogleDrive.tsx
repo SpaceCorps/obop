@@ -89,7 +89,7 @@ export function GoogleDrive() {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState<{
     tone: "success" | "danger" | "info";
-    text: string;
+    text: () => string; // how to word it, called each time it is drawn (D9)
   } | null>(null);
 
   const connected = settings?.state === "connected";
@@ -128,17 +128,18 @@ export function GoogleDrive() {
     if (r.kind === "approval") {
       setMessage({
         tone: "info",
-        text: t(
-          "Approval needed: this was proposed as plan {plan}. Nothing changes until a human approves it.",
-          {
-            plan: r.planId.slice(0, 8),
-          },
-        ),
+        text: () =>
+          t(
+            "Approval needed: this was proposed as plan {plan}. Nothing changes until a human approves it.",
+            {
+              plan: r.planId.slice(0, 8),
+            },
+          ),
       });
       return true;
     }
     if (r.kind === "error") {
-      setMessage({ tone: "danger", text: serverMessage(r.message) });
+      setMessage({ tone: "danger", text: () => serverMessage(r.message) });
       return true;
     }
     return false;
@@ -165,7 +166,7 @@ export function GoogleDrive() {
     setWriteGroup(null);
     await d.store.load("provider_policy");
     reload();
-    setMessage({ tone: "success", text: t("Saved.") });
+    setMessage({ tone: "success", text: () => t("Saved.") });
   }
 
   async function saveWorkspace() {
@@ -188,7 +189,7 @@ export function GoogleDrive() {
     setWorkspace(null);
     await d.store.load("provider_policy");
     reload();
-    setMessage({ tone: "success", text: t("Workspace saved.") });
+    setMessage({ tone: "success", text: () => t("Workspace saved.") });
   }
 
   async function connect() {
@@ -212,7 +213,10 @@ export function GoogleDrive() {
       {},
     ).url;
     if (!link)
-      return setMessage({ tone: "danger", text: t("Google did not give a sign-in address.") });
+      return setMessage({
+        tone: "danger",
+        text: () => t("Google did not give a sign-in address."),
+      });
     // Google asks the person to agree, then sends the browser back to obop.
     window.location.assign(link);
   }
@@ -233,7 +237,10 @@ export function GoogleDrive() {
     if (fail(r)) return;
     await d.store.load("connection");
     reload();
-    setMessage({ tone: "success", text: t("Disconnected. The sign-in was removed from obop.") });
+    setMessage({
+      tone: "success",
+      text: () => t("Disconnected. The sign-in was removed from obop."),
+    });
   }
 
   return (
@@ -254,7 +261,7 @@ export function GoogleDrive() {
           )}
         </Notice>
       )}
-      {message && <Notice tone={message.tone}>{message.text}</Notice>}
+      {message && <Notice tone={message.tone}>{message.text()}</Notice>}
       {settings.state === "connected" && (
         <Notice
           tone="success"

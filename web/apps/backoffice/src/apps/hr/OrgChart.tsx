@@ -25,7 +25,7 @@ const DEPARTMENT = "hr_department";
 
 type State =
   | { kind: "loading" }
-  | { kind: "error"; message: string }
+  | { kind: "error"; message: string } // the server's text, worded where it is drawn (D9)
   | { kind: "ready"; roots: OrgNode[]; total: number };
 
 /** The tint of a person without a photo: the same as on their card in the Employees gallery. */
@@ -73,8 +73,7 @@ export function OrgChart({ app }: { app: App }) {
         search(d.token, DEPARTMENT, { limit: LOAD_LIMIT }),
       ]);
       if (!live) return;
-      if ("error" in people)
-        return setState({ kind: "error", message: serverMessage(people.error) });
+      if ("error" in people) return setState({ kind: "error", message: people.error });
       const names = new Map(
         ("error" in depts ? [] : depts.rows).map((r) => [r.id, d.recordLabel(DEPARTMENT, r)]),
       );
@@ -264,7 +263,7 @@ export function OrgChart({ app }: { app: App }) {
             ))}
           </div>
         ) : state.kind === "error" ? (
-          <p className="hint">{state.message}</p>
+          <p className="hint">{serverMessage(state.message)}</p>
         ) : state.total === 0 ? (
           <p className="ov-calm">
             <Icon name="info" size={18} />

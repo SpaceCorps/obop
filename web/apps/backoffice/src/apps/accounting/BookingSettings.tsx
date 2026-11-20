@@ -3,7 +3,7 @@
 // tax and VAT account it is booked with. Read with `invoice_posting_setting.get`, saved with
 // `invoice_posting_setting.update` (accounting.manager); the server checks every record it names.
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Notice, Select, Skeleton, Switch, t } from "@obop/ui";
+import { Button, Card, Notice, Select, Skeleton, Switch, t, useWorded } from "@obop/ui";
 import { call, search, type Row } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import { serverMessage } from "../../serverMessage.ts";
@@ -20,7 +20,7 @@ export function BookingSettings() {
   const d = useData();
   const [saved, setSaved] = useState<Settings | null>(null);
   const [form, setForm] = useState<Settings | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useWorded();
   const [journals, setJournals] = useState<Row[]>([]);
   const [accounts, setAccounts] = useState<Row[]>([]);
   const [taxes, setTaxes] = useState<Row[]>([]);
@@ -42,7 +42,8 @@ export function BookingSettings() {
         search(d.token, "accounting_tax", { limit: 500 }),
       ]);
       if (!live) return;
-      if (s.kind !== "ok") return setError(s.kind === "error" ? serverMessage(s.message) : "");
+      if (s.kind !== "ok")
+        return setError(() => (s.kind === "error" ? serverMessage(s.message) : ""));
       const v = s.value as Settings;
       setSaved(v);
       setForm(v);

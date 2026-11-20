@@ -56,7 +56,8 @@ export function PrivacyPreview(p: Props) {
   const d = useData();
   const records = useRows(p.model);
   const [recordId, setRecordId] = useState("");
-  const [state, setState] = useState<{ preview?: Preview; error?: string; busy: boolean }>({
+  // The error is kept as how to word it, so a language switch rewords it (D9).
+  const [state, setState] = useState<{ preview?: Preview; error?: () => string; busy: boolean }>({
     busy: true,
   });
   const seq = useRef(0);
@@ -91,7 +92,7 @@ export function PrivacyPreview(p: Props) {
       } else {
         setState({
           busy: false,
-          error: r.kind === "error" ? serverMessage(r.message) : t("Needs approval"),
+          error: () => (r.kind === "error" ? serverMessage(r.message) : t("Needs approval")),
         });
         onPreview?.(null);
       }
@@ -125,7 +126,7 @@ export function PrivacyPreview(p: Props) {
       )}
       {state.error && (
         <Notice tone="warning" title={t("No preview yet")}>
-          {state.error}
+          {state.error()}
         </Notice>
       )}
       {!state.error && state.busy && !state.preview && <Skeleton rows={4} cols={3} />}
