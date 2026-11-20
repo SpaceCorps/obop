@@ -137,7 +137,7 @@ it("words the outcome of the last test and keeps the server's answer as the deta
   const refused = container.querySelector("[data-test-outcome=permanent]")!;
   expect(refused.textContent).toContain("Not sent, refused");
   // The server's words are the detail, without obop's own English prefix.
-  expect(refused.textContent).toContain("(550 no such user)");
+  expect(refused.textContent).toContain(" · 550 no such user");
   expect(refused.textContent).not.toContain("failed:");
   expect(refused.className).toContain("mail-error");
   // A server tested before the outcome code existed shows the server's words as before.
@@ -195,7 +195,8 @@ it("words the outcome from the field's option labels, in the language of the pag
     expect(line.textContent).toContain("Letzter Test");
     expect(line.textContent).toContain("Nicht gesendet (abgelehnt)");
     expect(line.textContent).not.toContain("Not sent");
-    expect(line.textContent).toContain("(550 no such user)");
+    expect(line.textContent).toContain("Nicht gesendet (abgelehnt) · 550 no such user");
+    expect(line.textContent).not.toContain(") (");
   } finally {
     registerMeta([]);
     provideCatalogue("en", {});

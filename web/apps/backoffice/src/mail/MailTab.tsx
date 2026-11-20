@@ -634,8 +634,9 @@ function ServersSection({
                       })}
                   {testOutcome(s(r.last_test_outcome)) && (
                     <span className="mail-detail">
-                      {" "}
-                      ({s(r.last_test_result).replace(/^(sent|failed): /, "")})
+                      {/* A separator, not parentheses: the outcome's label may end in one. */}
+                      {" · "}
+                      {s(r.last_test_result).replace(/^(sent|failed): /, "")}
                     </span>
                   )}
                 </div>
