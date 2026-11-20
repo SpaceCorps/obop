@@ -413,7 +413,7 @@ function DriveView({
         </Notice>
       )}
       {error && <Notice tone="danger">{error}</Notice>}
-      <Table caption={here} dense>
+      <Table caption={here} dense stack>
         <thead>
           <tr>
             <th scope="col">{t("Name")}</th>
@@ -427,7 +427,7 @@ function DriveView({
         <tbody>
           {files.map((f) => (
             <tr key={f.id}>
-              <td>
+              <td className="cell-main">
                 {f.folder ? (
                   <Button
                     size="sm"
@@ -446,9 +446,11 @@ function DriveView({
                   <span className={f.importable ? "" : "hint"}>{f.name}</span>
                 )}
               </td>
-              <td>{f.modified ? fmt.dateOf(new Date(f.modified), { dateStyle: "medium" }) : ""}</td>
-              <td>{f.size != null ? formatBytes(f.size) : ""}</td>
-              <td className="drive-actions">
+              <td data-label={t("Modified")}>
+                {f.modified ? fmt.dateOf(new Date(f.modified), { dateStyle: "medium" }) : ""}
+              </td>
+              <td data-label={t("Size")}>{f.size != null ? formatBytes(f.size) : ""}</td>
+              <td className="cell-actions drive-actions">
                 {inline && f.web_link && (
                   <a href={f.web_link} target="_blank" rel="noreferrer noopener">
                     {t("Open in Google Drive")}

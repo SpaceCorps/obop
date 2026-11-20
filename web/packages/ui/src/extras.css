@@ -180,12 +180,12 @@
   background: var(--surface);
   color: var(--text);
 }
-/* 36 px to tap; the negative margin keeps the bar from growing by as much. */
+/* 44 px to tap; the negative margin keeps the bar from growing by as much. */
 @media (max-width: 40rem), (pointer: coarse) {
   .codeblock-copy {
-    min-block-size: 2.25rem;
+    min-block-size: 2.75rem;
     padding-inline: 0.75rem;
-    margin-block: -0.25rem;
+    margin-block: -0.5rem;
   }
 }
 .codeblock pre {

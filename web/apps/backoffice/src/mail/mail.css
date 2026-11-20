@@ -64,6 +64,13 @@
     flex: 0 0 auto;
   }
 }
+/* The deliveries are cards up to 60rem too (stack-md): six columns left a recipient four lines and
+   the date five at 768 px. */
+@media (max-width: 60rem) {
+  .table.stack-md > tbody > tr > td.mail-status {
+    flex: 0 0 auto;
+  }
+}
 .mail-switches {
   display: flex;
   gap: 24px;

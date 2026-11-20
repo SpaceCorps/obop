@@ -169,7 +169,9 @@ export function AgentTokensSection({ token, notify }: { token: string; notify: N
                 <td className="cell-main">
                   <strong>{nameOf(row)}</strong>
                 </td>
-                <td data-label={t("Can act with")}>{row.scopes.join(", ")}</td>
+                <td className="cell-wide" data-label={t("Can act with")}>
+                  {row.scopes.join(", ")}
+                </td>
                 <td data-label={t("Created")}>
                   {row.created_at ? fmt.dateTime(row.created_at * 1000) : ""}
                 </td>

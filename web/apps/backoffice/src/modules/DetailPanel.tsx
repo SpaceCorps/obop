@@ -305,24 +305,32 @@ function Dependencies({
           {t("Versions it supports")}
         </h3>
         <div className="table-wrap">
-          <table className="table dep-ranges">
+          <table className="table dep-ranges stack-sm" role="table">
             <caption className="sr-only">
               {t("The versions of the core and of other modules {name} supports", { name: title })}
             </caption>
             <thead>
-              <tr>
-                <th scope="col">{t("Needs")}</th>
-                <th scope="col">{t("Supported versions")}</th>
-                <th scope="col">{t("Here")}</th>
+              <tr role="row">
+                <th scope="col" role="columnheader">
+                  {t("Needs")}
+                </th>
+                <th scope="col" role="columnheader">
+                  {t("Supported versions")}
+                </th>
+                <th scope="col" role="columnheader">
+                  {t("Here")}
+                </th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>{t("Core")}</td>
-                <td>
+              <tr role="row">
+                <td role="cell" className="cell-main">
+                  {t("Core")}
+                </td>
+                <td role="cell" data-label={t("Supported versions")}>
                   <code>{prettyReq(row.requires_core)}</code>
                 </td>
-                <td>
+                <td role="cell" data-label={t("Here")}>
                   <span className="tabular">{core}</span>{" "}
                   <Badge
                     tone={row.compatible ? "success" : "danger"}
@@ -334,12 +342,14 @@ function Dependencies({
                 </td>
               </tr>
               {row.dependencies.map((d) => (
-                <tr key={d.id}>
-                  <td>{nameOf(d.id) || d.name}</td>
-                  <td>
+                <tr key={d.id} role="row">
+                  <td role="cell" className="cell-main">
+                    {nameOf(d.id) || d.name}
+                  </td>
+                  <td role="cell" data-label={t("Supported versions")}>
                     <code>{prettyReq(d.requirement)}</code>
                   </td>
-                  <td>
+                  <td role="cell" data-label={t("Here")}>
                     {d.installed_version ? (
                       <span className="tabular">{d.installed_version}</span>
                     ) : (
@@ -594,19 +604,25 @@ function Versions({
         />
       )}
       <div className="table-wrap">
-        <table className="table">
+        <table className="table stack-sm" role="table">
           <caption className="sr-only">{t("Versions of this module")}</caption>
           <thead>
-            <tr>
-              <th scope="col">{t("Version")}</th>
-              <th scope="col">{t("State")}</th>
+            <tr role="row">
+              <th scope="col" role="columnheader">
+                {t("Version")}
+              </th>
+              <th scope="col" role="columnheader">
+                {t("State")}
+              </th>
             </tr>
           </thead>
           <tbody>
             {available && available !== installed && (
-              <tr>
-                <td className="tabular">{available}</td>
-                <td>
+              <tr role="row">
+                <td role="cell" className="cell-main tabular">
+                  {available}
+                </td>
+                <td role="cell" data-label={t("State")}>
                   <Badge tone="info" dot={false} className="mod-badge">
                     {t("In the marketplace")}
                   </Badge>
@@ -614,9 +630,11 @@ function Versions({
               </tr>
             )}
             {installed && (
-              <tr>
-                <td className="tabular">{installed}</td>
-                <td>
+              <tr role="row">
+                <td role="cell" className="cell-main tabular">
+                  {installed}
+                </td>
+                <td role="cell" data-label={t("State")}>
                   <Badge tone="success" dot={false} className="mod-badge">
                     {t("Installed")}
                   </Badge>

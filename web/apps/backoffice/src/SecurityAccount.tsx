@@ -386,7 +386,9 @@ export function ConnectedAppsSection({ token, notify }: { token: string; notify:
                   <strong>{g.client_name}</strong>
                   <div className="hint">{g.redirect_host}</div>
                 </td>
-                <td data-label={t("Can act with")}>{g.scopes.join(", ")}</td>
+                <td className="cell-wide" data-label={t("Can act with")}>
+                  {g.scopes.join(", ")}
+                </td>
                 <td data-label={t("Connected")}>
                   {g.created_at ? fmt.dateTime(g.created_at) : ""}
                 </td>
@@ -512,7 +514,7 @@ export function DevicesSection({
       {rows !== null && rows.length === 0 && problem === null ? (
         <p className="hint">{t("No device is signed in.")}</p>
       ) : rows === null ? null : (
-        <Table caption={t("Devices")} dense stack>
+        <Table caption={t("Devices")} dense stack className="stack-md sec-devices">
           <thead>
             <tr>
               <th scope="col">{t("Device")}</th>

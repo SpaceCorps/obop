@@ -692,7 +692,7 @@ function DeliveriesSection({
       )}
       {rows !== null && rows.length === 0 && <p className="hint">{t("No messages yet.")}</p>}
       {rows !== null && rows.length > 0 && (
-        <Table caption={t("Deliveries")} dense stack>
+        <Table caption={t("Deliveries")} dense stack className="stack-md">
           <thead>
             <tr>
               <th scope="col">{t("Queued")}</th>
@@ -716,7 +716,7 @@ function DeliveriesSection({
                   <td className="cell-main mail-to" data-label={t("Recipient")}>
                     {s(r.to)}
                   </td>
-                  <td data-label={t("Subject")}>
+                  <td className="cell-wide" data-label={t("Subject")}>
                     {s(r.subject)}
                     {s(r.last_error) && st !== "sent" && (
                       <span className="hint block mail-error">{s(r.last_error)}</span>

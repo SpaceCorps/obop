@@ -401,7 +401,7 @@ function TypeBlock() {
         weight 600 and tighten tracking as they grow; overlines are uppercase with +0.06em.
       </p>
       <div className="table-wrap">
-        <table className="table scale stack-sm" role="table">
+        <table className="table scale stack-sm wrap-md" role="table">
           <caption className="sr-only">Type scale</caption>
           <thead role="rowgroup">
             <tr role="row">

@@ -136,7 +136,7 @@ export function Register() {
           hint={t("Connections appear here as soon as they exist.")}
         />
       ) : (
-        <Table caption={t("Processing register")}>
+        <Table caption={t("Processing register")} stack className="stack-md cx-register">
           <thead>
             <tr>
               <th scope="col">{t("Connection")}</th>
@@ -156,19 +156,19 @@ export function Register() {
                   {String(r.name)}
                   <span className="hint block">{stateLabel(String(r.state))}</span>
                 </th>
-                <td>{String(r.recipient)}</td>
-                <td>{String(r.purpose)}</td>
-                <td>
+                <td data-label={t("Recipient")}>{String(r.recipient)}</td>
+                <td data-label={t("Purpose")}>{String(r.purpose)}</td>
+                <td data-label={t("Legal basis")}>
                   {String(r.legal_basis) === "not recorded"
                     ? t("Not recorded")
                     : basisLabel(String(r.legal_basis))}
                 </td>
-                <td>{String(r.personal_data_categories) || "—"}</td>
-                <td>{String(r.transfer_basis)}</td>
-                <td>
+                <td data-label={t("Personal data")}>{String(r.personal_data_categories) || "—"}</td>
+                <td data-label={t("Transfers")}>{String(r.transfer_basis)}</td>
+                <td data-label={t("Agreement")}>
                   {String(r.agreement_recorded) === "yes" ? t("Recorded") : t("Not recorded")}
                 </td>
-                <td>
+                <td data-label={t("Retention")}>
                   {t("{count, plural, one {# day} other {# days}}", {
                     count: Number(r.retention_days),
                   })}
@@ -369,7 +369,7 @@ export function Overview(props: {
         ) : (
           // One block per run on a phone, the connection on top (stack). The explicit roles keep
           // it a table for Safari, which drops the semantics once display changes.
-          <Table dense stack role="table" caption={t("Latest runs")}>
+          <Table dense stack role="table" className="cx-runs" caption={t("Latest runs")}>
             <thead>
               <tr role="row">
                 <th scope="col" role="columnheader">
