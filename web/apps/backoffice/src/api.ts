@@ -20,6 +20,9 @@ export type Command = {
   to?: string | null;
   /** Whether no action of the model, whoever may run it, leaves `to` (#102); set by the server. */
   one_way?: boolean;
+  /** A command of the model as a whole that takes no record id (U66): the list offers it, the
+   * record panel does not; set by the server. */
+  whole_model?: boolean;
   /** D95 hints for the record panel (PROPOSED); absent until the package declares them. */
   ui?: ActionUi;
 };

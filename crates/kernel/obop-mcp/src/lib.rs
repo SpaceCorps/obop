@@ -516,6 +516,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             if let Some(w) = a.one_way {
                                 o["one_way"] = json!(w);
                             }
+                            if a.whole_model {
+                                o["whole_model"] = json!(true);
+                            }
                             translations(&mut o, &a.labels, &a.descriptions);
                             if let Some(u) = &a.ui {
                                 o["ui"] = ui::action_ui(u);

@@ -402,6 +402,8 @@ pub(crate) async fn submit(
             saw_history: pair(&pairs, "hist") == Some("1"),
             // The wording digest of the page the form came from (O59).
             words: pair(&pairs, "words").unwrap_or("").to_string(),
+            // The consent id of the texts the page showed (O59).
+            shown_consent: pair(&pairs, "wid").unwrap_or("").to_string(),
         };
         let c = client(&s, &parts);
         match svc.submit(&rid, &tok, &form, &c) {

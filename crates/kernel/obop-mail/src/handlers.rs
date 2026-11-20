@@ -119,6 +119,8 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, mail: &Arc<Mail>) {
             Ok(Value::map([
                 ("id", Value::text(&id)),
                 ("last_test_result", Value::text(&result)),
+                // A test that was not sent is refused above, so the answer is always this one.
+                ("last_test_outcome", Value::text("sent")),
             ]))
         }),
     );

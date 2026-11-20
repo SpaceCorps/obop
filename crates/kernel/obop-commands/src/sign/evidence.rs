@@ -27,6 +27,31 @@ pub(super) fn wording_digest(req: &Fields) -> String {
     ])
 }
 
+/// The key of the `sign_signed` entry of request `rid`, signed at `at_secs` (Unix seconds): the
+/// shape of every key of the log (`{at:012}-` and 12 hex digits, sortable by time), with the
+/// digits taken from the request id, since a request is signed once. `evidence_check` reads the
+/// entry by it instead of searching the whole log (docs/ISSUES.md U60).
+pub(super) fn entry_id(at_secs: i64, rid: &str) -> String {
+    let tag: String = token::sha256_hex(format!("obop-sign-signed:{rid}").as_bytes())
+        .chars()
+        .take(12)
+        .collect();
+    format!("{:012}-{tag}", at_secs.max(0))
+}
+
+/// The entry `op` (an insert into the log) under the key [`entry_id`] of request `rid`.
+pub(super) fn keyed(mut op: obop_storage::Op, rid: &str) -> obop_storage::Op {
+    if let obop_storage::Op::Insert { id, .. } = &mut op {
+        let at = id
+            .split('-')
+            .next()
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(0);
+        *id = entry_id(at, rid);
+    }
+    op
+}
+
 /// The value of one `key {value};` part of an entry's detail, read up to the next `;`. Only the
 /// parts the door writes before the address are read: what follows them is what a client sent.
 fn part<'a>(detail: &'a str, key: &str) -> Option<&'a str> {
@@ -63,17 +88,33 @@ impl SignService {
         if text(&req, "state") != "signed" || text(&req, "signed_at").is_empty() {
             return Ok(None);
         }
-        let entries = self.store.backend.find(
-            crate::audit::EVENT_TABLE,
-            "user",
-            &J::from(format!("sign_request:{rid}")),
-        )?;
-        let Some(detail) = entries
-            .iter()
-            .filter(|(_, e)| text(e, "kind") == "sign_signed")
-            .map(|(_, e)| text(e, "detail").to_string())
-            .next()
-        else {
+        let user = format!("sign_request:{rid}");
+        let ours = |e: &Fields| text(e, "kind") == "sign_signed" && text(e, "user") == user;
+        // The entry of a signature made from `sign` 0.3.1 on is read by its key (docs/ISSUES.md
+        // U60); an older one, which has a random key, by a search of the log.
+        let keyed = match instant_micros(text(&req, "signed_at")) {
+            Some(us) => self
+                .store
+                .backend
+                .get(
+                    crate::audit::EVENT_TABLE,
+                    &entry_id(us / MICROS_PER_SECOND, rid),
+                )?
+                .filter(|e| ours(e)),
+            None => None,
+        };
+        let detail = match keyed {
+            Some(e) => Some(text(&e, "detail").to_string()),
+            None => self
+                .store
+                .backend
+                .find(crate::audit::EVENT_TABLE, "user", &J::from(user.clone()))?
+                .iter()
+                .filter(|(_, e)| ours(e))
+                .map(|(_, e)| text(e, "detail").to_string())
+                .next(),
+        };
+        let Some(detail) = detail else {
             return Ok(Some("no_entry"));
         };
         let (Some(id12), Some(digest)) = (part(&detail, "link"), part(&detail, "digest")) else {

@@ -230,6 +230,15 @@ description = "Milloin viimeisin testiviesti lähetettiin"
 label = "Viimeisimmän testin tulos"
 description = "Mitä palvelin vastasi viimeisimpään testiviestiin"
 
+[labels.fi.model.mail_server.field.last_test_outcome]
+label = "Viimeisimmän testin lopputulos"
+description = "Miten viimeisin testi päättyi: lähetetty, tilapäisesti lähettämättä tai hylätty"
+
+[labels.fi.model.mail_server.field.last_test_outcome.options]
+sent = "Lähetetty"
+temporary = "Ei lähetetty (tilapäinen)"
+permanent = "Ei lähetetty (hylätty)"
+
 [labels.fi.model.mail_server.field.test_recipient]
 label = "Testin vastaanottaja"
 description = "test_send-komennon syöte: testiviestin osoite; ei tallenneta"

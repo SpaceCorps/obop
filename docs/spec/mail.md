@@ -14,21 +14,21 @@ The same screens are reachable through the generated record pages (`#/mail/outbo
 
 ## 2. Models and commands
 
-Module `mail`, built in (`crates/kernel/obop-mail`). Permission groups (Proposed names, [CONVENTIONS.md](../CONVENTIONS.md) 4): `mail.admin` (servers, templates, the log, retry, cancel, test) and `mail.sender` (may queue a message). `mail.system` holds the stored body and is held by nobody. `mail.account_admin` of platform.md stays reserved for the W2 mailboxes.
+Module `mail`, built in (`crates/kernel/obop-mail`). Permission groups (Proposed names, [CONVENTIONS.md](../CONVENTIONS.md) 4): `mail.admin` (servers, templates, the log, retry, cancel, test) and `mail.sender` (may queue a message). `mail.system` holds the worker's own fields (the lease and the due time) and is held by nobody. `mail.account_admin` of platform.md stays reserved for the W2 mailboxes.
 
 | Model | Purpose | Notes |
 |---|---|---|
 | `mail_server` | A way out: SMTP relay or provider connection | `password` is data class `secret`: write-only, sealed with the instance key (`OBOP_SECRET_KEY` ring, purpose `mail-server-password`), never returned on any surface |
-| `outbound_mail` | The queue and the deliveries log | the body is sealed (purpose `outbound-mail:<id>`) in a field of group `mail.system` and erased once the message is sent or cancelled; no screen shows it, and only `platform.admin` (which holds every group) can read the sealed text through the API, never the plain text. `last_error` and `server_reply` (like `mail_server.last_test_result`) are personal data of class `internal`, as the addresses are: a relay's answer often repeats the recipient, so an agent reads them masked |
+| `outbound_mail` | The queue and the deliveries log | the body is sealed (purpose `outbound-mail:<id>`) in a field of group `mail.sender` (so the list's Send asks a sender for it, U66) and erased once the message is sent or cancelled; no screen shows it, `get`, `list` and `search` leave it out of every answer, also to `platform.admin` (which holds every group), and refuse it as a filter or a sort key: only the worker reads it, from the store (U58). `last_error` and `server_reply` (like `mail_server.last_test_result`) are personal data of class `internal`, as the addresses are: a relay's answer often repeats the recipient, so an agent reads them masked |
 | `mail_template` | Subject and text per key and language | unique per key and language |
 
 | Command | Group | What it does |
 |---|---|---|
-| `outbound_mail.send` | `mail.sender` | Checks the addresses, renders the template (or takes `subject` and `body`), picks the server, queues the message. Returns the id. Never sends inside the call |
+| `outbound_mail.send` | `mail.sender` | Checks the addresses, renders the template (or takes `subject` and `body`), picks the server, queues the message. Returns the id. Never sends inside the call. A command of the model as a whole (`whole_model` in `/api/meta`, like `process`): the list of deliveries offers it as a button that asks for `to`, `subject` and `body`, and a record's panel does not (U66) |
 | `outbound_mail.retry` | `mail.admin` | `failed` to `queued` (declared as a move of `status`, so it is offered on a failed message only), attempts from zero; refused for a test message (its text is not stored: use Send test again) |
 | `outbound_mail.cancel` | `mail.admin` | `queued` to `cancelled` (a move of `status` too), body erased |
 | `outbound_mail.process` | `mail.admin` | Runs the due part of the queue now (what the worker does every few seconds); answers one row per message it tried, `id` and the new `status` (`sent`, `queued` for a later attempt, `failed`) |
-| `mail_server.test_send` | `mail.admin` | Sends a test message to `test_recipient` through this server now and records the answer on the server and in the log |
+| `mail_server.test_send` | `mail.admin` | Sends a test message to `test_recipient` through this server now and records the answer on the server and in the log: `last_test_result` keeps the server's own words and `last_test_outcome` the outcome as a code, `sent`, `temporary` (not sent; the server could not be reached or asked to try later) or `permanent` (not sent; refused), which the back office words in the reader's language with the server's words as the detail (U63). A refusal starts "The test message was not sent: " |
 | generated `get`, `list`, `search`, `create`, `update`, `delete` | read `mail.admin`; `outbound_mail` has no generated `create`, `update` or `bulk_create`: they are refused for everyone and left out of `/api/meta` (`can_create` and `can_update` false) and the OpenAPI document (only `send` queues) | |
 
 CLI: `obop call outbound_mail send to=a@example.com subject=Hi body=Text`; REST `POST /api/outbound_mail/send`; MCP tool `outbound_mail.send`.
@@ -48,6 +48,8 @@ One worker thread per server process (`Mail::start`), woken when a message is qu
 A temporary failure (a network error, a timeout, an SMTP `4xx`, HTTP `429` or `5xx`) is tried again after 1, 5, 30 minutes, 2 and 6 hours; after the sixth attempt, or at once on a permanent failure (SMTP `5xx`, HTTP `4xx` other than `429`, a missing setting), the message is `failed` with the reason (no body, no credentials). Retention: sent and cancelled messages are removed after `OBOP_MAIL_RETENTION_DAYS` (default 90) days, failed ones too; the run is once a day under the lock `mail.purge`.
 
 ## 4. Transports
+
+**The log-only sink** (`OBOP_MAIL_SINK=log`, an operator's setting read at start, for the hosted sandbox of platform.md 4.18 and for demos; U55, first slice): `Mail::deliver` opens no connection, to a relay or a provider, and answers `logged only, not sent (OBOP_MAIL_SINK=log)`, so a queued message ends `sent` with that reply and its text erased as after a send, and a test message is recorded with the outcome `sent` and that reply. The server log gets one line per message, its id and the server's name.
 
 **SMTP** is written in this crate over `rustls` (already in the tree; no new dependency): `EHLO`, `STARTTLS` (required when the security is `starttls`: a server that does not offer it is refused, never fallen back to plain), implicit TLS on `tls`, `AUTH PLAIN` or `AUTH LOGIN`, `MAIL FROM`, `RCPT TO`, `DATA` with dot-stuffing. Certificates are checked against the Mozilla roots of `webpki-roots`. A user name and password are never sent over a connection without TLS, except to a loopback address or, with the server's switch `allow_private_network` on, to a relay whose every address is on the business's own network (section 6). The host goes through the same checks as every outbound request of the Connectors (`net::Client::vet`): the operator's host allow-list (`egress_policy.host_allowlist`), a public address (a private one only with that switch, loopback only with `OBOP_CONNECTORS_ALLOW_LOOPBACK=1`, tests and local development), and the connection goes to the address that was checked. The message is MIME 1.0, `text/plain; charset=utf-8`, base64; non-ASCII names and subjects are RFC 2047 encoded words of at most 39 bytes each, and every header is folded at spaces onto lines of at most 78 characters (RFC 5322 2.2.3), so a long German subject or sender name goes out. A line break in a given value is refused before the relay is contacted. Addresses are ASCII `local@domain` without spaces, angle brackets, commas or line breaks (international addresses are refused for now).
 
@@ -71,7 +73,6 @@ An administrator connects the provider in the Connectors app as for any other pr
 - **Per company.** There is no company record yet; the choice is per message kind.
 - **Template sandbox** (`minijinja`): placeholders are plain substitutions; no conditions or loops.
 - **A real relay or provider.** Nothing was sent to a real server: SMTP was tested against a stand-in on loopback (plain, STARTTLS and implicit TLS with a test certificate), each provider against a fake HTTP server.
-- **The log-only sink of the hosted sandbox** (platform.md 4.18).
 - **"Edit in list"** on the generated Deliveries page is offered and refused by the server (`outbound_mail.update` is not allowed); New and Import are hidden.
 
 ## 6. The owner's answers (2026-11-18)

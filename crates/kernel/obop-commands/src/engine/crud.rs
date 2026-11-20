@@ -602,6 +602,9 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         if !edited {
             return row(eng, def, &id);
         }
+        for op in take_also(def.name, &id) {
+            unit.push_op(op);
+        }
         commit(eng, unit)?;
     } else {
         let answers = if steps.iter().all(|s| s.joins) {
@@ -635,6 +638,40 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after, &actor.caller);
     }
     row_after_commit(eng, def, &id, &after)
+}
+
+thread_local! {
+    /// Writes that a wrapper of `update` asks to be stored with the update of one record
+    /// ([`update_with`]): the model, the id and the operations.
+    static ALSO: std::cell::RefCell<Option<(String, String, Vec<obop_storage::Op>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The operations [`update_with`] left for the update of `model` `id`, taken once.
+fn take_also(model: &str, id: &str) -> Vec<obop_storage::Op> {
+    ALSO.with(|a| {
+        let mut a = a.borrow_mut();
+        match a.as_ref() {
+            Some((m, i, _)) if m == model && i == id => a.take().map(|t| t.2).unwrap_or_default(),
+            _ => Vec::new(),
+        }
+    })
+}
+
+/// Run `call` (a call of the generated `update` of `model` record `id`, on this thread) so that
+/// `ops` are stored in the same batch as the update's own writes, or not at all: a log line that
+/// must exist exactly when the change does (docs/ISSUES.md UB14). An update that changes nothing,
+/// or one that runs an implied action, writes none of them.
+pub(crate) fn update_with<T>(
+    model: &str,
+    id: &str,
+    ops: Vec<obop_storage::Op>,
+    call: impl FnOnce() -> T,
+) -> T {
+    ALSO.with(|a| *a.borrow_mut() = Some((model.to_string(), id.to_string(), ops)));
+    let out = call();
+    ALSO.with(|a| *a.borrow_mut() = None);
+    out
 }
 
 pub(crate) fn gapless_message(def: &ModelDef, id: &str, field: &str) -> String {

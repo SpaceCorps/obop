@@ -23,7 +23,7 @@ function modelName(name: string): string {
 }
 
 /** The field of a model as `/api/meta` described it, or `undefined` when either is unknown. */
-function findField(model: string, field: string): FieldMeta | undefined {
+export function findField(model: string, field: string): FieldMeta | undefined {
   for (const m of modules) {
     const f = m.models.find((x) => x.name === model)?.fields.find((x) => x.name === field);
     if (f) return f;

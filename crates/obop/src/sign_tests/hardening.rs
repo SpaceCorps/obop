@@ -426,7 +426,10 @@ async fn the_address_is_the_last_entry_of_the_last_header_line() {
 async fn without_a_trusted_proxy_the_forwarded_header_is_ignored() {
     let (f, _, path, _) = sent().await;
     let router = f.router_without_proxy();
-    let body = format!("name=Jane+Test&agree=1&doc={}", f.file);
+    let body = f.form_body(
+        &path,
+        &[("name", "Jane Test"), ("agree", "1"), ("doc", &f.file)],
+    );
     let r = send(
         &router,
         Request::post(&path)

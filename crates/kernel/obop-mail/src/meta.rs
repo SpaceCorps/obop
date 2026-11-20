@@ -16,6 +16,9 @@ pub const OUTBOUND: &str = "outbound_mail";
 pub const TEMPLATE: &str = "mail_template";
 
 pub const STATUSES: [&str; 5] = ["queued", "sending", "sent", "failed", "cancelled"];
+/// How a test message ended (`mail_server.last_test_outcome`), worded by every surface from its
+/// labels; `last_test_result` keeps the server's own words as the detail.
+pub const TEST_OUTCOMES: [&str; 3] = ["sent", "temporary", "permanent"];
 pub const LANGUAGES: [&str; 7] = ["en", "de", "fr", "pl", "fi", "sv", "es"];
 
 fn t(name: &'static str, desc: &'static str, g: &'static str) -> F {
@@ -64,6 +67,9 @@ fn server() -> ModelDef {
                 .kind(FieldKind::LongText),
             t("last_test_at", "When the last test message was sent", ADMIN).datetime().readonly(),
             p("last_test_result", "What the server answered to the last test message", ADMIN).readonly(),
+            t("last_test_outcome", "How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)", ADMIN)
+                .select(&TEST_OUTCOMES)
+                .readonly(),
             p("test_recipient", "Input of test_send: the address the test message goes to; never stored", ADMIN),
         ],
         commands: vec![
@@ -95,7 +101,8 @@ fn outbound() -> ModelDef {
             p("bcc", "Blind copy recipients, comma separated; never in a header", ADMIN),
             p("reply_to", "Where replies go; empty means the server's setting", ADMIN),
             p("subject", "Subject line", ADMIN),
-            F::new("body", "The text, sealed; erased once the message is sent or cancelled", Internal, true, SYSTEM)
+            // Group mail.sender, so the list's Send can ask for it (U66); no answer carries it.
+            F::new("body", "The text, sealed; erased once the message is sent or cancelled", Internal, true, SENDER)
                 .kind(FieldKind::LongText)
                 .hidden(),
             t("template", "Input of send: the template key to render; recorded", ADMIN),
@@ -131,7 +138,10 @@ fn outbound() -> ModelDef {
                 "Queue a message: to, subject and body, or template with language and vars; returns its id. The worker sends it after the call",
                 SENDER,
             )
-            .approval(),
+            .approval()
+            .of_model()
+            // What the list's Send asks for (U66); a template is queued through the API.
+            .needs(&["to", "subject", "body"]),
             // Declared as moves of `status`, so every surface offers each one only in the state
             // it starts from; the handlers do the work.
             CommandDef::new("retry", "Queue a failed message again, attempts from zero", ADMIN)
@@ -143,7 +153,8 @@ fn outbound() -> ModelDef {
                 .transition("status", Some("queued"), "cancelled")
                 .danger()
                 .done("Cancelled"),
-            CommandDef::new("process", "Send the messages that are due now (the worker does this every few seconds)", ADMIN),
+            CommandDef::new("process", "Send the messages that are due now (the worker does this every few seconds)", ADMIN)
+                .of_model(),
         ],
         ext: Default::default(),
     }

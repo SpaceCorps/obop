@@ -475,11 +475,7 @@ async fn a_post_from_the_https_page_is_accepted_with_the_public_url_or_the_forwa
     let state = obop_http::HttpState::with_mcp(f.app.dispatcher.clone(), f.auth.clone(), cfg);
     state.set_trust_proxy(true);
     let router = obop_http::router(state, None);
-    let body = good_form(&f, "Jane Test")
-        .iter()
-        .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
-        .collect::<Vec<_>>()
-        .join("&");
+    let body = f.form_body(&path, &good_form(&f, "Jane Test"));
     let post = |origin: &str, extra: Option<(&str, &str)>| {
         let mut b = Request::post(path.as_str())
             .header("host", HOST)

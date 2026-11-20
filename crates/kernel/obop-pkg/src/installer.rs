@@ -2455,6 +2455,18 @@ fn effect_target_problems(d: &Dispatcher, module: &Module) -> Vec<String> {
                         n + 1,
                         e.kind_name(),
                     ));
+                } else if !own.contains(target)
+                    && !obop_commands::sign::effect_may_write_from(target, &module.id)
+                {
+                    // Its guards act on the commands only (docs/ISSUES.md O35).
+                    out.push(format!(
+                        "{}.{}.{}: effect {} ({}) writes {target}, which only the actions of its own module may change",
+                        module.id,
+                        model.name,
+                        command.name,
+                        n + 1,
+                        e.kind_name(),
+                    ));
                 }
             }
         }

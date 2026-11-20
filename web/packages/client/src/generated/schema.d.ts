@@ -4493,6 +4493,11 @@ export interface components {
              * @example 2026-03-29T01:30:00.000000Z
              */
             last_test_at?: string;
+            /**
+             * @description How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)
+             * @enum {string}
+             */
+            last_test_outcome?: "sent" | "temporary" | "permanent";
             /** @description What the server answered to the last test message (personal data: agents see it masked) */
             last_test_result?: string;
             /** @description A name that tells the servers apart */
@@ -13574,6 +13579,11 @@ export interface operations {
                          * @example 2026-03-29T01:30:00.000000Z
                          */
                         last_test_at?: string;
+                        /**
+                         * @description How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)
+                         * @enum {string}
+                         */
+                        last_test_outcome?: "sent" | "temporary" | "permanent";
                         /** @description What the server answered to the last test message (personal data: agents see it masked) */
                         last_test_result?: string;
                         /** @description A name that tells the servers apart */
@@ -13717,6 +13727,11 @@ export interface operations {
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     last_test_at?: string;
+                    /**
+                     * @description How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)
+                     * @enum {string}
+                     */
+                    last_test_outcome?: "sent" | "temporary" | "permanent";
                     /** @description What the server answered to the last test message (personal data: agents see it masked) */
                     last_test_result?: string;
                     /** @description A name that tells the servers apart */
@@ -14276,6 +14291,11 @@ export interface operations {
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     last_test_at?: string;
+                    /**
+                     * @description How the last test ended: sent, temporary (not sent; the server could not be reached or asked to try later) or permanent (not sent; refused)
+                     * @enum {string}
+                     */
+                    last_test_outcome?: "sent" | "temporary" | "permanent";
                     /** @description What the server answered to the last test message (personal data: agents see it masked) */
                     last_test_result?: string;
                     /** @description A name that tells the servers apart */

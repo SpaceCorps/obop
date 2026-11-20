@@ -294,6 +294,9 @@ pub struct CommandDef {
     /// `[model.action.ui]` (D95): how the interface offers the action, the fields its input may
     /// carry (`needs`) and who may not run it (`not_by`); `None`: none declared.
     pub ui: Option<Arc<ActionUi>>,
+    /// The command is about the model as a whole and takes no record id (docs/ISSUES.md U66):
+    /// the record panel leaves it out and a list offers it instead (`whole_model` in `/api/meta`).
+    pub whole_model: bool,
 }
 
 /// A declared state transition: set `field` to `to`, only when it currently equals `from` (if
@@ -328,6 +331,7 @@ impl CommandDef {
             effects: Vec::new(),
             asserts: Vec::new(),
             ui: None,
+            whole_model: false,
         }
     }
 
@@ -339,6 +343,12 @@ impl CommandDef {
             from: from.map(intern),
             to: intern(to),
         });
+        self
+    }
+
+    /// A command of the model as a whole, which takes no record id (see `whole_model`).
+    pub fn of_model(mut self) -> Self {
+        self.whole_model = true;
         self
     }
 
@@ -1215,6 +1225,7 @@ mod tests {
             effects: vec![],
             asserts: vec![],
             ui: None,
+            whole_model: false,
         });
         assert_eq!(check_module(&m).len(), 1);
     }
