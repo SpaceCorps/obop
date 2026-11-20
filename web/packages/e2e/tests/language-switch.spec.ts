@@ -304,14 +304,14 @@ test.describe("switching the language with the account menu, on a screen that st
     // The panel is the same one: no navigation, no reload.
     await expect(page.locator("aside.record")).toBeVisible();
     await expect(page.getByRole("group", { name: say("sv", "Related records") })).toBeVisible();
-    // The group's name can change before its buttons do: wait for the buttons' own re-render (U77).
-    await expect(buttons.first()).not.toHaveText(english[0]!.text ?? "");
+    // The group's name can change before its buttons do: wait for their own re-render (U77).
+    // A count reads alike in both languages; a title does not.
+    await expect(buttons.first()).not.toHaveAttribute("title", english[0]!.title ?? "");
     const swedish = await smart();
     expect(swedish, "the buttons are in Swedish").not.toEqual(english);
 
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("lang", "sv");
-    await expect(buttons.first()).toHaveText(swedish[0]!.text ?? "");
     expect(swedish, "what a reload shows").toEqual(await smart());
   });
 
