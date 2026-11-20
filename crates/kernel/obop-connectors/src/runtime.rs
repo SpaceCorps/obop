@@ -10,7 +10,7 @@ use obop_storage::{Backend, Fields};
 use serde_json::{Map, Value as J, json};
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use crate::catalog::{Engine, Provider, providers};
@@ -69,7 +69,9 @@ pub enum HookError {
 
 pub struct Runtime {
     pub backend: Arc<dyn Backend>,
-    pub dispatcher: Arc<Dispatcher>,
+    /// Weak (U41): the dispatcher holds this runtime through the handlers it registers, so a
+    /// strong reference here would be a cycle that keeps both, and the store, alive for ever.
+    dispatcher: Weak<Dispatcher>,
     pub secrets: SecretBox,
     pub egress: Arc<Egress>,
     pub ingress: Ingress,
@@ -116,7 +118,7 @@ impl Runtime {
         let egress = Arc::new(Egress::new(
             backend.clone(),
             secrets.clone(),
-            dispatcher.clone(),
+            Arc::new(crate::egress::WeakCatalog(Arc::downgrade(&dispatcher))),
         ));
         let client = client.unwrap_or_else(|| {
             let client = Client::new(ClientConfig {
@@ -134,9 +136,9 @@ impl Runtime {
         });
         let queue = Queue::new(backend.clone(), secrets.clone());
         Arc::new(Self {
-            ingress: Ingress::new(backend.clone(), egress.clone(), dispatcher.clone()),
+            ingress: Ingress::new(backend.clone(), egress.clone(), Arc::downgrade(&dispatcher)),
             backend,
-            dispatcher,
+            dispatcher: Arc::downgrade(&dispatcher),
             secrets,
             egress,
             client,
@@ -218,7 +220,8 @@ impl Runtime {
         // What a connector may use: the groups of this one model (read, write and its actions).
         let scopes = self
             .dispatcher
-            .model_def(model)
+            .upgrade()
+            .and_then(|d| d.model_def(model))
             .map(|d| {
                 let mut g = vec![d.read_group.to_string(), d.write_group.to_string()];
                 g.extend(d.commands.iter().map(|c| c.permission_group.to_string()));
@@ -244,7 +247,9 @@ impl Runtime {
     /// group, so nothing more is readable than the owner could read.
     pub fn reader_for(&self, id: &str, groups: &[String], model: &str) -> Principal {
         let mut scopes: Vec<&str> = Vec::new();
-        let mut next = self.dispatcher.model_def(model);
+        // Without a dispatcher (the server is going away) the principal is scoped to nothing.
+        let disp = self.dispatcher.upgrade();
+        let mut next = disp.as_ref().and_then(|x| x.model_def(model));
         // The access rule follows at most four parents (`engine::access::MAX_HOPS`).
         for _ in 0..=4 {
             let Some(d) = next.take() else { break };
@@ -264,7 +269,7 @@ impl Runtime {
                 .and_then(|a| a.via)
                 .and_then(|f| d.fields.iter().find(|x| x.name == f))
                 .and_then(|x| x.kind.target())
-                .and_then(|t| self.dispatcher.model_def(t));
+                .and_then(|t| disp.as_ref().and_then(|x| x.model_def(t)));
         }
         let refs: Vec<&str> = groups.iter().map(String::as_str).collect();
         let mut p = Principal::agent(&format!("connector:{id}"), &refs, &scopes);
@@ -299,13 +304,13 @@ impl Runtime {
             CallError::Handler(m) if Fault::is_transient(&m) => m,
             _ => format!("the owner of this connection may not read {model}"),
         };
+        let d = self.dispatcher()?;
         let mut out = Vec::new();
         let mut v = Vault::new();
         match ids {
             Some(ids) => {
                 for id in ids.iter().take(MAX_ROWS_PER_FLOW) {
-                    let r = self
-                        .dispatcher
+                    let r = d
                         .call(
                             Surface::Rest,
                             &p,
@@ -321,8 +326,7 @@ impl Runtime {
             }
             None => {
                 let input = Value::map([("limit", Value::Int(MAX_ROWS_PER_FLOW as i64))]);
-                let r = self
-                    .dispatcher
+                let r = d
                     .call(Surface::Rest, &p, &mut v, &format!("{model}.list"), &input)
                     .map_err(refused)?;
                 if let J::Array(a) = j(&r.value) {
@@ -331,6 +335,14 @@ impl Runtime {
             }
         }
         Ok(out)
+    }
+
+    /// The dispatcher, while the application that made this runtime is alive (U41). A call after
+    /// it is gone is refused: the server is shutting down.
+    pub fn dispatcher(&self) -> Result<Arc<Dispatcher>, String> {
+        self.dispatcher
+            .upgrade()
+            .ok_or_else(|| "the server is shutting down; try again".to_string())
     }
 
     /// Seal a credentials object for storage.
@@ -514,7 +526,10 @@ impl Runtime {
         if p.body_format != "slack" {
             return Ok(String::new());
         }
-        match self.dispatcher.brand().fresh() {
+        let Some(d) = self.dispatcher.upgrade() else {
+            return Err(Self::NAME_REFUSED.to_string());
+        };
+        match d.brand().fresh() {
             Ok(read) => Ok(read.shown().brand().name().to_string()),
             // The pool has noted the fault on this thread, so the layer above answers a request by
             // D74 and an earlier fault of the request stays the first; the text keeps the code word
@@ -1544,7 +1559,10 @@ impl Runtime {
     /// sealed values and external-id links of the person for ever with no trace.
     pub fn observe_erasures(self: &Arc<Self>) {
         let this = Arc::downgrade(self);
-        self.dispatcher.observe(
+        let Some(d) = self.dispatcher.upgrade() else {
+            return;
+        };
+        d.observe(
             "connectors",
             Box::new(move |command, _p, input, out| {
                 if command != "party.erase" {
@@ -1737,7 +1755,10 @@ impl Runtime {
         self.started.store(true, Ordering::SeqCst);
         let (tx, rx) = std::sync::mpsc::channel::<(String, String)>();
         let tx = Mutex::new(tx);
-        self.dispatcher.observe(
+        let Some(d) = self.dispatcher.upgrade() else {
+            return;
+        };
+        d.observe(
             "connectors",
             Box::new(move |command, _p, input, out| {
                 // A bulk create (D70) is one `create` event per record it made.

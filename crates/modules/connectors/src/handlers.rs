@@ -409,7 +409,7 @@ fn render(rt: &Runtime, input: &Value) -> Result<Value, String> {
     if model.is_empty() {
         return Err("choose the model to preview".into());
     }
-    if blocked_model(model) || !rt.dispatcher.has_model(model) {
+    if blocked_model(model) || !rt.dispatcher()?.has_model(model) {
         return Err(format!("{model} cannot be previewed"));
     }
     // The connection to preview: an existing one (its real pseudonyms), or a stand-in built from
@@ -454,7 +454,7 @@ fn render(rt: &Runtime, input: &Value) -> Result<Value, String> {
     let mut v = obop_commands::Vault::new();
     let rows: Vec<Map<String, J>> = if txt(m, "record_id").is_empty() {
         let r = rt
-            .dispatcher
+            .dispatcher()?
             .call(
                 obop_commands::Surface::Rest,
                 &reader,
@@ -472,7 +472,7 @@ fn render(rt: &Runtime, input: &Value) -> Result<Value, String> {
         }
     } else {
         let r = rt
-            .dispatcher
+            .dispatcher()?
             .call(
                 obop_commands::Surface::Rest,
                 &reader,

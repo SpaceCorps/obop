@@ -55,6 +55,16 @@ impl Catalog for Dispatcher {
     }
 }
 
+/// The catalogue of a dispatcher held weakly (U41): the runtime's engines must not keep the
+/// dispatcher alive. A model of a dispatcher that is gone is unknown, so nothing leaves.
+pub struct WeakCatalog(pub std::sync::Weak<Dispatcher>);
+
+impl Catalog for WeakCatalog {
+    fn fields(&self, model: &str) -> Option<Vec<FieldMeta>> {
+        self.0.upgrade()?.fields(model)
+    }
+}
+
 /// A keyed pseudonym of `value`: stable for one connection, different for every other, and not
 /// reversible without the master key (and, even with it, only by guessing the plain value).
 pub fn pseudonym(secrets: &SecretBox, connection: &str, value: &J) -> Result<String, String> {
