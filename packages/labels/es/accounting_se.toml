@@ -132,10 +132,14 @@ description = "De dónde procede la casilla y qué se comprobó, por ejemplo la 
 [labels.es.model.accounting_se_vat_box.action.verify]
 label = "Verificar"
 description = "Marcar la casilla como comprobada con SKV 4700 (solo aprobadores); registra quién verificó y cuándo"
+confirm = "¿Marcar esta casilla como comprobada con el formulario SKV 4700?"
+done = "Casilla verificada"
 
 [labels.es.model.accounting_se_vat_box.action.unverify]
 label = "Quitar verificación"
 description = "Retirar la verificación de la casilla (solo aprobadores)"
+confirm = "¿Retirar la verificación de esta casilla?"
+done = "Verificación retirada"
 
 [labels.es.model.accounting_se_vat_code]
 name = "Código de IVA"
@@ -232,10 +236,14 @@ description = "De dónde procede el código y qué se comprobó, por ejemplo la 
 [labels.es.model.accounting_se_vat_code.action.verify]
 label = "Verificar"
 description = "Marcar el código como comprobado con SKV 4700 (solo aprobadores); registra quién verificó y cuándo"
+confirm = "¿Marcar este código de IVA como comprobado con el formulario SKV 4700?"
+done = "Código de IVA verificado"
 
 [labels.es.model.accounting_se_vat_code.action.unverify]
 label = "Quitar verificación"
 description = "Retirar la verificación del código (solo aprobadores)"
+confirm = "¿Retirar la verificación de este código de IVA?"
+done = "Verificación retirada"
 
 [labels.es.model.accounting_se_vat_report]
 name = "Informe de IVA"
@@ -307,14 +315,18 @@ filed = "Presentado"
 [labels.es.model.accounting_se_vat_report.action.propose]
 label = "Proponer"
 description = "Proponer el informe para su aprobación; los agentes pueden hacerlo"
+done = "Propuesto para aprobación"
 
 [labels.es.model.accounting_se_vat_report.action.withdraw]
 label = "Retirar"
 description = "Devolver un informe propuesto a borrador"
+done = "Vuelto a borrador"
 
 [labels.es.model.accounting_se_vat_report.action.approve]
 label = "Aprobar"
 description = "Aprobar el informe (solo aprobadores; las casillas deben estar confirmadas como comprobadas con SKV 4700)"
+confirm = "¿Aprobar esta declaración de IVA? Ya no se podrá modificar."
+done = "Declaración de IVA aprobada"
 
 [labels.es.model.accounting_se_vat_report.action.approve.assert.boxes_checked]
 message = "Las casillas no se han confirmado como comprobadas con SKV 4700"
@@ -322,6 +334,8 @@ message = "Las casillas no se han confirmado como comprobadas con SKV 4700"
 [labels.es.model.accounting_se_vat_report.action.record_filed]
 label = "Registrar presentación"
 description = "Registrar que la declaración se presentó a Skatteverket fuera de este sistema (solo aprobadores)"
+confirm = "¿Registrar que esta declaración se presentó ante Skatteverket?"
+done = "Registrada como presentada"
 
 [labels.es.model.accounting_se_vat_report_line]
 name = "Línea de informe de IVA"

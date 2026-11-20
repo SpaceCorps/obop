@@ -1,7 +1,7 @@
 import { inSentence, t } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta, Reply } from "./api.ts";
 import { isEmpty, optionLabel } from "./format.ts";
-import { actionTitle } from "./labels.ts";
+import { actionConfirm, actionTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { JOB, needsSignature } from "./apps/field_service/job.ts";
 
@@ -178,6 +178,57 @@ export function canMove(
     needsApproval: false,
     current: false,
   };
+}
+
+/**
+ * A step with no way back (#102): no action moves the field on from the state it leads to. The
+ * server decides it over every action of the model (`one_way` in `/api/meta`), also the ones this
+ * person may not run, so a leave request that a manager approves or refuses afterwards is not one.
+ * Without that flag (an older server) only the actions listed here are looked at.
+ */
+export function oneWay(model: ModelMeta, a: Command): boolean {
+  if (!a.field || !a.to) return false;
+  if (typeof a.one_way === "boolean") return a.one_way;
+  return !model.actions.some(
+    (b) =>
+      b.id !== a.id &&
+      b.field === a.field &&
+      !!b.to &&
+      b.to !== a.to &&
+      (isEmpty(b.from) || b.from === a.to),
+  );
+}
+
+/**
+ * The question asked before an action runs, by its button, "Move to…", the status bar, the kanban
+ * and a list cell alike (#102, #104): the package's `confirm`, else one for a step with no way back,
+ * else none.
+ */
+export function questionOf(model: ModelMeta, a: Command): string | undefined {
+  const asked = actionConfirm(a);
+  if (asked) return asked;
+  if (!oneWay(model, a)) return undefined;
+  const f = model.fields.find((x) => x.name === a.field);
+  return t("{action}? There is no way back: afterwards no action moves it out of {state}.", {
+    action: actionTitle(a),
+    state: optionLabel(a.to!, f),
+  });
+}
+
+/**
+ * The question of a danger action in a record's panel, which names the record: the package's
+ * `confirm`, else "Mark spam “Johanna Becker”?", with the sentence of a step with no way back
+ * when it is one (as the kanban asks it).
+ */
+export function namedQuestionOf(model: ModelMeta, a: Command, action: string, name: string) {
+  const asked = actionConfirm(a);
+  if (asked) return asked;
+  if (!oneWay(model, a)) return t("{action} “{name}”?", { action, name });
+  const f = model.fields.find((x) => x.name === a.field);
+  return t(
+    "{action} “{name}”? There is no way back: afterwards no action moves it out of {state}.",
+    { action, name, state: optionLabel(a.to!, f) },
+  );
 }
 
 /** The label of an action button: "Mark won". */

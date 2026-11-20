@@ -128,14 +128,18 @@ closed = "Cerrado"
 [labels.es.model.helpdesk_ticket.action.take]
 label = "Asignármelo"
 description = "Empezar a trabajar en un ticket abierto"
+done = "Ticket asumido"
 
 [labels.es.model.helpdesk_ticket.action.resolve]
 label = "Resolver"
 description = "Marcar como resuelto un ticket en curso"
+done = "Ticket resuelto"
 
 [labels.es.model.helpdesk_ticket.action.close]
 label = "Cerrar"
 description = "Cerrar definitivamente un ticket resuelto (solo responsables)"
+confirm = "¿Cerrar este ticket definitivamente? Un ticket cerrado ya no se puede modificar."
+done = "Ticket cerrado"
 
 [labels.es.model.helpdesk_ticket.action.reopen]
 label = "Reabrir"
@@ -144,3 +148,15 @@ description = "Reabrir un ticket resuelto cuando el problema ha vuelto"
 [labels.es.model.helpdesk_ticket.field.number]
 label = "Número"
 description = "Número de ticket como TCK-00042, asignado al crear el ticket"
+
+[labels.es.model.helpdesk_ticket.section.request]
+label = "Solicitud"
+
+[labels.es.model.helpdesk_ticket.section.requester]
+label = "Solicitante"
+
+[labels.es.model.helpdesk_ticket.section.handling]
+label = "Gestión"
+
+[labels.es.model.helpdesk_ticket.section.resolution]
+label = "Resolución"

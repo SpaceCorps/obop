@@ -4413,6 +4413,8 @@ export interface components {
             issue_date?: string;
             /** @description Number from a gapless yearly series, such as INV-2026-00042, assigned when posted (a number the system assigns; read-only) */
             readonly number?: string;
+            /** @description Our reference printed on the invoice (Var referens), free text */
+            our_reference?: string;
             /** @description Customer party id */
             party_id?: string;
             /** @description Source sale order id */
@@ -4422,6 +4424,8 @@ export interface components {
              * @enum {string}
              */
             state?: "draft" | "posted" | "cancelled";
+            /** @description The customer's reference printed on the invoice (Er referens), free text */
+            their_reference?: string;
             /** @description Invoice total in minor units, the sum of the lines (computed when read; read-only) */
             readonly total_minor?: number;
         };
@@ -4467,6 +4471,8 @@ export interface components {
         };
         /** @description A way out for mail: an SMTP relay, or a provider reached through a Connectors connection */
         mail_server: {
+            /** @description SMTP: the relay may be on the business's own network (a private address such as 10.0.0.5), and security none is accepted there; off by default, set only by a person (docs/spec/mail.md 6) */
+            allow_private_network?: boolean;
             /** @description Provider: the Connectors connection that sends */
             connection?: string;
             /** @description Mail may go out through this server */
@@ -5036,7 +5042,7 @@ export interface components {
             at?: string;
             /** @description A short note without any code or secret (personal data: agents see it masked) */
             detail?: string;
-            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_link_revoked, sign_link_restored, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared, setup_open, setup_refused, setup_complete */
+            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_link_revoked, sign_link_restored, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared, mail_private_network, storage_index_dropped, setup_open, setup_refused, setup_complete */
             kind?: string;
             /** @description The account the event is about */
             user?: string;
@@ -10849,6 +10855,8 @@ export interface operations {
                          * @description Date the invoice is issued (YYYY-MM-DD)
                          */
                         issue_date?: string;
+                        /** @description Our reference printed on the invoice (Var referens), free text */
+                        our_reference?: string;
                         /** @description Customer party id */
                         party_id?: string;
                         /** @description Source sale order id */
@@ -10858,6 +10866,8 @@ export interface operations {
                          * @enum {string}
                          */
                         state?: "draft" | "posted" | "cancelled";
+                        /** @description The customer's reference printed on the invoice (Er referens), free text */
+                        their_reference?: string;
                     }[];
                 };
             };
@@ -11041,6 +11051,8 @@ export interface operations {
                      * @description Date the invoice is issued (YYYY-MM-DD)
                      */
                     issue_date?: string;
+                    /** @description Our reference printed on the invoice (Var referens), free text */
+                    our_reference?: string;
                     /** @description Customer party id */
                     party_id?: string;
                     /** @description Source sale order id */
@@ -11050,6 +11062,8 @@ export interface operations {
                      * @enum {string}
                      */
                     state?: "draft" | "posted" | "cancelled";
+                    /** @description The customer's reference printed on the invoice (Er referens), free text */
+                    their_reference?: string;
                 };
             };
         };
@@ -11571,6 +11585,8 @@ export interface operations {
                      * @description Date the invoice is issued (YYYY-MM-DD)
                      */
                     issue_date?: string;
+                    /** @description Our reference printed on the invoice (Var referens), free text */
+                    our_reference?: string;
                     /** @description Customer party id */
                     party_id?: string;
                     /** @description Source sale order id */
@@ -11580,6 +11596,8 @@ export interface operations {
                      * @enum {string}
                      */
                     state?: "draft" | "posted" | "cancelled";
+                    /** @description The customer's reference printed on the invoice (Er referens), free text */
+                    their_reference?: string;
                 };
             };
         };
@@ -13668,6 +13686,8 @@ export interface operations {
                     /** @enum {string} */
                     mode?: "all_or_nothing" | "partial";
                     rows?: {
+                        /** @description SMTP: the relay may be on the business's own network (a private address such as 10.0.0.5), and security none is accepted there; off by default, set only by a person (docs/spec/mail.md 6) */
+                        allow_private_network?: boolean;
                         /** @description Provider: the Connectors connection that sends */
                         connection?: string;
                         /** @description Mail may go out through this server */
@@ -13809,6 +13829,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description SMTP: the relay may be on the business's own network (a private address such as 10.0.0.5), and security none is accepted there; off by default, set only by a person (docs/spec/mail.md 6) */
+                    allow_private_network?: boolean;
                     /** @description Provider: the Connectors connection that sends */
                     connection?: string;
                     /** @description Mail may go out through this server */
@@ -14365,6 +14387,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description SMTP: the relay may be on the business's own network (a private address such as 10.0.0.5), and security none is accepted there; off by default, set only by a person (docs/spec/mail.md 6) */
+                    allow_private_network?: boolean;
                     /** @description Provider: the Connectors connection that sends */
                     connection?: string;
                     /** @description Mail may go out through this server */

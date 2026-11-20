@@ -298,26 +298,35 @@ refunded = "Erstattet"
 [labels.de.model.ecommerce_order.action.mark_paid]
 label = "Als bezahlt markieren"
 description = "Die Zahlung ist eingegangen"
+done = "Als bezahlt markiert"
 
 [labels.de.model.ecommerce_order.action.ship]
 label = "Versenden"
 description = "Das Paket wurde dem Versanddienstleister übergeben"
+confirm = "Diese Bestellung als versandt markieren? Tragen Sie zuerst die Sendungsnummer ein, falls es eine gibt."
+done = "Versandt"
 
 [labels.de.model.ecommerce_order.action.deliver]
 label = "Als geliefert markieren"
 description = "Das Paket hat den Kunden erreicht"
+done = "Zugestellt"
 
 [labels.de.model.ecommerce_order.action.cancel]
 label = "Stornieren"
 description = "Eine Bestellung stornieren, die nie bezahlt wurde"
+confirm = "Diese Bestellung stornieren? Ihr Bestand geht zurück in die Angebote, und sie kann nicht mehr geändert werden."
 
 [labels.de.model.ecommerce_order.action.refund]
 label = "Erstatten"
 description = "Das Geld für eine bezahlte, nicht gelieferte Bestellung zurückzahlen (nur Führungskräfte)"
+confirm = "Diese Bestellung erstatten? Das Geld geht an den Käufer zurück und der Bestand zurück in die Angebote."
+done = "Erstattet"
 
 [labels.de.model.ecommerce_order.action.refund_delivered]
 label = "Nach Lieferung erstatten"
 description = "Das Geld für eine gelieferte Bestellung zurückzahlen, zum Beispiel nach einer Rücksendung (nur Führungskräfte)"
+confirm = "Diese gelieferte Bestellung erstatten? Das Geld geht an den Käufer zurück; die Ware kommt nicht zurück ins Regal."
+done = "Erstattet"
 
 [labels.de.model.ecommerce_order_line]
 name = "Auftragsposition"
@@ -552,7 +561,36 @@ description = "IDs der bereits angewendeten Anbieter-Ereignisse als JSON, damit 
 [labels.de.model.ecommerce_payment.action.mark_failed]
 label = "Als fehlgeschlagen markieren"
 description = "Der Anbieter meldet, dass die Zahlung fehlgeschlagen ist"
+confirm = "Diese Zahlung als fehlgeschlagen markieren?"
 
 [labels.de.model.ecommerce_payment.action.cancel]
 label = "Abbrechen"
 description = "Nicht länger auf diese Zahlung warten"
+confirm = "Nicht mehr auf diese Zahlung warten?"
+
+[labels.de.model.ecommerce_listing.section.in_the_shop]
+label = "Im Shop"
+
+[labels.de.model.ecommerce_listing.section.stock]
+label = "Lager"
+
+[labels.de.model.ecommerce_listing.section.product_page]
+label = "Produktseite"
+
+[labels.de.model.ecommerce_listing.section.advanced]
+label = "Erweitert"
+
+[labels.de.model.ecommerce_order.section.customer]
+label = "Kunde"
+
+[labels.de.model.ecommerce_order.section.delivery]
+label = "Lieferung"
+
+[labels.de.model.ecommerce_order.section.amounts]
+label = "Beträge"
+
+[labels.de.model.ecommerce_order.section.payment]
+label = "Zahlung"
+
+[labels.de.model.ecommerce_order.section.checkout_record]
+label = "Kassenbeleg"

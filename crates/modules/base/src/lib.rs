@@ -1,8 +1,16 @@
 //! `base` implementation: the Contacts app foundation.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, ModelUi, Module, ModuleMeta};
+use obop_registry::ui::UiFilter;
+use obop_registry::{
+    CommandDef, FieldDef as F, FieldKind, Filter, ModelDef, ModelUi, Module, ModuleMeta,
+};
 use obop_types::DataClass::*;
+
+/// The name an erased contact keeps (`party.erase`).
+pub const ERASED: &str = "[erased]";
+/// The filter the contact list opens with, so erased contacts do not lead a name order (U1).
+const NOT_ERASED: &str = "Not erased";
 
 pub fn module() -> Module {
     let m = Module {
@@ -70,6 +78,13 @@ pub fn module() -> Module {
                 quick_create: vec!["name".into(), "email".into()],
                 order: Some("name asc".into()),
                 default_view: Some("gallery".into()),
+                // The placeholder sorts before every letter; the person can remove the filter.
+                filters: vec![UiFilter {
+                    label: NOT_ERASED.into(),
+                    filter: Filter::parse(&format!("name != \"{ERASED}\""))
+                        .expect("a valid filter"),
+                }],
+                default_filter: Some(NOT_ERASED.into()),
                 ..Default::default()
             }),
         ],
@@ -114,14 +129,14 @@ pub fn register(d: &Dispatcher, store: &Store) {
             };
             let erased = ["name", "email", "tax_id", "notes"]
                 .into_iter()
-                .map(|f| (f.to_string(), Value::text("[erased]")))
+                .map(|f| (f.to_string(), Value::text(ERASED)))
                 .collect();
             s.update("party", id, erased)?;
             // The photo is personal data too: clear the field and delete the file (D60).
             s.erase_blob_fields(&party, id)?;
             Ok(Value::map([
                 ("id", Value::text(id)),
-                ("name", Value::text("[erased]")),
+                ("name", Value::text(ERASED)),
             ]))
         }),
     );
@@ -171,6 +186,55 @@ mod tests {
     #[test]
     fn base_passes_install_gate() {
         assert!(obop_registry::check_module(&module()).is_empty());
+    }
+
+    /// U1: the contact list opens with a filter that leaves erased contacts out, so their
+    /// placeholder name does not lead the name order; the filter is the one the list query takes.
+    #[test]
+    fn the_contact_list_opens_without_erased_contacts() {
+        let (d, store, ada) = setup();
+        let officer = Principal::user("u2", &["base.user", "privacy.officer"]);
+        let mut v = Vault::new();
+        store
+            .insert(
+                "party",
+                [("name".to_string(), Value::text("Bea Example"))].into(),
+            )
+            .unwrap();
+        d.call(Surface::Rest, &officer, &mut v, "party.erase", &by_id(&ada))
+            .unwrap();
+        let m = module();
+        let ui = m.models[0].ui().expect("hints");
+        let label = ui.default_filter.as_deref().expect("a default filter");
+        let f = &ui.filters.iter().find(|f| f.label == label).unwrap().filter;
+        let conds = f
+            .clauses
+            .iter()
+            .map(|c| {
+                let obop_registry::ui::FilterValue::Text(t) = &c.value else {
+                    panic!("a text value")
+                };
+                let op = if c.op == obop_registry::ui::CmpOp::Ne {
+                    "ne"
+                } else {
+                    "eq"
+                };
+                Value::map([
+                    ("field", Value::text(&c.field)),
+                    ("op", Value::text(op)),
+                    ("value", Value::text(t)),
+                ])
+            })
+            .collect();
+        let input = Value::map([("filter", Value::List(conds))]);
+        let r = d
+            .call(Surface::Rest, &officer, &mut v, "party.list", &input)
+            .unwrap();
+        let Value::List(rows) = r.value else {
+            panic!("a list")
+        };
+        let names: Vec<_> = rows.iter().map(|row| field(row, "name").clone()).collect();
+        assert_eq!(names, [Value::text("Bea Example")]);
     }
 
     #[test]

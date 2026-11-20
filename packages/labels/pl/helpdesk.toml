@@ -128,14 +128,18 @@ closed = "Zamknięte"
 [labels.pl.model.helpdesk_ticket.action.take]
 label = "Przejmij"
 description = "Rozpoczyna pracę nad otwartym zgłoszeniem"
+done = "Zgłoszenie przejęte"
 
 [labels.pl.model.helpdesk_ticket.action.resolve]
 label = "Rozwiąż"
 description = "Oznacza zgłoszenie w toku jako rozwiązane"
+done = "Zgłoszenie rozwiązane"
 
 [labels.pl.model.helpdesk_ticket.action.close]
 label = "Zamknij"
 description = "Zamyka rozwiązane zgłoszenie na stałe (tylko kierownik)"
+confirm = "Zamknąć to zgłoszenie na stałe? Zamkniętego zgłoszenia nie można już zmienić."
+done = "Zgłoszenie zamknięte"
 
 [labels.pl.model.helpdesk_ticket.action.reopen]
 label = "Otwórz ponownie"
@@ -144,3 +148,15 @@ description = "Otwiera ponownie rozwiązane zgłoszenie, gdy problem wrócił"
 [labels.pl.model.helpdesk_ticket.field.number]
 label = "Numer"
 description = "Numer zgłoszenia, np. TCK-00042, nadawany przy utworzeniu zgłoszenia"
+
+[labels.pl.model.helpdesk_ticket.section.request]
+label = "Zgłoszenie"
+
+[labels.pl.model.helpdesk_ticket.section.requester]
+label = "Zgłaszający"
+
+[labels.pl.model.helpdesk_ticket.section.handling]
+label = "Obsługa"
+
+[labels.pl.model.helpdesk_ticket.section.resolution]
+label = "Rozwiązanie"

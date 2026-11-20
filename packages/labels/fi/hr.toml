@@ -119,10 +119,13 @@ offboarded = "Työsuhde päättynyt"
 [labels.fi.model.hr_employee.action.activate]
 label = "Aktivoi"
 description = "Päätä perehdytys ja merkitse työntekijä aktiiviseksi"
+done = "Työntekijä on nyt aktiivinen"
 
 [labels.fi.model.hr_employee.action.offboard]
 label = "Päätä työsuhde"
 description = "Päätä työsuhdetietue; peruttavissa vain henkilöstöhallinnon päätöksellä"
+confirm = "Päätetäänkö tämän työntekijän työsuhde? Tietue ja sen tiedot säilyvät, eikä mikään vaihe palauta sitä."
+done = "Työntekijän työsuhde on päättynyt"
 
 [labels.fi.model.hr_leave_request]
 name = "Poissaolopyyntö"
@@ -181,14 +184,18 @@ refused = "Hylätty"
 [labels.fi.model.hr_leave_request.action.request]
 label = "Pyydä"
 description = "Lähetä pyyntö esihenkilölle"
+done = "Lähetetty hyväksyttäväksi"
 
 [labels.fi.model.hr_leave_request.action.approve]
 label = "Hyväksy"
 description = "Hyväksy pyydetty vapaa (vain esihenkilö)"
+done = "Poissaolo hyväksytty"
 
 [labels.fi.model.hr_leave_request.action.refuse]
 label = "Hylkää"
 description = "Hylkää pyydetty vapaa (vain esihenkilö)"
+confirm = "Hylätäänkö tämä poissaolohakemus?"
+done = "Poissaolo hylätty"
 
 [labels.fi.model.hr_employee.field.photo]
 label = "Valokuva"
@@ -235,3 +242,24 @@ label = "Tulevat"
 
 [labels.fi.model.hr_leave_request.filter.not_refused]
 label = "Ei hylätyt"
+
+[labels.fi.model.hr_employee.section.work]
+label = "Työ"
+
+[labels.fi.model.hr_employee.section.employment]
+label = "Työsuhde"
+
+[labels.fi.model.hr_employee.section.private]
+label = "Yksityinen"
+
+[labels.fi.model.hr_employee.section.pay]
+label = "Palkka"
+
+[labels.fi.model.hr_employee.section.sensitive]
+label = "Arkaluonteinen"
+
+[labels.fi.model.hr_leave_request.section.leave]
+label = "Poissaolo"
+
+[labels.fi.model.hr_leave_request.section.sick_leave]
+label = "Sairauspoissaolo"

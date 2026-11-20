@@ -249,6 +249,45 @@ impl Dispatcher {
         }
     }
 
+    /// Create records of registered models with every check of their generated `create` (fills
+    /// and defaults, kinds, required fields, references and their filters, limits, the guard,
+    /// unique keys) and write the caller's own steps `extra` with them, in one transaction: all
+    /// of it or none (docs/ISSUES.md U6). Each record is `(model, id, fields)`, made in order, so
+    /// a later one may refer to an earlier one by its id. `p` must hold the write group of every
+    /// model it creates. No audit row and no observer runs: the call that asked for the write is
+    /// the record of it. It does not take the transaction lock of the dispatcher.
+    pub fn create_checked(
+        &self,
+        store: &Store,
+        p: &crate::Principal,
+        records: &[(&str, String, Value)],
+        extra: Vec<obop_storage::Op>,
+    ) -> Result<(), String> {
+        crud::create_all(
+            &self.engine(store),
+            &crate::engine::Actor::of(p),
+            records,
+            extra,
+        )
+    }
+
+    /// The checks of `create_checked` for `records` without writing anything: `Ok` when
+    /// `create_checked` would accept them as the store is now (a guard that plans a later write).
+    pub fn check_created(
+        &self,
+        store: &Store,
+        p: &crate::Principal,
+        records: &[(&str, String, Value)],
+    ) -> Result<(), String> {
+        crud::create_all_checked(
+            &self.engine(store),
+            &crate::engine::Actor::of(p),
+            records,
+            Vec::new(),
+            false,
+        )
+    }
+
     /// Register `get`, `list` and `search` of one model (the reads of the model engine).
     fn register_reads(&self, module: &Module, def: &ModelDef, eng: &Engine) {
         let name = def.name;

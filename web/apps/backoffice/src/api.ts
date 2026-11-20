@@ -18,6 +18,8 @@ export type Command = {
   from?: string | null;
   /** The state the action moves the record to. */
   to?: string | null;
+  /** Whether no action of the model, whoever may run it, leaves `to` (#102); set by the server. */
+  one_way?: boolean;
   /** D95 hints for the record panel (PROPOSED); absent until the package declares them. */
   ui?: ActionUi;
 };
@@ -88,6 +90,8 @@ export type UiSection = {
   collapsed?: boolean;
   /** Shown only while the record's state is one of these. */
   show_in?: string[];
+  /** The label per language from the package's label files (R17), absent when none translates it. */
+  labels?: Record<string, string>;
 };
 /**
  * `[[model.ui.filter]]`: a saved filter offered by the control panel; `labels` is its label per
@@ -174,6 +178,9 @@ export type ActionUi = {
   confirm?: string;
   /** The toast after it ran. */
   done?: string;
+  /** `confirm` and `done` per language from the package's label files (R17). */
+  confirm_labels?: Record<string, string>;
+  done_labels?: Record<string, string>;
   /** Actions with the same group show as one entry (the variant valid for the state runs). */
   group?: string;
   /** Fields the action input may carry, asked for in a small dialog (`reject_reason`). */

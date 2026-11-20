@@ -37,10 +37,13 @@ description = "Währungscode nach ISO 4217"
 [labels.de.model.sale_order.action.confirm]
 label = "Bestätigen"
 description = "Einen Auftragsentwurf bestätigen"
+done = "Auftrag bestätigt; ein Rechnungsentwurf liegt bereit"
 
 [labels.de.model.sale_order.action.cancel]
 label = "Stornieren"
 description = "Einen Auftrag stornieren"
+confirm = "Diesen Auftrag stornieren?"
+done = "Auftrag storniert"
 
 [labels.de.model.sale_order.action.reset_to_draft]
 label = "Auf Entwurf zurücksetzen"

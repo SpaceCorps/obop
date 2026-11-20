@@ -3,14 +3,25 @@
 //! The feed is a JSON document served by the control plane (`GET /api/releases`) or any host the
 //! operator names with `OBOP_UPDATE_FEED`. Each release carries a digest over its fields, so a
 //! release that was altered or truncated on the way is dropped rather than shown. The digest is
-//! an integrity check, not a signature: whoever serves the feed can also compute it. That is why
-//! the feed never decides what runs. A managed instance only tells the control plane *which
+//! an integrity check: whoever serves the feed can also compute it. A release may also carry an
+//! Ed25519 signature over that digest (H7), made with the release key that the owner holds
+//! (`obop platform release keygen`, `publish --signing-key`); once a public key is pinned in
+//! [`RELEASE_PUBLIC_KEYS`], a release without a valid signature of one of them is dropped. No key
+//! is pinned yet (the key and its custody are the owner's), so today the digest is the only
+//! check. Either way the feed never decides what runs. A managed instance only tells the control plane *which
 //! published version* it wants, and the control plane deploys the image it published itself
 //! (docs/DEPLOY.md, "Updating an instance from inside").
 
 use obop_pkg::semver::Version;
+use ring::signature::{ED25519, Ed25519KeyPair, KeyPair, UnparsedPublicKey};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
+
+/// The public keys of the release key, hex (64 characters each), that a release must be signed
+/// with. Empty until the owner generates the key and publishes its public half: then the key goes
+/// here and every release without its signature is dropped from the feed. Two entries while a key
+/// is rotated.
+pub const RELEASE_PUBLIC_KEYS: &[&str] = &[];
 
 /// The feed an instance reads when nothing else is configured.
 pub const DEFAULT_FEED: &str = "https://obop.dev/api/releases";
@@ -32,6 +43,8 @@ pub struct Release {
     pub min_from: String,
     /// SHA-256 over the fields above.
     pub digest: String,
+    /// Ed25519 over [`Release::signed_text`], hex; empty for a release that was not signed.
+    pub signature: String,
 }
 
 impl Release {
@@ -43,6 +56,7 @@ impl Release {
             image: image.into(),
             min_from: min_from.into(),
             digest: String::new(),
+            signature: String::new(),
         }
         .sealed()
     }
@@ -65,13 +79,43 @@ impl Release {
         self.digest == self.compute_digest()
     }
 
+    /// What the release key signs: the digest of the fields, under its own label.
+    pub fn signed_text(&self) -> String {
+        format!("obop-release-signature-v1\n{}", self.compute_digest())
+    }
+
+    /// The release signed with the release key (a PKCS#8 Ed25519 document, as `keygen` writes).
+    pub fn signed_with(mut self, pkcs8: &[u8]) -> Result<Self, String> {
+        let key = Ed25519KeyPair::from_pkcs8(pkcs8)
+            .map_err(|_| "the signing key is not an Ed25519 key in PKCS#8 form".to_string())?;
+        self.signature = obop_keys::hex(key.sign(self.signed_text().as_bytes()).as_ref());
+        Ok(self)
+    }
+
+    /// Whether the release carries a valid signature of one of `keys` (hex public keys).
+    pub fn signed_by(&self, keys: &[&str]) -> bool {
+        let Some(sig) = unhex(&self.signature) else {
+            return false;
+        };
+        keys.iter().filter_map(|k| unhex(k)).any(|k| {
+            UnparsedPublicKey::new(&ED25519, k)
+                .verify(self.signed_text().as_bytes(), &sig)
+                .is_ok()
+        })
+    }
+
     pub fn semver(&self) -> Option<Version> {
         Version::parse(&self.version).ok()
     }
 
     pub fn to_json(&self) -> J {
-        json!({"version": self.version, "published_at": self.published_at, "notes": self.notes,
-               "image": self.image, "min_from": self.min_from, "digest": self.digest})
+        let mut j = json!({"version": self.version, "published_at": self.published_at,
+               "notes": self.notes, "image": self.image, "min_from": self.min_from,
+               "digest": self.digest});
+        if !self.signature.is_empty() {
+            j["signature"] = J::from(self.signature.clone());
+        }
+        j
     }
 
     pub fn from_json(v: &J) -> Option<Release> {
@@ -83,6 +127,7 @@ impl Release {
             image: t("image").unwrap_or_default(),
             min_from: t("min_from").unwrap_or_default(),
             digest: t("digest")?,
+            signature: t("signature").unwrap_or_default(),
         })
     }
 }
@@ -95,8 +140,41 @@ pub struct Feed {
     pub dropped: Vec<String>,
 }
 
-/// Read a feed document: `{"releases": [...]}`.
+fn unhex(s: &str) -> Option<Vec<u8>> {
+    if s.is_empty() || !s.len().is_multiple_of(2) {
+        return None;
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok())
+        .collect()
+}
+
+/// A new release key: the PKCS#8 document to keep secret and the public key (hex) to pin in
+/// [`RELEASE_PUBLIC_KEYS`]. Only `obop platform release keygen` calls it, on the owner's machine.
+pub fn generate_release_key() -> Result<(Vec<u8>, String), String> {
+    let rng = ring::rand::SystemRandom::new();
+    let doc = Ed25519KeyPair::generate_pkcs8(&rng)
+        .map_err(|_| "the system's random source failed".to_string())?;
+    let public = public_key_of(doc.as_ref())?;
+    Ok((doc.as_ref().to_vec(), public))
+}
+
+/// The public key (hex) of a release key in PKCS#8 form.
+pub fn public_key_of(pkcs8: &[u8]) -> Result<String, String> {
+    let key = Ed25519KeyPair::from_pkcs8(pkcs8)
+        .map_err(|_| "the signing key is not an Ed25519 key in PKCS#8 form".to_string())?;
+    Ok(obop_keys::hex(key.public_key().as_ref()))
+}
+
+/// Read a feed document: `{"releases": [...]}`, checked against the pinned release keys.
 pub fn parse_feed(text: &str) -> Result<Feed, String> {
+    parse_feed_with(text, RELEASE_PUBLIC_KEYS)
+}
+
+/// [`parse_feed`] with the public keys a release must be signed with; none means no signature is
+/// asked for (the digest is still checked).
+pub fn parse_feed_with(text: &str, keys: &[&str]) -> Result<Feed, String> {
     let j: J =
         serde_json::from_str(text).map_err(|e| format!("the release feed is not JSON: {e}"))?;
     let list = j
@@ -121,6 +199,13 @@ pub fn parse_feed(text: &str) -> Result<Feed, String> {
         if !r.intact() {
             feed.dropped.push(format!(
                 "{}: its digest does not match its contents, so it was left out",
+                r.version
+            ));
+            continue;
+        }
+        if !keys.is_empty() && !r.signed_by(keys) {
+            feed.dropped.push(format!(
+                "{}: it is not signed with the release key, so it was left out",
                 r.version
             ));
             continue;
@@ -259,6 +344,53 @@ mod tests {
         );
         assert!(parse_feed("{}").is_err());
         assert!(parse_feed("not json").is_err());
+    }
+
+    #[test]
+    fn with_a_pinned_key_only_releases_signed_with_it_are_kept() {
+        let (key, public) = generate_release_key().unwrap();
+        let (other, _) = generate_release_key().unwrap();
+        let good = Release::new("0.3.0", "img:0.3.0", "signed", 10, "")
+            .signed_with(&key)
+            .unwrap();
+        let unsigned = Release::new("0.3.1", "img:0.3.1", "unsigned", 11, "");
+        let wrong = Release::new("0.3.2", "img:0.3.2", "other key", 12, "")
+            .signed_with(&other)
+            .unwrap();
+        // Signed, then changed: whoever changes it can compute the digest again, not the
+        // signature.
+        let mut forged = Release::new("0.3.3", "img:0.3.3", "notes", 13, "")
+            .signed_with(&key)
+            .unwrap();
+        let sig = forged.signature.clone();
+        forged.image = "evil:latest".into();
+        forged = forged.sealed();
+        forged.signature = sig;
+        assert!(forged.intact());
+        let text = feed_of(&[good.clone(), unsigned, wrong, forged]);
+        let f = parse_feed_with(&text, &[public.as_str()]).unwrap();
+        let v: Vec<_> = f.releases.iter().map(|r| r.version.as_str()).collect();
+        assert_eq!(v, ["0.3.0"]);
+        assert_eq!(f.dropped.len(), 3, "{:?}", f.dropped);
+        assert!(
+            f.dropped
+                .iter()
+                .all(|d| d.contains("not signed with the release key"))
+        );
+        // The signature travels in the feed and survives a round trip.
+        assert_eq!(f.releases[0], good);
+        // Without a pinned key every intact release is kept, as before.
+        assert_eq!(parse_feed_with(&text, &[]).unwrap().releases.len(), 4);
+        assert!(
+            RELEASE_PUBLIC_KEYS.is_empty(),
+            "no key is pinned until the owner gives one"
+        );
+        assert_eq!(public_key_of(&key).unwrap(), public);
+        assert!(
+            Release::new("1.0.0", "i", "", 1, "")
+                .signed_with(b"not a key")
+                .is_err()
+        );
     }
 
     #[test]

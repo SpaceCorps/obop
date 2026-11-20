@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Dashboards"
-description = "Dashboards und ihre Kacheln, als Daten gespeichert und von einer Oberfläche darzustellen. Ein Dashboard ist privat für seinen Eigentümer und dashboards.manager, solange es nicht geteilt ist. Eine Kachel legt Darstellung, Modell, Kennzahlfeld, Aggregation, Gruppierung, Filter und Position fest. Das Paket speichert nur die Definition und berechnet nichts."
+description = "Dashboards und ihre Kacheln, als Daten gespeichert und von einer Oberfläche darzustellen. Ein Dashboard ist privat für seinen Eigentümer und dashboards.manager, solange es nicht geteilt ist. Eine Kachel legt Darstellung, Modell, Kennzahlfeld, Aggregation, Gruppierung, Zeitraum, Filter und Position fest. Das Paket speichert nur die Definition und berechnet nichts."
 summary = "Dashboards und Kacheln als Daten gespeichert, damit das Backoffice sie als Kennzahlen, Diagramme und Tabellen darstellt."
 
 [labels.de.model.dashboards_dashboard]
@@ -71,6 +71,17 @@ sum = "Summe"
 [labels.de.model.dashboards_widget.field.group_by]
 label = "Gruppieren nach"
 description = "Feld, nach dem das Ergebnis aufgeteilt wird (Auswahl-, Referenz- oder Datumsfeld); leer für einen Wert"
+
+[labels.de.model.dashboards_widget.field.period]
+label = "Zeitraum"
+description = "Bei einem Datums- oder Zeitfeld in group_by: der Zeitraum, für den gezählt wird (Tag, Woche, ISO-Woche, Monat oder Jahr); leer bedeutet Monat"
+
+[labels.de.model.dashboards_widget.field.period.options]
+day = "Tag"
+week = "Woche"
+iso_week = "ISO-Woche"
+month = "Monat"
+year = "Jahr"
 
 [labels.de.model.dashboards_widget.field.filter]
 label = "Filter"

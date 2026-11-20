@@ -119,10 +119,13 @@ offboarded = "Avslutad"
 [labels.sv.model.hr_employee.action.activate]
 label = "Aktivera"
 description = "Slutför introduktionen och markera den anställde som aktiv"
+done = "Medarbetaren är nu aktiv"
 
 [labels.sv.model.hr_employee.action.offboard]
 label = "Avsluta anställning"
 description = "Avsluta anställningsposten; ångra bara efter beslut av HR"
+confirm = "Avsluta den här medarbetaren? Posten och dess uppgifter finns kvar, och inget steg flyttar tillbaka den."
+done = "Medarbetaren är avslutad"
 
 [labels.sv.model.hr_leave_request]
 name = "Ledighetsansökan"
@@ -181,14 +184,18 @@ refused = "Avslagen"
 [labels.sv.model.hr_leave_request.action.request]
 label = "Begär"
 description = "Skicka ansökan till chefen"
+done = "Skickad för godkännande"
 
 [labels.sv.model.hr_leave_request.action.approve]
 label = "Godkänn"
 description = "Godkänn en begärd ledighet (endast chef)"
+done = "Ledigheten beviljad"
 
 [labels.sv.model.hr_leave_request.action.refuse]
 label = "Avslå"
 description = "Avslå en begärd ledighet (endast chef)"
+confirm = "Avslå den här ledighetsansökan?"
+done = "Ledigheten avslagen"
 
 [labels.sv.model.hr_employee.field.photo]
 label = "Foto"
@@ -235,3 +242,24 @@ label = "Kommande"
 
 [labels.sv.model.hr_leave_request.filter.not_refused]
 label = "Inte avslagna"
+
+[labels.sv.model.hr_employee.section.work]
+label = "Arbete"
+
+[labels.sv.model.hr_employee.section.employment]
+label = "Anställning"
+
+[labels.sv.model.hr_employee.section.private]
+label = "Privat"
+
+[labels.sv.model.hr_employee.section.pay]
+label = "Lön"
+
+[labels.sv.model.hr_employee.section.sensitive]
+label = "Känsligt"
+
+[labels.sv.model.hr_leave_request.section.leave]
+label = "Ledighet"
+
+[labels.sv.model.hr_leave_request.section.sick_leave]
+label = "Sjukfrånvaro"

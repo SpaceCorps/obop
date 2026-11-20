@@ -129,10 +129,12 @@ description = "Mettre un message en file : to, subject et body, ou template avec
 [labels.fr.model.outbound_mail.action.retry]
 label = "Renvoyer"
 description = "Remettre en file un message échoué, tentatives à zéro"
+done = "Remis en file d'attente"
 
 [labels.fr.model.outbound_mail.action.cancel]
 label = "Annuler"
 description = "Annuler un message en file ; son texte est effacé"
+done = "Annulé"
 
 [labels.fr.model.outbound_mail.action.process]
 label = "Envoyer les messages dus"
@@ -184,6 +186,10 @@ starttls = "STARTTLS"
 tls = "TLS"
 none = "Aucune"
 
+[labels.fr.model.mail_server.field.allow_private_network]
+label = "Autoriser notre propre réseau"
+description = "SMTP : le relais peut se trouver sur le réseau de l’entreprise (une adresse privée comme 10.0.0.5), et la sécurité none y est acceptée ; désactivé par défaut, seule une personne l’active (docs/spec/mail.md 6)"
+
 [labels.fr.model.mail_server.field.username]
 label = "Nom d’utilisateur"
 description = "SMTP : nom d’utilisateur ; vide signifie sans authentification"
@@ -231,6 +237,7 @@ description = "Entrée de test_send : l’adresse du message de test ; jamais en
 [labels.fr.model.mail_server.action.test_send]
 label = "Envoyer un test"
 description = "Envoyer maintenant un court message de test par ce serveur à test_recipient et enregistrer la réponse"
+done = "Message de test envoyé"
 
 [labels.fr.model.mail_template]
 name = "Modèle d’e-mail"

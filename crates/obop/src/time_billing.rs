@@ -61,7 +61,11 @@ pub fn module() -> Module {
                 ),
                 f(
                     "per",
-                    "Input, optional: entry (the default, one invoice line per time entry) or task (one line per task, its minutes added up)",
+                    "Input, optional: entry (the default, one invoice line per time entry), task (one line per task, its minutes added up) or hours (one line for the period with the hours rounded up to whole hours)",
+                ),
+                f(
+                    "description",
+                    "Input, optional with per=hours: the text of the single invoice line; Datakonsult - <project>, <from> till <to> when left out",
                 ),
                 f("dry_run", "Input: only show the lines, write nothing").kind(FieldKind::Bool),
                 f("entry_id", "Link: the time entry id"),
@@ -115,6 +119,10 @@ pub struct Input {
     pub currency: String,
     /// One line per task instead of per entry.
     pub per_task: bool,
+    /// One single line: the period's hours rounded up to whole hours at the rate.
+    pub whole_hours: bool,
+    /// The text of that single line; a Swedish default when empty.
+    pub description: String,
 }
 
 /// One planned invoice line.
@@ -125,6 +133,9 @@ pub struct Line {
     pub description: String,
     pub minutes: i64,
     pub amount: i64,
+    /// Written as the line quantity and unit price; 1 and the amount unless whole hours are billed.
+    pub quantity: i64,
+    pub unit_price: i64,
 }
 
 pub struct Planned {
@@ -281,6 +292,8 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
                     description: title.clone(),
                     minutes: 0,
                     amount: 0,
+                    quantity: 1,
+                    unit_price: 0,
                 });
                 lines.len() - 1
             });
@@ -306,12 +319,41 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
             description: d,
             minutes,
             amount: amount_of(minutes, rate)?,
+            quantity: 1,
+            unit_price: amount_of(minutes, rate)?,
         });
+    }
+    if i.whole_hours {
+        // One line: every entry is linked, the hours are rounded up to whole hours.
+        let total = lines
+            .iter()
+            .try_fold(0i64, |a, l| a.checked_add(l.minutes))
+            .ok_or("the minutes overflow")?;
+        let hours = total / 60 + i64::from(total % 60 != 0);
+        let text = if i.description.trim().is_empty() {
+            format!(
+                "Datakonsult - {}, {} till {}",
+                text(&project, "name"),
+                i.from,
+                i.to
+            )
+        } else {
+            i.description.trim().to_string()
+        };
+        lines = vec![Line {
+            entry_ids: lines.into_iter().flat_map(|l| l.entry_ids).collect(),
+            description: text,
+            minutes: total,
+            amount: hours.checked_mul(rate).ok_or("the total overflows")?,
+            quantity: hours,
+            unit_price: rate,
+        }];
     }
     if i.per_task {
         // A task's minutes are priced once: the line is its hours times the rate.
         for l in &mut lines {
             l.amount = amount_of(l.minutes, rate)?;
+            l.unit_price = l.amount;
             let n = l.entry_ids.len();
             l.description = format!(
                 "{}: {} h ({n} {})",
@@ -374,8 +416,8 @@ pub fn create_invoice(
         .lines
         .iter()
         .map(|l| {
-            json!({"invoice_id": iid, "description": l.description, "quantity": 1,
-                "unit_price_minor": l.amount})
+            json!({"invoice_id": iid, "description": l.description, "quantity": l.quantity,
+                "unit_price_minor": l.unit_price})
         })
         .collect();
     if let Err(e) = crate::sie::bulk(env, p, "invoice_line", rows, None, false) {
@@ -466,12 +508,13 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 Some(Value::Text(t)) if t.trim().parse::<i64>().is_ok() => t.trim().parse().ok(),
                 _ => None,
             };
-            let per_task = match s("per").as_str() {
-                "" | "entry" => false,
+            let per = s("per");
+            let per_task = match per.as_str() {
+                "" | "entry" | "hours" => false,
                 "task" => true,
                 other => {
                     return Err(format!(
-                        "per must be entry or task, not {other:?}; nothing was billed"
+                        "per must be entry, task or hours, not {other:?}; nothing was billed"
                     ));
                 }
             };
@@ -486,6 +529,8 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 hourly_rate_minor: rate,
                 currency: s("currency"),
                 per_task,
+                whole_hours: per == "hours",
+                description: s("description"),
             };
             let (pl, iid) = create_invoice(Env { d: &d, store: &st }, &p, &inp, dry)?;
             let lines = pl

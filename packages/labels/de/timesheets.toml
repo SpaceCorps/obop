@@ -51,11 +51,15 @@ approved = "Genehmigt"
 [labels.de.model.timesheets_entry.action.submit]
 label = "Einreichen"
 description = "Den Eintrag zur Genehmigung einreichen"
+done = "Zur Freigabe eingereicht"
 
 [labels.de.model.timesheets_entry.action.approve]
 label = "Genehmigen"
 description = "Einen eingereichten Eintrag genehmigen (nur Führungskräfte)"
+confirm = "Diesen Zeiteintrag freigeben? Er kann danach nicht mehr geändert werden."
+done = "Freigegeben"
 
 [labels.de.model.timesheets_entry.action.reject]
 label = "Zurückweisen"
 description = "Einen eingereichten Eintrag zurück auf Entwurf setzen (nur Führungskräfte)"
+done = "Zurück in den Entwurf gesetzt"

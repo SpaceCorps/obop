@@ -119,10 +119,13 @@ offboarded = "Ausgeschieden"
 [labels.de.model.hr_employee.action.activate]
 label = "Aktivieren"
 description = "Die Einarbeitung abschließen und den Mitarbeiter als aktiv markieren"
+done = "Der Mitarbeiter ist jetzt aktiv"
 
 [labels.de.model.hr_employee.action.offboard]
 label = "Austritt erfassen"
 description = "Den Beschäftigungsdatensatz beenden; nur mit Entscheidung der Personalabteilung rückgängig zu machen"
+confirm = "Diesen Mitarbeiter austreten lassen? Der Datensatz und seine Angaben bleiben, und kein Schritt macht das rückgängig."
+done = "Der Mitarbeiter ist ausgetreten"
 
 [labels.de.model.hr_leave_request]
 name = "Abwesenheitsantrag"
@@ -181,14 +184,18 @@ refused = "Abgelehnt"
 [labels.de.model.hr_leave_request.action.request]
 label = "Beantragen"
 description = "Den Antrag bei der Führungskraft einreichen"
+done = "Zur Freigabe gesendet"
 
 [labels.de.model.hr_leave_request.action.approve]
 label = "Genehmigen"
 description = "Eine beantragte Abwesenheit genehmigen (nur Führungskräfte)"
+done = "Abwesenheit genehmigt"
 
 [labels.de.model.hr_leave_request.action.refuse]
 label = "Ablehnen"
 description = "Eine beantragte Abwesenheit ablehnen (nur Führungskräfte)"
+confirm = "Diesen Abwesenheitsantrag ablehnen?"
+done = "Abwesenheit abgelehnt"
 
 [labels.de.model.hr_employee.field.photo]
 label = "Foto"
@@ -235,3 +242,24 @@ label = "Bevorstehend"
 
 [labels.de.model.hr_leave_request.filter.not_refused]
 label = "Nicht abgelehnt"
+
+[labels.de.model.hr_employee.section.work]
+label = "Arbeit"
+
+[labels.de.model.hr_employee.section.employment]
+label = "Beschäftigung"
+
+[labels.de.model.hr_employee.section.private]
+label = "Privat"
+
+[labels.de.model.hr_employee.section.pay]
+label = "Bezahlung"
+
+[labels.de.model.hr_employee.section.sensitive]
+label = "Vertraulich"
+
+[labels.de.model.hr_leave_request.section.leave]
+label = "Abwesenheit"
+
+[labels.de.model.hr_leave_request.section.sick_leave]
+label = "Krankmeldung"

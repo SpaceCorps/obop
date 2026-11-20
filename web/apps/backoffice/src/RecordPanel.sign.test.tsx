@@ -314,6 +314,10 @@ describe("a request made from a template", () => {
   it("is marked signed by hand when the Sign button is pressed", async () => {
     await mount(rows.template);
     await click(actionButton("Sign"));
+    // Signed is a state no action leaves: the button asks first (#102).
+    const dialog = document.body.querySelector('[role="alertdialog"]')!;
+    expect(sent("sign_request/sign")).toEqual([]);
+    await click([...dialog.querySelectorAll("button")].find((b) => flat(b) === "Sign"));
     await settle();
     expect(sent("sign_request/sign")).toEqual([
       { url: "/api/sign_request/sign", body: { id: "r1" } },

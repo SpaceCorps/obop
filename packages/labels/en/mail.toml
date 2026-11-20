@@ -70,6 +70,9 @@ label = "Message kinds"
 starttls = "STARTTLS"
 tls = "TLS"
 
+[labels.en.model.mail_server.field.allow_private_network]
+label = "Allow our own network"
+
 [labels.en.model.mail_server.field.username]
 label = "User name"
 

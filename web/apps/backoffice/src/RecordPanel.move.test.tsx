@@ -109,3 +109,59 @@ describe("Move to… on a governed field", () => {
     expect(document.body.textContent).toContain("Mark this box as verified?");
   });
 });
+
+describe("an action button for a step with no way back", () => {
+  it("asks first though its package declares no confirm (#102)", async () => {
+    const shift: ModelMeta = {
+      ...box,
+      name: "shift",
+      fields: [
+        field("code", { required: true }),
+        field("state", { kind: "select", required: true, options: ["published", "confirmed"] }),
+      ],
+      actions: [
+        {
+          id: "shift.confirm",
+          description: "Confirm",
+          needs_approval: false,
+          field: "state",
+          from: "published",
+          to: "confirmed",
+          ui: { primary: true },
+        },
+      ],
+    };
+    const mods: ModuleMeta[] = [{ id: "pl", name: "Planning", models: [shift] }];
+    markActionOnly(mods);
+    await act(async () => {
+      root.render(
+        <DataProvider
+          token="t"
+          modules={mods}
+          apps={[]}
+          notify={() => {}}
+          confirm={async () => true}
+          linkFor={() => null}
+        >
+          <RecordPanel
+            model={shift}
+            fields={shift.fields}
+            row={{ id: "s1", code: "A", state: "published" }}
+            defaults={{}}
+            withheld={[]}
+            title="Shift"
+            onClose={() => {}}
+            onSaved={() => {}}
+          />
+        </DataProvider>,
+      );
+    });
+    const button = [...container.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === "Confirm",
+    );
+    expect(button).toBeTruthy();
+    await act(async () => button!.click());
+    expect(calls.filter((u) => u.includes("/api/shift/confirm"))).toEqual([]);
+    expect(document.body.textContent).toContain("There is no way back");
+  });
+});

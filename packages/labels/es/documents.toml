@@ -87,10 +87,13 @@ archived = "Archivado"
 [labels.es.model.documents_document.action.publish]
 label = "Publicar"
 description = "Convertir un documento en borrador en la versión vigente"
+done = "El documento está publicado"
 
 [labels.es.model.documents_document.action.archive]
 label = "Archivar"
 description = "Archivar un documento publicado (solo responsables)"
+confirm = "¿Archivar este documento? Ningún paso lo recupera."
+done = "El documento está archivado"
 
 [labels.es.model.documents_document.field.attachment]
 label = "Archivo"
@@ -99,3 +102,9 @@ description = "El archivo del documento (PDF, imagen, texto, hoja de cálculo o 
 [labels.es.model.documents_document.field.open_to_all]
 label = "Abierto a todos"
 description = "Indica si todo el que puede leer documentos puede ver este: verdadero para documentos públicos e internos"
+
+[labels.es.model.documents_document.section.document]
+label = "Documento"
+
+[labels.es.model.documents_document.section.where_it_is_kept]
+label = "Dónde se guarda"

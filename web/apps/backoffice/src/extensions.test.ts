@@ -48,6 +48,7 @@ describe("registrations", () => {
       panels: [],
       sections: [],
       overrides: [],
+      confirmSave: [],
     });
     expect(modelPageOf("no_such_model")).toBeUndefined();
   });
