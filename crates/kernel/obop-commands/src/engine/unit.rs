@@ -53,6 +53,9 @@ impl Reads for Plain<'_> {
 
 type Key = (String, String);
 
+/// The stored records of each key text of one rule, asked ahead (`Unit::prefetch_unique`).
+type Prefetched = HashMap<String, Vec<(String, Fields)>>;
+
 /// The unit's own records of one model by the key of one uniqueness rule, so that the check of a
 /// row does not look at every other row the unit has written (a bulk create of 1,000 rows would
 /// otherwise compare each row with all the rows before it).
@@ -165,7 +168,7 @@ pub(crate) struct Unit<'a> {
     keyed: RefCell<HashMap<String, Vec<Keyed>>>,
     /// What the store answered for keys asked ahead (K36, `prefetch_unique`): by model and the
     /// rule's fields, the stored records of each key text. A key not in it is asked of the store.
-    prefetched: RefCell<HashMap<(String, Vec<String>), HashMap<String, Vec<(String, Fields)>>>>,
+    prefetched: RefCell<HashMap<(String, Vec<String>), Prefetched>>,
     /// The definitions of the models, when the unit checks the immutability guards (D77): every
     /// unit the engine starts does (`Engine::unit`).
     guards: Option<DefLook<'a>>,
@@ -204,7 +207,7 @@ impl<'a> Unit<'a> {
     /// before. A key that a row ends up with and that was not asked ahead is asked of the store.
     pub fn prefetch_unique(&self, model: &str, fields: &[&str], keys: &[Vec<J>]) -> R<()> {
         let stored = self.backend.find_unique_many(model, fields, keys)?;
-        let mut by_key: HashMap<String, Vec<(String, Fields)>> = HashMap::new();
+        let mut by_key: Prefetched = HashMap::new();
         for values in keys {
             let hits = stored
                 .iter()
