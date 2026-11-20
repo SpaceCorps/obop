@@ -204,6 +204,11 @@ test.describe("the approvals inbox on a phone", () => {
       .locator(".record")
       .getByRole("button", { name: /^Finish/ })
       .click();
+    // Finish is a step with no way back, so the page asks first (#102); the button of that
+    // question sends the change for approval.
+    const ask = page.getByRole("alertdialog");
+    await expect(ask).toContainText("There is no way back");
+    await ask.getByRole("button", { name: /^Finish/ }).click();
     const toast = page.locator(".toast").filter({ hasText: "Sent for approval." });
     await expect(toast).toBeVisible();
     const link = toast.getByRole("link", { name: "Open Approvals" });
