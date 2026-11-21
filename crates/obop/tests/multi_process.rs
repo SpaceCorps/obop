@@ -204,7 +204,15 @@ fn http(
 ) -> Reply {
     let mut s = TcpStream::connect(("127.0.0.1", port))
         .unwrap_or_else(|e| panic!("connect to 127.0.0.1:{port} for {method} {path}: {e}"));
-    s.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
+    // `OBOP_TEST_TIME_FACTOR` stretches the wait for a database behind a slow link (J6 runs these
+    // tests through a delay proxy).
+    let factor: u64 = std::env::var("OBOP_TEST_TIME_FACTOR")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(1)
+        .max(1);
+    s.set_read_timeout(Some(Duration::from_secs(60 * factor)))
+        .unwrap();
     let payload = body.map(J::to_string).unwrap_or_default();
     let mut req = format!(
         "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\nAccept: application/json\r\n"
@@ -872,4 +880,161 @@ fn a_module_installed_through_one_process_appears_on_the_other_and_goes_with_its
         );
         std::thread::sleep(Duration::from_millis(250));
     }
+}
+
+// ---- bulk_create from two processes at once (J6) ----------------------------------------------
+
+/// `POST /api/{model}/bulk_create` with `body`.
+fn bulk(port: u16, t: &str, model: &str, body: &J) -> Reply {
+    http(
+        port,
+        "POST",
+        &format!("/api/{model}/bulk_create"),
+        Some(t),
+        &[],
+        Some(body),
+    )
+}
+
+/// Every record of `model`, through `/api/{model}/list` page by page.
+fn all_of(port: u16, t: &str, model: &str) -> Vec<J> {
+    let mut out = Vec::new();
+    loop {
+        let r = http(
+            port,
+            "POST",
+            &format!("/api/{model}/list"),
+            Some(t),
+            &[],
+            Some(&json!({"limit": 500, "offset": out.len()})),
+        );
+        assert_eq!(r.status, 200, "{}", r.body);
+        let page = r.json()["value"].as_array().cloned().unwrap_or_default();
+        let n = page.len();
+        out.extend(page);
+        if n < 500 {
+            return out;
+        }
+    }
+}
+
+/// J6: two processes each import 1,000 rows at the same moment. Orders (a sequence field) all land
+/// with the numbers 1 to 2,000, none twice and none missing; products whose SKUs (a unique field)
+/// overlap between the two calls never land twice: one call is whole and the other is refused
+/// as a whole with the rule's message (all or nothing), and a repeat of the same call with the
+/// same idempotency key on the other process is the first answer again and writes nothing.
+///
+/// Run through a local delay proxy of about 30 ms a round trip (a stand-in for a database on
+/// another machine; `OBOP_TEST_TIME_FACTOR=10` stretches the HTTP wait), the orders of the second
+/// process wait for the write lock (`dispatcher.txn`) longer than its fixed 60 s and are refused
+/// with "timed out waiting for lock dispatcher.txn" (400): the first import holds that lock for its
+/// whole commit, two statements a row (docs/DEPLOY.md, "Locks"). That run is not part of this test.
+#[test]
+fn two_processes_importing_1000_rows_at_once_keep_sequences_and_unique_keys() {
+    let Some(p) = pair(&[("OBOP_BULK_PER_MINUTE", "0")]) else {
+        return;
+    };
+    let t = token_of(&login(p.a.port, "ada", PASSWORD));
+    let (pa, pb) = (p.a.port, p.b.port);
+    let party = http(
+        pa,
+        "POST",
+        "/api/party/create",
+        Some(&t),
+        &[],
+        Some(&json!({"name": "Bulk customer"})),
+    );
+    assert_eq!(party.status, 200, "{}", party.body);
+    let party = party.json()["value"]["id"].as_str().unwrap().to_string();
+
+    // Orders: a sequence, 1,000 rows through each process at once.
+    let orders = |port: u16| {
+        let rows: Vec<J> = (0..1_000).map(|_| json!({"party_id": party})).collect();
+        bulk(port, &t, "sale_order", &json!({"rows": rows}))
+    };
+    let (ra, rb) = std::thread::scope(|s| {
+        let a = s.spawn(|| orders(pa));
+        let b = s.spawn(|| orders(pb));
+        (a.join().unwrap(), b.join().unwrap())
+    });
+    for r in [&ra, &rb] {
+        assert_eq!(r.status, 200, "{}", r.body);
+        assert_eq!(r.json()["value"]["created"], 1_000, "{}", r.body);
+    }
+    for port in [pa, pb] {
+        let mut numbers: Vec<String> = all_of(port, &t, "sale_order")
+            .iter()
+            .map(|o| o["number"].as_str().unwrap_or_default().to_string())
+            .collect();
+        numbers.sort();
+        let want: Vec<String> = (1..=2_000).map(|n| format!("SO-{n:05}")).collect();
+        assert_eq!(
+            numbers, want,
+            "no number twice and none missing, seen on {port}"
+        );
+    }
+
+    // Products: a unique SKU, the two calls overlap in 500 SKUs.
+    let products = |port: u16, from: usize, key: &str| {
+        let rows: Vec<J> = (from..from + 1_000)
+            .map(|i| json!({"name": format!("Item {i}"), "sku": format!("SKU-{i:05}")}))
+            .collect();
+        bulk(
+            port,
+            &t,
+            "product",
+            &json!({"rows": rows, "idempotency_key": key}),
+        )
+    };
+    let (ra, rb) = std::thread::scope(|s| {
+        let a = s.spawn(|| products(pa, 0, "j6-a"));
+        let b = s.spawn(|| products(pb, 500, "j6-b"));
+        (a.join().unwrap(), b.join().unwrap())
+    });
+    let won: Vec<&Reply> = [&ra, &rb].into_iter().filter(|r| r.status == 200).collect();
+    let lost: Vec<&Reply> = [&ra, &rb].into_iter().filter(|r| r.status != 200).collect();
+    assert_eq!(
+        (won.len(), lost.len()),
+        (1, 1),
+        "{} {}\n{} {}",
+        ra.status,
+        ra.body,
+        rb.status,
+        rb.body
+    );
+    assert_eq!(won[0].json()["value"]["created"], 1_000, "{}", won[0].body);
+    assert!(
+        lost[0].body.contains("must be unique"),
+        "{} {}",
+        lost[0].status,
+        lost[0].body
+    );
+    for port in [pa, pb] {
+        let skus: Vec<String> = all_of(port, &t, "product")
+            .iter()
+            .map(|r| r["sku"].as_str().unwrap_or_default().to_string())
+            .collect();
+        let distinct: std::collections::HashSet<_> = skus.iter().collect();
+        assert_eq!(
+            skus.len(),
+            1_000,
+            "only the whole call landed, seen on {port}"
+        );
+        assert_eq!(distinct.len(), 1_000, "no SKU twice, seen on {port}");
+    }
+
+    // The same call again, with the same key, on the other process: the stored answer.
+    let (first, again) = if ra.status == 200 {
+        (&ra, products(pb, 0, "j6-a"))
+    } else {
+        (&rb, products(pa, 500, "j6-b"))
+    };
+    assert_eq!(again.status, 200, "{}", again.body);
+    assert_eq!(again.json()["value"]["replayed"], true, "{}", again.body);
+    assert_eq!(
+        again.json()["value"]["ids"],
+        first.json()["value"]["ids"],
+        "the first answer"
+    );
+    assert_eq!(all_of(pa, &t, "product").len(), 1_000, "nothing written");
 }

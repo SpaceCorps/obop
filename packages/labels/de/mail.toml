@@ -1,0 +1,280 @@
+# Machine-drafted labels of the built-in Mail module (docs/spec/mail.md).
+
+[labels.de.module]
+name = "E-Mail"
+description = "Ausgehende E-Mail: Mailserver (SMTP-Relays und Anbieter-APIs über die Connectors), Vorlagen in sieben Sprachen, eine Warteschlange mit Wiederholungen und ein Versandprotokoll, das nie den Text zeigt."
+summary = "E-Mails über Ihr eigenes SMTP-Relay oder einen Anbieter senden, mit Vorlagen und Versandprotokoll."
+
+[labels.de.model.outbound_mail]
+name = "Ausgehende E-Mail"
+plural = "Sendungen"
+description = "Eine ausgehende Nachricht: Warteschlange und Versandprotokoll. Zeigt nie den Text"
+
+[labels.de.model.outbound_mail.field.kind]
+label = "Art"
+description = "Wofür die Nachricht ist, etwa invoice oder password_reset; general, wenn nichts angegeben ist"
+
+[labels.de.model.outbound_mail.field.to]
+label = "An"
+description = "Empfänger, durch Kommas getrennt"
+
+[labels.de.model.outbound_mail.field.cc]
+label = "Kopie"
+description = "Empfänger einer Kopie, durch Kommas getrennt"
+
+[labels.de.model.outbound_mail.field.bcc]
+label = "Blindkopie"
+description = "Empfänger einer Blindkopie, durch Kommas getrennt; nie in einer Kopfzeile"
+
+[labels.de.model.outbound_mail.field.reply_to]
+label = "Antwort an"
+description = "Wohin Antworten gehen; leer bedeutet die Einstellung des Servers"
+
+[labels.de.model.outbound_mail.field.subject]
+label = "Betreff"
+description = "Betreffzeile"
+
+[labels.de.model.outbound_mail.field.body]
+label = "Text"
+description = "Der Text, versiegelt; gelöscht, sobald die Nachricht gesendet oder storniert ist"
+
+[labels.de.model.outbound_mail.field.template]
+label = "Vorlage"
+description = "Eingabe von send: der Schlüssel der Vorlage; wird gespeichert"
+
+[labels.de.model.outbound_mail.field.language]
+label = "Sprache"
+description = "Eingabe von send: die Sprache der Vorlage"
+
+[labels.de.model.outbound_mail.field.language.options]
+en = "Englisch"
+de = "Deutsch"
+fr = "Französisch"
+pl = "Polnisch"
+fi = "Finnisch"
+sv = "Schwedisch"
+es = "Spanisch"
+
+[labels.de.model.outbound_mail.field.vars]
+label = "Werte"
+description = "Eingabe von send: die Werte der Vorlage als JSON-Objekt; nie gespeichert"
+
+[labels.de.model.outbound_mail.field.server]
+label = "Mailserver"
+description = "Der Mailserver, der sie sendet"
+
+[labels.de.model.outbound_mail.field.status]
+label = "Status"
+description = "in der Warteschlange, wird gesendet, gesendet, fehlgeschlagen oder storniert"
+
+[labels.de.model.outbound_mail.field.status.options]
+queued = "In Warteschlange"
+sending = "Wird gesendet"
+sent = "Gesendet"
+failed = "Fehlgeschlagen"
+cancelled = "Storniert"
+
+[labels.de.model.outbound_mail.field.attempts]
+label = "Versuche"
+description = "Bisherige Zustellversuche"
+
+[labels.de.model.outbound_mail.field.next_attempt_at]
+label = "Nächster Versuch"
+description = "Wann es erneut versucht wird"
+
+[labels.de.model.outbound_mail.field.queued_at]
+label = "Eingereiht"
+description = "Wann es eingereiht wurde"
+
+[labels.de.model.outbound_mail.field.sent_at]
+label = "Gesendet"
+description = "Wann der Server oder Anbieter sie angenommen hat"
+
+[labels.de.model.outbound_mail.field.last_error]
+label = "Letzter Fehler"
+description = "Warum der letzte Versuch scheiterte, ohne Text oder Zugangsdaten"
+
+[labels.de.model.outbound_mail.field.server_reply]
+label = "Antwort des Servers"
+description = "Die Antwort des Servers oder Anbieters auf die angenommene Nachricht"
+
+[labels.de.model.outbound_mail.field.message_id]
+label = "Message-ID"
+description = "Die Kopfzeile Message-ID, bei jedem Versuch gleich"
+
+[labels.de.model.outbound_mail.field.related_model]
+label = "Bezogenes Modell"
+description = "Das Modell des Datensatzes, um den es geht"
+
+[labels.de.model.outbound_mail.field.related_id]
+label = "Bezogener Datensatz"
+description = "Die ID dieses Datensatzes"
+
+[labels.de.model.outbound_mail.field.requested_by]
+label = "Eingereiht von"
+description = "Wer es eingereiht hat"
+
+[labels.de.model.outbound_mail.field.lease_until]
+label = "Reserviert bis"
+description = "Reservierung des Workers, in Sekunden seit 1970"
+
+[labels.de.model.outbound_mail.field.due]
+label = "Fällig"
+description = "Wann es fällig ist, in Sekunden seit 1970"
+
+[labels.de.model.outbound_mail.action.send]
+label = "Senden"
+description = "Eine Nachricht einreihen: to, subject und body oder template mit language und vars; gibt ihre ID zurück. Der Worker sendet sie nach dem Aufruf"
+done = "Nachricht eingereiht"
+
+[labels.de.model.outbound_mail.action.retry]
+label = "Erneut senden"
+description = "Eine fehlgeschlagene Nachricht erneut einreihen, Versuche ab null"
+done = "Erneut eingereiht"
+
+[labels.de.model.outbound_mail.action.cancel]
+label = "Stornieren"
+description = "Eine eingereihte Nachricht stornieren; ihr Text wird gelöscht"
+done = "Abgebrochen"
+
+[labels.de.model.outbound_mail.action.process]
+label = "Fällige senden"
+description = "Die jetzt fälligen Nachrichten senden (der Worker tut das alle paar Sekunden)"
+
+[labels.de.model.mail_server]
+name = "Mailserver"
+plural = "Mailserver"
+description = "Ein Weg für ausgehende E-Mails: ein SMTP-Relay oder ein Anbieter über eine Verbindung der Connectors"
+
+[labels.de.model.mail_server.field.name]
+label = "Name"
+description = "Ein Name, der die Server unterscheidet"
+
+[labels.de.model.mail_server.field.kind]
+label = "Sendet über"
+description = "smtp (ein Relay) oder provider (eine API über eine Verbindung der Connectors)"
+
+[labels.de.model.mail_server.field.kind.options]
+smtp = "SMTP-Relay"
+provider = "Anbieter"
+
+[labels.de.model.mail_server.field.enabled]
+label = "Aktiv"
+description = "E-Mails dürfen über diesen Server hinausgehen"
+
+[labels.de.model.mail_server.field.is_default]
+label = "Standardserver"
+description = "Für jede Nachrichtenart, die kein anderer Server nennt"
+
+[labels.de.model.mail_server.field.kinds]
+label = "Nachrichtenarten"
+description = "Nachrichtenarten dieses Servers, durch Kommas getrennt (etwa invoice, password_reset); leer bedeutet alle"
+
+[labels.de.model.mail_server.field.host]
+label = "Hostname"
+description = "SMTP: Hostname des Relays"
+
+[labels.de.model.mail_server.field.port]
+label = "Portnummer"
+description = "SMTP: Port (587 für STARTTLS, 465 für TLS)"
+
+[labels.de.model.mail_server.field.security]
+label = "Sicherheit"
+description = "SMTP: starttls, tls oder none (none sendet kein Passwort)"
+
+[labels.de.model.mail_server.field.security.options]
+starttls = "STARTTLS"
+tls = "TLS"
+none = "Keine"
+
+[labels.de.model.mail_server.field.allow_private_network]
+label = "Eigenes Netzwerk erlauben"
+description = "SMTP: Das Relay darf im eigenen Netzwerk des Unternehmens liegen (eine private Adresse wie 10.0.0.5), und die Sicherheit none ist dort erlaubt; standardmäßig aus, nur eine Person schaltet es ein (docs/spec/mail.md 6)"
+
+[labels.de.model.mail_server.field.username]
+label = "Benutzername"
+description = "SMTP: Benutzername; leer bedeutet keine Anmeldung"
+
+[labels.de.model.mail_server.field.password]
+label = "Passwort"
+description = "SMTP: Passwort; nur schreibbar, verschlüsselt gespeichert, nie zurückgegeben"
+
+[labels.de.model.mail_server.field.password_set]
+label = "Passwort gespeichert"
+description = "SMTP: ob ein Passwort gespeichert ist"
+
+[labels.de.model.mail_server.field.connection]
+label = "Verbindung"
+description = "Anbieter: die Verbindung der Connectors, die sendet"
+
+[labels.de.model.mail_server.field.from_address]
+label = "Absenderadresse"
+description = "Absenderadresse jeder Nachricht dieses Servers"
+
+[labels.de.model.mail_server.field.from_name]
+label = "Absendername"
+description = "Absendername, den der Empfänger sieht"
+
+[labels.de.model.mail_server.field.reply_to]
+label = "Antwortadresse"
+description = "Wohin Antworten gehen; leer bedeutet die Absenderadresse"
+
+[labels.de.model.mail_server.field.footer]
+label = "Fußzeile"
+description = "Text unter jeder Nachricht, etwa die Firmenangaben oder wie man diese Nachrichten abbestellt"
+
+[labels.de.model.mail_server.field.last_test_at]
+label = "Letzter Test"
+description = "Wann die letzte Testnachricht gesendet wurde"
+
+[labels.de.model.mail_server.field.last_test_result]
+label = "Letztes Testergebnis"
+description = "Was der Server auf die letzte Testnachricht antwortete"
+
+[labels.de.model.mail_server.field.last_test_outcome]
+label = "Ergebnis des letzten Tests"
+description = "Wie der letzte Test endete: gesendet, vorübergehend nicht gesendet oder abgelehnt"
+
+[labels.de.model.mail_server.field.last_test_outcome.options]
+sent = "Gesendet"
+temporary = "Nicht gesendet (vorübergehend)"
+permanent = "Nicht gesendet (abgelehnt)"
+
+[labels.de.model.mail_server.field.test_recipient]
+label = "Testempfänger"
+description = "Eingabe von test_send: die Adresse der Testnachricht; nie gespeichert"
+
+[labels.de.model.mail_server.action.test_send]
+label = "Test senden"
+description = "Jetzt eine kurze Testnachricht über diesen Server an test_recipient senden und die Antwort festhalten"
+done = "Testnachricht gesendet"
+
+[labels.de.model.mail_template]
+name = "E-Mail-Vorlage"
+plural = "E-Mail-Vorlagen"
+description = "Betreff und Text einer Nachrichtenart in einer Sprache, mit Platzhaltern (ein Name in doppelten geschweiften Klammern)"
+
+[labels.de.model.mail_template.field.key]
+label = "Schlüssel"
+description = "Die Nachrichtenart der Vorlage, etwa invoice oder password_reset"
+
+[labels.de.model.mail_template.field.language]
+label = "Sprache"
+description = "Sprache des Textes"
+
+[labels.de.model.mail_template.field.language.options]
+en = "Englisch"
+de = "Deutsch"
+fr = "Französisch"
+pl = "Polnisch"
+fi = "Finnisch"
+sv = "Schwedisch"
+es = "Spanisch"
+
+[labels.de.model.mail_template.field.subject]
+label = "Betreff"
+description = "Betreffzeile, mit Platzhaltern (ein Name in doppelten geschweiften Klammern)"
+
+[labels.de.model.mail_template.field.body]
+label = "Text"
+description = "Text, mit Platzhaltern (ein Name in doppelten geschweiften Klammern)"

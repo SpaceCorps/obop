@@ -229,6 +229,18 @@ pub(crate) fn index_name(model: &str, fields: &[&str]) -> String {
     format!("{}_{:016x}", &readable[..46], h)
 }
 
+/// The names of the database constraints `def` declares (what [`ensure_indexes`] makes).
+pub(crate) fn index_names(def: &ModelDef) -> Vec<String> {
+    unique_specs(def)
+        .into_iter()
+        .map(|(field, with)| {
+            let mut cols = vec![field];
+            cols.extend(with.iter().copied());
+            index_name(def.name, &cols)
+        })
+        .collect()
+}
+
 /// Create the database constraints of `def`. A database that already holds duplicates keeps
 /// working (the write-time check still applies); the failure is reported.
 pub(crate) fn ensure_indexes(backend: &dyn obop_storage::Backend, def: &ModelDef) {
@@ -265,6 +277,49 @@ pub(crate) fn check_unique(
     lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
 ) -> R<()> {
     check_unique_keys(unit, lookup, &unit.touched())
+}
+
+/// Ask the store at once for the keys the rows of a bulk create carry, one statement per rule on
+/// PostgreSQL (K36). The keys are read from the rows as given; a row whose key changes on the way
+/// (a default, a number, a canonical form) is asked about on its own when it is checked, so the
+/// answers are the same as without this. Only keys of exact text (a text, a whole number, a
+/// yes/no) are asked ahead: any other value (a fraction, a list, an object) is refused by the
+/// row's checks before its key is looked up, and asking for it would read the model.
+pub(crate) fn prefetch_unique_keys<'r>(
+    unit: &Unit<'_>,
+    def: &ModelDef,
+    rows: impl Iterator<Item = &'r Fields> + Clone,
+) -> R<()> {
+    fn exact(v: &J) -> bool {
+        match v {
+            J::String(s) => !s.contains('\0'),
+            J::Number(n) => n.is_i64() || n.is_u64(),
+            J::Bool(_) => true,
+            _ => false,
+        }
+    }
+    for (field, with) in unique_specs(def) {
+        let keys: Vec<Vec<J>> = rows
+            .clone()
+            .filter_map(|rec| {
+                let value = match rec.get(field) {
+                    None | Some(J::Null) => return None,
+                    Some(J::String(s)) if s.is_empty() => return None,
+                    Some(v) => v.clone(),
+                };
+                let mut values = vec![value];
+                values.extend(with.iter().map(|w| norm(rec, w)));
+                values.iter().all(exact).then_some(values)
+            })
+            .collect();
+        if keys.len() < 2 {
+            continue;
+        }
+        let mut fields = vec![field];
+        fields.extend(with.iter().copied());
+        unit.prefetch_unique(def.name, &fields, &keys)?;
+    }
+    Ok(())
 }
 
 /// Like `check_unique`, for the given records only (a bulk create checks each new row as it adds

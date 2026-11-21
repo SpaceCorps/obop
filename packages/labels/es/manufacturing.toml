@@ -91,6 +91,7 @@ cancelled = "Cancelado"
 [labels.es.model.manufacturing_order.action.confirm]
 label = "Confirmar"
 description = "Confirmar una orden en borrador para poder planificar la producción; necesita el producto terminado, un lugar de producción y al menos una línea de componente"
+done = "Pedido confirmado"
 
 [labels.es.model.manufacturing_order.action.confirm.assert.has_product]
 message = "Elija primero el producto terminado: al terminar la orden, entra en el stock del lugar de producción"
@@ -104,14 +105,19 @@ message = "Añada primero los componentes: una orden sin componentes no mueve st
 [labels.es.model.manufacturing_order.action.start]
 label = "Iniciar"
 description = "Iniciar la producción de una orden confirmada"
+done = "Producción iniciada"
 
 [labels.es.model.manufacturing_order.action.finish]
 label = "Terminar"
 description = "Marcar la producción como terminada: con una ubicación de producción se crea un movimiento de stock en borrador que saca cada componente de allí y otro que deja allí el producto terminado, con el número de la orden como origen, para que el almacén los valide (requiere el grupo inventory.user)"
+confirm = "¿Marcar la producción como terminada? Los movimientos de stock retiran los componentes y dan entrada al producto terminado en la ubicación de producción. Una orden terminada ya no se puede modificar."
+done = "Producción terminada"
 
 [labels.es.model.manufacturing_order.action.cancel]
 label = "Cancelar"
 description = "Cancelar una orden que no se ha confirmado"
+confirm = "¿Cancelar este pedido?"
+done = "Pedido cancelado"
 
 [labels.es.model.manufacturing_order.field.product_id]
 label = "Producto"
@@ -140,3 +146,9 @@ description = "El producto consumido"
 [labels.es.model.manufacturing_order_line.field.quantity]
 label = "Cantidad"
 description = "Unidades del componente que usa toda la orden"
+
+[labels.es.model.manufacturing_order.filter.in_progress]
+label = "En curso"
+
+[labels.es.model.manufacturing_order.filter.late]
+label = "Retrasadas"

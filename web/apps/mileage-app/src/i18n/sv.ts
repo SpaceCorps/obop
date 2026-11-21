@@ -31,11 +31,21 @@ export const sv: Translation<"one"> = {
   "error.sync": "Resorna kunde inte skickas. Telefonen sparar dem och försöker igen.",
   "error.database": "Resorna på den här telefonen kunde inte öppnas.",
   "error.database.hint":
-    "Inget har raderats. Försök igen. Så länge resorna inte kan öppnas sparas inga nya positioner. Om registreringen fortfarande pågår kan du stoppa den med knappen på skärmen. Om Försök igen fortsätter att misslyckas kan krypteringsnyckeln för resorna ha gått förlorad, och då går resorna inte att läsa. Den enda utvägen är Inställningar, Appar, obop Mileage, Lagring, Rensa lagringsutrymme. Det raderar de resor som inte har laddats upp.",
+    "Inget har raderats. Försök igen. Så länge resorna inte kan öppnas sparas inga nya positioner. Om registreringen fortfarande pågår kan du stoppa den med knappen på skärmen. Om Försök igen fortsätter att misslyckas kan krypteringsnyckeln för resorna ha gått förlorad, och då går resorna inte att läsa. Den enda utvägen är Radera resorna på den här telefonen, nedan. Det raderar de resor som inte har laddats upp.",
   "error.database.hint.ios":
-    "Inget har raderats. Försök igen. Om telefonen precis har startat, lås upp den en gång och försök igen. Så länge resorna inte kan öppnas sparas inga nya positioner. Om registreringen fortfarande pågår kan du stoppa den med knappen på skärmen. Om Försök igen fortsätter att misslyckas kan krypteringsnyckeln för resorna ha gått förlorad, och då går resorna inte att läsa. Den enda utvägen är att radera appen från telefonen och installera den igen (håll ned appikonen, välj Ta bort app och sedan Radera app). Det raderar de resor som inte har laddats upp.",
+    "Inget har raderats. Försök igen. Om telefonen precis har startat, lås upp den en gång och försök igen. Så länge resorna inte kan öppnas sparas inga nya positioner. Om registreringen fortfarande pågår kan du stoppa den med knappen på skärmen. Om Försök igen fortsätter att misslyckas kan krypteringsnyckeln för resorna ha gått förlorad, och då går resorna inte att läsa. Den enda utvägen är Radera resorna på den här telefonen, nedan. Det raderar de resor som inte har laddats upp.",
   "error.database.stop": "Stoppa registreringen",
   "error.database.stopped": "Registreringen stoppades.",
+  "error.database.erase": "Radera resorna på den här telefonen",
+  "error.database.erase.confirm":
+    "Det här raderar alla resor på den här telefonen för gott, även de resor som inte har laddats upp, och de går inte att få tillbaka. Gör det bara om Försök igen fortsätter att misslyckas. Resor som har laddats upp finns kvar på servern.",
+  "error.database.erase.yes": "Radera för gott",
+  "error.database.erase.failed": "Resorna kunde inte raderas. Försök igen.",
+  "error.database.detail.no_cipher":
+    "Den här versionen av appen kan inte kryptera resorna och öppnar dem därför inte.",
+  "error.database.detail.wrong_key":
+    "Nyckeln till resorna passar inte filen: nyckeln kan ha gått förlorad, eller så är filen skadad.",
+  "error.database.detail.newer": "Resorna sparades av en nyare version av appen. Uppdatera appen.",
 
   "unit.trips.one": "{count} resa",
   "unit.trips.other": "{count} resor",
@@ -229,6 +239,13 @@ export const sv: Translation<"one"> = {
   "trip.distance": "Sträcka",
   "trip.distance.pending": "Servern har inte räknat ut den än",
   "trip.purpose": "Syfte",
+  "trip.purpose.change": "Du kan ändra syftet tills resan har skickats in.",
+  "trip.private.note":
+    "En privat resa skickas inte in för granskning: ingen granskare läser den. Servern sparar sträckan och tiderna, inte färdvägen. Om resan var i tjänsten, ändra syftet.",
+  "trip.private.confirm.title": "Markera resan som privat?",
+  "trip.private.confirm.message":
+    "En privat resa behåller sträckan och tiderna, inte färdvägen. Färdvägen tas bort från servern för gott, även om du ändrar syftet tillbaka.",
+  "trip.private.confirm": "Markera som privat",
   "trip.state": "Status",
   "trip.checks": "Serverns kontroller",
   "trip.check.seq_gap.one": "{count} lucka i numreringen av punkterna",
@@ -237,6 +254,10 @@ export const sv: Translation<"one"> = {
   "trip.check.speed_jump.other": "{count} punkter uteslöts på grund av omöjliga hopp",
   "trip.check.low_accuracy.one": "{count} punkt uteslöts på grund av låg noggrannhet",
   "trip.check.low_accuracy.other": "{count} punkter uteslöts på grund av låg noggrannhet",
+  "trip.check.route_removed.one":
+    "Färdvägen togs bort när resan markerades som privat ({count} punkt)",
+  "trip.check.route_removed.other":
+    "Färdvägen togs bort när resan markerades som privat ({count} punkter)",
   "trip.submit": "Skicka in för granskning",
   "trip.submit.hint": "Skickar resan till en granskare",
   "trip.discard": "Kassera resan",

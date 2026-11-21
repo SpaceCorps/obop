@@ -1,0 +1,280 @@
+# Machine-drafted labels of the built-in Mail module (docs/spec/mail.md).
+
+[labels.fr.module]
+name = "E-mail"
+description = "E-mails sortants : serveurs de messagerie (relais SMTP et API de fournisseurs via les Connecteurs), modèles en sept langues, une file d’attente avec nouvelles tentatives et un journal des envois qui ne montre jamais le texte."
+summary = "Envoyer des e-mails via votre propre relais SMTP ou un fournisseur, avec modèles et journal des envois."
+
+[labels.fr.model.outbound_mail]
+name = "E-mail sortant"
+plural = "Envois"
+description = "Un message sortant : la file d’attente et le journal des envois. Ne montre jamais le texte"
+
+[labels.fr.model.outbound_mail.field.kind]
+label = "Type"
+description = "À quoi sert le message, par exemple invoice ou password_reset ; general si rien n’est indiqué"
+
+[labels.fr.model.outbound_mail.field.to]
+label = "À"
+description = "Destinataires, séparés par des virgules"
+
+[labels.fr.model.outbound_mail.field.cc]
+label = "Copie"
+description = "Destinataires en copie, séparés par des virgules"
+
+[labels.fr.model.outbound_mail.field.bcc]
+label = "Cci"
+description = "Destinataires en copie cachée, séparés par des virgules ; jamais dans un en-tête"
+
+[labels.fr.model.outbound_mail.field.reply_to]
+label = "Répondre à"
+description = "Où vont les réponses ; vide signifie le réglage du serveur"
+
+[labels.fr.model.outbound_mail.field.subject]
+label = "Objet"
+description = "Ligne d’objet"
+
+[labels.fr.model.outbound_mail.field.body]
+label = "Texte"
+description = "Le texte, scellé ; effacé dès que le message est envoyé ou annulé"
+
+[labels.fr.model.outbound_mail.field.template]
+label = "Modèle"
+description = "Entrée de send : la clé du modèle à utiliser ; enregistrée"
+
+[labels.fr.model.outbound_mail.field.language]
+label = "Langue"
+description = "Entrée de send : la langue du modèle"
+
+[labels.fr.model.outbound_mail.field.language.options]
+en = "Anglais"
+de = "Allemand"
+fr = "Français"
+pl = "Polonais"
+fi = "Finnois"
+sv = "Suédois"
+es = "Espagnol"
+
+[labels.fr.model.outbound_mail.field.vars]
+label = "Valeurs"
+description = "Entrée de send : les valeurs du modèle en objet JSON ; jamais enregistrées"
+
+[labels.fr.model.outbound_mail.field.server]
+label = "Serveur de messagerie"
+description = "Le serveur de messagerie qui l’envoie"
+
+[labels.fr.model.outbound_mail.field.status]
+label = "Statut"
+description = "en file, en cours d’envoi, envoyé, échoué ou annulé"
+
+[labels.fr.model.outbound_mail.field.status.options]
+queued = "En file"
+sending = "Envoi en cours"
+sent = "Envoyé"
+failed = "Échoué"
+cancelled = "Annulé"
+
+[labels.fr.model.outbound_mail.field.attempts]
+label = "Tentatives"
+description = "Tentatives d’envoi jusqu’ici"
+
+[labels.fr.model.outbound_mail.field.next_attempt_at]
+label = "Prochaine tentative"
+description = "Quand il sera réessayé"
+
+[labels.fr.model.outbound_mail.field.queued_at]
+label = "Mis en file"
+description = "Quand il a été mis en file"
+
+[labels.fr.model.outbound_mail.field.sent_at]
+label = "Envoyé"
+description = "Quand le serveur ou le fournisseur l’a accepté"
+
+[labels.fr.model.outbound_mail.field.last_error]
+label = "Dernière erreur"
+description = "Pourquoi la dernière tentative a échoué, sans le texte ni les identifiants"
+
+[labels.fr.model.outbound_mail.field.server_reply]
+label = "Réponse du serveur"
+description = "La réponse du serveur ou du fournisseur au message accepté"
+
+[labels.fr.model.outbound_mail.field.message_id]
+label = "Message-ID"
+description = "L’en-tête Message-ID, le même à chaque tentative"
+
+[labels.fr.model.outbound_mail.field.related_model]
+label = "Modèle lié"
+description = "Le modèle de l’enregistrement concerné"
+
+[labels.fr.model.outbound_mail.field.related_id]
+label = "Enregistrement lié"
+description = "L’identifiant de cet enregistrement"
+
+[labels.fr.model.outbound_mail.field.requested_by]
+label = "Mis en file par"
+description = "Qui l’a mis en file"
+
+[labels.fr.model.outbound_mail.field.lease_until]
+label = "Réservé jusqu’à"
+description = "Réservation du processus, en secondes depuis 1970"
+
+[labels.fr.model.outbound_mail.field.due]
+label = "Échéance"
+description = "Quand il est dû, en secondes depuis 1970"
+
+[labels.fr.model.outbound_mail.action.send]
+label = "Envoyer"
+description = "Mettre un message en file : to, subject et body, ou template avec language et vars ; renvoie son identifiant. Le processus l’envoie après l’appel"
+done = "Message mis en file d’attente"
+
+[labels.fr.model.outbound_mail.action.retry]
+label = "Renvoyer"
+description = "Remettre en file un message échoué, tentatives à zéro"
+done = "Remis en file d'attente"
+
+[labels.fr.model.outbound_mail.action.cancel]
+label = "Annuler"
+description = "Annuler un message en file ; son texte est effacé"
+done = "Annulé"
+
+[labels.fr.model.outbound_mail.action.process]
+label = "Envoyer les messages dus"
+description = "Envoyer les messages dus maintenant (le processus le fait toutes les quelques secondes)"
+
+[labels.fr.model.mail_server]
+name = "Serveur de messagerie"
+plural = "Serveurs de messagerie"
+description = "Une sortie pour les e-mails : un relais SMTP, ou un fournisseur joint via une connexion des Connecteurs"
+
+[labels.fr.model.mail_server.field.name]
+label = "Nom"
+description = "Un nom qui distingue les serveurs"
+
+[labels.fr.model.mail_server.field.kind]
+label = "Envoie via"
+description = "smtp (un relais) ou provider (une API via une connexion des Connecteurs)"
+
+[labels.fr.model.mail_server.field.kind.options]
+smtp = "Relais SMTP"
+provider = "Fournisseur"
+
+[labels.fr.model.mail_server.field.enabled]
+label = "Activé"
+description = "Les e-mails peuvent sortir par ce serveur"
+
+[labels.fr.model.mail_server.field.is_default]
+label = "Serveur par défaut"
+description = "Utilisé pour tout type de message qu’aucun autre serveur ne liste"
+
+[labels.fr.model.mail_server.field.kinds]
+label = "Types de message"
+description = "Types de message envoyés par ce serveur, séparés par des virgules (par exemple invoice, password_reset) ; vide signifie tous"
+
+[labels.fr.model.mail_server.field.host]
+label = "Hôte"
+description = "SMTP : nom d’hôte du relais"
+
+[labels.fr.model.mail_server.field.port]
+label = "Numéro de port"
+description = "SMTP : port (587 pour STARTTLS, 465 pour TLS)"
+
+[labels.fr.model.mail_server.field.security]
+label = "Sécurité"
+description = "SMTP : starttls, tls ou none (none n’envoie pas de mot de passe)"
+
+[labels.fr.model.mail_server.field.security.options]
+starttls = "STARTTLS"
+tls = "TLS"
+none = "Aucune"
+
+[labels.fr.model.mail_server.field.allow_private_network]
+label = "Autoriser notre propre réseau"
+description = "SMTP : le relais peut se trouver sur le réseau de l’entreprise (une adresse privée comme 10.0.0.5), et la sécurité none y est acceptée ; désactivé par défaut, seule une personne l’active (docs/spec/mail.md 6)"
+
+[labels.fr.model.mail_server.field.username]
+label = "Nom d’utilisateur"
+description = "SMTP : nom d’utilisateur ; vide signifie sans authentification"
+
+[labels.fr.model.mail_server.field.password]
+label = "Mot de passe"
+description = "SMTP : mot de passe ; écriture seule, stocké chiffré, jamais renvoyé"
+
+[labels.fr.model.mail_server.field.password_set]
+label = "Mot de passe enregistré"
+description = "SMTP : si un mot de passe est enregistré"
+
+[labels.fr.model.mail_server.field.connection]
+label = "Connexion"
+description = "Fournisseur : la connexion des Connecteurs qui envoie"
+
+[labels.fr.model.mail_server.field.from_address]
+label = "Adresse de l’expéditeur"
+description = "Adresse d’expéditeur de chaque message de ce serveur"
+
+[labels.fr.model.mail_server.field.from_name]
+label = "Nom de l’expéditeur"
+description = "Nom de l’expéditeur affiché au destinataire"
+
+[labels.fr.model.mail_server.field.reply_to]
+label = "Adresse de réponse"
+description = "Où vont les réponses ; vide signifie l’adresse de l’expéditeur"
+
+[labels.fr.model.mail_server.field.footer]
+label = "Pied de message"
+description = "Texte ajouté sous chaque message, comme les coordonnées de l’entreprise ou comment ne plus recevoir ces messages"
+
+[labels.fr.model.mail_server.field.last_test_at]
+label = "Dernier test"
+description = "Quand le dernier message de test a été envoyé"
+
+[labels.fr.model.mail_server.field.last_test_result]
+label = "Résultat du dernier test"
+description = "Ce que le serveur a répondu au dernier message de test"
+
+[labels.fr.model.mail_server.field.last_test_outcome]
+label = "Issue du dernier test"
+description = "Comment le dernier test s’est terminé : envoyé, non envoyé pour l’instant ou refusé"
+
+[labels.fr.model.mail_server.field.last_test_outcome.options]
+sent = "Envoyé"
+temporary = "Non envoyé (temporaire)"
+permanent = "Non envoyé (refusé)"
+
+[labels.fr.model.mail_server.field.test_recipient]
+label = "Destinataire du test"
+description = "Entrée de test_send : l’adresse du message de test ; jamais enregistrée"
+
+[labels.fr.model.mail_server.action.test_send]
+label = "Envoyer un test"
+description = "Envoyer maintenant un court message de test par ce serveur à test_recipient et enregistrer la réponse"
+done = "Message de test envoyé"
+
+[labels.fr.model.mail_template]
+name = "Modèle d’e-mail"
+plural = "Modèles d’e-mail"
+description = "Objet et texte d’un type de message dans une langue, avec des espaces réservés (un nom entre doubles accolades)"
+
+[labels.fr.model.mail_template.field.key]
+label = "Clé"
+description = "Le type de message du modèle, par exemple invoice ou password_reset"
+
+[labels.fr.model.mail_template.field.language]
+label = "Langue"
+description = "Langue du texte"
+
+[labels.fr.model.mail_template.field.language.options]
+en = "Anglais"
+de = "Allemand"
+fr = "Français"
+pl = "Polonais"
+fi = "Finnois"
+sv = "Suédois"
+es = "Espagnol"
+
+[labels.fr.model.mail_template.field.subject]
+label = "Objet"
+description = "Ligne d’objet, avec des espaces réservés (un nom entre doubles accolades)"
+
+[labels.fr.model.mail_template.field.body]
+label = "Texte"
+description = "Texte, avec des espaces réservés (un nom entre doubles accolades)"

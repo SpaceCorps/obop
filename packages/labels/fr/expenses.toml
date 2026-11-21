@@ -73,18 +73,24 @@ refused = "Refusée"
 [labels.fr.model.expenses_expense.action.submit]
 label = "Soumettre"
 description = "Soumet la demande pour approbation"
+done = "Soumis pour approbation"
 
 [labels.fr.model.expenses_expense.action.approve]
 label = "Approuver"
 description = "Approuve une demande soumise (responsable uniquement)"
+done = "Note de frais approuvée"
 
 [labels.fr.model.expenses_expense.action.pay]
 label = "Payer"
 description = "Enregistre le remboursement comme payé (service financier uniquement) ; la date de paiement est aujourd’hui si aucune n’est indiquée"
+confirm = "Enregistrer cette note de frais comme payée ?"
+done = "Note de frais marquée payée"
 
 [labels.fr.model.expenses_expense.action.refuse]
 label = "Refuser"
 description = "Refuse une demande soumise (responsable uniquement)"
+confirm = "Refuser cette note de frais ? Une note refusée ne peut plus être modifiée."
+done = "Note de frais refusée"
 
 [labels.fr.model.expenses_expense.field.number]
 label = "Numéro"
@@ -93,3 +99,24 @@ description = "Numéro de demande tel que EXP-2026-0042, attribué à la créati
 [labels.fr.model.expenses_expense.field.receipt]
 description = "Photo ou scan du justificatif (PDF ou image) ; téléchargeable uniquement par les personnes qui peuvent lire la demande"
 label = "Justificatif"
+
+[labels.fr.model.expenses_expense.section.expense]
+label = "Dépense"
+
+[labels.fr.model.expenses_expense.section.notes]
+label = "Notes"
+
+[labels.fr.model.expenses_expense.section.claimed_by]
+label = "Demandé par"
+
+[labels.fr.model.expenses_expense.section.payment]
+label = "Paiement"
+
+[labels.fr.model.expenses_expense.filter.my_claims]
+label = "Mes notes de frais"
+
+[labels.fr.model.expenses_expense.filter.to_approve]
+label = "À approuver"
+
+[labels.fr.model.expenses_expense.filter.to_pay]
+label = "À payer"

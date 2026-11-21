@@ -109,6 +109,15 @@ description = "Det fullständiga namn som signeraren skrev (bevis); signer_name 
 label = "Version av samtycket"
 description = "Samtyckestextens id: dess version, språket för inskickningen (formulärets lang om det anger ett av de sju; om formuläret saknar fältet lang helt, adressens; annars webbläsarens, instansens och till sist engelska; inget bevis för sidan som visades) och de 8 första hextecknen i en hash av texterna på det språket, till exempel v1-draft/sv/9e91bef0"
 
+[labels.sv.model.sign_request.field.evidence_check]
+label = "Kontroll av bevis"
+description = "Om bevisen för en begäran som signerats via länk fortfarande stämmer med säkerhetsloggens post från signeringen (från Sign 0.3.0 även rubrik, meddelande och begärt namn): stämmer, avviker (ändrad efter signeringen) eller ingen post. Tas fram bara vid get, tom i listor. Inte förfalskningssäkert: den som kan skriva i databasen kan ändra båda"
+
+[labels.sv.model.sign_request.field.evidence_check.options]
+matches = "Stämmer"
+differs = "Avviker"
+no_entry = "Ingen post"
+
 [labels.sv.model.sign_request.field.state]
 label = "Status"
 description = "Begärans status: utkast, skickad, signerad, avböjd, utgången"
@@ -123,10 +132,13 @@ expired = "Utgången"
 [labels.sv.model.sign_request.action.send]
 label = "Skicka"
 description = "Skicka begäran till undertecknaren"
+done = "Skickad till undertecknaren"
 
 [labels.sv.model.sign_request.action.sign]
 label = "Signera"
 description = "Registrera för hand att undertecknaren har signerat; bara för en begäran utan dokument, eftersom en begäran om ett dokument signeras av undertecknaren via länken"
+confirm = "Registrera att undertecknaren har skrivit under? En begäran om ett dokument skrivs i stället under via sin signeringslänk."
+done = "Markerad som signerad"
 
 [labels.sv.model.sign_request.action.sign.assert.document_request]
 message = "En begäran om ett dokument signeras av undertecknaren via länken; den kan inte markeras som signerad för hand"
@@ -134,14 +146,19 @@ message = "En begäran om ett dokument signeras av undertecknaren via länken; d
 [labels.sv.model.sign_request.action.decline]
 label = "Avböj"
 description = "Registrera att undertecknaren avböjde"
+confirm = "Registrera att undertecknaren avböjde?"
+done = "Markerad som avböjd"
 
 [labels.sv.model.sign_request.action.expire]
 label = "Markera som utgången"
 description = "Registrera att begäran gick ut utan signatur"
+confirm = "Registrera att begäran gick ut utan underskrift?"
+done = "Markerad som utgången"
 
 [labels.sv.model.sign_request.action.send_document]
 label = "Skicka dokument"
 description = "Skicka en begäran om ett dokument i Dokument: tar PDF:ens SHA-256, sparar en exakt kopia och flyttar begäran till skickad; skapa därefter signeringslänken"
+done = "Skickad. Skapa signeringslänken härnäst."
 
 [labels.sv.model.sign_link]
 name = "Signeringslänk"
@@ -167,3 +184,24 @@ description = "När länken återkallades (UTC); sätt värdet för att återkal
 [labels.sv.model.sign_link.field.link]
 label = "Länkadress"
 description = "Själva länken: bara i svaret på create, visas en gång, sparas aldrig och returneras aldrig av get, list eller search"
+
+[labels.sv.model.sign_request.section.request]
+label = "Ärende"
+
+[labels.sv.model.sign_request.section.options]
+label = "Alternativ"
+
+[labels.sv.model.sign_request.section.sent_file]
+label = "Skickad fil"
+
+[labels.sv.model.sign_request.section.evidence]
+label = "Bevis"
+
+[labels.sv.model.sign_request.filter.waiting_for_signature]
+label = "Väntar på underskrift"
+
+[labels.sv.model.sign_request.filter.signed]
+label = "Underskrivna"
+
+[labels.sv.model.sign_request.filter.expiring_soon]
+label = "Går snart ut"

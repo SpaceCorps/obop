@@ -672,9 +672,14 @@ fn the_check_costs_the_same_in_a_model_of_any_size(small_url: &str, large_url: &
     let (large, large_runs) = work_in(large_url, 20_000);
     eprintln!("2,000 rows: {small:?}, {small_runs:?}");
     eprintln!("20,000 rows: {large:?}, {large_runs:?}");
-    // Every created row asked once for each of the two rules; the refused one only about the
-    // first, which it broke.
-    let asked = 2 * (20 + 50) + 1;
+    // Every single create asked once for each of the two rules; the refused one only about the
+    // first, which it broke. The bulk create asked for the keys of its 50 rows once per rule
+    // (K36), and its rows found their keys in that answer.
+    let asked = 2 * 20 + 1;
+    let bulk_keys = 2 * 50;
+    // The statements the backend ran: SQLite answers the keys of the bulk create one by one (a
+    // local file, no round trip), PostgreSQL in one statement per rule.
+    let statements = asked + if sqlite { bulk_keys } else { 2 };
     for (r, runs) in [(&small, &small_runs), (&large, &large_runs)] {
         // No read of the whole model, and no lookup on one field (a scan, on both databases).
         // (The one call of `list` is the sweep of expired idempotency answers after a bulk
@@ -682,11 +687,12 @@ fn the_check_costs_the_same_in_a_model_of_any_size(small_url: &str, large_url: &
         assert_eq!((r.list_rows, r.scan_rows, r.finds), (0, 0, 0), "{r:?}");
         assert_eq!(r.scans, 0, "{r:?}");
         assert_eq!(r.keyed, asked, "{r:?}");
+        assert_eq!((r.keyed_many, r.keyed_many_keys), (2, bulk_keys), "{r:?}");
         // And the answers held at most the one twin.
         assert!(r.keyed_rows <= 2, "{r:?}");
         // The backend ran its keyed statement for every one of them: it did not go the way of
         // `find`, which would give the same answers at the cost of the model.
-        assert_eq!((runs.keyed, runs.fallback), (asked, 0), "{runs:?}");
+        assert_eq!((runs.keyed, runs.fallback), (statements, 0), "{runs:?}");
     }
     // The same work reads the same, whatever the size of the model.
     assert_eq!(small, large);
@@ -696,7 +702,7 @@ fn the_check_costs_the_same_in_a_model_of_any_size(small_url: &str, large_url: &
         // 120,026 steps for one statement over 20,000 rows, see `obop-storage`'s
         // `the_work_sqlite_does_for_the_keyed_statement_does_not_grow_with_the_model`.)
         assert!(small_runs.vm_steps > 0, "{small_runs:?}");
-        assert!(small_runs.vm_steps < 100 * asked, "{small_runs:?}");
+        assert!(small_runs.vm_steps < 100 * statements, "{small_runs:?}");
         assert!(
             large_runs.vm_steps <= small_runs.vm_steps + small_runs.vm_steps / 10,
             "{small_runs:?} {large_runs:?}"
@@ -718,6 +724,49 @@ fn with_postgres_the_check_reads_the_same_few_rows_in_a_model_of_any_size() {
     let small = obop_storage::testing::TestDb::create(&base).unwrap();
     let large = obop_storage::testing::TestDb::create(&base).unwrap();
     the_check_costs_the_same_in_a_model_of_any_size(small.url(), large.url(), false);
+}
+
+/// Keys that cannot be valid (a fraction, a list, an object in a text field) are not asked ahead:
+/// the rows are refused by their type check, and no lookup of them reads the model (`find`).
+fn wrongly_typed_keys_are_not_looked_up(url: &str) {
+    let (_flaky, store) = tallied_over(url);
+    let b = Bench::over(store);
+    load(&b, 50);
+    obop_storage::testing::reset_unique_runs();
+    let rows = Value::List(
+        (0..30)
+            .map(|i| {
+                let code = match i % 3 {
+                    0 => Value::Num(format!("{i}.5")),
+                    1 => Value::List(vec![t("a")]),
+                    _ => m(vec![("x", t("y"))]),
+                };
+                m(vec![("code", code), ("note", t("bad"))])
+            })
+            .collect(),
+    );
+    let out = b.call(&Bench::user(), "bulk_create", m(vec![("rows", rows)]));
+    assert!(
+        out.as_ref().map(|o| created(&o.value) == 0).unwrap_or(true),
+        "{out:?}"
+    );
+    let runs = obop_storage::testing::unique_runs();
+    assert_eq!(runs.fallback, 0, "{runs:?}");
+}
+
+#[test]
+fn wrongly_typed_keys_of_a_bulk_call_read_no_model() {
+    wrongly_typed_keys_are_not_looked_up("sqlite::memory:");
+}
+
+#[test]
+fn with_postgres_wrongly_typed_keys_of_a_bulk_call_read_no_model() {
+    let Ok(base) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+        eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
+        return;
+    };
+    let db = obop_storage::testing::TestDb::create(&base).unwrap();
+    wrongly_typed_keys_are_not_looked_up(db.url());
 }
 
 // ---- the database as the last word ---------------------------------------------------------
@@ -1107,5 +1156,42 @@ fn a_row_that_failed_leaves_nothing_behind_in_a_bulk_call() {
         assert_eq!(failed, [1, 3, 4], "{url}");
         assert_eq!(created(&out), 2, "{url}");
         assert_eq!(it.store.backend.count(&it.model).unwrap(), 3, "{url}");
+    }
+}
+
+// ---- K41: the unique indexes no model declares ----------------------------------------------
+
+/// The index of a removed rule or an uninstalled module is listed as orphaned, the indexes of the
+/// registered models are not, and only an `obop_uq_` name can be dropped. On SQLite always, and
+/// on PostgreSQL in a scratch database when `OBOP_TEST_POSTGRES_URL` is set.
+#[test]
+fn an_index_no_registered_model_declares_is_listed_and_can_be_dropped() {
+    let path = obop_storage::testing::TempPath::new("prune-idx");
+    let pg = obop_storage::testing::TestDb::new();
+    let mut urls = vec![path.url()];
+    if let Some(db) = &pg {
+        urls.push(db.url().to_string());
+    }
+    for url in urls {
+        let store = Store::open(&url).unwrap();
+        let d = Dispatcher::new();
+        d.register_crud(&item_module("kp"), &store);
+        let b = store.backend();
+        let mut ours = b.unique_indexes().unwrap();
+        ours.sort();
+        assert_eq!(ours.len(), 3, "{url}: {ours:?}");
+        assert!(d.orphaned_unique_indexes(&*b).unwrap().is_empty());
+        // What an uninstalled module left behind.
+        b.ensure_unique("obop_uq_gone_code", "gone", &["code"])
+            .unwrap();
+        assert_eq!(
+            d.orphaned_unique_indexes(&*b).unwrap(),
+            vec!["obop_uq_gone_code".to_string()]
+        );
+        assert!(b.drop_unique_index("obop_record_pkey").is_err());
+        assert!(b.drop_unique_index("obop_uq_x; DROP TABLE t").is_err());
+        b.drop_unique_index("obop_uq_gone_code").unwrap();
+        assert!(d.orphaned_unique_indexes(&*b).unwrap().is_empty());
+        assert_eq!(b.unique_indexes().unwrap().len(), 3);
     }
 }

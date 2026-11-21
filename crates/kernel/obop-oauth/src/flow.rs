@@ -108,11 +108,12 @@ pub struct FlowCtx {
     pub preselected: Vec<String>,
     /// Whether the sign-in page offers "Sign in with Microsoft". The OAuth crate cannot see the
     /// provider (it has no HTTP client and no connectors runtime), so `obop-http` sets this after
-    /// `view`: the connectors runtime exists, the provider is configured and enabled, and the
-    /// client is a mobile app. Never set for an MCP client.
+    /// `view`: the connectors runtime exists and the provider is configured and enabled. For a
+    /// mobile app's flow and an MCP client's alike (N5).
     pub microsoft: bool,
-    /// The longest the person may hand over for, in days: the cap of a Microsoft-only account on
-    /// a mobile app's flow once somebody is signed in on it, else the general maximum.
+    /// The longest the person may hand over for, in days: the cap of a Microsoft-only account
+    /// once somebody is signed in on the flow (a phone's or an MCP client's), else the general
+    /// maximum.
     pub max_days: u32,
     /// The instance brand every page of this request shows: the one the handler read at the start
     /// of the request (docs/spec/branding.md, section 4), so that the name and the logo of a page
@@ -261,20 +262,36 @@ impl OAuth {
         base: &str,
         p: &AuthorizeParams,
     ) -> Result<Validated, AuthzError> {
+        self.validate_authorize_from(base, p, None)
+    }
+
+    /// As `validate_authorize`, for a request from the client address `ip`: a metadata document
+    /// the request makes the server read is counted against that address too (E7i).
+    pub fn validate_authorize_from(
+        &self,
+        base: &str,
+        p: &AuthorizeParams,
+        ip: Option<&str>,
+    ) -> Result<Validated, AuthzError> {
         let page = |key| AuthzError::Page { key };
         let client = p
             .client_id
             .as_deref()
-            .and_then(|id| self.client(id))
+            .and_then(|id| self.client_from(id, ip))
             .ok_or(page("err.client"))?;
         let matches = |u: &str| match client.class {
-            Class::Mcp => redirect::matches(&client.redirect_uris, u),
+            // A client registered before the operator listed the hosts is held to the list too.
+            Class::Mcp => {
+                redirect::matches(&client.redirect_uris, u) && self.cfg.mcp_redirect_allowed(u)
+            }
             Class::Mobile => redirect::matches_mobile(&client.redirect_uris, u),
         };
         let redirect_uri = match p.redirect_uri.as_deref() {
             Some(u) if matches(u) => u.to_string(),
             Some(_) => return Err(page("err.redirect")),
-            None if client.redirect_uris.len() == 1 => client.redirect_uris[0].clone(),
+            None if client.redirect_uris.len() == 1 && matches(&client.redirect_uris[0]) => {
+                client.redirect_uris[0].clone()
+            }
             None => return Err(page("err.redirect")),
         };
         let state = p
@@ -513,10 +530,8 @@ impl OAuth {
     pub fn view(&self, id: &str, binder: &str, brand: &Arc<Shown>) -> Result<FlowCtx, FlowError> {
         let rec = self.load(id, binder, None)?;
         let mut ctx = self.ctx(id, &rec, brand);
-        if ctx.class.is_mobile()
-            && let Some(user) = ctx.user.as_deref()
-        {
-            ctx.max_days = self.phone_cap(user)?;
+        if let Some(user) = ctx.user.as_deref() {
+            ctx.max_days = self.grant_cap(user)?;
         }
         Ok(ctx)
     }
@@ -529,9 +544,9 @@ impl OAuth {
         self.view(id, binder, &Arc::new(Shown::not_set(None)))
     }
 
-    /// The longest a phone grant of `user` may last. A refused read is not "no cap": the page is
+    /// The longest a grant of `user` may last (a phone's or an MCP client's). A refused read is not "no cap": the page is
     /// not shown, and the decision is not taken, on a guess about the kind of account.
-    fn phone_cap(&self, user: &str) -> Result<u32, FlowError> {
+    fn grant_cap(&self, user: &str) -> Result<u32, FlowError> {
         self.tokens()
             .is_microsoft_only(user)
             .map(max_days)
@@ -646,13 +661,32 @@ impl OAuth {
         csrf: &str,
         mfa_token: Option<&str>,
     ) -> Result<J, FlowError> {
+        self.passkey_options_for(ctx, id, binder, csrf, mfa_token, None)
+    }
+
+    /// As `passkey_options`; with a `username` typed on the page and no `mfa_token`, the options
+    /// of that name (username-first, E7c: its keys, or the same stand-in ids for any name that
+    /// has none, so the answer does not say whether the name exists).
+    pub fn passkey_options_for(
+        &self,
+        ctx: &obop_commands::WebauthnCtx,
+        id: &str,
+        binder: &str,
+        csrf: &str,
+        mfa_token: Option<&str>,
+        username: Option<&str>,
+    ) -> Result<J, FlowError> {
         let _ = self.load(id, binder, Some(csrf))?;
         let api = self.auth.passkeys().ok_or(FlowError::Forbidden)?;
-        api.passkey_login_options(ctx, mfa_token)
-            .map_err(|e| match e {
-                obop_commands::MfaError::Locked(_) => FlowError::Busy(60),
-                _ => FlowError::Forbidden,
-            })
+        let name = username.map(str::trim).filter(|n| !n.is_empty());
+        match (mfa_token, name) {
+            (None, Some(name)) => api.passkey_login_options_for(ctx, name),
+            _ => api.passkey_login_options(ctx, mfa_token),
+        }
+        .map_err(|e| match e {
+            obop_commands::MfaError::Locked(_) => FlowError::Busy(60),
+            _ => FlowError::Forbidden,
+        })
     }
 
     /// The browser's answer to a passkey request: signs in without a password, or completes the
@@ -674,8 +708,16 @@ impl OAuth {
         )
         .map_err(|e| FlowError::Busy(e.retry_after.unwrap_or(60)))?;
         let api = self.auth.passkeys().ok_or(FlowError::Forbidden)?;
-        match api.passkey_login(ctx, mfa_token, credential) {
-            Ok(out) => self.after_login(id, &mut rec, out),
+        match api.passkey_login_seen(ctx, mfa_token, credential) {
+            Ok((out, seen)) => {
+                // A sign-in by passkey alone: the epoch its check compared is the baseline (L19),
+                // never one read after it.
+                if let Some((user, epoch)) = seen {
+                    rec["pre_user"] = J::from(user);
+                    rec["pre_epoch"] = epoch.map_or(J::Null, J::from);
+                }
+                self.after_login(id, &mut rec, out)
+            }
             Err(obop_commands::MfaError::Locked(_)) => {
                 self.count_attempt(id, &mut rec)?;
                 let _ = self.flow_put(id, &rec);
@@ -755,16 +797,12 @@ impl OAuth {
     fn seat(&self, rec: &mut J, who: &str) -> Result<(), FlowError> {
         if Class::of_record(rec).is_mobile() {
             // The epoch read before the credential was looked at, when it is for the same person:
-            // a sign-in by password, with or without a second factor, or by Microsoft (the epoch
-            // its sign-in compared). A sign-in by passkey alone has no earlier read, because the
-            // person is known only once the assertion has been checked, so the epoch is read
-            // here, after it. A credential change (a passkey removed, a reset, a new password)
-            // that commits between the check of the assertion and this read, the few
-            // milliseconds of resolving and revoking one session, is therefore not seen by the
-            // later compares, which hold this baseline: that sign-in can finish for a credential
-            // that had just been removed, and ends with the next change of credentials or by
-            // revoking the device (docs/ISSUES.md L19). The exchange of the code closes every
-            // other window, atomically.
+            // a sign-in by password, with or without a second factor, by Microsoft (the epoch its
+            // sign-in compared) or by passkey alone (the epoch the check of the assertion
+            // compared, L19). A credential change that commits after that read is seen by the
+            // later compares, which hold this baseline. Only a flow with no such read for this
+            // person reads the epoch here; the exchange of the code closes every other window,
+            // atomically.
             let epoch = if rec["pre_user"].as_str() == Some(who) {
                 rec["pre_epoch"].as_str().map(String::from)
             } else {
@@ -785,15 +823,15 @@ impl OAuth {
         Ok(())
     }
 
-    // ---- the Microsoft step of a mobile app's sign-in (the phone leg of D91) -----------------------
+    // ---- the Microsoft step of the sign-in pages (the phone leg of D91, and MCP clients, N5) -----
 
-    /// The start of the Microsoft step for flow `id`, for the browser holding `binder`: the flow
-    /// must be a mobile app's, and nobody signed in yet. (No CSRF token: this is a link, and the
+    /// The start of the Microsoft step for flow `id`, for the browser holding `binder`: nobody
+    /// may be signed in on the flow yet. (No CSRF token: this is a link, and the
     /// binder cookie is the proof; what it starts is only a round trip to the provider.) Returns
     /// the language of the flow's pages.
     pub fn microsoft_start(&self, id: &str, binder: &str) -> Result<String, FlowError> {
         let rec = self.load(id, binder, None)?;
-        if !Class::of_record(&rec).is_mobile() || rec["user"].as_str().is_some() {
+        if rec["user"].as_str().is_some() {
             return Err(FlowError::Forbidden);
         }
         Ok(rec["lang"].as_str().unwrap_or("en").to_string())
@@ -852,9 +890,6 @@ impl OAuth {
                 .map_err(|_| FlowError::Gone)?
                 .ok_or(FlowError::Gone)?;
             let mut rec: J = serde_json::from_str(&raw).map_err(|_| FlowError::Gone)?;
-            if !Class::of_record(&rec).is_mobile() {
-                return Err(FlowError::Forbidden);
-            }
             match (&placed, &signed) {
                 (Placed::Person(who), Some(s)) => {
                     rec["pre_user"] = J::from(s.user.as_str());
@@ -910,9 +945,6 @@ impl OAuth {
         ip: &str,
     ) -> Result<LoginOut, FlowError> {
         let rec = self.load(id, binder, None)?;
-        if !Class::of_record(&rec).is_mobile() {
-            return Err(FlowError::Forbidden);
-        }
         if rec["user"].as_str().is_some() {
             return Ok(LoginOut::Consent);
         }
@@ -1049,7 +1081,7 @@ impl OAuth {
         }
         // The cap of a Microsoft-only account, again on the server: a form that was posted by
         // hand gets nothing the page did not list.
-        if class.is_mobile() && days > self.phone_cap(&user)? {
+        if days > self.grant_cap(&user)? {
             return Ok(DecideOut::Retry("err.expiry_cap"));
         }
         // Whoever deletes the flow first is the one answer.

@@ -990,6 +990,11 @@ impl Site {
         if let Err(r) = self.check_post(ctx, &form) {
             return r;
         }
+        // The language of the page the form was on (its hidden `lang`), so the order records the
+        // titles the buyer read also when no cookie carries the language (G10).
+        if let Some(l) = crate::i18n::Lang::parse(form.get("lang")) {
+            ctx.lang = l;
+        }
         // A bot fills the hidden field: it gets a page that looks like success and nothing is
         // created.
         if !form.get("website").is_empty() {
@@ -1178,7 +1183,9 @@ impl Site {
             let mut server = BTreeMap::from([
                 (
                     "description".to_string(),
-                    Value::text(&truncate_chars(l.rec.text("title"), 200)),
+                    // The title the buyer saw: the listing's translation in the language of
+                    // the checkout, else the default title (G10).
+                    Value::text(&truncate_chars(pick(&l.rec, l.tr.as_ref(), "title"), 200)),
                 ),
                 ("unit_price".to_string(), Value::Int(l.unit)),
                 ("subtotal".to_string(), Value::Int(l.out.gross)),

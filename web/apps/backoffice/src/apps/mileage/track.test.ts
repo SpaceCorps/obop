@@ -58,6 +58,47 @@ describe("mileage track", () => {
     expect(dy).toBeLessThanOrEqual(200);
   });
 
+  it("leaves out a far-off first fix that the check of the track re-anchored away from (UB10)", () => {
+    // The phone stood at a far-off place for one fix (good accuracy), then 30 fixes about 140 m
+    // apart every 10 s: the server re-anchors on them and the trip starts there.
+    const at = (i: number) => new Date(Date.UTC(2026, 10, 3, 13, 0, i * 10)).toISOString();
+    const rows = [
+      { ...r("far", "37.4219983", "-122.0840000"), seq: 1, recorded_at: at(0) },
+      ...Array.from({ length: 30 }, (_, i) => ({
+        ...r(String(i), (53.55 + i * 0.001).toFixed(7), (9.93 + i * 0.001).toFixed(7)),
+        seq: i + 2,
+        recorded_at: at(i + 1),
+      })),
+    ];
+    const d = drawRoute(pointsOf(rows), 320, 200, 16, at(0));
+    expect(d.dropped).toHaveLength(1);
+    // The route fills the box and is one line from its start to its end.
+    const [sx, sy] = d.start!;
+    const [ex, ey] = d.end!;
+    expect(Math.hypot(ex - sx, ey - sy)).toBeGreaterThan(150);
+    expect(d.path.split("M")).toHaveLength(2);
+    expect(d.path.split("L")).toHaveLength(30);
+  });
+
+  it("draws a jump after a drive as two lines, not as a line across it", () => {
+    const at = (i: number) => new Date(Date.UTC(2026, 10, 3, 13, 0, i * 5)).toISOString();
+    const rows = [
+      ...[0, 1, 2, 3].map((i) => ({
+        ...r(`a${i}`, (50 + i * 0.00045).toFixed(7), "10.0000000"),
+        seq: i + 1,
+        recorded_at: at(i),
+      })),
+      ...[0, 1, 2].map((i) => ({
+        ...r(`b${i}`, (50.1 + i * 0.00045).toFixed(7), "10.0000000"),
+        seq: i + 5,
+        recorded_at: at(i + 4),
+      })),
+    ];
+    const d = drawRoute(pointsOf(rows), 320, 200);
+    expect(d.dropped).toHaveLength(0);
+    expect(d.path.split("M")).toHaveLength(3);
+  });
+
   it("draws nothing without points", () => {
     expect(drawRoute([], 320, 200).path).toBe("");
   });
@@ -93,5 +134,11 @@ describe("mileage track", () => {
     const unknown = checkNotes("something_new:1", 10, true);
     expect(unknown.map((n) => n.tone)).toEqual(["warn"]);
     expect(checkNotes("", 10, false)).toEqual([]);
+  });
+  it("never calls a track of no points clean, and names a route removed for a private purpose", () => {
+    expect(checkNotes("", 0, true)).toEqual([]);
+    const removed = checkNotes("route_removed:10", 0, true);
+    expect(removed.map((n) => n.tone)).toEqual(["warn"]);
+    expect(removed[0].text).toContain("removed when the trip was marked private (10 points)");
   });
 });

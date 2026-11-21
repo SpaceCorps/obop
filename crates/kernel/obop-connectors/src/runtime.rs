@@ -10,7 +10,7 @@ use obop_storage::{Backend, Fields};
 use serde_json::{Map, Value as J, json};
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use crate::catalog::{Engine, Provider, providers};
@@ -69,7 +69,9 @@ pub enum HookError {
 
 pub struct Runtime {
     pub backend: Arc<dyn Backend>,
-    pub dispatcher: Arc<Dispatcher>,
+    /// Weak (U41): the dispatcher holds this runtime through the handlers it registers, so a
+    /// strong reference here would be a cycle that keeps both, and the store, alive for ever.
+    dispatcher: Weak<Dispatcher>,
     pub secrets: SecretBox,
     pub egress: Arc<Egress>,
     pub ingress: Ingress,
@@ -81,6 +83,9 @@ pub struct Runtime {
     /// delivers events, so a call that erases a party leaves the work to it.
     started: AtomicBool,
 }
+
+/// Why an OAuth flow of a revoked connection stores nothing.
+const REVOKED: &str = "the connection was revoked; start a new one";
 
 /// The key prefix of the notes that an erasure is owed.
 const ERASURE_OWED: &str = "connectors.erase:";
@@ -116,7 +121,7 @@ impl Runtime {
         let egress = Arc::new(Egress::new(
             backend.clone(),
             secrets.clone(),
-            dispatcher.clone(),
+            Arc::new(crate::egress::WeakCatalog(Arc::downgrade(&dispatcher))),
         ));
         let client = client.unwrap_or_else(|| {
             let client = Client::new(ClientConfig {
@@ -134,9 +139,9 @@ impl Runtime {
         });
         let queue = Queue::new(backend.clone(), secrets.clone());
         Arc::new(Self {
-            ingress: Ingress::new(backend.clone(), egress.clone(), dispatcher.clone()),
+            ingress: Ingress::new(backend.clone(), egress.clone(), Arc::downgrade(&dispatcher)),
             backend,
-            dispatcher,
+            dispatcher: Arc::downgrade(&dispatcher),
             secrets,
             egress,
             client,
@@ -218,7 +223,8 @@ impl Runtime {
         // What a connector may use: the groups of this one model (read, write and its actions).
         let scopes = self
             .dispatcher
-            .model_def(model)
+            .upgrade()
+            .and_then(|d| d.model_def(model))
             .map(|d| {
                 let mut g = vec![d.read_group.to_string(), d.write_group.to_string()];
                 g.extend(d.commands.iter().map(|c| c.permission_group.to_string()));
@@ -244,7 +250,9 @@ impl Runtime {
     /// group, so nothing more is readable than the owner could read.
     pub fn reader_for(&self, id: &str, groups: &[String], model: &str) -> Principal {
         let mut scopes: Vec<&str> = Vec::new();
-        let mut next = self.dispatcher.model_def(model);
+        // Without a dispatcher (the server is going away) the principal is scoped to nothing.
+        let disp = self.dispatcher.upgrade();
+        let mut next = disp.as_ref().and_then(|x| x.model_def(model));
         // The access rule follows at most four parents (`engine::access::MAX_HOPS`).
         for _ in 0..=4 {
             let Some(d) = next.take() else { break };
@@ -264,7 +272,7 @@ impl Runtime {
                 .and_then(|a| a.via)
                 .and_then(|f| d.fields.iter().find(|x| x.name == f))
                 .and_then(|x| x.kind.target())
-                .and_then(|t| self.dispatcher.model_def(t));
+                .and_then(|t| disp.as_ref().and_then(|x| x.model_def(t)));
         }
         let refs: Vec<&str> = groups.iter().map(String::as_str).collect();
         let mut p = Principal::agent(&format!("connector:{id}"), &refs, &scopes);
@@ -299,13 +307,13 @@ impl Runtime {
             CallError::Handler(m) if Fault::is_transient(&m) => m,
             _ => format!("the owner of this connection may not read {model}"),
         };
+        let d = self.dispatcher()?;
         let mut out = Vec::new();
         let mut v = Vault::new();
         match ids {
             Some(ids) => {
                 for id in ids.iter().take(MAX_ROWS_PER_FLOW) {
-                    let r = self
-                        .dispatcher
+                    let r = d
                         .call(
                             Surface::Rest,
                             &p,
@@ -321,8 +329,7 @@ impl Runtime {
             }
             None => {
                 let input = Value::map([("limit", Value::Int(MAX_ROWS_PER_FLOW as i64))]);
-                let r = self
-                    .dispatcher
+                let r = d
                     .call(Surface::Rest, &p, &mut v, &format!("{model}.list"), &input)
                     .map_err(refused)?;
                 if let J::Array(a) = j(&r.value) {
@@ -331,6 +338,14 @@ impl Runtime {
             }
         }
         Ok(out)
+    }
+
+    /// The dispatcher, while the application that made this runtime is alive (U41). A call after
+    /// it is gone is refused: the server is shutting down.
+    pub fn dispatcher(&self) -> Result<Arc<Dispatcher>, String> {
+        self.dispatcher
+            .upgrade()
+            .ok_or_else(|| "the server is shutting down; try again".to_string())
     }
 
     /// Seal a credentials object for storage.
@@ -514,7 +529,10 @@ impl Runtime {
         if p.body_format != "slack" {
             return Ok(String::new());
         }
-        match self.dispatcher.brand().fresh() {
+        let Some(d) = self.dispatcher.upgrade() else {
+            return Err(Self::NAME_REFUSED.to_string());
+        };
+        match d.brand().fresh() {
             Ok(read) => Ok(read.shown().brand().name().to_string()),
             // The pool has noted the fault on this thread, so the layer above answers a request by
             // D74 and an earlier fault of the request stays the first; the text keeps the code word
@@ -842,7 +860,7 @@ impl Runtime {
         let (c, p) = self.connection(connection)?;
         match p.engine {
             Engine::RestPull => return self.pull(connection),
-            Engine::WebhookIn | Engine::Browse | Engine::None => {
+            Engine::WebhookIn | Engine::Browse | Engine::Mail | Engine::None => {
                 return Err(format!("{} has nothing to send", p.name));
             }
             _ => {}
@@ -1318,6 +1336,11 @@ impl Runtime {
     pub fn oauth_callback(&self, state: &str, code: &str) -> Result<String, String> {
         let (pending, verifier) = oauth::take_state(&*self.backend, &self.secrets, state)?;
         let (c, p) = self.connection(&pending.connection)?;
+        // A connection revoked while its flow was open gets no tokens (K19): the code is not
+        // even exchanged.
+        if c.state == "revoked" {
+            return Err(REVOKED.into());
+        }
         let cfg = self.oauth_config(&c, &p)?;
         let hosts = self.oauth_hosts(&p, &cfg);
         let tokens = oauth::exchange_code(&self.client, &cfg, code, &verifier, &hosts)?;
@@ -1362,10 +1385,29 @@ impl Runtime {
         // What the provider did cannot be taken back.
         obop_storage::fault::external_change();
         obop_storage::fault::needed(|| {
-            if self.backend.update(CONNECTION, &c.id, &f)? {
-                Ok(())
-            } else {
-                Err(format!("no connection {}", c.id))
+            // Asked again right before the write: the connection may have been revoked while the
+            // provider answered (K19), and a revoked connection keeps no tokens.
+            match self.backend.get(CONNECTION, &c.id)? {
+                None => return Err(format!("no connection {}", c.id)),
+                Some(now) if now.get("state").and_then(J::as_str) == Some("revoked") => {
+                    return Err(REVOKED.into());
+                }
+                Some(_) => {}
+            }
+            if !self.backend.update(CONNECTION, &c.id, &f)? {
+                return Err(format!("no connection {}", c.id));
+            }
+            // And after it: a revocation that came between the check and the write set the state
+            // before it cleared the tokens, so a revoked state here means the tokens just written
+            // may have outlived its clearing. They are cleared again.
+            match self.backend.get(CONNECTION, &c.id)? {
+                Some(now) if now.get("state").and_then(J::as_str) == Some("revoked") => {
+                    let mut clear = Fields::new();
+                    clear.insert("oauth_tokens".into(), "".into());
+                    self.backend.update(CONNECTION, &c.id, &clear)?;
+                    Err(REVOKED.into())
+                }
+                _ => Ok(()),
             }
         })
     }
@@ -1474,6 +1516,15 @@ impl Runtime {
                 }
                 notes.push("the account is authorised".into());
             }
+            Engine::Mail => {
+                if p.auth_kind == "oauth2" && c.oauth_tokens.is_empty() {
+                    return Err("the connection is not authorised yet".into());
+                }
+                notes.push(
+                    "send a test message from the mail server in Customize, Mail: this check sends nothing"
+                        .into(),
+                );
+            }
             Engine::None => return Err("this provider is a definition only; nothing runs".into()),
         }
         Ok(json!({"ok": true, "checks": notes}))
@@ -1500,6 +1551,8 @@ impl Runtime {
         f.insert("credentials_hint".into(), "revoked".into());
         f.insert("oauth_tokens".into(), "".into());
         needed(|| self.backend.update(CONNECTION, connection, &f).map(|_| ()))?;
+        // A flow started before the revocation cannot finish after it (K19).
+        needed(|| oauth::end_flows(&*self.backend, connection))?;
         needed(|| self.queue.drop_connection(connection))?;
         needed(|| self.egress.forget_connection(connection))
     }
@@ -1535,7 +1588,10 @@ impl Runtime {
     /// sealed values and external-id links of the person for ever with no trace.
     pub fn observe_erasures(self: &Arc<Self>) {
         let this = Arc::downgrade(self);
-        self.dispatcher.observe(
+        let Some(d) = self.dispatcher.upgrade() else {
+            return;
+        };
+        d.observe(
             "connectors",
             Box::new(move |command, _p, input, out| {
                 if command != "party.erase" {
@@ -1728,7 +1784,10 @@ impl Runtime {
         self.started.store(true, Ordering::SeqCst);
         let (tx, rx) = std::sync::mpsc::channel::<(String, String)>();
         let tx = Mutex::new(tx);
-        self.dispatcher.observe(
+        let Some(d) = self.dispatcher.upgrade() else {
+            return;
+        };
+        d.observe(
             "connectors",
             Box::new(move |command, _p, input, out| {
                 // A bulk create (D70) is one `create` event per record it made.
@@ -1856,5 +1915,54 @@ mod config_tests {
         let c = with(&[("OBOP_PUBLIC_URL", "https://obop.example/"), ("X", "1")]);
         assert_eq!(c.public_url.as_deref(), Some("https://obop.example"));
         assert_eq!(with(&[("OBOP_PUBLIC_URL", "")]).public_url, None);
+    }
+}
+
+#[cfg(test)]
+mod revoke_race_tests {
+    use super::*;
+    use obop_storage::testing::Flaky;
+
+    /// K19: a revocation that lands between the re-check of `store_tokens` and its write leaves
+    /// no tokens on the revoked connection.
+    #[test]
+    fn a_revocation_between_the_check_and_the_write_leaves_no_tokens() {
+        let b = obop_storage::open("memory:").unwrap();
+        let flaky = Flaky::new(b.clone());
+        let rt = Runtime::with_providers(
+            flaky.clone(),
+            Arc::new(Dispatcher::new()),
+            SecretBox::for_tests(),
+            Config::default(),
+            providers(),
+            Some(Client::new(ClientConfig::default())),
+        );
+        let row = json!({"name": "Hook", "provider": "webhook_out", "state": "connected",
+            "retention_days": 30, "oauth_tokens": ""});
+        b.insert(CONNECTION, "c1", row.as_object().unwrap())
+            .unwrap();
+        let c = Connection::load(&*b, "c1").unwrap();
+        let tokens = Tokens::from_json(&json!({
+            "access_token": "a", "refresh_token": "r", "expires_at": 4_000_000_000u64
+        }))
+        .unwrap();
+        // The revocation, as `connection.revoke` does it: the state first, then the tokens.
+        flaky.after_the_get_of(
+            CONNECTION,
+            0,
+            Box::new(|b| {
+                let mut f = Fields::new();
+                f.insert("state".into(), "revoked".into());
+                b.update(CONNECTION, "c1", &f).unwrap();
+                let mut f = Fields::new();
+                f.insert("oauth_tokens".into(), "".into());
+                b.update(CONNECTION, "c1", &f).unwrap();
+            }),
+        );
+        let e = rt.store_tokens(&c, &tokens).unwrap_err();
+        assert!(e.contains("revoked"), "{e}");
+        let now = b.get(CONNECTION, "c1").unwrap().unwrap();
+        assert_eq!(now["state"], "revoked");
+        assert_eq!(now["oauth_tokens"], "", "no tokens on a revoked connection");
     }
 }

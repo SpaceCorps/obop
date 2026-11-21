@@ -399,18 +399,6 @@ export const fmt = {
     N.nf(formatLocale(), { style: "percent", maximumFractionDigits: digits }).format(n),
   /** Format a Date with Intl options in the active format locale. */
   dateOf: (d: Date, o: Intl.DateTimeFormatOptions) => N.df(formatLocale(), o).format(d),
-  /** First day of the week in the active format locale, 1 = Monday ... 7 = Sunday. */
-  firstDay: (): number => {
-    try {
-      const l = new Intl.Locale(formatLocale()) as Intl.Locale & {
-        getWeekInfo?: () => { firstDay: number };
-        weekInfo?: { firstDay: number };
-      };
-      return (l.getWeekInfo?.() ?? l.weekInfo)?.firstDay ?? 1;
-    } catch {
-      return 1;
-    }
-  },
   money: (minor: unknown, currency?: string) =>
     N.formatMoney(minor, currency ?? S.currency, formatLocale()),
   /** The amount as typed in an edit field ("12,50" for a German locale). */
@@ -429,6 +417,23 @@ export const fmt = {
   /** Decimal and group separators of the active format locale. */
   separators: () => N.separators(formatLocale()),
 };
+
+/**
+ * First day of the week in the active format locale, 1 = Monday ... 7 = Sunday. It follows the
+ * region, so it is a function of its own that the i18n guard holds a memo to (`REGION_SEEDS`,
+ * ISSUES.md D14), not a member of `fmt`.
+ */
+export function firstDayOfWeek(): number {
+  try {
+    const l = new Intl.Locale(formatLocale()) as Intl.Locale & {
+      getWeekInfo?: () => { firstDay: number };
+      weekInfo?: { firstDay: number };
+    };
+    return (l.getWeekInfo?.() ?? l.weekInfo)?.firstDay ?? 1;
+  } catch {
+    return 1;
+  }
+}
 
 let collator: { loc: string; c: Intl.Collator } | null = null;
 /** Collation-aware comparison for client-side sorts (accents, case and numbers in the active locale). */

@@ -60,6 +60,7 @@ description = "Gör ett planerat projekt aktivt"
 [labels.sv.model.projects_project.action.finish]
 label = "Avsluta"
 description = "Markera ett aktivt projekt som klart"
+done = "Projektet klart"
 
 [labels.sv.model.projects_project.action.reopen]
 label = "Öppna igen"
@@ -102,6 +103,7 @@ description = "Markera en väntande milstolpe som nådd"
 [labels.sv.model.projects_milestone.action.miss]
 label = "Markera som missad"
 description = "Registrera att en väntande milstolpe missades"
+confirm = "Registrera den här milstolpen som missad?"
 
 [labels.sv.model.projects_task]
 name = "Uppgift"
@@ -166,6 +168,7 @@ description = "Markera en pågående uppgift som klar"
 [labels.sv.model.projects_task.action.cancel]
 label = "Annullera"
 description = "Lägg ner en uppgift som aldrig påbörjades"
+confirm = "Avbryta den här uppgiften?"
 
 [labels.sv.model.projects_project.field.estimate_minutes]
 label = "Uppskattning (minuter)"
@@ -194,3 +197,9 @@ description = "Öppna en klar uppgift igen, tillbaka till att göra"
 [labels.sv.model.projects_task.action.reopen_cancelled]
 label = "Öppna igen"
 description = "Öppna en annullerad uppgift igen, tillbaka till att göra"
+
+[labels.sv.model.projects_task.filter.open]
+label = "Öppna"
+
+[labels.sv.model.projects_task.filter.overdue]
+label = "Försenade"

@@ -22,6 +22,10 @@ export type ActionDialogProps = {
   /** What the form holds for the fields asked for (typed before the action), to start from. */
   initial?: Record<string, Edit>;
   onCancel: () => void;
+  /** The action is running: the dialog stays open, with what was typed, until it answers. */
+  busy?: boolean;
+  /** Why the server refused the action, shown in the dialog so the person can correct it. */
+  error?: string | null;
   /** The values typed, as the server takes them. */
   onConfirm: (values: Record<string, unknown>) => void;
 };
@@ -34,6 +38,7 @@ export function ActionDialog(p: ActionDialogProps) {
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const submit = () => {
+    if (p.busy) return;
     const out: Record<string, unknown> = {};
     const errs: Record<string, string> = {};
     for (const f of p.needs) {
@@ -55,7 +60,7 @@ export function ActionDialog(p: ActionDialogProps) {
       footer={
         <>
           <Button onClick={p.onCancel}>{t("Cancel")}</Button>
-          <Button variant={p.danger ? "danger" : "primary"} onClick={submit}>
+          <Button variant={p.danger ? "danger" : "primary"} loading={p.busy} onClick={submit}>
             {p.label}
           </Button>
         </>
@@ -72,6 +77,11 @@ export function ActionDialog(p: ActionDialogProps) {
         }}
       >
         {p.question && <p className="confirm-msg">{p.question}</p>}
+        {p.error && (
+          <p role="alert" className="error action-refusal">
+            {p.error}
+          </p>
+        )}
         {p.needs.map((f, i) => {
           const id = `act-${f.name}`;
           return (

@@ -91,6 +91,8 @@ closed = "Suljettu"
 [labels.fi.model.pos_session.action.close]
 label = "Sulje"
 description = "Sulje kassavuoro, kun laatikko on laskettu (vain esihenkilö)"
+confirm = "Suljetaanko tämä istunto? Laske ensin kassalaatikon käteinen; suljettua istuntoa ei voi muuttaa."
+done = "Istunto suljettu"
 
 [labels.fi.model.pos_session.action.close.assert.difference_explained]
 message = "Kassaeroa ei ole selitetty: kirjoita syy muistiinpanoon ennen sulkemista"
@@ -144,14 +146,18 @@ cancelled = "Peruutettu"
 [labels.fi.model.pos_order.action.pay]
 label = "Maksa"
 description = "Myynti on maksettu kokonaan: evätään, kunnes maksut kattavat summan; luo rivikohtaisen luonnossiirron (vaatii inventory.user-ryhmän)"
+done = "Myynti maksettu"
 
 [labels.fi.model.pos_order.action.cancel]
 label = "Peruuta"
 description = "Peruuta myynti, jota ei ole maksettu"
+confirm = "Perutaanko tämä myynti? Se säilyttää kuittinumeronsa eikä sitä voi sen jälkeen muuttaa."
 
 [labels.fi.model.pos_order.action.refund]
 label = "Hyvitä"
 description = "Hyvitä maksettu myynti asiakkaalle (vain esihenkilö)"
+confirm = "Hyvitetäänkö tämä myynti asiakkaalle?"
+done = "Myynti hyvitetty"
 
 [labels.fi.model.pos_order_line]
 name = "Kassamyynnin rivi"
@@ -254,3 +260,9 @@ description = "Käteisellä maksettu osuus maksuista (valuutan pienin yksikkö)"
 [labels.fi.model.pos_order.field.refund_session_id]
 label = "Palautettu istunnossa"
 description = "Istunto, jonka laatikosta palautuksen käteinen maksettiin, palvelimen asettama, kun suljetun istunnon myynti palautetaan: myynnin kassalla silloin avoinna oleva istunto; tyhjä, jos myynnin oma istunto oli vielä auki"
+
+[labels.fi.model.pos_session.section.cash_count]
+label = "Kassan laskenta"
+
+[labels.fi.model.pos_session.filter.open]
+label = "Avoimet"

@@ -1,6 +1,6 @@
 [module]
 id = "planning"
-version = "0.3.1"
+version = "0.3.3"
 name = "Planning"
 description = "Shifts for employees, with roles and shift templates. A template only records a name, a role and times: no action creates a shift from it. A shift has a day and a start and end in minutes since midnight (0 to 1439; 540 is 09:00). A shift with no employee is an open shift. Workflow: open, published, confirmed by the employee. Needs the Human Resources package."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["planning", "shifts", "rota"]
 categories = ["people"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "Refused since 0.3.1: a shift that ends before it starts, and a shift of an employee who already has one at an overlapping time on that day. The app opens on Shifts, shown on the calendar and coloured by employee; roles and templates sit under Configuration. Start and end read as times of day and are never added up, and a time outside 00:00 to 23:59 is refused. A shift can be given only to an employee who has not left. The first state reads Not published."
+changelog = "Refused since 0.3.1: a shift that ends before it starts, and a shift of an employee who already has one at an overlapping time on that day. 0.3.3: the quick filters of the lists are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.3.2: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). The app opens on Shifts, shown on the calendar and coloured by employee; roles and templates sit under Configuration. Start and end read as times of day and are never added up, and a time outside 00:00 to 23:59 is refused. A shift can be given only to an employee who has not left. The first state reads Not published."
 home = "planning_shift"
 
 [module.dependencies]

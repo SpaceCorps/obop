@@ -17,10 +17,16 @@ use std::sync::Arc;
 /// One ledger row on one line.
 fn ledger_line(r: &obop_migrate::Entry) -> String {
     format!(
-        "{} {} {} [{}, ddl {}] {} by {} {}ms sha256:{}{}{}",
+        "{} {} {}{} [{}, ddl {}] {} by {} {}ms sha256:{}{}{}",
         obop_ops::backup::rfc3339(r.at),
         r.id,
         r.status.as_str(),
+        // U45: a step that keeps failing for one reason is one row; say how often.
+        if r.status == obop_migrate::EntryStatus::Failed {
+            format!(" x{} attempt(s)", r.attempts)
+        } else {
+            String::new()
+        },
         r.class.as_str(),
         r.ddl.as_str(),
         r.name,

@@ -88,6 +88,8 @@ struct Gauges {
     queue: Option<(u64, u64, u64)>,
     backups: Option<BackupGauges>,
     wal: Option<WalGauges>,
+    /// Milliseconds the change feed is held back (U43), when the store keeps a feed that can be.
+    history_lag_ms: Option<i64>,
 }
 
 /// What the catalogue says about backups and drills (D73), read with the other gauges.
@@ -296,9 +298,23 @@ pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
         }
         return resp;
     };
+    // The two addresses of the Microsoft sign-in are reached by a navigation of the browser and
+    // answer every failure with a redirect that names it (`#oidc_error=busy`, or the return page
+    // of an app's flow): that redirect is kept, so the person lands on the sign-in page and not on
+    // a JSON body (N19). Their success needs a write that committed, so a fault without a commit
+    // always comes with a failure redirect here.
+    if is_sign_in_navigation(&path) && resp.status().is_redirection() {
+        FAULT_ANSWERS[fault_index(fault)][1].fetch_add(1, Relaxed);
+        return no_store(resp);
+    }
     let column = if applied == Applied::Partial { 2 } else { 0 };
     FAULT_ANSWERS[fault_index(fault)][column].fetch_add(1, Relaxed);
     replacement(fault, applied, &path, &resp)
+}
+
+/// The addresses of the Microsoft sign-in that a browser navigates to (D91).
+fn is_sign_in_navigation(path: &str) -> bool {
+    matches!(path, "/api/auth/oidc/start" | "/api/auth/oidc/callback")
 }
 
 fn no_store(mut r: Response) -> Response {
@@ -498,6 +514,7 @@ fn gauges(s: &HttpState) -> Gauges {
                 lag: a.last_archived_age,
                 failed: a.failed_count,
             }),
+        history_lag_ms: s.shared.backend.history_lag_ms().ok().flatten(),
         backups: obop_ops::schedule::stats(&*s.shared.backend, now)
             .ok()
             .map(|st| BackupGauges {
@@ -511,6 +528,12 @@ fn gauges(s: &HttpState) -> Gauges {
     };
     *s.ops.gauges.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), v));
     v
+}
+
+/// Milliseconds as seconds with three decimals, never negative.
+fn history_lag_seconds(ms: i64) -> String {
+    let ms = ms.max(0);
+    format!("{}.{:03}", ms / 1000, ms % 1000)
 }
 
 type PoolReading = fn(&obop_storage::pool::PoolStats) -> f64;
@@ -649,8 +672,17 @@ fn render_pools(t: &mut String) {
 }
 
 fn render(s: &HttpState) -> String {
+    let mut t = render_process(&s.ops);
+    render_db_up(&mut t, || {
+        s.shared.backend.counter_get("health.ping").map(drop)
+    });
+    render_pools(&mut t);
+    render_rest(s, t)
+}
+
+/// The series every obop process has: build, uptime and the HTTP counters of `o`.
+fn render_process(o: &Ops) -> String {
     use std::fmt::Write;
-    let o = &s.ops;
     let mut t = String::new();
     let _ = writeln!(
         t,
@@ -711,9 +743,14 @@ fn render(s: &HttpState) -> String {
         o.sum_micros.load(Relaxed) as f64 / 1e6
     );
     let _ = writeln!(t, "obop_http_request_duration_seconds_count {count}");
+    t
+}
 
+/// `obop_db_up` and `obop_db_ping_seconds` from one ping, timed here.
+fn render_db_up(t: &mut String, ping: impl FnOnce() -> Result<(), String>) {
+    use std::fmt::Write;
     let started = Instant::now();
-    let up = reachable(&s.shared.backend.counter_get("health.ping"));
+    let up = reachable(&ping());
     let ping = started.elapsed().as_secs_f64();
     let _ = writeln!(t, "# HELP obop_db_up 1 when the database answered a ping.");
     let _ = writeln!(t, "# TYPE obop_db_up gauge");
@@ -724,9 +761,10 @@ fn render(s: &HttpState) -> String {
     );
     let _ = writeln!(t, "# TYPE obop_db_ping_seconds gauge");
     let _ = writeln!(t, "obop_db_ping_seconds {ping:.6}");
+}
 
-    render_pools(&mut t);
-
+fn render_rest(s: &HttpState, mut t: String) -> String {
+    use std::fmt::Write;
     let g = gauges(s);
     if let Some(n) = g.sessions {
         let _ = writeln!(
@@ -788,6 +826,18 @@ fn render(s: &HttpState) -> String {
             Some(u64::from(b.last_run_failed)),
         );
     }
+    if let Some(ms) = g.history_lag_ms {
+        let _ = writeln!(
+            t,
+            "# HELP obop_history_feed_lag_seconds Seconds the change feed is held back by the oldest open transaction of the PostgreSQL server (alert above 60)."
+        );
+        let _ = writeln!(t, "# TYPE obop_history_feed_lag_seconds gauge");
+        let _ = writeln!(
+            t,
+            "obop_history_feed_lag_seconds {}",
+            history_lag_seconds(ms)
+        );
+    }
     if let Some(w) = g.wal {
         if let Some(lag) = w.lag {
             let _ = writeln!(
@@ -805,6 +855,90 @@ fn render(s: &HttpState) -> String {
         let _ = writeln!(t, "obop_wal_archive_failed_total {}", w.failed);
     }
     t
+}
+
+/// The metrics of the control plane (`obop platform serve`, I6): who may read them and the HTTP
+/// counters of its router.
+pub struct PlaneOps {
+    ops: Ops,
+}
+
+impl PlaneOps {
+    pub fn new(access: MetricsAccess) -> Arc<Self> {
+        let ops = Ops::new();
+        ops.set_access(access);
+        Arc::new(PlaneOps { ops })
+    }
+}
+
+/// Whether the control plane's database answers (`PlatformApi::ready`).
+pub(crate) type PlaneReady = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
+
+/// Counts the control plane's responses, as [`track`] does for an instance.
+pub(crate) async fn plane_track(
+    State(p): State<Arc<PlaneOps>>,
+    req: Request,
+    next: Next,
+) -> Response {
+    let t = Instant::now();
+    let resp = next.run(req).await;
+    p.ops.observe(resp.status().as_u16(), t.elapsed());
+    resp
+}
+
+/// `GET /metrics` of the control plane: build, uptime, the HTTP counters, whether its database
+/// answers (`ready`) and the connection pools of the process. The same access rule as an
+/// instance (`OBOP_METRICS_TOKEN`, or a direct loopback caller on a loopback bind).
+pub(crate) async fn plane_metrics(
+    State((p, ready)): State<(Arc<PlaneOps>, PlaneReady)>,
+    req: Request,
+) -> Response {
+    let access = p
+        .ops
+        .access
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    match authorize(&access, &req) {
+        Verdict::Allowed => {
+            let body = super::blocking(move || {
+                let mut t = render_process(&p.ops);
+                render_db_up(&mut t, || ready());
+                render_pools(&mut t);
+                t
+            })
+            .await;
+            metrics_text(body)
+        }
+        other => refused(other),
+    }
+}
+
+fn metrics_text(body: String) -> Response {
+    no_store(
+        (
+            StatusCode::OK,
+            [(
+                header::CONTENT_TYPE,
+                "text/plain; version=0.0.4; charset=utf-8",
+            )],
+            body,
+        )
+            .into_response(),
+    )
+}
+
+fn refused(v: Verdict) -> Response {
+    match v {
+        Verdict::Unauthorized => no_store(
+            (
+                StatusCode::UNAUTHORIZED,
+                [(header::WWW_AUTHENTICATE, "Bearer realm=\"metrics\"")],
+            )
+                .into_response(),
+        ),
+        _ => no_store(StatusCode::NOT_FOUND.into_response()),
+    }
 }
 
 /// `GET /metrics`: Prometheus text, for whoever the operator opened it to.
@@ -953,6 +1087,18 @@ mod tests {
             })
             .await
         });
+        // A refused read answered with the redirect of a failed sign-in (`sso::back`).
+        let busy_redirect = get(|| async {
+            crate::blocking(|| {
+                obop_storage::fault::note(obop_storage::fault::Fault::Busy);
+                (
+                    StatusCode::SEE_OTHER,
+                    [("location", "/#oidc_error=busy")],
+                    "",
+                )
+            })
+            .await
+        });
         let router = Router::new()
             .route("/api/read", swallows)
             .route("/api/create", writes_then_reads)
@@ -963,6 +1109,9 @@ mod tests {
             .route("/oauth/token", shaped.clone())
             .route("/api/shaped", shaped)
             .route("/page", page)
+            .route("/api/auth/oidc/callback", busy_redirect.clone())
+            .route("/api/auth/oidc/start", busy_redirect.clone())
+            .route("/api/redirect_busy", busy_redirect)
             .layer(axum::middleware::from_fn(storage_faults));
         (flaky, db, router)
     }
@@ -1104,6 +1253,17 @@ mod tests {
         assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
         assert!(h["content-type"].to_str().unwrap().starts_with("text/html"));
         assert!(body.contains("Try again"), "a page, not raw JSON: {body}");
+
+        // The Microsoft sign-in's callback is a navigation that answers its failure with a
+        // redirect naming it: the redirect is kept (N19), and an ordinary route's is not.
+        for path in ["/api/auth/oidc/callback", "/api/auth/oidc/start"] {
+            let (s, h, body) = call(&r, "GET", path).await;
+            assert_eq!(s, StatusCode::SEE_OTHER, "{path}: {body}");
+            assert_eq!(h["location"], "/#oidc_error=busy");
+            assert_eq!(h["cache-control"], "no-store");
+        }
+        let (s, _, _) = call(&r, "GET", "/api/redirect_busy").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
 
         // The REST shape elsewhere, and the route's own headers are kept there too.
         flaky.refuse_next(1);

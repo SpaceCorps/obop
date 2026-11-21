@@ -294,6 +294,9 @@ pub struct CommandDef {
     /// `[model.action.ui]` (D95): how the interface offers the action, the fields its input may
     /// carry (`needs`) and who may not run it (`not_by`); `None`: none declared.
     pub ui: Option<Arc<ActionUi>>,
+    /// The command is about the model as a whole and takes no record id (docs/ISSUES.md U66):
+    /// the record panel leaves it out and a list offers it instead (`whole_model` in `/api/meta`).
+    pub whole_model: bool,
 }
 
 /// A declared state transition: set `field` to `to`, only when it currently equals `from` (if
@@ -328,6 +331,7 @@ impl CommandDef {
             effects: Vec::new(),
             asserts: Vec::new(),
             ui: None,
+            whole_model: false,
         }
     }
 
@@ -339,6 +343,12 @@ impl CommandDef {
             from: from.map(intern),
             to: intern(to),
         });
+        self
+    }
+
+    /// A command of the model as a whole, which takes no record id (see `whole_model`).
+    pub fn of_model(mut self) -> Self {
+        self.whole_model = true;
         self
     }
 
@@ -890,10 +900,12 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
 /// server starts (or put back after a failed upgrade): a field or model that has a reserved name
 /// (D75) is left alone, because the module was installed when the name was free. It stays an
 /// ordinary field of an untracked model, and the next upgrade of the module is refused by
-/// [`check_module`] until the name is changed. Everything else is checked as before.
+/// [`check_module`] until the name is changed. An action effect that writes a constant outside
+/// its field's limits (K44 c) is let through too: the action is refused when it runs. Everything
+/// else is checked as before.
 pub fn check_installed_module(m: &Module) -> Vec<Violation> {
     let mut v = check_basics(m, false);
-    v.extend(rules::check_rules(m, &|_| None, false));
+    v.extend(rules::check_installed_rules(m, &|_| None));
     v.extend(ui::check(m, &|_| None, false));
     v.extend(guard::check(m, &|_| None, false));
     v
@@ -1213,6 +1225,7 @@ mod tests {
             effects: vec![],
             asserts: vec![],
             ui: None,
+            whole_model: false,
         });
         assert_eq!(check_module(&m).len(), 1);
     }

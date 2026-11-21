@@ -57,11 +57,20 @@ pub struct ModelTr {
     /// package declares (`[[model.ui.filter]]`), `[labels.<lang>.model.<m>.filter.<key>] label`
     /// (U10).
     pub filters: BTreeMap<String, Texts>,
+    /// Section key (`filter_key` of its English label) -> language -> the label of a form section
+    /// the package declares (`[[model.ui.section]]`), `[labels.<lang>.model.<m>.section.<key>]
+    /// label` (R17).
+    pub sections: BTreeMap<String, Texts>,
+    /// Action -> language -> the question asked before it runs (`ui.confirm`), `confirm` under
+    /// `[labels.<lang>.model.<m>.action.<a>]` (R17).
+    pub confirms: BTreeMap<String, Texts>,
+    /// Action -> language -> the note shown after it ran (`ui.done`), `done` under the action (R17).
+    pub dones: BTreeMap<String, Texts>,
 }
 
-/// The key a filter of `[[model.ui.filter]]` is translated under: its English label in lower
-/// case, every run of other characters than ASCII letters and digits one `_` ("Not refused" is
-/// `not_refused`, "Away today" `away_today`).
+/// The key a filter of `[[model.ui.filter]]` (or a section of `[[model.ui.section]]`, R17) is
+/// translated under: its English label in lower case, every run of other characters than ASCII
+/// letters and digits one `_` ("Not refused" is `not_refused`, "Away today" `away_today`).
 pub fn filter_key(label: &str) -> String {
     let mut k = String::new();
     for c in label.chars() {
@@ -122,6 +131,10 @@ pub struct ModelLabels {
     /// Filter key (`filter_key`) -> its table: `[labels.<lang>.model.<m>.filter.<key>]` (U10).
     #[serde(default)]
     pub filter: BTreeMap<String, FilterLabels>,
+    /// Section key (`filter_key` of its label) -> its table:
+    /// `[labels.<lang>.model.<m>.section.<key>]` (R17).
+    #[serde(default)]
+    pub section: BTreeMap<String, FilterLabels>,
 }
 
 /// `label`: what a filter the package declares is called in the language.
@@ -153,6 +166,10 @@ pub struct FieldLabels {
 pub struct ActionLabels {
     pub label: Option<String>,
     pub description: Option<String>,
+    /// The question asked before the action runs (`ui.confirm`), R17.
+    pub confirm: Option<String>,
+    /// The note shown after it ran (`ui.done`), R17.
+    pub done: Option<String>,
     /// Assertion key -> its table: `[labels.<lang>.model.<m>.action.<a>.assert.<key>]`.
     #[serde(default)]
     pub assert: BTreeMap<String, AssertLabels>,
@@ -222,6 +239,12 @@ pub struct ModelShape {
     pub rules: BTreeSet<String>,
     /// The keys (`filter_key`) of the filters the model declares (U10).
     pub filters: BTreeSet<String>,
+    /// The keys (`filter_key`) of the form sections the model declares (R17).
+    pub sections: BTreeSet<String>,
+    /// The actions that declare a `ui.confirm` (R17).
+    pub confirms: BTreeSet<String>,
+    /// The actions that declare a `ui.done` (R17).
+    pub dones: BTreeSet<String>,
 }
 
 impl Shape {
@@ -270,6 +293,22 @@ impl Shape {
                                 .ui()
                                 .map(|u| u.filters.iter().map(|f| filter_key(&f.label)).collect())
                                 .unwrap_or_default(),
+                            sections: m
+                                .ui()
+                                .map(|u| u.sections.iter().map(|s| filter_key(&s.label)).collect())
+                                .unwrap_or_default(),
+                            confirms: m
+                                .commands
+                                .iter()
+                                .filter(|c| c.ui.as_ref().is_some_and(|u| u.confirm.is_some()))
+                                .map(|c| c.name.to_string())
+                                .collect(),
+                            dones: m
+                                .commands
+                                .iter()
+                                .filter(|c| c.ui.as_ref().is_some_and(|u| u.done.is_some()))
+                                .map(|c| c.name.to_string())
+                                .collect(),
                         },
                     )
                 })
@@ -353,6 +392,15 @@ pub fn check_labels(labels: &BTreeMap<String, LangLabels>, shape: &Shape) -> Res
                 }
                 val(format!("{at}.label"), &fl.label, MAX_LABEL_CHARS)?;
             }
+            for (key, sl) in &ml.section {
+                let at = format!("{at}.section.{key}");
+                if !ms.sections.contains(key) {
+                    return Err(format!(
+                        "labels.{at}: {model} declares no form section whose key is {key:?} (the key is the English label in lower case with _ between the words)"
+                    ));
+                }
+                val(format!("{at}.label"), &sl.label, MAX_LABEL_CHARS)?;
+            }
             for (field, fl) in &ml.field {
                 let at = format!("{at}.field.{field}");
                 let Some(opts) = ms.fields.get(field) else {
@@ -393,6 +441,17 @@ pub fn check_labels(labels: &BTreeMap<String, LangLabels>, shape: &Shape) -> Res
                     &al.description,
                     MAX_DESCRIPTION_CHARS,
                 )?;
+                for (key, text, declared) in [
+                    ("confirm", &al.confirm, &ms.confirms),
+                    ("done", &al.done, &ms.dones),
+                ] {
+                    if text.is_some() && !declared.contains(action) {
+                        return Err(format!(
+                            "labels.{at}.{key}: {model}.{action} declares no ui.{key} to translate"
+                        ));
+                    }
+                    val(format!("{at}.{key}"), text, MAX_DESCRIPTION_CHARS)?;
+                }
                 for (key, asl) in &al.assert {
                     let at = format!("{at}.assert.{key}");
                     if !keys.contains(key) {
@@ -441,6 +500,9 @@ impl Translations {
                 for (key, fl) in &ml.filter {
                     put(mt.filters.entry(key.clone()).or_default(), lang, &fl.label);
                 }
+                for (key, sl) in &ml.section {
+                    put(mt.sections.entry(key.clone()).or_default(), lang, &sl.label);
+                }
                 for (field, fl) in &ml.field {
                     let ft = mt.fields.entry(field.clone()).or_default();
                     put(&mut ft.entry.labels, lang, &fl.label);
@@ -456,6 +518,16 @@ impl Translations {
                     let at = mt.actions.entry(action.clone()).or_default();
                     put(&mut at.labels, lang, &al.label);
                     put(&mut at.descriptions, lang, &al.description);
+                    if al.confirm.is_some() {
+                        put(
+                            mt.confirms.entry(action.clone()).or_default(),
+                            lang,
+                            &al.confirm,
+                        );
+                    }
+                    if al.done.is_some() {
+                        put(mt.dones.entry(action.clone()).or_default(), lang, &al.done);
+                    }
                     for (key, asl) in &al.assert {
                         if let Some(text) = &asl.message {
                             mt.asserts
@@ -624,6 +696,41 @@ label = \"Nicht abgelehnt\""
     }
 
     #[test]
+    fn sections_confirms_and_dones_are_translated_where_the_model_declares_them() {
+        // R17.
+        let mut shape = Shape::default();
+        shape.models.insert(
+            "m".into(),
+            ModelShape {
+                actions: BTreeMap::from([
+                    ("close".to_string(), BTreeSet::new()),
+                    ("take".to_string(), BTreeSet::new()),
+                ]),
+                sections: BTreeSet::from(["resource_and_time".to_string()]),
+                confirms: BTreeSet::from(["close".to_string()]),
+                dones: BTreeSet::from(["close".to_string(), "take".to_string()]),
+                ..ModelShape::default()
+            },
+        );
+        let check = |s: &str| check_labels(&Translations::parse_labels(s).unwrap(), &shape);
+        let ok = "[labels.de.model.m.section.resource_and_time]\nlabel = \"Ressource und Zeit\"\n\n\
+                  [labels.de.model.m.action.close]\nconfirm = \"Ticket endgültig schließen?\"\ndone = \"Ticket geschlossen\"\n\n\
+                  [labels.de.model.m.action.take]\ndone = \"Ticket übernommen\"";
+        assert!(check(ok).is_ok(), "{:?}", check(ok));
+        let t = Translations::from_labels(&Translations::parse_labels(ok).unwrap());
+        let m = &t.models["m"];
+        assert_eq!(m.sections["resource_and_time"]["de"], "Ressource und Zeit");
+        assert_eq!(m.confirms["close"]["de"], "Ticket endgültig schließen?");
+        assert_eq!(m.dones["take"]["de"], "Ticket übernommen");
+        assert!(!m.confirms.contains_key("take"));
+        let e = check("[labels.de.model.m.section.time]\nlabel = \"Zeit\"").unwrap_err();
+        assert!(e.contains("declares no form section"), "{e}");
+        let e = check("[labels.de.model.m.action.take]\nconfirm = \"Sicher?\"").unwrap_err();
+        assert!(e.contains("declares no ui.confirm"), "{e}");
+        assert!(check("[labels.de.model.m.action.close]\ndone = \"<b>x</b>\"").is_err());
+    }
+
+    #[test]
     fn a_guard_message_is_translated_only_where_the_model_has_one() {
         let mut shape = Shape::default();
         for (m, has) in [("locked", true), ("plain", false)] {
@@ -696,6 +803,7 @@ label = \"Nicht abgelehnt\""
                 guard_message: false,
                 rules: BTreeSet::new(),
                 filters: BTreeSet::new(),
+                ..ModelShape::default()
             },
         );
         let doc = |at: &str, msg: &str| format!("[labels.sv.model.m.action.{at}]\nmessage = {msg}");

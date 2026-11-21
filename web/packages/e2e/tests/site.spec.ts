@@ -1045,6 +1045,14 @@ test.describe("website without JavaScript", () => {
       // The rule can fail: the language's own word for beta is found, and "Betalning" is not it.
       expect(`Maturity: ${m.meta.maturities.beta}`).toMatch(beta);
       expect(`Maturity: ${m.meta.maturities.stable}`).not.toMatch(beta);
+      // The Markdown copies are fetched together, while the pages are read: one after the other they
+      // added up past the limit of a request on a loaded machine (U65).
+      const copies = new Map(
+        slugs.map((slug) => [
+          slug,
+          request.get(`${base()}${prefix}/apps/${slug}.md`).then((r) => r.text()),
+        ]),
+      );
       for (const slug of slugs) {
         const where = `${locale} ${slug}`;
         await page.goto(`${base()}${prefix}/apps/${slug}/`, { waitUntil: "domcontentloaded" });
@@ -1065,7 +1073,7 @@ test.describe("website without JavaScript", () => {
             els.map((el) => (el.tagName === "META" ? el.getAttribute("content") : el.textContent)),
           );
         expect(data.join(" "), `${where}: structured data and descriptions`).not.toMatch(beta);
-        const md = await (await request.get(`${base()}${prefix}/apps/${slug}.md`)).text();
+        const md = await copies.get(slug)!;
         expect(md, `${where}: the Markdown copy`).not.toMatch(beta);
         expect(md, where).toContain(`**${m.meta.maturity}:** ${m.meta.maturities.stable}`);
       }
@@ -2050,7 +2058,7 @@ test.describe("crawlers and agents", () => {
     expect(sv).toContain(messages.sv.apps.store.purposeEnglish);
     expect(sv).toContain("Fakturering");
     expect(app).toContain("### Models");
-    expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.5.1`);
+    expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.5.3`);
     // The page breaks a table token after an underscore or a dot with <wbr>; the copy, and
     // llms-full.txt which agents read, keep the plain token in backticks and no HTML tag.
     expect(app).toContain("`requester_email`");
@@ -2647,7 +2655,7 @@ test.describe("accessibility", () => {
           [
             "/apps/accounting/",
             13,
-            ["A Apache-2.0", "A packages/accounting.toml", "BUTTON", "SUMMARY Show 3 more actions"],
+            ["A Apache-2.0", "A packages/accounting.toml", "BUTTON", "SUMMARY Show 4 more actions"],
           ],
           ["/apps/invoicing/", 10, ["A Apache-2.0", "A crates/modules/invoicing"]],
         ] as const) {
@@ -2872,7 +2880,7 @@ test.describe("accessibility", () => {
       "/apps/helpdesk/ A packages/helpdesk.toml",
       "/apps/helpdesk/ BUTTON",
       "/apps/invoicing/ A crates/modules/invoicing",
-      "/apps/accounting/ SUMMARY Show 3 more actions",
+      "/apps/accounting/ SUMMARY Show 4 more actions",
       "/apps/accounting/ SUMMARY Show 5 more things it ke",
       "/apps/accounting/ SUMMARY Information",
       "/apps/accounting/ SUMMARY For developers",

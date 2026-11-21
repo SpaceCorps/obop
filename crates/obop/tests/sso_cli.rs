@@ -379,3 +379,40 @@ fn a_binding_pins_the_tenant_even_after_the_provider_was_removed() {
     // A verb nobody knows.
     assert!(refused(obop(&url, &["admin", "sso", "only", "ada", "maybe"], None)).contains("usage"));
 }
+
+/// The data-protection checklist of the connectors lists the test authority of the Microsoft
+/// sign-in when the process has it, through the command an administrator runs (N20 f: the item
+/// itself is unit-tested, this is the call that adds it to the list).
+#[test]
+fn the_checklist_warns_about_the_test_authority_of_the_process() {
+    let dir = Dir::new("checklist");
+    let url = dir.url();
+    ok(obop(
+        &url,
+        &["admin", "create", "boss", "--all-groups"],
+        Some("a long enough password 1\n"),
+    ));
+    let out = ok(obop(
+        &url,
+        &["agent-token", "boss", "--scopes", "connectors.admin"],
+        None,
+    ));
+    let token = out
+        .lines()
+        .find(|l| l.starts_with("obop_"))
+        .expect("a token")
+        .trim()
+        .to_string();
+    let checklist = |env: &[(&str, &str)]| {
+        ok(obop_with(
+            &url,
+            &["call", "egress_policy", "checklist", "--token", &token],
+            None,
+            env,
+        ))
+    };
+    assert!(!checklist(&[]).contains("oidc_test_authority"));
+    let set = checklist(&[("OBOP_OIDC_TEST_AUTHORITY", "http://127.0.0.1:4455")]);
+    assert!(set.contains("oidc_test_authority"), "{set}");
+    assert!(set.contains("ignores it"), "{set}");
+}

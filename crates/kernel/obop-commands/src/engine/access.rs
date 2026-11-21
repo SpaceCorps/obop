@@ -174,7 +174,7 @@ impl<'a> Gate<'a> {
     pub fn load(&self, def: &ModelDef, id: &str) -> R<Fields> {
         match self.reads.get(def.name, id)? {
             Some(rec) if self.visible(def, &rec) => Ok(rec),
-            _ => Err(format!("no {} {id}", def.name)),
+            _ => Err(crate::errors::no_record(def.name, id)),
         }
     }
 }
@@ -194,9 +194,12 @@ pub(crate) fn creator_blocked(gate: &Gate<'_>, def: &ModelDef, rec: &Fields) -> 
         (None, Some(v)) => format!("set {v} to a record you can see"),
         _ => "you may not create records you could not see afterwards".to_string(),
     };
-    Some(format!(
-        "{} would not be visible to you ({how}), so it was not saved",
-        def.name
+    Some(crate::errors::coded(
+        crate::errors::code::CREATOR_BLOCKED,
+        &format!(
+            "{} would not be visible to you ({how}), so it was not saved",
+            def.name
+        ),
     ))
 }
 
@@ -214,8 +217,11 @@ fn owner_from_link(def: &ModelDef, a: &Access, rec: &Fields) -> Option<String> {
     } else {
         format!("someone with {}", a.see_all.join(" or "))
     };
-    Some(format!(
-        "This {who} has their own login, so the record would be theirs and out of your sight: ask {by} to file it. Nothing was saved"
+    Some(crate::errors::coded(
+        crate::errors::code::CREATOR_BLOCKED,
+        &format!(
+            "This {who} has their own login, so the record would be theirs and out of your sight: ask {by} to file it. Nothing was saved"
+        ),
     ))
 }
 
@@ -336,8 +342,13 @@ mod tests {
         };
         assert_eq!(ids(&admin, &project).len(), 4);
         let gate = Gate::new(&reads, &lookup, &ann);
-        assert!(gate.load(&project, "theirs").unwrap_err() == "no t_project theirs");
-        assert!(gate.load(&project, "ghost").unwrap_err() == "no t_project ghost");
+        // Hidden and missing answer alike, with the code `record_not_found` (L30).
+        assert!(
+            gate.load(&project, "theirs").unwrap_err() == "record_not_found: no t_project theirs"
+        );
+        assert!(
+            gate.load(&project, "ghost").unwrap_err() == "record_not_found: no t_project ghost"
+        );
         assert!(creator_blocked(&gate, &project, &rec(&[("owner", "bob".into())])).is_some());
         assert!(creator_blocked(&gate, &project, &rec(&[("owner", "ann".into())])).is_none());
     }

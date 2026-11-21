@@ -105,6 +105,39 @@ impl Auth {
             .collect())
     }
 
+    /// The stand-in credential ids of a name that has no passkey to sign in with (E7c): one or two
+    /// ids of 32 bytes, an HMAC of the name under a random key of this instance, so a name gets the
+    /// same answer every time and nobody without the key can tell it from a real one by working it
+    /// out. The key is made once, in the shared store, by whichever process needs it first.
+    pub(crate) fn decoy_ids(&self, name: &str, rp_id: &str) -> Result<Vec<J>, MfaError> {
+        use hmac::{Hmac, KeyInit, Mac};
+        const KEY: &str = "auth/passkey_decoy_key";
+        let fresh = b64url(&random_bytes::<32>());
+        self.backend
+            .kv_put_new(KEY, &fresh, None)
+            .map_err(MfaError::Unavailable)?;
+        let key = self
+            .backend
+            .kv_get(KEY)
+            .map_err(MfaError::Unavailable)?
+            .and_then(|k| b64url_decode(&k))
+            .ok_or_else(|| MfaError::Unavailable("the stand-in key could not be read".into()))?;
+        let id = |i: u8| {
+            let mut m = <Hmac<sha2::Sha256> as KeyInit>::new_from_slice(&key)
+                .expect("HMAC takes any key length");
+            m.update(rp_id.as_bytes());
+            m.update(&[0, i]);
+            m.update(name.as_bytes());
+            m.finalize().into_bytes().to_vec()
+        };
+        let first = id(0);
+        let mut out = vec![J::from(b64url(&first))];
+        if first[0] % 2 == 1 {
+            out.push(J::from(b64url(&id(1))));
+        }
+        Ok(out)
+    }
+
     pub fn passkey_count(&self, name: &str) -> usize {
         self.passkeys_of(&name.trim().to_lowercase()).len()
     }
@@ -331,12 +364,17 @@ impl Auth {
         if let Some(bound) = rec["user"].as_str()
             && bound != owner
         {
-            self.event(
-                bound,
-                "passkey_failed",
-                bound,
-                "a passkey of another account was presented",
-            );
+            // A sign-in challenge was bound to a name anybody may type (username-first, E7c): a
+            // line in that name's log would let anybody write one, so only a second step or a
+            // proof, which a password or a session stands behind, writes it.
+            if purpose != "login" {
+                self.event(
+                    bound,
+                    "passkey_failed",
+                    bound,
+                    "a passkey of another account was presented",
+                );
+            }
             return Err(denied("this passkey belongs to a different account"));
         }
         if stored["rp_id"].as_str() != Some(&ctx.rp_id) {
@@ -541,11 +579,13 @@ impl Auth {
         }
     }
 
+    /// A sign-in by passkey alone, with who it was for and the credential epoch the check of the
+    /// assertion compared: the baseline of an OAuth flow that it seats (L19).
     fn login_passwordless(
         &self,
         ctx: &WebauthnCtx,
         credential: &J,
-    ) -> Result<LoginOutcome, MfaError> {
+    ) -> Result<(LoginOutcome, String, Epoch), MfaError> {
         let (name, _, epoch) = self.verify_assertion(ctx, "login", credential, true)?;
         // An account that signs in with Microsoft only (D91) has no passkey sign-in of its own.
         if self.is_sso_only(&name).map_err(MfaError::Unavailable)? {
@@ -564,8 +604,10 @@ impl Auth {
             &name,
             "signed in with a passkey alone",
         );
-        self.session_outcome(&name, false, &epoch)
-            .map_err(SessionError::mfa)
+        let out = self
+            .session_outcome(&name, false, &epoch)
+            .map_err(SessionError::mfa)?;
+        Ok((out, name, epoch))
     }
 }
 
@@ -602,7 +644,9 @@ impl PasskeyApi for Auth {
             "passwordless": u["passkey_login"].as_bool() == Some(true),
             "passwordless_possible": uv_any,
             "totp": u["mfa_enabled"].as_bool() == Some(true),
-            "policy_requires_second_factor": self.enrolment_required_for(&groups),
+            "policy_requires_second_factor": self
+                .enrolment_required_for(&groups)
+                .map_err(MfaError::Unavailable)?,
             "is_admin": p.groups.contains(ADMIN_GROUP),
         }))
     }
@@ -839,7 +883,12 @@ impl PasskeyApi for Auth {
         let left = all.len().saturating_sub(1);
         let totp = self.settled(|| self.mfa_enabled(name))?;
         let groups: Vec<String> = p.groups.iter().cloned().collect();
-        if left == 0 && !totp && self.enrolment_required_for(&groups) {
+        if left == 0
+            && !totp
+            && self
+                .enrolment_required_for(&groups)
+                .map_err(MfaError::Unavailable)?
+        {
             return Err(MfaError::Invalid(
                 "your administrator requires a second factor, and this is your last one: add another passkey or an authenticator app first".into(),
             ));
@@ -1003,6 +1052,53 @@ impl PasskeyApi for Auth {
         }
     }
 
+    fn passkey_login_options_for(&self, ctx: &WebauthnCtx, username: &str) -> Result<J, MfaError> {
+        self.site(ctx)?;
+        self.pk_limit(ctx, "options", OPTIONS_PER_IP)?;
+        let name = username.trim().to_lowercase();
+        if name.is_empty() || name.chars().count() > 256 {
+            return Err(MfaError::Invalid("a user name is needed".into()));
+        }
+        // The same reads for every name, known or not: the account and its passkeys.
+        let account = match self.user_record(&name) {
+            Ok(u) => Some(u),
+            Err(MfaError::NotFound) => None,
+            Err(e) => return Err(e),
+        };
+        let keys = self.passkeys_checked(&name)?;
+        let may = account.as_ref().is_some_and(|u| {
+            u["passkey_login"].as_bool() == Some(true)
+                && u["disabled"].as_bool() != Some(true)
+                && u["sso_only"].as_bool() != Some(true)
+        });
+        let mut ids: Vec<J> = if may {
+            keys.iter()
+                .filter(|(_, r)| r["user_verified"].as_bool() == Some(true))
+                .filter_map(|(_, r)| r["cred_id"].as_str().map(J::from))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if ids.is_empty() {
+            ids = self.decoy_ids(&name, &ctx.rp_id)?;
+        }
+        // The challenge is bound to the name typed, as a second step's is to its person: a key
+        // that does not send who it belongs to is then accepted for this name only.
+        let challenge = self.new_challenge(ctx, "login", Some(&name), None)?;
+        // No transports: the real keys would carry them and the stand-ins could not.
+        let allow: Vec<J> = ids
+            .into_iter()
+            .map(|id| json!({"type": "public-key", "id": id}))
+            .collect();
+        Ok(json!({"publicKey": {
+            "challenge": challenge,
+            "rpId": ctx.rp_id,
+            "timeout": 120_000,
+            "userVerification": "required",
+            "allowCredentials": allow,
+        }}))
+    }
+
     fn passkey_login(
         &self,
         ctx: &WebauthnCtx,
@@ -1013,7 +1109,27 @@ impl PasskeyApi for Auth {
         self.pk_limit(ctx, "verify", VERIFY_PER_IP)?;
         match mfa_token {
             Some(tok) => self.login_second(ctx, tok, credential),
-            None => self.login_passwordless(ctx, credential),
+            None => self
+                .login_passwordless(ctx, credential)
+                .map(|(out, _, _)| out),
+        }
+    }
+
+    fn passkey_login_seen(
+        &self,
+        ctx: &WebauthnCtx,
+        mfa_token: Option<&str>,
+        credential: &J,
+    ) -> Result<(LoginOutcome, Option<(String, Option<String>)>), MfaError> {
+        self.site(ctx)?;
+        self.pk_limit(ctx, "verify", VERIFY_PER_IP)?;
+        match mfa_token {
+            Some(tok) => self
+                .login_second(ctx, tok, credential)
+                .map(|out| (out, None)),
+            None => self
+                .login_passwordless(ctx, credential)
+                .map(|(out, name, epoch)| (out, Some((name, epoch)))),
         }
     }
 

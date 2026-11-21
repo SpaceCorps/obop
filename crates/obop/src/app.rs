@@ -18,6 +18,8 @@ pub struct App {
     pub connectors: Arc<Connectors>,
     /// Payments for the web shop (D62): bank transfer, Stripe Checkout, the local demo.
     pub payments: Arc<obop_payments::Payments>,
+    /// Outbound mail (docs/spec/mail.md): servers, templates, the queue and its worker.
+    pub mail: Arc<obop_mail::Mail>,
 }
 
 /// The bundled catalog, plus a remote one when `OBOP_MARKETPLACE_URL` is set.
@@ -63,6 +65,8 @@ impl App {
             ConnectorConfig::from_env(),
         );
         ::connectors::register(&d, &store, &connectors);
+        let mail = obop_mail::Mail::new(connectors.clone(), obop_mail::Config::from_env());
+        mail.register(&d, &store);
         crate::sie::command::register(&d, &store);
         crate::vat::register(&d, &store);
         crate::invoice_posting::register(&d, &store);
@@ -90,6 +94,7 @@ impl App {
             invoicing::module(),
             mileage::module(),
             ::connectors::module(),
+            obop_mail::module(),
             obop_pkg::admin_module(),
         ];
         let market = marketplace();
@@ -120,6 +125,7 @@ impl App {
             market,
             connectors,
             payments,
+            mail,
         }
     }
 
@@ -237,5 +243,34 @@ impl App {
         g.sort();
         g.dedup();
         g
+    }
+}
+
+#[cfg(test)]
+mod drop_tests {
+    use super::*;
+
+    /// U41, K52 (a): dropping an `App` lets go of its dispatcher and so of its store. Before the
+    /// connectors runtime held the dispatcher weakly, a cycle (dispatcher, its handlers, the
+    /// runtime, the dispatcher) kept the SQLite file open, and on Windows it could not be removed.
+    #[test]
+    fn a_dropped_app_releases_its_dispatcher_and_its_database_file() {
+        let path = obop_storage::testing::TempPath::new("obop-app-drop");
+        let url = path.url();
+        let app = App::with_store(Store::open(&url).unwrap());
+        app.seed_demo();
+        let dispatcher = Arc::downgrade(&app.dispatcher);
+        let runtime = Arc::downgrade(&app.connectors);
+        drop(app);
+        assert!(
+            dispatcher.upgrade().is_none(),
+            "{} strong references to the dispatcher are left",
+            dispatcher.strong_count()
+        );
+        assert!(
+            runtime.upgrade().is_none(),
+            "the connectors runtime is left"
+        );
+        std::fs::remove_file(path.path()).expect("the database file is closed and can be removed");
     }
 }

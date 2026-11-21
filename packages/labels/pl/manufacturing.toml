@@ -91,6 +91,7 @@ cancelled = "Anulowane"
 [labels.pl.model.manufacturing_order.action.confirm]
 label = "Potwierdź"
 description = "Potwierdza zlecenie robocze, aby można było zaplanować produkcję; wymaga wyrobu gotowego, miejsca produkcji i co najmniej jednej pozycji komponentu"
+done = "Zamówienie potwierdzone"
 
 [labels.pl.model.manufacturing_order.action.confirm.assert.has_product]
 message = "Najpierw wybierz wyrób gotowy: po zakończeniu zlecenia jest on przyjmowany na stan w miejscu produkcji"
@@ -104,14 +105,19 @@ message = "Najpierw dodaj komponenty: zlecenie bez komponentów po zakończeniu 
 [labels.pl.model.manufacturing_order.action.start]
 label = "Rozpocznij"
 description = "Rozpoczyna produkcję dla potwierdzonego zlecenia"
+done = "Produkcja rozpoczęta"
 
 [labels.pl.model.manufacturing_order.action.finish]
 label = "Zakończ"
 description = "Oznacza produkcję jako zakończoną: przy podanej lokalizacji produkcji powstaje szkic ruchu magazynowego zdejmującego tam każdy komponent i jeden przyjmujący wyrób gotowy, z numerem zlecenia jako dokumentem źródłowym, do zatwierdzenia przez magazyn (wymaga grupy inventory.user)"
+confirm = "Oznaczyć produkcję jako zakończoną? Ruchy magazynowe wydadzą komponenty i przyjmą gotowy produkt w miejscu produkcji. Zakończonego zlecenia nie można już zmienić."
+done = "Produkcja zakończona"
 
 [labels.pl.model.manufacturing_order.action.cancel]
 label = "Anuluj"
 description = "Anuluje zlecenie, które nie zostało potwierdzone"
+confirm = "Anulować to zamówienie?"
+done = "Zamówienie anulowane"
 
 [labels.pl.model.manufacturing_order.field.product_id]
 label = "Produkt"
@@ -140,3 +146,9 @@ description = "Zużywany produkt"
 [labels.pl.model.manufacturing_order_line.field.quantity]
 label = "Ilość"
 description = "Liczba sztuk komponentu zużywana przez całe zlecenie"
+
+[labels.pl.model.manufacturing_order.filter.in_progress]
+label = "W toku"
+
+[labels.pl.model.manufacturing_order.filter.late]
+label = "Opóźnione"

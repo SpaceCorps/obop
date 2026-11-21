@@ -298,26 +298,35 @@ refunded = "Återbetald"
 [labels.sv.model.ecommerce_order.action.mark_paid]
 label = "Markera som betald"
 description = "Betalningen har kommit in"
+done = "Markerad som betald"
 
 [labels.sv.model.ecommerce_order.action.ship]
 label = "Skicka"
 description = "Paketet lämnades till transportören"
+confirm = "Markera den här beställningen som skickad? Lägg först till spårningsnumret om det finns ett."
+done = "Skickad"
 
 [labels.sv.model.ecommerce_order.action.deliver]
 label = "Leverera"
 description = "Paketet nådde kunden"
+done = "Levererad"
 
 [labels.sv.model.ecommerce_order.action.cancel]
 label = "Annullera"
 description = "Annullera en order som aldrig betalades"
+confirm = "Avbryta den här beställningen? Lagret går tillbaka till annonserna och den kan inte längre ändras."
 
 [labels.sv.model.ecommerce_order.action.refund]
 label = "Återbetala"
 description = "Betala tillbaka en betald order som inte levererats (endast chef)"
+confirm = "Återbetala den här beställningen? Pengarna går tillbaka till kunden och lagret till annonserna."
+done = "Återbetald"
 
 [labels.sv.model.ecommerce_order.action.refund_delivered]
 label = "Återbetala efter leverans"
 description = "Betala tillbaka en levererad order, till exempel efter en retur (endast chef)"
+confirm = "Återbetala den här levererade beställningen? Pengarna går tillbaka till kunden; varorna går inte tillbaka till hyllan."
+done = "Återbetald"
 
 [labels.sv.model.ecommerce_order_line]
 name = "Orderrad"
@@ -552,7 +561,48 @@ description = "Id:n för leverantörens redan tillämpade händelser som JSON, s
 [labels.sv.model.ecommerce_payment.action.mark_failed]
 label = "Markera som misslyckad"
 description = "Leverantören rapporterar att betalningen misslyckades"
+confirm = "Markera den här betalningen som misslyckad?"
 
 [labels.sv.model.ecommerce_payment.action.cancel]
 label = "Avbryt"
 description = "Sluta vänta på den här betalningen"
+confirm = "Sluta vänta på den här betalningen?"
+
+[labels.sv.model.ecommerce_listing.section.in_the_shop]
+label = "I butiken"
+
+[labels.sv.model.ecommerce_listing.section.stock]
+label = "Lager"
+
+[labels.sv.model.ecommerce_listing.section.product_page]
+label = "Produktsida"
+
+[labels.sv.model.ecommerce_listing.section.advanced]
+label = "Avancerat"
+
+[labels.sv.model.ecommerce_order.section.customer]
+label = "Kund"
+
+[labels.sv.model.ecommerce_order.section.delivery]
+label = "Leverans"
+
+[labels.sv.model.ecommerce_order.section.amounts]
+label = "Belopp"
+
+[labels.sv.model.ecommerce_order.section.payment]
+label = "Betalning"
+
+[labels.sv.model.ecommerce_order.section.checkout_record]
+label = "Kassapost"
+
+[labels.sv.model.ecommerce_listing.filter.in_the_shop]
+label = "I butiken"
+
+[labels.sv.model.ecommerce_listing.filter.out_of_stock]
+label = "Slut i lager"
+
+[labels.sv.model.ecommerce_order.filter.to_ship]
+label = "Att skicka"
+
+[labels.sv.model.ecommerce_order.filter.waiting_for_payment]
+label = "Väntar på betalning"

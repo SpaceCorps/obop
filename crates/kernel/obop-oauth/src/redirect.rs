@@ -37,6 +37,12 @@ fn parts(uri: &str) -> Option<(&str, &str, Option<u16>, &str)> {
     Some((scheme, host, port, tail))
 }
 
+/// The host of a URI that passed [`validate`], lower case, without its port (an IPv6 address keeps
+/// its brackets). `None` for anything else.
+pub fn host_of(uri: &str) -> Option<String> {
+    parts(uri).map(|(_, h, _, _)| h.to_ascii_lowercase())
+}
+
 pub fn is_loopback_host(host: &str) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }

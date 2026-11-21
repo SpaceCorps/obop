@@ -109,6 +109,15 @@ description = "Pełne imię i nazwisko wpisane przez osobę podpisującą (dowó
 label = "Wersja zgody"
 description = "Identyfikator tekstu zgody: jego wersja, język wysłania (lang formularza, jeśli wskazuje jeden z siedmiu; jeśli formularz w ogóle nie ma pola lang, język adresu; w przeciwnym razie przeglądarki, instancji, a na końcu angielski; to nie dowód, jaka strona została pokazana) oraz pierwsze 8 znaków szesnastkowych skrótu tekstów w tym języku, na przykład v1-draft/pl/c3127377"
 
+[labels.pl.model.sign_request.field.evidence_check]
+label = "Kontrola dowodów"
+description = "Czy dowody wniosku podpisanego przez link nadal odpowiadają wpisowi w dzienniku bezpieczeństwa z chwili podpisania (od Sign 0.3.0 także tytuł, wiadomość i żądane imię i nazwisko): zgodne, różne (zmienione po podpisaniu) lub brak wpisu. Ustalane tylko przy get, puste na listach. Nie chroni przed fałszerstwem: kto może zapisywać w bazie, może zmienić oba"
+
+[labels.pl.model.sign_request.field.evidence_check.options]
+matches = "Zgodne"
+differs = "Różne"
+no_entry = "Brak wpisu"
+
 [labels.pl.model.sign_request.field.state]
 label = "Status"
 description = "Status wniosku: wersja robocza, wysłane, podpisane, odrzucone, wygasłe"
@@ -123,10 +132,13 @@ expired = "Wygasłe"
 [labels.pl.model.sign_request.action.send]
 label = "Wyślij"
 description = "Wysyła wniosek do podpisującego"
+done = "Wysłano do podpisującego"
 
 [labels.pl.model.sign_request.action.sign]
 label = "Podpisz"
 description = "Ręcznie rejestruje, że podpisujący złożył podpis; tylko dla wniosku bez dokumentu, ponieważ wniosek dotyczący dokumentu podpisuje sam podpisujący przez link"
+confirm = "Zapisać, że podpisujący podpisał? Prośbę dotyczącą dokumentu podpisuje się zamiast tego przez jej link do podpisu."
+done = "Oznaczono jako podpisane"
 
 [labels.pl.model.sign_request.action.sign.assert.document_request]
 message = "Wniosek dotyczący dokumentu podpisuje sam podpisujący przez link; nie można go ręcznie oznaczyć jako podpisanego"
@@ -134,14 +146,19 @@ message = "Wniosek dotyczący dokumentu podpisuje sam podpisujący przez link; n
 [labels.pl.model.sign_request.action.decline]
 label = "Odrzuć"
 description = "Rejestruje, że podpisujący odmówił podpisu"
+confirm = "Zapisać, że podpisujący odmówił?"
+done = "Oznaczono jako odrzucone"
 
 [labels.pl.model.sign_request.action.expire]
 label = "Oznacz jako wygasłe"
 description = "Rejestruje, że wniosek wygasł bez podpisu"
+confirm = "Zapisać, że prośba wygasła bez podpisu?"
+done = "Oznaczono jako wygasłe"
 
 [labels.pl.model.sign_request.action.send_document]
 label = "Wyślij dokument"
 description = "Wyślij prośbę o dokument z Dokumentów: pobiera SHA-256 pliku PDF, zachowuje dokładną kopię i ustawia prośbę jako wysłaną; potem utwórz link do podpisu"
+done = "Wysłano. Teraz utwórz link do podpisu."
 
 [labels.pl.model.sign_link]
 name = "Link do podpisu"
@@ -167,3 +184,24 @@ description = "Kiedy link został unieważniony (UTC); ustaw wartość, aby unie
 [labels.pl.model.sign_link.field.link]
 label = "Odnośnik"
 description = "Sam link: tylko w odpowiedzi na create, pokazywany raz, nigdy nie zapisywany i nigdy nie zwracany przez get, list ani search"
+
+[labels.pl.model.sign_request.section.request]
+label = "Zgłoszenie"
+
+[labels.pl.model.sign_request.section.options]
+label = "Opcje"
+
+[labels.pl.model.sign_request.section.sent_file]
+label = "Wysłany plik"
+
+[labels.pl.model.sign_request.section.evidence]
+label = "Dowody"
+
+[labels.pl.model.sign_request.filter.waiting_for_signature]
+label = "Czekają na podpis"
+
+[labels.pl.model.sign_request.filter.signed]
+label = "Podpisane"
+
+[labels.pl.model.sign_request.filter.expiring_soon]
+label = "Wkrótce wygasają"

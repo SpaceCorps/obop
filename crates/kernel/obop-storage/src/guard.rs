@@ -180,6 +180,9 @@ impl Backend for Guarded {
     fn history_stats(&self) -> Result<HistoryStats> {
         self.inner.history_stats()
     }
+    fn history_lag_ms(&self) -> Result<Option<i64>> {
+        self.inner.history_lag_ms()
+    }
     fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
         fault::before_write()?;
         let r = self.inner.history_ensure_partition(month);
@@ -219,6 +222,25 @@ impl Backend for Guarded {
         values: &[J],
     ) -> Result<Vec<(String, Fields)>> {
         self.inner.find_unique(model, fields, values)
+    }
+    fn find_unique_many(
+        &self,
+        model: &str,
+        fields: &[&str],
+        keys: &[Vec<J>],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.inner.find_unique_many(model, fields, keys)
+    }
+    fn unique_indexes(&self) -> Result<Vec<String>> {
+        self.inner.unique_indexes()
+    }
+    fn drop_unique_index(&self, name: &str) -> Result<()> {
+        fault::before_write()?;
+        let r = self.inner.drop_unique_index(name);
+        if r.is_ok() {
+            fault::wrote();
+        }
+        r
     }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         fault::before_write()?;

@@ -109,6 +109,15 @@ description = "Le nom complet saisi par le signataire (preuve) ; signer_name res
 label = "Version du consentement"
 description = "Identifiant du texte de consentement : sa version, la langue de l'envoi (le lang du formulaire s'il désigne l'une des sept ; si le formulaire n'a aucun champ lang, celle de l'adresse ; sinon celle du navigateur, de l'instance, puis l'anglais ; pas une preuve de la page affichée) et les 8 premiers caractères hexadécimaux d'une empreinte des textes de la langue, par exemple v1-draft/fr/31aa87b0"
 
+[labels.fr.model.sign_request.field.evidence_check]
+label = "Contrôle des preuves"
+description = "Indique si les preuves d'une demande signée par lien correspondent encore à l'entrée du journal de sécurité écrite à la signature (depuis Sign 0.3.0, aussi le titre, le message et le nom demandé) : conforme, différent (modifié après la signature) ou aucune entrée. Calculé par get seulement, vide dans les listes. Pas infalsifiable : qui écrit dans la base peut changer les deux"
+
+[labels.fr.model.sign_request.field.evidence_check.options]
+matches = "Conforme"
+differs = "Différent"
+no_entry = "Aucune entrée"
+
 [labels.fr.model.sign_request.field.state]
 label = "Statut"
 description = "Statut de la demande : brouillon, envoyée, signée, déclinée, expirée"
@@ -123,10 +132,13 @@ expired = "Expirée"
 [labels.fr.model.sign_request.action.send]
 label = "Envoyer"
 description = "Envoie la demande au signataire"
+done = "Envoyée au signataire"
 
 [labels.fr.model.sign_request.action.sign]
 label = "Signer"
 description = "Enregistre à la main que le signataire a signé ; seulement pour une demande sans document, car une demande portant sur un document est signée par le signataire au moyen du lien"
+confirm = "Enregistrer que le signataire a signé ? Une demande portant sur un document se signe plutôt par son lien de signature."
+done = "Marquée comme signée"
 
 [labels.fr.model.sign_request.action.sign.assert.document_request]
 message = "Une demande portant sur un document est signée par le signataire au moyen du lien ; elle ne peut pas être marquée signée à la main"
@@ -134,14 +146,19 @@ message = "Une demande portant sur un document est signée par le signataire au 
 [labels.fr.model.sign_request.action.decline]
 label = "Décliner"
 description = "Enregistre que le signataire a décliné"
+confirm = "Enregistrer que le signataire a refusé ?"
+done = "Marquée comme refusée"
 
 [labels.fr.model.sign_request.action.expire]
 label = "Marquer expiré"
 description = "Enregistre que la demande est arrivée à échéance sans signature"
+confirm = "Enregistrer que la demande a expiré sans signature ?"
+done = "Marquée comme expirée"
 
 [labels.fr.model.sign_request.action.send_document]
 label = "Envoyer le document"
 description = "Envoyer une demande portant sur un document de Documents : prend l'empreinte SHA-256 du PDF, en garde une copie exacte et passe la demande à envoyée ; créez ensuite le lien de signature"
+done = "Envoyée. Créez ensuite le lien de signature."
 
 [labels.fr.model.sign_link]
 name = "Lien de signature"
@@ -167,3 +184,24 @@ description = "Quand le lien a été révoqué (UTC) ; renseignez-le pour révoq
 [labels.fr.model.sign_link.field.link]
 label = "Lien"
 description = "Le lien lui-même : uniquement dans la réponse de create, affiché une fois, jamais conservé et jamais renvoyé par get, list ou search"
+
+[labels.fr.model.sign_request.section.request]
+label = "Demande"
+
+[labels.fr.model.sign_request.section.options]
+label = "Réglages"
+
+[labels.fr.model.sign_request.section.sent_file]
+label = "Fichier envoyé"
+
+[labels.fr.model.sign_request.section.evidence]
+label = "Preuves"
+
+[labels.fr.model.sign_request.filter.waiting_for_signature]
+label = "En attente de signature"
+
+[labels.fr.model.sign_request.filter.signed]
+label = "Signées"
+
+[labels.fr.model.sign_request.filter.expiring_soon]
+label = "Expire bientôt"

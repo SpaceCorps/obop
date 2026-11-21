@@ -91,6 +91,8 @@ closed = "Zamknięte"
 [labels.pl.model.pos_session.action.close]
 label = "Zamknij"
 description = "Zamyka sesję po przeliczeniu szuflady (tylko kierownik)"
+confirm = "Zamknąć tę sesję? Najpierw policz gotówkę w szufladzie; zamkniętej sesji nie można zmienić."
+done = "Sesja zamknięta"
 
 [labels.pl.model.pos_session.action.close.assert.difference_explained]
 message = "Różnica w kasie nie jest wyjaśniona: przed zamknięciem podaj przyczynę w notatce"
@@ -144,14 +146,18 @@ cancelled = "Anulowane"
 [labels.pl.model.pos_order.action.pay]
 label = "Zapłać"
 description = "Sprzedaż jest w pełni opłacona: odrzucane, dopóki płatności nie pokrywają sumy; tworzy roboczą operację magazynową na pozycję (wymaga grupy inventory.user)"
+done = "Sprzedaż opłacona"
 
 [labels.pl.model.pos_order.action.cancel]
 label = "Anuluj"
 description = "Anuluje sprzedaż, która nigdy nie została opłacona"
+confirm = "Anulować tę sprzedaż? Zachowa numer paragonu i potem nie będzie można jej zmienić."
 
 [labels.pl.model.pos_order.action.refund]
 label = "Zwróć środki"
 description = "Zwraca klientowi środki za opłaconą sprzedaż (tylko kierownik)"
+confirm = "Zwrócić klientowi pieniądze za tę sprzedaż?"
+done = "Zwrócono pieniądze za sprzedaż"
 
 [labels.pl.model.pos_order_line]
 name = "Pozycja sprzedaży"
@@ -254,3 +260,9 @@ description = "Część płatności dokonana gotówką (najmniejsza jednostka wa
 [labels.pl.model.pos_order.field.refund_session_id]
 label = "Zwrócono w sesji"
 description = "Sesja, z której szuflady wypłacono gotówkę zwrotu, ustawiana przez serwer, gdy zwracana jest sprzedaż zamkniętej sesji: sesja otwarta wtedy na kasie tej sprzedaży; pusta, gdy własna sesja sprzedaży była jeszcze otwarta"
+
+[labels.pl.model.pos_session.section.cash_count]
+label = "Liczenie gotówki"
+
+[labels.pl.model.pos_session.filter.open]
+label = "Otwarte"

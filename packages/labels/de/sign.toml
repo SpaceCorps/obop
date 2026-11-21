@@ -109,6 +109,15 @@ description = "Der vollständige Name, den die unterzeichnende Person eingegeben
 label = "Version der Einwilligung"
 description = "Kennung des Einwilligungstexts: Version, die Sprache der Absendung (die lang des Formulars, wenn sie eine der sieben nennt; fehlt im Formular das Feld lang ganz, die der Adresse; sonst die des Browsers, die der Instanz, dann Englisch; kein Beweis für die gezeigte Seite), und die ersten 8 Hex-Zeichen eines Hashs der Texte dieser Sprache, zum Beispiel v1-draft/de/9ebff173"
 
+[labels.de.model.sign_request.field.evidence_check]
+label = "Prüfung der Nachweise"
+description = "Ob die Nachweise einer per Link unterzeichneten Anfrage noch dem Eintrag im Sicherheitsprotokoll beim Unterzeichnen entsprechen (ab Sign 0.3.0 auch Titel, Nachricht und angefragter Name): stimmt überein, weicht ab (nach dem Unterzeichnen geändert) oder kein Eintrag. Nur bei get ermittelt, in Listen leer. Nicht fälschungssicher: Wer die Datenbank schreiben kann, kann beides ändern"
+
+[labels.de.model.sign_request.field.evidence_check.options]
+matches = "Stimmt überein"
+differs = "Weicht ab"
+no_entry = "Kein Eintrag"
+
 [labels.de.model.sign_request.field.state]
 label = "Status"
 description = "Anfragestatus: Entwurf, gesendet, unterzeichnet, abgelehnt, abgelaufen"
@@ -123,10 +132,13 @@ expired = "Abgelaufen"
 [labels.de.model.sign_request.action.send]
 label = "Senden"
 description = "Die Anfrage an den Unterzeichner senden"
+done = "An den Unterzeichner gesendet"
 
 [labels.de.model.sign_request.action.sign]
 label = "Unterzeichnen"
 description = "Von Hand festhalten, dass der Unterzeichner unterzeichnet hat; nur für eine Anfrage ohne Dokument, denn eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über den Link"
+confirm = "Festhalten, dass der Unterzeichner unterschrieben hat? Eine Anfrage zu einem Dokument wird stattdessen über ihren Signaturlink unterschrieben."
+done = "Als unterschrieben markiert"
 
 [labels.de.model.sign_request.action.sign.assert.document_request]
 message = "Eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über den Link; sie kann nicht von Hand als unterzeichnet markiert werden"
@@ -134,14 +146,19 @@ message = "Eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über 
 [labels.de.model.sign_request.action.decline]
 label = "Ablehnen"
 description = "Festhalten, dass der Unterzeichner abgelehnt hat"
+confirm = "Festhalten, dass der Unterzeichner abgelehnt hat?"
+done = "Als abgelehnt markiert"
 
 [labels.de.model.sign_request.action.expire]
 label = "Ablaufen lassen"
 description = "Festhalten, dass die Anfrage ohne Unterschrift abgelaufen ist"
+confirm = "Festhalten, dass die Anfrage ohne Unterschrift abgelaufen ist?"
+done = "Als abgelaufen markiert"
 
 [labels.de.model.sign_request.action.send_document]
 label = "Dokument senden"
 description = "Eine Anfrage zu einem Dokument in Dokumente senden: nimmt den SHA-256 des PDF, hält eine exakte Kopie fest und setzt die Anfrage auf gesendet; danach den Unterschriftslink erstellen"
+done = "Gesendet. Erstellen Sie als Nächstes den Signaturlink."
 
 [labels.de.model.sign_link]
 name = "Unterschriftslink"
@@ -167,3 +184,24 @@ description = "Wann der Link widerrufen wurde (UTC); setzen Sie den Wert, um den
 [labels.de.model.sign_link.field.link]
 label = "Link-Adresse"
 description = "Der Link selbst: nur in der Antwort von create, einmal angezeigt, nie gespeichert und nie von get, list oder search zurückgegeben"
+
+[labels.de.model.sign_request.section.request]
+label = "Anliegen"
+
+[labels.de.model.sign_request.section.options]
+label = "Optionen"
+
+[labels.de.model.sign_request.section.sent_file]
+label = "Gesendete Datei"
+
+[labels.de.model.sign_request.section.evidence]
+label = "Nachweise"
+
+[labels.de.model.sign_request.filter.waiting_for_signature]
+label = "Warten auf Unterschrift"
+
+[labels.de.model.sign_request.filter.signed]
+label = "Unterschrieben"
+
+[labels.de.model.sign_request.filter.expiring_soon]
+label = "Läuft bald ab"

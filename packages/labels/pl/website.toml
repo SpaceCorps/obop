@@ -47,6 +47,7 @@ archived = "Zarchiwizowane"
 [labels.pl.model.website_page.action.publish]
 label = "Opublikuj"
 description = "Udostępnia stronę publicznie (tylko kierownik)"
+done = "Opublikowano"
 
 [labels.pl.model.website_page.action.unpublish]
 label = "Cofnij publikację"
@@ -55,6 +56,7 @@ description = "Wyłącza stronę z sieci i przywraca wersję roboczą"
 [labels.pl.model.website_page.action.archive]
 label = "Archiwizuj"
 description = "Wycofuje opublikowaną stronę na stałe"
+confirm = "Zarchiwizować tę stronę? Zniknie na stałe, jej adres odpowie, że została usunięta, i nie będzie można jej już zmienić."
 
 [labels.pl.model.website_menu_item]
 name = "Pozycja menu"
@@ -137,6 +139,7 @@ archived = "Zarchiwizowane"
 [labels.pl.model.website_blog_post.action.publish]
 label = "Opublikuj"
 description = "Udostępnia wpis publicznie (tylko kierownik)"
+done = "Opublikowano"
 
 [labels.pl.model.website_blog_post.action.unpublish]
 label = "Cofnij publikację"
@@ -145,6 +148,7 @@ description = "Wyłącza wpis z sieci i przywraca wersję roboczą"
 [labels.pl.model.website_blog_post.action.archive]
 label = "Archiwizuj"
 description = "Wycofuje opublikowany wpis"
+confirm = "Zarchiwizować ten wpis? Zniknie na stałe i nie będzie można go już zmienić."
 
 [labels.pl.model.website_form_submission]
 name = "Zgłoszenie z formularza"
@@ -195,10 +199,12 @@ spam = "Spam"
 [labels.pl.model.website_form_submission.action.handle]
 label = "Oznacz jako obsłużone"
 description = "Oznacza wiadomość jako odpowiedzianą lub załatwioną"
+done = "Oznaczono jako obsłużone"
 
 [labels.pl.model.website_form_submission.action.mark_spam]
 label = "Oznacz jako spam"
 description = "Oznacza wiadomość jako spam"
+done = "Oznaczono jako spam"
 
 [labels.pl.model.website_page_translation]
 name = "Tłumaczenie strony"
@@ -295,3 +301,21 @@ description = "Obraz na górze wpisu i w podglądach linków (PNG, JPEG, WebP lu
 [labels.pl.model.website_blog_post.field.cover_alt]
 label = "Opis obrazu tytułowego"
 description = "Tekst opisujący obraz tytułowy dla osób, które go nie widzą"
+
+[labels.pl.model.website_page.section.content]
+label = "Treść"
+
+[labels.pl.model.website_page.section.cover_picture]
+label = "Zdjęcie okładki"
+
+[labels.pl.model.website_page.section.search_engines]
+label = "Wyszukiwarki"
+
+[labels.pl.model.website_blog_post.section.content]
+label = "Treść"
+
+[labels.pl.model.website_blog_post.section.cover_picture]
+label = "Zdjęcie okładki"
+
+[labels.pl.model.website_form_submission.filter.new]
+label = "Nowe"

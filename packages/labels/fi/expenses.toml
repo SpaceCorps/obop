@@ -73,18 +73,24 @@ refused = "Hylätty"
 [labels.fi.model.expenses_expense.action.submit]
 label = "Lähetä hyväksyttäväksi"
 description = "Lähetä kulukorvaus hyväksyttäväksi"
+done = "Lähetetty hyväksyttäväksi"
 
 [labels.fi.model.expenses_expense.action.approve]
 label = "Hyväksy"
 description = "Hyväksy lähetetty kulukorvaus (vain esihenkilö)"
+done = "Kulukorvaus hyväksytty"
 
 [labels.fi.model.expenses_expense.action.pay]
 label = "Maksa"
 description = "Kirjaa korvaus maksetuksi (vain talous); maksupäivä on tänään, ellei sitä ole annettu"
+confirm = "Kirjataanko tämä kulukorvaus maksetuksi?"
+done = "Kulukorvaus merkitty maksetuksi"
 
 [labels.fi.model.expenses_expense.action.refuse]
 label = "Hylkää"
 description = "Hylkää lähetetty kulukorvaus (vain esihenkilö)"
+confirm = "Hylätäänkö tämä kulukorvaus? Hylättyä kulukorvausta ei voi enää muuttaa."
+done = "Kulukorvaus hylätty"
 
 [labels.fi.model.expenses_expense.field.number]
 label = "Numero"
@@ -93,3 +99,24 @@ description = "Korvauksen numero, esimerkiksi EXP-2026-0042, annetaan korvausta 
 [labels.fi.model.expenses_expense.field.receipt]
 description = "Kuitin valokuva tai skannaus (PDF tai kuva); ladattavissa vain niille, jotka saavat lukea korvauksen"
 label = "Kuitti"
+
+[labels.fi.model.expenses_expense.section.expense]
+label = "Kulu"
+
+[labels.fi.model.expenses_expense.section.notes]
+label = "Muistiinpanot"
+
+[labels.fi.model.expenses_expense.section.claimed_by]
+label = "Hakija"
+
+[labels.fi.model.expenses_expense.section.payment]
+label = "Maksu"
+
+[labels.fi.model.expenses_expense.filter.my_claims]
+label = "Omat kulukorvaukset"
+
+[labels.fi.model.expenses_expense.filter.to_approve]
+label = "Hyväksyttävät"
+
+[labels.fi.model.expenses_expense.filter.to_pay]
+label = "Maksettavat"

@@ -25,7 +25,12 @@ description = "Interna anteckningar i fritext"
 [labels.sv.model.party.action.erase]
 label = "Radera"
 description = "Anonymisera parten på plats och registrera raderingen"
+confirm = "Radera kontaktens personuppgifter? Det går inte att ångra."
+done = "Personuppgifterna raderade"
 
 [labels.sv.model.party.field.photo]
 label = "Foto"
 description = "Foto eller logotyp för kontakten (PNG, JPEG, WebP eller GIF, upp till 2 MiB)"
+
+[labels.sv.model.party.filter.not_erased]
+label = "Ej anonymiserade"

@@ -57,11 +57,27 @@ archived = "Arkiverad"
 [labels.sv.model.knowledge_article.action.publish]
 label = "Publicera"
 description = "Publicera artikeln (endast chef)"
+done = "Artikeln är publicerad"
 
 [labels.sv.model.knowledge_article.action.unpublish]
 label = "Avpublicera"
 description = "Flytta artikeln tillbaka till utkast"
+done = "Artikeln är ett utkast igen"
 
 [labels.sv.model.knowledge_article.action.archive]
 label = "Arkivera"
 description = "Arkivera en artikel som är inaktuell"
+confirm = "Arkivera den här artikeln? Inget steg tar tillbaka den."
+done = "Artikeln är arkiverad"
+
+[labels.sv.model.knowledge_article.section.article]
+label = "Artikel"
+
+[labels.sv.model.knowledge_article.section.details]
+label = "Detaljer"
+
+[labels.sv.model.knowledge_article.filter.published]
+label = "Publicerade"
+
+[labels.sv.model.knowledge_article.filter.drafts]
+label = "Utkast"

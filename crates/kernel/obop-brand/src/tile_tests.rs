@@ -545,3 +545,26 @@ fn the_moved_colour_maths_is_pinned_by_value() {
         );
     }
 }
+
+#[test]
+fn the_inline_logo_is_printed_once_per_logo_and_stays_byte_for_byte() {
+    use crate::logo::prints::INLINE_PRINTS;
+    let prints = || INLINE_PRINTS.with(|n| n.get());
+    for (stored, accent) in [(ART, None), ("", Some("#e11d48"))] {
+        let l = Logo::resolve(stored, "MOHV", accent);
+        let before = prints();
+        let first = l.inline(28);
+        // A fresh logo prints the same text: the kept text is the printed one.
+        let fresh = Logo::resolve(stored, "MOHV", accent).inline(28);
+        assert_eq!(first, fresh);
+        let mid = prints();
+        assert_eq!(mid - before, 2, "one print per logo");
+        for _ in 0..5 {
+            assert_eq!(l.inline(28), first);
+        }
+        assert_eq!(prints(), mid, "the renders after the first print nothing");
+        // Another size is printed as it was asked for, and does not replace the kept one.
+        assert!(l.inline(40).contains(" width=\"40\" height=\"40\""));
+        assert_eq!(l.inline(28), first);
+    }
+}

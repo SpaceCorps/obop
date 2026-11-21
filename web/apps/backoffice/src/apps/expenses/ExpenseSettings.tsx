@@ -2,7 +2,7 @@
 // may approve it too. Off by default: the server refuses such an approval. Read with
 // `expenses_setting.get`, changed with `expenses_setting.update` (administrators only).
 import { useEffect, useState } from "react";
-import { Card, Notice, Skeleton, Switch, t } from "@obop/ui";
+import { Card, Notice, Skeleton, Switch, t, useWorded } from "@obop/ui";
 import { call } from "../../api.ts";
 import { useData } from "../../data.tsx";
 import { serverMessage } from "../../serverMessage.ts";
@@ -11,7 +11,7 @@ import "./expenses.css";
 export function ExpenseSettings() {
   const d = useData();
   const [allow, setAllow] = useState<boolean | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useWorded();
   const [busy, setBusy] = useState(false);
   // Administrators see Customize; they are the ones who may change a company setting.
   const isAdmin = d.apps.some((a) => a.id === "customize");
@@ -22,7 +22,7 @@ export function ExpenseSettings() {
       if (!live) return;
       if (r.kind === "ok")
         setAllow(!!(r.value as { allow_self_approval?: boolean }).allow_self_approval);
-      else setError(r.kind === "error" ? serverMessage(r.message) : "");
+      else setError(() => (r.kind === "error" ? serverMessage(r.message) : ""));
     });
     return () => {
       live = false;

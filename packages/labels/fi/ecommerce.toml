@@ -298,26 +298,35 @@ refunded = "Hyvitetty"
 [labels.fi.model.ecommerce_order.action.mark_paid]
 label = "Merkitse maksetuksi"
 description = "Maksu on saapunut"
+done = "Merkitty maksetuksi"
 
 [labels.fi.model.ecommerce_order.action.ship]
 label = "Lähetä"
 description = "Paketti on luovutettu kuljetusliikkeelle"
+confirm = "Merkitäänkö tämä tilaus lähetetyksi? Lisää ensin seurantanumero, jos sellainen on."
+done = "Lähetetty"
 
 [labels.fi.model.ecommerce_order.action.deliver]
 label = "Toimita"
 description = "Paketti on saapunut ostajalle"
+done = "Toimitettu"
 
 [labels.fi.model.ecommerce_order.action.cancel]
 label = "Peruuta"
 description = "Peruuta tilaus, jota ei ole koskaan maksettu"
+confirm = "Perutaanko tämä tilaus? Sen varasto palaa tuotelistauksiin, eikä sitä voi enää muuttaa."
 
 [labels.fi.model.ecommerce_order.action.refund]
 label = "Hyvitä"
 description = "Palauta maksetun, toimittamattoman tilauksen rahat (vain esihenkilö)"
+confirm = "Hyvitetäänkö tämä tilaus? Rahat palautetaan ostajalle ja varasto tuotelistauksiin."
+done = "Hyvitetty"
 
 [labels.fi.model.ecommerce_order.action.refund_delivered]
 label = "Hyvitä toimitettu"
 description = "Palauta toimitetun tilauksen rahat, esimerkiksi palautuksen jälkeen (vain esihenkilö)"
+confirm = "Hyvitetäänkö tämä toimitettu tilaus? Rahat palautetaan ostajalle; tavarat eivät palaa hyllyyn."
+done = "Hyvitetty"
 
 [labels.fi.model.ecommerce_order_line]
 name = "Tilausrivi"
@@ -552,7 +561,48 @@ description = "Jo käsiteltyjen palveluntarjoajan tapahtumien tunnisteet JSON-mu
 [labels.fi.model.ecommerce_payment.action.mark_failed]
 label = "Merkitse epäonnistuneeksi"
 description = "Palveluntarjoaja ilmoittaa, että maksu epäonnistui"
+confirm = "Merkitäänkö tämä maksu epäonnistuneeksi?"
 
 [labels.fi.model.ecommerce_payment.action.cancel]
 label = "Peruuta"
 description = "Lopeta tämän maksun odottaminen"
+confirm = "Lopetetaanko tämän maksun odottaminen?"
+
+[labels.fi.model.ecommerce_listing.section.in_the_shop]
+label = "Verkkokaupassa"
+
+[labels.fi.model.ecommerce_listing.section.stock]
+label = "Varasto"
+
+[labels.fi.model.ecommerce_listing.section.product_page]
+label = "Tuotesivu"
+
+[labels.fi.model.ecommerce_listing.section.advanced]
+label = "Lisäasetukset"
+
+[labels.fi.model.ecommerce_order.section.customer]
+label = "Asiakas"
+
+[labels.fi.model.ecommerce_order.section.delivery]
+label = "Toimitus"
+
+[labels.fi.model.ecommerce_order.section.amounts]
+label = "Summat"
+
+[labels.fi.model.ecommerce_order.section.payment]
+label = "Maksu"
+
+[labels.fi.model.ecommerce_order.section.checkout_record]
+label = "Kassatapahtuma"
+
+[labels.fi.model.ecommerce_listing.filter.in_the_shop]
+label = "Kaupassa"
+
+[labels.fi.model.ecommerce_listing.filter.out_of_stock]
+label = "Loppu varastosta"
+
+[labels.fi.model.ecommerce_order.filter.to_ship]
+label = "Lähetettävät"
+
+[labels.fi.model.ecommerce_order.filter.waiting_for_payment]
+label = "Odottaa maksua"

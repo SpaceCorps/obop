@@ -65,6 +65,12 @@ pub(crate) fn take_lock(c: &mut Client) -> std::result::Result<(), postgres::Err
     c.batch_execute(FRESH_SQL)
 }
 
+/// See what other sessions committed since this one last looked names up (see [`FRESH_SQL`]),
+/// without the lock: for a question asked again after a "missing" answer (K22).
+pub(crate) fn see_now(c: &mut Client) -> std::result::Result<(), postgres::Error> {
+    c.batch_execute(FRESH_SQL)
+}
+
 /// What a part says about its data: findings for [`inspect`].
 pub type Audit = fn(&mut Client) -> Result<Vec<Finding>>;
 

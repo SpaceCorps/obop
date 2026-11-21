@@ -14,7 +14,8 @@
 //!
 //! A cash refund of a sale whose session is already closed (U8, pos 0.7.0) is paid out of the
 //! drawer of the session open at the sale's till at that moment: the refund records that session
-//! in `refund_session_id` once the refund has happened (chosen while the sale is still paid), and
+//! in `refund_session_id` in the same unit as the move (chosen while the sale is still paid; pos
+//! 0.7.2, U20), and
 //! its expected cash subtracts the cash of such refunds. With no session open at the till such a refund is refused: its cash would leave no
 //! session's drawer. A sale refunded while its own session is open needs nothing: it simply stops
 //! counting as paid there.
@@ -200,24 +201,26 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
         "pos_order.refund",
         Box::new(move |_, input, inner| {
             let id = input_text(input, "id");
-            // Which drawer pays out is decided while the sale is still paid; it is written only
-            // once the refund happened, so a refused refund leaves no session on the sale.
+            // Which drawer pays out is decided while the sale is still paid, under the write lock
+            // that also serialises the close of a session, and handed to the action, which writes
+            // it in its own unit with the move (U20): a refused refund leaves no session on the
+            // sale, and a refund and its drawer are stored together or not at all.
             let session = if id.is_empty() {
                 None
             } else {
                 refund_session(&*b, &id)?
             };
-            let out = inner(input)?;
-            if let Some(session) = session
-                && b.get("pos_order", &id)
-                    .map_err(|e| e.to_string())?
-                    .is_some_and(|o| text(&o, "state") == "refunded")
-            {
-                let mut f = Fields::new();
-                f.insert("refund_session_id".into(), J::from(session));
-                b.update("pos_order", &id, &f).map_err(|e| e.to_string())?;
+            match (session, input) {
+                (Some(session), Value::Map(m)) => {
+                    let mut with = m.clone();
+                    with.insert(
+                        obop_commands::ACTION_STAMP.into(),
+                        Value::map([("refund_session_id", Value::text(&session))]),
+                    );
+                    inner(&Value::Map(with))
+                }
+                _ => inner(input),
             }
-            Ok(out)
         }),
     );
     let b = store.backend();

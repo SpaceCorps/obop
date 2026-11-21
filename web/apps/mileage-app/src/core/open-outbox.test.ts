@@ -3,7 +3,9 @@ import { FakeDatabaseFile, FakeSecrets, fakePorts } from "../test-support/fake-f
 import { HOST_SCHEMA } from "./host-state.ts";
 import {
   META_STALE_FILE_RECOVERED,
+  databaseProblem,
   dismissStaleFileNote,
+  eraseOutbox,
   isNotADatabase,
   openOutbox as openOutboxWith,
   policyFor,
@@ -439,5 +441,60 @@ describe("a new database on iOS means a new installation", () => {
     expect(opened.fresh).toBe(true);
     expect(secrets.items.has("server")).toBe(true);
     expect(secrets.items.has("tokens")).toBe(true);
+  });
+});
+
+describe("erasing the trips on this phone when they cannot be opened (L34)", () => {
+  test("a file no key fits is erased with its key, and the next open makes a new key and an empty file", async () => {
+    const file = new FakeDatabaseFile();
+    file.plantStaleFile(OTHER);
+    const secrets = new FakeSecrets();
+    secrets.items.set("db-key", KEY);
+    signedIn(secrets);
+    const ports = fakePorts(file, secrets, { key: "c".repeat(64) });
+    const failed = await openOutbox(ports, NAMES, ANDROID).catch((e: unknown) => e);
+    expect(databaseProblem(failed)).toBe("wrong_key");
+    await eraseOutbox(ports, NAMES);
+    expect(file.deletes).toBe(1);
+    expect(secrets.items.has("db-key")).toBe(false);
+    // The sign-in is not touched: the driver stays signed in.
+    expect(secrets.items.has("tokens")).toBe(true);
+    const opened = await openOutbox(ports, NAMES, ANDROID);
+    expect(opened).toMatchObject({ fresh: true });
+    expect(secrets.items.get("db-key")).toBe("c".repeat(64));
+    expect(file.keyOfFile).toBe("c".repeat(64));
+    expect(await createSqlStore(opened.db).listTrips()).toEqual([]);
+  });
+
+  test("a deletion that fails keeps the key", async () => {
+    const secrets = new FakeSecrets();
+    secrets.items.set("db-key", KEY);
+    const ports = {
+      secrets,
+      deleteFile: async () => {
+        throw new Error("busy");
+      },
+    };
+    await expect(eraseOutbox(ports, NAMES)).rejects.toThrow("busy");
+    expect(secrets.items.get("db-key")).toBe(KEY);
+  });
+});
+
+describe("what the screen says about a database that cannot be opened (L51)", () => {
+  test("each known cause is a word, and anything else is said as it is", async () => {
+    const plain = new FakeDatabaseFile();
+    plain.cipherVersion = null;
+    const noCipher = await openOutbox(
+      fakePorts(plain, new FakeSecrets(), { key: KEY }),
+      NAMES,
+      ANDROID,
+    ).catch((e: unknown) => e);
+    expect(databaseProblem(noCipher)).toBe("no_cipher");
+    expect(databaseProblem(new Error("file is not a database"))).toBe("wrong_key");
+    expect(
+      databaseProblem(new Error("The database is from a newer version of the app (schema 2)")),
+    ).toBe("newer");
+    expect(databaseProblem(new Error("disk I/O error"))).toBe("other");
+    expect(databaseProblem("text")).toBe("other");
   });
 });

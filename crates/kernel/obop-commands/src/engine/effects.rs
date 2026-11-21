@@ -166,6 +166,9 @@ struct Runner<'e> {
     now_us: i64,
     /// Today's date on the wall clock of the platform zone.
     today: String,
+    /// The module of the action the caller named: what its effects may write depends on it
+    /// (`sign::effect_may_write_from`).
+    origin: String,
 }
 
 /// Run the action `cmd` of `def` on record `id` inside `unit`. `depth` is 0 for the action the
@@ -189,6 +192,13 @@ pub(crate) fn run_action(
         now,
         now_us,
         today,
+        origin: eng
+            .models
+            .read()
+            .unwrap()
+            .get(def.name)
+            .map(|m| m.module.clone())
+            .unwrap_or_default(),
     };
     r.action(unit, def, cmd, id, depth)
 }
@@ -326,8 +336,8 @@ impl Runner<'_> {
     /// The record with its computed fields, as `$self` sees it.
     fn me(&self, unit: &Unit<'_>, def: &ModelDef, id: &str) -> R<Fields> {
         let look = |n: &str| self.look(n);
-        let mut rec =
-            Reads::get(unit, def.name, id)?.ok_or_else(|| format!("no {} {id}", def.name))?;
+        let mut rec = Reads::get(unit, def.name, id)?
+            .ok_or_else(|| crate::errors::no_record(def.name, id))?;
         Computer::new(unit, &look, false).fill(def, id, &mut rec);
         Ok(rec)
     }
@@ -601,6 +611,12 @@ impl Runner<'_> {
 
     /// An effect writes only a model that has the generated `create` and `update`.
     fn writable(&self, def: &ModelDef) -> R<()> {
+        if !crate::sign::effect_may_write_from(def.name, &self.origin) {
+            return Err(format!(
+                "{} is changed by the actions of its own module only, so an action of {} cannot write it",
+                def.name, self.origin
+            ));
+        }
         if self.eng.effects_may_write(def.name) {
             return Ok(());
         }

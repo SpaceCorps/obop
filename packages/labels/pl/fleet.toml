@@ -60,14 +60,18 @@ retired = "Wycofane"
 [labels.pl.model.fleet_vehicle.action.dispatch]
 label = "Wydaj"
 description = "Oddaje dostępny pojazd do użytku"
+done = "Pojazd jest w użyciu"
 
 [labels.pl.model.fleet_vehicle.action.return_to_pool]
 label = "Zwróć do puli"
 description = "Zwraca używany pojazd do puli dostępnych"
+done = "Pojazd wrócił do puli"
 
 [labels.pl.model.fleet_vehicle.action.retire]
 label = "Wycofaj"
 description = "Trwale usuwa dostępny pojazd z floty (wymaga osoby zatwierdzającej)"
+confirm = "Wycofać ten pojazd na stałe? Żaden krok go nie przywróci."
+done = "Pojazd jest wycofany"
 
 [labels.pl.model.fleet_vehicle_driver]
 name = "Kierowca"
@@ -101,10 +105,13 @@ suspended = "Zawieszone"
 [labels.pl.model.fleet_vehicle_driver.action.suspend]
 label = "Zawieś"
 description = "Oznacza kierowcę jako zawieszonego, na przykład po wygaśnięciu prawa jazdy"
+confirm = "Zawiesić tego kierowcę?"
+done = "Kierowca jest zawieszony"
 
 [labels.pl.model.fleet_vehicle_driver.action.reactivate]
 label = "Aktywuj ponownie"
 description = "Przywraca zawieszonemu kierowcy status aktywny"
+done = "Kierowca jest znów aktywny"
 
 [labels.pl.model.fleet_vehicle_service]
 name = "Serwis pojazdu"
@@ -158,15 +165,38 @@ cancelled = "Anulowane"
 [labels.pl.model.fleet_vehicle_service.action.complete]
 label = "Zakończ"
 description = "Oznacza zaplanowane prace jako wykonane"
+done = "Serwis jest wykonany"
 
 [labels.pl.model.fleet_vehicle_service.action.cancel]
 label = "Anuluj"
 description = "Anuluje zaplanowane prace"
+confirm = "Anulować ten serwis?"
+done = "Serwis jest anulowany"
 
 [labels.pl.model.fleet_vehicle.action.send_to_workshop]
 label = "Do warsztatu"
 description = "Wysłać dostępny pojazd do warsztatu na przegląd lub naprawę"
+done = "Pojazd jest w warsztacie"
 
 [labels.pl.model.fleet_vehicle.action.back_in_service]
 label = "Powrót z warsztatu"
 description = "Przywrócić pojazd z warsztatu do puli dostępnych"
+done = "Pojazd wrócił do puli"
+
+[labels.pl.model.fleet_vehicle.filter.available]
+label = "Dostępne"
+
+[labels.pl.model.fleet_vehicle.filter.in_the_workshop]
+label = "W warsztacie"
+
+[labels.pl.model.fleet_vehicle_driver.filter.licence_expiring]
+label = "Wygasające prawo jazdy"
+
+[labels.pl.model.fleet_vehicle_driver.filter.suspended]
+label = "Zawieszeni"
+
+[labels.pl.model.fleet_vehicle_service.filter.planned]
+label = "Zaplanowane"
+
+[labels.pl.model.fleet_vehicle_service.filter.done]
+label = "Wykonane"

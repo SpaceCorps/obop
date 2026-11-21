@@ -513,9 +513,22 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                                 "from": a.transition.and_then(|t| t.from),
                                 "to": a.transition.map(|t| t.to),
                             });
+                            if let Some(w) = a.one_way {
+                                o["one_way"] = json!(w);
+                            }
+                            if a.whole_model {
+                                o["whole_model"] = json!(true);
+                            }
                             translations(&mut o, &a.labels, &a.descriptions);
                             if let Some(u) = &a.ui {
                                 o["ui"] = ui::action_ui(u);
+                                // Its confirm and done per language (R17), beside the English.
+                                let short = a.id.rsplit('.').next().unwrap_or_default();
+                                for (key, all) in [("confirm_labels", &x.confirm_labels), ("done_labels", &x.done_labels)] {
+                                    if let Some(t) = all.get(short).filter(|t| !t.is_empty()) {
+                                        o["ui"][key] = json!(t);
+                                    }
+                                }
                             }
                             o
                         }).collect::<Vec<_>>(),
@@ -569,6 +582,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
         // The instance currency (D95): the default `$instance.currency` and what the interface
         // shows a money value in when the record names none.
         "currency": d.currency(),
+        // The currency codes a write accepts (ISO 4217 as bundled, U5), so a picker offers no
+        // code the server refuses (U15).
+        "currencies": obop_registry::limits::ISO_4217,
         "modules": modules
     })
 }

@@ -82,6 +82,7 @@ confirmed = "Bestätigt"
 [labels.de.model.planning_shift.action.publish]
 label = "Veröffentlichen"
 description = "Die Schicht dem zugewiesenen Mitarbeiter bekannt geben, bei einer offenen Schicht allen"
+done = "Veröffentlicht"
 
 [labels.de.model.planning_shift.action.unpublish]
 label = "Veröffentlichung zurückziehen"
@@ -90,9 +91,19 @@ description = "Eine veröffentlichte Schicht wieder auf offen setzen"
 [labels.de.model.planning_shift.action.confirm]
 label = "Bestätigen"
 description = "Der Mitarbeiter bestätigt, dass er die Schicht arbeitet"
+done = "Bestätigt"
 
 [labels.de.model.planning_shift.rule.ends_after_start]
 message = "Die Schicht endet, bevor sie beginnt: Legen Sie ein Ende nach dem Beginn fest"
 
 [labels.de.model.planning_shift.rule.no_double_shift]
 message = "Der Mitarbeiter hat zu dieser Zeit bereits eine Schicht: Wählen Sie eine andere Zeit oder einen anderen Mitarbeiter"
+
+[labels.de.model.planning_shift.filter.open_shifts]
+label = "Offene Schichten"
+
+[labels.de.model.planning_shift.filter.not_published]
+label = "Nicht veröffentlicht"
+
+[labels.de.model.planning_shift.filter.coming_up]
+label = "Demnächst"

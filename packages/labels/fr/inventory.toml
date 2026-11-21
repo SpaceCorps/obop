@@ -124,10 +124,14 @@ cancelled = "Annulé"
 [labels.fr.model.inventory_move.action.validate]
 label = "Valider"
 description = "Confirme que les marchandises ont réellement bougé : la quantité quitte l’article source et arrive à l’article de destination (gestionnaires de stock uniquement) ; un mouvement terminé ne peut pas être annulé"
+confirm = "Valider ce mouvement ? Le stock change tout de suite et un mouvement terminé ne peut pas être annulé."
+done = "Stock mis à jour"
 
 [labels.fr.model.inventory_move.action.cancel]
 label = "Annuler"
 description = "Annule un mouvement en brouillon"
+confirm = "Annuler ce mouvement ?"
+done = "Mouvement annulé"
 
 [labels.fr.model.inventory_item.field.below_reorder]
 description = "Indique si l’article demande attention : la quantité est négative, ou au niveau de réapprovisionnement ou en dessous"
@@ -152,3 +156,27 @@ description = "Le document d’origine du mouvement, par exemple un numéro de c
 [labels.fr.model.inventory_move.field.lot]
 label = "Lot"
 description = "Le lot déplacé, quand le produit est suivi par lots ; la validation modifie l'article de stock de ce lot (créé s'il manque)"
+
+[labels.fr.model.inventory_item.filter.low_stock]
+label = "Stock bas"
+
+[labels.fr.model.inventory_item.filter.in_stock]
+label = "En stock"
+
+[labels.fr.model.inventory_move.filter.to_do]
+label = "À faire"
+
+[labels.fr.model.inventory_move.filter.receipts]
+label = "Réceptions"
+
+[labels.fr.model.inventory_move.filter.deliveries]
+label = "Livraisons"
+
+[labels.fr.model.inventory_move.filter.stock_counts]
+label = "Inventaires"
+
+[labels.fr.model.inventory_move.filter.scrap]
+label = "Rebuts"
+
+[labels.fr.model.inventory_move.filter.late]
+label = "En retard"

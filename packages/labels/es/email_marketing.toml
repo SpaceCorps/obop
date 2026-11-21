@@ -136,14 +136,19 @@ cancelled = "Cancelado"
 [labels.es.model.email_marketing_campaign.action.schedule]
 label = "Programar"
 description = "Marcar la campaña como programada para su día"
+done = "Programada"
 
 [labels.es.model.email_marketing_campaign.action.send]
 label = "Marcar como enviada"
 description = "Marcar la campaña programada como enviada; no se envía ningún correo (solo responsables)"
+confirm = "¿Marcar esta campaña como enviada? No se envía ningún correo: esta instancia todavía no envía correo. Después la campaña ya no se podrá modificar."
+done = "Marcada como enviada; no se envió ningún correo"
 
 [labels.es.model.email_marketing_campaign.action.send_now]
 label = "Marcar como enviada"
 description = "Marcar como enviada una campaña en borrador; no se envía ningún correo (solo responsables)"
+confirm = "¿Marcar esta campaña como enviada? No se envía ningún correo: esta instancia todavía no envía correo. Después la campaña ya no se podrá modificar."
+done = "Marcada como enviada; no se envió ningún correo"
 
 [labels.es.model.email_marketing_campaign.action.unschedule]
 label = "Cancelar programación"
@@ -152,3 +157,19 @@ description = "Devolver una campaña programada a borrador"
 [labels.es.model.email_marketing_campaign.action.cancel]
 label = "Cancelar"
 description = "Cancelar una campaña programada"
+confirm = "¿Cancelar esta campaña? Después ya no se podrá modificar."
+
+[labels.es.model.email_marketing_campaign.section.message]
+label = "Mensaje"
+
+[labels.es.model.email_marketing_campaign.section.content]
+label = "Contenido"
+
+[labels.es.model.email_marketing_campaign.section.schedule]
+label = "Calendario"
+
+[labels.es.model.email_marketing_campaign.section.results]
+label = "Resultados"
+
+[labels.es.model.email_marketing_contact.filter.may_be_mailed]
+label = "Se puede enviar correo"

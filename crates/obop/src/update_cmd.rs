@@ -229,13 +229,47 @@ fn platform(sub: &str, args: &mut Vec<String>) -> Exit {
                         _ => String::new(),
                     };
                     let min_from = take(args, "--min-from").unwrap_or_default();
+                    // The release key (H7): a PKCS#8 file that `release keygen` wrote.
+                    let key = match take(args, "--signing-key") {
+                        Some(f) => Some(
+                            std::fs::read(&f)
+                                .map_err(|e| fail(&format!("cannot read {f}: {e}")))?,
+                        ),
+                        None => None,
+                    };
                     if !args.is_empty() {
                         return Err(usage());
                     }
                     let r = platform
-                        .publish_release(&version, &image, &notes, &min_from)
+                        .publish_release_signed(&version, &image, &notes, &min_from, key.as_deref())
                         .map_err(|e| fail(&e))?;
-                    println!("published {} ({})", r.version, r.image);
+                    let signed = if r.signature.is_empty() {
+                        "not signed"
+                    } else {
+                        "signed"
+                    };
+                    println!("published {} ({}), {signed}", r.version, r.image);
+                    Ok(())
+                }
+                "keygen" => {
+                    // A new release key, written once to a file of the owner's choosing; the
+                    // public half is printed to pin in obop-update's RELEASE_PUBLIC_KEYS.
+                    let out = take(args, "--out").ok_or_else(usage)?;
+                    if !args.is_empty() {
+                        return Err(usage());
+                    }
+                    let (pkcs8, public) =
+                        obop_update::release::generate_release_key().map_err(|e| fail(&e))?;
+                    let mut f = create_private_file(std::path::Path::new(&out))
+                        .map_err(|e| fail(&format!("cannot create {out}: {e}")))?;
+                    std::io::Write::write_all(&mut f, &pkcs8)
+                        .and_then(|()| f.sync_all())
+                        .map_err(|e| fail(&format!("cannot write {out}: {e}")))?;
+                    println!("wrote the release key to {out}; keep it secret and off this server");
+                    if let Some(w) = PRIVATE_FILE_WARNING {
+                        eprintln!("warning: {w}");
+                    }
+                    println!("public key: {public}");
                     Ok(())
                 }
                 "withdraw" => {
@@ -316,5 +350,58 @@ fn platform(sub: &str, args: &mut Vec<String>) -> Exit {
             Ok(())
         }
         _ => Err(usage()),
+    }
+}
+
+/// What `release keygen` says where the file it writes is not made owner-only (U75): on Windows
+/// the file inherits the folder's access list, so the key belongs on a Unix host.
+#[cfg(unix)]
+const PRIVATE_FILE_WARNING: Option<&str> = None;
+#[cfg(not(unix))]
+const PRIVATE_FILE_WARNING: Option<&str> = Some(
+    "on this system the key file inherits the access rights of its folder and is not made \
+     readable by its owner only; make release keys on a Unix host (mode 0600), or restrict the \
+     file yourself",
+);
+
+/// A new file that only its owner can read, created that way (mode 0600 on Unix, never wider for
+/// a moment); an existing file is never overwritten. The release key of `release keygen` (H7).
+/// Elsewhere (Windows) the file takes its folder's access list and the command prints
+/// `PRIVATE_FILE_WARNING`.
+fn create_private_file(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        o.mode(0o600);
+    }
+    o.open(path)
+}
+
+#[cfg(test)]
+mod private_file_tests {
+    #[test]
+    fn the_release_key_file_is_created_private_and_never_overwritten() {
+        let dir = std::env::temp_dir().join(format!("obop-keyfile-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("release.pk8");
+        drop(super::create_private_file(&p).unwrap());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&p).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "{mode:o}");
+            assert!(super::PRIVATE_FILE_WARNING.is_none());
+        }
+        // Not made owner-only off Unix (U75): the command says so instead of claiming it.
+        #[cfg(not(unix))]
+        assert!(super::PRIVATE_FILE_WARNING.is_some_and(|w| w.contains("Unix host")));
+        // One sentence with single spaces (a lost line continuation left runs of them).
+        #[cfg(not(unix))]
+        assert!(super::PRIVATE_FILE_WARNING.is_some_and(|w| !w.contains("  ")));
+        assert!(super::create_private_file(&p).is_err(), "never overwritten");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

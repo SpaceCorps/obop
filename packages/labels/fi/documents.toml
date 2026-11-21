@@ -87,10 +87,13 @@ archived = "Arkistoitu"
 [labels.fi.model.documents_document.action.publish]
 label = "Julkaise"
 description = "Tee luonnoksesta voimassa oleva versio"
+done = "Asiakirja on julkaistu"
 
 [labels.fi.model.documents_document.action.archive]
 label = "Arkistoi"
 description = "Arkistoi julkaistu asiakirja (vain esihenkilö)"
+confirm = "Arkistoidaanko tämä asiakirja? Mikään vaihe ei palauta sitä."
+done = "Asiakirja on arkistoitu"
 
 [labels.fi.model.documents_document.field.attachment]
 label = "Tiedosto"
@@ -99,3 +102,18 @@ description = "Itse asiakirjatiedosto (PDF, kuva, teksti, taulukko tai toimisto-
 [labels.fi.model.documents_document.field.open_to_all]
 label = "Avoin kaikille"
 description = "Näkevätkö kaikki, joilla on asiakirjojen lukuoikeus, tämän: tosi julkisille ja sisäisille asiakirjoille"
+
+[labels.fi.model.documents_document.section.document]
+label = "Asiakirja"
+
+[labels.fi.model.documents_document.section.where_it_is_kept]
+label = "Säilytyspaikka"
+
+[labels.fi.model.documents_document.filter.expiring_soon]
+label = "Vanhenee pian"
+
+[labels.fi.model.documents_document.filter.drafts]
+label = "Luonnokset"
+
+[labels.fi.model.documents_document.filter.confidential]
+label = "Luottamukselliset"

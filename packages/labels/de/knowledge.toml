@@ -57,11 +57,27 @@ archived = "Archiviert"
 [labels.de.model.knowledge_article.action.publish]
 label = "Veröffentlichen"
 description = "Den Artikel veröffentlichen (nur Führungskräfte)"
+done = "Der Artikel ist veröffentlicht"
 
 [labels.de.model.knowledge_article.action.unpublish]
 label = "Veröffentlichung zurückziehen"
 description = "Den Artikel zurück auf Entwurf setzen"
+done = "Der Artikel ist wieder ein Entwurf"
 
 [labels.de.model.knowledge_article.action.archive]
 label = "Archivieren"
 description = "Einen veralteten Artikel archivieren"
+confirm = "Diesen Artikel archivieren? Kein Schritt holt ihn zurück."
+done = "Der Artikel ist archiviert"
+
+[labels.de.model.knowledge_article.section.article]
+label = "Artikel"
+
+[labels.de.model.knowledge_article.section.details]
+label = "Einzelheiten"
+
+[labels.de.model.knowledge_article.filter.published]
+label = "Veröffentlicht"
+
+[labels.de.model.knowledge_article.filter.drafts]
+label = "Entwürfe"

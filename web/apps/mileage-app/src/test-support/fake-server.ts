@@ -136,8 +136,9 @@ export class FakeServer implements TripApi {
 
   private need(id: string): Stored {
     const t = this.trips.get(id);
-    // The module answers a trip it does not hold (or may not show) with a plain 400 and no code.
-    if (!t) throw apiError(400, { message: `no mileage_trip ${id}` });
+    // The module answers a trip it does not hold (or may not show) with a 400, the code
+    // `record_not_found` and the words it always had (an older server: the words alone, L30).
+    if (!t) throw apiError(400, { code: "record_not_found", message: `no mileage_trip ${id}` });
     return t;
   }
 
@@ -207,7 +208,13 @@ export class FakeServer implements TripApi {
 
   async updateTrip(
     id: string,
-    fields: { endedAt?: string; expectedPoints?: number; lastSeq?: number; discardReason?: string },
+    fields: {
+      endedAt?: string;
+      expectedPoints?: number;
+      lastSeq?: number;
+      discardReason?: string;
+      purpose?: Purpose;
+    },
   ): Promise<void> {
     this.before("updateTrip", undefined, id);
     const t = this.need(id);
@@ -218,6 +225,9 @@ export class FakeServer implements TripApi {
     if (fields.expectedPoints !== undefined) t.expectedPoints = fields.expectedPoints;
     if (fields.lastSeq !== undefined) t.lastSeq = fields.lastSeq;
     if (fields.discardReason !== undefined) t.discardReason = fields.discardReason;
+    if (fields.purpose !== undefined) t.purpose = fields.purpose;
+    // The module keeps no route of a private trip that has left recording.
+    if (t.purpose === "private" && t.state !== "recording") this.points.delete(t.id);
     this.afterwards("updateTrip");
   }
 
@@ -244,6 +254,7 @@ export class FakeServer implements TripApi {
     if (have < 2) throw apiError(400, { message: "the trip has no distance: discard it instead" });
     t.state = "ended";
     t.distanceM = this.distance;
+    if (t.purpose === "private") this.points.delete(t.id);
     this.afterwards("endTrip");
     return this.remote(t);
   }
@@ -253,6 +264,9 @@ export class FakeServer implements TripApi {
     const t = this.need(id);
     if (t.state !== "ended") {
       throw apiError(400, { message: `cannot submit a trip that is ${t.state}` });
+    }
+    if (t.purpose === "private") {
+      throw apiError(400, { message: "a private trip is not reviewed" });
     }
     t.state = "in_review";
     this.afterwards("submitTrip");

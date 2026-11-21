@@ -195,7 +195,41 @@ impl SignService {
         inner: &dyn Fn(&Value) -> Result<Value, String>,
     ) -> Result<Value, String> {
         if is_admin(p) {
-            return inner(input);
+            // An administrator may change any field, and a revoke by one is logged like any
+            // other (docs/ISSUES.md O19): the link stopped working, whoever stopped it.
+            let id = id_of(input).ok();
+            let was = match &id {
+                Some(id) => self.get("sign_link", id)?,
+                None => None,
+            };
+            // Emptying `revoked_at` again brings a link that was not used back to life, which is
+            // logged too, as `sign_link_restored`. The line is written in the same batch as the
+            // change (docs/ISSUES.md UB14): both are stored or neither is.
+            let (Some(id), Some(was), Value::Map(m)) = (id, was, input) else {
+                return inner(input);
+            };
+            let before = text(&was, "revoked_at").is_empty();
+            let after = match m.get("revoked_at") {
+                None => before,
+                Some(Value::Null) => true,
+                Some(Value::Text(t)) => t.is_empty(),
+                Some(_) => false,
+            };
+            let kind = match (before, after) {
+                (true, false) => "sign_link_revoked",
+                (false, true) => "sign_link_restored",
+                _ => return inner(input),
+            };
+            let id12: String = id.chars().take(12).collect();
+            let at = u64::try_from(self.now_micros() / MICROS_PER_SECOND).unwrap_or(0);
+            let line = crate::audit::event_op(
+                at,
+                &format!("sign_request:{}", text(&was, "request_id")),
+                kind,
+                &p.id,
+                &format!("link {id12}; by an administrator"),
+            );
+            return crate::engine::crud::update_with("sign_link", &id, vec![line], || inner(input));
         }
         let Value::Map(m) = input else {
             return inner(input);
@@ -258,16 +292,16 @@ impl SignService {
         }
         let now = self.now_micros();
         out.insert("revoked_at".into(), Value::Text(micros_text(now)));
-        let done = inner(&Value::Map(out))?;
         let id12: String = id.chars().take(12).collect();
-        crate::audit::record_event(
-            &*self.store.backend,
+        // The line is stored in the batch of the revoke (docs/ISSUES.md UB14): a store that
+        // refuses it refuses the revoke too, and the link is not ended without its line.
+        let line = crate::audit::event_op(
             u64::try_from(now / MICROS_PER_SECOND).unwrap_or(0),
             &format!("sign_request:{}", text(&cur, "request_id")),
             "sign_link_revoked",
             &p.id,
             &format!("link {id12}"),
         );
-        Ok(done)
+        crate::engine::crud::update_with("sign_link", &id, vec![line], || inner(&Value::Map(out)))
     }
 }

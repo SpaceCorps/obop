@@ -44,6 +44,69 @@ pub fn register_with_clock(d: &Dispatcher, store: &Store, clock: Clock) {
     guards::install(d, &m.id, db.clone(), clock.clone());
     handlers::install(d, &m, db.clone(), clock.clone());
     audit::install(d, db, clock);
+    // The discards declare no `from`; the policy lets them start only before confirm, so `meta`
+    // does not count them as a way out of a confirmed trip (U76).
+    for a in ["discard", "discard_stuck"] {
+        let states = policy::starts_in(a).unwrap_or_default();
+        d.starts_only_in(&m.id, &format!("{}.{a}", policy::TRIP), states);
+    }
+}
+
+/// Removes the route of every private trip that is no longer recording but still holds one
+/// (stored by an earlier build of the module). The answer is the number of trips cleared.
+pub fn drop_private_routes(store: &Store) -> Result<usize, String> {
+    handlers::drop_private_routes(&store.backend()).map(|(cleared, _)| cleared)
+}
+
+/// The row of the migration ledger (`obop_migration`) that records that `drop_private_routes`
+/// has run to its end on this database (U81).
+pub const PRIVATE_ROUTES_STEP: &str = "mileage/0001";
+
+const PRIVATE_ROUTES_NAME: &str =
+    "drop_private_routes: remove the route of private trips stored before a private trip lost it";
+
+/// `drop_private_routes` once per database (U81): `serve` calls it at every start, and it does
+/// nothing (`Ok(None)`) when the migration ledger holds `PRIVATE_ROUTES_STEP`. Otherwise it runs,
+/// and when no trip was left because it changed meanwhile, it writes that row (module `mileage`,
+/// kind `rust`, step `0001`, applied, with the count in its note), so that `obop migrate status`
+/// lists it and later starts skip the search. A trip that changed meanwhile leaves the row
+/// unwritten, so the next start runs it again. The answer is the number of trips cleared.
+pub fn drop_private_routes_once(store: &Store) -> Result<Option<usize>, String> {
+    use obop_migrate::ledger::{self, Entry};
+    let db = store.backend();
+    if let Some(row) = db.get(ledger::MODEL, PRIVATE_ROUTES_STEP)?
+        && Entry::from_fields(PRIVATE_ROUTES_STEP, &row)
+            .is_some_and(|e| e.status == ledger::Status::Applied)
+    {
+        return Ok(None);
+    }
+    let began = ledger::now_ms();
+    let (cleared, left) = handlers::drop_private_routes(&db)?;
+    if left == 0 {
+        let entry = Entry {
+            id: PRIVATE_ROUTES_STEP.into(),
+            module: "mileage".into(),
+            kind: "rust".into(),
+            step: "0001".into(),
+            version: None,
+            name: PRIVATE_ROUTES_NAME.into(),
+            class: ledger::Class::Backfill,
+            ddl: ledger::Ddl::None,
+            checksum: ledger::sha256_hex(PRIVATE_ROUTES_NAME.as_bytes()),
+            status: ledger::Status::Applied,
+            at: ledger::now_secs(),
+            duration_ms: ledger::now_ms().saturating_sub(began),
+            by: "server".into(),
+            role: "application".into(),
+            app_version: obop_types::CORE_VERSION.into(),
+            backup_id: None,
+            restore_point: None,
+            note: format!("{cleared} private trip(s) cleared"),
+            attempts: 1,
+        };
+        db.apply(&[entry.put()])?;
+    }
+    Ok(Some(cleared))
 }
 
 #[cfg(test)]

@@ -124,10 +124,14 @@ cancelled = "Annullerad"
 [labels.sv.model.inventory_move.action.validate]
 label = "Validera"
 description = "Bekräfta att varorna verkligen flyttats: antalet lämnar posten på källplatsen och kommer till posten på målplatsen (endast lagerchefer); en genomförd rörelse kan inte ångras"
+confirm = "Validera den här förflyttningen? Lagret ändras nu, och en klar förflyttning kan inte ångras."
+done = "Lagret uppdaterat"
 
 [labels.sv.model.inventory_move.action.cancel]
 label = "Annullera"
 description = "Annullera en rörelse i utkast"
+confirm = "Avbryta den här förflyttningen?"
+done = "Förflyttningen avbruten"
 
 [labels.sv.model.inventory_item.field.below_reorder]
 description = "Om posten behöver uppmärksamhet: antalet är under noll, eller på eller under beställningspunkten"
@@ -152,3 +156,27 @@ description = "Dokumentet som rörelsen kommer från, till exempel ett inköpsor
 [labels.sv.model.inventory_move.field.lot]
 label = "Parti"
 description = "Partiet som flyttas, när produkten spåras i partier; valideringen ändrar lagerposten för det partiet (den skapas om den saknas)"
+
+[labels.sv.model.inventory_item.filter.low_stock]
+label = "Lågt lager"
+
+[labels.sv.model.inventory_item.filter.in_stock]
+label = "I lager"
+
+[labels.sv.model.inventory_move.filter.to_do]
+label = "Att göra"
+
+[labels.sv.model.inventory_move.filter.receipts]
+label = "Inleveranser"
+
+[labels.sv.model.inventory_move.filter.deliveries]
+label = "Utleveranser"
+
+[labels.sv.model.inventory_move.filter.stock_counts]
+label = "Inventeringar"
+
+[labels.sv.model.inventory_move.filter.scrap]
+label = "Kassationer"
+
+[labels.sv.model.inventory_move.filter.late]
+label = "Försenade"

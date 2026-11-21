@@ -106,11 +106,26 @@ description = "Ein überfälliges Abonnement nach der Zahlung wieder auf aktiv s
 [labels.de.model.subscriptions_subscription.action.cancel_trial]
 label = "In Testphase stornieren"
 description = "Ein Abonnement während der Testphase stornieren"
+confirm = "Dieses Abonnement kündigen? Es kann danach nicht mehr geändert werden."
 
 [labels.de.model.subscriptions_subscription.action.cancel]
 label = "Stornieren"
 description = "Ein aktives Abonnement stornieren"
+confirm = "Dieses Abonnement kündigen? Es kann danach nicht mehr geändert werden."
 
 [labels.de.model.subscriptions_subscription.action.cancel_overdue]
 label = "Wegen Verzug stornieren"
 description = "Ein überfälliges Abonnement stornieren"
+confirm = "Dieses Abonnement kündigen? Es kann danach nicht mehr geändert werden."
+
+[labels.de.model.subscriptions_subscription.section.billing]
+label = "Abrechnung"
+
+[labels.de.model.subscriptions_subscription.section.cancellation]
+label = "Stornierung"
+
+[labels.de.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "Testphase endet diese Woche"
+
+[labels.de.model.subscriptions_subscription.filter.invoice_due]
+label = "Rechnung fällig"

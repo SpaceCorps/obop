@@ -309,19 +309,45 @@ async fn sessions_are_required_validated_ended_and_bound_to_the_token() {
 
 #[tokio::test]
 async fn expired_sessions_are_404() {
-    let r = router_with(McpConfig {
-        // Wide against a loaded machine: the session must still be alive when it is made and
-        // long dead when it is used.
-        session_ttl: std::time::Duration::from_millis(400),
-        ..McpConfig::default()
-    });
+    // U44: no wall-clock race. The session is made with the default lifetime, then its stored
+    // entry is rewritten through the store with a lifetime that is already over.
+    let app = App::new();
+    app.seed_demo();
+    let r = obop_http::router(
+        obop_http::HttpState::with_mcp(
+            app.dispatcher.clone(),
+            Arc::new(DevAuth),
+            McpConfig::default(),
+        ),
+        None,
+    );
     let sid = session(&r, "dev-agent").await;
-    tokio::time::sleep(std::time::Duration::from_millis(900)).await;
-    let resp = rpc(
+    let backend = app
+        .dispatcher
+        .shared_backend()
+        .expect("the HTTP state shares its backend");
+    let key = format!("mcp:s:{sid}");
+    let alive = rpc(
         &r,
         "dev-agent",
         &sid,
         json!({"jsonrpc":"2.0","id":2,"method":"ping"}),
+    )
+    .await;
+    assert_eq!(alive.status, 200, "the session is alive before it expires");
+    let sealed = backend
+        .kv_get(&key)
+        .unwrap()
+        .expect("the session is stored");
+    backend.kv_put(&key, &sealed, Some(1)).unwrap();
+    // The entry expired one millisecond after it was written; a short pause makes that certain
+    // whatever the clock's resolution.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let resp = rpc(
+        &r,
+        "dev-agent",
+        &sid,
+        json!({"jsonrpc":"2.0","id":3,"method":"ping"}),
     )
     .await;
     assert_eq!(resp.status, 404);

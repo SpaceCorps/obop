@@ -18,7 +18,7 @@
 
 use crate::Clock;
 use crate::policy::{self, Fields, Who};
-use obop_commands::{Dispatcher, Guard, Principal, Value, Verdict};
+use obop_commands::{Dispatcher, Guard, Principal, PrincipalKind, Value, Verdict};
 use obop_storage::Backend;
 use serde_json::Value as J;
 use std::collections::BTreeMap;
@@ -222,6 +222,18 @@ fn update_trip(db: Db) -> Guard {
             .collect();
         if changed.is_empty() {
             return Ok(Verdict::default());
+        }
+        // Marking a trip private removes its route for good (5.6), so an agent's token does not do
+        // it: the driver does, in the app (whose token names its device) or in the back office.
+        if p.kind == PrincipalKind::Agent
+            && p.device.is_none()
+            && changed.iter().any(|k| k.as_str() == "purpose")
+            && m.get("purpose").map(Value::to_json) == Some(J::from(policy::PRIVATE))
+        {
+            return Err(
+                "mileage_trip.purpose private removes the route of the trip for good, so an agent cannot set it; the driver does, in the app or in the back office"
+                    .into(),
+            );
         }
         let allowed = policy::writable_fields(&who, &trip)?;
         for k in changed {

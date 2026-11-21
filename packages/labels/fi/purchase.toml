@@ -82,18 +82,25 @@ cancelled = "Peruutettu"
 [labels.fi.model.purchase_order.action.send]
 label = "Lähetä"
 description = "Lähetä luonnostilaus toimittajalle tarjouspyyntönä"
+done = "Merkitty lähetetyksi"
 
 [labels.fi.model.purchase_order.action.confirm]
 label = "Vahvista"
 description = "Sitoudu tilaukseen toimittajan kanssa (vain esihenkilö)"
+confirm = "Vahvistetaanko tämä tilaus toimittajalle?"
+done = "Tilaus vahvistettu"
 
 [labels.fi.model.purchase_order.action.receive]
 label = "Vastaanota"
 description = "Kirjaa, että tavarat saapuivat: jokaisesta rivistä luodaan luonnossiirto varaston vahvistettavaksi (vaatii inventory.user-ryhmän)"
+confirm = "Vastaanotetaanko tavarat? Kun vastaanottopaikka on asetettu, jokaiselle riville tehdään varastosiirron luonnos varaston vahvistettavaksi, eikä tilausta voi enää muuttaa."
+done = "Tilaus vastaanotettu"
 
 [labels.fi.model.purchase_order.action.cancel]
 label = "Peruuta"
 description = "Peruuta tilaus, jota ei ole vielä lähetetty"
+confirm = "Perutaanko tämä tilaus?"
+done = "Tilaus peruttu"
 
 [labels.fi.model.purchase_order_line]
 name = "Ostotilauksen rivi"
@@ -142,3 +149,12 @@ description = "Rivin summa: määrä kertaa yksikköhinta (valuutan pienin yksik
 [labels.fi.model.purchase_order_line.field.receipt_quantity]
 label = "Vastaanotettava määrä"
 description = "Yksiköt, jotka vastaanotto vie varastoon: vastaanotettu määrä, jos se on annettu, muuten tilattu määrä"
+
+[labels.fi.model.purchase_order.filter.to_send]
+label = "Lähetettävät"
+
+[labels.fi.model.purchase_order.filter.to_receive]
+label = "Vastaanotettavat"
+
+[labels.fi.model.purchase_order.filter.late]
+label = "Myöhässä"

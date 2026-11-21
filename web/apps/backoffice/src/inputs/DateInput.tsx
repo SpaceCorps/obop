@@ -12,7 +12,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { fmt, t, validDate } from "@obop/ui";
+import { firstDayOfWeek, fmt, t, validDate } from "@obop/ui";
 import { getTime } from "../api.ts";
 import { fromZonedInput } from "../instants.ts";
 import { Icon } from "../ui.tsx";
@@ -55,7 +55,7 @@ export function CalendarGrid({
   const grid = useRef<HTMLDivElement>(null);
   const f = dateOf(focus);
   const month = new Date(f.getFullYear(), f.getMonth(), 1);
-  const first = fmt.firstDay() % 7; // 0 = Sunday
+  const first = firstDayOfWeek() % 7; // 0 = Sunday
   const lead = (month.getDay() - first + 7) % 7;
   const days: Date[] = [];
   for (let i = 0; i < 42; i++)

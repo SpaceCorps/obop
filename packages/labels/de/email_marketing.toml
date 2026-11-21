@@ -136,14 +136,19 @@ cancelled = "Storniert"
 [labels.de.model.email_marketing_campaign.action.schedule]
 label = "Einplanen"
 description = "Die Kampagne für den geplanten Tag vormerken"
+done = "Geplant"
 
 [labels.de.model.email_marketing_campaign.action.send]
 label = "Als gesendet markieren"
 description = "Die terminierte Kampagne als gesendet markieren; es wird keine E-Mail versendet (nur Führungskräfte)"
+confirm = "Diese Kampagne als gesendet markieren? Es wird keine E-Mail verschickt: Diese Instanz versendet noch keine E-Mails. Die Kampagne kann danach nicht mehr geändert werden."
+done = "Als gesendet markiert; es wurde keine E-Mail verschickt"
 
 [labels.de.model.email_marketing_campaign.action.send_now]
 label = "Als gesendet markieren"
 description = "Eine Kampagne im Entwurf als gesendet markieren; es wird keine E-Mail versendet (nur Führungskräfte)"
+confirm = "Diese Kampagne als gesendet markieren? Es wird keine E-Mail verschickt: Diese Instanz versendet noch keine E-Mails. Die Kampagne kann danach nicht mehr geändert werden."
+done = "Als gesendet markiert; es wurde keine E-Mail verschickt"
 
 [labels.de.model.email_marketing_campaign.action.unschedule]
 label = "Einplanung aufheben"
@@ -152,3 +157,19 @@ description = "Eine terminierte Kampagne zurück auf Entwurf setzen"
 [labels.de.model.email_marketing_campaign.action.cancel]
 label = "Stornieren"
 description = "Eine terminierte Kampagne stornieren"
+confirm = "Diese Kampagne abbrechen? Sie kann danach nicht mehr geändert werden."
+
+[labels.de.model.email_marketing_campaign.section.message]
+label = "Nachricht"
+
+[labels.de.model.email_marketing_campaign.section.content]
+label = "Inhalt"
+
+[labels.de.model.email_marketing_campaign.section.schedule]
+label = "Zeitplan"
+
+[labels.de.model.email_marketing_campaign.section.results]
+label = "Ergebnisse"
+
+[labels.de.model.email_marketing_contact.filter.may_be_mailed]
+label = "Darf angeschrieben werden"

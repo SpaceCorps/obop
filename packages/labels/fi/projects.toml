@@ -60,6 +60,7 @@ description = "Siirrä suunniteltu projekti aktiiviseksi"
 [labels.fi.model.projects_project.action.finish]
 label = "Päätä"
 description = "Merkitse aktiivinen projekti valmiiksi"
+done = "Projekti valmis"
 
 [labels.fi.model.projects_project.action.reopen]
 label = "Avaa uudelleen"
@@ -102,6 +103,7 @@ description = "Merkitse odottava välitavoite saavutetuksi"
 [labels.fi.model.projects_milestone.action.miss]
 label = "Merkitse myöhästyneeksi"
 description = "Kirjaa, että odottava välitavoite myöhästyi"
+confirm = "Kirjataanko tämä välitavoite saavuttamatta jääneeksi?"
 
 [labels.fi.model.projects_task]
 name = "Tehtävä"
@@ -166,6 +168,7 @@ description = "Merkitse työn alla oleva tehtävä valmiiksi"
 [labels.fi.model.projects_task.action.cancel]
 label = "Peruuta"
 description = "Hylkää tehtävä, jota ei koskaan aloitettu"
+confirm = "Perutaanko tämä tehtävä?"
 
 [labels.fi.model.projects_project.field.estimate_minutes]
 label = "Arvioitu aika (min)"
@@ -194,3 +197,9 @@ description = "Avaa valmis tehtävä uudelleen, takaisin tekemättömäksi"
 [labels.fi.model.projects_task.action.reopen_cancelled]
 label = "Avaa uudelleen"
 description = "Avaa peruutettu tehtävä uudelleen, takaisin tekemättömäksi"
+
+[labels.fi.model.projects_task.filter.open]
+label = "Avoimet"
+
+[labels.fi.model.projects_task.filter.overdue]
+label = "Myöhässä"

@@ -106,11 +106,26 @@ description = "Palauta erääntynyt kestotilaus aktiiviseksi maksun jälkeen"
 [labels.fi.model.subscriptions_subscription.action.cancel_trial]
 label = "Peruuta kokeilu"
 description = "Peruuta kestotilaus kokeilun aikana"
+confirm = "Perutaanko tämä tilaus? Sitä ei voi sen jälkeen muuttaa."
 
 [labels.fi.model.subscriptions_subscription.action.cancel]
 label = "Peruuta"
 description = "Peruuta aktiivinen kestotilaus"
+confirm = "Perutaanko tämä tilaus? Sitä ei voi sen jälkeen muuttaa."
 
 [labels.fi.model.subscriptions_subscription.action.cancel_overdue]
 label = "Peruuta erääntynyt"
 description = "Peruuta erääntynyt kestotilaus"
+confirm = "Perutaanko tämä tilaus? Sitä ei voi sen jälkeen muuttaa."
+
+[labels.fi.model.subscriptions_subscription.section.billing]
+label = "Laskutus"
+
+[labels.fi.model.subscriptions_subscription.section.cancellation]
+label = "Peruutus"
+
+[labels.fi.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "Kokeilu päättyy tällä viikolla"
+
+[labels.fi.model.subscriptions_subscription.filter.invoice_due]
+label = "Laskutettavat"

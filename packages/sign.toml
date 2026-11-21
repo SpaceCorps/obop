@@ -1,6 +1,6 @@
 [module]
 id = "sign"
-version = "0.2.5"
+version = "0.3.1"
 name = "Sign"
 description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence. A request can point at a PDF in Documents: sending it takes the SHA-256 of the file and keeps an exact copy, and a person with the manager role creates a one-time signing link that the signer opens without an account to read that copy, type their full name and agree. This is a simple electronic signature only: a typed name does not prove who typed it, the time is the server clock, and the address is the one the proxy chain reports. At signing the evidence is stored on the request and an entry is written to the security log (the log has only read commands, so no caller can write or change an entry through a command; the server writes the entries, and the database does not stop someone who can write it). A manager can switch on a history for files that several named people sign together: the signer then sees the typed names and the times of the others who signed the same file. A signed request can be changed or deleted only by an administrator, who can still change any record. Sending and recording a signature need a human approval for agents, and agents cannot create signing links."
 author = "SpaceCorps"
@@ -13,7 +13,7 @@ categories = ["productivity"]
 maturity = "experimental"
 requires_core = "^0.2.2"
 home = "sign_request"
-changelog = "Safer requests: a request about a Document is visible only to those who can see that Document (with a role in Documents); recording a decline or an expiry, and changing or deleting a request that was sent, need the manager role, and an agent only proposes a decline or an expiry; the days a request was sent and signed are set by the system; an agent cannot switch the history on, and cannot revoke a link."
+changelog = "The translated section titles, questions, done notes and list quick filters of the back office (filters machine-drafted in German, French, Polish, Finnish, Swedish and Spanish) reach an instance that already had Sign. The signing page now carries the version of the texts it showed, and a form without it, or from a page whose texts changed since, is shown again before anything is signed. Revoking a link and its line in the security log are stored together."
 
 [module.dependencies]
 documents = ">=0.3, <1"
@@ -254,6 +254,20 @@ write_group = "sign.user"
   description = "Id of the consent wording: its version, the language of the post (the form's lang if it names one of the seven; if the form has no lang field at all, the address's; otherwise the browser's, the instance's, then English; not proof of the page that was shown) and the first 8 hex characters of a hash of the texts of that language, for example v1-draft/en/a05c68c3"
   class = "none"
   group = "sign.manager"
+
+  [[model.field]]
+  name = "evidence_check"
+  description = "Whether the evidence of a request signed through a link still equals what the security log recorded at signing (from Sign 0.3.0 also the title, message and requested name): matches, differs (changed after signing) or no_entry (no log entry). Worked out on get only, empty in lists. Not tamper-proof: whoever can write the database can change both"
+  class = "none"
+  kind = "select"
+  options = ["matches", "differs", "no_entry"]
+  group = "sign.manager"
+  readonly = true
+
+    [model.field.ui]
+    tones = { matches = "ok", differs = "bad", no_entry = "warn" }
+    # Shown by the panel of a signed request (it asks get, which works it out), not as a form field.
+    hidden = true
 
   [[model.field]]
   name = "state"

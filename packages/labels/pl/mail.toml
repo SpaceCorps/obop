@@ -1,0 +1,280 @@
+# Machine-drafted labels of the built-in Mail module (docs/spec/mail.md).
+
+[labels.pl.module]
+name = "Poczta"
+description = "Poczta wychodząca: serwery pocztowe (przekaźniki SMTP i API dostawców przez Konektory), szablony w siedmiu językach, kolejka z ponowieniami i dziennik wysyłek, który nigdy nie pokazuje treści."
+summary = "Wysyłaj pocztę przez własny przekaźnik SMTP lub dostawcę, z szablonami i dziennikiem wysyłek."
+
+[labels.pl.model.outbound_mail]
+name = "Wiadomość wychodząca"
+plural = "Wysyłki"
+description = "Jedna wiadomość wychodząca: kolejka i dziennik wysyłek. Nigdy nie pokazuje treści"
+
+[labels.pl.model.outbound_mail.field.kind]
+label = "Rodzaj"
+description = "Do czego służy wiadomość, np. invoice lub password_reset; general, gdy nie podano"
+
+[labels.pl.model.outbound_mail.field.to]
+label = "Do"
+description = "Odbiorcy, oddzieleni przecinkami"
+
+[labels.pl.model.outbound_mail.field.cc]
+label = "DW"
+description = "Odbiorcy kopii, oddzieleni przecinkami"
+
+[labels.pl.model.outbound_mail.field.bcc]
+label = "UDW"
+description = "Odbiorcy ukrytej kopii, oddzieleni przecinkami; nigdy w nagłówku"
+
+[labels.pl.model.outbound_mail.field.reply_to]
+label = "Odpowiedź do"
+description = "Dokąd trafiają odpowiedzi; puste oznacza ustawienie serwera"
+
+[labels.pl.model.outbound_mail.field.subject]
+label = "Temat"
+description = "Wiersz tematu"
+
+[labels.pl.model.outbound_mail.field.body]
+label = "Treść"
+description = "Treść, zaszyfrowana; usuwana po wysłaniu lub anulowaniu wiadomości"
+
+[labels.pl.model.outbound_mail.field.template]
+label = "Szablon"
+description = "Dane wejściowe send: klucz szablonu; zapisywany"
+
+[labels.pl.model.outbound_mail.field.language]
+label = "Język"
+description = "Dane wejściowe send: język szablonu"
+
+[labels.pl.model.outbound_mail.field.language.options]
+en = "Angielski"
+de = "Niemiecki"
+fr = "Francuski"
+pl = "Polski"
+fi = "Fiński"
+sv = "Szwedzki"
+es = "Hiszpański"
+
+[labels.pl.model.outbound_mail.field.vars]
+label = "Wartości"
+description = "Dane wejściowe send: wartości szablonu jako obiekt JSON; nigdy nie zapisywane"
+
+[labels.pl.model.outbound_mail.field.server]
+label = "Serwer pocztowy"
+description = "Serwer pocztowy, który ją wysyła"
+
+[labels.pl.model.outbound_mail.field.status]
+label = "Status"
+description = "w kolejce, wysyłana, wysłana, nieudana lub anulowana"
+
+[labels.pl.model.outbound_mail.field.status.options]
+queued = "W kolejce"
+sending = "Wysyłanie"
+sent = "Wysłana"
+failed = "Nieudana"
+cancelled = "Anulowana"
+
+[labels.pl.model.outbound_mail.field.attempts]
+label = "Próby"
+description = "Dotychczasowe próby doręczenia"
+
+[labels.pl.model.outbound_mail.field.next_attempt_at]
+label = "Następna próba"
+description = "Kiedy nastąpi kolejna próba"
+
+[labels.pl.model.outbound_mail.field.queued_at]
+label = "Dodano do kolejki"
+description = "Kiedy dodano do kolejki"
+
+[labels.pl.model.outbound_mail.field.sent_at]
+label = "Wysłano"
+description = "Kiedy serwer lub dostawca ją przyjął"
+
+[labels.pl.model.outbound_mail.field.last_error]
+label = "Ostatni błąd"
+description = "Dlaczego ostatnia próba się nie udała, bez treści i danych logowania"
+
+[labels.pl.model.outbound_mail.field.server_reply]
+label = "Odpowiedź serwera"
+description = "Odpowiedź serwera lub dostawcy na przyjętą wiadomość"
+
+[labels.pl.model.outbound_mail.field.message_id]
+label = "Message-ID"
+description = "Nagłówek Message-ID, taki sam przy każdej próbie"
+
+[labels.pl.model.outbound_mail.field.related_model]
+label = "Powiązany model"
+description = "Model rekordu, którego dotyczy wiadomość"
+
+[labels.pl.model.outbound_mail.field.related_id]
+label = "Powiązany rekord"
+description = "Identyfikator tego rekordu"
+
+[labels.pl.model.outbound_mail.field.requested_by]
+label = "Dodane przez"
+description = "Kto dodał do kolejki"
+
+[labels.pl.model.outbound_mail.field.lease_until]
+label = "Zarezerwowane do"
+description = "Rezerwacja procesu, w sekundach od 1970"
+
+[labels.pl.model.outbound_mail.field.due]
+label = "Termin"
+description = "Kiedy przypada, w sekundach od 1970"
+
+[labels.pl.model.outbound_mail.action.send]
+label = "Wyślij"
+description = "Dodaj wiadomość do kolejki: to, subject i body albo template z language i vars; zwraca jej identyfikator. Proces wysyła ją po wywołaniu"
+done = "Wiadomość dodana do kolejki"
+
+[labels.pl.model.outbound_mail.action.retry]
+label = "Wyślij ponownie"
+description = "Ponownie dodaj nieudaną wiadomość do kolejki, próby od zera"
+done = "Ponownie w kolejce"
+
+[labels.pl.model.outbound_mail.action.cancel]
+label = "Anuluj"
+description = "Anuluj wiadomość w kolejce; jej treść zostaje usunięta"
+done = "Anulowano"
+
+[labels.pl.model.outbound_mail.action.process]
+label = "Wyślij zaległe"
+description = "Wyślij wiadomości, które są teraz do wysłania (proces robi to co kilka sekund)"
+
+[labels.pl.model.mail_server]
+name = "Serwer pocztowy"
+plural = "Serwery pocztowe"
+description = "Droga wyjścia poczty: przekaźnik SMTP albo dostawca osiągany przez połączenie Konektorów"
+
+[labels.pl.model.mail_server.field.name]
+label = "Nazwa"
+description = "Nazwa odróżniająca serwery"
+
+[labels.pl.model.mail_server.field.kind]
+label = "Wysyła przez"
+description = "smtp (przekaźnik) lub provider (API przez połączenie Konektorów)"
+
+[labels.pl.model.mail_server.field.kind.options]
+smtp = "Przekaźnik SMTP"
+provider = "Dostawca"
+
+[labels.pl.model.mail_server.field.enabled]
+label = "Włączony"
+description = "Poczta może wychodzić przez ten serwer"
+
+[labels.pl.model.mail_server.field.is_default]
+label = "Serwer domyślny"
+description = "Używany dla każdego rodzaju wiadomości, którego nie wymienia inny serwer"
+
+[labels.pl.model.mail_server.field.kinds]
+label = "Rodzaje wiadomości"
+description = "Rodzaje wiadomości wysyłane przez ten serwer, oddzielone przecinkami (np. invoice, password_reset); puste oznacza wszystkie"
+
+[labels.pl.model.mail_server.field.host]
+label = "Nazwa hosta"
+description = "SMTP: nazwa hosta przekaźnika"
+
+[labels.pl.model.mail_server.field.port]
+label = "Numer portu"
+description = "SMTP: port (587 dla STARTTLS, 465 dla TLS)"
+
+[labels.pl.model.mail_server.field.security]
+label = "Zabezpieczenie"
+description = "SMTP: starttls, tls lub none (none nie wysyła hasła)"
+
+[labels.pl.model.mail_server.field.security.options]
+starttls = "STARTTLS"
+tls = "TLS"
+none = "Brak"
+
+[labels.pl.model.mail_server.field.allow_private_network]
+label = "Zezwól na własną sieć"
+description = "SMTP: przekaźnik może być w sieci firmy (adres prywatny, np. 10.0.0.5), a zabezpieczenie none jest tam akceptowane; domyślnie wyłączone, włącza je tylko osoba (docs/spec/mail.md 6)"
+
+[labels.pl.model.mail_server.field.username]
+label = "Nazwa użytkownika"
+description = "SMTP: nazwa użytkownika; puste oznacza brak uwierzytelniania"
+
+[labels.pl.model.mail_server.field.password]
+label = "Hasło"
+description = "SMTP: hasło; tylko do zapisu, przechowywane w postaci zaszyfrowanej, nigdy nie zwracane"
+
+[labels.pl.model.mail_server.field.password_set]
+label = "Hasło zapisane"
+description = "SMTP: czy hasło jest zapisane"
+
+[labels.pl.model.mail_server.field.connection]
+label = "Połączenie"
+description = "Dostawca: połączenie Konektorów, które wysyła"
+
+[labels.pl.model.mail_server.field.from_address]
+label = "Adres nadawcy"
+description = "Adres nadawcy każdej wiadomości z tego serwera"
+
+[labels.pl.model.mail_server.field.from_name]
+label = "Nazwa nadawcy"
+description = "Nazwa nadawcy widoczna dla odbiorcy"
+
+[labels.pl.model.mail_server.field.reply_to]
+label = "Adres do odpowiedzi"
+description = "Dokąd trafiają odpowiedzi; puste oznacza adres nadawcy"
+
+[labels.pl.model.mail_server.field.footer]
+label = "Stopka"
+description = "Tekst dodawany pod każdą wiadomością, np. dane firmy lub jak zrezygnować z tych wiadomości"
+
+[labels.pl.model.mail_server.field.last_test_at]
+label = "Ostatni test"
+description = "Kiedy wysłano ostatnią wiadomość testową"
+
+[labels.pl.model.mail_server.field.last_test_result]
+label = "Wynik ostatniego testu"
+description = "Co serwer odpowiedział na ostatnią wiadomość testową"
+
+[labels.pl.model.mail_server.field.last_test_outcome]
+label = "Rezultat ostatniego testu"
+description = "Jak zakończył się ostatni test: wysłano, tymczasowo nie wysłano lub odrzucono"
+
+[labels.pl.model.mail_server.field.last_test_outcome.options]
+sent = "Wysłano"
+temporary = "Nie wysłano (tymczasowo)"
+permanent = "Nie wysłano (odrzucono)"
+
+[labels.pl.model.mail_server.field.test_recipient]
+label = "Odbiorca testu"
+description = "Dane wejściowe test_send: adres wiadomości testowej; nigdy nie zapisywany"
+
+[labels.pl.model.mail_server.action.test_send]
+label = "Wyślij test"
+description = "Wyślij teraz krótką wiadomość testową przez ten serwer do test_recipient i zapisz odpowiedź"
+done = "Wysłano wiadomość testową"
+
+[labels.pl.model.mail_template]
+name = "Szablon wiadomości"
+plural = "Szablony wiadomości"
+description = "Temat i treść jednego rodzaju wiadomości w jednym języku, z symbolami zastępczymi (nazwa w podwójnych nawiasach klamrowych)"
+
+[labels.pl.model.mail_template.field.key]
+label = "Klucz"
+description = "Rodzaj wiadomości szablonu, np. invoice lub password_reset"
+
+[labels.pl.model.mail_template.field.language]
+label = "Język"
+description = "Język tekstu"
+
+[labels.pl.model.mail_template.field.language.options]
+en = "Angielski"
+de = "Niemiecki"
+fr = "Francuski"
+pl = "Polski"
+fi = "Fiński"
+sv = "Szwedzki"
+es = "Hiszpański"
+
+[labels.pl.model.mail_template.field.subject]
+label = "Temat"
+description = "Wiersz tematu z symbolami zastępczymi (nazwa w podwójnych nawiasach klamrowych)"
+
+[labels.pl.model.mail_template.field.body]
+label = "Treść"
+description = "Treść z symbolami zastępczymi (nazwa w podwójnych nawiasach klamrowych)"

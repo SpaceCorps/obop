@@ -91,6 +91,7 @@ cancelled = "Annulé"
 [labels.fr.model.manufacturing_order.action.confirm]
 label = "Confirmer"
 description = "Confirme un ordre en brouillon pour que la production puisse être planifiée ; il faut le produit fini, un lieu de production et au moins une ligne de composant"
+done = "Commande confirmée"
 
 [labels.fr.model.manufacturing_order.action.confirm.assert.has_product]
 message = "Choisissez d’abord le produit fini : à la fin de l’ordre, il entre en stock au lieu de production"
@@ -104,14 +105,19 @@ message = "Ajoutez d’abord les composants : un ordre sans composants ne dépla
 [labels.fr.model.manufacturing_order.action.start]
 label = "Démarrer"
 description = "Démarre la production d’un ordre confirmé"
+done = "Production démarrée"
 
 [labels.fr.model.manufacturing_order.action.finish]
 label = "Achever"
 description = "Marque la production comme achevée : avec un emplacement de production, un mouvement de stock brouillon retire chaque composant à cet endroit et un autre y dépose le produit fini, avec le numéro de l’ordre comme origine, à valider par l’entrepôt (nécessite le groupe inventory.user)"
+confirm = "Marquer la production comme terminée ? Des mouvements de stock sortent les composants et entrent le produit fini à l'emplacement de production. Un ordre terminé ne peut plus être modifié."
+done = "Production terminée"
 
 [labels.fr.model.manufacturing_order.action.cancel]
 label = "Annuler"
 description = "Annule un ordre qui n’a pas été confirmé"
+confirm = "Annuler cette commande ?"
+done = "Commande annulée"
 
 [labels.fr.model.manufacturing_order.field.product_id]
 label = "Produit"
@@ -140,3 +146,9 @@ description = "Le produit consommé"
 [labels.fr.model.manufacturing_order_line.field.quantity]
 label = "Quantité"
 description = "Unités du composant que l’ordre entier utilise"
+
+[labels.fr.model.manufacturing_order.filter.in_progress]
+label = "En cours"
+
+[labels.fr.model.manufacturing_order.filter.late]
+label = "En retard"

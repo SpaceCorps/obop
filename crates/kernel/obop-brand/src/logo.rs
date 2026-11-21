@@ -76,6 +76,20 @@ pub struct Logo {
     v: String,
     source: Source,
     fallback: Option<Vec<Refusal>>,
+    /// The inline text of the first size asked for, printed once per logo (BRN4): a logo is
+    /// resolved once per refill of the brand, and the pages ask for it at one size on every render.
+    inline_memo: std::sync::OnceLock<(u32, String)>,
+}
+
+/// How many times this thread printed an inline logo (read by the test of BRN4; one add per logo).
+pub(crate) mod prints {
+    thread_local! {
+        pub(crate) static INLINE_PRINTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    pub(crate) fn note() {
+        INLINE_PRINTS.with(|n| n.set(n.get() + 1));
+    }
 }
 
 impl Logo {
@@ -93,6 +107,7 @@ impl Logo {
                     theme_accent: theme_accent.map(str::to_string),
                 },
                 fallback,
+                inline_memo: std::sync::OnceLock::new(),
             }
         };
         if stored.is_empty() {
@@ -106,6 +121,7 @@ impl Logo {
                     served,
                     source: Source::Artwork(parsed),
                     fallback: None,
+                    inline_memo: std::sync::OnceLock::new(),
                 }
             }
             Err(refusals) => tile(Some(refusals)),
@@ -134,7 +150,21 @@ impl Logo {
     }
 
     /// The same logo with `width` and `height` of `size` on the root, for inline use on a page.
+    /// The text of the first size asked for is printed once and kept with the logo (BRN4); another
+    /// size is printed each time.
     pub fn inline(&self, size: u32) -> String {
+        let (kept, text) = self
+            .inline_memo
+            .get_or_init(|| (size, self.print_inline(size)));
+        if *kept == size {
+            text.clone()
+        } else {
+            self.print_inline(size)
+        }
+    }
+
+    fn print_inline(&self, size: u32) -> String {
+        prints::note();
         match &self.source {
             Source::Artwork(parsed) => parsed.print_inline(size),
             Source::Tile { name, theme_accent } => {

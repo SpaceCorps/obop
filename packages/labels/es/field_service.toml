@@ -107,18 +107,23 @@ cancelled = "Cancelado"
 [labels.es.model.field_service_job.action.depart]
 label = "Voy de camino"
 description = "El técnico está de camino"
+done = "En camino"
 
 [labels.es.model.field_service_job.action.start]
 label = "Empezar el trabajo"
 description = "El técnico ha llegado y ha empezado el trabajo"
+done = "Trabajo iniciado"
 
 [labels.es.model.field_service_job.action.complete]
 label = "Completar el trabajo"
 description = "Terminar el trabajo; si se requiere firma, registra antes quién firmó y cuándo"
+confirm = "¿Completar este trabajo? Un trabajo terminado ya no se puede modificar."
+done = "Trabajo hecho"
 
 [labels.es.model.field_service_job.action.cancel]
 label = "Cancelar"
 description = "Cancelar un trabajo que no ha empezado"
+confirm = "¿Cancelar este trabajo? Después ya no se podrá modificar."
 
 [labels.es.model.field_service_part]
 name = "Pieza"
@@ -150,3 +155,24 @@ description = "Observación sobre la pieza, por ejemplo el número de serie"
 
 [labels.es.model.field_service_job.action.complete.assert.signed]
 message = "El cliente tiene que firmar primero este trabajo: indique quién firmó y en qué fecha"
+
+[labels.es.model.field_service_job.section.job]
+label = "Trabajo"
+
+[labels.es.model.field_service_job.section.customer_and_site]
+label = "Cliente y lugar"
+
+[labels.es.model.field_service_job.section.schedule]
+label = "Calendario"
+
+[labels.es.model.field_service_job.section.sign_off]
+label = "Conformidad"
+
+[labels.es.model.field_service_job.section.report]
+label = "Declaración"
+
+[labels.es.model.field_service_job.filter.today]
+label = "Hoy"
+
+[labels.es.model.field_service_job.filter.not_done]
+label = "Sin terminar"

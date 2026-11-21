@@ -82,6 +82,7 @@ confirmed = "Vahvistettu"
 [labels.fi.model.planning_shift.action.publish]
 label = "Julkaise"
 description = "Julkaise vuoro määrätylle työntekijälle tai kaikille, kun vuoro on avoin"
+done = "Julkaistu"
 
 [labels.fi.model.planning_shift.action.unpublish]
 label = "Peru julkaisu"
@@ -90,9 +91,19 @@ description = "Palauta julkaistu vuoro avoimeksi"
 [labels.fi.model.planning_shift.action.confirm]
 label = "Vahvista"
 description = "Työntekijä vahvistaa tekevänsä vuoron"
+done = "Vahvistettu"
 
 [labels.fi.model.planning_shift.rule.ends_after_start]
 message = "Vuoro päättyy ennen kuin se alkaa: aseta päättymisaika alkamisen jälkeen"
 
 [labels.fi.model.planning_shift.rule.no_double_shift]
 message = "Työntekijällä on jo vuoro tuohon aikaan: valitse toinen aika tai toinen työntekijä"
+
+[labels.fi.model.planning_shift.filter.open_shifts]
+label = "Avoimet vuorot"
+
+[labels.fi.model.planning_shift.filter.not_published]
+label = "Julkaisemattomat"
+
+[labels.fi.model.planning_shift.filter.coming_up]
+label = "Tulossa"

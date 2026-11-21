@@ -169,29 +169,42 @@ fn person(p: &Principal) -> Result<&str, MfaError> {
 impl Auth {
     // ---- policy -------------------------------------------------------------------------
 
-    fn security_setting(&self, key: &str) -> Option<bool> {
-        let f = self.backend.get("obop_setting", "instance").ok()??;
-        let v: J = serde_json::from_str(f.get("value")?.as_str()?).ok()?;
-        v["security"][key].as_bool()
+    /// A switch of the stored security settings: `None` when no value is stored. A refused read
+    /// is the error, never the default: read as "not required", a fault of the store would relax
+    /// the enrolment policy for the sign-in or the change that asked (UB3).
+    fn security_setting(&self, key: &str) -> Result<Option<bool>, String> {
+        let Some(f) = self.backend.get("obop_setting", "instance")? else {
+            return Ok(None);
+        };
+        Ok(f.get("value")
+            .and_then(J::as_str)
+            .and_then(|s| serde_json::from_str::<J>(s).ok())
+            .and_then(|v| v["security"][key].as_bool()))
     }
 
     /// `security.require_mfa_for_admins`: the stored value, else the configured default.
-    pub fn require_mfa_for_admins(&self) -> bool {
-        self.security_setting("require_mfa_for_admins")
-            .unwrap_or(self.config.default_require_admins)
+    pub fn require_mfa_for_admins(&self) -> Result<bool, String> {
+        Ok(self
+            .security_setting("require_mfa_for_admins")?
+            .unwrap_or(self.config.default_require_admins))
     }
 
     /// `security.require_mfa_for_all` (off by default).
-    pub fn require_mfa_for_all(&self) -> bool {
-        self.security_setting("require_mfa_for_all")
-            .unwrap_or(false)
+    pub fn require_mfa_for_all(&self) -> Result<bool, String> {
+        Ok(self
+            .security_setting("require_mfa_for_all")?
+            .unwrap_or(false))
     }
 
-    pub(crate) fn enrolment_required_for(&self, groups: &[String]) -> bool {
+    /// Does the policy demand a second factor of an account with these groups? A refused read of
+    /// the policy is the error (UB3).
+    pub(crate) fn enrolment_required_for(&self, groups: &[String]) -> Result<bool, String> {
         // Without a server key nobody could enrol, so the policy cannot be applied.
-        !self.config.keys.is_empty()
-            && (self.require_mfa_for_all()
-                || (self.require_mfa_for_admins() && groups.iter().any(|g| g == ADMIN_GROUP)))
+        if self.config.keys.is_empty() {
+            return Ok(false);
+        }
+        Ok(self.require_mfa_for_all()?
+            || (groups.iter().any(|g| g == ADMIN_GROUP) && self.require_mfa_for_admins()?))
     }
 
     pub fn mfa_enabled(&self, username: &str) -> bool {
@@ -482,7 +495,7 @@ impl Auth {
             .get("auth_user", name)?
             .map(|u| str_list(u.get("groups").unwrap_or(&J::Null)))
             .unwrap_or_default();
-        let limited = self.enrolment_required_for(&groups);
+        let limited = self.enrolment_required_for(&groups)?;
         if limited {
             self.event(
                 name,
@@ -826,8 +839,8 @@ impl MfaApi for Auth {
             "limited": p.mfa_limited,
             "password_change_required": u["must_change_password"].as_bool() == Some(true),
             "is_admin": p.groups.contains(ADMIN_GROUP),
-            "require_admins": self.require_mfa_for_admins(),
-            "require_all": self.require_mfa_for_all(),
+            "require_admins": self.require_mfa_for_admins().map_err(MfaError::Unavailable)?,
+            "require_all": self.require_mfa_for_all().map_err(MfaError::Unavailable)?,
         }))
     }
 

@@ -1,4 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
+import { answered } from "../support/answered.ts";
 import { expect, test } from "../support/fixtures.ts";
 
 // The board of wave 1 of the UI plan (lane L3): cards are not dragged between the values of a ref
@@ -147,7 +148,10 @@ test.describe("kanban board (L3)", () => {
       state: "unmatched",
       amount_minor: 4000,
     });
+    // The sums come with the board's data: wait for its answers, however slow the machine (U65).
+    const board = answered(page, (url) => url.includes(`/api/${model}/`));
     await signIn("root", `/${model}/${model}?view=kanban`);
+    await board();
 
     await expect(column(page, "Matched").locator(".sum")).toHaveText("−€1,525.00");
     await expect(column(page, "Unmatched").locator(".sum")).toHaveText("€40.00");

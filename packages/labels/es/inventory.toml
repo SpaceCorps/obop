@@ -124,10 +124,14 @@ cancelled = "Cancelado"
 [labels.es.model.inventory_move.action.validate]
 label = "Validar"
 description = "Confirmar que la mercancía se movió de verdad: la cantidad sale del artículo de origen y llega al de destino (solo responsables de stock); un movimiento hecho no se puede deshacer"
+confirm = "¿Validar este movimiento? El stock cambia ahora y un movimiento hecho no se puede deshacer."
+done = "Stock actualizado"
 
 [labels.es.model.inventory_move.action.cancel]
 label = "Cancelar"
 description = "Cancelar un movimiento en borrador"
+confirm = "¿Cancelar este movimiento?"
+done = "Movimiento cancelado"
 
 [labels.es.model.inventory_item.field.below_reorder]
 description = "Si el artículo necesita atención: la cantidad es negativa, o está en el nivel de reposición o por debajo"
@@ -152,3 +156,27 @@ description = "El documento del que procede el movimiento, por ejemplo un númer
 [labels.es.model.inventory_move.field.lot]
 label = "Lote"
 description = "El lote que se mueve, cuando el producto se controla por lotes; al validar cambia el artículo de stock de ese lote (se crea si falta)"
+
+[labels.es.model.inventory_item.filter.low_stock]
+label = "Stock bajo"
+
+[labels.es.model.inventory_item.filter.in_stock]
+label = "En stock"
+
+[labels.es.model.inventory_move.filter.to_do]
+label = "Por hacer"
+
+[labels.es.model.inventory_move.filter.receipts]
+label = "Recepciones"
+
+[labels.es.model.inventory_move.filter.deliveries]
+label = "Entregas"
+
+[labels.es.model.inventory_move.filter.stock_counts]
+label = "Recuentos"
+
+[labels.es.model.inventory_move.filter.scrap]
+label = "Desechos"
+
+[labels.es.model.inventory_move.filter.late]
+label = "Retrasados"

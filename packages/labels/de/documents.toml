@@ -87,10 +87,13 @@ archived = "Archiviert"
 [labels.de.model.documents_document.action.publish]
 label = "Veröffentlichen"
 description = "Einen Dokumententwurf zur aktuellen Version machen"
+done = "Das Dokument ist veröffentlicht"
 
 [labels.de.model.documents_document.action.archive]
 label = "Archivieren"
 description = "Ein veröffentlichtes Dokument archivieren (nur Führungskräfte)"
+confirm = "Dieses Dokument archivieren? Kein Schritt holt es zurück."
+done = "Das Dokument ist archiviert"
 
 [labels.de.model.documents_document.field.attachment]
 label = "Datei"
@@ -99,3 +102,18 @@ description = "Die Dokumentdatei selbst (PDF, Bild, Text, Tabelle oder Office-Do
 [labels.de.model.documents_document.field.open_to_all]
 label = "Für alle sichtbar"
 description = "Ob alle, die Dokumente lesen dürfen, dieses Dokument sehen können: wahr bei öffentlichen und internen Dokumenten"
+
+[labels.de.model.documents_document.section.document]
+label = "Dokument"
+
+[labels.de.model.documents_document.section.where_it_is_kept]
+label = "Aufbewahrungsort"
+
+[labels.de.model.documents_document.filter.expiring_soon]
+label = "Läuft bald ab"
+
+[labels.de.model.documents_document.filter.drafts]
+label = "Entwürfe"
+
+[labels.de.model.documents_document.filter.confidential]
+label = "Vertraulich"

@@ -147,10 +147,14 @@ closed = "Abgeschlossen"
 [labels.de.model.accounting_fiscal_year.action.close]
 label = "Abschließen"
 description = "Das Geschäftsjahr abschließen, sodass darin nichts mehr gebucht wird (nur Genehmigende)"
+confirm = "Dieses Geschäftsjahr abschließen? Es kann nicht mehr geändert werden, bis es wieder geöffnet wird."
+done = "Geschäftsjahr abgeschlossen"
 
 [labels.de.model.accounting_fiscal_year.action.reopen]
 label = "Wieder öffnen"
 description = "Ein abgeschlossenes Geschäftsjahr zur Korrektur wieder öffnen (nur Genehmigende)"
+confirm = "Dieses abgeschlossene Geschäftsjahr wieder öffnen?"
+done = "Geschäftsjahr wieder geöffnet"
 
 [labels.de.model.accounting_period]
 name = "Periode"
@@ -187,10 +191,14 @@ closed = "Abgeschlossen"
 [labels.de.model.accounting_period.action.close]
 label = "Abschließen"
 description = "Die Periode für weitere Buchungen sperren (nur Genehmigende)"
+confirm = "Diese Periode abschließen? Buchungen mit Datum darin können nicht mehr gebucht oder geändert werden."
+done = "Periode abgeschlossen"
 
 [labels.de.model.accounting_period.action.reopen]
 label = "Wieder öffnen"
 description = "Eine abgeschlossene Periode wieder öffnen (nur Genehmigende)"
+confirm = "Diese Periode wieder öffnen? Buchungsentwürfe mit Datum darin können wieder geändert und gebucht werden."
+done = "Periode wieder geöffnet"
 
 [labels.de.model.accounting_move]
 name = "Buchung"
@@ -237,14 +245,20 @@ reversed = "Storno gebucht"
 [labels.de.model.accounting_move.action.post]
 label = "Buchen"
 description = "Eine Buchung ins Hauptbuch buchen und nummerieren (nur Genehmiger; abgelehnt ohne Betrag oder wenn Soll und Haben nicht gleich sind)"
+confirm = "Diese Buchung buchen? Sie erhält ihre Nummer und kann nicht mehr geändert werden."
+done = "Buchung gebucht"
 
 [labels.de.model.accounting_move.action.cancel]
 label = "Stornieren"
 description = "Eine Buchung im Entwurf stornieren, die nie gebucht wurde"
+confirm = "Diesen Buchungsentwurf stornieren?"
+done = "Buchung storniert"
 
 [labels.de.model.accounting_move.action.reverse]
 label = "Storno buchen"
-description = "Eine gebuchte Buchung als storniert kennzeichnen; die Gegenbuchung wird separat erfasst (nur Genehmigende)"
+description = "Eine gebuchte Buchung als storniert kennzeichnen und die Gegenbuchung als Entwurf anlegen, den eine genehmigende Person bucht (nur Genehmigende)"
+confirm = "Diese Buchung stornieren? Ein Entwurf mit den Gegenzeilen wird angelegt, den eine genehmigende Person bucht."
+done = "Buchung storniert; die Gegenbuchung ist ein Entwurf"
 
 [labels.de.model.accounting_move_line]
 name = "Buchungszeile"
@@ -296,7 +310,7 @@ plural = "Kontoauszugszeilen"
 description = "Eine Zeile eines Kontoauszugs, die auf die Zuordnung zu Buchungen wartet"
 
 [labels.de.model.accounting_bank_statement_line.guard]
-message = "Eine abgeglichene Banktransaktion kann nicht geändert werden."
+message = "Eine abgeglichene Banktransaktion kann nicht geändert werden. Eine Führungskraft kann den Abgleich zuerst rückgängig machen."
 
 [labels.de.model.accounting_bank_statement_line.field.journal_id]
 label = "Journal"
@@ -342,14 +356,25 @@ reconciled = "Abgeglichen"
 [labels.de.model.accounting_bank_statement_line.action.match]
 label = "Zuordnen"
 description = "Festhalten, dass die Zeile der in move_line_id genannten Buchungszeile entspricht"
+done = "Zugeordnet"
 
 [labels.de.model.accounting_bank_statement_line.action.reconcile]
 label = "Abgleichen"
 description = "Eine zugeordnete Zeile abgleichen (nur Führungskräfte)"
+confirm = "Diese Banktransaktion abgleichen? Sie kann nicht geändert werden, bis eine Führungskraft den Abgleich aufhebt."
+done = "Abgeglichen"
 
 [labels.de.model.accounting_bank_statement_line.action.unmatch]
 label = "Zuordnung aufheben"
 description = "Eine falsche Zuordnung rückgängig machen"
+confirm = "Diese Zuordnung aufheben?"
+done = "Zuordnung aufgehoben"
+
+[labels.de.model.accounting_bank_statement_line.action.unreconcile]
+label = "Abgleich aufheben"
+description = "Einen falschen Abgleich rückgängig machen; die Zeile ist wieder zugeordnet und kann geändert werden (nur Führungskräfte)"
+confirm = "Den Abgleich dieser Banktransaktion aufheben? Sie ist wieder zugeordnet und kann wieder geändert werden."
+done = "Abgleich aufgehoben"
 
 [labels.de.model.accounting_move.field.total_debit]
 label = "Summe Soll"
@@ -383,3 +408,30 @@ message = "Eine andere Periode umfasst bereits einige dieser Tage: Beginnen Sie 
 [labels.de.model.accounting_move_line.field.settled]
 label = "Beglichen"
 description = "Ob eine Banktransaktion diesen Forderungs- oder Verbindlichkeitsposten begleicht (ihr settles_line_id nennt ihn); berechnet, daher zeigt es auch eine gebuchte Zeile"
+
+[labels.de.model.accounting_account.filter.reconcilable]
+label = "Abstimmbar"
+
+[labels.de.model.accounting_account.filter.in_use]
+label = "In Verwendung"
+
+[labels.de.model.accounting_period.filter.open]
+label = "Offen"
+
+[labels.de.model.accounting_move.filter.drafts]
+label = "Entwürfe"
+
+[labels.de.model.accounting_move.filter.posted]
+label = "Gebucht"
+
+[labels.de.model.accounting_move_line.filter.open_items]
+label = "Offene Posten"
+
+[labels.de.model.accounting_move_line.filter.overdue]
+label = "Überfällig"
+
+[labels.de.model.accounting_move_line.filter.due_in_30_days]
+label = "Fällig in 30 Tagen"
+
+[labels.de.model.accounting_bank_statement_line.filter.to_match]
+label = "Zuzuordnen"

@@ -165,7 +165,8 @@ impl Px {
             }
             assert!(
                 std::time::Instant::now() < until,
-                "the feed stayed held back"
+                "the feed stayed held back: {}",
+                self.holders()
             );
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
@@ -178,9 +179,59 @@ impl Px {
         while self.b.history_stats().unwrap().horizon_lag_ms != 0 {
             assert!(
                 std::time::Instant::now() < until,
-                "something stayed held back"
+                "something stayed held back: {}",
+                self.holders()
             );
             std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+    }
+
+    /// Who holds the feed back, for the message of a test that waited too long (U40): every
+    /// session of the server with a transaction number (pid, database, start of the transaction,
+    /// the start of its statement) and every prepared transaction. A loaded machine where the
+    /// tests of other databases run beside these can raise `OBOP_TEST_TIME_FACTOR`.
+    fn holders(&self) -> String {
+        let mut c = self.sql();
+        let mut out: Vec<String> = c
+            .query(
+                "SELECT pid, coalesce(datname, ''), coalesce(xact_start::text, ''),
+                        left(coalesce(query, ''), 120)
+                   FROM pg_stat_activity
+                  WHERE backend_xid IS NOT NULL AND pid <> pg_backend_pid()
+                  ORDER BY xact_start",
+                &[],
+            )
+            .map(|rows| {
+                rows.iter()
+                    .map(|r| {
+                        format!(
+                            "pid {} db {} since {}: {}",
+                            r.get::<_, i32>(0),
+                            r.get::<_, String>(1),
+                            r.get::<_, String>(2),
+                            r.get::<_, String>(3)
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_else(|e| vec![format!("pg_stat_activity not readable: {e}")]);
+        if let Ok(rows) = c.query(
+            "SELECT gid, database, prepared::text FROM pg_prepared_xacts",
+            &[],
+        ) {
+            out.extend(rows.iter().map(|r| {
+                format!(
+                    "prepared {} db {} since {}",
+                    r.get::<_, String>(0),
+                    r.get::<_, String>(1),
+                    r.get::<_, String>(2)
+                )
+            }));
+        }
+        if out.is_empty() {
+            "no session with a transaction number is open now".into()
+        } else {
+            out.join("; ")
         }
     }
 
@@ -461,6 +512,31 @@ fn a_process_that_waited_for_the_schema_lock_sees_what_the_one_before_it_made() 
         seen,
         (true, true),
         "the waiter has the lock after the other committed the part: it sees the part (check, relations)"
+    );
+}
+
+/// K22: the check of a write that needs the history part runs in the write's own transaction,
+/// outside the schema lock. When that transaction began before another process committed the
+/// part, the session's old "missing" answer must not refuse the write: `require` looks once more
+/// after reading what was committed since.
+#[test]
+fn a_write_whose_transaction_began_before_the_part_was_made_finds_it() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let mut writer = db.connect();
+    // As every process does at its start: ask once, with nothing there.
+    assert!(!(crate::pg_hist::PART.check)(&mut writer).unwrap());
+    writer.batch_execute("BEGIN").unwrap();
+    writer.query_one("SELECT 1", &[]).unwrap();
+    let mut maker = db.connect();
+    crate::schema::with_lock(&mut maker, crate::schema::install_all).unwrap();
+    let st = crate::pg_hist::State::new(crate::Ddl::Never, false);
+    let r = st.require(&mut writer);
+    writer.batch_execute("ROLLBACK").unwrap();
+    assert!(
+        r.is_ok(),
+        "the part is there and the write is refused: {r:?}"
     );
 }
 
@@ -1704,6 +1780,15 @@ fn the_feed_holds_back_what_an_earlier_open_transaction_may_still_commit_and_los
         "what was settled before is still there"
     );
     assert!(px.b.history_stats().unwrap().horizon_lag_ms > 0);
+    // The light reading of `/metrics` (U43) says the same, and the message of a test that waits
+    // too long names the holder (U40).
+    assert!(
+        px.b.history_lag_ms().unwrap().is_some_and(|ms| ms > 0),
+        "{:?}",
+        px.b.history_lag_ms()
+    );
+    let named = px.holders();
+    assert!(named.contains("pid "), "{named}");
     // The holder writes an entry of its own (it gets the next number, after the write above) and
     // commits.
     holder

@@ -5,7 +5,7 @@
 // number as its source document), then `inventory_move.validate` for each move when the person may
 // validate, so the goods are in stock when the dialog closes.
 import { useEffect, useMemo, useState } from "react";
-import { fmt, t } from "@obop/ui";
+import { fmt, t, useWorded } from "@obop/ui";
 import { search, type FieldMeta, type Row } from "../../api.ts";
 import type { RecordExtProps } from "../../extensions.ts";
 import { useData, useRows } from "../../data.tsx";
@@ -48,7 +48,7 @@ function ReceiveDialog({ order, onClose }: { order: Row; onClose: () => void }) 
     | undefined;
   const [lines, setLines] = useState<Line[] | null>(null);
   const [loc, setLoc] = useState<Edit | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useWorded();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -58,7 +58,7 @@ function ReceiveDialog({ order, onClose }: { order: Row; onClose: () => void }) 
       limit: 500,
     }).then((r) => {
       if (!live) return;
-      if ("error" in r) setError(serverMessage(r.error));
+      if ("error" in r) setError(() => serverMessage(r.error));
       else
         setLines(
           r.rows.map((row) => ({
@@ -84,19 +84,19 @@ function ReceiveDialog({ order, onClose }: { order: Row; onClose: () => void }) 
     if (!lines) return;
     const bad = lines.find((l) => !/^\d+$/.test(l.arrived.trim()));
     if (bad) {
-      setError(t("Enter the units that arrived for every line (0 when none did)"));
+      setError(() => t("Enter the units that arrived for every line (0 when none did)"));
       return;
     }
     const where = locField ? fromEdit({ ...locField, required: true }, location) : null;
     if (!where || "error" in where) {
-      setError(t("Choose where the goods are received"));
+      setError(() => t("Choose where the goods are received"));
       return;
     }
     setBusy(true);
     setError("");
     const fail = (m: string) => {
       setBusy(false);
-      setError(serverMessage(m));
+      setError(() => serverMessage(m));
     };
     // The location first, in its own call (a state move is never mixed with other edits).
     if (where.value !== (order.receive_location_id ?? null)) {

@@ -124,10 +124,14 @@ cancelled = "Storniert"
 [labels.de.model.inventory_move.action.validate]
 label = "Validieren"
 description = "Bestätigen, dass die Ware wirklich bewegt wurde: die Menge verlässt den Bestand am Quellort und kommt beim Bestand am Zielort an (nur Lagerleiter); eine erledigte Bewegung lässt sich nicht rückgängig machen"
+confirm = "Diese Lagerbewegung bestätigen? Der Bestand ändert sich sofort, und eine erledigte Bewegung kann nicht rückgängig gemacht werden."
+done = "Bestand aktualisiert"
 
 [labels.de.model.inventory_move.action.cancel]
 label = "Stornieren"
 description = "Eine Bewegung im Entwurf stornieren"
+confirm = "Diese Lagerbewegung stornieren?"
+done = "Lagerbewegung storniert"
 
 [labels.de.model.inventory_item.field.below_reorder]
 description = "Ob der Bestand Aufmerksamkeit braucht: die Menge ist unter null oder erreicht oder unterschreitet den Meldebestand"
@@ -152,3 +156,27 @@ description = "Der Beleg, aus dem die Bewegung stammt, zum Beispiel eine Bestell
 [labels.de.model.inventory_move.field.lot]
 label = "Charge"
 description = "Die bewegte Charge, wenn das Produkt in Chargen geführt wird; das Bestätigen ändert den Lagerbestand dieser Charge (er wird angelegt, wenn er fehlt)"
+
+[labels.de.model.inventory_item.filter.low_stock]
+label = "Niedriger Bestand"
+
+[labels.de.model.inventory_item.filter.in_stock]
+label = "Auf Lager"
+
+[labels.de.model.inventory_move.filter.to_do]
+label = "Zu erledigen"
+
+[labels.de.model.inventory_move.filter.receipts]
+label = "Wareneingänge"
+
+[labels.de.model.inventory_move.filter.deliveries]
+label = "Lieferungen"
+
+[labels.de.model.inventory_move.filter.stock_counts]
+label = "Inventuren"
+
+[labels.de.model.inventory_move.filter.scrap]
+label = "Ausschuss"
+
+[labels.de.model.inventory_move.filter.late]
+label = "Verspätet"

@@ -19,6 +19,7 @@ import {
 } from "./format.ts";
 import { fieldTitle } from "./labels.ts";
 import { counterState } from "./limits.ts";
+import { matchesPattern, patternWords } from "./patterns.ts";
 import { BlobInput, BlobThumb, FileChip } from "./BlobFields.tsx";
 import { epochToInstant } from "./instants.ts";
 import { parseInline, plain } from "./markdown.ts";
@@ -354,13 +355,23 @@ export function FieldInput(p: InputProps) {
   const editableText = !readOnly && (f.kind === "text" || f.kind === "longtext");
   const limited = editableText ? f.max_length : undefined;
   const counter = editableText ? counterState(f, String(value)) : null;
+  // A text in the wrong format (an IBAN, a VAT number; K45) is marked before Save, also a stored
+  // one that a format set later refuses: it is kept, but a change of the field must fit (U18).
+  const offPattern =
+    f.kind === "text" &&
+    !readOnly &&
+    f.pattern !== undefined &&
+    !matchesPattern(f.pattern, String(value))
+      ? f.pattern
+      : null;
+  const patternId = `${counterId}-pattern`;
   const display = displayOf(f);
   const common: CommonAttrs = {
     id: p.id,
     autoFocus: p.autoFocus,
     // Over the limit of the field and about to be sent: invalid before the save says so. A value
     // left as stored is savable (D90 Decision 6), so it is not marked.
-    "aria-invalid": p.invalid || (counter?.over && !p.unchanged) || undefined,
+    "aria-invalid": p.invalid || ((!!counter?.over || !!offPattern) && !p.unchanged) || undefined,
     "aria-describedby": p.describedBy,
     "aria-required": f.required || undefined,
     onKeyDown: p.onKeyDown,
@@ -527,7 +538,14 @@ export function FieldInput(p: InputProps) {
           <div className={mode ? "withlink" : undefined}>
             <input
               {...common}
-              aria-describedby={describe(p.describedBy, counterId, counter)}
+              aria-describedby={
+                [
+                  describe(p.describedBy, counterId, counter),
+                  offPattern && !p.compact ? patternId : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               type="text"
               inputMode={mode}
               autoComplete={mode === "email" ? "email" : mode === "tel" ? "tel" : undefined}
@@ -539,6 +557,16 @@ export function FieldInput(p: InputProps) {
             {mode && !p.compact && <ValueLink display={display} value={value} />}
           </div>
           <CharCounter id={counterId} state={counter} max={limited} />
+          {offPattern && !p.compact && (
+            <small className={p.unchanged ? "hint" : "error"} id={patternId}>
+              {p.unchanged
+                ? t(
+                    "This stored {what} is not valid. It is kept as it is; a new value must be valid.",
+                    patternWords(offPattern),
+                  )
+                : t("Enter a valid {what}, such as {example}.", patternWords(offPattern))}
+            </small>
+          )}
         </>
       );
     }

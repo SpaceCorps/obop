@@ -298,26 +298,35 @@ refunded = "Zwrócone"
 [labels.pl.model.ecommerce_order.action.mark_paid]
 label = "Oznacz jako opłacone"
 description = "Płatność wpłynęła"
+done = "Oznaczono jako zapłacone"
 
 [labels.pl.model.ecommerce_order.action.ship]
 label = "Nadaj"
 description = "Paczka została przekazana przewoźnikowi"
+confirm = "Oznaczyć to zamówienie jako wysłane? Najpierw dodaj numer przesyłki, jeśli jest."
+done = "Wysłano"
 
 [labels.pl.model.ecommerce_order.action.deliver]
 label = "Potwierdź doręczenie"
 description = "Paczka dotarła do kupującego"
+done = "Dostarczono"
 
 [labels.pl.model.ecommerce_order.action.cancel]
 label = "Anuluj"
 description = "Anuluje zamówienie, które nigdy nie zostało opłacone"
+confirm = "Anulować to zamówienie? Jego zapas wraca do ofert i nie będzie można go już zmienić."
 
 [labels.pl.model.ecommerce_order.action.refund]
 label = "Zwróć środki"
 description = "Zwraca pieniądze za opłacone, niedostarczone zamówienie (tylko kierownik)"
+confirm = "Zwrócić pieniądze za to zamówienie? Pieniądze wracają do kupującego, a zapas do ofert."
+done = "Zwrócono"
 
 [labels.pl.model.ecommerce_order.action.refund_delivered]
 label = "Zwróć środki po dostawie"
 description = "Zwraca pieniądze za dostarczone zamówienie, na przykład po zwrocie towaru (tylko kierownik)"
+confirm = "Zwrócić pieniądze za to dostarczone zamówienie? Pieniądze wracają do kupującego; towar nie wraca na półkę."
+done = "Zwrócono"
 
 [labels.pl.model.ecommerce_order_line]
 name = "Pozycja zamówienia"
@@ -552,7 +561,48 @@ description = "Identyfikatory zdarzeń operatora już zastosowanych, w JSON, aby
 [labels.pl.model.ecommerce_payment.action.mark_failed]
 label = "Oznacz jako nieudaną"
 description = "Operator zgłasza, że płatność się nie powiodła"
+confirm = "Oznaczyć tę płatność jako nieudaną?"
 
 [labels.pl.model.ecommerce_payment.action.cancel]
 label = "Anuluj"
 description = "Przestań czekać na tę płatność"
+confirm = "Przestać czekać na tę płatność?"
+
+[labels.pl.model.ecommerce_listing.section.in_the_shop]
+label = "W sklepie"
+
+[labels.pl.model.ecommerce_listing.section.stock]
+label = "Zapas"
+
+[labels.pl.model.ecommerce_listing.section.product_page]
+label = "Strona produktu"
+
+[labels.pl.model.ecommerce_listing.section.advanced]
+label = "Zaawansowane"
+
+[labels.pl.model.ecommerce_order.section.customer]
+label = "Klient"
+
+[labels.pl.model.ecommerce_order.section.delivery]
+label = "Dostawa"
+
+[labels.pl.model.ecommerce_order.section.amounts]
+label = "Kwoty"
+
+[labels.pl.model.ecommerce_order.section.payment]
+label = "Płatność"
+
+[labels.pl.model.ecommerce_order.section.checkout_record]
+label = "Zapis transakcji"
+
+[labels.pl.model.ecommerce_listing.filter.in_the_shop]
+label = "W sklepie"
+
+[labels.pl.model.ecommerce_listing.filter.out_of_stock]
+label = "Brak w magazynie"
+
+[labels.pl.model.ecommerce_order.filter.to_ship]
+label = "Do wysłania"
+
+[labels.pl.model.ecommerce_order.filter.waiting_for_payment]
+label = "Czekają na płatność"

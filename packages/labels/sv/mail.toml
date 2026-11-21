@@ -1,0 +1,280 @@
+# Machine-drafted labels of the built-in Mail module (docs/spec/mail.md).
+
+[labels.sv.module]
+name = "E-post"
+description = "Utgående e-post: e-postservrar (SMTP-reläer och leverantörers API:er via kopplingarna), mallar på sju språk, en kö med nya försök och en leveranslogg som aldrig visar texten."
+summary = "Skicka e-post via ditt eget SMTP-relä eller en leverantör, med mallar och leveranslogg."
+
+[labels.sv.model.outbound_mail]
+name = "Utgående e-post"
+plural = "Leveranser"
+description = "Ett utgående meddelande: kön och leveransloggen. Visar aldrig texten"
+
+[labels.sv.model.outbound_mail.field.kind]
+label = "Typ"
+description = "Vad meddelandet gäller, till exempel invoice eller password_reset; general om inget anges"
+
+[labels.sv.model.outbound_mail.field.to]
+label = "Till"
+description = "Mottagare, kommaseparerade"
+
+[labels.sv.model.outbound_mail.field.cc]
+label = "Kopia"
+description = "Kopiemottagare, kommaseparerade"
+
+[labels.sv.model.outbound_mail.field.bcc]
+label = "Hemlig kopia"
+description = "Mottagare av hemlig kopia, kommaseparerade; aldrig i ett huvud"
+
+[labels.sv.model.outbound_mail.field.reply_to]
+label = "Svar till"
+description = "Vart svar går; tomt betyder serverns inställning"
+
+[labels.sv.model.outbound_mail.field.subject]
+label = "Ämne"
+description = "Ämnesrad"
+
+[labels.sv.model.outbound_mail.field.body]
+label = "Text"
+description = "Texten, förseglad; raderas när meddelandet har skickats eller avbrutits"
+
+[labels.sv.model.outbound_mail.field.template]
+label = "Mall"
+description = "Indata till send: mallens nyckel; sparas"
+
+[labels.sv.model.outbound_mail.field.language]
+label = "Språk"
+description = "Indata till send: mallens språk"
+
+[labels.sv.model.outbound_mail.field.language.options]
+en = "Engelska"
+de = "Tyska"
+fr = "Franska"
+pl = "Polska"
+fi = "Finska"
+sv = "Svenska"
+es = "Spanska"
+
+[labels.sv.model.outbound_mail.field.vars]
+label = "Värden"
+description = "Indata till send: mallens värden som JSON-objekt; sparas aldrig"
+
+[labels.sv.model.outbound_mail.field.server]
+label = "E-postserver"
+description = "E-postservern som skickar det"
+
+[labels.sv.model.outbound_mail.field.status]
+label = "Status"
+description = "i kö, skickas, skickat, misslyckat eller avbrutet"
+
+[labels.sv.model.outbound_mail.field.status.options]
+queued = "I kö"
+sending = "Skickas"
+sent = "Skickat"
+failed = "Misslyckat"
+cancelled = "Avbrutet"
+
+[labels.sv.model.outbound_mail.field.attempts]
+label = "Försök"
+description = "Leveransförsök hittills"
+
+[labels.sv.model.outbound_mail.field.next_attempt_at]
+label = "Nästa försök"
+description = "När det försöks nästa gång"
+
+[labels.sv.model.outbound_mail.field.queued_at]
+label = "Köad"
+description = "När det köades"
+
+[labels.sv.model.outbound_mail.field.sent_at]
+label = "Skickat"
+description = "När servern eller leverantören tog emot det"
+
+[labels.sv.model.outbound_mail.field.last_error]
+label = "Senaste fel"
+description = "Varför senaste försöket misslyckades, utan text eller inloggningsuppgifter"
+
+[labels.sv.model.outbound_mail.field.server_reply]
+label = "Serverns svar"
+description = "Serverns eller leverantörens svar på det mottagna meddelandet"
+
+[labels.sv.model.outbound_mail.field.message_id]
+label = "Message-ID"
+description = "Huvudet Message-ID, samma vid varje försök"
+
+[labels.sv.model.outbound_mail.field.related_model]
+label = "Relaterad modell"
+description = "Modellen för posten meddelandet gäller"
+
+[labels.sv.model.outbound_mail.field.related_id]
+label = "Relaterad post"
+description = "Postens id"
+
+[labels.sv.model.outbound_mail.field.requested_by]
+label = "Köad av"
+description = "Vem som köade det"
+
+[labels.sv.model.outbound_mail.field.lease_until]
+label = "Reserverad till"
+description = "Arbetsprocessens reservation, i sekunder sedan 1970"
+
+[labels.sv.model.outbound_mail.field.due]
+label = "Förfaller"
+description = "När det ska göras, i sekunder sedan 1970"
+
+[labels.sv.model.outbound_mail.action.send]
+label = "Skicka"
+description = "Köa ett meddelande: to, subject och body, eller template med language och vars; returnerar dess id. Arbetsprocessen skickar det efter anropet"
+done = "Meddelandet har köats"
+
+[labels.sv.model.outbound_mail.action.retry]
+label = "Skicka igen"
+description = "Köa ett misslyckat meddelande igen, försök från noll"
+done = "Köad igen"
+
+[labels.sv.model.outbound_mail.action.cancel]
+label = "Avbryt"
+description = "Avbryt ett köat meddelande; dess text raderas"
+done = "Avbruten"
+
+[labels.sv.model.outbound_mail.action.process]
+label = "Skicka förfallna"
+description = "Skicka meddelandena som ska skickas nu (arbetsprocessen gör det med några sekunders mellanrum)"
+
+[labels.sv.model.mail_server]
+name = "E-postserver"
+plural = "E-postservrar"
+description = "En väg ut för e-post: ett SMTP-relä eller en leverantör via en koppling"
+
+[labels.sv.model.mail_server.field.name]
+label = "Namn"
+description = "Ett namn som skiljer servrarna åt"
+
+[labels.sv.model.mail_server.field.kind]
+label = "Skickar via"
+description = "smtp (ett relä) eller provider (ett API via en koppling)"
+
+[labels.sv.model.mail_server.field.kind.options]
+smtp = "SMTP-relä"
+provider = "Leverantör"
+
+[labels.sv.model.mail_server.field.enabled]
+label = "Aktiverad"
+description = "E-post får gå ut via den här servern"
+
+[labels.sv.model.mail_server.field.is_default]
+label = "Standardserver"
+description = "Används för varje meddelandetyp som ingen annan server listar"
+
+[labels.sv.model.mail_server.field.kinds]
+label = "Meddelandetyper"
+description = "Meddelandetyper servern skickar, kommaseparerade (till exempel invoice, password_reset); tomt betyder alla"
+
+[labels.sv.model.mail_server.field.host]
+label = "Värd"
+description = "SMTP: reläets värdnamn"
+
+[labels.sv.model.mail_server.field.port]
+label = "Portnummer"
+description = "SMTP: port (587 för STARTTLS, 465 för TLS)"
+
+[labels.sv.model.mail_server.field.security]
+label = "Säkerhet"
+description = "SMTP: starttls, tls eller none (none skickar inget lösenord)"
+
+[labels.sv.model.mail_server.field.security.options]
+starttls = "STARTTLS"
+tls = "TLS"
+none = "Ingen"
+
+[labels.sv.model.mail_server.field.allow_private_network]
+label = "Tillåt eget nätverk"
+description = "SMTP: reläet får finnas i företagets eget nätverk (en privat adress som 10.0.0.5), och säkerheten none godtas där; av som standard, bara en person slår på det (docs/spec/mail.md 6)"
+
+[labels.sv.model.mail_server.field.username]
+label = "Användarnamn"
+description = "SMTP: användarnamn; tomt betyder ingen inloggning"
+
+[labels.sv.model.mail_server.field.password]
+label = "Lösenord"
+description = "SMTP: lösenord; endast skrivbart, lagras krypterat, returneras aldrig"
+
+[labels.sv.model.mail_server.field.password_set]
+label = "Lösenord sparat"
+description = "SMTP: om ett lösenord är sparat"
+
+[labels.sv.model.mail_server.field.connection]
+label = "Koppling"
+description = "Leverantör: kopplingen som skickar"
+
+[labels.sv.model.mail_server.field.from_address]
+label = "Avsändaradress"
+description = "Avsändaradress för varje meddelande från servern"
+
+[labels.sv.model.mail_server.field.from_name]
+label = "Avsändarnamn"
+description = "Avsändarnamn som mottagaren ser"
+
+[labels.sv.model.mail_server.field.reply_to]
+label = "Svarsadress"
+description = "Vart svar går; tomt betyder avsändaradressen"
+
+[labels.sv.model.mail_server.field.footer]
+label = "Sidfot"
+description = "Text under varje meddelande, till exempel företagsuppgifter eller hur man slutar få meddelandena"
+
+[labels.sv.model.mail_server.field.last_test_at]
+label = "Senaste test"
+description = "När det senaste testmeddelandet skickades"
+
+[labels.sv.model.mail_server.field.last_test_result]
+label = "Senaste testresultat"
+description = "Vad servern svarade på det senaste testmeddelandet"
+
+[labels.sv.model.mail_server.field.last_test_outcome]
+label = "Utfall av senaste test"
+description = "Hur det senaste testet slutade: skickat, tillfälligt inte skickat eller avvisat"
+
+[labels.sv.model.mail_server.field.last_test_outcome.options]
+sent = "Skickat"
+temporary = "Inte skickat (tillfälligt)"
+permanent = "Inte skickat (avvisat)"
+
+[labels.sv.model.mail_server.field.test_recipient]
+label = "Testmottagare"
+description = "Indata till test_send: adressen testmeddelandet går till; sparas aldrig"
+
+[labels.sv.model.mail_server.action.test_send]
+label = "Skicka test"
+description = "Skicka nu ett kort testmeddelande via servern till test_recipient och spara svaret"
+done = "Testmeddelandet skickat"
+
+[labels.sv.model.mail_template]
+name = "E-postmall"
+plural = "E-postmallar"
+description = "Ämne och text för en meddelandetyp på ett språk, med platshållare (ett namn inom dubbla klammerparenteser)"
+
+[labels.sv.model.mail_template.field.key]
+label = "Nyckel"
+description = "Meddelandetypen mallen gäller, till exempel invoice eller password_reset"
+
+[labels.sv.model.mail_template.field.language]
+label = "Språk"
+description = "Textens språk"
+
+[labels.sv.model.mail_template.field.language.options]
+en = "Engelska"
+de = "Tyska"
+fr = "Franska"
+pl = "Polska"
+fi = "Finska"
+sv = "Svenska"
+es = "Spanska"
+
+[labels.sv.model.mail_template.field.subject]
+label = "Ämne"
+description = "Ämnesrad, med platshållare (ett namn inom dubbla klammerparenteser)"
+
+[labels.sv.model.mail_template.field.body]
+label = "Text"
+description = "Text, med platshållare (ett namn inom dubbla klammerparenteser)"

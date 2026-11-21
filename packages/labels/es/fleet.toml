@@ -60,14 +60,18 @@ retired = "Retirado"
 [labels.es.model.fleet_vehicle.action.dispatch]
 label = "Poner en servicio"
 description = "Poner en servicio un vehículo disponible"
+done = "El vehículo está en servicio"
 
 [labels.es.model.fleet_vehicle.action.return_to_pool]
 label = "Devolver a la flota"
 description = "Devolver un vehículo en servicio al grupo de disponibles"
+done = "El vehículo vuelve a estar disponible"
 
 [labels.es.model.fleet_vehicle.action.retire]
 label = "Retirar"
 description = "Retirar definitivamente de la flota un vehículo disponible (requiere aprobador)"
+confirm = "¿Retirar este vehículo definitivamente? Ningún paso lo recupera."
+done = "El vehículo está retirado"
 
 [labels.es.model.fleet_vehicle_driver]
 name = "Conductor"
@@ -101,10 +105,13 @@ suspended = "Suspendido"
 [labels.es.model.fleet_vehicle_driver.action.suspend]
 label = "Suspender"
 description = "Marcar a un conductor como suspendido, por ejemplo por un permiso caducado"
+confirm = "¿Suspender a este conductor?"
+done = "El conductor está suspendido"
 
 [labels.es.model.fleet_vehicle_driver.action.reactivate]
 label = "Reactivar"
 description = "Volver a poner como activo a un conductor suspendido"
+done = "El conductor vuelve a estar activo"
 
 [labels.es.model.fleet_vehicle_service]
 name = "Servicio de vehículo"
@@ -158,15 +165,38 @@ cancelled = "Cancelado"
 [labels.es.model.fleet_vehicle_service.action.complete]
 label = "Completar"
 description = "Marcar un trabajo planificado como hecho"
+done = "El mantenimiento está hecho"
 
 [labels.es.model.fleet_vehicle_service.action.cancel]
 label = "Cancelar"
 description = "Cancelar un trabajo planificado"
+confirm = "¿Cancelar este mantenimiento?"
+done = "El mantenimiento está cancelado"
 
 [labels.es.model.fleet_vehicle.action.send_to_workshop]
 label = "Enviar al taller"
 description = "Enviar un vehículo disponible al taller para mantenimiento o reparación"
+done = "El vehículo está en el taller"
 
 [labels.es.model.fleet_vehicle.action.back_in_service]
 label = "De vuelta del taller"
 description = "Devolver un vehículo del taller a los vehículos disponibles"
+done = "El vehículo vuelve a estar disponible"
+
+[labels.es.model.fleet_vehicle.filter.available]
+label = "Disponibles"
+
+[labels.es.model.fleet_vehicle.filter.in_the_workshop]
+label = "En el taller"
+
+[labels.es.model.fleet_vehicle_driver.filter.licence_expiring]
+label = "Permiso por caducar"
+
+[labels.es.model.fleet_vehicle_driver.filter.suspended]
+label = "Suspendidos"
+
+[labels.es.model.fleet_vehicle_service.filter.planned]
+label = "Planificados"
+
+[labels.es.model.fleet_vehicle_service.filter.done]
+label = "Realizados"

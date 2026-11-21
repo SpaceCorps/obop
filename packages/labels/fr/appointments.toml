@@ -87,18 +87,22 @@ no_show = "Absent"
 [labels.fr.model.appointments_appointment.action.confirm]
 label = "Confirmer"
 description = "Confirme un rendez-vous planifié"
+done = "Confirmé"
 
 [labels.fr.model.appointments_appointment.action.complete]
 label = "Terminer"
 description = "Marque un rendez-vous confirmé comme tenu"
+done = "Marqué comme tenu"
 
 [labels.fr.model.appointments_appointment.action.cancel]
 label = "Annuler"
 description = "Annule un rendez-vous planifié"
+confirm = "Annuler ce rendez-vous ? Il ne pourra plus être modifié ensuite."
 
 [labels.fr.model.appointments_appointment.action.mark_no_show]
 label = "Marquer absent"
 description = "Enregistre que le participant ne s’est pas présenté"
+confirm = "Enregistrer que la personne n'est pas venue ?"
 
 [labels.fr.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Le rendez-vous se termine avant de commencer : choisissez une heure de fin après le début"
@@ -108,3 +112,15 @@ message = "Le rendez-vous se termine avant de commencer : choisissez une heure d
 
 [labels.fr.model.appointments_appointment.rule.no_double_booking]
 message = "La ressource est déjà réservée à ce moment : choisissez une autre heure ou une autre ressource"
+
+[labels.fr.model.appointments_appointment.section.appointment]
+label = "Rendez-vous"
+
+[labels.fr.model.appointments_appointment.section.resource_and_time]
+label = "Ressource et horaire"
+
+[labels.fr.model.appointments_appointment.filter.today]
+label = "Aujourd'hui"
+
+[labels.fr.model.appointments_appointment.filter.coming_up]
+label = "À venir"

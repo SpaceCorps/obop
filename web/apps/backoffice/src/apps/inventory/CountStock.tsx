@@ -4,7 +4,7 @@
 // the count. Applying a count needs the group that validates moves; the quantity itself is never
 // typed in.
 import { useState } from "react";
-import { fmt, t } from "@obop/ui";
+import { fmt, t, useWorded } from "@obop/ui";
 import type { RecordExtProps } from "../../extensions.ts";
 import { useData } from "../../data.tsx";
 import { serverMessage } from "../../serverMessage.ts";
@@ -32,7 +32,7 @@ function CountDialog({ row, onClose }: { row: RecordExtProps["row"]; onClose: ()
   const d = useData();
   const onHand = Number(row.quantity ?? 0);
   const [counted, setCounted] = useState(String(onHand));
-  const [error, setError] = useState("");
+  const [error, setError] = useWorded();
   const [busy, setBusy] = useState(false);
   const n = /^\d+$/.test(counted.trim()) ? Number(counted.trim()) : null;
   const diff = n === null ? null : n - onHand;
@@ -42,7 +42,7 @@ function CountDialog({ row, onClose }: { row: RecordExtProps["row"]; onClose: ()
 
   async function submit() {
     if (n === null) {
-      setError(t("Enter the number of units you counted"));
+      setError(() => t("Enter the number of units you counted"));
       return;
     }
     if (diff === 0) {
@@ -55,7 +55,7 @@ function CountDialog({ row, onClose }: { row: RecordExtProps["row"]; onClose: ()
     const out = await d.run("stock_count.apply", { item: row.id, counted: n });
     setBusy(false);
     if (out.kind !== "ok") {
-      setError(
+      setError(() =>
         out.kind === "error"
           ? serverMessage(out.message)
           : t("The move was proposed and waits for approval."),

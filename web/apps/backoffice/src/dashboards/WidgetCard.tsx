@@ -324,7 +324,7 @@ function Series({
       ),
     // ref labels arrive after the groups do
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, cur, lk, d.lang],
+    [rows, cur, lk, d.lang, d.locale],
   );
   const format = (n: number) => formatMeasure(m, n, cur);
   const keep = w.kind === "pie" ? 7 : 8;

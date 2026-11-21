@@ -27,6 +27,7 @@
 //! The security log entry written at signing carries a digest of the evidence as it stood.
 
 mod door;
+mod evidence;
 mod guards;
 mod history;
 mod link;
@@ -48,6 +49,14 @@ use obop_storage::Fields;
 use obop_values::datetime::Instant;
 use serde_json::Value as J;
 use std::sync::{Arc, RwLock};
+
+/// The wording digest the signer's page carries as `words` for this request as stored (the
+/// title, the message and the requested name). `pub` for the tests of the `obop` binary, which
+/// post the form as a page would.
+#[doc(hidden)]
+pub fn page_wording(req: &Fields) -> String {
+    evidence::wording_digest(req)
+}
 
 /// SHA-256 of `bytes` as lower-case hex: the form of a blob id and of a document hash.
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -86,6 +95,17 @@ pub const DOOR_OWNED: [&str; 10] = [
     "signature_reference",
 ];
 
+/// The models whose guards act in `Dispatcher::invoke` (the wrappers of this module): an action
+/// effect writes through the engine and skips them, so only an action of `sign` itself may write
+/// them (docs/ISSUES.md O35). The install gate refuses an effect of another package on them, and
+/// the engine refuses it again when it runs.
+pub const OWN_EFFECTS_ONLY: [&str; 2] = ["sign_request", "sign_link"];
+
+/// Whether an action effect of `module` may write `model` as far as this module is concerned.
+pub fn effect_may_write_from(model: &str, module: &str) -> bool {
+    !OWN_EFFECTS_ONLY.contains(&model) || module == "sign"
+}
+
 type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 pub struct SignService {
@@ -119,6 +139,7 @@ impl SignService {
         guards::install(d, &svc);
         send::install(d, &svc);
         link::install(d, &svc);
+        evidence::install(d, &svc);
         svc
     }
 
@@ -173,6 +194,21 @@ impl SignService {
     pub(crate) fn registered(&self) -> bool {
         let m = self.models.read().unwrap();
         m.contains_key("sign_link") && m.contains_key("sign_request")
+    }
+
+    /// What the server says at start about the signer door (docs/ISSUES.md O29): with `sign`
+    /// installed and no `OBOP_PUBLIC_URL`, a new link is a bare path, and the door checks the
+    /// origin of a post against the `Host` header, over https only when the proxy sends
+    /// `X-Forwarded-Proto: https`; a proxy that does not would have every signature refused.
+    /// `None` when there is nothing to say.
+    pub fn start_up_note(&self) -> Option<String> {
+        if !self.registered() || self.public_url().is_some() {
+            return None;
+        }
+        Some(
+            "sign: OBOP_PUBLIC_URL is not set, so a new signing link is only a path (/sign/...) and the signer page checks where a post came from against the Host header, over https only when the proxy sends X-Forwarded-Proto: https; set OBOP_PUBLIC_URL to the public https address of this instance (docs/SIGN.md)"
+                .to_string(),
+        )
     }
 
     pub(crate) fn public_url(&self) -> Option<String> {

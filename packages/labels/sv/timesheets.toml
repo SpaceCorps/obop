@@ -51,11 +51,21 @@ approved = "Godkänd"
 [labels.sv.model.timesheets_entry.action.submit]
 label = "Skicka in"
 description = "Skicka in registreringen för godkännande"
+done = "Inskickad för godkännande"
 
 [labels.sv.model.timesheets_entry.action.approve]
 label = "Godkänn"
 description = "Godkänn en inskickad registrering (endast chef)"
+confirm = "Godkänna den här tidsregistreringen? Den kan inte ändras efteråt."
+done = "Godkänd"
 
 [labels.sv.model.timesheets_entry.action.reject]
 label = "Avvisa"
 description = "Skicka tillbaka en inskickad registrering till utkast (endast chef)"
+done = "Skickad tillbaka till utkast"
+
+[labels.sv.model.timesheets_entry.filter.mine]
+label = "Mina"
+
+[labels.sv.model.timesheets_entry.filter.to_approve]
+label = "Att godkänna"

@@ -276,16 +276,15 @@ describe("Swedish sentences that hold a label of the catalogue or an iPhone menu
     expect(t("language.unsaved")).not.toMatch(/går den tillbaka/);
   });
 
-  test("the way out of the screen Failed on an iPhone is to delete the app, not to remove it from the Home Screen", () => {
+  test("the way out of the screen Failed is the button of the screen, named as the button is (L34)", () => {
     setLanguage("sv");
-    const ios = tOn("ios", "error.database.hint");
-    expect(ios).toContain("Radera app");
-    expect(ios).toContain("radera appen från telefonen");
-    expect(ios).not.toContain("från hemskärmen");
-    expect(tOn("android", "error.database.hint")).toContain("Rensa lagringsutrymme");
-    // The English source says the same: Delete App, not Remove from Home Screen.
+    const button = t("error.database.erase");
+    for (const os of ["android", "ios"] as const) {
+      const hint = tOn(os, "error.database.hint");
+      expect(hint).toContain(button);
+      expect(hint).not.toMatch(/Rensa lagringsutrymme|radera appen från telefonen|från hemskärmen/);
+    }
     setLanguage("en");
-    expect(tOn("ios", "error.database.hint")).toContain("choose Remove App, then Delete App");
   });
 });
 

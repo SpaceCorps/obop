@@ -82,6 +82,7 @@ confirmed = "Potwierdzone"
 [labels.pl.model.planning_shift.action.publish]
 label = "Opublikuj"
 description = "Publikuje zmianę dla przypisanego pracownika lub dla wszystkich, gdy jest otwarta"
+done = "Opublikowano"
 
 [labels.pl.model.planning_shift.action.unpublish]
 label = "Cofnij publikację"
@@ -90,9 +91,19 @@ description = "Przywraca opublikowaną zmianę do stanu otwartego"
 [labels.pl.model.planning_shift.action.confirm]
 label = "Potwierdź"
 description = "Pracownik potwierdza, że przyjdzie na zmianę"
+done = "Potwierdzono"
 
 [labels.pl.model.planning_shift.rule.ends_after_start]
 message = "Zmiana kończy się, zanim się zacznie: ustaw godzinę zakończenia po rozpoczęciu"
 
 [labels.pl.model.planning_shift.rule.no_double_shift]
 message = "Pracownik ma już zmianę w tym czasie: wybierz inną godzinę lub innego pracownika"
+
+[labels.pl.model.planning_shift.filter.open_shifts]
+label = "Wolne zmiany"
+
+[labels.pl.model.planning_shift.filter.not_published]
+label = "Nieopublikowane"
+
+[labels.pl.model.planning_shift.filter.coming_up]
+label = "Nadchodzące"

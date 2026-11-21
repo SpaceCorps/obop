@@ -106,11 +106,26 @@ description = "Gör ett förfallet abonnemang aktivt igen efter betalning"
 [labels.sv.model.subscriptions_subscription.action.cancel_trial]
 label = "Avbryt provperiod"
 description = "Avbryt ett abonnemang under provperioden"
+confirm = "Säga upp den här prenumerationen? Den kan inte ändras efteråt."
 
 [labels.sv.model.subscriptions_subscription.action.cancel]
 label = "Annullera"
 description = "Annullera ett aktivt abonnemang"
+confirm = "Säga upp den här prenumerationen? Den kan inte ändras efteråt."
 
 [labels.sv.model.subscriptions_subscription.action.cancel_overdue]
 label = "Annullera förfallet"
 description = "Annullera ett förfallet abonnemang"
+confirm = "Säga upp den här prenumerationen? Den kan inte ändras efteråt."
+
+[labels.sv.model.subscriptions_subscription.section.billing]
+label = "Fakturering"
+
+[labels.sv.model.subscriptions_subscription.section.cancellation]
+label = "Annullering"
+
+[labels.sv.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "Provperioden slutar denna vecka"
+
+[labels.sv.model.subscriptions_subscription.filter.invoice_due]
+label = "Ska faktureras"

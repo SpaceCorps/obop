@@ -136,14 +136,19 @@ cancelled = "Anulowane"
 [labels.pl.model.email_marketing_campaign.action.schedule]
 label = "Zaplanuj"
 description = "Oznacza kampanię jako zaplanowaną na wyznaczony dzień"
+done = "Zaplanowano"
 
 [labels.pl.model.email_marketing_campaign.action.send]
 label = "Oznacz jako wysłaną"
 description = "Oznacza zaplanowaną kampanię jako wysłaną; żaden e-mail nie jest wysyłany (tylko kierownik)"
+confirm = "Oznaczyć tę kampanię jako wysłaną? Żaden e-mail nie zostanie wysłany: ta instancja jeszcze nie wysyła e-maili. Potem nie będzie można zmienić kampanii."
+done = "Oznaczono jako wysłane; nie wysłano żadnego e-maila"
 
 [labels.pl.model.email_marketing_campaign.action.send_now]
 label = "Oznacz jako wysłaną"
 description = "Oznacza roboczą kampanię jako wysłaną; żaden e-mail nie jest wysyłany (tylko kierownik)"
+confirm = "Oznaczyć tę kampanię jako wysłaną? Żaden e-mail nie zostanie wysłany: ta instancja jeszcze nie wysyła e-maili. Potem nie będzie można zmienić kampanii."
+done = "Oznaczono jako wysłane; nie wysłano żadnego e-maila"
 
 [labels.pl.model.email_marketing_campaign.action.unschedule]
 label = "Cofnij planowanie"
@@ -152,3 +157,19 @@ description = "Przywraca zaplanowaną kampanię do wersji roboczej"
 [labels.pl.model.email_marketing_campaign.action.cancel]
 label = "Anuluj"
 description = "Anuluje zaplanowaną kampanię"
+confirm = "Anulować tę kampanię? Potem nie będzie można jej zmienić."
+
+[labels.pl.model.email_marketing_campaign.section.message]
+label = "Wiadomość"
+
+[labels.pl.model.email_marketing_campaign.section.content]
+label = "Treść"
+
+[labels.pl.model.email_marketing_campaign.section.schedule]
+label = "Harmonogram"
+
+[labels.pl.model.email_marketing_campaign.section.results]
+label = "Wyniki"
+
+[labels.pl.model.email_marketing_contact.filter.may_be_mailed]
+label = "Zgoda na wysyłkę"

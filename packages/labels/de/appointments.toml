@@ -87,18 +87,22 @@ no_show = "Nicht erschienen"
 [labels.de.model.appointments_appointment.action.confirm]
 label = "Bestätigen"
 description = "Einen terminierten Termin bestätigen"
+done = "Bestätigt"
 
 [labels.de.model.appointments_appointment.action.complete]
 label = "Erledigen"
 description = "Einen bestätigten Termin als stattgefunden markieren"
+done = "Als stattgefunden markiert"
 
 [labels.de.model.appointments_appointment.action.cancel]
 label = "Stornieren"
 description = "Einen terminierten Termin stornieren"
+confirm = "Diesen Termin absagen? Er kann danach nicht mehr geändert werden."
 
 [labels.de.model.appointments_appointment.action.mark_no_show]
 label = "Als nicht erschienen markieren"
 description = "Festhalten, dass die teilnehmende Person nicht gekommen ist"
+confirm = "Festhalten, dass die Person nicht gekommen ist?"
 
 [labels.de.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Der Termin endet, bevor er beginnt: Legen Sie ein Ende nach dem Beginn fest"
@@ -108,3 +112,15 @@ message = "Der Termin endet, bevor er beginnt: Legen Sie ein Ende nach dem Begin
 
 [labels.de.model.appointments_appointment.rule.no_double_booking]
 message = "Die Ressource ist zu dieser Zeit bereits gebucht: Wählen Sie eine andere Zeit oder eine andere Ressource"
+
+[labels.de.model.appointments_appointment.section.appointment]
+label = "Termin"
+
+[labels.de.model.appointments_appointment.section.resource_and_time]
+label = "Ressource und Zeit"
+
+[labels.de.model.appointments_appointment.filter.today]
+label = "Heute"
+
+[labels.de.model.appointments_appointment.filter.coming_up]
+label = "Demnächst"

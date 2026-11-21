@@ -147,10 +147,14 @@ closed = "Stängt"
 [labels.sv.model.accounting_fiscal_year.action.close]
 label = "Stäng"
 description = "Stäng räkenskapsåret så att inget mer bokförs i det (endast godkännare)"
+confirm = "Stänga det här räkenskapsåret? Det kan inte ändras förrän det öppnas igen."
+done = "Räkenskapsåret stängt"
 
 [labels.sv.model.accounting_fiscal_year.action.reopen]
 label = "Öppna igen"
 description = "Öppna ett stängt räkenskapsår för att rätta det (endast godkännare)"
+confirm = "Öppna det här stängda räkenskapsåret igen?"
+done = "Räkenskapsåret öppnat igen"
 
 [labels.sv.model.accounting_period]
 name = "Period"
@@ -187,10 +191,14 @@ closed = "Stängd"
 [labels.sv.model.accounting_period.action.close]
 label = "Stäng"
 description = "Stäng perioden för vidare bokföring (endast godkännare)"
+confirm = "Stänga den här perioden? Verifikationer daterade i den kan inte längre bokföras eller ändras."
+done = "Perioden stängd"
 
 [labels.sv.model.accounting_period.action.reopen]
 label = "Öppna igen"
 description = "Öppna en stängd period (endast godkännare)"
+confirm = "Öppna den här perioden igen? Verifikationsutkast daterade i den kan ändras och bokföras igen."
+done = "Perioden öppnad igen"
 
 [labels.sv.model.accounting_move]
 name = "Verifikation"
@@ -237,14 +245,20 @@ reversed = "Återförd"
 [labels.sv.model.accounting_move.action.post]
 label = "Bokför"
 description = "Bokför en verifikation i utkast i huvudboken och ge den ett nummer (endast godkännare; nekas utan belopp eller om debet och kredit inte är lika)"
+confirm = "Bokföra den här verifikationen? Den får sitt nummer och kan inte längre ändras."
+done = "Verifikation bokförd"
 
 [labels.sv.model.accounting_move.action.cancel]
 label = "Annullera"
 description = "Annullera en verifikation i utkast som aldrig bokförts"
+confirm = "Makulera det här verifikationsutkastet?"
+done = "Verifikation makulerad"
 
 [labels.sv.model.accounting_move.action.reverse]
 label = "Återför"
-description = "Markera en bokförd verifikation som återförd; motverifikationen bokförs separat (endast godkännare)"
+description = "Markera en bokförd verifikation som återförd och skapa motverifikationen som utkast som en godkännare bokför (endast godkännare)"
+confirm = "Återföra den här verifikationen? Ett utkast med motsatta rader skapas som en godkännare bokför."
+done = "Verifikationen återförd; motverifikationen är ett utkast"
 
 [labels.sv.model.accounting_move_line]
 name = "Verifikationsrad"
@@ -296,7 +310,7 @@ plural = "Kontoutdragsrader"
 description = "En rad i ett kontoutdrag som väntar på att matchas mot verifikationer"
 
 [labels.sv.model.accounting_bank_statement_line.guard]
-message = "En avstämd banktransaktion kan inte ändras."
+message = "En avstämd banktransaktion kan inte ändras. En chef kan först ångra avstämningen."
 
 [labels.sv.model.accounting_bank_statement_line.field.journal_id]
 label = "Verifikationsserie"
@@ -342,14 +356,25 @@ reconciled = "Avstämd"
 [labels.sv.model.accounting_bank_statement_line.action.match]
 label = "Matcha"
 description = "Registrera att raden motsvarar verifikationsraden som anges i move_line_id"
+done = "Matchad"
 
 [labels.sv.model.accounting_bank_statement_line.action.reconcile]
 label = "Stäm av"
 description = "Stäm av en matchad rad (endast chef)"
+confirm = "Stämma av den här banktransaktionen? Den kan inte ändras förrän en chef ångrar avstämningen."
+done = "Avstämd"
 
 [labels.sv.model.accounting_bank_statement_line.action.unmatch]
 label = "Ta bort matchning"
 description = "Ångra en matchning som blev fel"
+confirm = "Ångra den här matchningen?"
+done = "Matchningen ångrad"
+
+[labels.sv.model.accounting_bank_statement_line.action.unreconcile]
+label = "Ångra avstämning"
+description = "Ångra en avstämning som blev fel; raden blir matchad igen och kan ändras (endast chefer)"
+confirm = "Ångra avstämningen av den här banktransaktionen? Den blir matchad igen och kan ändras igen."
+done = "Avstämningen ångrad"
 
 [labels.sv.model.accounting_move.field.total_debit]
 label = "Totalt debet"
@@ -383,3 +408,30 @@ message = "En annan period täcker redan några av dessa dagar: låt den här b�
 [labels.sv.model.accounting_move_line.field.settled]
 label = "Reglerad"
 description = "Om en banktransaktion reglerar den här kund- eller leverantörsposten (dess settles_line_id anger den); beräknad, så även en bokförd rad visar det"
+
+[labels.sv.model.accounting_account.filter.reconcilable]
+label = "Avstämningsbara"
+
+[labels.sv.model.accounting_account.filter.in_use]
+label = "Används"
+
+[labels.sv.model.accounting_period.filter.open]
+label = "Öppna"
+
+[labels.sv.model.accounting_move.filter.drafts]
+label = "Utkast"
+
+[labels.sv.model.accounting_move.filter.posted]
+label = "Bokförda"
+
+[labels.sv.model.accounting_move_line.filter.open_items]
+label = "Öppna poster"
+
+[labels.sv.model.accounting_move_line.filter.overdue]
+label = "Förfallna"
+
+[labels.sv.model.accounting_move_line.filter.due_in_30_days]
+label = "Förfaller inom 30 dagar"
+
+[labels.sv.model.accounting_bank_statement_line.filter.to_match]
+label = "Att matcha"

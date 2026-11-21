@@ -106,11 +106,26 @@ description = "Devolver a activa una suscripción vencida tras el pago"
 [labels.es.model.subscriptions_subscription.action.cancel_trial]
 label = "Cancelar prueba"
 description = "Cancelar una suscripción durante su prueba"
+confirm = "¿Cancelar esta suscripción? Después ya no se podrá modificar."
 
 [labels.es.model.subscriptions_subscription.action.cancel]
 label = "Cancelar"
 description = "Cancelar una suscripción activa"
+confirm = "¿Cancelar esta suscripción? Después ya no se podrá modificar."
 
 [labels.es.model.subscriptions_subscription.action.cancel_overdue]
 label = "Cancelar por impago"
 description = "Cancelar una suscripción vencida"
+confirm = "¿Cancelar esta suscripción? Después ya no se podrá modificar."
+
+[labels.es.model.subscriptions_subscription.section.billing]
+label = "Facturación"
+
+[labels.es.model.subscriptions_subscription.section.cancellation]
+label = "Cancelación"
+
+[labels.es.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "La prueba termina esta semana"
+
+[labels.es.model.subscriptions_subscription.filter.invoice_due]
+label = "Factura pendiente"

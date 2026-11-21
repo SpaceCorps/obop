@@ -194,7 +194,7 @@ pub fn is_currency_code(s: &str) -> bool {
 
 /// The length of the IBAN of each country of the IBAN registry (SWIFT).
 #[rustfmt::skip]
-const IBAN_LENGTHS: &[(&str, usize)] = &[
+pub const IBAN_LENGTHS: &[(&str, usize)] = &[
     ("AD", 24), ("AE", 23), ("AL", 28), ("AT", 20), ("AZ", 28), ("BA", 20), ("BE", 16),
     ("BG", 22), ("BH", 22), ("BI", 27), ("BR", 29), ("BY", 28), ("CH", 21), ("CR", 22),
     ("CY", 28), ("CZ", 24), ("DE", 22), ("DJ", 27), ("DK", 18), ("DO", 28), ("EE", 20),
@@ -245,7 +245,7 @@ fn iban_ok(s: &str) -> bool {
 /// prefix: `9` a digit, `A` a letter, `X` a letter or digit, anything else itself; alternatives
 /// are separated by `|`.
 #[rustfmt::skip]
-const VAT_SHAPES: &[(&str, &str)] = &[
+pub const VAT_SHAPES: &[(&str, &str)] = &[
     ("AT", "U99999999"), ("BE", "9999999999"), ("BG", "999999999|9999999999"),
     ("CY", "99999999A"), ("CZ", "99999999|999999999|9999999999"), ("DE", "999999999"),
     ("DK", "99999999"), ("EE", "999999999"), ("EL", "999999999"), ("ES", "X9999999X"),

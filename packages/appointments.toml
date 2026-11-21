@@ -1,6 +1,6 @@
 [module]
 id = "appointments"
-version = "0.3.2"
+version = "0.3.4"
 name = "Appointments"
 description = "Bookable resources (people, rooms, equipment) and appointments with a date, start and end time and a status flow. A resource cannot be booked twice at overlapping times, or more times at once than its capacity when it has one (cancelled and missed appointments excepted)."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["booking", "scheduling", "resources"]
 categories = ["services"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "Refused since 0.3.2: an appointment that ends before it starts, and one that books a resource at an overlapping time more often than its capacity allows (once when it has none). The booking form asks what the appointment is and who comes first, then the resource, the day and the time, and shows the free half-hour slots of that resource on that day: a free slot fills the start and the end, and a time that clashes with another booking is named before saving."
+changelog = "Refused since 0.3.2: an appointment that ends before it starts, and one that books a resource at an overlapping time more often than its capacity allows (once when it has none). 0.3.4: the quick filters of the lists are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.3.3: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). The booking form asks what the appointment is and who comes first, then the resource, the day and the time, and shows the free half-hour slots of that resource on that day: a free slot fills the start and the end, and a time that clashes with another booking is named before saving."
 home = "appointments_appointment"
 
 [[model]]

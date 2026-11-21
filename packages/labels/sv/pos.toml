@@ -91,6 +91,8 @@ closed = "Stängt"
 [labels.sv.model.pos_session.action.close]
 label = "Stäng"
 description = "Stäng kassapasset när kassalådan har räknats (endast chef)"
+confirm = "Stänga det här passet? Räkna kontanterna i lådan först; ett stängt pass kan inte ändras."
+done = "Passet stängt"
 
 [labels.sv.model.pos_session.action.close.assert.difference_explained]
 message = "Kassadifferensen är inte förklarad: ange orsaken i anteckningen innan du stänger"
@@ -144,14 +146,18 @@ cancelled = "Annullerad"
 [labels.sv.model.pos_order.action.pay]
 label = "Betala"
 description = "Försäljningen är helt betald: nekas tills betalningarna täcker totalbeloppet; skapar ett lagerrörelseutkast per rad (kräver gruppen inventory.user)"
+done = "Försäljningen betald"
 
 [labels.sv.model.pos_order.action.cancel]
 label = "Annullera"
 description = "Annullera en försäljning som aldrig betalades"
+confirm = "Makulera den här försäljningen? Den behåller sitt kvittonummer och kan inte ändras efteråt."
 
 [labels.sv.model.pos_order.action.refund]
 label = "Återbetala"
 description = "Återbetala en betald försäljning till kunden (endast chef)"
+confirm = "Återbetala den här försäljningen till kunden?"
+done = "Försäljningen återbetald"
 
 [labels.sv.model.pos_order_line]
 name = "Försäljningsrad"
@@ -254,3 +260,9 @@ description = "Den del av betalningarna som gjordes kontant (minsta valutaenhet)
 [labels.sv.model.pos_order.field.refund_session_id]
 label = "Återbetald i pass"
 description = "Passet vars kassalåda betalade ut kontanterna för en återbetalning, satt av servern när en försäljning från ett stängt pass återbetalas: passet som då är öppet i försäljningens kassa; tomt när försäljningens eget pass fortfarande var öppet"
+
+[labels.sv.model.pos_session.section.cash_count]
+label = "Kassaräkning"
+
+[labels.sv.model.pos_session.filter.open]
+label = "Öppna"

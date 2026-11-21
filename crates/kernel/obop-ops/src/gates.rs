@@ -733,7 +733,9 @@ fn lock_level(backend: &Arc<dyn Backend>, wait: Duration) -> Level {
     let b = backend.clone();
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let r = b.lock("obop.migrate").map(drop);
+        // Bounded by the gate's own wait: the probe is a question, and must not keep waiting
+        // (and, on PostgreSQL, hold a pooled session) for the full migration wait (K5).
+        let r = obop_storage::with_lock_wait(wait, || b.lock("obop.migrate").map(drop));
         let _ = tx.send(r);
     });
     match rx.recv_timeout(wait) {

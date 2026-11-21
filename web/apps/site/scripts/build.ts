@@ -5,6 +5,7 @@ import { build } from "vitepress";
 import { assemble } from "./assemble.ts";
 import { postbuild } from "./postbuild.ts";
 import { DIST, SITE_ROOT } from "./lib/paths.ts";
+import { isMain } from "./lib/main.ts";
 
 export async function buildSite(): Promise<void> {
   const t0 = Date.now();
@@ -16,6 +17,6 @@ export async function buildSite(): Promise<void> {
   console.log(`site built in ${((Date.now() - t0) / 1000).toFixed(1)}s -> ${DIST}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   await buildSite();
 }

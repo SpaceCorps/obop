@@ -106,11 +106,26 @@ description = "Przywraca zaległą subskrypcję do statusu aktywnej po zapłacie
 [labels.pl.model.subscriptions_subscription.action.cancel_trial]
 label = "Anuluj okres próbny"
 description = "Anuluje subskrypcję w trakcie okresu próbnego"
+confirm = "Anulować tę subskrypcję? Potem nie będzie można jej zmienić."
 
 [labels.pl.model.subscriptions_subscription.action.cancel]
 label = "Anuluj"
 description = "Anuluje aktywną subskrypcję"
+confirm = "Anulować tę subskrypcję? Potem nie będzie można jej zmienić."
 
 [labels.pl.model.subscriptions_subscription.action.cancel_overdue]
 label = "Anuluj zaległą"
 description = "Anuluje zaległą subskrypcję"
+confirm = "Anulować tę subskrypcję? Potem nie będzie można jej zmienić."
+
+[labels.pl.model.subscriptions_subscription.section.billing]
+label = "Rozliczenia"
+
+[labels.pl.model.subscriptions_subscription.section.cancellation]
+label = "Anulowanie"
+
+[labels.pl.model.subscriptions_subscription.filter.trial_ends_this_week]
+label = "Okres próbny kończy się w tym tygodniu"
+
+[labels.pl.model.subscriptions_subscription.filter.invoice_due]
+label = "Faktura do wystawienia"

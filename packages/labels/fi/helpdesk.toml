@@ -128,14 +128,18 @@ closed = "Suljettu"
 [labels.fi.model.helpdesk_ticket.action.take]
 label = "Ota itselle"
 description = "Ryhdy käsittelemään avointa tikettiä"
+done = "Tiketti otettu"
 
 [labels.fi.model.helpdesk_ticket.action.resolve]
 label = "Ratkaise"
 description = "Merkitse käynnissä oleva tiketti ratkaistuksi"
+done = "Tiketti ratkaistu"
 
 [labels.fi.model.helpdesk_ticket.action.close]
 label = "Sulje"
 description = "Sulje ratkaistu tiketti lopullisesti (vain esihenkilö)"
+confirm = "Suljetaanko tämä tiketti lopullisesti? Suljettua tikettiä ei voi enää muuttaa."
+done = "Tiketti suljettu"
 
 [labels.fi.model.helpdesk_ticket.action.reopen]
 label = "Avaa uudelleen"
@@ -144,3 +148,27 @@ description = "Avaa ratkaistu tiketti uudelleen, kun ongelma palasi"
 [labels.fi.model.helpdesk_ticket.field.number]
 label = "Numero"
 description = "Tiketin numero, esimerkiksi TCK-00042, annetaan tikettiä luotaessa"
+
+[labels.fi.model.helpdesk_ticket.section.request]
+label = "Pyyntö"
+
+[labels.fi.model.helpdesk_ticket.section.requester]
+label = "Pyytäjä"
+
+[labels.fi.model.helpdesk_ticket.section.handling]
+label = "Käsittely"
+
+[labels.fi.model.helpdesk_ticket.section.resolution]
+label = "Ratkaisu"
+
+[labels.fi.model.helpdesk_ticket.filter.not_closed]
+label = "Sulkemattomat"
+
+[labels.fi.model.helpdesk_ticket.filter.unassigned]
+label = "Ei käsittelijää"
+
+[labels.fi.model.helpdesk_ticket.filter.mine]
+label = "Omat"
+
+[labels.fi.model.helpdesk_ticket.filter.overdue]
+label = "Myöhässä"

@@ -1091,7 +1091,11 @@ fn people_see_and_change_only_their_own_records() {
                 c,
                 m(vec![("id", t(&his)), ("days", Value::Int(9))]),
             );
-            assert_eq!(e, format!("no {}_leave {his}", r.p), "{c}");
+            assert_eq!(
+                e,
+                format!("record_not_found: no {}_leave {his}", r.p),
+                "{c}"
+            );
         }
         assert_eq!(int(r.fld(&hr(), "leave", &his, "days")), 5);
         // Actions go through the same door; the manager of the group may press them.

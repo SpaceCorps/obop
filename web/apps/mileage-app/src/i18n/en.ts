@@ -26,11 +26,22 @@ export const en = {
   "error.sync": "The trips could not be sent. The phone keeps them and tries again.",
   "error.database": "The trips on this phone could not be opened.",
   "error.database.hint":
-    "Nothing was deleted. Try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is Settings, Apps, obop Mileage, Storage, Clear storage, which deletes the trips that were not sent.",
+    "Nothing was deleted. Try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is Erase the trips on this phone, below, which deletes the trips that were not sent.",
   "error.database.hint.ios":
-    "Nothing was deleted. Try again. If the phone has only just started, unlock it once and try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is to delete the app from the phone (touch and hold the app icon, choose Remove App, then Delete App) and install it again, which deletes the trips that were not sent.",
+    "Nothing was deleted. Try again. If the phone has only just started, unlock it once and try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is Erase the trips on this phone, below, which deletes the trips that were not sent.",
   "error.database.stop": "Stop the location service",
   "error.database.stopped": "The location service was stopped.",
+  "error.database.erase": "Erase the trips on this phone",
+  "error.database.erase.confirm":
+    "This deletes every trip on this phone for good, also the trips that were not sent, and they cannot be got back. Do it only when Try again keeps failing. Trips that were sent stay on the server.",
+  "error.database.erase.yes": "Erase for good",
+  "error.database.erase.failed": "The trips could not be erased. Try again.",
+  "error.database.detail.no_cipher":
+    "This build of the app cannot encrypt the trips, so it does not open them.",
+  "error.database.detail.wrong_key":
+    "The key of the trips does not fit the file: the key may be lost, or the file is damaged.",
+  "error.database.detail.newer":
+    "The trips were saved by a newer version of the app. Update the app.",
 
   "unit.trips.one": "{count} trip",
   "unit.trips.other": "{count} trips",
@@ -219,6 +230,13 @@ export const en = {
   "trip.distance": "Distance",
   "trip.distance.pending": "The server has not counted it yet",
   "trip.purpose": "Purpose",
+  "trip.purpose.change": "You can change the purpose until the trip is submitted.",
+  "trip.private.note":
+    "A private trip is not submitted for review: no reviewer reads it. The server keeps its distance and times, not its route. If the trip was for work, change the purpose.",
+  "trip.private.confirm.title": "Mark the trip private?",
+  "trip.private.confirm.message":
+    "A private trip keeps its distance and times, not its route. The route is removed from the server for good, also if you change the purpose back.",
+  "trip.private.confirm": "Mark private",
   "trip.state": "State",
   "trip.checks": "Checks by the server",
   "trip.check.seq_gap.one": "{count} gap in the numbering of the points",
@@ -227,6 +245,9 @@ export const en = {
   "trip.check.speed_jump.other": "{count} points skipped for impossible jumps",
   "trip.check.low_accuracy.one": "{count} point skipped for low accuracy",
   "trip.check.low_accuracy.other": "{count} points skipped for low accuracy",
+  "trip.check.route_removed.one": "Route removed when the trip was marked private ({count} point)",
+  "trip.check.route_removed.other":
+    "Route removed when the trip was marked private ({count} points)",
   "trip.submit": "Submit for review",
   "trip.submit.hint": "Sends the trip to a reviewer",
   "trip.discard": "Discard trip",

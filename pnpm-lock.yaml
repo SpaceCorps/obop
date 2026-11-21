@@ -179,6 +179,9 @@ importers:
       '@obop/host-bridge':
         specifier: workspace:*
         version: link:../../packages/host-bridge
+      '@obop/trip-core':
+        specifier: workspace:*
+        version: link:../../packages/trip-core
       '@obop/ui':
         specifier: workspace:*
         version: link:../../packages/ui

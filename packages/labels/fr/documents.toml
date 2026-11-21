@@ -87,10 +87,13 @@ archived = "Archivé"
 [labels.fr.model.documents_document.action.publish]
 label = "Publier"
 description = "Fait d’un document en brouillon la version en vigueur"
+done = "Le document est publié"
 
 [labels.fr.model.documents_document.action.archive]
 label = "Archiver"
 description = "Archive un document publié (responsable uniquement)"
+confirm = "Archiver ce document ? Aucune étape ne le fait revenir."
+done = "Le document est archivé"
 
 [labels.fr.model.documents_document.field.attachment]
 label = "Fichier"
@@ -99,3 +102,18 @@ description = "Le fichier du document lui-même (PDF, image, texte, tableur ou d
 [labels.fr.model.documents_document.field.open_to_all]
 label = "Visible par tous"
 description = "Indique si toute personne autorisée à lire les documents peut voir celui-ci : vrai pour les documents publics et internes"
+
+[labels.fr.model.documents_document.section.document]
+label = "Document"
+
+[labels.fr.model.documents_document.section.where_it_is_kept]
+label = "Lieu de conservation"
+
+[labels.fr.model.documents_document.filter.expiring_soon]
+label = "Expire bientôt"
+
+[labels.fr.model.documents_document.filter.drafts]
+label = "Brouillons"
+
+[labels.fr.model.documents_document.filter.confidential]
+label = "Confidentiels"

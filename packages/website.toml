@@ -1,6 +1,6 @@
 [module]
 id = "website"
-version = "0.5.0"
+version = "0.5.2"
 name = "Website"
 description = "Content for a public website: pages with a slug and a draft, published, archived flow, navigation menu items, blog posts with a byline and a publish date, translations of both, and the form submissions visitors send in. When the instance runs with the public site enabled it serves the published content to visitors as a server-rendered website with SEO and no login; only the fields marked public are ever visible to them. Publishing makes content public and needs a human approval, agents may only propose it. Senders are personal data and are never public."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["website", "cms", "blog", "seo"]
 categories = ["marketing"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "The app opens on an overview; pages and posts link to where they are seen on the site, and their content is edited as Markdown. Publishing a page or a post dates it today when it has no date yet. The menu is shown as a tree, and the newest form submissions come first. An archived page or post can no longer be changed."
+changelog = "0.5.2: the quick filters of the lists are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). 0.5.1: form sections, the questions before an action and the notes after it are translated into German, French, Polish, Finnish, Swedish and Spanish (machine-drafted). The app opens on an overview; pages and posts link to where they are seen on the site, and their content is edited as Markdown. Publishing a page or a post dates it today when it has no date yet. The menu is shown as a tree, and the newest form submissions come first. An archived page or post can no longer be changed."
 home = "overview"
 
 [[model]]

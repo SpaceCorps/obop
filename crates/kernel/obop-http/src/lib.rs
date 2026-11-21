@@ -43,6 +43,8 @@ mod addr_scan_tests;
 #[cfg(test)]
 mod audit_kind_tests;
 #[cfg(test)]
+mod auth_platform_login_tests;
+#[cfg(test)]
 mod brand_scan_tests;
 #[cfg(test)]
 mod error_tests;
@@ -128,7 +130,15 @@ impl HttpState {
         oauth_config: obop_oauth::OAuthConfig,
     ) -> Arc<Self> {
         let shared = shared::SharedState::for_dispatcher(&dispatcher);
+        let cimd = oauth_config
+            .cimd_hosts
+            .is_some()
+            .then_some(oauth_config.cimd_allow_loopback);
         let oauth = obop_oauth::OAuth::new(shared.backend.clone(), auth.clone(), oauth_config);
+        // Client ID Metadata Documents (E7i) are read only where the operator listed hosts.
+        if let (Some(o), Some(loopback)) = (&oauth, cimd) {
+            o.set_cimd_fetcher(oauth::cimd_fetcher(loopback));
+        }
         Arc::new(Self {
             dispatcher,
             auth,
@@ -1130,6 +1140,22 @@ async fn platform_openapi(headers: HeaderMap) -> Response {
 
 /// Routes of the control plane: sign up, sign in and manage your instances.
 pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> Router {
+    platform_router_with_metrics(api, static_dir, ops::MetricsAccess::Disabled, Router::new())
+}
+
+/// [`platform_router`] with `/metrics` open to `metrics` (I6): `obop platform serve` passes
+/// `MetricsAccess::from_env`, the same rule as an instance (D67). Disabled answers 404.
+/// `extra` (the forum and status routes of `platform serve`) is merged before the layers, so
+/// its requests are counted in `/metrics` too.
+pub fn platform_router_with_metrics(
+    api: Arc<dyn PlatformApi>,
+    static_dir: Option<&str>,
+    metrics: ops::MetricsAccess,
+    extra: Router,
+) -> Router {
+    let plane = ops::PlaneOps::new(metrics);
+    let ready_api = api.clone();
+    let ready: ops::PlaneReady = Arc::new(move || ready_api.ready());
     let r = Router::new()
         .route("/api/platform/signup", post(p_signup))
         .route("/api/platform/login", post(p_login))
@@ -1145,8 +1171,13 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         .route("/healthz", get(ops::healthz))
         .route("/readyz", get(p_readyz))
         .with_state(api.clone())
+        .route(
+            "/metrics",
+            get(ops::plane_metrics).with_state((plane.clone(), ready)),
+        )
         .route("/openapi.json", get(platform_openapi))
-        .route("/api/openapi.json", get(platform_openapi));
+        .route("/api/openapi.json", get(platform_openapi))
+        .merge(extra);
     // Optional TOTP for the owner's own account (D53): same routes as an instance, not enforced.
     let r = match api.authenticator() {
         Some(a) => r.merge(mfa::routes("/api/platform", a)),
@@ -1161,6 +1192,10 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
     // The control plane's database is pooled too: a refused call is a 503 here as well (D74),
     // not a 401 "invalid username or password" or a 404.
     r.layer(axum::middleware::from_fn(ops::storage_faults))
+        .layer(axum::middleware::from_fn_with_state(
+            plane,
+            ops::plane_track,
+        ))
 }
 
 /// `GET /readyz` of the control plane: 200 while its database answers, else 503 with a fixed
@@ -1259,6 +1294,8 @@ fn p_login_blocking(api: Arc<dyn PlatformApi>, b: J) -> Response {
         b["password"].as_str().unwrap_or(""),
     ) {
         Ok(out) => mfa::outcome(api.authenticator().as_deref(), out),
+        // A refused read of the account is no wrong password, as on the instance login (UB2).
+        Err(e) if obop_storage::fault::Fault::is_transient(&e) => unavailable(&e),
         Err(e) if e.contains("too many") => err(StatusCode::TOO_MANY_REQUESTS, e),
         Err(e) => err(StatusCode::UNAUTHORIZED, e),
     }

@@ -87,18 +87,22 @@ no_show = "Nieobecność"
 [labels.pl.model.appointments_appointment.action.confirm]
 label = "Potwierdź"
 description = "Potwierdza zaplanowane spotkanie"
+done = "Potwierdzono"
 
 [labels.pl.model.appointments_appointment.action.complete]
 label = "Zakończ"
 description = "Oznacza potwierdzone spotkanie jako odbyte"
+done = "Oznaczono jako odbyte"
 
 [labels.pl.model.appointments_appointment.action.cancel]
 label = "Anuluj"
 description = "Anuluje zaplanowane spotkanie"
+confirm = "Odwołać tę wizytę? Potem nie będzie można jej zmienić."
 
 [labels.pl.model.appointments_appointment.action.mark_no_show]
 label = "Oznacz nieobecność"
 description = "Rejestruje, że uczestnik nie przyszedł"
+confirm = "Zapisać, że uczestnik nie przyszedł?"
 
 [labels.pl.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Spotkanie kończy się, zanim się zacznie: ustaw godzinę zakończenia po rozpoczęciu"
@@ -108,3 +112,15 @@ message = "Spotkanie kończy się, zanim się zacznie: ustaw godzinę zakończen
 
 [labels.pl.model.appointments_appointment.rule.no_double_booking]
 message = "Zasób jest już zarezerwowany w tym czasie: wybierz inną godzinę lub inny zasób"
+
+[labels.pl.model.appointments_appointment.section.appointment]
+label = "Wizyta"
+
+[labels.pl.model.appointments_appointment.section.resource_and_time]
+label = "Zasób i czas"
+
+[labels.pl.model.appointments_appointment.filter.today]
+label = "Dzisiaj"
+
+[labels.pl.model.appointments_appointment.filter.coming_up]
+label = "Nadchodzące"

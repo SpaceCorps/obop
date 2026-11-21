@@ -398,10 +398,23 @@ describe("which cards a section shows and which it folds", () => {
       ["email_marketing", "models", 3],
     ] as const)
       expect(at(id, section), `${id} ${section}`).toEqual([n, 0]);
-    // Nine marked cards and one other (three or more marked): the rule holds a long run to one other.
-    expect(at("connectors", "actions")).toEqual([10, 3]);
-    expect(at("accounting", "actions")).toEqual([7, 3]);
-    expect(at("accounting", "models")).toEqual([3, 5]);
+    // Connectors and Accounting have many cards and grow with their packages, so their numbers come
+    // from the rule (the marked cards and the room after them), not from literals that a new action
+    // of the package breaks (docs/ISSUES.md U71). They do fold: a long run is held to the room.
+    const byRule = (id: string, section: (typeof SECTIONS)[number]) => {
+      const cards = view(id)[section];
+      const marked = cards.filter(isMarked).length;
+      const shown = Math.min(cards.length, marked + (marked >= SHOWN_CARDS ? 1 : SHOWN_CARDS));
+      return [shown, cards.length - shown];
+    };
+    for (const [id, section] of [
+      ["connectors", "actions"],
+      ["accounting", "actions"],
+      ["accounting", "models"],
+    ] as const) {
+      expect(at(id, section), `${id} ${section}`).toEqual(byRule(id, section));
+      expect(at(id, section)[1], `${id} ${section} folds`).toBeGreaterThan(0);
+    }
     // The two apps whose Submit and Approve cards speak of approval: nothing is folded, as before.
     expect(at("timesheets", "actions")).toEqual([3, 0]);
     expect(at("expenses", "actions")).toEqual([4, 0]);

@@ -147,10 +147,14 @@ closed = "Clôturé"
 [labels.fr.model.accounting_fiscal_year.action.close]
 label = "Clôturer"
 description = "Clôture l’exercice fiscal : plus aucune écriture n’y sera comptabilisée (approbateur uniquement)"
+confirm = "Clôturer cet exercice ? Il ne pourra plus être modifié tant qu'il n'est pas rouvert."
+done = "Exercice clôturé"
 
 [labels.fr.model.accounting_fiscal_year.action.reopen]
 label = "Rouvrir"
 description = "Rouvre un exercice fiscal clôturé pour le corriger (approbateur uniquement)"
+confirm = "Rouvrir cet exercice clôturé ?"
+done = "Exercice rouvert"
 
 [labels.fr.model.accounting_period]
 name = "Période"
@@ -187,10 +191,14 @@ closed = "Clôturée"
 [labels.fr.model.accounting_period.action.close]
 label = "Clôturer"
 description = "Clôture la période : plus aucune comptabilisation (approbateur uniquement)"
+confirm = "Clôturer cette période ? Les écritures datées dans celle-ci ne pourront plus être comptabilisées ni modifiées."
+done = "Période clôturée"
 
 [labels.fr.model.accounting_period.action.reopen]
 label = "Rouvrir"
 description = "Rouvre une période clôturée (approbateur uniquement)"
+confirm = "Rouvrir cette période ? Les écritures en brouillon datées dans celle-ci pourront de nouveau être modifiées et comptabilisées."
+done = "Période rouverte"
 
 [labels.fr.model.accounting_move]
 name = "Écriture"
@@ -237,14 +245,20 @@ reversed = "Extournée"
 [labels.fr.model.accounting_move.action.post]
 label = "Comptabiliser"
 description = "Comptabilise une écriture en brouillon au grand livre et la numérote (approbateur uniquement ; refusé sans montant ou si le débit et le crédit ne sont pas égaux)"
+confirm = "Comptabiliser cette écriture ? Elle reçoit son numéro et ne pourra plus être modifiée."
+done = "Écriture comptabilisée"
 
 [labels.fr.model.accounting_move.action.cancel]
 label = "Annuler"
 description = "Annule une écriture en brouillon qui n’a jamais été comptabilisée"
+confirm = "Annuler cette écriture en brouillon ?"
+done = "Écriture annulée"
 
 [labels.fr.model.accounting_move.action.reverse]
 label = "Extourner"
-description = "Marque une écriture comptabilisée comme extournée ; l’écriture inverse est saisie séparément (approbateur uniquement)"
+description = "Marque une écriture comptabilisée comme extournée et crée l’écriture inverse en brouillon, à comptabiliser par un approbateur (approbateur uniquement)"
+confirm = "Extourner cette écriture ? Un brouillon avec les lignes inverses est créé, à comptabiliser par un approbateur."
+done = "Écriture extournée ; l’écriture inverse est un brouillon"
 
 [labels.fr.model.accounting_move_line]
 name = "Ligne d’écriture"
@@ -296,7 +310,7 @@ plural = "Lignes de relevé bancaire"
 description = "Une ligne de relevé bancaire en attente d’association à des écritures"
 
 [labels.fr.model.accounting_bank_statement_line.guard]
-message = "Une transaction bancaire rapprochée ne peut pas être modifiée."
+message = "Une transaction bancaire rapprochée ne peut pas être modifiée. Un responsable peut d'abord annuler le rapprochement."
 
 [labels.fr.model.accounting_bank_statement_line.field.journal_id]
 label = "Journal"
@@ -342,14 +356,25 @@ reconciled = "Rapprochée"
 [labels.fr.model.accounting_bank_statement_line.action.match]
 label = "Associer"
 description = "Enregistre que la ligne correspond à la ligne d’écriture indiquée dans move_line_id"
+done = "Associée"
 
 [labels.fr.model.accounting_bank_statement_line.action.reconcile]
 label = "Rapprocher"
 description = "Rapproche une ligne associée (responsable uniquement)"
+confirm = "Rapprocher cette transaction bancaire ? Elle ne pourra plus être modifiée tant qu'un responsable n'aura pas annulé le rapprochement."
+done = "Rapprochée"
 
 [labels.fr.model.accounting_bank_statement_line.action.unmatch]
 label = "Dissocier"
 description = "Annule une association erronée"
+confirm = "Annuler cette association ?"
+done = "Association annulée"
+
+[labels.fr.model.accounting_bank_statement_line.action.unreconcile]
+label = "Annuler le rapprochement"
+description = "Annule un rapprochement erroné ; la ligne redevient associée et peut de nouveau être modifiée (responsables uniquement)"
+confirm = "Annuler le rapprochement de cette transaction bancaire ? Elle redevient associée et peut de nouveau être modifiée."
+done = "Rapprochement annulé"
 
 [labels.fr.model.accounting_move.field.total_debit]
 label = "Total débit"
@@ -383,3 +408,30 @@ message = "Une autre période couvre déjà certains de ces jours : commencez ce
 [labels.fr.model.accounting_move_line.field.settled]
 label = "Réglé"
 description = "Si une transaction bancaire règle ce poste client ou fournisseur (son settles_line_id le désigne) ; calculé, donc une ligne comptabilisée l'affiche aussi"
+
+[labels.fr.model.accounting_account.filter.reconcilable]
+label = "Lettrables"
+
+[labels.fr.model.accounting_account.filter.in_use]
+label = "Utilisés"
+
+[labels.fr.model.accounting_period.filter.open]
+label = "Ouvertes"
+
+[labels.fr.model.accounting_move.filter.drafts]
+label = "Brouillons"
+
+[labels.fr.model.accounting_move.filter.posted]
+label = "Comptabilisées"
+
+[labels.fr.model.accounting_move_line.filter.open_items]
+label = "Écritures ouvertes"
+
+[labels.fr.model.accounting_move_line.filter.overdue]
+label = "En retard"
+
+[labels.fr.model.accounting_move_line.filter.due_in_30_days]
+label = "Échéance sous 30 jours"
+
+[labels.fr.model.accounting_bank_statement_line.filter.to_match]
+label = "À rapprocher"

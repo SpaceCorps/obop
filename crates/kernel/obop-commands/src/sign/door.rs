@@ -102,7 +102,8 @@ pub enum Invalid {
     /// that did not say so: the staff switch was turned on after the signer opened the page. Nothing
     /// was written; the page is shown again with the notice.
     History,
-    /// The switch was cleared between the door's read and its write (docs/ISSUES.md O50): nothing
+    /// The switch was cleared between the door's read and its write (docs/ISSUES.md O50), or the
+    /// title, message or requested name differ from the page the form came from (O59): nothing
     /// was written, and the page is shown again as it is now.
     Changed,
 }
@@ -117,6 +118,10 @@ pub struct ViewData {
     /// The SHA-256 of the document (hex); the form sends it back as `doc`.
     pub document_hash: String,
     pub expires_at: String,
+    /// The digest of the title, message and requested name as stored when the page was made
+    /// (`evidence::wording_digest`); the form sends it back as `words`, so that an edit of them
+    /// between the page and the post is not signed under the new words (docs/ISSUES.md O19, O59).
+    pub wording: String,
     /// The signatures so far on this file, when the request asks for them (`show_history`); `None`
     /// for every other request, which is shown the page it has always been shown.
     pub history: Option<History>,
@@ -155,6 +160,18 @@ pub struct SignForm {
     /// This is the client's word: the door cannot tell what the browser was shown, only that a
     /// form for a request that asks must say so (see `submit`).
     pub saw_history: bool,
+    /// The wording digest of the page the form came from (the hidden field `words`, see
+    /// [`ViewData::wording`]). When it differs from the request as stored at the post, nothing is
+    /// signed and the page is shown again ([`Invalid::Changed`]). Like `hist`, it is the client's
+    /// word. A form without it (a page made before `sign` 0.3.0, a script) is shown the page
+    /// again too, since `sign` 0.3.1 (docs/ISSUES.md O59).
+    pub words: String,
+    /// The consent id of the wording the page showed (the hidden field `wid`): the texts of the
+    /// running image, in the page's language, with the history sentence when it was shown. When
+    /// it is not the id that `consent_version` (or `consent_version_history`) names at the post,
+    /// the texts changed in between (a deploy while the page was open) and the page is shown
+    /// again with the new ones ([`Invalid::Changed`]); a form without it is too (O59).
+    pub shown_consent: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -426,6 +443,7 @@ impl SignService {
                     document_title: cut(text(&doc, "title"), 200),
                     document_hash: text(&f.req, "document_hash").to_string(),
                     expires_at: text(&f.link, "expires_at").to_string(),
+                    wording: super::evidence::wording_digest(&f.req),
                     history: self.history_for(&f)?,
                 }))
             }
@@ -514,6 +532,24 @@ impl SignService {
         let name = clean_name(&form.name).ok_or(DoorError::Invalid(Invalid::Name))?;
         if !form.agree {
             return Err(DoorError::Invalid(Invalid::Agree));
+        }
+        // What the signer read of the request (its title, message and requested name), so that
+        // `evidence_check` can tell a later edit of them (docs/ISSUES.md O19). The page carries
+        // the same digest: when staff edited them after the page was made, the signer is shown
+        // the new words before anything is signed (O59). The batch below holds them as read.
+        let shown = super::evidence::wording_digest(&f.req);
+        if !token::ct_eq(&form.words, &shown) {
+            return Err(DoorError::Invalid(Invalid::Changed));
+        }
+        // And the texts of the image that served the page are the ones that will be stored as the
+        // consent id (O59): a deploy between the page and the post shows the new words first.
+        let applies = if history {
+            &form.consent_version_history
+        } else {
+            &form.consent_version
+        };
+        if !token::ct_eq(&form.shown_consent, applies) {
+            return Err(DoorError::Invalid(Invalid::Changed));
         }
         let hash = text(&f.req, "document_hash").to_string();
         if !token::ct_eq(&form.doc, &hash) {
@@ -606,6 +642,19 @@ impl SignService {
                         HISTORY_FLAG.into(),
                         f.req.get(HISTORY_FLAG).cloned().unwrap_or(J::Null),
                     ),
+                    // The words of the wording digest are those that were read (O19, O59).
+                    (
+                        "title".into(),
+                        f.req.get("title").cloned().unwrap_or(J::Null),
+                    ),
+                    (
+                        "message".into(),
+                        f.req.get("message").cloned().unwrap_or(J::Null),
+                    ),
+                    (
+                        "signer_name".into(),
+                        f.req.get("signer_name").cloned().unwrap_or(J::Null),
+                    ),
                 ],
             },
             // An empty patch that only checks, in the same transaction, that the Document still
@@ -616,17 +665,20 @@ impl SignService {
                 patch: Fields::new(),
                 expect: vec![("attachment".into(), J::from(hash.clone()))],
             },
-            audit::event_op(
-                u64::try_from(at / MICROS_PER_SECOND).unwrap_or(0),
-                &format!("sign_request:{}", f.rid),
-                "sign_signed",
-                &format!("signer:link:{id12}"),
-                &format!(
-                    "request {}; link {id12}; document {hash}; consent {consent}; digest {digest}; address {ip}; peer {}; forwarded {}",
-                    f.rid,
-                    logged(&client.peer, 64),
-                    logged(&client.forwarded, 200)
+            super::evidence::keyed(
+                audit::event_op(
+                    u64::try_from(at / MICROS_PER_SECOND).unwrap_or(0),
+                    &format!("sign_request:{}", f.rid),
+                    "sign_signed",
+                    &format!("signer:link:{id12}"),
+                    &format!(
+                        "request {}; link {id12}; document {hash}; consent {consent}; digest {digest}; wording {shown}; address {ip}; peer {}; forwarded {}",
+                        f.rid,
+                        logged(&client.peer, 64),
+                        logged(&client.forwarded, 200)
+                    ),
                 ),
+                &f.rid,
             ),
         ];
         let ctx = WriteCtx::new(
@@ -666,6 +718,14 @@ impl SignService {
         }
         if let Some(r) = &req
             && text(r, "state") == "sent"
+            && super::evidence::wording_digest(r) != super::evidence::wording_digest(&f.req)
+        {
+            // Staff edited the title, the message or the requested name in that instant: show the
+            // page again with the new words (O59).
+            return Err(DoorError::Invalid(Invalid::Changed));
+        }
+        if let Some(r) = &req
+            && text(r, "state") == "sent"
             && r.get(HISTORY_FLAG) != f.req.get(HISTORY_FLAG)
         {
             // A manager ticked or cleared the box in that instant: the link still works, and the
@@ -692,7 +752,7 @@ impl SignService {
 }
 
 /// SHA-256 of the sorted `key=value` lines: what the log entry vouches for.
-fn evidence_digest(pairs: &[(&str, &str)]) -> String {
+pub(super) fn evidence_digest(pairs: &[(&str, &str)]) -> String {
     let sorted: BTreeMap<&str, &str> = pairs.iter().copied().collect();
     let mut s = String::new();
     for (k, v) in sorted {

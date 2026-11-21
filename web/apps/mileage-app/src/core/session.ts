@@ -61,14 +61,31 @@ export function needsRegistration(
 }
 
 /**
- * What the authorization page answers for a client that the instance does not know (the instance
- * forgot it for a reason other than idleness: its database was replaced, a restore, a new
- * installation at the same address): 400 and an error page, without a redirect. A client that it
- * knows gets the sign-in page. The app asks before it opens the browser, and registers again once
- * when the answer is this one, so that the driver never lands on an error page that the app cannot
- * read (the browser reports only that it was closed).
+ * What the authorization page answered the app's question, asked with `Accept: application/json`:
+ * the status, and the OAuth `error` of a JSON answer (`null` for an answer that is not one, which
+ * is what an older instance sends: its HTML page).
  */
-export const clientUnknown = (status: number | null): boolean => status === 400;
+export interface AuthorizeVerdict {
+  status: number;
+  error: string | null;
+}
+
+/**
+ * Whether the instance does not know the client (it forgot it for a reason other than idleness: its
+ * database was replaced, a restore, a new installation at the same address). The app asks before it
+ * opens the browser, and registers again once when the answer is this one, so that the driver never
+ * lands on an error page that the app cannot read (the browser reports only that it was closed).
+ *
+ * An instance that answers in JSON says so with `error: "invalid_client"`, and only that error
+ * counts: a bad request of another kind would not be cured by a new registration. An older
+ * instance answers with its HTML error page and the status 400, which is then the sign
+ * (docs/ISSUES.md L40). No answer (`null`) is not a reason to register.
+ */
+export function clientUnknown(verdict: AuthorizeVerdict | null): boolean {
+  if (verdict === null) return false;
+  if (verdict.error !== null) return verdict.error === "invalid_client";
+  return verdict.status === 400;
+}
 
 /** Where the session is kept. On the phone: the Android Keystore or the iOS Keychain through expo-secure-store. */
 export interface SessionStorage {

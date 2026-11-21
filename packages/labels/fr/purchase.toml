@@ -82,18 +82,25 @@ cancelled = "Annulée"
 [labels.fr.model.purchase_order.action.send]
 label = "Envoyer"
 description = "Envoie une commande en brouillon au fournisseur comme demande de prix"
+done = "Marqué comme envoyé"
 
 [labels.fr.model.purchase_order.action.confirm]
 label = "Confirmer"
 description = "Engage la commande auprès du fournisseur (responsable uniquement)"
+confirm = "Confirmer cette commande auprès du fournisseur ?"
+done = "Commande confirmée"
 
 [labels.fr.model.purchase_order.action.receive]
 label = "Réceptionner"
 description = "Enregistre l’arrivée des marchandises : un mouvement de stock en brouillon est créé par ligne, à valider par l’entrepôt (exige le groupe inventory.user)"
+confirm = "Réceptionner les marchandises ? Avec un emplacement de réception défini, un mouvement de stock brouillon est créé pour chaque ligne et l'entrepôt le valide ; la commande ne pourra plus être modifiée."
+done = "Commande reçue"
 
 [labels.fr.model.purchase_order.action.cancel]
 label = "Annuler"
 description = "Annule une commande qui n’a pas encore été envoyée"
+confirm = "Annuler cette commande ?"
+done = "Commande annulée"
 
 [labels.fr.model.purchase_order_line]
 name = "Ligne de commande"
@@ -142,3 +149,12 @@ description = "Montant de la ligne : quantité multipliée par le prix unitaire 
 [labels.fr.model.purchase_order_line.field.receipt_quantity]
 label = "Quantité à réceptionner"
 description = "Unités que la réception met en stock : la quantité reçue si elle est indiquée, sinon la quantité commandée"
+
+[labels.fr.model.purchase_order.filter.to_send]
+label = "À envoyer"
+
+[labels.fr.model.purchase_order.filter.to_receive]
+label = "À réceptionner"
+
+[labels.fr.model.purchase_order.filter.late]
+label = "En retard"

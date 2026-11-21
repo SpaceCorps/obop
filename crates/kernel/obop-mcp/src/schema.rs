@@ -549,6 +549,8 @@ mod tests {
                     from: Some("draft"),
                     to: "posted",
                 }),
+                one_way: None,
+                whole_model: false,
                 labels: Default::default(),
                 descriptions: Default::default(),
                 ui: None,
@@ -566,6 +568,9 @@ mod tests {
             guard: None,
             guard_messages: Default::default(),
             filter_labels: Default::default(),
+            section_labels: Default::default(),
+            confirm_labels: Default::default(),
+            done_labels: Default::default(),
         }
     }
 

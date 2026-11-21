@@ -236,13 +236,22 @@ test.describe("passkeys", () => {
 
     await page.evaluate(() => sessionStorage.clear());
     await page.goto(`${origin()}/`);
-    await page.getByRole("button", { name: "Sign in with a passkey" }).click();
+    // The autofill of the username field (E7c) may sign in first: the virtual authenticator answers
+    // its offer at once. Either way the person is signed in with the passkey.
+    await page
+      .getByRole("button", { name: "Sign in with a passkey" })
+      .click({ timeout: 5_000 })
+      .catch(() => undefined);
     await expect(page.locator(".topbar")).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem("obop-user"))).toBe(users.pax.name);
 
-    // The authorization page of an MCP client offers the same, with no username to type.
+    // The authorization page of an MCP client offers the same, with no username to type (its
+    // autofill may sign in first, as above).
     await page.goto(await authorizeUrl());
-    await page.getByRole("button", { name: "Sign in with a passkey" }).click();
+    await page
+      .getByRole("button", { name: "Sign in with a passkey" })
+      .click({ timeout: 5_000 })
+      .catch(() => undefined);
     await expect(page.getByRole("heading", { name: "Connect Passkey Claude?" })).toBeVisible();
     await expect(page.getByText("Signed in as pax.")).toBeVisible();
   });
@@ -261,6 +270,15 @@ test.describe("passkeys", () => {
 
     // A client registers (as any MCP client does) and sends the person to the authorization page.
     const authorize = await authorizeUrl();
+    // The page offers the passkey in the autofill of its username field (E7c), and the virtual
+    // authenticator would answer that offer at once, before the password is typed. This test is
+    // about the password and then the passkey as the second step: no offer here.
+    await page.addInitScript(() => {
+      const pkc = window.PublicKeyCredential as unknown as {
+        isConditionalMediationAvailable?: () => Promise<boolean>;
+      };
+      if (pkc) pkc.isConditionalMediationAvailable = () => Promise.resolve(false);
+    });
 
     // The page has one script and a policy that names it by hash and nothing else.
     const response = await page.goto(authorize);

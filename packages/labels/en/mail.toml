@@ -1,0 +1,116 @@
+# English names, plurals and labels of the built-in Mail module that differ from the ones
+# derived from the identifiers (D52, D95; docs/spec/mail.md).
+
+[labels.en.model.outbound_mail]
+name = "Outbound mail"
+plural = "Deliveries"
+
+[labels.en.model.outbound_mail.field.reply_to]
+label = "Reply-to"
+
+[labels.en.model.outbound_mail.field.body]
+label = "Text"
+
+[labels.en.model.outbound_mail.field.language.options]
+en = "English"
+de = "German"
+fr = "French"
+pl = "Polish"
+fi = "Finnish"
+sv = "Swedish"
+es = "Spanish"
+
+[labels.en.model.outbound_mail.field.vars]
+label = "Values"
+
+[labels.en.model.outbound_mail.field.server]
+label = "Mail server"
+
+[labels.en.model.outbound_mail.field.next_attempt_at]
+label = "Next attempt"
+
+[labels.en.model.outbound_mail.field.queued_at]
+label = "Queued"
+
+[labels.en.model.outbound_mail.field.sent_at]
+label = "Sent"
+
+[labels.en.model.outbound_mail.field.message_id]
+label = "Message-ID"
+
+[labels.en.model.outbound_mail.field.related_id]
+label = "Related record"
+
+[labels.en.model.outbound_mail.field.requested_by]
+label = "Queued by"
+
+[labels.en.model.outbound_mail.action.retry]
+label = "Send again"
+
+[labels.en.model.outbound_mail.action.process]
+label = "Send due messages"
+
+[labels.en.model.mail_server]
+name = "Mail server"
+plural = "Mail servers"
+
+[labels.en.model.mail_server.field.kind]
+label = "Sends through"
+
+[labels.en.model.mail_server.field.kind.options]
+smtp = "SMTP relay"
+
+[labels.en.model.mail_server.field.is_default]
+label = "Default server"
+
+[labels.en.model.mail_server.field.kinds]
+label = "Message kinds"
+
+[labels.en.model.mail_server.field.security.options]
+starttls = "STARTTLS"
+tls = "TLS"
+
+[labels.en.model.mail_server.field.allow_private_network]
+label = "Allow our own network"
+
+[labels.en.model.mail_server.field.username]
+label = "User name"
+
+[labels.en.model.mail_server.field.password_set]
+label = "Password stored"
+
+[labels.en.model.mail_server.field.from_address]
+label = "Sender address"
+
+[labels.en.model.mail_server.field.from_name]
+label = "Sender name"
+
+[labels.en.model.mail_server.field.reply_to]
+label = "Reply-to address"
+
+[labels.en.model.mail_server.field.last_test_at]
+label = "Last test"
+
+[labels.en.model.mail_server.action.test_send]
+label = "Send test"
+
+[labels.en.model.mail_template]
+name = "Mail template"
+plural = "Mail templates"
+
+[labels.en.model.mail_template.field.language.options]
+en = "English"
+de = "German"
+fr = "French"
+pl = "Polish"
+fi = "Finnish"
+sv = "Swedish"
+es = "Spanish"
+
+[labels.en.model.mail_template.field.body]
+label = "Text"
+
+[labels.en.model.mail_server.field.last_test_outcome.options]
+sent = "Sent"
+temporary = "Not sent (temporary)"
+permanent = "Not sent (refused)"

@@ -983,6 +983,7 @@ impl Auth {
             "provider": provider.map(|p| json!({
                 "kind": p.kind, "tenant": p.tenant, "client_id": p.client_id,
                 "enabled": p.enabled, "secret_set": p.secret_set,
+                "updated_at": p.updated_at, "updated_by": p.updated_by,
             })),
             "accounts": rows,
             "break_glass": bg,

@@ -91,6 +91,7 @@ cancelled = "Annullerad"
 [labels.sv.model.manufacturing_order.action.confirm]
 label = "Bekräfta"
 description = "Bekräfta en order i utkast så att tillverkningen kan planeras; den behöver den färdiga produkten, en produktionsplats och minst en komponentrad"
+done = "Ordern bekräftad"
 
 [labels.sv.model.manufacturing_order.action.confirm.assert.has_product]
 message = "Välj den färdiga produkten först: när ordern slutförs läggs den i lager på produktionsplatsen"
@@ -104,14 +105,19 @@ message = "Lägg till komponenterna först: en order utan komponenter flyttar in
 [labels.sv.model.manufacturing_order.action.start]
 label = "Starta"
 description = "Starta tillverkningen av en bekräftad order"
+done = "Produktionen startad"
 
 [labels.sv.model.manufacturing_order.action.finish]
 label = "Avsluta"
 description = "Markera tillverkningen som avslutad: med en produktionsplats skapas en lagerrörelse i utkast per komponent som tar den därifrån och en som lägger in den färdiga produkten där, med ordernumret som ursprung, för lagret att validera (kräver gruppen inventory.user)"
+confirm = "Markera produktionen som klar? Lagerförflyttningar tar ut komponenterna och lägger in den färdiga produkten på produktionsplatsen. En klar order kan inte längre ändras."
+done = "Produktionen klar"
 
 [labels.sv.model.manufacturing_order.action.cancel]
 label = "Annullera"
 description = "Annullera en order som inte har bekräftats"
+confirm = "Avbryta den här ordern?"
+done = "Ordern avbruten"
 
 [labels.sv.model.manufacturing_order.field.product_id]
 label = "Produkt"
@@ -140,3 +146,9 @@ description = "Produkten som förbrukas"
 [labels.sv.model.manufacturing_order_line.field.quantity]
 label = "Antal"
 description = "Antal enheter av komponenten som hela ordern förbrukar"
+
+[labels.sv.model.manufacturing_order.filter.in_progress]
+label = "Pågående"
+
+[labels.sv.model.manufacturing_order.filter.late]
+label = "Försenade"

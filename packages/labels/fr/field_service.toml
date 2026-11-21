@@ -107,18 +107,23 @@ cancelled = "Annulée"
 [labels.fr.model.field_service_job.action.depart]
 label = "Je pars"
 description = "Le technicien est en chemin"
+done = "En chemin"
 
 [labels.fr.model.field_service_job.action.start]
 label = "Commencer le travail"
 description = "Le technicien est arrivé et a commencé le travail"
+done = "Travail commencé"
 
 [labels.fr.model.field_service_job.action.complete]
 label = "Terminer l'intervention"
 description = "Termine l’intervention ; si une signature est requise, enregistrez d’abord signed_by et signed_on"
+confirm = "Terminer cette intervention ? Une intervention terminée ne peut plus être modifiée."
+done = "Intervention terminée"
 
 [labels.fr.model.field_service_job.action.cancel]
 label = "Annuler"
 description = "Annule une intervention qui n’a pas commencé"
+confirm = "Annuler cette intervention ? Elle ne pourra plus être modifiée ensuite."
 
 [labels.fr.model.field_service_part]
 name = "Pièce"
@@ -150,3 +155,24 @@ description = "Remarque sur la pièce, par exemple le numéro de série"
 
 [labels.fr.model.field_service_job.action.complete.assert.signed]
 message = "Le client doit d’abord valider cette intervention : indiquez qui a signé et à quelle date"
+
+[labels.fr.model.field_service_job.section.job]
+label = "Intervention"
+
+[labels.fr.model.field_service_job.section.customer_and_site]
+label = "Client et site"
+
+[labels.fr.model.field_service_job.section.schedule]
+label = "Planning"
+
+[labels.fr.model.field_service_job.section.sign_off]
+label = "Validation client"
+
+[labels.fr.model.field_service_job.section.report]
+label = "Déclaration"
+
+[labels.fr.model.field_service_job.filter.today]
+label = "Aujourd'hui"
+
+[labels.fr.model.field_service_job.filter.not_done]
+label = "Non terminées"

@@ -147,10 +147,14 @@ closed = "Zamknięte"
 [labels.pl.model.accounting_fiscal_year.action.close]
 label = "Zamknij"
 description = "Zamyka rok obrotowy, aby nic więcej nie było w nim księgowane (tylko osoba zatwierdzająca)"
+confirm = "Zamknąć ten rok obrotowy? Nie będzie można go zmienić, dopóki nie zostanie ponownie otwarty."
+done = "Rok obrotowy zamknięty"
 
 [labels.pl.model.accounting_fiscal_year.action.reopen]
 label = "Otwórz ponownie"
 description = "Otwiera ponownie zamknięty rok obrotowy w celu korekty (tylko osoba zatwierdzająca)"
+confirm = "Ponownie otworzyć ten zamknięty rok obrotowy?"
+done = "Rok obrotowy ponownie otwarty"
 
 [labels.pl.model.accounting_period]
 name = "Okres"
@@ -187,10 +191,14 @@ closed = "Zamknięte"
 [labels.pl.model.accounting_period.action.close]
 label = "Zamknij"
 description = "Zamyka okres dla dalszych księgowań (tylko osoba zatwierdzająca)"
+confirm = "Zamknąć ten okres? Zapisów z datą w tym okresie nie będzie można zaksięgować ani zmienić."
+done = "Okres zamknięty"
 
 [labels.pl.model.accounting_period.action.reopen]
 label = "Otwórz ponownie"
 description = "Otwiera ponownie zamknięty okres (tylko osoba zatwierdzająca)"
+confirm = "Ponownie otworzyć ten okres? Projekty zapisów z datą w tym okresie znów będzie można zmieniać i księgować."
+done = "Okres ponownie otwarty"
 
 [labels.pl.model.accounting_move]
 name = "Operacja"
@@ -237,14 +245,20 @@ reversed = "Wystornowane"
 [labels.pl.model.accounting_move.action.post]
 label = "Zaksięguj"
 description = "Księguje roboczą operację w księdze i nadaje jej numer (tylko osoba zatwierdzająca; odrzucane bez kwoty lub gdy winien nie równa się ma)"
+confirm = "Zaksięgować ten zapis? Otrzyma numer i nie będzie można go już zmienić."
+done = "Zapis zaksięgowany"
 
 [labels.pl.model.accounting_move.action.cancel]
 label = "Anuluj"
 description = "Anuluje roboczą operację, która nigdy nie była zaksięgowana"
+confirm = "Anulować ten projekt zapisu?"
+done = "Zapis anulowany"
 
 [labels.pl.model.accounting_move.action.reverse]
 label = "Wystornuj"
-description = "Oznacza zaksięgowaną operację jako wystornowaną; operacja przeciwna jest księgowana osobno (tylko osoba zatwierdzająca)"
+description = "Oznacza zaksięgowaną operację jako wystornowaną i tworzy operację przeciwną jako wersję roboczą do zaksięgowania przez osobę zatwierdzającą (tylko osoba zatwierdzająca)"
+confirm = "Wystornować ten zapis? Zostanie utworzona wersja robocza z liniami przeciwnymi do zaksięgowania przez osobę zatwierdzającą."
+done = "Zapis wystornowany; zapis przeciwny jest wersją roboczą"
 
 [labels.pl.model.accounting_move_line]
 name = "Pozycja operacji"
@@ -296,7 +310,7 @@ plural = "Pozycje wyciągu bankowego"
 description = "Pozycja wyciągu bankowego oczekująca na dopasowanie do operacji"
 
 [labels.pl.model.accounting_bank_statement_line.guard]
-message = "Uzgodnionej transakcji bankowej nie można zmienić."
+message = "Uzgodnionej transakcji bankowej nie można zmienić. Kierownik może najpierw cofnąć uzgodnienie."
 
 [labels.pl.model.accounting_bank_statement_line.field.journal_id]
 label = "Dziennik"
@@ -342,14 +356,25 @@ reconciled = "Uzgodnione"
 [labels.pl.model.accounting_bank_statement_line.action.match]
 label = "Dopasuj"
 description = "Rejestruje, że pozycja odpowiada pozycji operacji wskazanej w move_line_id"
+done = "Dopasowano"
 
 [labels.pl.model.accounting_bank_statement_line.action.reconcile]
 label = "Uzgodnij"
 description = "Uzgadnia dopasowaną pozycję (tylko kierownik)"
+confirm = "Uzgodnić tę transakcję bankową? Nie będzie można jej zmienić, dopóki kierownik nie cofnie uzgodnienia."
+done = "Uzgodniono"
 
 [labels.pl.model.accounting_bank_statement_line.action.unmatch]
 label = "Cofnij dopasowanie"
 description = "Cofa błędne dopasowanie"
+confirm = "Cofnąć to dopasowanie?"
+done = "Dopasowanie cofnięte"
+
+[labels.pl.model.accounting_bank_statement_line.action.unreconcile]
+label = "Cofnij uzgodnienie"
+description = "Cofa błędne uzgodnienie; wiersz wraca do stanu dopasowanego i można go znowu zmienić (tylko kierownicy)"
+confirm = "Cofnąć uzgodnienie tej transakcji bankowej? Wróci do stanu dopasowanego i znów będzie można ją zmienić."
+done = "Uzgodnienie cofnięte"
 
 [labels.pl.model.accounting_move.field.total_debit]
 label = "Suma winien"
@@ -383,3 +408,30 @@ message = "Inny okres obejmuje już niektóre z tych dni: rozpocznij ten po jego
 [labels.pl.model.accounting_move_line.field.settled]
 label = "Rozliczona"
 description = "Czy transakcja bankowa rozlicza tę należność lub zobowiązanie (wskazuje ją jej settles_line_id); obliczane, więc pokazuje to także zaksięgowana pozycja"
+
+[labels.pl.model.accounting_account.filter.reconcilable]
+label = "Do uzgadniania"
+
+[labels.pl.model.accounting_account.filter.in_use]
+label = "W użyciu"
+
+[labels.pl.model.accounting_period.filter.open]
+label = "Otwarte"
+
+[labels.pl.model.accounting_move.filter.drafts]
+label = "Wersje robocze"
+
+[labels.pl.model.accounting_move.filter.posted]
+label = "Zaksięgowane"
+
+[labels.pl.model.accounting_move_line.filter.open_items]
+label = "Pozycje otwarte"
+
+[labels.pl.model.accounting_move_line.filter.overdue]
+label = "Po terminie"
+
+[labels.pl.model.accounting_move_line.filter.due_in_30_days]
+label = "Termin w ciągu 30 dni"
+
+[labels.pl.model.accounting_bank_statement_line.filter.to_match]
+label = "Do dopasowania"

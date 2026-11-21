@@ -60,6 +60,7 @@ description = "Pasar un proyecto planificado a activo"
 [labels.es.model.projects_project.action.finish]
 label = "Terminar"
 description = "Marcar un proyecto activo como hecho"
+done = "Proyecto terminado"
 
 [labels.es.model.projects_project.action.reopen]
 label = "Reabrir"
@@ -102,6 +103,7 @@ description = "Marcar un hito pendiente como alcanzado"
 [labels.es.model.projects_milestone.action.miss]
 label = "Marcar como no alcanzado"
 description = "Registrar que un hito pendiente se incumplió"
+confirm = "¿Registrar este hito como incumplido?"
 
 [labels.es.model.projects_task]
 name = "Tarea"
@@ -166,6 +168,7 @@ description = "Marcar como hecha una tarea en curso"
 [labels.es.model.projects_task.action.cancel]
 label = "Cancelar"
 description = "Descartar una tarea que nunca se empezó"
+confirm = "¿Cancelar esta tarea?"
 
 [labels.es.model.projects_project.field.estimate_minutes]
 label = "Minutos estimados"
@@ -194,3 +197,9 @@ description = "Reabrir una tarea completada, de vuelta a pendiente"
 [labels.es.model.projects_task.action.reopen_cancelled]
 label = "Reabrir"
 description = "Reabrir una tarea cancelada, de vuelta a pendiente"
+
+[labels.es.model.projects_task.filter.open]
+label = "Abiertas"
+
+[labels.es.model.projects_task.filter.overdue]
+label = "Vencidas"

@@ -5,7 +5,7 @@
 // most, and asks once more before the stock there would go below zero (allowed, as the package
 // says, but rarely meant).
 import { useEffect, useMemo, useState } from "react";
-import { fmt, t } from "@obop/ui";
+import { fmt, t, useWorded } from "@obop/ui";
 import { search, type FieldMeta } from "../../api.ts";
 import { useData, useRows } from "../../data.tsx";
 import { fromEdit, toEdit, type Edit } from "../../edit.ts";
@@ -115,7 +115,7 @@ export function MoveDialog(p: { kind: Kind; onClose: () => void }) {
   const value = (f: FieldMeta): Edit =>
     f.name in values ? values[f.name]! : toEdit(f, preset[f.name] || undefined);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [failed, setFailed] = useState("");
+  const [failed, setFailed] = useWorded();
   const [busy, setBusy] = useState(false);
   // The quantity the person was told is more than is there, and pressed again for.
   const [overOk, setOverOk] = useState("");
@@ -151,7 +151,7 @@ export function MoveDialog(p: { kind: Kind; onClose: () => void }) {
     const out = await makeMove(d.run, move, body);
     setBusy(false);
     if (out.kind === "error") {
-      setFailed(serverMessage(out.message));
+      setFailed(() => serverMessage(out.message));
       return;
     }
     const product = d.refText("product", String(body.product_id));

@@ -20,12 +20,15 @@ import { getLanguage } from "../i18n/index.ts";
 import {
   clientUnknown,
   needsRegistration,
+  type AuthorizeVerdict,
   type ServerConfig,
   type Session,
 } from "../core/session.ts";
 import type { StartupConfig } from "../core/startup-config.ts";
+import { isPendingSignIn, resumable, type PendingSignIn } from "../core/pending-sign-in.ts";
+import { keychain } from "./keychain.ts";
 import { languageStore } from "./language.ts";
-import { deviceInfo, oauthDeps } from "./platform-deps.ts";
+import { deviceInfo, initialUrl, oauthDeps } from "./platform-deps.ts";
 
 /** Why a sign-in failed, as a word; the catalogue holds the sentence for each. */
 export type SignInFailure =
@@ -105,15 +108,27 @@ async function ownerOf(baseUrl: string, tokens: TokenSet): Promise<Owner> {
 }
 
 /**
- * The status that the authorization page answers for this address, or `null` when it did not
- * answer (any failure: the sign-in goes on and the browser shows what is wrong). The page is read,
- * not followed, and the instance keeps a sign-in flow for it that runs out by itself.
+ * What the authorization page answers for this address when it is asked for JSON, or `null` when
+ * it did not answer (any failure: the sign-in goes on and the browser shows what is wrong). An
+ * instance that knows the question answers it without storing a sign-in flow or counting a sign-in
+ * page of the address; an older one sends its page (the status is then all there is), and keeps a
+ * flow for it that runs out by itself. The page is read, not followed.
  */
-async function probeAuthorize(url: string): Promise<number | null> {
+async function probeAuthorize(url: string): Promise<AuthorizeVerdict | null> {
   try {
     return await withDeadline(PROBE_MS, async (signal) => {
-      const response = await fetch(url, { signal, redirect: "manual" });
-      return response.status;
+      const response = await fetch(url, {
+        signal,
+        redirect: "manual",
+        headers: { Accept: "application/json" },
+      });
+      let error: string | null = null;
+      if ((response.headers.get("content-type") ?? "").includes("application/json")) {
+        const body: unknown = await response.json().catch(() => null);
+        const code = (body as { error?: unknown } | null)?.error;
+        if (typeof code === "string") error = code;
+      }
+      return { status: response.status, error };
     });
   } catch {
     return null;
@@ -177,33 +192,101 @@ export async function signIn(host: SignInHost, input: string): Promise<void> {
       config = await register();
       url = authorizeUrl(config.clientId);
     }
-    const result = await WebBrowser.openAuthSessionAsync(url, identity.redirectUri);
-    if (result.type !== "success") throw new SignInError("cancelled");
-    const code = parseAuthorizationResponse(result.url, { state, baseUrl });
-    const tokens = await exchangeCode(oauthDeps, {
-      baseUrl,
-      clientId: config.clientId,
-      redirectUri: identity.redirectUri,
-      code,
+    // Kept until the sign-in ends, so that a redirect that restarts the app can still finish it
+    // (`resumeSignIn`, docs/ISSUES.md L32).
+    const pending: PendingSignIn = {
+      config,
       verifier: pkce.verifier,
-      device: deviceInfo(),
-    });
+      state,
+      startedAt: Date.now(),
+    };
+    await pendingStore(identity).save(pending);
     try {
-      const owner = await ownerOf(baseUrl, tokens);
-      await host.bindIdentity(owner);
-      await session.setConfig({ ...config, user: owner.user, usedAt: Date.now() });
-    } catch (error) {
-      // The sign-in is not finished: do not leave it active on the instance (best effort).
-      await revokeToken(oauthDeps, {
-        baseUrl,
-        clientId: config.clientId,
-        token: tokens.refreshToken,
-        timeoutMs: 5000,
-      }).catch(() => undefined);
-      throw error;
+      const result = await WebBrowser.openAuthSessionAsync(url, identity.redirectUri);
+      if (result.type !== "success") throw new SignInError("cancelled");
+      await finish(host, pending, result.url);
+    } finally {
+      await pendingStore(identity).clear();
     }
-    await session.completeSignIn(tokens);
   } catch (error) {
     throw failure(error);
+  }
+}
+
+/** Exchanges the code of a redirect, asks who the person is, binds the trips and keeps the sign-in. */
+async function finish(host: SignInHost, pending: PendingSignIn, redirect: string): Promise<void> {
+  const { session } = host;
+  const { identity } = host.startup;
+  const { config } = pending;
+  const baseUrl = config.baseUrl;
+  const code = parseAuthorizationResponse(redirect, { state: pending.state, baseUrl });
+  const tokens = await exchangeCode(oauthDeps, {
+    baseUrl,
+    clientId: config.clientId,
+    redirectUri: identity.redirectUri,
+    code,
+    verifier: pending.verifier,
+    device: deviceInfo(),
+  });
+  try {
+    const owner = await ownerOf(baseUrl, tokens);
+    await host.bindIdentity(owner);
+    await session.setConfig({ ...config, user: owner.user, usedAt: Date.now() });
+  } catch (error) {
+    // The sign-in is not finished: do not leave it active on the instance (best effort).
+    await revokeToken(oauthDeps, {
+      baseUrl,
+      clientId: config.clientId,
+      token: tokens.refreshToken,
+      timeoutMs: 5000,
+    }).catch(() => undefined);
+    throw error;
+  }
+  await session.completeSignIn(tokens);
+}
+
+/** The Keystore or Keychain item of the pending sign-in: named after the item of the server address. */
+function pendingStore(identity: SignInHost["startup"]["identity"]) {
+  const name = `${identity.storage.server}.pending-sign-in`;
+  return {
+    async load(): Promise<PendingSignIn | null> {
+      try {
+        const text = await keychain.get(name);
+        if (!text) return null;
+        const value: unknown = JSON.parse(text);
+        return isPendingSignIn(value) ? value : null;
+      } catch {
+        return null;
+      }
+    },
+    save: (pending: PendingSignIn) => keychain.set(name, JSON.stringify(pending)),
+    clear: () => keychain.delete(name).catch(() => undefined),
+  };
+}
+
+/**
+ * Finishes a sign-in that the system ended the app in the middle of (docs/ISSUES.md L32): the
+ * redirect started the app again, and the address it was started with is that redirect. Returns
+ * `false` when there is nothing to finish (no pending sign-in, the app was started another way, the
+ * `state` is not the one of the pending sign-in, or the sign-in was begun too long ago); a sign-in
+ * that is finished returns `true`, and one that fails throws a `SignInError` as `signIn` does. The
+ * pending sign-in is removed in every case, so it is tried once. `onResume` is called when there is
+ * one to finish, before the instance is asked.
+ */
+export async function resumeSignIn(host: SignInHost, onResume?: () => void): Promise<boolean> {
+  const { identity } = host.startup;
+  const store = pendingStore(identity);
+  const pending = await store.load();
+  if (pending === null) return false;
+  try {
+    const url = await initialUrl().catch(() => null);
+    if (!resumable(pending, url, identity.redirectUri, Date.now())) return false;
+    onResume?.();
+    await finish(host, pending, url!);
+    return true;
+  } catch (error) {
+    throw failure(error);
+  } finally {
+    await store.clear();
   }
 }

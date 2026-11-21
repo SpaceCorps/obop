@@ -20,6 +20,8 @@ mod door;
 mod fixes;
 mod hardening;
 mod history;
+mod m3;
+mod n6;
 mod pinned;
 mod recheck;
 mod rules;
@@ -148,6 +150,68 @@ impl Fx {
         send(&self.router, b.body(Body::empty()).unwrap()).await
     }
 
+    /// The body of a post to the door. A form the signer's page makes carries the hidden fields
+    /// `words` and `wid` (docs/ISSUES.md O59); a test that names neither gets the ones the page
+    /// of the request as stored would carry, in the language the server resolves the post to,
+    /// with the history sentence when the request asks for it. A test that names one, even
+    /// empty, gets only what it named. The helper reads the request before the post is sent (a
+    /// read a test that counts must take out, or name both fields).
+    pub fn form_body(&self, path: &str, pairs: &[(&str, &str)]) -> String {
+        self.form_body_as(path, pairs, "")
+    }
+
+    /// As `form_body`, for a browser that asks for `accept` (an `Accept-Language` value): the
+    /// language the server resolves a post without `lang` to.
+    pub fn form_body_as(&self, path: &str, pairs: &[(&str, &str)], accept: &str) -> String {
+        let mut all: Vec<(String, String)> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let has = |k: &str| pairs.iter().any(|(x, _)| *x == k);
+        let parts: Vec<&str> = path.split('?').next().unwrap_or("").split('/').collect();
+        if let ["", "sign", rid, _tok] = parts.as_slice()
+            && has("name")
+            && !(has("words") && has("wid"))
+            && let Ok(Some(req)) = self.app.store.backend().get("sign_request", rid)
+        {
+            if !has("words") {
+                all.push(("words".into(), obop_commands::sign::page_wording(&req)));
+            }
+            if !has("wid") {
+                // The language the server resolves the post to, as `lang_for` does.
+                // The form's `lang`, else the address's `?lang=`.
+                let query = path.split_once('?').map_or("", |(_, q)| q);
+                let param = pairs
+                    .iter()
+                    .find(|(k, _)| *k == "lang")
+                    .map(|(_, v)| *v)
+                    .or_else(|| query.split('&').find_map(|p| p.strip_prefix("lang=")));
+                let lang = obop_http::sign_text::choose_language(
+                    param,
+                    Some(accept),
+                    self.state.default_language(),
+                );
+                // The texts of a request that shows the signatures so far carry the sentence,
+                // while the installed package knows the switch.
+                let declared = self
+                    .app
+                    .dispatcher
+                    .model_fields("sign_request")
+                    .is_some_and(|fs| fs.iter().any(|f| f.name == "show_history"));
+                let wid = if declared && req.get("show_history") == Some(&J::Bool(true)) {
+                    obop_http::sign_text::consent_version_with_history_for(lang)
+                } else {
+                    obop_http::sign_text::consent_version_for(lang)
+                };
+                all.push(("wid".into(), wid));
+            }
+        }
+        all.iter()
+            .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
+            .collect::<Vec<_>>()
+            .join("&")
+    }
+
     /// The door: the signer's post.
     pub async fn post(&self, path: &str, from: &str, pairs: &[(&str, &str)]) -> Resp {
         self.post_with(path, from, pairs, &[("origin", ORIGIN)])
@@ -161,11 +225,11 @@ impl Fx {
         pairs: &[(&str, &str)],
         extra: &[(&str, &str)],
     ) -> Resp {
-        let body = pairs
+        let accept = extra
             .iter()
-            .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
-            .collect::<Vec<_>>()
-            .join("&");
+            .find(|(k, _)| k.eq_ignore_ascii_case("accept-language"))
+            .map_or("", |(_, v)| *v);
+        let body = self.form_body_as(path, pairs, accept);
         let mut b = Request::post(path)
             .header("host", HOST)
             .header("content-type", "application/x-www-form-urlencoded")
@@ -192,11 +256,7 @@ impl Fx {
         pairs: &[(&str, &str)],
         agent: &[u8],
     ) -> Resp {
-        let body = pairs
-            .iter()
-            .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
-            .collect::<Vec<_>>()
-            .join("&");
+        let body = self.form_body(path, pairs);
         let req = Request::post(path)
             .header("host", HOST)
             .header("origin", ORIGIN)

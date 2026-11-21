@@ -9,7 +9,14 @@ import { modulesHref } from "./route.ts";
 import type { ModulesRoute, Row } from "./types.ts";
 
 export type Dialog =
-  | { kind: "plan"; request: PlanRequest; title: string; name: string; verb: "install" | "update" }
+  | {
+      kind: "plan";
+      request: PlanRequest;
+      /** How to word the title: called each time it is drawn (D9). */
+      title: () => string;
+      name: string;
+      verb: "install" | "update";
+    }
   | { kind: "uninstall"; row: Row }
   | { kind: "rollback"; row: Row }
   | { kind: "updateall" }
@@ -111,7 +118,7 @@ export function useModulesView(opts: {
         setDialog({
           kind: "plan",
           request: { id: r.id },
-          title: t("Install {name}", { name: nameOf(r.id) }),
+          title: () => t("Install {name}", { name: nameOf(r.id) }),
           name: nameOf(r.id),
           verb: "install",
         }),
@@ -119,7 +126,7 @@ export function useModulesView(opts: {
         setDialog({
           kind: "plan",
           request: { id: r.id },
-          title: t("Update {name}", { name: nameOf(r.id) }),
+          title: () => t("Update {name}", { name: nameOf(r.id) }),
           name: nameOf(r.id),
           verb: "update",
         }),

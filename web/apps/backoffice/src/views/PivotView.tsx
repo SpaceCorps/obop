@@ -83,7 +83,7 @@ export function useMeasures(
   return { opts, measure, index, setup };
 }
 
-/** The measure menu: the count, the sums, then the averages. */
+/** The measure menu: the count, the sums, the averages, then the smallest and the largest values. */
 export function MeasurePicker(props: {
   opts: MeasureOptions;
   value: MeasureSel;
@@ -112,6 +112,18 @@ export function MeasurePicker(props: {
               </option>
             ))}
           </optgroup>
+        )}
+        {(["min", "max"] as const).map(
+          (op) =>
+            sums.length + avgs.length > 0 && (
+              <optgroup key={op} label={op === "min" ? t("Smallest") : t("Largest")}>
+                {[...sums, ...avgs].map((f) => (
+                  <option key={f.name} value={`${op}:${f.name}`}>
+                    {measureTitle({ field: f, op })}
+                  </option>
+                ))}
+              </optgroup>
+            ),
         )}
       </select>
     </label>
@@ -202,10 +214,10 @@ export function PivotView(p: ViewProps) {
   const rowRef = rowD ? dimRef(rowD) : "";
   const colRef = colD ? dimRef(colD) : "";
   const mx = useMemo(
-    () => (rowD ? matrixOf(report.rows, [rowD, colD], lk) : null),
+    () => (rowD ? matrixOf(report.rows, [rowD, colD], lk, false, m) : null),
     // The refs stand for the dimensions; ref labels arrive with `version`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [report.rows, rowRef, colRef, lk, d.lang],
+    [report.rows, rowRef, colRef, m?.op, lk, d.lang, d.locale],
   );
 
   if (!rowD || !mx) return <p className="hint pad">{t("Nothing to group these records by.")}</p>;

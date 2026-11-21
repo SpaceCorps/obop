@@ -303,9 +303,10 @@ pub fn reads_positions(who: &Who, trip_driver: &str) -> bool {
     who.admin || (!who.id.is_empty() && trip_driver == who.id)
 }
 
-/// The refusal for a record the caller may not see: the words of a record that does not exist.
+/// The refusal for a record the caller may not see: the answer for a record that does not exist,
+/// with the code `record_not_found` and the words `no MODEL ID` (L30).
 pub fn no_such(model: &str, id: &str) -> String {
-    format!("no {model} {id}")
+    obop_commands::errors::no_record(model, id)
 }
 
 fn word(action: &str) -> &str {
@@ -313,6 +314,20 @@ fn word(action: &str) -> &str {
         "discard_stuck" => "discard a stuck",
         a => a,
     }
+}
+
+/// The states each action of a trip may start in (the declared `from`, or for the two discards,
+/// which declare none, the states this policy allows); `None` for a name that is no action.
+pub(crate) fn starts_in(action: &str) -> Option<&'static [&'static str]> {
+    Some(match action {
+        "end" => &[RECORDING],
+        "submit" => &[ENDED],
+        "confirm" | "reject" => &[IN_REVIEW],
+        "reopen" => &[REJECTED],
+        "discard" => &[RECORDING, ENDED, REJECTED],
+        "discard_stuck" => &[RECORDING, ENDED],
+        _ => return None,
+    })
 }
 
 /// Whether `who` may run `action` on `trip`, and why not. `approver` is the person who approved
@@ -328,14 +343,8 @@ pub fn check_action(
     let st = state(trip);
     let decider = approver.unwrap_or(&who.id);
     let mine = owns(who, trip);
-    let allowed_from: &[&str] = match action {
-        "end" => &[RECORDING],
-        "submit" => &[ENDED],
-        "confirm" | "reject" => &[IN_REVIEW],
-        "reopen" => &[REJECTED],
-        "discard" => &[RECORDING, ENDED, REJECTED],
-        "discard_stuck" => &[RECORDING, ENDED],
-        other => return Err(format!("{TRIP}.{other} is not an action of a trip")),
+    let Some(allowed_from) = starts_in(action) else {
+        return Err(format!("{TRIP}.{action} is not an action of a trip"));
     };
     match action {
         "end" | "submit" | "discard" if !mine => {

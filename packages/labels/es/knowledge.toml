@@ -57,11 +57,27 @@ archived = "Archivado"
 [labels.es.model.knowledge_article.action.publish]
 label = "Publicar"
 description = "Publicar el artículo (solo responsables)"
+done = "El artículo está publicado"
 
 [labels.es.model.knowledge_article.action.unpublish]
 label = "Despublicar"
 description = "Devolver el artículo a borrador"
+done = "El artículo vuelve a ser un borrador"
 
 [labels.es.model.knowledge_article.action.archive]
 label = "Archivar"
 description = "Archivar un artículo desfasado"
+confirm = "¿Archivar este artículo? Ningún paso lo recupera."
+done = "El artículo está archivado"
+
+[labels.es.model.knowledge_article.section.article]
+label = "Artículo"
+
+[labels.es.model.knowledge_article.section.details]
+label = "Detalles"
+
+[labels.es.model.knowledge_article.filter.published]
+label = "Publicados"
+
+[labels.es.model.knowledge_article.filter.drafts]
+label = "Borradores"

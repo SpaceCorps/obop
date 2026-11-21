@@ -82,18 +82,25 @@ cancelled = "Annullerad"
 [labels.sv.model.purchase_order.action.send]
 label = "Skicka"
 description = "Skicka en order i utkast till leverantören som en offertförfrågan"
+done = "Markerad som skickad"
 
 [labels.sv.model.purchase_order.action.confirm]
 label = "Bekräfta"
 description = "Förbinda sig till ordern hos leverantören (endast chef)"
+confirm = "Bekräfta den här ordern med leverantören?"
+done = "Ordern bekräftad"
 
 [labels.sv.model.purchase_order.action.receive]
 label = "Ta emot"
 description = "Registrera att varorna har kommit: ett lagerrörelseutkast skapas per rad för lagret att validera (kräver gruppen inventory.user)"
+confirm = "Ta emot varorna? Med en mottagningsplats angiven skapas ett utkast till lagerförflyttning för varje rad som lagret validerar, och ordern kan inte längre ändras."
+done = "Ordern mottagen"
 
 [labels.sv.model.purchase_order.action.cancel]
 label = "Annullera"
 description = "Annullera en order som ännu inte skickats"
+confirm = "Avbryta den här ordern?"
+done = "Ordern avbruten"
 
 [labels.sv.model.purchase_order_line]
 name = "Inköpsorderrad"
@@ -142,3 +149,12 @@ description = "Radbelopp: antal gånger styckpris (valutans minsta enhet)"
 [labels.sv.model.purchase_order_line.field.receipt_quantity]
 label = "Antal att ta emot"
 description = "Antal enheter som inleveransen lägger i lager: det mottagna antalet om det anges, annars det beställda antalet"
+
+[labels.sv.model.purchase_order.filter.to_send]
+label = "Att skicka"
+
+[labels.sv.model.purchase_order.filter.to_receive]
+label = "Att ta emot"
+
+[labels.sv.model.purchase_order.filter.late]
+label = "Försenade"

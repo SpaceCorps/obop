@@ -87,18 +87,22 @@ no_show = "Utebliven"
 [labels.sv.model.appointments_appointment.action.confirm]
 label = "Bekräfta"
 description = "Bekräfta en schemalagd bokning"
+done = "Bekräftad"
 
 [labels.sv.model.appointments_appointment.action.complete]
 label = "Slutför"
 description = "Markera en bekräftad bokning som genomförd"
+done = "Markerad som genomförd"
 
 [labels.sv.model.appointments_appointment.action.cancel]
 label = "Annullera"
 description = "Annullera en schemalagd bokning"
+confirm = "Avboka den här bokningen? Den kan inte ändras efteråt."
 
 [labels.sv.model.appointments_appointment.action.mark_no_show]
 label = "Markera som utebliven"
 description = "Registrera att deltagaren inte kom"
+confirm = "Registrera att deltagaren inte kom?"
 
 [labels.sv.model.appointments_appointment.action.confirm.assert.ends_after_start]
 message = "Bokningen slutar innan den börjar: ange en sluttid efter starten"
@@ -108,3 +112,15 @@ message = "Bokningen slutar innan den börjar: ange en sluttid efter starten"
 
 [labels.sv.model.appointments_appointment.rule.no_double_booking]
 message = "Resursen är redan bokad vid den tiden: välj en annan tid eller en annan resurs"
+
+[labels.sv.model.appointments_appointment.section.appointment]
+label = "Bokning"
+
+[labels.sv.model.appointments_appointment.section.resource_and_time]
+label = "Resurs och tid"
+
+[labels.sv.model.appointments_appointment.filter.today]
+label = "I dag"
+
+[labels.sv.model.appointments_appointment.filter.coming_up]
+label = "Kommande"

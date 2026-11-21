@@ -136,14 +136,19 @@ cancelled = "Annulée"
 [labels.fr.model.email_marketing_campaign.action.schedule]
 label = "Planifier"
 description = "Marque la campagne comme planifiée pour le jour prévu"
+done = "Planifiée"
 
 [labels.fr.model.email_marketing_campaign.action.send]
 label = "Marquer comme envoyée"
 description = "Marque la campagne planifiée comme envoyée ; aucun e-mail n’est envoyé (responsable uniquement)"
+confirm = "Marquer cette campagne comme envoyée ? Aucun e-mail n'est envoyé : cette instance n'envoie pas encore d'e-mails. La campagne ne pourra plus être modifiée ensuite."
+done = "Marquée comme envoyée ; aucun e-mail n'a été envoyé"
 
 [labels.fr.model.email_marketing_campaign.action.send_now]
 label = "Marquer comme envoyée"
 description = "Marque une campagne en brouillon comme envoyée ; aucun e-mail n’est envoyé (responsable uniquement)"
+confirm = "Marquer cette campagne comme envoyée ? Aucun e-mail n'est envoyé : cette instance n'envoie pas encore d'e-mails. La campagne ne pourra plus être modifiée ensuite."
+done = "Marquée comme envoyée ; aucun e-mail n'a été envoyé"
 
 [labels.fr.model.email_marketing_campaign.action.unschedule]
 label = "Déplanifier"
@@ -152,3 +157,19 @@ description = "Remet une campagne planifiée en brouillon"
 [labels.fr.model.email_marketing_campaign.action.cancel]
 label = "Annuler"
 description = "Annule une campagne planifiée"
+confirm = "Annuler cette campagne ? Elle ne pourra plus être modifiée ensuite."
+
+[labels.fr.model.email_marketing_campaign.section.message]
+label = "Message"
+
+[labels.fr.model.email_marketing_campaign.section.content]
+label = "Contenu"
+
+[labels.fr.model.email_marketing_campaign.section.schedule]
+label = "Planning"
+
+[labels.fr.model.email_marketing_campaign.section.results]
+label = "Résultats"
+
+[labels.fr.model.email_marketing_contact.filter.may_be_mailed]
+label = "Peut recevoir des e-mails"
