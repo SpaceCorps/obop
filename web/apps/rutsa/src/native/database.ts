@@ -2,7 +2,9 @@ import * as Crypto from "expo-crypto";
 import * as SQLite from "expo-sqlite";
 import { identity } from "../../config/identity.ts";
 import {
+  eraseDatabaseAndKey,
   openDatabase as openWith,
+  testFailure,
   type FileHandle,
   type Opened,
   type OpenPorts,
@@ -39,6 +41,15 @@ const ports: OpenPorts = {
   deleteFile: () => SQLite.deleteDatabaseAsync(databaseFile),
 };
 
+// TEMPORARY, removed before the stage is done: a test build made with
+// EXPO_PUBLIC_RUTSA_TEST_DB_FAILURE=wrong_key|newer|no_cipher pretends that the open fails, until
+// the trips are erased, so the screen of the failure can be tried on the emulator. Metro writes the
+// value into the bundle when the build is made; a normal build has none. Gradle does not see the
+// variable as an input: after a change of it, delete android/app/build/generated/assets/react and
+// android/app/build/generated/res/react (and the Metro cache), or the old bundle is packed again.
+const pretended = testFailure(process.env.EXPO_PUBLIC_RUTSA_TEST_DB_FAILURE);
+let erased = false;
+
 let opened: Promise<Opened> | null = null;
 
 /**
@@ -46,9 +57,24 @@ let opened: Promise<Opened> | null = null;
  * location task and the screens share it.
  */
 export function openDatabase(): Promise<Opened> {
+  if (pretended !== null && !erased) return Promise.reject(pretended);
   opened ??= openWith(ports, databaseKey).catch((error: unknown) => {
     opened = null;
     throw error;
   });
   return opened;
+}
+
+/**
+ * Erases the database file and its key after an open failed (the screen of the failure): the next
+ * `openDatabase` makes a new key and an empty file. The trips on this phone are gone for good.
+ *
+ * After `eraseDatabase` of `mileage-app` (`src/native/database.ts`).
+ */
+export async function eraseDatabase(): Promise<void> {
+  await eraseDatabaseAndKey(
+    { deleteFile: () => SQLite.deleteDatabaseAsync(databaseFile), secrets: keychain },
+    databaseKey,
+  );
+  erased = true;
 }

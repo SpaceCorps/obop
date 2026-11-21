@@ -134,13 +134,28 @@ Before C: JDK 17, the Android SDK and the emulator installed (list in `docs/spec
 
 Components from `@obop/ui-native`.
 
-- [ ] D1 `feat(rutsa): navigation and data hooks`: `ui/router.ts`, `ui/hooks.ts`
+- [x] D1 `feat(rutsa): navigation and data hooks`: `ui/router.ts` (the routes, the stack, the
+      gate loading / failed / app, the open trip first; location is a route, never a gate, BR-36)
+      and its tests, `ui/hooks.ts` (the store, the trips, the clock, the check of a recording of
+      C5, moved out of the temporary panel), `ui/foreground.ts` (now and on every return to the
+      front) and its test; the Android back button; the screen "the trips could not be opened"
+      (`ui/screens/Failed.tsx`: the reason, Try again, Stop recording, Erase trips after two
+      confirmations where erasing can help, not for a newer version or a build without SQLCipher)
+      with `databaseProblem` and `canErase` in `core/open-db.ts`, `eraseDatabase` in
+      `native/database.ts` and `delete` in `native/keychain.ts`, and a temporary build flag
+      `EXPO_PUBLIC_RUTSA_TEST_DB_FAILURE` (Metro writes it into the bundle, no new package) to try
+      it on the emulator (removed before F3); the temporary panel moves to `ui/screens/Panel.tsx`
+      and stays the home route until D3
 - [ ] D2 `feat(rutsa): permissions screen`: why location is needed, what is stored and where (on
       the phone only), then the system dialog of location and of notifications; without location
       (BR-36, US-18) a screen for each case (refused for good, approximate only, location off on
       the phone) with Open Settings and Close, and a new check when the app comes back to the
-      front, which goes on by itself; the rest of the app works without location
-- [ ] D3 `feat(rutsa): home screen`: Start; km today and this month
+      front, which goes on by itself; the rest of the app works without location; before the
+      first trip a note to keep the app running (Android: battery use Unrestricted; iOS: not
+      closed from the app switcher), and a note when the notifications of Android 13 are refused
+      (the trip records but is not shown, BR-14)
+- [ ] D3 `feat(rutsa): home screen`: Start; km today and this month; a note when a database file
+      from a backup that no key could open was replaced at this start
 - [ ] D4 `feat(rutsa): recording screen`: elapsed time, km so far, Pause, Resume, Stop; a note
       when no position has come for a while or the updates are not registered (C5), with a button
       that starts the recording again and a message when that fails
@@ -272,3 +287,9 @@ D23).
   registered (`isRecording`) comes in C5; the button that starts the recording again, with a
   message when that fails, goes to D4. Unlike `mileage-app`, the check runs when the app opens on
   any screen, and also stops updates left running for a paused trip or none.
+- 2026-11-21: block D checked against `docs/spec/rutsa.md` and the screens of `mileage-app` before
+  D1. D1 gains the screen for a database that cannot be opened (`Failed` of `mileage-app`: our
+  `open-db` leaves a file that no key fits alone, so without Erase the app would stay on the
+  error), the helper for a return to the front and the check of C5 at the level of the app; D2
+  gains the note to keep the app running and the note on refused notifications (both from
+  `mileage-app`); D3 gains the note on a replaced backup file.

@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, test } from "vite-plus/test";
 import { FakeDatabaseFile, FakeSecrets, fakePorts } from "../test-support/fake-file.ts";
-import { openDatabase } from "./open-db.ts";
+import {
+  TEST_FAILURES,
+  canErase,
+  databaseProblem,
+  eraseDatabaseAndKey,
+  openDatabase,
+  testFailure,
+} from "./open-db.ts";
 import { SCHEMA_VERSION, SchemaError } from "./schema.ts";
 
 const NAME = "org.obop.rutsa.database-key";
@@ -113,5 +120,129 @@ describe("opening the database", () => {
     await expect(open()).rejects.toThrow("Keychain is not available");
     expect(file.openHandles).toBe(0);
     expect(secrets.items.get(NAME)).toBe(`pending:${NEW_KEY}`);
+  });
+});
+
+describe("why the database could not be opened", () => {
+  const failureOf = (promise: Promise<unknown>) =>
+    promise.then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+  test("each refusal of the open names its own reason", async () => {
+    file.cipherVersion = null;
+    expect(databaseProblem(await failureOf(open()))).toBe("no_cipher");
+
+    file = new FakeDatabaseFile();
+    await file.makeFile(OLD_KEY);
+    secrets.items.set(NAME, "d".repeat(64));
+    expect(databaseProblem(await failureOf(open()))).toBe("wrong_key");
+
+    file = new FakeDatabaseFile();
+    secrets = new FakeSecrets();
+    await file.makeFile(NEW_KEY);
+    secrets.items.set(NAME, NEW_KEY);
+    file.sqlite?.exec("PRAGMA user_version = 99");
+    const newer = await failureOf(open());
+    expect(newer).toBeInstanceOf(SchemaError);
+    expect(databaseProblem(newer)).toBe("newer");
+  });
+
+  test("what SQLite says about a wrong key, in its several wordings, is a wrong key", () => {
+    for (const message of [
+      "Call to function 'NativeDatabase.execAsync' has been rejected. Caused by: Error code 26: file is not a database",
+      "file is encrypted or is not a database",
+      "SQLITE_NOTADB",
+    ]) {
+      expect(databaseProblem(new Error(message)), message).toBe("wrong_key");
+    }
+  });
+
+  test("anything else is other, also a SchemaError that is not about a newer version", () => {
+    expect(databaseProblem(new Error("disk I/O error"))).toBe("other");
+    expect(databaseProblem("a string")).toBe("other");
+    expect(databaseProblem(new SchemaError("migration 2 has version 3"))).toBe("other");
+  });
+});
+
+describe("erasing the trips when the database cannot be opened", () => {
+  test("is offered only where it can help: a wrong key or an unknown cause", () => {
+    expect(canErase("wrong_key")).toBe(true);
+    expect(canErase("other")).toBe(true);
+    // The file is sound; the newer version of the app opens it.
+    expect(canErase("newer")).toBe(false);
+    // A build without SQLCipher refuses a new file too.
+    expect(canErase("no_cipher")).toBe(false);
+  });
+
+  test("the file goes first, then the key, and the next open starts empty with a new key", async () => {
+    // A file with a trip, made by an earlier start; its key is lost (another one is in the secure
+    // store), and the open fails.
+    await file.makeFile(OLD_KEY);
+    file.sqlite?.exec(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m) VALUES ('gone', 'ended', 'manual', 1, 2, 3)",
+    );
+    secrets.items.set(NAME, "d".repeat(64));
+    await expect(open()).rejects.toThrow(/file is not a database/);
+
+    const order: string[] = [];
+    await eraseDatabaseAndKey(
+      {
+        deleteFile: async () => {
+          order.push("file");
+          await file.deleteFile();
+        },
+        secrets: {
+          delete: async (name) => {
+            order.push(`key ${name}`);
+            await secrets.delete(name);
+          },
+        },
+      },
+      NAME,
+    );
+    expect(order).toEqual(["file", `key ${NAME}`]);
+    expect(secrets.items.has(NAME)).toBe(false);
+
+    const next = await openDatabase(fakePorts(file, secrets, "e".repeat(64)), NAME);
+    expect(next.fresh).toBe(true);
+    expect(await next.db.all("SELECT id FROM trip")).toEqual([]);
+    expect(secrets.items.get(NAME)).toBe("e".repeat(64));
+  });
+
+  test("a file that cannot be deleted keeps its key", async () => {
+    secrets.items.set(NAME, OLD_KEY);
+    await expect(
+      eraseDatabaseAndKey(
+        {
+          deleteFile: async () => {
+            throw new Error("Cannot delete a database that is open");
+          },
+          secrets,
+        },
+        NAME,
+      ),
+    ).rejects.toThrow("Cannot delete");
+    expect(secrets.items.get(NAME)).toBe(OLD_KEY);
+  });
+});
+
+describe("the failure a test build asks for (temporary)", () => {
+  test("a normal build has none", () => {
+    expect(testFailure(undefined)).toBeNull();
+    expect(testFailure("")).toBeNull();
+  });
+
+  test("each named failure reads as its own reason on the screen", () => {
+    for (const name of TEST_FAILURES) {
+      expect(databaseProblem(testFailure(name)), name).toBe(name);
+    }
+  });
+
+  test("a value that is not a failure fails too, and names itself", () => {
+    const error = testFailure("wrong-key");
+    expect(error?.message).toContain('"wrong-key"');
+    expect(databaseProblem(error)).toBe("other");
   });
 });

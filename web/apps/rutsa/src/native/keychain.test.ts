@@ -35,6 +35,9 @@ const fake = vi.hoisted(() => {
       sets.push({ key, options });
       items.set(key, { value, kind: options?.keychainAccessible ?? WHEN_UNLOCKED });
     },
+    deleteItemAsync: async (key: string) => {
+      items.delete(key);
+    },
   };
 });
 vi.mock("expo-secure-store", () => fake);
@@ -67,6 +70,14 @@ describe("what the app keeps in the Keychain", () => {
 
   test("a name that was never stored reads as nothing", async () => {
     await expect(keychain.get("nothing")).resolves.toBeNull();
+  });
+
+  test("a deleted value reads as nothing, and the others stay", async () => {
+    await keychain.set(identity.storage.databaseKey, "k".repeat(64));
+    await keychain.set("other", "x");
+    await keychain.delete(identity.storage.databaseKey);
+    await expect(keychain.get(identity.storage.databaseKey)).resolves.toBeNull();
+    await expect(keychain.get("other")).resolves.toBe("x");
   });
 
   test("the fake does what the default class of the library does: an item with no class is not readable while locked", async () => {

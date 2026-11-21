@@ -115,6 +115,9 @@ export class FakeSecrets {
   set = async (name: string, value: string) => {
     this.items.set(name, value);
   };
+  delete = async (name: string) => {
+    this.items.delete(name);
+  };
 }
 
 export function fakePorts(

@@ -10,9 +10,13 @@
  * After `mileage-app` (`src/i18n/en.ts`).
  */
 export const en = {
+  "app.title": "Rutsa",
+
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.delete": "Delete",
+  "common.details": "Details",
+  "common.loading": "Loading",
   "common.retry": "Try again",
   "common.save": "Save",
 
@@ -34,6 +38,26 @@ export const en = {
   "error.notFound": "This trip is no longer on the phone.",
   "error.wrongState": "This cannot be done with the trip as it is now.",
   "error.database": "The trips on this phone could not be opened.",
+  "error.database.hint":
+    "Try again. If it keeps failing, you can stop a recording that is still running, so that the phone stops looking for your position.",
+  "error.database.detail.no_cipher":
+    "This build of the app cannot encrypt the trips, so it does not open them. Install the app again from where you got it.",
+  "error.database.detail.wrong_key":
+    "The key of the trips does not fit the file: the key was lost or the file is damaged.",
+  "error.database.detail.newer":
+    "The trips were saved by a newer version of Rutsa. Install the newer version again to open them.",
+  "error.database.stop": "Stop recording",
+  "error.database.stopped": "Recording is stopped.",
+  "error.database.stop.failed": "Recording could not be stopped. Try again.",
+  "error.database.erase": "Erase trips",
+  "error.database.erase.title": "Erase all trips?",
+  "error.database.erase.first":
+    "The trips on this phone cannot be opened. Erasing them makes a new, empty list of trips, and the app works again. The trips are kept only on this phone, so they cannot be brought back.",
+  "error.database.erase.continue": "Continue",
+  "error.database.erase.second":
+    "Last step: every trip on this phone will be gone for good. This cannot be undone.",
+  "error.database.erase.yes": "Erase all trips",
+  "error.database.erase.failed": "The trips could not be erased. Try again.",
 } as const;
 
 type EnglishKey = keyof typeof en;

@@ -20,6 +20,11 @@ const keychain = vi.hoisted(() => {
       keychain.sets.push({ key, value });
       items.set(key, value);
     },
+    deleteItemAsync: async (key: string) => {
+      keychain.deletes.push(key);
+      items.delete(key);
+    },
+    deletes: [] as string[],
   };
 });
 vi.mock("expo-secure-store", () => keychain);
@@ -75,6 +80,8 @@ async function load() {
 beforeEach(() => {
   keychain.items.clear();
   keychain.sets.length = 0;
+  keychain.deletes.length = 0;
+  vi.unstubAllEnvs();
   crypto.uuids = 0;
   sqlite.file = new FakeDatabaseFile();
   sqlite.opened.length = 0;
@@ -150,6 +157,60 @@ describe("a failed open", () => {
     await expect(getStore()).rejects.toThrow(/file is not a database/);
     expect(sqlite.deleted).toEqual([]);
     expect(sqlite.file.keyOfFile).toBe("cd".repeat(32));
+  });
+});
+
+describe("erasing the trips after a failed open", () => {
+  test("the file is deleted by its name, then the key by its name, and the next open starts empty", async () => {
+    await sqlite.file.makeFile("cd".repeat(32));
+    keychain.items.set(KEY_NAME, "ef".repeat(32));
+    const { openDatabase, eraseDatabase } = await load();
+    await expect(openDatabase()).rejects.toThrow(/file is not a database/);
+
+    await eraseDatabase();
+    expect(sqlite.deleted).toEqual([FILE]);
+    expect(keychain.deletes).toEqual([KEY_NAME]);
+
+    const opened = await openDatabase();
+    expect(opened.fresh).toBe(true);
+    expect(sqlite.file.keyOfFile).toBe(KEY);
+    expect(keychain.items.get(KEY_NAME)).toBe(KEY);
+  });
+
+  test("a file that cannot be deleted keeps its key", async () => {
+    await sqlite.file.makeFile("cd".repeat(32));
+    keychain.items.set(KEY_NAME, "cd".repeat(32));
+    const { eraseDatabase } = await load();
+    // A handle that is still open: expo-sqlite refuses to delete the file.
+    await sqlite.file.openFile();
+    await expect(eraseDatabase()).rejects.toThrow(/open/);
+    expect(keychain.deletes).toEqual([]);
+    expect(keychain.items.get(KEY_NAME)).toBe("cd".repeat(32));
+  });
+});
+
+describe("a test build that pretends the open fails (temporary)", () => {
+  test("every open fails with the reason asked for, and nothing is touched", async () => {
+    vi.stubEnv("EXPO_PUBLIC_RUTSA_TEST_DB_FAILURE", "wrong_key");
+    const { openDatabase } = await load();
+    await expect(openDatabase()).rejects.toThrow(/file is not a database/);
+    await expect(openDatabase()).rejects.toThrow(/file is not a database/);
+    expect(sqlite.opened).toEqual([]);
+    expect(keychain.sets).toEqual([]);
+  });
+
+  test("after the trips are erased the real database opens", async () => {
+    vi.stubEnv("EXPO_PUBLIC_RUTSA_TEST_DB_FAILURE", "newer");
+    const { openDatabase, eraseDatabase } = await load();
+    await expect(openDatabase()).rejects.toThrow(/newer version of Rutsa/);
+    await eraseDatabase();
+    await expect(openDatabase()).resolves.toMatchObject({ fresh: true });
+    expect(sqlite.opened).toEqual([FILE]);
+  });
+
+  test("a normal build pretends nothing", async () => {
+    const { openDatabase } = await load();
+    await expect(openDatabase()).resolves.toMatchObject({ fresh: true });
   });
 });
 
