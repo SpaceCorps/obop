@@ -1,10 +1,70 @@
 /**
- * Whether the phone can record a trip. Pure, so it runs in `vp test`; `native/permissions.ts`
- * feeds it what the location service says. The health of a recording that runs (no position for
- * a while) comes here too, with the recovery of a recording after a restart of the app.
+ * Whether the phone can record a trip, and whether a trip that is recording really is. Pure, so it
+ * runs in `vp test`; `native/permissions.ts` feeds it what the location service says, and the
+ * screen of a recording feeds it the stored positions and the clock.
  *
  * After `mileage-app` (`src/core/liveness.ts`).
  */
+
+/** No position at all this long after the start of the segment: something is wrong. */
+export const NO_FIX_MS = 60_000;
+
+/**
+ * No new position this long after the last one. The phone asks for a position every 5 m, so a car
+ * that stands sends none for a while: the notice is soft and says so.
+ */
+export const QUIET_MS = 3 * 60_000;
+
+export type Health =
+  /** Positions arrive. */
+  | { kind: "ok" }
+  /** The segment has just started, or the positions have not been read yet: no position is normal. */
+  | { kind: "waiting" }
+  /** A minute and still no position (location off, no permission, the service does not run). */
+  | { kind: "no_fix" }
+  /** The last position is old; `minutes` whole minutes. */
+  | { kind: "quiet"; minutes: number };
+
+/**
+ * The health of a trip that is recording. Being registered with the system is no proof that it
+ * records: after a restart of the app the foreground service does not run, location may be off.
+ * The one proof is that positions arrive, so this looks at the age of the last one.
+ *
+ * Measured from the start of the current segment (Start or the last Resume) and with the positions
+ * of that segment only: right after a Resume the positions from before the pause are old, and
+ * would say "quiet" before the phone has had a chance to send a new one.
+ */
+export function recordingHealth(input: {
+  /** `Trip.segmentStartedAt`. */
+  segmentStartedAt: number;
+  /**
+   * When the newest position of the segment was taken (`lastFixOfSegment`), `null` when there is
+   * none, and `undefined` while the positions have not been read yet (opening a trip that is older
+   * than a minute must not say "no position" before the phone has looked).
+   */
+  lastFixAt: number | null | undefined;
+  now: number;
+}): Health {
+  const { segmentStartedAt, lastFixAt, now } = input;
+  if (lastFixAt === undefined) return { kind: "waiting" };
+  if (lastFixAt === null) {
+    return now - segmentStartedAt >= NO_FIX_MS ? { kind: "no_fix" } : { kind: "waiting" };
+  }
+  const age = now - lastFixAt;
+  return age >= QUIET_MS ? { kind: "quiet", minutes: Math.floor(age / 60_000) } : { kind: "ok" };
+}
+
+/** When the newest stored position of `segment` was taken; `null` when the segment has none. */
+export function lastFixOfSegment(
+  points: readonly { segment: number; t: number }[],
+  segment: number,
+): number | null {
+  let last: number | null = null;
+  for (const p of points) {
+    if (p.segment === segment && (last === null || p.t > last)) last = p.t;
+  }
+  return last;
+}
 
 /** What stands between the driver and a recording, in the order the driver can fix it. */
 export type Readiness = "ready" | "no_permission" | "approximate" | "services_off";

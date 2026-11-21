@@ -195,6 +195,14 @@ describe("starting and stopping the location updates", () => {
     expect(location.stopped).toEqual([NAME]);
   });
 
+  test("whether the updates are registered is asked under the same name", async () => {
+    const recorder = await import("./recorder.ts");
+    await expect(recorder.isRecording()).resolves.toBe(true);
+    location.registered = false;
+    await expect(recorder.isRecording()).resolves.toBe(false);
+    expect(location.asked).toEqual([NAME, NAME]);
+  });
+
   test("a service that is not registered (after Pause, or a restart) is not stopped", async () => {
     location.registered = false;
     const recorder = await import("./recorder.ts");

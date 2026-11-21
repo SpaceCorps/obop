@@ -23,7 +23,26 @@ export class CannotRecord extends Error {
   }
 }
 
-/** What the buttons Start, Pause, Resume and Stop do. */
+/**
+ * A segment that started this recently (Start or Resume) has just had its updates started: they
+ * are not started again.
+ */
+export const JUST_STARTED_MS = 10_000;
+
+/** What `ensure` found and did. */
+export type Ensured =
+  /** No trip is open; updates that were left running are stopped. */
+  | { kind: "none" }
+  /** The open trip is paused; updates that were left running are stopped. */
+  | { kind: "paused"; trip: Trip }
+  /** The trip records and its updates were started again. */
+  | { kind: "restarted"; trip: Trip }
+  /** The segment started less than `JUST_STARTED_MS` ago: left as it is. */
+  | { kind: "just_started"; trip: Trip }
+  /** The phone cannot record now; the trip stays recording, the driver has to change `reason`. */
+  | { kind: "blocked"; trip: Trip; reason: Exclude<Readiness, "ready"> };
+
+/** What the buttons Start, Pause, Resume and Stop do, and the recovery of a recording. */
 export interface Recording {
   /**
    * Checks that the phone can record (`CannotRecord`), stores the trip (`TripAlreadyActive` while
@@ -49,14 +68,26 @@ export interface Recording {
    * stops them at its next delivery, since no trip is active then.
    */
   stop(tripId: string): Promise<Trip>;
+  /**
+   * Makes the location updates match the open trip; called when the app opens and whenever it
+   * comes back to the front. Android does not start the foreground service again after the app's
+   * process was ended (low memory, swiped away, force stop, a restart of the phone), and the trip
+   * would stay "recording" with no position coming. So a trip that records gets its updates
+   * started again when the phone can record; when it cannot, the reason is answered and the trip
+   * is left as it is (the driver decides, nothing is ended for them). A paused trip, or no trip,
+   * gets updates that were left running stopped. An error of the system is thrown, and the trip is
+   * not changed.
+   */
+  ensure(): Promise<Ensured>;
 }
 
 /**
  * The actions over a store and the location updates; `now` is the clock, so the tests give exact
  * times. Nothing here tells the screens: `native/actions.ts` does after each action.
  *
- * After `startTrip` and `stopTrip` of `mileage-app` (`src/native/actions.ts`), with Pause and
- * Resume, which it does not have; here the order of the steps and the rollbacks are tested.
+ * After `startTrip`, `stopTrip` and `resumeRecording` of `mileage-app` (`src/native/actions.ts`),
+ * with Pause and Resume, which it does not have; here the order of the steps and the rollbacks are
+ * tested.
  */
 export function createRecording(deps: {
   store: TripRepository;
@@ -109,6 +140,21 @@ export function createRecording(deps: {
     async stop(tripId) {
       await location.stop().catch(() => undefined);
       return store.stopTrip(tripId, now());
+    },
+
+    async ensure() {
+      const trip = await store.activeTrip();
+      if (trip === null || trip.state === "paused") {
+        // Nothing may record now; a stop that fails is met again at the next check, and the task
+        // stops the updates at its next delivery anyway (no trip takes positions).
+        await location.stop().catch(() => undefined);
+        return trip === null ? { kind: "none" } : { kind: "paused", trip };
+      }
+      if (now() - trip.segmentStartedAt < JUST_STARTED_MS) return { kind: "just_started", trip };
+      const ready = await location.readiness();
+      if (ready !== "ready") return { kind: "blocked", trip, reason: ready };
+      await location.start();
+      return { kind: "restarted", trip };
     },
   };
 }

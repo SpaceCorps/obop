@@ -122,9 +122,13 @@ Before C: JDK 17, the Android SDK and the emulator installed (list in `docs/spec
 - [x] C4 `feat(rutsa): start, pause, resume and stop`: `native/recorder.ts`, `native/actions.ts`; the
       order of the steps and the rollbacks in `core/recording.ts` and its tests; the Android
       notification "recording" while a trip runs; a temporary panel in `App.tsx` to try it
-- [ ] C5 `feat(rutsa): recover a recording after a restart`: recording health in
-      `core/liveness.ts` (no position for a while) and tests; when the app opens with a trip that
-      is recording, it starts the location updates again (the screen of D4 shows the health)
+- [x] C5 `feat(rutsa): recover a recording after a restart`: recording health in
+      `core/liveness.ts` (no position for a while, measured from the start of the segment) and
+      tests; `ensure` in `core/recording.ts` and its tests: when the app opens or comes back to the
+      front with a trip that is recording, it starts the location updates again, and stops updates
+      left running for a paused trip or none; `isRecording` in `native/recorder.ts`; the temporary
+      panel shows the health, whether the updates are registered and what the check did (the
+      screen of D4 shows the health)
 
 ### D. Screens
 
@@ -138,7 +142,8 @@ Components from `@obop/ui-native`.
       front, which goes on by itself; the rest of the app works without location
 - [ ] D3 `feat(rutsa): home screen`: Start; km today and this month
 - [ ] D4 `feat(rutsa): recording screen`: elapsed time, km so far, Pause, Resume, Stop; a note
-      when no position has come for a while (C5)
+      when no position has come for a while or the updates are not registered (C5), with a button
+      that starts the recording again and a message when that fails
 - [ ] D5 `feat(rutsa): trips list`: trips by day
 - [ ] D6 `feat(rutsa): trip detail`: times, km, duration, delete
 - [ ] D7 `feat(rutsa): add a trip by hand`: date, time, from, to, km; marked as manual. Date and
@@ -263,3 +268,7 @@ D23).
   missing (the app config as prebuild gets it, the native permissions, the task and the recorder,
   the Keychain class, a failed open of the database) come in the next commit,
   `test(rutsa): native wiring and app config`.
+- 2026-11-21: C5 compared with `mileage-app`: the check every 5 s that the updates are still
+  registered (`isRecording`) comes in C5; the button that starts the recording again, with a
+  message when that fails, goes to D4. Unlike `mileage-app`, the check runs when the app opens on
+  any screen, and also stops updates left running for a paused trip or none.

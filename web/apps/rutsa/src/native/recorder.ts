@@ -34,7 +34,16 @@ export async function startRecording(): Promise<void> {
 
 /** Stops the updates; nothing happens when they are not running (after Pause, or a restart). */
 export async function stopRecording(): Promise<void> {
-  if (await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK)) {
+  if (await isRecording()) {
     await Location.stopLocationUpdatesAsync(LOCATION_TASK);
   }
+}
+
+/**
+ * Whether the updates are registered with the system. `false` while a trip records means they
+ * were stopped. `true` does not mean that positions arrive: after a restart of the app the task
+ * stays registered without its service; `recordingHealth` (`core/liveness.ts`) is the proof.
+ */
+export function isRecording(): Promise<boolean> {
+  return Location.hasStartedLocationUpdatesAsync(LOCATION_TASK);
 }

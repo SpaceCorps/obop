@@ -5,6 +5,7 @@ import type { Position } from "./fix.ts";
 import type { Readiness } from "./liveness.ts";
 import {
   CannotRecord,
+  JUST_STARTED_MS,
   createRecording,
   type LocationUpdates,
   type Recording,
@@ -191,6 +192,121 @@ describe("Stop", () => {
     const trip = await recording.start();
     await recording.stop(trip.id);
     await expect(recording.stop(trip.id)).rejects.toThrow(TripStateError);
+  });
+});
+
+describe("the check when the app opens or comes back to the front", () => {
+  /** The process of the app was ended: the service with it, the trip stays in the database. */
+  const processEnded = () => {
+    location.running = false;
+  };
+
+  test("no trip: updates that were left running are stopped, nothing is started", async () => {
+    location.running = true;
+    expect(await recording.ensure()).toEqual({ kind: "none" });
+    expect(location.running).toBe(false);
+    expect(location.starts).toBe(0);
+  });
+
+  test("a paused trip stays paused and updates that were left running are stopped", async () => {
+    const trip = await recording.start();
+    await recording.pause(trip.id);
+    // A crash between storing the pause and stopping the updates leaves them running.
+    location.running = true;
+    clock += 10 * MIN;
+    const ensured = await recording.ensure();
+    expect(ensured).toMatchObject({ kind: "paused", trip: { id: trip.id, state: "paused" } });
+    expect(location.running).toBe(false);
+    expect(location.starts).toBe(1);
+  });
+
+  test("a stop that fails is no error: the next check and the task stop them again", async () => {
+    location.running = true;
+    location.failStop = true;
+    expect(await recording.ensure()).toEqual({ kind: "none" });
+  });
+
+  test("a recording trip whose process was ended gets its updates started again, and is not changed", async () => {
+    const trip = await recording.start();
+    processEnded();
+    clock += 5 * MIN;
+    const ensured = await recording.ensure();
+    expect(ensured).toEqual({ kind: "restarted", trip });
+    expect(location.running).toBe(true);
+    expect(location.starts).toBe(2);
+    expect(await store.activeTrip()).toEqual(trip);
+  });
+
+  test("updates that still run are started again too: being registered proves nothing", async () => {
+    const trip = await recording.start();
+    clock += MIN;
+    expect(await recording.ensure()).toEqual({ kind: "restarted", trip });
+    expect(location.starts).toBe(2);
+  });
+
+  test("right after Start or Resume nothing is started again", async () => {
+    const trip = await recording.start();
+    clock += JUST_STARTED_MS - 1;
+    expect(await recording.ensure()).toEqual({ kind: "just_started", trip });
+    clock += 1;
+    expect((await recording.ensure()).kind).toBe("restarted");
+
+    // Long after Start, but just after a Resume: the start of the segment counts.
+    clock += 20 * MIN;
+    await recording.pause(trip.id);
+    clock += 5 * MIN;
+    await recording.resume(trip.id);
+    const starts = location.starts;
+    clock += 5000;
+    expect((await recording.ensure()).kind).toBe("just_started");
+    expect(location.starts).toBe(starts);
+  });
+
+  test("a phone that cannot record says why, and the trip goes on recording, with its points", async () => {
+    const trip = await recording.start();
+    await storeDelivery(store, drive(3, 0));
+    processEnded();
+    clock += 5 * MIN;
+    for (const reason of ["no_permission", "approximate", "services_off"] as const) {
+      location.ready = reason;
+      expect(await recording.ensure()).toEqual({ kind: "blocked", trip, reason });
+    }
+    expect(location.starts).toBe(1);
+    expect(location.running).toBe(false);
+    expect(await store.activeTrip()).toEqual(trip);
+    expect(await store.points(trip.id)).toHaveLength(3);
+
+    // Location is switched on again and the driver comes back to the app.
+    location.ready = "ready";
+    expect((await recording.ensure()).kind).toBe("restarted");
+    expect(location.running).toBe(true);
+  });
+
+  test("when the system refuses, its error is thrown and the trip is neither ended nor paused", async () => {
+    const trip = await recording.start();
+    processEnded();
+    clock += 5 * MIN;
+    location.failStart = true;
+    await expect(recording.ensure()).rejects.toThrow("the system refused");
+    expect(await store.activeTrip()).toEqual(trip);
+    location.failStart = false;
+    expect((await recording.ensure()).kind).toBe("restarted");
+  });
+
+  test("1 km, the app is ended while the car drives 1.2 km, the app is opened, 1 km more: 3.2 km", async () => {
+    const trip = await recording.start();
+    // 100 s at 10 m/s: 0 to 1,000 m.
+    await storeDelivery(store, drive(21, 0));
+    processEnded();
+    // No position for two minutes while the car goes on at 10 m/s; then the driver opens the app.
+    clock = T0 + 220_000;
+    expect((await recording.ensure()).kind).toBe("restarted");
+    // 2,200 to 3,200 m. The road between the last position before and the first after is counted
+    // as a straight line, at a speed a car can drive.
+    await storeDelivery(store, drive(21, 220_000, 2200));
+    clock = T0 + 6 * MIN;
+    const ended = await recording.stop(trip.id);
+    expect(ended.distanceM).toBeCloseTo(3200, 0);
   });
 });
 
