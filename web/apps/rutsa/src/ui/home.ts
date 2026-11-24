@@ -16,6 +16,20 @@ export function lastEndedTrip(trips: readonly Trip[]): Trip | null {
 }
 
 /**
+ * How long an ended trip took: a recorded one without its pauses (`closedMs`, the sum of its
+ * segments, from the store), one added by hand from its start to its end. `null` while the
+ * segments of a recorded trip are not read yet.
+ */
+export function tripDurationMs(
+  trip: Pick<Trip, "source" | "startedAt" | "endedAt">,
+  closedMs: number | null,
+): number | null {
+  if (trip.source === "manual")
+    return Math.max(0, (trip.endedAt ?? trip.startedAt) - trip.startedAt);
+  return closedMs;
+}
+
+/**
  * When a moment was, for a line on the screen: `Today 14:05`, `Yesterday 08:30`, or the day
  * without its year (`Nov 18 08:30`), in the time zone given. The words come from the catalogue.
  */

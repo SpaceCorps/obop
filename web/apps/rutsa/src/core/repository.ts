@@ -1,3 +1,4 @@
+import type { TripProgress } from "./progress.ts";
 import type { NewFix, StoredPoint, Trip } from "./types.ts";
 
 /**
@@ -58,6 +59,13 @@ export interface TripRepository {
 
   /** The stored points of a trip in the order they were stored (`seq`). */
   points(tripId: string): Promise<StoredPoint[]>;
+
+  /**
+   * The count of a trip so far (`progress.ts`): its km by the same rule as Stop, its stored
+   * positions, the newest one of its current segment and the note about 0 km. `null` when there
+   * is no trip with this id.
+   */
+  progress(tripId: string): Promise<TripProgress | null>;
 
   /**
    * Deletes an ended trip with its points. Throws `TripStateError` for a trip that is recording or

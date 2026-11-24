@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { canGoBack, current, openTripFirst, reduce, type Route } from "./router.ts";
+import { canGoBack, current, reduce, type Route } from "./router.ts";
 
 const home: Route = { name: "home" };
 const names = (stack: readonly Route[]) => stack.map((r) => r.name);
@@ -21,7 +21,7 @@ describe("the screen stack", () => {
   });
 
   test("home clears the stack", () => {
-    const stack = reduce([home, { name: "trips" }, { name: "recording" }], { type: "home" });
+    const stack = reduce([home, { name: "trips" }, { name: "trip", id: "t1" }], { type: "home" });
     expect(stack).toEqual([home]);
   });
 
@@ -55,20 +55,5 @@ describe("without location", () => {
     stack = reduce(stack, { type: "push", route: { name: "permissions", next: "start" } });
     stack = reduce(stack, { type: "back" });
     expect(names(stack)).toEqual(["home", "trips"]);
-  });
-});
-
-describe("a trip that is open when the app starts", () => {
-  test("is shown first, on the screen of the recording", () => {
-    expect(names(openTripFirst([home], true))).toEqual(["home", "recording"]);
-  });
-
-  test("no open trip leaves the stack as it is", () => {
-    expect(openTripFirst([home], false)).toEqual([home]);
-  });
-
-  test("the screen of the recording is not shown twice", () => {
-    const stack: Route[] = [home, { name: "recording" }];
-    expect(openTripFirst(stack, true)).toEqual(stack);
   });
 });

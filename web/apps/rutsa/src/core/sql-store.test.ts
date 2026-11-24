@@ -207,6 +207,77 @@ describe("pause, resume and the distance", () => {
   });
 });
 
+describe("the count while a trip records", () => {
+  test("the km so far are the km Stop then stores, also across a pause", async () => {
+    const trip = await store.startTrip(T0);
+    await store.appendFixes(trip.id, drive(21, 5000, 10));
+    expect((await store.progress(trip.id))?.distanceM).toBeCloseTo(1000, 0);
+    await store.pauseTrip(trip.id, T0 + 2 * MIN);
+    await store.resumeTrip(trip.id, T0 + 5 * MIN);
+    await store.appendFixes(trip.id, drive(21, 5000, 10, 5 * MIN, 5000));
+    const soFar = await store.progress(trip.id);
+    const ended = await store.stopTrip(trip.id, T0 + 7 * MIN);
+    expect(soFar?.distanceM).toBeCloseTo(2000, 0);
+    expect(soFar?.distanceM).toBe(ended.distanceM);
+  });
+
+  test("the newest position is that of the current segment: none right after Resume", async () => {
+    const trip = await store.startTrip(T0);
+    expect(await store.progress(trip.id)).toEqual({
+      state: "recording",
+      closedMs: 0,
+      distanceM: 0,
+      points: 0,
+      lastFixAt: null,
+      signal: null,
+    });
+    await store.appendFixes(trip.id, drive(3, 5000, 10));
+    expect((await store.progress(trip.id))?.lastFixAt).toBe(T0 + 10_000);
+    await store.pauseTrip(trip.id, T0 + MIN);
+    await store.resumeTrip(trip.id, T0 + 2 * MIN);
+    expect(await store.progress(trip.id)).toMatchObject({ points: 3, lastFixAt: null });
+  });
+
+  test("positions that are all too imprecise give 0 km and say why", async () => {
+    const trip = await store.startTrip(T0);
+    const weak = drive(8, 5000, 10).map((f) => ({ ...f, accuracyM: 300 }));
+    await store.appendFixes(trip.id, weak);
+    expect(await store.progress(trip.id)).toMatchObject({
+      distanceM: 0,
+      signal: { kind: "weak", accuracyM: 300 },
+    });
+  });
+
+  test("the time of a trip leaves its pauses out: each Pause ends a segment, Stop the last", async () => {
+    const trip = await store.startTrip(T0);
+    expect((await store.progress(trip.id))?.closedMs).toBe(0);
+    // 10 min recording, 20 min paused, 5 min recording.
+    await store.pauseTrip(trip.id, T0 + 10 * MIN);
+    expect((await store.progress(trip.id))?.closedMs).toBe(10 * MIN);
+    await store.resumeTrip(trip.id, T0 + 30 * MIN);
+    expect((await store.progress(trip.id))?.closedMs).toBe(10 * MIN);
+    await store.stopTrip(trip.id, T0 + 35 * MIN);
+    expect((await store.progress(trip.id))?.closedMs).toBe(15 * MIN);
+  });
+
+  test("Stop from a pause keeps the end the Pause gave the segment", async () => {
+    const trip = await store.startTrip(T0);
+    await store.pauseTrip(trip.id, T0 + 10 * MIN);
+    await store.stopTrip(trip.id, T0 + 50 * MIN);
+    expect((await store.progress(trip.id))?.closedMs).toBe(10 * MIN);
+  });
+
+  test("a clock set back at Pause does not end a segment before its start", async () => {
+    const trip = await store.startTrip(T0);
+    await store.pauseTrip(trip.id, T0 - MIN);
+    expect((await store.progress(trip.id))?.closedMs).toBe(0);
+  });
+
+  test("no trip with this id has no count", async () => {
+    expect(await store.progress("nobody")).toBeNull();
+  });
+});
+
 describe("trips added by hand", () => {
   test("are ended, manual, with the typed distance and texts", async () => {
     const trip = await store.addManualTrip({

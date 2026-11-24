@@ -48,6 +48,11 @@ refused for good; `pm clear` resets both.
 - [x] 2026-11-21 Force stop while paused, open the app: still paused, no notification
 - [x] 2026-11-21 Location off while recording, back to the app: the reason; on again: recording
 - [x] 2026-11-21 No new position for 3 min: `quiet 3 min`
+
+Since D4 these read the warnings on the home screen instead of the lines of the temporary panel:
+the reason is "Location is switched off: the trip is not recorded." with Fix it, and the quiet
+one is "The last position is 3 minutes old ...".
+
 - [x] 2026-11-21 Swipe the app away: the service survives on this Android
 
 ## D1. Navigation and the failure screen
@@ -75,16 +80,14 @@ Changing the flag needs a fresh bundle: delete `android\app\build\generated\asse
 - [x] 2026-11-24 Notifications refused: the note on the guide; Start the trip asks no second time
 - [x] 2026-11-24 Back from the settings starts the trip with no dialog of the notifications
 - [x] 2026-11-24 Close and the back button go back to where the driver was
+- [ ] (since D4) Notifications refused, the note on the guide: Open settings, turn them on, back: the note is gone
 
 ## D3. Home and the status banner
 
-- [ ] `smoke` The app opens on Home: Today, This month, Start, "No trips yet." or the last trip
-- [ ] `smoke` Start, feed a drive, Stop on the recording route, Back: Today and This month grew by the trip, the last trip line shows its km and "Today HH:MM"
-- [ ] `smoke` Location off on the phone: one low line at the top, under the clock: "Location is off.", Open settings, × at the right in the middle; nothing hidden under it
-- [ ] `smoke` The banner's close button folds it up and the screen moves up
-- [ ] With a trip open, Home shows "A trip is being recorded" (or "paused") with its start; Open trip goes to the recording route; Start is greyed out
-- [ ] Force stop while recording, open the app: it opens on the recording route; Back goes home
-- [ ] Start from the permissions (first start, `pm clear`) ends on the recording route; Back goes home
+- [x] 2026-11-24 `smoke` The app opens on Home: Today, This month, Start, "No trips yet." or the last trip
+- [x] 2026-11-24 `smoke` Start, feed a drive, Stop, back home: Today and This month grew by the trip, the last trip line shows its km and "Today HH:MM"
+- [x] 2026-11-24 `smoke` Location off on the phone: one low line at the top, under the clock: "Location is off.", Open settings, × at the right in the middle; nothing hidden under it
+- [x] 2026-11-24 `smoke` The banner's close button folds it up and the screen moves up
 - [ ] Banner, location off on the phone: Open settings opens the location settings; on, back: the banner is gone
 - [ ] Banner, no permission (`pm clear`, then Start, refuse twice, Close): "Location access is off."; Open settings opens the app's page
 - [ ] Banner, approximate only: "Precise location is off."
@@ -97,3 +100,27 @@ Changing the flag needs a fresh bundle: delete `android\app\build\generated\asse
 - [ ] Trips over two days: "Yesterday HH:MM" for a trip of yesterday (change the date of the emulator, or wait a day)
 - [ ] After midnight Today starts at 0.0 km, This month keeps the month (or at the start of a month, This month starts at 0.0 km)
 - [ ] The note about a replaced backup file cannot be made on Android (the app's backup is off); its open is tested by `open-db.test.ts`
+
+The checks of D3 with a recording route went with D4, which records on the home screen.
+
+## D4. The recording on the home screen
+
+- [x] 2026-11-24 `smoke` Start: the big button turns red and says Stop, Pause at its left; Current shows the time running and 0.0 km
+- [x] 2026-11-24 `smoke` Feed a drive: the km of Current grow (within about 4 s of each position); Today and This month do not
+- [ ] `smoke` Pause: the big button says Resume, Stop at its left, Current says "Current · Paused", the clock stands; Resume: Stop and Pause again, the clock goes on from where it stood
+- [ ] `smoke` The big button stands exactly in the middle (in line with the home bar of Android) and stays there when the small one comes, goes or changes; the small one is in the top left corner of the footer; Pause, Resume, Pause, Resume: nothing jumps, only the pressed button shows that it works
+- [ ] `smoke` After Stop the last trip line says its km, how long it took without the pauses, and when: "Last trip: 0.5 km, 3 min, Today 17:17"
+- [ ] `smoke` The app installed over the last build (migration 4) keeps every trip and its km
+- [x] 2026-11-24 `smoke` Stop: "Stop the trip?"; Cancel keeps recording; Stop ends it: Current goes, Today and This month grow by its km (the same km Current showed), the last trip line shows it
+- [ ] Stop from a pause (the small Stop): asks, then ends the trip
+- [ ] 0.5 km, Pause, move 4 km, Resume, 0.5 km: Current shows about 1.0 km all along, and Stop stores the same
+- [ ] Right after Start, before the first position: "Waiting for the first position."
+- [ ] A minute with no position (location off before Start is refused, so: `pm clear`, start in a place the emulator gives no fix, or wait after switching location off in the quick settings without leaving the app): "No position arrived in the first minute" with Restart recording
+- [ ] Location off in the quick settings while recording, 3 min: "The last position is 3 minutes old ..." with Restart recording; Restart recording with location off: "Location is switched off ..." with Fix it
+- [ ] Fix it: the screen of the permissions; location on, back: the recording goes on by itself, the warning is gone, home
+- [ ] Force stop while recording, open the app: Home shows the trip as Current, still recording (the check of C5), no warning after a few seconds
+- [ ] Location off, then the app away and back (the check of C5 finds it): "Location is switched off ..." with Fix it; the banner at the top says nothing about location while the trip is open
+- [ ] Notifications off while a trip is open: the banner at the top says "Notifications are off."
+- [ ] Resume with location off: the screen of the permissions; location on, back: the trip goes on by itself
+- [ ] Positions too imprecise for a minute (`adb emu geo fix` cannot give an accuracy; tested in `signal.test.ts` and `sql-store.test.ts`)
+- [ ] TalkBack on: "Recording started" at Start, "Recording stopped ..." at Stop

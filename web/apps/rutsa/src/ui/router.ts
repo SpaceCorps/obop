@@ -1,6 +1,7 @@
 /**
- * The screens of the stack, as data. The app has six routes, so the state is a small stack in
- * `App.tsx` and not a navigation library: fewer native modules, fewer versions to pin.
+ * The screens of the stack, as data. The app has five routes, so the state is a small stack in
+ * `App.tsx` and not a navigation library: fewer native modules, fewer versions to pin. The
+ * recording is on the home screen (D4), not on a route of its own.
  *
  * Location is a route and never a gate (BR-36, US-18): without location access the trips and the
  * trips added by hand stay reachable; only what needs a position goes to `permissions`, and Close
@@ -13,10 +14,11 @@ export type Route =
   /**
    * Why location is needed and what to do about it (D2). `next` is what the driver was doing:
    * when they come back from the settings with location allowed, it goes on without another tap
-   * (US-18 AC5). (Not called `then`: an object with `then` is taken for a promise by `await`.)
+   * (US-18 AC5): `start` a new trip, `resume` the paused one, or `restart` the recording of the
+   * open trip after the check of C5 found that the phone could not record. (Not called `then`: an
+   * object with `then` is taken for a promise by `await`.)
    */
-  | { name: "permissions"; next: "start" }
-  | { name: "recording" }
+  | { name: "permissions"; next: "start" | "resume" | "restart" }
   | { name: "trips" }
   | { name: "trip"; id: string }
   /** A trip added by hand (D7). */
@@ -61,13 +63,4 @@ export function current(stack: readonly Route[]): Route {
  */
 export function canGoBack(stack: readonly Route[]): boolean {
   return stack.length > 1;
-}
-
-/**
- * The stack once the trips have been read at the start: a trip that is open (recording or paused)
- * is shown first, on the screen of the recording, where Pause and Stop are (D4).
- */
-export function openTripFirst(stack: readonly Route[], openTrip: boolean): Route[] {
-  if (!openTrip || current(stack).name === "recording") return [...stack];
-  return reduce(stack, { type: "push", route: { name: "recording" } });
 }

@@ -1,4 +1,4 @@
-import { analyseTrack, type Fix } from "@obop/trip-core";
+import { analyseRecorded, progressOf, type SegmentTimes } from "./progress.ts";
 import {
   TripAlreadyActive,
   TripNotFound,
@@ -113,30 +113,6 @@ function text(value: string | null | undefined): string | null {
   return trimmed === "" ? null : trimmed;
 }
 
-/**
- * The distance of a recorded trip: `analyseTrack` of `@obop/trip-core` over each segment on its own,
- * summed, so a pause adds no straight line from where the trip paused to where it went on. Each
- * segment is analysed from its own start (`starts`, by segment number; the start of the trip where
- * a segment has none), the same rule `acceptFixes` applied when its positions were stored.
- */
-export function recordedDistanceM(
-  points: readonly StoredPoint[],
-  starts: ReadonlyMap<number, number>,
-  startedAt: number,
-): number {
-  const segments = new Map<number, Fix[]>();
-  for (const p of points) {
-    const fixes = segments.get(p.segment) ?? [];
-    fixes.push({ seq: p.seq, t: p.t, lat: p.lat, lon: p.lon, accuracyM: p.accuracyM });
-    segments.set(p.segment, fixes);
-  }
-  let total = 0;
-  for (const [segment, fixes] of segments) {
-    total += analyseTrack(fixes, { startedAt: starts.get(segment) ?? startedAt }).distanceM;
-  }
-  return total;
-}
-
 export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripRepository {
   const thinning = options.thinning ?? RECORDING_THINNING;
 
@@ -158,6 +134,25 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
         [tripId],
       )
     ).map(toPoint);
+
+  /** The segments of a trip: their starts by segment number, and their ends (`null` while open). */
+  const readSegments = async (q: SqlTx, tripId: string): Promise<SegmentTimes[]> =>
+    (
+      await q.all<{ segment: number; started_at: number; ended_at: number | null }>(
+        "SELECT segment, started_at, ended_at FROM segment WHERE trip_id = ? ORDER BY segment",
+        [tripId],
+      )
+    ).map((s) => ({ segment: s.segment, startedAt: s.started_at, endedAt: s.ended_at }));
+
+  const readStarts = async (q: SqlTx, tripId: string): Promise<Map<number, number>> =>
+    new Map((await readSegments(q, tripId)).map((s) => [s.segment, s.startedAt]));
+
+  /** Ends the open segment of a trip at `at` (not before its start); a closed one is left as it is. */
+  const endSegment = (q: SqlTx, trip: Trip, at: number) =>
+    q.run(
+      "UPDATE segment SET ended_at = MAX(started_at, ?) WHERE trip_id = ? AND segment = ? AND ended_at IS NULL",
+      [at, trip.id, trip.segment],
+    );
 
   return {
     startTrip: (at) =>
@@ -206,11 +201,12 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
       });
     },
 
-    pauseTrip: (tripId) =>
+    pauseTrip: (tripId, at) =>
       db.transaction(async (tx) => {
         const trip = await mustRead(tx, tripId);
         if (trip.state !== "recording") throw new TripStateError(tripId, trip.state, "paused");
         await tx.run("UPDATE trip SET state = 'paused' WHERE id = ?", [tripId]);
+        await endSegment(tx, trip, at);
         return mustRead(tx, tripId);
       }),
 
@@ -237,13 +233,9 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
       db.transaction(async (tx) => {
         const trip = await mustRead(tx, tripId);
         if (trip.state === "ended") throw new TripStateError(tripId, trip.state, "stopped");
-        const starts = await tx.all<{ segment: number; started_at: number }>(
-          "SELECT segment, started_at FROM segment WHERE trip_id = ?",
-          [tripId],
-        );
-        const distanceM = recordedDistanceM(
+        const { distanceM } = analyseRecorded(
           await readPoints(tx, tripId),
-          new Map(starts.map((s) => [s.segment, s.started_at])),
+          await readStarts(tx, tripId),
           trip.startedAt,
         );
         // A clock set back during the trip must not leave an end before the start.
@@ -253,6 +245,9 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
           distanceM,
           tripId,
         ]);
+        // A trip stopped while it records ends its segment now; one stopped from a pause has it
+        // ended at the Pause already.
+        await endSegment(tx, trip, endedAt);
         return mustRead(tx, tripId);
       }),
 
@@ -296,6 +291,13 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
     },
 
     points: (tripId) => readPoints(db, tripId),
+
+    progress: (tripId) =>
+      db.transaction(async (tx) => {
+        const trip = await readTrip(tx, tripId);
+        if (!trip) return null;
+        return progressOf(trip, await readPoints(tx, tripId), await readSegments(tx, tripId));
+      }),
 
     deleteTrip: (tripId) =>
       db.transaction(async (tx) => {

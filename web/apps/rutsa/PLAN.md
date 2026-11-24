@@ -166,12 +166,21 @@ Components from `@obop/ui-native`.
       banner up until the next start of the app; it goes away by itself when the cause is gone,
       checked again on every return to the front; made in the app from `@obop/ui-native` parts;
       the rest of the screen works as usual
-- [ ] D4 `feat(rutsa): recording screen`: elapsed time, km so far, Pause, Resume, Stop; a note
-      when no position has come for a while or the updates are not registered (C5), with a button
-      that starts the recording again and a message when that fails; the reason when the check of
-      C5 finds that the phone cannot record, and a Resume that cannot record, lead to the
-      permissions (`next: "resume"`); the notifications that are off are said by the status
-      banner of D3
+- [x] D4 `feat(rutsa): recording on the home screen`: the recording is shown on the home screen,
+      not on a screen of its own. The big button of D3 is Start; while a trip records it turns
+      red and says Stop, with a small Pause button at its left; while the trip is paused the big
+      button says Resume and the small button at its left says Stop (words only, no symbols yet).
+      Stop asks to confirm. While a trip is open the screen shows it as Current, its elapsed time
+      and km so far (the same count as Stop's, over the segments), next to the totals of today and
+      this month, which leave the open trip out; at Stop its km join Today and This month and
+      Current goes. The warnings of a recording stay, for the
+      driver and not only for the tests: a note when no position has come for a while or the
+      updates are not registered (C5), with a button that starts the recording again and a
+      message when that fails; the reason when the check of C5 finds that the phone cannot
+      record, and a Resume that cannot record, lead to the permissions (`next: "resume"`); the
+      notifications that are off are said by the status banner of D3. The temporary panel, its
+      lines for testing (health, service, check) and the recording route go; the permissions end
+      on the home screen
 - [ ] D5 `feat(rutsa): trips list`: trips by day
 - [ ] D6 `feat(rutsa): trip detail`: times, km, duration, delete
 - [ ] D7 `feat(rutsa): add a trip by hand`: date, time, from, to, km; marked as manual. Date and
@@ -341,3 +350,36 @@ D23).
   the catalogue, `bannerText`), with Open settings and × in the middle at the right. Asked for, to
   be decided at the analysis of D4: the recording shown on the home screen while a trip is open,
   instead of a screen of its own.
+- 2026-11-24: decided after D3: D4 shows the recording on the home screen (`mileage-app` has a
+  screen of its own). The big button goes Start, then a red Stop with a small Pause at its left,
+  then Resume while paused; the elapsed time and km so far stand with the totals. The lines of the
+  temporary panel for testing (health, service, check) are not kept: what the driver needs of them
+  becomes the notes of D4. Open at D4: where Stop is while the trip is paused. Decided the same
+  day: while paused, the big button says Resume and the small one at its left says Stop; the
+  warnings of a recording (no position, updates not registered, Restart recording, the reason the
+  phone cannot record) stay, since a driver must see that a trip is not recorded; the checks of
+  C in `CHECKS.md` then read them instead of the lines for testing.
+- 2026-11-24: D4 takes from the Recording screen of `mileage-app`: the elapsed time, the count read
+  at most every 4 s (`core/progress-reader.ts`), the note on 0 km (`core/signal.ts`), "waiting for
+  the first position", the confirmation of Stop, the warnings with Restart recording, and the
+  words for a screen reader (`ui/announce.ts`); not its count of points, its upload and its banner
+  "Keep this app running" (the note of D2 says it before the first trip). The count while a trip
+  records comes from the store (`progress`), by the same rule as Stop (`core/progress.ts`,
+  `analyseRecorded`, over the segments), so Current and the stored km are the same. The buttons
+  are pinned at the bottom. Without a trip open, the banner keeps every problem; with one, only
+  the notifications, since the warning on the home screen says the location with its way on. The
+  route `recording`, `openTripFirst` and the temporary panel are gone; `permissions` also takes
+  `next: "resume"` and `next: "restart"`. Unused sentences of the panel left the catalogue.
+  Tried on the emulator, then changed: the clock of Current stands while the trip is paused
+  (migration 4 gives a segment its end, set at Pause and at Stop; the trips of version 3 get the
+  ends that can be known: a segment the trip went on from ends at its newest position, the last
+  one of an ended trip with the trip, the open one of a paused trip at its newest position;
+  `closedMs` of the count, `elapsedMs`); the footer has three columns, so the big button stays in
+  the middle when the small one comes or goes, the small one has one width, and only the pressed
+  button shows that it works; the count is read again at once when the trip is paused or
+  resumed; the note on the notifications of the guide (D2) is read again on the return from the
+  settings and goes once they are on. Tried again: the three columns pushed the big button to the
+  right (the left one could not shrink below the small button), so the big button is centred on
+  its own and the small one lies over the top left corner of the footer, out of the flow; the
+  last trip line also says how long the trip took (a recorded one without its pauses, the sum of
+  its segments; one added by hand from start to end, `tripDurationMs`).

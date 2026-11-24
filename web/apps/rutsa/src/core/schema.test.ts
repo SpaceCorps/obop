@@ -122,6 +122,65 @@ describe("migrate", () => {
     expect(await db.all("SELECT * FROM meta")).toEqual([]);
   });
 
+  test("a file of version 3 gets the end of each segment, as far as it can be known", async () => {
+    const db = memoryDb();
+    expect(await migrate(db, MIGRATIONS.slice(0, 3))).toEqual({ from: 0, to: 3 });
+    // An ended trip that was paused once, an ended trip of one segment, and a trip that is paused.
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, segment) VALUES ('e', 'ended', 'recorded', 1000, 9000, 120, 2)",
+    );
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, segment) VALUES ('p', 'ended', 'recorded', 10000, 11000, 0, 1)",
+    );
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, segment) VALUES ('q', 'paused', 'recorded', 30000, 1)",
+    );
+    await db.run(
+      "INSERT INTO segment (trip_id, segment, started_at) VALUES ('e', 1, 1000), ('e', 2, 5000), ('p', 1, 10000), ('q', 1, 30000)",
+    );
+    await db.run(
+      "INSERT INTO point (trip_id, seq, segment, t, lat, lon) VALUES ('e', 1, 1, 1000, 59.3, 18), ('e', 2, 1, 3000, 59.31, 18), ('e', 3, 2, 6000, 59.32, 18), ('q', 1, 1, 34000, 59.3, 18)",
+    );
+
+    await migrate(db);
+    expect(
+      await db.all(
+        "SELECT trip_id, segment, started_at, ended_at FROM segment ORDER BY trip_id, segment",
+      ),
+    ).toEqual([
+      // The segment the trip went on from ends at its newest position; the last ends with the trip.
+      { trip_id: "e", segment: 1, started_at: 1000, ended_at: 3000 },
+      { trip_id: "e", segment: 2, started_at: 5000, ended_at: 9000 },
+      { trip_id: "p", segment: 1, started_at: 10000, ended_at: 11000 },
+      // A trip paused before the version ends at its newest position.
+      { trip_id: "q", segment: 1, started_at: 30000, ended_at: 34000 },
+    ]);
+  });
+
+  test("the segment of a trip that records stays open through version 4", async () => {
+    const db = memoryDb();
+    await migrate(db, MIGRATIONS.slice(0, 3));
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, segment) VALUES ('r', 'recording', 'recorded', 20000, 1)",
+    );
+    await db.run("INSERT INTO segment (trip_id, segment, started_at) VALUES ('r', 1, 20000)");
+    await migrate(db);
+    expect(await db.one("SELECT ended_at FROM segment")).toEqual({ ended_at: null });
+  });
+
+  test("a segment cannot end before it starts", async () => {
+    const db = memoryDb();
+    await migrate(db);
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at) VALUES ('t', 'recording', 'recorded', 1000)",
+    );
+    await expect(
+      db.run(
+        "INSERT INTO segment (trip_id, segment, started_at, ended_at) VALUES ('t', 1, 1000, 500)",
+      ),
+    ).rejects.toThrow();
+  });
+
   test("migrations must be numbered 1, 2, 3 ... in order", async () => {
     const step = { description: "x", up: async () => {} };
     await expect(migrate(memoryDb(), [{ ...step, version: 2 }])).rejects.toThrow(SchemaError);

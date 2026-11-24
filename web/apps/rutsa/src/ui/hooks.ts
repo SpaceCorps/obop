@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { databaseProblem, type DatabaseProblem } from "../core/open-db.ts";
+import type { TripProgress } from "../core/progress.ts";
+import { startProgressReader } from "../core/progress-reader.ts";
 import type { Ensured } from "../core/recording.ts";
 import type { TripRepository } from "../core/repository.ts";
 import type { Trip } from "../core/types.ts";
 import { ensureRecording } from "../native/actions.ts";
 import { onChange } from "../native/bus.ts";
 import { locationReadiness, notificationsAllowed } from "../native/permissions.ts";
+import { isRecording } from "../native/recorder.ts";
 import { databaseInfo, getStore } from "../native/store.ts";
 import { onForeground } from "./foreground.ts";
 import type { PhoneStatus } from "./status.ts";
@@ -123,6 +126,62 @@ export function usePhoneStatus(): PhoneStatus | null {
     };
   }, []);
   return status;
+}
+
+/**
+ * The count of the open trip (`TripRepository.progress`): read at once and when positions are
+ * stored, at most every few seconds (`core/progress-reader.ts`), and at once again when the state
+ * of the trip changes (Pause, Resume), whose time it changes. `null` until it was read, and without
+ * a trip; the count of the same trip stays on screen while it is read again.
+ */
+export function useProgress(
+  store: TripRepository,
+  tripId: string | null,
+  state: string | null,
+): TripProgress | null {
+  const [progress, setProgress] = useState<TripProgress | null>(null);
+  const shownFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (shownFor.current !== tripId) setProgress(null);
+    shownFor.current = tripId;
+    return startProgressReader<TripProgress | null>({
+      id: tripId,
+      read: (id) => store.progress(id),
+      subscribe: onChange,
+      clock: () => Date.now(),
+      set: setProgress,
+      setTimeout: (run, ms) => setTimeout(run, ms),
+      clearTimeout: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+    });
+  }, [store, tripId, state]);
+  return progress;
+}
+
+/**
+ * Whether the location updates are registered with the system, asked every 5 s while `asking`
+ * (a trip records): `false` then means that the trip records nothing. `null` before the first
+ * answer and while not asking.
+ */
+export function useRegistered(asking: boolean): boolean | null {
+  const [registered, setRegistered] = useState<boolean | null>(null);
+  useEffect(() => {
+    setRegistered(null);
+    if (!asking) return;
+    let alive = true;
+    const ask = () => {
+      isRecording().then(
+        (r) => alive && setRegistered(r),
+        () => undefined,
+      );
+    };
+    ask();
+    const timer = setInterval(ask, 5000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [asking]);
+  return registered;
 }
 
 /** What the last check of the recording found (`Recording.ensure`), and when. */

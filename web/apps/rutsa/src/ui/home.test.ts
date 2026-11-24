@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import type { Trip } from "../core/types.ts";
-import { lastEndedTrip, whenText } from "./home.ts";
+import { lastEndedTrip, tripDurationMs, whenText } from "./home.ts";
 
 const STOCKHOLM = "Europe/Stockholm";
 const at = (iso: string) => Date.parse(iso);
@@ -50,6 +50,23 @@ describe("the last trip", () => {
   test("none before the first", () => {
     expect(lastEndedTrip([])).toBeNull();
     expect(lastEndedTrip([trip("2026-11-18T09:00:00Z", "recording")])).toBeNull();
+  });
+});
+
+describe("how long the last trip took", () => {
+  test("a recorded trip: its segments, without the pauses", () => {
+    const recorded = trip("2026-11-18T08:00:00Z", "ended");
+    expect(tripDurationMs(recorded, 7 * 60_000)).toBe(7 * 60_000);
+  });
+
+  test("a recorded trip whose segments are not read yet has no duration yet", () => {
+    expect(tripDurationMs(trip("2026-11-18T08:00:00Z", "ended"), null)).toBeNull();
+  });
+
+  test("a trip added by hand: from its start to its end", () => {
+    const manual = trip("2026-11-18T08:00:00Z", "ended", "manual");
+    expect(tripDurationMs(manual, 0)).toBe(600_000);
+    expect(tripDurationMs(manual, null)).toBe(600_000);
   });
 });
 

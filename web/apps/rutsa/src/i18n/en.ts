@@ -34,11 +34,44 @@ export const en = {
   "home.today": "Today",
   "home.month": "This month",
   "home.last": "Last trip: {distance}, {when}",
+  "home.last.duration": "Last trip: {distance}, {duration}, {when}",
   "home.none": "No trips yet.",
-  "home.open.recording": "A trip is being recorded",
-  "home.open.paused": "A trip is paused",
-  "home.open.message": "Started: {when}.",
-  "home.open.action": "Open trip",
+  "home.current": "Current",
+  "home.paused": "Paused",
+  "home.stop": "Stop",
+  "home.stop.hint": "Ends the trip that is being recorded",
+  "home.pause": "Pause",
+  "home.resume": "Resume",
+  "home.waiting": "Waiting for the first position. Go outside or wait a moment.",
+  "home.stop.title": "Stop the trip?",
+  "home.stop.message": "The trip ends here and is saved on this phone.",
+
+  "recording.restart": "Restart recording",
+  "recording.restart.failed": "Recording could not be restarted. Try again.",
+  "recording.blocked.services_off": "Location is switched off: the trip is not recorded.",
+  "recording.blocked.no_permission": "Location is not allowed any more: the trip is not recorded.",
+  "recording.blocked.approximate":
+    "Only an approximate location is allowed: the trip cannot be measured.",
+  "recording.blocked.action": "Fix it",
+  "recording.stuck": "Recording has stopped: the trip is open but the phone is not recording it.",
+  "recording.nofix":
+    "No position arrived in the first minute. Check that location is switched on, then restart recording.",
+  "recording.nofix.ios":
+    "No position arrived in the first minute. Check that Location Services are switched on, then restart recording.",
+  "recording.quiet.one":
+    "The last position is {count} minute old. Standing still, that is normal; driving, restart recording.",
+  "recording.quiet.other":
+    "The last position is {count} minutes old. Standing still, that is normal; driving, restart recording.",
+  "recording.weak":
+    "The location signal is too weak to measure the distance. Indoors, move to a window or go outside.",
+  "recording.jumpy":
+    "The positions do not fit together and are left out of the distance. If it stays at 0 km, stop this trip and start a new one.",
+  "recording.signal.detail.one": "{count} of {total} positions was left out",
+  "recording.signal.detail.other": "{count} of {total} positions were left out",
+
+  "announce.recording.started": "Recording started",
+  "announce.recording.stopped": "Recording stopped. The trip is saved on this phone.",
+  "announce.recording.stuck": "Recording has stopped. Restart recording.",
   "home.restored.title": "The trips of a backup could not be opened",
   "home.restored.message":
     "The key of the trips stays on the phone they were made on, so the trips that came back with a backup could not be opened here. They were replaced by an empty list.",
@@ -93,9 +126,6 @@ export const en = {
   "guide.start": "Start the trip",
 
   "error.generic": "Something went wrong. Try again.",
-  "error.alreadyActive": "A trip is already being recorded. Stop it before you start a new one.",
-  "error.notFound": "This trip is no longer on the phone.",
-  "error.wrongState": "This cannot be done with the trip as it is now.",
   "error.database": "The trips on this phone could not be opened.",
   "error.database.hint":
     "Try again. If it keeps failing, you can stop a recording that is still running, so that the phone stops looking for your position.",

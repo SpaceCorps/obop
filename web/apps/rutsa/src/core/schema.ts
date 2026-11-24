@@ -121,6 +121,40 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    description: "the end of each segment of a recorded trip",
+    up: async (tx) => {
+      // A segment ends at Pause or Stop; the time of a trip is the sum of its segments, so the
+      // clock on the home screen stands while the trip is paused.
+      await tx.exec(`
+        ALTER TABLE segment ADD COLUMN ended_at INTEGER
+          CHECK (ended_at IS NULL OR ended_at >= started_at)
+      `);
+      // Before this version the moment of a Pause was not kept. A segment the trip went on from
+      // ends at its newest position (else at its start); the last segment of an ended trip ends
+      // with the trip; the open segment of a trip that records stays open.
+      await tx.exec(`
+        UPDATE segment SET ended_at = MAX(started_at, COALESCE(
+          (SELECT MAX(p.t) FROM point p WHERE p.trip_id = segment.trip_id AND p.segment = segment.segment),
+          started_at))
+        WHERE segment < (SELECT t.segment FROM trip t WHERE t.id = segment.trip_id)
+      `);
+      await tx.exec(`
+        UPDATE segment SET ended_at = MAX(started_at, (SELECT t.ended_at FROM trip t WHERE t.id = segment.trip_id))
+        WHERE ended_at IS NULL
+          AND (SELECT t.state FROM trip t WHERE t.id = segment.trip_id) = 'ended'
+      `);
+      // A trip paused before this version: its current segment ends at its newest position.
+      await tx.exec(`
+        UPDATE segment SET ended_at = MAX(started_at, COALESCE(
+          (SELECT MAX(p.t) FROM point p WHERE p.trip_id = segment.trip_id AND p.segment = segment.segment),
+          started_at))
+        WHERE ended_at IS NULL
+          AND (SELECT t.state FROM trip t WHERE t.id = segment.trip_id) = 'paused'
+      `);
+    },
+  },
 ];
 
 /** The version of the tables this build works with. */

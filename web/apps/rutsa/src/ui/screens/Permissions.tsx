@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { DISCLOSURE_ACCEPTED, NOTIFICATIONS_ASKED } from "../../core/settings.ts";
 import { t } from "../../i18n/index.ts";
-import { CannotRecord, startTrip } from "../../native/actions.ts";
+import { CannotRecord, ensureRecording, resumeTrip, startTrip } from "../../native/actions.ts";
 import {
   locationAccess,
   notificationsAllowed,
@@ -13,7 +13,7 @@ import {
   requestNotifications,
   type LocationAccess,
 } from "../../native/permissions.ts";
-import { getSettings } from "../../native/store.ts";
+import { getSettings, getStore } from "../../native/store.ts";
 import { onReturnFromAway } from "../foreground.ts";
 import { tOs } from "../os-text.ts";
 import {
@@ -29,11 +29,26 @@ import type { Nav, Route } from "../router.ts";
 
 type Next = Extract<Route, { name: "permissions" }>["next"];
 
-/** What the driver was doing when the way led here. */
+/**
+ * What the driver was doing when the way led here: a new trip, the paused one going on, or the
+ * recording of the open trip started again. A phone that still cannot record throws `CannotRecord`
+ * in each case, and the screen shows what stands in the way.
+ */
 async function carryOut(next: Next): Promise<void> {
   switch (next) {
     case "start":
       await startTrip();
+      return;
+    case "resume": {
+      const active = await (await getStore()).activeTrip();
+      if (active?.state === "paused") await resumeTrip(active.id);
+      return;
+    }
+    case "restart": {
+      const ensured = await ensureRecording();
+      if (ensured.kind === "blocked") throw new CannotRecord(ensured.reason);
+      return;
+    }
   }
 }
 
@@ -93,8 +108,8 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
       try {
         setNotificationsOff(!(await notifications(byTap).catch(() => true)));
         await carryOut(next);
-        // The recording route (the temporary panel until D4) replaces this screen; Back is home.
-        nav.replace({ name: "recording" });
+        // The recording is on the home screen (D4).
+        nav.home();
       } catch (e) {
         setStarting(false);
         if (e instanceof CannotRecord) {
@@ -136,6 +151,12 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
         AppState,
         () => asking.current,
         () => {
+          // Back from the settings of the notifications (the note on the guide): read them again,
+          // without a dialog, so the note goes once they are on.
+          notificationsAllowed().then(
+            (allowed) => setNotificationsOff(!allowed),
+            () => undefined,
+          );
           if (!waitsForFix(current.current)) return;
           locationAccess().then(
             (access) => {
