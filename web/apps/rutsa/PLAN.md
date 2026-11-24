@@ -181,13 +181,44 @@ Components from `@obop/ui-native`.
       notifications that are off are said by the status banner of D3. The temporary panel, its
       lines for testing (health, service, check) and the recording route go; the permissions end
       on the home screen
-- [ ] D5 `feat(rutsa): trips list`: trips by day
-- [ ] D6 `feat(rutsa): trip detail`: times, km, duration, delete
-- [ ] D7 `feat(rutsa): add a trip by hand`: date, time, from, to, km; marked as manual. Date and
-      time are typed and checked (no date picker package in this stage)
-
+- [ ] D5 `feat(rutsa): trips list`: trips by day; each trip shows its kind (a trip added by hand
+      is marked; mixed comes with D8)
+- [ ] D6 `feat(rutsa): trip detail`: times, km, duration (without the pauses), its kind, delete;
+      the way to its edit screen comes with D8
+- [ ] D7 `feat(rutsa): manual add`: a grey underlined "Manual add" on the home screen (under the
+      data of Current while a trip is open, under Start and the last trip otherwise) opens a
+      window over the screen (a modal, its content scrolls, Cancel and Done in its footer) that
+      adds a new trip typed by hand: date (Today, Yesterday, or typed as `2026-11-24`), start and
+      end times (24 h; an end before the start is the next day, said under the field), km (a dot
+      or a comma), From and To (required text, the addresses in effect), Note (optional, for
+      example why it was typed). The trip is one typed part (D8) and of the kind manual (BR-28),
+      shown "Added by hand" in the list (D5) and on its screen (D6). The checks, each under its
+      field: a real date and times, no start or end in the future, km over 0 and under a sane
+      maximum (about 2,000 km), no overlap with another trip, the open one included (its km would
+      count twice); a dialog, not a refusal, when the average speed is over about 150 km/h. Times
+      are typed in the phone's time zone and stored in UTC, like recorded ones. No date picker
+      package in this stage
+- [ ] D8 `feat(rutsa): edit a trip`: a trip that ended is made of parts in the order of their
+      times: recorded parts (the segments of GPS between pauses) and typed parts (start, end, km,
+      From, To, typed by hand; a table of typed parts, a migration). Its km are the sum of the km
+      of its parts and its time the sum of their times; the gaps between parts (pauses, a part
+      with no recording) count for neither. Its start is the start of its earliest part and its
+      end the end of its latest. Its kind follows its parts: recorded (only recorded parts),
+      manual (only typed ones, D7) or mixed (both); the list (D5) and its screen (D6) show it, and
+      the report of stage 2 says the km measured (the recorded parts) and the km typed. The edit
+      screen, opened from the trip's screen (D6), lists the parts top to bottom, each with its
+      times, km, From and To and a mark of GPS or typed; a typed part can be changed or deleted,
+      "Add a part" adds one; a recorded part cannot be changed (its km and times were measured)
+      but can be deleted (a stretch the GPS recorded by mistake), and the km measured go down
+      with it; under the list the totals and the kind. The list sorts itself by time: when a
+      changed part loses the focus it moves to its place (no dragging). A trip can be edited as
+      often as the driver likes. The open trip cannot be edited: a trip is recorded first, and
+      what was forgotten (a late Start) is added after Stop. The checks of a part: not in the
+      future, its end after its start, no overlap with another part or another trip, its km and
+      its speed as in D7. Deleting the whole trip stays on its screen (D6)
 Checkpoint: the app runs on the emulator; every check of `CHECKS.md` is run; Start, Pause, Resume,
-Stop, the list and a trip added by hand work when tried by hand; the clock times and km on the screen are right (`Intl` of Hermes:
+Stop, the list, a trip added by hand and a trip edited by hand work when tried by hand; the clock
+times and km on the screen are right (`Intl` of Hermes:
 `mileage-app` notes that an engine without data for a language or time zone falls back quietly).
 
 ### E. Check on the emulator and the simulator
@@ -208,9 +239,27 @@ Checkpoint: the APK builds and installs, a route gives a trip with the expected 
 - [ ] F1 `docs(rutsa): the local prototype`: `docs/spec/rutsa.md` 1.1 describes two products
       (Rutsa, local, no sign-in; companies on obop use the `mileage` module with the obop phone
       app); phase 1 becomes the local prototype (the calendar reminder moves to stage 3); 5.5
-      without "Calls to obop" for Rutsa; what was run and what was not
+      without "Calls to obop" for Rutsa; what was run and what was not; the proposals below for
+      stage 2 go into the spec as PROPOSED, so they outlive this file
 - [ ] F2 `docs: add the Rutsa app to the README`
 - [ ] F3 delete this file and `CHECKS.md`, then "Ready for review"
+
+## Proposed for stage 2 (not built in this stage)
+
+**The GPS side of a manual add** (asked for on 2026-11-24; the manual add and the edit of a trip
+are D7 and D8): in stage 1 From and To of a typed trip or part are text and its km are the
+driver's.
+
+- A route or places picked on a map for a typed trip or part, instead of text.
+- Dragging the parts of a trip in its edit screen, if the sorting by time is not enough.
+- Typed km kept honest: besides the mark in the report (which says how many km were measured and
+  how many typed), the shortest route between the places the driver gives could be computed and a
+  large excess shown. That needs a routing service and a geocoder, so the network and addresses
+  leaving the phone, against the local-only idea of Rutsa: a privacy decision goes with it.
+- A company setting that forbids typed km, in the version for companies.
+
+**Statuses of a trip**: today a trip is open (recording or paused) or ended. A later state, such as
+a trip in a sent report, could lock it against an edit.
 
 ## Dependencies
 
@@ -383,3 +432,28 @@ D23).
   its own and the small one lies over the top left corner of the footer, out of the flow; the
   last trip line also says how long the trip took (a recorded one without its pauses, the sum of
   its segments; one added by hand from start to end, `tripDurationMs`).
+- 2026-11-24: asked for after D4: D7 gains its checks (future, order, midnight, overlap, km,
+  plausible speed, time zone), and a new step D8 "started late" adds a part typed by hand to the
+  open trip or a recorded one, before or after its recorded part (the open trip only before,
+  since it has no end yet), with three kinds of trip (recorded, manual, mixed). The same day,
+  after the questions of its fields and of typed km that can be inflated: "Started late" leaves
+  block D and stage 1; it is written down under "Proposed for stage 2" with what was decided,
+  its pitfalls and what is open, and goes into the spec at F1. Changed the same day: with the
+  model of D7 (times, km, From and To as required text, a note, the mark) the fields are known,
+  and the honesty of typed km is the same question for a trip and a part; so D7 and the old D8
+  become one "Manual add": D7 the window and a new trip, D8 the same window adding a part to an
+  existing trip (before or after) or to the start of the open one, stored at once; Current counts
+  the typed part in its km and its time; only the GPS side of a manual add and the statuses of a
+  trip stay proposed for stage 2. Changed again the same day: the window asks for the target
+  first (new trip, the current one, an existing one with Before or After) and then for the fields
+  of that target, instead of the data first and the targets that fit them after: the driver
+  types the times while seeing the trip, and a part touches its trip, so it needs only one time
+  (its start before, its end after). Final, the same day: no "Started late" and no adding to a
+  trip from the window. D7 "Manual add" adds a new trip only; D8 "Edit a trip" opens from the
+  trip's screen and shows the trip as its parts sorted by time (recorded parts that can only be
+  deleted, typed parts that can be added, changed and deleted, each with its own start and end;
+  gaps between parts are allowed and count for nothing); km and time are the sums of the parts;
+  the kind (recorded, manual, mixed) follows the parts, and the km measured and typed come from
+  them, so nothing else needs keeping for honesty; the list sorts itself when a changed part
+  loses the focus; only an ended trip can be edited, as often as the driver likes. Not in `docs/spec/rutsa.md` (BR-28 has only the trip added by
+  hand); the spec is brought in line at F1.
