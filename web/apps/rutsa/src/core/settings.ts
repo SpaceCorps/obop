@@ -17,18 +17,7 @@ export const DISCLOSURE_ACCEPTED = "disclosure_accepted_at";
  */
 export const NOTIFICATIONS_ASKED = "notifications_asked_at";
 
-/**
- * Whether Stop opens the window with the details of the trip (D4b): `on` or `off`. A compromise
- * while it is open how a trip is best ended (PLAN, "Proposed for stage 2").
- */
-export const STOP_DETAILS = "stop_details";
-
-export const SETTING_KEYS = [DISCLOSURE_ACCEPTED, NOTIFICATIONS_ASKED, STOP_DETAILS] as const;
-
-/** The switch "Details at Stop" from its stored value: on unless it was turned off. */
-export function stopDetailsOn(value: string | null): boolean {
-  return value !== "off";
-}
+export const SETTING_KEYS = [DISCLOSURE_ACCEPTED, NOTIFICATIONS_ASKED] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 export interface Settings {

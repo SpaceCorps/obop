@@ -97,7 +97,7 @@ Changing the flag needs a fresh bundle: delete `android\app\build\generated\asse
 - [ ] Closed for the notifications, then location off: the banner is back: "Location and notifications are off."
 - [ ] Location switched off in the quick settings without leaving the app: the banner comes within about 15 s
 - [ ] No banner on the screen of the permissions, which says the same in full
-- [ ] Trips over two days: the row History on Home says "Last trip: X km, Yesterday HH:MM" for a trip of yesterday (the sample trips of D5 give one)
+- [ ] Trips over two days: a trip of yesterday in Recent trips says "Yesterday" (the samples of D5 give one)
 - [ ] After midnight Today starts at 0.0 km, This month keeps the month (or at the start of a month, This month starts at 0.0 km)
 - [ ] The note about a replaced backup file cannot be made on Android (the app's backup is off); its open is tested by `open-db.test.ts`
 
@@ -114,7 +114,7 @@ The checks of D3 with a recording route went with D4, which records on the home 
 - [x] 2026-11-24 `smoke` Stop: "Stop the trip?"; Cancel keeps recording; Stop ends it: Current goes, Today and This month grow by its km (the same km Current showed), the last trip line shows it
 - [ ] Stop from a pause (the small Stop): asks, then ends the trip
 - [ ] 0.5 km, Pause, move 4 km, Resume, 0.5 km: Current shows about 1.0 km all along, and Stop stores the same
-- [ ] Right after Start, before the first position: "Waiting for the first position."
+- [x] 2026-11-25 (removed in D6: the note "Waiting for the first position" is gone; "No position arrived in the first minute" still warns)
 - [ ] A minute with no position (location off before Start is refused, so: `pm clear`, start in a place the emulator gives no fix, or wait after switching location off in the quick settings without leaving the app): "No position arrived in the first minute" with Restart recording
 - [ ] Location off in the quick settings while recording, 3 min: "The last position is 3 minutes old ..." with Restart recording; Restart recording with location off: "Location is switched off ..." with Fix it
 - [ ] Fix it: the screen of the permissions; location on, back: the recording goes on by itself, the warning is gone, home
@@ -127,22 +127,14 @@ The checks of D3 with a recording route went with D4, which records on the home 
 
 ## D4b. Details at Stop
 
+Removed during D6 (2026-11-25): Stop asks in a dialog again and the details are typed on the trip's
+screen; the window lives on there (`DetailsSheet`), its checks are in D6. The checks run before:
+
 - [x] 2026-11-24 `smoke` Stop opens the window "Stop the trip?" with the time and km of the trip, Name, From, To and Note, Cancel and Stop trip
 - [x] 2026-11-24 `smoke` Type a name, Stop trip: the trip ends, the last trip line starts with the name ("Last trip: Meeting, 0.5 km, 3 min, Today 17:17")
 - [x] 2026-11-24 `smoke` Cancel: the window closes and the trip goes on recording
 - [x] 2026-11-24 `smoke` The switch "Details at Stop" off: Stop ends the trip at once, with no window; force stop and open the app: the switch is still off
 - [x] 2026-11-24 `smoke` The app installed over the last build (migration 5) keeps every trip and its km
-- [ ] Stop trip with nothing typed: the trip ends, and the list shows it by its times
-- [ ] From and To with no name: the list shows it as "From → To"
-
-Since D5 the name is shown in the list only; the row History on Home says "Last trip: 0.5 km, Today 17:17".
-
-- [ ] The back button of Android in the window is Cancel
-- [ ] The keyboard does not hide the field being typed in, Note included (several lines)
-- [ ] A name of 100 characters is taken; the field takes no more (the limit is shown if one is pasted)
-- [ ] The small Stop of a paused trip opens the same window, and ends the trip with the details
-- [ ] The switch sits in the bottom left corner of the footer and moves neither button
-- [ ] The window opens empty each time, also after a Cancel with something typed
 
 ## D5. The list of trips
 
@@ -156,11 +148,71 @@ temporary button of D5 (removed before its commit); `pm clear` erases them.
 - [x] 2026-11-24 `smoke` Stop, then the list: no Current; the trip is the newest of Today, which counts it now
 - [x] 2026-11-24 `smoke` Tap an ended trip: the screen of the trip (until D6 the temporary "comes in a later step")
 - [x] 2026-11-24 `smoke` The days before today follow Today, newest first, each under its date with its trips and km ("Mon, Nov 23 · 3 trips · 50.3 km", no "Yesterday")
+
+Since D6 the open trip is not in History at all (no Current there); the home screen shows it.
+
 - [ ] Back of Android on the list and the Back button go to Home
-- [ ] `pm clear`, open the app: the row History says "No trips yet." with no number; the list says "No trips yet."
+- [ ] `pm clear`, open the app: the widget says "No trips yet.", Recent trips has no rows; History says "No trips yet."
 - [ ] A trip with From and To but no name: "From → To" as the title (the samples "Home → Office", "Home → Airport")
 - [ ] A day of another year has the year (tested in `trips-list.test.ts`; on the emulator only with its date set back)
 - [ ] The sample over midnight is under the day of its start (five days ago): "23:40–00:20"
 - [ ] Location off on the phone (`set-location-enabled false`): the list opens and shows the trips, with the banner at the top
 - [ ] The two samples added by hand show "Added by hand": "Uppsala → Stockholm" with its times and the mark under it; the other with its times as the title and only the mark under it
 - [ ] TalkBack: the header of a day is read as a heading, a trip as its title, times and km
+
+## D6. The screen of a trip
+
+- [ ] `smoke` The app installed over the last build (migration 7) keeps every trip; only the trips without a name have a number, counted again in the order of their start without gaps for the named ones ("Untitled trip 30" is followed by 31, whatever named trips lie between)
+- [ ] `smoke` History, tap "Site visit": the title is its name; under it From and To ("Not given" where empty); then Date "Sat, Nov 21", Time, Duration, Distance (the km of the list), Positions ("331 positions"), no Kind; then Note ("Empty" when there is none); Edit details at the left and Delete trip at the right of the footer
+- [ ] `smoke` An untitled trip, Edit details: Name holds "Untitled trip N"; Save without changing it: the trip stays "Untitled trip N" with the same number
+- [ ] `smoke` Untitled trips N-1 and N; name trip N ("Customer"), Save: its title is the name; Start and Stop a new trip with nothing typed: it is "Untitled trip N" (the number was given up)
+- [ ] `smoke` A trip named at Stop has no number; the next untitled trip counts on from the last untitled one
+- [ ] `smoke` A trip added by hand ("Uppsala → Stockholm"): Duration from its start to its end, no Positions; its note "Phone was off"
+- [ ] `smoke` Delete trip: "Delete this trip?" with Cancel and Delete; Cancel keeps it; Delete goes back to History without the trip, and the km of its day and of Today or This month on Home go down; the other trips keep their numbers
+- [ ] `smoke` A trip recorded with a pause (Start, a drive, Pause, wait 2 min, Resume, a drive, Stop): Duration leaves out the pause
+- [ ] A named trip, Edit details, clear the name, Save: "Untitled trip M", M one more than the highest number held
+- [ ] The sample over midnight: Time "23:40–00:20 (…)" with the day of its end
+- [ ] A long note (several lines, up to 1,000 characters): the Note block grows with it and the screen scrolls; the footer stays
+- [ ] Edit details: clear every field, Save: "Not given" for From and To, "Empty" for Note, the title "Untitled trip M"
+- [ ] Edit details: Cancel after typing, then Edit details again: the stored values (the default in Name for an untitled trip), not what was typed
+- [ ] Edit details: the back button of Android is Cancel; a name of 100 characters is taken; the keyboard does not hide the Note
+- [ ] The window of Stop (D4b) still opens empty, with "Stop the trip?", the time and km, and "Stop trip" in red
+- [ ] Back of Android and the Back button go to History
+- [ ] Location off on the phone: the screen opens, Edit details and Delete trip work
+- [ ] TalkBack: each row is read with its title and value; Delete trip and its dialog are read
+
+Since the second round of D6: no switch "Details at Stop" and no window at Stop; the open trip on Home is the current widget.
+
+- [ ] `smoke` Home with no trip open: no switch in the footer, only Start in the middle
+- [ ] `smoke` Start: the current widget, a white card: its name ("Untitled trip N", the next number) at the top left, a red dot and "Recording" at the top right, the big timer, its km at the bottom left and the start time ("22:42", no word) at the bottom right; no "Waiting for the first position" under it; Today and This month under it, then History
+- [ ] `smoke` Pause: a grey dot and "Paused", the timer stands; Resume: red and "Recording" again
+- [ ] `smoke` Tap the widget: the trip's screen; Time "22:42–now", Duration runs as the timer, Distance and Positions grow while a drive is fed; no Delete trip, Edit details across the footer
+- [ ] `smoke` On the open trip's screen, Edit details: the default name in Name; type a name, Save: the title shows it, and back on Home the widget too; the trip goes on recording; Stop: the trip keeps the name in History
+- [ ] `smoke` Stop: the dialog "Stop the trip?" "The trip ends here and is saved on this phone." with Cancel and Stop; Cancel keeps recording; Stop ends the trip; the small Stop of a paused trip asks the same
+- [ ] `smoke` History while a trip is open: no Current, only the days of the trips that ended
+- [ ] On the open trip's screen while it is paused: the Duration stands; Resume on Home, back to it: it runs again
+- [ ] A trip started before midnight and still open: the widget says "Yesterday 23:40" at the bottom right
+- [ ] Name the open trip, then clear the name: it gets the next free number
+- [ ] TalkBack: the widget is read as a button with its name, state, time, km and start
+- [ ] `smoke` No trip open: the widget stays and shows the last trip that ended: its name, a green dot and "Ended", its time without the pauses (not running), its km and when it started ("22:51", or "Yesterday 23:40", "Nov 18 08:30"); a tap opens its screen with Delete trip
+- [ ] `smoke` Stop: the widget turns from red "Recording" to green "Ended" with the same trip; Start: it shows the new trip
+- [ ] `pm clear`, open the app: the widget says "No trips yet." and does nothing on a tap
+- [ ] Delete the last trip from its screen: the widget shows the trip before it
+
+Since the third round of D6: the home screen stays mounted under the other screens; Recent trips replaces the row History.
+
+- [ ] `smoke` No trip open, Start (location already allowed): the widget changes its values in place, from green "Ended" to red "Recording", with no flash of "No trips yet." or of an empty card
+- [ ] `smoke` Open History, Back: Home is as it was, with no flash
+- [ ] `smoke` Under Today and This month: a grey header "Recent trips" with "Open history" at the right in the colour of Back; under it the newest trips that ended, as in History ("Meeting" over "Today 08:30–09:15", an untitled one "08:30–09:15" over "Yesterday", a date before that), as many as fit above the footer without scrolling; "Open history" opens History; a tap on a row opens the trip
+- [ ] `smoke` Start: the open trip is not in Recent trips; Stop: it comes at the top of Recent trips
+- [ ] A warning on Home (location off while recording, `set-location-enabled false`) or the status banner at the top: Recent trips shows fewer rows, and the screen does not scroll; when it goes, the rows come back
+- [ ] With large text (Settings, Display, Font size at the largest): the rows still fit above the footer (at least one is shown)
+
+Since the fourth round of D6: Start without the screen of the permissions when nothing stands in the way; a smaller round button; the small button at the right.
+
+- [ ] `smoke` Start with location allowed: no "How Rutsa uses your location / Loading" for a moment; the widget turns red at once, Start shows that it works while the trip starts
+- [ ] `smoke` The round button is smaller (Start, Stop, Resume); Pause, and Stop while paused, stand at the top right of the footer, mirrored; nothing moves when the small button comes, goes or changes
+- [ ] `smoke` Recent trips shows one row more than before (6 on the emulator), with at least the space between the title Rutsa and the widget between the last row and the footer
+- [ ] `pm clear`, Start: the explanation, as before (the screen of the permissions still comes when something stands in the way)
+- [ ] Location off on the phone, Start: the screen "Location is switched off on this phone", as before
+- [ ] Notifications not asked yet (`pm clear`, then through the explanation once; or a fresh install): the dialog of the notifications comes once, at a Start

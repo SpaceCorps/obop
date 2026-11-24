@@ -196,8 +196,10 @@ Components from `@obop/ui-native`.
       The category (work, private, commute) joins this window in stage 2, with the classification
 - [x] D5 `feat(rutsa): trips list`: trips by day; each trip shows its kind (a trip added by hand
       is marked; mixed comes with D8) and its name, else From → To, else its times
-- [ ] D6 `feat(rutsa): trip detail`: times, km, duration (without the pauses), its kind, delete;
-      the way to its edit screen comes with D8
+- [x] D6 `feat(rutsa): trip detail`: its name ("Untitled trip N" for a trip without one, numbered
+      among the untitled trips), times, km, duration (without the pauses), the positions stored
+      and those the distance left out, its details (From, To, Note) and their change in the window
+      of Stop (promised by D4b), delete; the way to its edit screen comes with D8
 - [ ] D7 `feat(rutsa): manual add`: a grey underlined "Manual add" on the home screen (under the
       data of Current while a trip is open, under Start and the last trip otherwise) opens a
       window over the screen (a modal, its content scrolls, Cancel and Done in its footer) that
@@ -274,15 +276,14 @@ driver's.
 **Statuses of a trip**: today a trip is open (recording or paused) or ended. A later state, such as
 a trip in a sent report, could lock it against an edit.
 
-**How a trip is ended** (an open question; the switch "Details at Stop" of D4b is the compromise
-in the meantime): with a name and details or without, at once or with a step that asks for them.
-Its answer decides the switch: it stays a setting (then it moves to the settings screen, with the
-language and the app lock of BR-35), or one way wins and the switch goes. It belongs with the
-classification of stage 2 (BR-4, US-3, US-4) and with the end of a trip from its notification
-(BR-27) and the automatic stop of stage 4, which end a trip without the window.
+**How a trip is ended** (answered for stage 1 on 2026-11-25, during D6): Stop asks in a dialog and
+ends the trip; the details are typed afterwards on the trip's screen. The window of D4b and its
+switch went. Asking for a category at Stop may come back with the classification of stage 2 (BR-4,
+US-3, US-4), together with the end of a trip from its notification (BR-27) and the automatic stop
+of stage 4.
 
 **Joining two trips** that follow each other, in the edit of a trip (D8): for a trip split in two by
-a Stop pressed by mistake while the switch is off.
+a Stop pressed by mistake.
 
 ## Dependencies
 
@@ -514,3 +515,71 @@ D23).
   sample trips on the five days before today to the emulator's database (recorded ones through
   Start, positions and Stop of the store, two added by hand), so the days could be looked at; it
   was used once and removed before the commit, and the trips stay in that database for the checks.
+- 2026-11-24: D6 as built: `ui/screens/TripDetail.tsx` (route `trip`) has the name, else From →
+  To, else "Trip" as its title; rows Date (`Mon, Nov 23`, the year for another year), Time
+  (`08:10–08:42`, an end on another day with its day: `23:40–00:20 (Sat, Nov 21)`,
+  `ui/trip-view.ts`), Duration (`tripDurationMs`: a recorded trip without its pauses), Distance,
+  Kind (Recorded or Added by hand) and, for a recorded trip, Positions (`312 positions, 4 left
+out`: `progress` gains `dropped`, the positions the distance leaves out for their accuracy or
+  speed, the local stand-in for the server's checks in `mileage-app`); then Name, From, To and
+  Note ("Not given" when empty), Edit details and, in the footer, Delete trip after a system
+  dialog. Edit details opens the window of Stop (`ui/StopSheet.tsx` becomes `ui/DetailsSheet.tsx`,
+  given its title, its first values and its action) with Save; the store gains `updateDetails`
+  (an ended trip only, all four details at once, the rules of `details.ts`), and
+  `native/actions.ts` `updateTripDetails` and `deleteTrip`, in the queue of the actions. A trip
+  that is not there says so; an open one sends the screen home. Not in `mileage-app`'s screen: the
+  purpose (stage 2), submit and the server's states; its Discard with a reason is a Delete here.
+  Tried on the emulator, then changed: a trip without a name is called "Untitled trip 12" on its
+  screen, by a number each trip gets once when it is made (migration 6: the column `number`, one
+  more than the highest, unique; the trips of version 5 numbered in the order of their start), so
+  it keeps its name when others are added or deleted; the default is not stored, so a name cleared
+  and saved shows it again (`tripName`). The screen is three blocks: From and To ("Not given"),
+  then Date to Positions, then Note ("Empty"), which grows with its text; the Name row is gone (the
+  title says it); Edit details and Delete trip share the footer, side by side. The list of D5 keeps
+  its titles (name, else From → To, else the times). Tried again, then changed: the untitled trips
+  count among themselves ("Untitled trip 30" is followed by 31, whatever named trips lie between):
+  migration 7 takes the number from the trips with a name and numbers the untitled ones again in
+  the order of their start (migration 6 had run on the emulator); a trip named at Stop or later
+  gives its number up, and a new untitled trip, or one whose name is cleared, gets one more than
+  the highest number held (`writeDetails` in `sql-store.ts`), so the last untitled number comes
+  back when its trip is named. The field Name of the window opens with the default of an untitled
+  trip, and the default left as it is stays no name (`typedName`). The row Kind is gone (the list
+  marks a trip added by hand); Positions stays.
+- 2026-11-25: asked for while trying D6, and built in it: the window of D4b and its switch "Details
+  at Stop" go (with the setting `stop_details` and its hook); Stop asks in a dialog of the system
+  again, as in D4, and the details are typed on the
+  trip's screen only (the window is `DetailsSheet` there; the store still takes details at Stop).
+  History leaves the open trip out (no Current; it is not history yet), and the number on the row
+  History of the home screen counts only the trips that ended. The open trip on the home screen
+  shows, chosen from three layouts: its name ("Untitled trip 33") at the left and a red dot and
+  Recording (grey and Paused) at the right, the big timer, then its km at the left and "Started
+  22:23" at the right ("Started Yesterday 23:40" for a trip begun before today). The list keeps
+  the times as the title of an untitled trip (chosen over "Untitled trip N"). The sentences of the
+  window are `details.*`, and those of the switch, of the window at Stop and of Current in the
+  list left the catalogue.
+  Then: the open trip is the current widget (`ui/CurrentWidget.tsx`), one white card like the row
+  History, with the name at the top left, the state at the top right, the timer, the km at the
+  bottom left and the start time alone at the bottom right ("Started" went). A tap opens the
+  trip's screen, which now shows the open trip too: Time "22:42–now", Duration as the timer, and
+  Distance and Positions from the count, read again as positions are stored (`useProgress`); it
+  has no Delete (Stop is on the home screen). The open trip can be named there: `updateDetails`
+  takes any trip, so the name, with its number given up, goes on through Stop.
+  Tried, then changed: the note "Waiting for the first position" goes (the warning after a minute
+  without a position stays); the current widget is always there: with no trip open it shows the
+  last trip that ended, with a green dot and Ended, its time without the pauses (standing) and when
+  it started, and opens its screen; before the first trip it says "No trips yet.".
+  Tried, then changed: the home screen stays mounted under the other screens (hidden while one
+  is open, `App.tsx`), so a Start through the route of the permissions, or a Back from History,
+  finds it as it was, and the widget changes its values in place instead of flashing empty. The
+  row History gives way to Recent trips (`ui/RecentTrips.tsx`): a grey header with "Open history"
+  in the colour of Back at its right, which opens History, and the newest trips that ended as in
+  History with the day before the times (`recentLine`), as many as fit above the footer without
+  scrolling, measured on the screen and again after every render (at least one).
+  Tried, then changed: Start no longer passes the screen of the permissions when nothing stands in
+  the way (it showed "How Rutsa uses your location" with Loading for a moment): `startWhenReady`
+  (`native/start.ts`) reads the explanation and the access, asks the notifications as the screen
+  does (`notificationsAtStart`, now shared with it) and starts the trip; the screen comes only
+  when the explanation is unread, location is not allowed or the phone refuses to record. The round
+  button is the app's own (`ui/RoundButton.tsx`, 144 instead of the shared 176 of `Button
+size="big"`), so one more recent trip fits; the small button (Pause, Stop while paused) stands
+  at the top right of the footer.

@@ -40,6 +40,13 @@ export interface Trip {
   from: string | null;
   to: string | null;
   note: string | null;
+  /**
+   * A trip without a name is called by its number ("Untitled trip 12", D6): one more than the
+   * highest number held when it was made, or when its name was cleared. A trip with a name has
+   * none (`null`), so the untitled trips count on without gaps for the named ones. The number of an
+   * untitled trip does not change when others are added, named or deleted.
+   */
+  number: number | null;
 }
 
 /**

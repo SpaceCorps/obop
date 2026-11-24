@@ -164,6 +164,50 @@ export const MIGRATIONS: readonly Migration[] = [
       await tx.exec("ALTER TABLE trip ADD COLUMN name TEXT");
     },
   },
+  {
+    version: 6,
+    description: "the number of a trip",
+    up: async (tx) => {
+      // A trip without a name is called by its number ("Untitled trip 12", D6). The number is
+      // given once, when the trip is made, one more than the highest, and never changes, so a trip
+      // keeps its name when others are added or deleted. The trips before this version are
+      // numbered in the order of their start.
+      await tx.exec(
+        "ALTER TABLE trip ADD COLUMN number INTEGER CHECK (number IS NULL OR number >= 1)",
+      );
+      await tx.exec(`
+        UPDATE trip SET number = (
+          SELECT COUNT(*) FROM trip AS earlier
+          WHERE earlier.started_at < trip.started_at
+             OR (earlier.started_at = trip.started_at AND earlier.id <= trip.id)
+        )
+      `);
+      await tx.exec("CREATE UNIQUE INDEX trip_number ON trip (number)");
+    },
+  },
+  {
+    version: 7,
+    description: "numbers only for trips without a name",
+    up: async (tx) => {
+      // The number of version 6 counted every trip; the driver counts the untitled ones only
+      // ("Untitled trip 31" after 30, whatever trips with a name lie between). A trip that gets a
+      // name gives its number up; a new trip without one, or one whose name is cleared, gets one
+      // more than the highest number held (`sql-store.ts`). The untitled trips of version 6 are
+      // numbered again in the order of their start.
+      await tx.exec("DROP INDEX IF EXISTS trip_number");
+      await tx.exec("UPDATE trip SET number = NULL WHERE name IS NOT NULL");
+      await tx.exec(`
+        UPDATE trip SET number = (
+          SELECT COUNT(*) FROM trip AS earlier
+          WHERE earlier.name IS NULL
+            AND (earlier.started_at < trip.started_at
+              OR (earlier.started_at = trip.started_at AND earlier.id <= trip.id))
+        )
+        WHERE name IS NULL
+      `);
+      await tx.exec("CREATE UNIQUE INDEX trip_number ON trip (number) WHERE number IS NOT NULL");
+    },
+  },
 ];
 
 /** The version of the tables this build works with. */

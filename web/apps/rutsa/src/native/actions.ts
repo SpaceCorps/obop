@@ -1,5 +1,6 @@
 import type { TripDetails } from "../core/details.ts";
 import { createRecording, type Ensured, type Recording } from "../core/recording.ts";
+import type { TripRepository } from "../core/repository.ts";
 import { createSerial } from "../core/serial.ts";
 import type { Trip } from "../core/types.ts";
 import { emitChange } from "./bus.ts";
@@ -51,6 +52,27 @@ export function resumeTrip(tripId: string): Promise<Trip> {
 /** Ends the trip, with the details typed at Stop when given (D4b). */
 export function stopTrip(tripId: string, details?: TripDetails): Promise<Trip> {
   return run((r) => r.stop(tripId, details));
+}
+
+/** A change of the store alone, in the same queue, after which the open screens are told. */
+function change<T>(work: (store: TripRepository) => Promise<T>): Promise<T> {
+  return serial(async () => {
+    try {
+      return await work(await getStore());
+    } finally {
+      emitChange();
+    }
+  });
+}
+
+/** Changes the details of a trip that ended, from its screen (D6). */
+export function updateTripDetails(tripId: string, details: TripDetails): Promise<Trip> {
+  return change((store) => store.updateDetails(tripId, details));
+}
+
+/** Deletes a trip that ended, with its positions, from its screen (D6). */
+export function deleteTrip(tripId: string): Promise<void> {
+  return change((store) => store.deleteTrip(tripId));
 }
 
 /**

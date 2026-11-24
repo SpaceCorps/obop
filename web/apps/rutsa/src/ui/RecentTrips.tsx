@@ -1,0 +1,102 @@
+import { Row, Text, useTheme } from "@obop/ui-native";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { Pressable, View, type HostInstance } from "react-native";
+import { t } from "../i18n/index.ts";
+import type { TripLine } from "./trips-list.ts";
+
+/** The rows shown before the room under the list has been measured. */
+const FIRST_GUESS = 3;
+
+/**
+ * The recent trips of the home screen: a grey header "Recent trips" with "Open history" at its
+ * right (the colour of Back), which opens History, and under it the newest trips that ended, as in
+ * History, as many as fit between the header and the footer of the screen without scrolling (at
+ * least one). The room is measured on the screen (`measureInWindow`) against the top of the
+ * footer, again after every render (the clock of the home screen renders it every second while a
+ * trip records, every 30 s otherwise) and on every layout of the list, so a warning or a banner
+ * that comes or goes changes the number of rows. A tap on a row opens the trip's screen.
+ */
+export function RecentTrips({
+  lines,
+  footerRef,
+  onOpen,
+  onHistory,
+}: {
+  /** All the trips that ended, newest first; the rows that fit are taken from the start. */
+  lines: readonly TripLine[];
+  /** The content of the footer of the screen: the list ends above its frame. */
+  footerRef: RefObject<HostInstance | null>;
+  onOpen: (tripId: string) => void;
+  onHistory: () => void;
+}) {
+  const theme = useTheme();
+  const listRef = useRef<HostInstance>(null);
+  const [rowHeight, setRowHeight] = useState(0);
+  const [fit, setFit] = useState(FIRST_GUESS);
+
+  const measure = useCallback(() => {
+    const list = listRef.current;
+    const footer = footerRef.current;
+    if (!list || !footer || rowHeight <= 0) return;
+    list.measureInWindow((_x, top) => {
+      footer.measureInWindow((_fx, footerContentTop, _width, footerHeight) => {
+        // While another screen lies over the home screen it is hidden and measures nothing; the
+        // number of rows stays as it was until it is shown again.
+        if (footerHeight <= 0) return;
+        // The footer's frame starts its padding and its top border above its content, and the
+        // body of the screen keeps its padding at the bottom.
+        const room = footerContentTop - 1 - 2 * theme.space[4] - top;
+        setFit(Math.max(1, Math.floor(room / rowHeight)));
+      });
+    });
+  }, [footerRef, rowHeight, theme]);
+
+  useEffect(() => {
+    measure();
+  });
+
+  return (
+    <View style={{ gap: theme.space[2] }} testID="recent">
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={{ flex: 1 }}>
+          <Text variant="label" tone="muted" accessibilityRole="header">
+            {t("home.recent")}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onHistory}
+          hitSlop={12}
+          testID="open-history"
+        >
+          <Text variant="label" tone="accent">
+            {t("home.history")}
+          </Text>
+        </Pressable>
+      </View>
+      <View ref={listRef} onLayout={measure} testID="recent-list">
+        {lines.slice(0, fit).map((line, i) => (
+          <View
+            key={line.id}
+            onLayout={
+              i === 0
+                ? (e) => {
+                    const height = e.nativeEvent.layout.height;
+                    if (height > 0 && height !== rowHeight) setRowHeight(height);
+                  }
+                : undefined
+            }
+          >
+            <Row
+              title={line.title}
+              subtitle={line.subtitle ?? undefined}
+              value={line.km}
+              onPress={() => onOpen(line.id)}
+              testID={`recent-${line.id}`}
+            />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}

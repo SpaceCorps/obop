@@ -10,7 +10,7 @@ import {
 import { migrate } from "./schema.ts";
 import type { SqlDb } from "./sql.ts";
 import { createSqlStore } from "./sql-store.ts";
-import type { NewFix } from "./types.ts";
+import type { NewFix, Trip } from "./types.ts";
 
 const T0 = Date.parse("2026-11-18T09:00:00Z");
 const MIN = 60_000;
@@ -55,6 +55,7 @@ describe("starting and recording", () => {
       from: null,
       to: null,
       note: null,
+      number: 1,
     });
     expect(await store.activeTrip()).toEqual(trip);
   });
@@ -230,6 +231,7 @@ describe("the count while a trip records", () => {
       closedMs: 0,
       distanceM: 0,
       points: 0,
+      dropped: 0,
       lastFixAt: null,
       signal: null,
     });
@@ -320,6 +322,144 @@ describe("the details typed at Stop", () => {
     await store.pauseTrip(trip.id, T0 + MIN);
     const ended = await store.stopTrip(trip.id, T0 + 2 * MIN, { name: "Lunch run" });
     expect(ended).toMatchObject({ state: "ended", name: "Lunch run" });
+  });
+});
+
+describe("the details changed on the trip's screen", () => {
+  test("replace all four at once, trimmed; an empty field is cleared; nothing else changes", async () => {
+    const trip = await store.startTrip(T0);
+    await store.appendFixes(trip.id, drive(21, 5000, 10));
+    const ended = await store.stopTrip(trip.id, T0 + 2 * MIN, {
+      name: "Meeting",
+      from: "Stockholm",
+      note: "Samples",
+    });
+    const changed = await store.updateDetails(trip.id, {
+      name: " Customer visit ",
+      from: "",
+      to: "Uppsala",
+      note: "  ",
+    });
+    expect(changed).toEqual({
+      ...ended,
+      name: "Customer visit",
+      from: null,
+      to: "Uppsala",
+      note: null,
+    });
+    expect(await store.getTrip(trip.id)).toEqual(changed);
+  });
+
+  test("a trip added by hand takes them too", async () => {
+    const trip = await store.addManualTrip({
+      startedAt: T0,
+      endedAt: T0 + 30 * MIN,
+      distanceM: 12_400,
+      from: "Office",
+    });
+    const changed = await store.updateDetails(trip.id, { name: "Client", from: "Office" });
+    expect(changed).toMatchObject({ name: "Client", from: "Office", to: null, distanceM: 12_400 });
+  });
+
+  test("a detail that is too long changes nothing", async () => {
+    const trip = await store.startTrip(T0);
+    const ended = await store.stopTrip(trip.id, T0 + MIN, { name: "Meeting" });
+    await expect(
+      store.updateDetails(trip.id, { name: "Lunch", note: "x".repeat(1001) }),
+    ).rejects.toThrow(DetailsTooLong);
+    expect(await store.getTrip(trip.id)).toEqual(ended);
+  });
+
+  test("the open trip takes them while it records and while it is paused; it goes on", async () => {
+    const trip = await store.startTrip(T0);
+    const named = await store.updateDetails(trip.id, { name: "Customer" });
+    expect(named).toMatchObject({ state: "recording", name: "Customer", number: null });
+    await store.pauseTrip(trip.id, T0 + MIN);
+    const paused = await store.updateDetails(trip.id, { name: "Customer", note: "Samples" });
+    expect(paused).toMatchObject({ state: "paused", note: "Samples" });
+    await store.resumeTrip(trip.id, T0 + 2 * MIN);
+    expect(await store.stopTrip(trip.id, T0 + 3 * MIN)).toMatchObject({
+      state: "ended",
+      name: "Customer",
+      note: "Samples",
+    });
+  });
+
+  test("a trip that is not there is refused", async () => {
+    await expect(store.updateDetails("nobody", { name: "x" })).rejects.toThrow(TripNotFound);
+  });
+});
+
+describe("the number of a trip", () => {
+  test("1 for the first, one more for each new trip, recorded or added by hand", async () => {
+    const first = await store.startTrip(T0);
+    await store.stopTrip(first.id, T0 + MIN);
+    const manual = await store.addManualTrip({
+      startedAt: T0 - 60 * MIN,
+      endedAt: T0 - 30 * MIN,
+      distanceM: 1000,
+    });
+    const third = await store.startTrip(T0 + 10 * MIN);
+    expect([first.number, manual.number, third.number]).toEqual([1, 2, 3]);
+  });
+
+  /** Three untitled trips, one after another, numbered 1, 2, 3. */
+  async function threeUntitled(): Promise<Trip[]> {
+    const trips: Trip[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const trip = await store.startTrip(T0 + i * 10 * MIN);
+      trips.push(await store.stopTrip(trip.id, T0 + i * 10 * MIN + MIN));
+    }
+    return trips;
+  }
+
+  test("a trip named at Stop has none, and the next untitled one counts on without a gap", async () => {
+    await threeUntitled();
+    const named = await store.startTrip(T0 + 40 * MIN);
+    expect((await store.stopTrip(named.id, T0 + 41 * MIN, { name: "Meeting" })).number).toBeNull();
+    const next = await store.startTrip(T0 + 50 * MIN);
+    expect(next.number).toBe(4);
+  });
+
+  test("a trip that gets a name gives its number up: the next untitled one takes it", async () => {
+    const [, , third] = await threeUntitled();
+    const renamed = await store.updateDetails(third?.id ?? "", { name: "Customer" });
+    expect(renamed.number).toBeNull();
+    expect((await store.startTrip(T0 + 50 * MIN)).number).toBe(3);
+  });
+
+  test("a trip whose name is cleared gets the next number", async () => {
+    const [first] = await threeUntitled();
+    await store.updateDetails(first?.id ?? "", { name: "Customer" });
+    expect((await store.updateDetails(first?.id ?? "", { name: " " })).number).toBe(4);
+  });
+
+  test("other details keep the number", async () => {
+    const [first] = await threeUntitled();
+    const changed = await store.updateDetails(first?.id ?? "", { from: "Office", note: "x" });
+    expect(changed.number).toBe(1);
+  });
+
+  test("the others keep theirs when one is deleted or named", async () => {
+    const [first, second, third] = await threeUntitled();
+    await store.deleteTrip(first?.id ?? "");
+    await store.updateDetails(second?.id ?? "", { name: "Customer" });
+    expect((await store.getTrip(third?.id ?? ""))?.number).toBe(3);
+  });
+});
+
+describe("the positions left out of the distance", () => {
+  test("are counted next to the stored ones", async () => {
+    const trip = await store.startTrip(T0);
+    const fixes = drive(21, 5000, 10);
+    // One position far off the line: the speed it would need is impossible.
+    const jump = fixes[10];
+    if (jump) fixes[10] = { ...jump, lat: jump.lat + 0.05 };
+    await store.appendFixes(trip.id, fixes);
+    await store.stopTrip(trip.id, T0 + 2 * MIN);
+    const count = await store.progress(trip.id);
+    expect(count?.points).toBe(21);
+    expect(count?.dropped).toBe(1);
   });
 });
 

@@ -8,11 +8,10 @@ import type { Nav } from "../router.ts";
 import { tripSections, type ListWords } from "../trips-list.ts";
 
 /**
- * The trips on this phone, called History (D5): the open trip on top under Current, then the trips that ended by
- * the day of their start, newest first, each day with its number of trips and its km; each trip
- * with its name (else From → To, else its times), its km and the mark of a trip added by hand. A
- * trip that ended opens its screen; the open trip leads to the home screen, where it is recorded.
- * Reachable without location (BR-36, US-18 AC1).
+ * The trips on this phone that ended, called History (D5), by the day of their start, newest
+ * first, each day with its number of trips and its km; each trip with its name (else From → To,
+ * else its times), its km and the mark of a trip added by hand, and a tap opens its screen. The
+ * open trip is not history yet: the home screen shows it. Reachable without location (BR-36, US-18 AC1).
  *
  * After `Trips` of `mileage-app` (`src/ui/screens/Trips.tsx`), by day, without its server.
  *
@@ -25,12 +24,9 @@ export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
   // Today follows the clock; a minute is close enough for the names of the days.
   const now = useNow(60_000);
   const words: ListWords = {
-    current: t("home.current"),
     today: t("day.today"),
     trips: (count) => tp("trips.count", count),
     manual: t("trips.manual"),
-    recording: t("trips.recording"),
-    paused: t("trips.paused"),
   };
   const sections = tripSections(trips, now, LANGUAGE, phoneTimeZone(), words);
 
@@ -52,9 +48,8 @@ export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
                 key={line.id}
                 title={line.title}
                 subtitle={line.subtitle ?? undefined}
-                value={line.km ?? undefined}
-                hint={line.open ? t("trips.open.hint") : undefined}
-                onPress={() => (line.open ? nav.home() : nav.push({ name: "trip", id: line.id }))}
+                value={line.km}
+                onPress={() => nav.push({ name: "trip", id: line.id })}
                 testID={`trip-${line.id}`}
               />
             ))}

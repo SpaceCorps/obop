@@ -26,6 +26,7 @@ const trip = (
     from: null,
     to: null,
     note: null,
+    number: 1,
   };
 };
 

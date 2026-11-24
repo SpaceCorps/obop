@@ -65,6 +65,11 @@ export interface TripProgress {
   distanceM: number;
   /** Stored positions of the whole trip. */
   points: number;
+  /**
+   * Of those, the ones the distance leaves out for their accuracy or the speed they would need
+   * (the same rule as Stop); the screen of a trip (D6) says it next to `points`.
+   */
+  dropped: number;
   /** When the newest position of the current segment was taken; `null` when it has none. */
   lastFixAt: number | null;
   /** Why the distance may stay at 0 km (`signal.ts`); `null` when there is nothing to say. */
@@ -102,6 +107,7 @@ export function progressOf(
     closedMs,
     distanceM: analysis.distanceM,
     points: points.length,
+    dropped: analysis.skippedAccuracy + analysis.skippedSpeed,
     lastFixAt: lastFixOfSegment(points, trip.segment),
     signal: signalNote({
       ...analysis,

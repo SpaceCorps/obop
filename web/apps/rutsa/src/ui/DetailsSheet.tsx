@@ -4,28 +4,38 @@ import { KeyboardAvoidingView, Modal, Platform, ScrollView, View } from "react-n
 import { DETAIL_MAX, detailsProblems, type TripDetails } from "../core/details.ts";
 import { t } from "../i18n/index.ts";
 
+const EMPTY: TripDetails = { name: null, from: null, to: null, note: null };
+
 /**
- * The window of Stop (D4b): over the home screen, from the bottom, with the details of the trip,
- * all optional (Name, From, To, Note), and Cancel or "Stop trip". It replaces the confirmation of
- * Stop: Cancel keeps recording, "Stop trip" ends the trip with what was typed, also with nothing.
- * The back button of Android is Cancel. Its fields are empty each time it opens.
+ * The window of the details of a trip, over the screen, from the bottom: Name, From, To and Note,
+ * all optional, and Cancel or the action. The screen of a trip opens it to change them (D6: "Trip
+ * details", the fields as stored, Save). Made for Stop in D4b, which no longer opens it: a trip
+ * ends after a dialog and is named afterwards. The back button of Android is Cancel. Its fields are
+ * set from `initial` each time it opens, so what was typed before a Cancel is not kept.
  */
-export function StopSheet({
+export function DetailsSheet({
   visible,
-  summary,
+  title,
+  initial = EMPTY,
+  confirmLabel,
   busy,
-  failed,
+  failedText,
   onCancel,
-  onStop,
+  onConfirm,
+  testID,
 }: {
   visible: boolean;
-  /** The trip as Current shows it: its time and km. */
-  summary: string;
+  title: string;
+  /** The fields when the window opens; empty when not given. */
+  initial?: TripDetails;
+  confirmLabel: string;
   busy: boolean;
-  /** The last "Stop trip" failed; the window stays open with what was typed. */
-  failed: boolean;
+  /** The last action failed: said under the fields, and the window stays open with what was typed. */
+  failedText: string | null;
   onCancel: () => void;
-  onStop: (details: TripDetails) => void;
+  onConfirm: (details: TripDetails) => void;
+  /** The window's own test id; its fields and buttons are `details-name` ... `details-confirm`. */
+  testID: string;
 }) {
   const theme = useTheme();
   const insets = useInsets();
@@ -36,16 +46,19 @@ export function StopSheet({
 
   useEffect(() => {
     if (!visible) return;
-    setName("");
-    setFrom("");
-    setTo("");
-    setNote("");
+    setName(initial.name ?? "");
+    setFrom(initial.from ?? "");
+    setTo(initial.to ?? "");
+    setNote(initial.note ?? "");
+    // Only when it opens: a change of `initial` while it is open (the list read again) keeps what
+    // is being typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const details: TripDetails = { name, from, to, note };
   const problems = detailsProblems(details);
   const tooLong = (field: keyof typeof DETAIL_MAX) =>
-    problems.includes(field) ? t("stop.too_long", { max: DETAIL_MAX[field] }) : undefined;
+    problems.includes(field) ? t("details.too_long", { max: DETAIL_MAX[field] }) : undefined;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
@@ -54,7 +67,7 @@ export function StopSheet({
         style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" }}
       >
         <View
-          testID="stop-sheet"
+          testID={testID}
           style={{
             maxHeight: "90%",
             backgroundColor: theme.c.surface,
@@ -67,47 +80,45 @@ export function StopSheet({
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ gap: theme.space[3], padding: theme.space[4] }}
           >
-            <Text variant="title">{t("stop.title")}</Text>
-            <Text tone="muted">{summary}</Text>
-            <Text tone="muted">{t("stop.hint")}</Text>
+            <Text variant="title">{title}</Text>
             <Field
-              label={t("stop.name")}
+              label={t("details.name")}
               value={name}
               onChangeText={setName}
               maxLength={DETAIL_MAX.name}
               error={tooLong("name")}
-              testID="stop-name"
+              testID="details-name"
             />
             <Field
-              label={t("stop.from")}
+              label={t("details.from")}
               value={from}
               onChangeText={setFrom}
               maxLength={DETAIL_MAX.from}
               error={tooLong("from")}
-              testID="stop-from"
+              testID="details-from"
             />
             <Field
-              label={t("stop.to")}
+              label={t("details.to")}
               value={to}
               onChangeText={setTo}
               maxLength={DETAIL_MAX.to}
               error={tooLong("to")}
-              testID="stop-to"
+              testID="details-to"
             />
             <Field
-              label={t("stop.note")}
+              label={t("details.note")}
               value={note}
               onChangeText={setNote}
               multiline
               maxLength={DETAIL_MAX.note}
               error={tooLong("note")}
-              testID="stop-note"
+              testID="details-note"
             />
-            {failed ? (
-              <Text tone="danger" testID="stop-failed">
-                {t("stop.failed")}
+            {failedText === null ? null : (
+              <Text tone="danger" testID="details-failed">
+                {failedText}
               </Text>
-            ) : null}
+            )}
           </ScrollView>
           <View
             style={{
@@ -123,17 +134,16 @@ export function StopSheet({
                 variant="secondary"
                 disabled={busy}
                 onPress={onCancel}
-                testID="stop-cancel"
+                testID="details-cancel"
               />
             </View>
             <View style={{ flex: 1 }}>
               <Button
-                label={t("stop.confirm")}
-                variant="danger"
+                label={confirmLabel}
                 busy={busy}
                 disabled={problems.length > 0}
-                onPress={() => onStop(details)}
-                testID="stop-confirm"
+                onPress={() => onConfirm(details)}
+                testID="details-confirm"
               />
             </View>
           </View>

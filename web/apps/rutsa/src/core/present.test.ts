@@ -34,6 +34,7 @@ const trip = (startIso: string, distanceM: number | null, minutes = 30): Trip =>
     from: null,
     to: null,
     note: null,
+    number: 1,
   };
 };
 

@@ -1,4 +1,4 @@
-import { cleanDetails, cleanText } from "./details.ts";
+import { cleanDetails, cleanText, type StoredDetails } from "./details.ts";
 import { analyseRecorded, progressOf, type SegmentTimes } from "./progress.ts";
 import {
   TripAlreadyActive,
@@ -49,6 +49,7 @@ interface TripRow {
   from_text: string | null;
   to_text: string | null;
   note: string | null;
+  number: number | null;
 }
 
 interface PointRow {
@@ -65,7 +66,23 @@ interface PointRow {
 const TRIP_COLUMNS = `id, state, source, started_at, ended_at, distance_m, segment,
   (SELECT s.started_at FROM segment s WHERE s.trip_id = trip.id AND s.segment = trip.segment)
     AS segment_started_at,
-  name, from_text, to_text, note`;
+  name, from_text, to_text, note, number`;
+/** The number of a new trip without a name: one more than the highest held (migrations 6 and 7). */
+const NEXT_NUMBER = "SELECT COALESCE(MAX(number), 0) + 1 FROM trip";
+
+/**
+ * The details of a trip, with its number (migration 7): a trip with a name has none, so a name
+ * gives the number up; a trip without one keeps its number, or gets the next one when it had none
+ * (its name was cleared).
+ */
+function writeDetails(tx: SqlTx, tripId: string, typed: StoredDetails): Promise<void> {
+  return tx.run(
+    `UPDATE trip SET name = ?, from_text = ?, to_text = ?, note = ?,
+      number = CASE WHEN ? IS NOT NULL THEN NULL ELSE COALESCE(number, (${NEXT_NUMBER})) END
+    WHERE id = ?`,
+    [typed.name, typed.from, typed.to, typed.note, typed.name, tripId],
+  );
+}
 const ACTIVE = "state IN ('recording', 'paused')";
 
 function isState(value: string): value is TripState {
@@ -94,6 +111,7 @@ function toTrip(row: TripRow): Trip {
     from: row.from_text,
     to: row.to_text,
     note: row.note,
+    number: row.number,
   };
 }
 
@@ -161,7 +179,8 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
         if (active) throw new TripAlreadyActive(active.id);
         const id = options.newId();
         await tx.run(
-          "INSERT INTO trip (id, state, source, started_at, segment) VALUES (?, 'recording', 'recorded', ?, 1)",
+          `INSERT INTO trip (id, state, source, started_at, segment, number)
+            VALUES (?, 'recording', 'recorded', ?, 1, (${NEXT_NUMBER}))`,
           [id, at],
         );
         await tx.run("INSERT INTO segment (trip_id, segment, started_at) VALUES (?, 1, ?)", [
@@ -252,11 +271,17 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
         await endSegment(tx, trip, endedAt);
         // The details typed at Stop, in the same transaction: a trip is never ended without them.
         if (typed !== null) {
-          await tx.run(
-            "UPDATE trip SET name = ?, from_text = ?, to_text = ?, note = ? WHERE id = ?",
-            [typed.name, typed.from, typed.to, typed.note, tripId],
-          );
+          await writeDetails(tx, tripId, typed);
         }
+        return mustRead(tx, tripId);
+      }),
+
+    updateDetails: (tripId, details) =>
+      db.transaction(async (tx) => {
+        // Any trip, the open one too: it can be named while it records (D6).
+        await mustRead(tx, tripId);
+        const typed = cleanDetails(details);
+        await writeDetails(tx, tripId, typed);
         return mustRead(tx, tripId);
       }),
 
@@ -271,7 +296,8 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
       return db.transaction(async (tx) => {
         const id = options.newId();
         await tx.run(
-          "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, segment, from_text, to_text, note) VALUES (?, 'ended', 'manual', ?, ?, ?, 1, ?, ?, ?)",
+          `INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, segment, from_text, to_text, note, number)
+            VALUES (?, 'ended', 'manual', ?, ?, ?, 1, ?, ?, ?, (${NEXT_NUMBER}))`,
           [id, startedAt, endedAt, distanceM, text(input.from), text(input.to), text(input.note)],
         );
         return mustRead(tx, id);

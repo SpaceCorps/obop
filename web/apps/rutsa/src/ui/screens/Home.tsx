@@ -1,9 +1,8 @@
-import { Banner, Button, Row, Screen, Text, type BannerTone } from "@obop/ui-native";
+import { Banner, Button, Screen, Text, type BannerTone } from "@obop/ui-native";
 import { useEffect, useRef, useState } from "react";
-import { Switch, View } from "react-native";
-import type { TripDetails } from "../../core/details.ts";
+import { Alert, View, type HostInstance } from "react-native";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
-import { formatKm, phoneTimeZone, totals } from "../../core/present.ts";
+import { dayKey, formatClock, formatKm, phoneTimeZone, totals } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
 import { LANGUAGE, t, tp, type MessageKey } from "../../i18n/index.ts";
 import {
@@ -13,17 +12,13 @@ import {
   resumeTrip,
   stopTrip,
 } from "../../native/actions.ts";
+import { startWhenReady } from "../../native/start.ts";
 import { announce } from "../announce.ts";
-import { lastEndedTrip, whenText } from "../home.ts";
-import {
-  useNow,
-  useProgress,
-  useRegistered,
-  useStopDetails,
-  useTrips,
-  type Check,
-} from "../hooks.ts";
-import { StopSheet } from "../StopSheet.tsx";
+import { CurrentWidget } from "../CurrentWidget.tsx";
+import { RecentTrips } from "../RecentTrips.tsx";
+import { RoundButton } from "../RoundButton.tsx";
+import { lastEndedTrip, tripDurationMs, whenText } from "../home.ts";
+import { useNow, useProgress, useRegistered, useTrips, type Check } from "../hooks.ts";
 import { tOs } from "../os-text.ts";
 import {
   buttonsFor,
@@ -33,6 +28,7 @@ import {
   type Warning,
 } from "../recording-view.ts";
 import type { Nav } from "../router.ts";
+import { endedNewestFirst, recentLine } from "../trips-list.ts";
 
 // Read once in this start of the app: the note comes back only with another replaced file.
 let restoredNoteRead = false;
@@ -84,11 +80,12 @@ function warningBanner(
 
 /**
  * The first screen, and the screen of a recording (D4): the big button goes Start, then a red Stop
- * with Pause at its left, then Resume with Stop at its left while paused. While a trip is open it
- * shows as Current, with its elapsed time and km so far (the same count Stop makes), above the
- * totals of today and this month, which leave the open trip out until it ends. The one warning of
- * a recording that matters most (`warningOf`) has its way on: Restart recording, or the way to the
- * permissions. The totals follow the phone's day.
+ * with Pause at its left, then Resume with Stop at its left while paused; Stop asks first. While a
+ * trip is open it shows on top: Recording or Paused and its name ("Untitled trip 33" until it is
+ * named in History), its elapsed time, its km so far (the same count Stop makes) and its start,
+ * above the totals of today and this month, which leave the open trip out until it ends. The one
+ * warning of a recording that matters most (`warningOf`) has its way on: Restart recording, or the
+ * way to the permissions. The totals follow the phone's day.
  *
  * After `Home` and `Recording` of `mileage-app` (`src/ui/screens/`), on one screen, with Pause and
  * Resume, without the purpose of stage 2 and what talks to its server.
@@ -105,8 +102,19 @@ export function Home({
   check: Check | null;
 }) {
   const { trips, active } = useTrips(store);
+  // The content of the footer: the recent trips end above it.
+  const footerRef = useRef<HostInstance>(null);
+  const last = lastEndedTrip(trips);
+  // The trip of the current widget: the open one, else the last that ended.
+  const widgetTrip = active ?? last;
   const now = useNow(active ? 1000 : 30_000);
   const progress = useProgress(store, active?.id ?? null, active?.state ?? null);
+  // The time of the last trip without its pauses, for the widget while no trip is open.
+  const lastProgress = useProgress(
+    store,
+    active === null && last?.source === "recorded" ? last.id : null,
+    last?.state ?? null,
+  );
   const registered = useRegistered(active?.state === "recording");
   const [restoredRead, setRestoredRead] = useState(restoredNoteRead);
   const [busy, setBusy] = useState<Busy>(null);
@@ -115,10 +123,6 @@ export function Home({
   const [restartBlocked, setRestartBlocked] = useState<Blocked | null>(null);
   // A check of C5 older than this was answered here (a restart or a resume that worked).
   const [checkHandledAt, setCheckHandledAt] = useState(0);
-  // The window of Stop is open, from this button (D4b); `null` while it is closed.
-  const [stopSheet, setStopSheet] = useState<Busy>(null);
-  const [stopFailed, setStopFailed] = useState(false);
-  const [detailsAtStop, setDetailsAtStop] = useStopDetails();
 
   // Said to a screen reader: a trip that starts, a recording that stops by itself.
   const shownId = useRef<string | null>(null);
@@ -139,7 +143,6 @@ export function Home({
 
   const zone = phoneTimeZone();
   const sum = totals(trips, now, zone);
-  const last = lastEndedTrip(trips);
   const words = { today: t("day.today"), yesterday: t("day.yesterday") };
   const when = (ms: number) => whenText(ms, now, LANGUAGE, zone, words);
 
@@ -197,35 +200,22 @@ export function Home({
   };
 
   /**
-   * Stop (D4b): with the switch on, the window with the details of the trip; off, the trip ends at
-   * once, with no window and no confirmation.
+   * Stop asks first, in a dialog of the system. The details of the trip are typed afterwards on its
+   * screen (D6), not at Stop: the window of D4b and its switch went after they were tried.
    */
   const confirmStop = (which: Busy, id: string) => {
-    if (detailsAtStop) {
-      setStopFailed(false);
-      setStopSheet(which);
-      return;
-    }
-    act(which, async () => {
-      await stopTrip(id);
-      announce(t("announce.recording.stopped"));
-    });
-  };
-
-  /** "Stop trip" in the window: the trip ends with the details; a failure keeps the window open. */
-  const stopWith = (details: TripDetails) => {
-    if (!active || stopSheet === null) return;
-    setBusy(stopSheet);
-    setStopFailed(false);
-    stopTrip(active.id, details)
-      .then(
-        () => {
-          announce(t("announce.recording.stopped"));
-          setStopSheet(null);
-        },
-        () => setStopFailed(true),
-      )
-      .finally(() => setBusy(null));
+    Alert.alert(t("home.stop.title"), t("home.stop.message"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("home.stop"),
+        style: "destructive",
+        onPress: () =>
+          act(which, async () => {
+            await stopTrip(id);
+            announce(t("announce.recording.stopped"));
+          }),
+      },
+    ]);
   };
 
   const restart = () => {
@@ -258,20 +248,27 @@ export function Home({
     switch (buttons.main) {
       case "start":
         return (
-          <Button
+          <RoundButton
             label={t("home.start")}
-            size="big"
             hint={t("home.start.hint")}
-            onPress={() => nav.push({ name: "permissions", next: "start" })}
+            busy={busy === "main"}
+            onPress={() =>
+              act("main", async () => {
+                // Straight to the trip when nothing stands in the way; else the screen of the
+                // permissions, which shows what does.
+                if ((await startWhenReady()) === null) {
+                  nav.push({ name: "permissions", next: "start" });
+                }
+              })
+            }
             testID="start"
           />
         );
       case "stop":
         return (
-          <Button
+          <RoundButton
             label={t("home.stop")}
-            size="big"
-            variant="danger"
+            danger
             hint={t("home.stop.hint")}
             busy={busy === "main"}
             onPress={() => active && confirmStop("main", active.id)}
@@ -280,9 +277,8 @@ export function Home({
         );
       case "resume":
         return (
-          <Button
+          <RoundButton
             label={t("home.resume")}
-            size="big"
             busy={busy === "main"}
             onPress={() =>
               active &&
@@ -324,30 +320,15 @@ export function Home({
     <Screen
       title={t("app.title")}
       footer={
-        // The big button is centred on its own; the small one lies over the top left corner of
+        // The big button is centred on its own; the small one lies over the top right corner of
         // the footer, out of the flow, so it moves nothing when it comes, goes or changes.
-        // The switch "Details at Stop" (D4b) lies over the bottom left corner, also out of the flow.
-        <View style={{ alignItems: "center", justifyContent: "center" }}>
+        <View ref={footerRef} style={{ alignItems: "center", justifyContent: "center" }}>
           {mainButton}
           {sideButton ? (
-            <View style={{ position: "absolute", left: 0, top: 0, width: SIDE_WIDTH }}>
+            <View style={{ position: "absolute", right: 0, top: 0, width: SIDE_WIDTH }}>
               {sideButton}
             </View>
           ) : null}
-          <View
-            style={{ position: "absolute", left: 0, bottom: 0, width: SIDE_WIDTH, gap: 2 }}
-            testID="details-at-stop"
-          >
-            <Text variant="caption" tone="muted">
-              {t("home.details_at_stop")}
-            </Text>
-            <Switch
-              value={detailsAtStop}
-              onValueChange={setDetailsAtStop}
-              accessibilityLabel={t("home.details_at_stop")}
-              testID="details-at-stop-switch"
-            />
-          </View>
         </View>
       }
     >
@@ -367,29 +348,27 @@ export function Home({
         />
       ) : null}
 
-      {active ? (
-        <View style={{ gap: 4 }} testID="current">
-          <Text tone="muted">
-            {active.state === "paused"
-              ? `${t("home.current")} · ${t("home.paused")}`
-              : t("home.current")}
-          </Text>
-          <Text variant="display" accessibilityRole="timer" testID="elapsed">
-            {elapsedText}
-          </Text>
-          <Text variant="title" testID="current-km">
-            {formatKm(progress?.distanceM ?? 0, LANGUAGE)}
-          </Text>
-          {active.state === "recording" &&
-          progress !== null &&
-          progress.points === 0 &&
-          health.kind === "waiting" ? (
-            <Text tone="muted" testID="waiting">
-              {t("home.waiting")}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
+      {/* Always there: the open trip, else the last one that ended, else "No trips yet." */}
+      <CurrentWidget
+        trip={widgetTrip}
+        elapsed={
+          active
+            ? elapsedText
+            : formatElapsed(
+                last === null ? 0 : (tripDurationMs(last, lastProgress?.closedMs ?? null) ?? 0),
+              )
+        }
+        km={formatKm((active ? progress?.distanceM : last?.distanceM) ?? 0, LANGUAGE)}
+        started={
+          widgetTrip === null
+            ? ""
+            : // The clock time; with its day when the trip began before today.
+              dayKey(widgetTrip.startedAt, zone) === dayKey(now, zone)
+              ? formatClock(widgetTrip.startedAt, LANGUAGE, zone)
+              : when(widgetTrip.startedAt)
+        }
+        onPress={() => widgetTrip && nav.push({ name: "trip", id: widgetTrip.id })}
+      />
 
       {shown ? (
         <Banner
@@ -420,29 +399,19 @@ export function Home({
         </View>
       </View>
 
-      {/* The way to the list of trips (D5), with their number and the last trip under it: its
-          km and when, never its name (the list has the rest). */}
-      <Row
-        title={t("home.trips")}
-        subtitle={
-          last === null || last.distanceM === null
-            ? t("home.none")
-            : t("home.last", {
-                details: `${formatKm(last.distanceM, LANGUAGE)}, ${when(last.startedAt)}`,
-              })
-        }
-        value={trips.length === 0 ? undefined : tp("trips.count", trips.length)}
-        onPress={() => nav.push({ name: "trips" })}
-        testID="open-trips"
-      />
-
-      <StopSheet
-        visible={stopSheet !== null}
-        summary={`${elapsedText} · ${formatKm(progress?.distanceM ?? 0, LANGUAGE)}`}
-        busy={busy !== null}
-        failed={stopFailed}
-        onCancel={() => setStopSheet(null)}
-        onStop={stopWith}
+      {/* The newest trips that ended, as many as fit above the footer, and the way to History. */}
+      <RecentTrips
+        lines={endedNewestFirst(trips).map((trip) =>
+          recentLine(trip, now, LANGUAGE, zone, {
+            today: t("day.today"),
+            yesterday: t("day.yesterday"),
+            trips: (count) => tp("trips.count", count),
+            manual: t("trips.manual"),
+          }),
+        )}
+        footerRef={footerRef}
+        onOpen={(id) => nav.push({ name: "trip", id })}
+        onHistory={() => nav.push({ name: "trips" })}
       />
     </Screen>
   );

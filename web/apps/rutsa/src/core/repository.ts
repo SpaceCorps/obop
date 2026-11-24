@@ -51,6 +51,13 @@ export interface TripRepository {
    */
   stopTrip(tripId: string, at: number, details?: TripDetails): Promise<Trip>;
 
+  /**
+   * Changes the details of a trip (D6), the open one too: its name, From, To and Note, all four at
+   * once, trimmed (`details.ts`); a field left empty is cleared. A detail that is too long throws
+   * `DetailsTooLong` and nothing is changed. Throws `TripNotFound` when there is none.
+   */
+  updateDetails(tripId: string, details: TripDetails): Promise<Trip>;
+
   /** A trip the driver types afterwards: ended, source `manual`, no points. */
   addManualTrip(input: ManualTrip): Promise<Trip>;
 

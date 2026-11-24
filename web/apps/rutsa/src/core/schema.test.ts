@@ -180,6 +180,51 @@ describe("migrate", () => {
     ]);
   });
 
+  test("a file of version 5 numbers its untitled trips in the order of their start", async () => {
+    const db = memoryDb();
+    await migrate(db, MIGRATIONS.slice(0, 5));
+    // Inserted out of order; two start at the same moment and are ordered by their id.
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m) VALUES ('c', 'ended', 'manual', 3000, 4000, 1), ('a', 'ended', 'manual', 1000, 2000, 1), ('b2', 'ended', 'manual', 2000, 2500, 1), ('b1', 'ended', 'manual', 2000, 2500, 1)",
+    );
+    expect(await migrate(db)).toEqual({ from: 5, to: SCHEMA_VERSION });
+    expect(await db.all("SELECT id, number FROM trip ORDER BY number")).toEqual([
+      { id: "a", number: 1 },
+      { id: "b1", number: 2 },
+      { id: "b2", number: 3 },
+      { id: "c", number: 4 },
+    ]);
+  });
+
+  test("a file of version 6 keeps numbers for the untitled trips only, counted again without gaps", async () => {
+    const db = memoryDb();
+    await migrate(db, MIGRATIONS.slice(0, 5));
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, name) VALUES ('a', 'ended', 'manual', 1000, 2000, 1, NULL), ('b', 'ended', 'manual', 2000, 2500, 1, 'Meeting'), ('c', 'ended', 'manual', 3000, 4000, 1, NULL)",
+    );
+    await migrate(db, MIGRATIONS.slice(0, 6));
+    // Version 6 numbered every trip: a 1, b 2, c 3.
+    expect(await migrate(db)).toEqual({ from: 6, to: SCHEMA_VERSION });
+    expect(await db.all("SELECT id, number FROM trip ORDER BY id")).toEqual([
+      { id: "a", number: 1 },
+      { id: "b", number: null },
+      { id: "c", number: 2 },
+    ]);
+  });
+
+  test("two trips cannot have the same number", async () => {
+    const db = memoryDb();
+    await migrate(db);
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, number) VALUES ('a', 'ended', 'manual', 1000, 2000, 1, 1)",
+    );
+    await expect(
+      db.run(
+        "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, number) VALUES ('b', 'ended', 'manual', 3000, 4000, 1, 1)",
+      ),
+    ).rejects.toThrow();
+  });
+
   test("a segment cannot end before it starts", async () => {
     const db = memoryDb();
     await migrate(db);

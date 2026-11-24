@@ -11,6 +11,7 @@ import { canGoBack, current, reduce, type Nav, type Route } from "./src/ui/route
 import { Failed } from "./src/ui/screens/Failed.tsx";
 import { Home } from "./src/ui/screens/Home.tsx";
 import { Permissions } from "./src/ui/screens/Permissions.tsx";
+import { TripDetail } from "./src/ui/screens/TripDetail.tsx";
 import { Trips } from "./src/ui/screens/Trips.tsx";
 import { bannerShown, problemsOf, type Problem } from "./src/ui/status.ts";
 
@@ -28,7 +29,7 @@ function Loading() {
   );
 }
 
-/** TEMPORARY: the routes whose screens come in D6 and D7; the list of D5 leads to `trip`. */
+/** TEMPORARY: the route whose screen comes in D7; nothing leads to it yet. */
 function NotYet({ name, nav }: { name: Route["name"]; nav: Nav }) {
   return (
     <Screen title={name} onBack={nav.back}>
@@ -94,12 +95,10 @@ function Routes({
     setClosings((n) => n + 1);
   };
 
-  let screen: ReactNode;
+  // The screen over the home screen; `null` on the home screen.
+  let screen: ReactNode = null;
   switch (route.name) {
     case "home":
-      screen = (
-        <Home store={store} nav={nav} recoveredStaleFile={recoveredStaleFile} check={check} />
-      );
       break;
     case "permissions":
       screen = <Permissions nav={nav} next={route.next} />;
@@ -108,6 +107,8 @@ function Routes({
       screen = <Trips store={store} nav={nav} />;
       break;
     case "trip":
+      screen = <TripDetail store={store} nav={nav} id={route.id} />;
+      break;
     case "add":
       screen = <NotYet name={route.name} nav={nav} />;
       break;
@@ -117,7 +118,13 @@ function Routes({
     <View style={{ flex: 1 }}>
       {banner ? <StatusBanner problems={problems} insets={insets} onClose={closeBanner} /> : null}
       <InsetsProvider insets={banner ? { ...insets, top: 0 } : insets}>
-        <View style={{ flex: 1 }}>{screen}</View>
+        {/* The home screen stays mounted under the others, hidden while one is open, as in a
+            navigation stack: coming back to it (from History, or from the permissions after
+            Start) finds it as it was, read and drawn, with no flash of empty values. */}
+        <View style={{ flex: 1, display: screen === null ? "flex" : "none" }}>
+          <Home store={store} nav={nav} recoveredStaleFile={recoveredStaleFile} check={check} />
+        </View>
+        {screen === null ? null : <View style={{ flex: 1 }}>{screen}</View>}
       </InsetsProvider>
     </View>
   );

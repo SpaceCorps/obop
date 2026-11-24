@@ -1,7 +1,7 @@
 import { Banner, Button, Screen, Text } from "@obop/ui-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
-import { DISCLOSURE_ACCEPTED, NOTIFICATIONS_ASKED } from "../../core/settings.ts";
+import { DISCLOSURE_ACCEPTED } from "../../core/settings.ts";
 import { t } from "../../i18n/index.ts";
 import { CannotRecord, ensureRecording, resumeTrip, startTrip } from "../../native/actions.ts";
 import {
@@ -10,15 +10,14 @@ import {
   openLocationSettings,
   openSettings,
   requestLocation,
-  requestNotifications,
   type LocationAccess,
 } from "../../native/permissions.ts";
+import { notificationsAtStart } from "../../native/start.ts";
 import { getSettings, getStore } from "../../native/store.ts";
 import { onReturnFromAway } from "../foreground.ts";
 import { tOs } from "../os-text.ts";
 import {
   firstStep,
-  notificationsStep,
   stepAfterAccess,
   stepAfterRefusal,
   stepOnReturn,
@@ -85,18 +84,9 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
     }
   }, []);
 
-  /**
-   * Whether the notification of a recording can be shown. The dialog of Android 13 comes once in
-   * the life of the app, after a tap (`notificationsStep`); otherwise the answer is only read.
-   */
+  /** Whether the notification of a recording can be shown (`notificationsAtStart`). */
   const notifications = useCallback(
-    async (byTap: boolean): Promise<boolean> => {
-      const settings = await getSettings();
-      const asked = (await settings.get(NOTIFICATIONS_ASKED)) !== null;
-      if (notificationsStep(asked, byTap) === "read") return notificationsAllowed();
-      await settings.set(NOTIFICATIONS_ASKED, new Date().toISOString());
-      return ask(requestNotifications);
-    },
+    (byTap: boolean): Promise<boolean> => notificationsAtStart(byTap, ask),
     [ask],
   );
 
