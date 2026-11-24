@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "vite-plus/test";
 import { memoryDb } from "../test-support/memory-db.ts";
+import { DetailsTooLong } from "./details.ts";
 import {
   TripAlreadyActive,
   TripNotFound,
@@ -50,6 +51,7 @@ describe("starting and recording", () => {
       distanceM: null,
       segment: 1,
       segmentStartedAt: T0,
+      name: null,
       from: null,
       to: null,
       note: null,
@@ -275,6 +277,49 @@ describe("the count while a trip records", () => {
 
   test("no trip with this id has no count", async () => {
     expect(await store.progress("nobody")).toBeNull();
+  });
+});
+
+describe("the details typed at Stop", () => {
+  test("are stored with the end of the trip, trimmed", async () => {
+    const trip = await store.startTrip(T0);
+    await store.appendFixes(trip.id, drive(21, 5000, 10));
+    const ended = await store.stopTrip(trip.id, T0 + 2 * MIN, {
+      name: " Meeting with the customer ",
+      from: "Stockholm",
+      to: "Uppsala ",
+      note: "",
+    });
+    expect(ended).toMatchObject({
+      state: "ended",
+      name: "Meeting with the customer",
+      from: "Stockholm",
+      to: "Uppsala",
+      note: null,
+    });
+    expect(ended.distanceM).toBeCloseTo(1000, 0);
+    expect(await store.getTrip(trip.id)).toEqual(ended);
+  });
+
+  test("Stop without details leaves the trip without them, as before", async () => {
+    const trip = await store.startTrip(T0);
+    const ended = await store.stopTrip(trip.id, T0 + MIN);
+    expect(ended).toMatchObject({ name: null, from: null, to: null, note: null });
+  });
+
+  test("a detail that is too long stops nothing: the trip goes on recording", async () => {
+    const trip = await store.startTrip(T0);
+    await expect(store.stopTrip(trip.id, T0 + MIN, { name: "x".repeat(101) })).rejects.toThrow(
+      DetailsTooLong,
+    );
+    expect(await store.activeTrip()).toMatchObject({ id: trip.id, state: "recording" });
+  });
+
+  test("a paused trip is stopped with its details too", async () => {
+    const trip = await store.startTrip(T0);
+    await store.pauseTrip(trip.id, T0 + MIN);
+    const ended = await store.stopTrip(trip.id, T0 + 2 * MIN, { name: "Lunch run" });
+    expect(ended).toMatchObject({ state: "ended", name: "Lunch run" });
   });
 });
 

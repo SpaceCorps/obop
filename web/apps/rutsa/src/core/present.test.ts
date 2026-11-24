@@ -29,6 +29,7 @@ const trip = (startIso: string, distanceM: number | null, minutes = 30): Trip =>
     distanceM,
     segment: 1,
     segmentStartedAt: startedAt,
+    name: null,
     from: null,
     to: null,
     note: null,

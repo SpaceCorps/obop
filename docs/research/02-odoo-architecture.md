@@ -8,17 +8,17 @@ Baseline: Odoo 20.0 (Community source, branch `20.0`), researched 2026-10-01.
 - **Secondary:** one Hacker News thread, for sentiment only.
 - **Limits:** no web search engine was usable, so there was no broad survey of blogs or forums. The odoo.com pages were fetched through a summarising fetcher, and the 20.0 release-notes page came back truncated.
 - **Tags:** [V] = verified in source or docs. [I] = inference. [G] = guess.
-- **Enterprise edition:** no Enterprise code was read, and none should be. What Enterprise does is taken from public docs, or from the *absence* of a module in the Community tree.
+- **Enterprise edition:** no Enterprise code was read, and none should be. What Enterprise does is taken from public docs, or from the _absence_ of a module in the Community tree.
 
 ## 0. Baseline: what is current (corrects stale knowledge)
 
-| Fact | Status | Source |
-|---|---|---|
-| Odoo 20.0 is released (September 2026), standard support planned to Sept 2029. 19.0 is Sept 2025 (support to Sept 2028). 18.0 is Oct 2024 (support to Sept 2027). 17.0 standard support ends Sept 2026. SaaS 19.1, 19.2, 19.3 and 19.4 were released Jan, Mar, May and Jul 2026 (Odoo Online only, no extended support). | [V] docs table (re-checked 2026-10-01); the 20.0 release-notes page is headed "September 2026"; exact day of 20.0 not found | https://www.odoo.com/documentation/master/administration/standard_extended_support.html , https://www.odoo.com/odoo-20-release-notes |
-| GitHub default branch is `20.0`. Nightly `odoo_20.0.20261001.tar.gz` exists (also `odoo_20.0.latest.tar.gz`). | [V] | https://github.com/odoo/odoo , https://nightly.odoo.com/20.0/nightly/src/ |
-| Python >= 3.12 (max 3.14), PostgreSQL >= 16. The install docs agree ("Python 3.12 or later", "PostgreSQL ... 16.0 or above"). | [V] | https://github.com/odoo/odoo/blob/20.0/odoo/release.py , https://github.com/odoo/documentation/blob/20.0/content/administration/on_premise/source.rst |
-| License LGPL-3 for Community (`LICENSE`, `release.py`, every checked manifest). Repo is ~52% Python and ~43.5% JS by bytes, ~54.8k stars, ~33.9k forks (live counts, 2026-10-01). | [V] | https://github.com/odoo/odoo/blob/20.0/LICENSE , GitHub API |
-| The CE tree has 642 addon directories: 229 `l10n_*` and 413 others including tests. Not in CE: `web_studio`, `web_gantt`, `web_map`, `web_cohort`, `web_grid`, `documents`, `helpdesk`, `sign`, `planning`, `approvals`, `knowledge`, `account_accountant`, `voip`, `marketing_automation`, `appointment`, `hr_payroll`, any AI or MCP module. | [V] by absence in the git tree (re-checked 2026-10-01 with the GitHub tree API, not truncated) | https://github.com/odoo/odoo/tree/20.0/addons |
+| Fact                                                                                                                                                                                                                                                                                                                                           | Status                                                                                                                      | Source                                                                                                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Odoo 20.0 is released (September 2026), standard support planned to Sept 2029. 19.0 is Sept 2025 (support to Sept 2028). 18.0 is Oct 2024 (support to Sept 2027). 17.0 standard support ends Sept 2026. SaaS 19.1, 19.2, 19.3 and 19.4 were released Jan, Mar, May and Jul 2026 (Odoo Online only, no extended support).                       | [V] docs table (re-checked 2026-10-01); the 20.0 release-notes page is headed "September 2026"; exact day of 20.0 not found | https://www.odoo.com/documentation/master/administration/standard_extended_support.html , https://www.odoo.com/odoo-20-release-notes                  |
+| GitHub default branch is `20.0`. Nightly `odoo_20.0.20261001.tar.gz` exists (also `odoo_20.0.latest.tar.gz`).                                                                                                                                                                                                                                  | [V]                                                                                                                         | https://github.com/odoo/odoo , https://nightly.odoo.com/20.0/nightly/src/                                                                             |
+| Python >= 3.12 (max 3.14), PostgreSQL >= 16. The install docs agree ("Python 3.12 or later", "PostgreSQL ... 16.0 or above").                                                                                                                                                                                                                  | [V]                                                                                                                         | https://github.com/odoo/odoo/blob/20.0/odoo/release.py , https://github.com/odoo/documentation/blob/20.0/content/administration/on_premise/source.rst |
+| License LGPL-3 for Community (`LICENSE`, `release.py`, every checked manifest). Repo is ~52% Python and ~43.5% JS by bytes, ~54.8k stars, ~33.9k forks (live counts, 2026-10-01).                                                                                                                                                              | [V]                                                                                                                         | https://github.com/odoo/odoo/blob/20.0/LICENSE , GitHub API                                                                                           |
+| The CE tree has 642 addon directories: 229 `l10n_*` and 413 others including tests. Not in CE: `web_studio`, `web_gantt`, `web_map`, `web_cohort`, `web_grid`, `documents`, `helpdesk`, `sign`, `planning`, `approvals`, `knowledge`, `account_accountant`, `voip`, `marketing_automation`, `appointment`, `hr_payroll`, any AI or MCP module. | [V] by absence in the git tree (re-checked 2026-10-01 with the GitHub tree API, not truncated)                              | https://github.com/odoo/odoo/tree/20.0/addons                                                                                                         |
 
 **Major architecture shifts in the last three releases.** All are from the ORM changelog, https://github.com/odoo/documentation/blob/20.0/content/developer/reference/backend/orm/changelog.rst, unless noted.
 
@@ -74,14 +74,14 @@ Baseline: Odoo 20.0 (Community source, branch `20.0`), researched 2026-10-01.
 
 ### 2.1 Registry, model definitions, inheritance
 
-One `Registry` per database (`odoo/orm/registry.py`). Model *definitions* (Python classes in modules) are composed into one dynamic *model class* per model by Python MRO. The design comment at the top of `odoo/orm/model_classes.py` explains it.
+One `Registry` per database (`odoo/orm/registry.py`). Model _definitions_ (Python classes in modules) are composed into one dynamic _model class_ per model by Python MRO. The design comment at the top of `odoo/orm/model_classes.py` explains it.
 
-| Mode | Declaration | Effect | Example |
-|---|---|---|---|
-| Extension in place | `_inherit='a'`, no `_name` | Adds fields and methods to the same model and table. Load order determines override order. | Most module extensions |
-| Prototype (copy) | `_name='b'`, `_inherit=['a','b']` | New model and table that copies the fields and methods. | mixins into concrete models |
-| Delegation | `_inherits={'res.partner':'partner_id'}` | Composition. The child exposes the parent's fields, stored on the linked parent row. | `res.users` inherits `res.partner` (`res_users.py:177`) |
-| Abstract and transient | `AbstractModel`, `TransientModel` | Mixins with no table (`mail.thread`, `image.mixin`). Wizards with vacuumed rows. | |
+| Mode                   | Declaration                              | Effect                                                                                     | Example                                                 |
+| ---------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Extension in place     | `_inherit='a'`, no `_name`               | Adds fields and methods to the same model and table. Load order determines override order. | Most module extensions                                  |
+| Prototype (copy)       | `_name='b'`, `_inherit=['a','b']`        | New model and table that copies the fields and methods.                                    | mixins into concrete models                             |
+| Delegation             | `_inherits={'res.partner':'partner_id'}` | Composition. The child exposes the parent's fields, stored on the linked parent row.       | `res.users` inherits `res.partner` (`res_users.py:177`) |
+| Abstract and transient | `AbstractModel`, `TransientModel`        | Mixins with no table (`mail.thread`, `image.mixin`). Wizards with vacuumed rows.           |                                                         |
 
 Base attributes (`odoo/orm/models.py` ~L425-520):
 
@@ -94,18 +94,18 @@ Base attributes (`odoo/orm/models.py` ~L425-520):
 
 All in `odoo/orm/fields*.py` and re-exported by `odoo/fields/__init__.py`.
 
-| Type | Storage / notes |
-|---|---|
-| Boolean, Integer, Float (digits via `decimal.precision`) | Native columns. |
-| **Monetary** | `numeric`, with `currency_field='currency_id'`. The value is a Python float rounded by the currency. |
-| Char/Text/**Html** | `Html` is sanitised server-side. `translate=True` or a callable (term-level) stores **jsonb `{lang: value}`**. |
-| Selection, Date, Datetime | Native. |
-| **Json** | `jsonb`. |
-| **Binary/Image** | `BinaryValue`. With `attachment=True` it is stored in `ir.attachment` (filestore). `cloud_storage*` addons add blob stores. |
-| Many2one / One2many / Many2many | FK column, inverse-driven virtual field, join table. `ondelete`, `check_company` and `index` are options. |
-| **Reference / Many2oneReference** | Reference stores a `"model,id"` string. Many2oneReference is `model_field` plus an integer id. There is no FK integrity. `mail_followers.py` says "no integrity check on model names for performance reasons". |
-| **Properties / PropertiesDefinition** | Per-container schema plus `jsonb` values. Light user-defined fields without DDL. |
-| `company_dependent=True` | Any field type stored as `jsonb {company_id: value}`, with `ir.default` as fallback. |
+| Type                                                     | Storage / notes                                                                                                                                                                                                |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Boolean, Integer, Float (digits via `decimal.precision`) | Native columns.                                                                                                                                                                                                |
+| **Monetary**                                             | `numeric`, with `currency_field='currency_id'`. The value is a Python float rounded by the currency.                                                                                                           |
+| Char/Text/**Html**                                       | `Html` is sanitised server-side. `translate=True` or a callable (term-level) stores **jsonb `{lang: value}`**.                                                                                                 |
+| Selection, Date, Datetime                                | Native.                                                                                                                                                                                                        |
+| **Json**                                                 | `jsonb`.                                                                                                                                                                                                       |
+| **Binary/Image**                                         | `BinaryValue`. With `attachment=True` it is stored in `ir.attachment` (filestore). `cloud_storage*` addons add blob stores.                                                                                    |
+| Many2one / One2many / Many2many                          | FK column, inverse-driven virtual field, join table. `ondelete`, `check_company` and `index` are options.                                                                                                      |
+| **Reference / Many2oneReference**                        | Reference stores a `"model,id"` string. Many2oneReference is `model_field` plus an integer id. There is no FK integrity. `mail_followers.py` says "no integrity check on model names for performance reasons". |
+| **Properties / PropertiesDefinition**                    | Per-container schema plus `jsonb` values. Light user-defined fields without DDL.                                                                                                                               |
+| `company_dependent=True`                                 | Any field type stored as `jsonb {company_id: value}`, with `ir.default` as fallback.                                                                                                                           |
 
 Field options worth replicating:
 
@@ -272,7 +272,7 @@ Field options worth replicating:
 
 **(c) Rust design.**
 
-- Model the thread as a *capability* (`trait Threaded`) plus tables keyed by `(thread_kind, thread_id)`.
+- Model the thread as a _capability_ (`trait Threaded`) plus tables keyed by `(thread_kind, thread_id)`.
 - Inbound: `mail-parser` plus IMAP (`async-imap`) or an SMTP-receiving webhook. A route table replaces the stringly alias routing.
 - Outbound: a **transactional outbox** table drained by workers, sent via `lettre`.
 - Templates: `minijinja` in a sandbox, with per-language variants.
@@ -334,7 +334,7 @@ Field options worth replicating:
 **Rust / Vite+ design.**
 
 - Replace the runtime bundler with **build-time composition**: a Vite+ plugin discovers each module's `frontend/` directory and generates virtual registry modules. No runtime patching of other modules' internals.
-- Keep the *registry* idea: typed registries for fields, views, actions, services and systray items.
+- Keep the _registry_ idea: typed registries for fields, views, actions, services and systray items.
 - The server publishes a JSON schema, resolved views and a generated TypeScript client.
 
 **What Odoo gets wrong.** A hand-rolled module system and transpiler, an alpha UI framework in a stable release, fragile runtime patching, and per-database server-side bundling.
@@ -356,10 +356,10 @@ Field options worth replicating:
 
 ## 10. External API
 
-| API | Status | Detail |
-|---|---|---|
+| API                                                      | Status                                                                                                                                                       | Detail                                                                                                                                                                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | XML-RPC `/xmlrpc/2/{common,object}`, JSON-RPC `/jsonrpc` | Deprecated in 19, **scheduled for removal in Odoo 22** (fall 2028; Online 21.1, winter 2027). The `db` service was already removed in Odoo 20 (Online 19.1). | `addons/rpc/controllers/__init__.py` (`RPC_DEPRECATION_NOTICE`), https://github.com/odoo/documentation/blob/20.0/content/developer/reference/external_api.rst ("Migrating from XML-RPC / JSON-RPC") |
-| **JSON-2** `POST /json/2/<model>/<method>` | New in 19.0 | `addons/rpc/controllers/json2.py` |
+| **JSON-2** `POST /json/2/<model>/<method>`               | New in 19.0                                                                                                                                                  | `addons/rpc/controllers/json2.py`                                                                                                                                                                   |
 
 JSON-2 details, from https://github.com/odoo/documentation/blob/20.0/content/developer/reference/external_api.rst :
 
@@ -371,7 +371,7 @@ JSON-2 details, from https://github.com/odoo/documentation/blob/20.0/content/dev
 - **Transaction behaviour:** the route opens a read-only cursor only for methods decorated `@api.readonly`; everything else gets a read-write transaction (`json2.py`).
 - **Documentation:** each database serves `/doc`, generated by the `api_doc` addon (playground with examples).
 - **Method exposure:** `@api.model` methods take no `ids`. `@api.private` hides methods from RPC.
-- **Commercial restriction:** "Access to data via the external API is only available on *Custom* Odoo pricing plans." Odoo Online pricing, per user per month, read from the page HTML on 2026-10-01 (verify live): with the Yearly toggle, Standard is EUR 19.90 and Custom EUR 35.90 (list prices EUR 24.90 and EUR 44.90; the lower figure is a discount "valid for 12 months, for initial users ordered"). With the Monthly toggle, Standard is EUR 24.90 and Custom EUR 44.90 (list EUR 31.10 and EUR 56.90). Light User is EUR 7.90. The Custom plan lists "Odoo Studio / Agentic AI", "Multi-Company" and "External API". The multi-company docs confirm that enabling multi-company on Standard triggers an upsell to Custom. https://www.odoo.com/pricing-plan
+- **Commercial restriction:** "Access to data via the external API is only available on _Custom_ Odoo pricing plans." Odoo Online pricing, per user per month, read from the page HTML on 2026-10-01 (verify live): with the Yearly toggle, Standard is EUR 19.90 and Custom EUR 35.90 (list prices EUR 24.90 and EUR 44.90; the lower figure is a discount "valid for 12 months, for initial users ordered"). With the Monthly toggle, Standard is EUR 24.90 and Custom EUR 44.90 (list EUR 31.10 and EUR 56.90). Light User is EUR 7.90. The Custom plan lists "Odoo Studio / Agentic AI", "Multi-Company" and "External API". The multi-company docs confirm that enabling multi-company on Standard triggers an upsell to Custom. https://www.odoo.com/pricing-plan
 - **Odoo 20 release notes:** mention MCP connectivity to the database ("Connect to your database via MCP") and say all AI features now need credits bought via IAP, but no MCP or AI module is in the CE tree. So it is Enterprise or Online only. [I]
 
 **Rust design.** Keep the useful idea: one uniform `POST /api/<model>/<method>` RPC surface derived from the registry. Add a generated OpenAPI 3.1 spec, typed error bodies, idempotency keys, cursor pagination and webhooks. Also offer resource-style REST for CRUD. Scoped, expiring API keys as in Odoo. An MCP server generated from the same registry.

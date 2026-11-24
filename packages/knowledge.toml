@@ -21,144 +21,144 @@ description = "An article of the knowledge base"
 read_group = "knowledge.user"
 write_group = "knowledge.user"
 
-  [model.ui]
-  title = "{title}"
-  subtitle = "{author_name} · {published_on} | {author_name}"
-  list = ["title", "parent_id", "visibility", "author_name", "published_on", "state"]
-  card = ["title", "author_name", "tags", "published_on"]
-  quick_create = ["title", "parent_id"]
-  order = "sequence asc, title asc"
-  default_view = "tree"
-  menu = "main"
-  menu_order = 1
+[model.ui]
+title = "{title}"
+subtitle = "{author_name} · {published_on} | {author_name}"
+list = ["title", "parent_id", "visibility", "author_name", "published_on", "state"]
+card = ["title", "author_name", "tags", "published_on"]
+quick_create = ["title", "parent_id"]
+order = "sequence asc, title asc"
+default_view = "tree"
+menu = "main"
+menu_order = 1
 
-  [[model.ui.section]]
-  label = "Article"
-  fields = ["title", "parent_id", "body"]
+[[model.ui.section]]
+label = "Article"
+fields = ["title", "parent_id", "body"]
 
-  [[model.ui.section]]
-  label = "Details"
-  fields = ["visibility", "tags", "author_name", "published_on"]
+[[model.ui.section]]
+label = "Details"
+fields = ["visibility", "tags", "author_name", "published_on"]
 
-  [[model.ui.filter]]
-  label = "Published"
-  where = "state = published"
+[[model.ui.filter]]
+label = "Published"
+where = "state = published"
 
-  [[model.ui.filter]]
-  label = "Drafts"
-  where = "state = draft"
+[[model.ui.filter]]
+label = "Drafts"
+where = "state = draft"
 
-  [[model.field]]
-  name = "title"
-  description = "Article title"
-  class = "none"
-  required = true
+[[model.field]]
+name = "title"
+description = "Article title"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "parent_id"
-  description = "The article this one is nested under; empty for a top-level article"
-  class = "none"
-  kind = "ref"
-  to = "knowledge_article"
+[[model.field]]
+name = "parent_id"
+description = "The article this one is nested under; empty for a top-level article"
+class = "none"
+kind = "ref"
+to = "knowledge_article"
 
-  [[model.field]]
-  name = "body"
-  description = "Article content (Markdown)"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "body"
+description = "Article content (Markdown)"
+class = "none"
+kind = "longtext"
 
-    [model.field.ui]
-    display = "markdown"
+[model.field.ui]
+display = "markdown"
 
-  [[model.field]]
-  name = "visibility"
-  description = "Who the article is meant for: private, workspace, public"
-  class = "none"
-  kind = "select"
-  options = ["private", "workspace", "public"]
-  required = true
-  default = "workspace"
+[[model.field]]
+name = "visibility"
+description = "Who the article is meant for: private, workspace, public"
+class = "none"
+kind = "select"
+options = ["private", "workspace", "public"]
+required = true
+default = "workspace"
 
-    [model.field.ui]
-    tones = { private = "warn", workspace = "neutral", public = "info" }
+[model.field.ui]
+tones = { private = "warn", workspace = "neutral", public = "info" }
 
-  [[model.field]]
-  name = "tags"
-  description = "Comma-separated tags, for example onboarding,hr"
-  class = "none"
+[[model.field]]
+name = "tags"
+description = "Comma-separated tags, for example onboarding,hr"
+class = "none"
 
-  [[model.field]]
-  name = "author_name"
-  description = "Name of the author"
-  class = "public_directory"
-  personal_data = true
-  default = "$user"
+[[model.field]]
+name = "author_name"
+description = "Name of the author"
+class = "public_directory"
+personal_data = true
+default = "$user"
 
-  [[model.field]]
-  name = "sequence"
-  description = "Order among its siblings, lowest first"
-  class = "none"
-  kind = "number"
+[[model.field]]
+name = "sequence"
+description = "Order among its siblings, lowest first"
+class = "none"
+kind = "number"
 
-    [model.field.ui]
-    aggregate = "none"
-    hidden = true
+[model.field.ui]
+aggregate = "none"
+hidden = true
 
-  [[model.field]]
-  name = "published_on"
-  description = "Day the article was published (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
-  readonly = true
+[[model.field]]
+name = "published_on"
+description = "Day the article was published (YYYY-MM-DD)"
+class = "none"
+kind = "date"
+readonly = true
 
-  [[model.field]]
-  name = "state"
-  description = "Article status: draft, published, archived"
-  class = "none"
-  kind = "select"
-  options = ["draft", "published", "archived"]
-  required = true
+[[model.field]]
+name = "state"
+description = "Article status: draft, published, archived"
+class = "none"
+kind = "select"
+options = ["draft", "published", "archived"]
+required = true
 
-    [model.field.ui]
-    tones = { draft = "neutral", published = "ok", archived = "neutral" }
+[model.field.ui]
+tones = { draft = "neutral", published = "ok", archived = "neutral" }
 
-  [[model.action]]
-  name = "publish"
-  description = "Publish the article (manager only)"
-  field = "state"
-  from = "draft"
-  to = "published"
-  group = "knowledge.manager"
+[[model.action]]
+name = "publish"
+description = "Publish the article (manager only)"
+field = "state"
+from = "draft"
+to = "published"
+group = "knowledge.manager"
 
-    [model.action.ui]
-    primary = true
-    done = "The article is published"
+[model.action.ui]
+primary = true
+done = "The article is published"
 
-    [[model.action.effect]]
-    kind = "set"
-    set = { published_on = "$today" }
-    when = "!is_set(published_on)"
+[[model.action.effect]]
+kind = "set"
+set = { published_on = "$today" }
+when = "!is_set(published_on)"
 
-  [[model.action]]
-  name = "unpublish"
-  description = "Take the article back to draft"
-  field = "state"
-  from = "published"
-  to = "draft"
-  group = "knowledge.manager"
+[[model.action]]
+name = "unpublish"
+description = "Take the article back to draft"
+field = "state"
+from = "published"
+to = "draft"
+group = "knowledge.manager"
 
-    [model.action.ui]
-    done = "The article is back in draft"
+[model.action.ui]
+done = "The article is back in draft"
 
-  [[model.action]]
-  name = "archive"
-  description = "Archive an article that is out of date"
-  field = "state"
-  from = "published"
-  to = "archived"
-  group = "knowledge.manager"
+[[model.action]]
+name = "archive"
+description = "Archive an article that is out of date"
+field = "state"
+from = "published"
+to = "archived"
+group = "knowledge.manager"
 
-    [model.action.ui]
-    danger = true
-    confirm = "Archive this article? No step brings it back."
-    done = "The article is archived"
+[model.action.ui]
+danger = true
+confirm = "Archive this article? No step brings it back."
+done = "The article is archived"

@@ -14,36 +14,36 @@ The supply-chain area turns commitments (sales, purchase, manufacturing and repa
 
 ### 1.2 Apps and modules
 
-| App or module | Scope | Tier | Wave | Licence |
-|---|---|---|---|---|
-| `stock` | One warehouse, locations, transfers (receipts keyed in by hand), moves, quants, reservation, counts, scrap, the arithmetic forecast report | T1 | W1 | Open |
-| `stock` reordering | Reordering rules and the `buy` action that drafts RFQs; they travel with `purchase_stock` because `buy` is their only action in this area (Proposed consequence of the cut; OQ-19) | T1 | W2 | Open |
-| `stock` extensions | Lots, serials, expiry, routes and rule editing, multi-step, multi-warehouse, packages, putaway, removal strategies beyond FIFO (D25 names "lots, serials and routes" and placed them in W2; the OR-13 cut moved them to W3; the rest of the list is Proposed) | T1 | W3 | Open |
-| `stock_account` | Valuation entries, FIFO and AVCO, manual revaluation, per-transfer and at-invoicing posting (W1); periodic posting (W2); standard cost, landed costs and replay (W3) (Proposed split) | T1 | W1, later items W2-W3 | Open |
-| `sale_stock` | Bridge: deliveries from sales orders | T1 | W1 | Open |
-| `purchase_stock` | Bridge: receipts from purchase orders, the `buy` action, vendor returns; `dropship` arrives with routes in W3 | T1 | W2 | Open |
-| `purchase` | RFQ, PO, vendor prices, bill control, three-way match; approvals and the vendor portal later in W2; blanket orders W3 (Proposed placements; out of W1 by the OR-13 cut, confirmed in OR-15, D86) | T1 | W2 | Open |
-| `delivery` | Carrier trait, rate rules, shipments, connectors | T1 | W3 | Open |
-| `mrp` | BoM, work centers, routings, MO, by-products, subcontracting, Shop Floor | T2 | W3 | Open |
-| `quality`, `maintenance` | Ship with `mrp` (D25) | T2 | W3 | Open |
-| Barcode | Barcode fields on product and location exist from W1; nomenclature, scan-to-add and scan screens W3 (Proposed; scan-to-add was W2 before the cut); depth and WMS W4 (D25) | T2 | W3-W4 | Open |
-| PLM, `repair` | Not T1 or T2 (D25) | T3 | W4+ or community | Open |
-| MPS, MRP planning run | Unlisted, so T3 by the D25 default; placement Proposed | T3 | W4+ | Open |
+| App or module            | Scope                                                                                                                                                                                                                                                         | Tier | Wave                  | Licence |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | --------------------- | ------- |
+| `stock`                  | One warehouse, locations, transfers (receipts keyed in by hand), moves, quants, reservation, counts, scrap, the arithmetic forecast report                                                                                                                    | T1   | W1                    | Open    |
+| `stock` reordering       | Reordering rules and the `buy` action that drafts RFQs; they travel with `purchase_stock` because `buy` is their only action in this area (Proposed consequence of the cut; OQ-19)                                                                            | T1   | W2                    | Open    |
+| `stock` extensions       | Lots, serials, expiry, routes and rule editing, multi-step, multi-warehouse, packages, putaway, removal strategies beyond FIFO (D25 names "lots, serials and routes" and placed them in W2; the OR-13 cut moved them to W3; the rest of the list is Proposed) | T1   | W3                    | Open    |
+| `stock_account`          | Valuation entries, FIFO and AVCO, manual revaluation, per-transfer and at-invoicing posting (W1); periodic posting (W2); standard cost, landed costs and replay (W3) (Proposed split)                                                                         | T1   | W1, later items W2-W3 | Open    |
+| `sale_stock`             | Bridge: deliveries from sales orders                                                                                                                                                                                                                          | T1   | W1                    | Open    |
+| `purchase_stock`         | Bridge: receipts from purchase orders, the `buy` action, vendor returns; `dropship` arrives with routes in W3                                                                                                                                                 | T1   | W2                    | Open    |
+| `purchase`               | RFQ, PO, vendor prices, bill control, three-way match; approvals and the vendor portal later in W2; blanket orders W3 (Proposed placements; out of W1 by the OR-13 cut, confirmed in OR-15, D86)                                                              | T1   | W2                    | Open    |
+| `delivery`               | Carrier trait, rate rules, shipments, connectors                                                                                                                                                                                                              | T1   | W3                    | Open    |
+| `mrp`                    | BoM, work centers, routings, MO, by-products, subcontracting, Shop Floor                                                                                                                                                                                      | T2   | W3                    | Open    |
+| `quality`, `maintenance` | Ship with `mrp` (D25)                                                                                                                                                                                                                                         | T2   | W3                    | Open    |
+| Barcode                  | Barcode fields on product and location exist from W1; nomenclature, scan-to-add and scan screens W3 (Proposed; scan-to-add was W2 before the cut); depth and WMS W4 (D25)                                                                                     | T2   | W3-W4                 | Open    |
+| PLM, `repair`            | Not T1 or T2 (D25)                                                                                                                                                                                                                                            | T3   | W4+ or community      | Open    |
+| MPS, MRP planning run    | Unlisted, so T3 by the D25 default; placement Proposed                                                                                                                                                                                                        | T3   | W4+                   | Open    |
 
 Every row is Apache-2.0 and completely free to use and to self-host (OR-1, OR-2). There is no paid list, plan, operated service or ratchet in this area. The capabilities Odoo keeps proprietary (quality, PLM, MPS, the barcode screens, carrier connectors) are ordinary backlog items here: not withheld and not promised. From W2 on the list is an ordered backlog, and no app is built without a design partner (DECISIONS 5.1).
 
 ### 1.3 Boundaries with neighbouring areas
 
-| Neighbour | This area owns | Neighbour owns | Contract |
-|---|---|---|---|
-| Sales ([sales-crm.md](sales-crm.md)) | Delivery moves, reservations, returns | Order, pricing, invoicing policy | `sale_stock`: `DemandPort`, `QtyContributionPort` |
-| Finance ([finance.md](finance.md)) | Valuation entries | Journals, bills, closing, lock dates, payment release | `PostingPort` by account role. In W1, before `purchase`, a vendor bill is a plain finance bill; a bill line may name the validated receipt line it bills (Proposed, section 4.1.9; OQ-18) |
-| Retail ([retail-commerce-marketing.md](retail-commerce-marketing.md)) | Availability, `StockLevelChanged` | POS sessions, channel sync, the pending POS quantity | `pos_stock` raises one transfer per session at close; published availability subtracts the pending POS quantity until then (Proposed; answers retail open question 7) |
-| Services ([services.md](services.md)) | Repair orders, spare-part moves, van locations (internal `stock_location`), `maintenance_equipment` (the company's own assets) | Helpdesk actions, fleet, field service, customer-site `service_equipment` | Helpdesk creates repairs and returns; field jobs use `DemandPort` for van stock |
-| AI ([ai.md](ai.md)) | Replenishment rules and draft RFQs | `Forecaster` trait and baselines | Forecasts feed draft purchase proposals under a safety-stock policy, never orders (Proposed) |
-| Platform ([platform.md](platform.md)) | Domain rules | Chatter, approvals, automation, import | Approval requests |
-| Integrations ([integrations.md](integrations.md)) | `CarrierProvider` trait | API, webhooks, the plugin registry client | Connectors are plugins, that is packages (D32), listed in the free registry or copied into the business's own instance (D81); no payments, fees or commission (OR-2, OR-3) |
-| CLI and MCP ([cli.md](cli.md), [ai.md](ai.md)) | The meaning of each command of this area: inputs, effects, errors, permissions (section 4.10) | Grammar, global flags, output and exit-code contracts, the generated catalogue, the parity test, the agent write protocol | One catalogue entry per command, reachable through CLI, REST and MCP (D80) |
+| Neighbour                                                             | This area owns                                                                                                                 | Neighbour owns                                                                                                            | Contract                                                                                                                                                                                  |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sales ([sales-crm.md](sales-crm.md))                                  | Delivery moves, reservations, returns                                                                                          | Order, pricing, invoicing policy                                                                                          | `sale_stock`: `DemandPort`, `QtyContributionPort`                                                                                                                                         |
+| Finance ([finance.md](finance.md))                                    | Valuation entries                                                                                                              | Journals, bills, closing, lock dates, payment release                                                                     | `PostingPort` by account role. In W1, before `purchase`, a vendor bill is a plain finance bill; a bill line may name the validated receipt line it bills (Proposed, section 4.1.9; OQ-18) |
+| Retail ([retail-commerce-marketing.md](retail-commerce-marketing.md)) | Availability, `StockLevelChanged`                                                                                              | POS sessions, channel sync, the pending POS quantity                                                                      | `pos_stock` raises one transfer per session at close; published availability subtracts the pending POS quantity until then (Proposed; answers retail open question 7)                     |
+| Services ([services.md](services.md))                                 | Repair orders, spare-part moves, van locations (internal `stock_location`), `maintenance_equipment` (the company's own assets) | Helpdesk actions, fleet, field service, customer-site `service_equipment`                                                 | Helpdesk creates repairs and returns; field jobs use `DemandPort` for van stock                                                                                                           |
+| AI ([ai.md](ai.md))                                                   | Replenishment rules and draft RFQs                                                                                             | `Forecaster` trait and baselines                                                                                          | Forecasts feed draft purchase proposals under a safety-stock policy, never orders (Proposed)                                                                                              |
+| Platform ([platform.md](platform.md))                                 | Domain rules                                                                                                                   | Chatter, approvals, automation, import                                                                                    | Approval requests                                                                                                                                                                         |
+| Integrations ([integrations.md](integrations.md))                     | `CarrierProvider` trait                                                                                                        | API, webhooks, the plugin registry client                                                                                 | Connectors are plugins, that is packages (D32), listed in the free registry or copied into the business's own instance (D81); no payments, fees or commission (OR-2, OR-3)                |
+| CLI and MCP ([cli.md](cli.md), [ai.md](ai.md))                        | The meaning of each command of this area: inputs, effects, errors, permissions (section 4.10)                                  | Grammar, global flags, output and exit-code contracts, the generated catalogue, the parity test, the agent write protocol | One catalogue entry per command, reachable through CLI, REST and MCP (D80)                                                                                                                |
 
 ### 1.4 Design stance
 
@@ -55,18 +55,18 @@ Every row is Apache-2.0 and completely free to use and to self-host (OR-1, OR-2)
 
 ## 2. Personas and roles
 
-| Job role | Does | Default permission group | User type |
-|---|---|---|---|
-| Warehouse operator | Receives, picks, counts; scans from W3 | `stock.operator` | Light (Proposed) |
-| Warehouse manager | Configures warehouses and rules, approves adjustments, overrides | `stock.manager` | Full |
-| Buyer, purchasing manager (from W2) | RFQs and POs; approvals (later in W2), blanket orders (W3) | `purchase.user`, `purchase.manager` | Full |
-| Production planner | BoMs, MOs, schedule | `mrp.user`, `mrp.manager` | Full |
-| Shop-floor worker | Work orders on a tablet | `mrp.operator` | Light (Proposed) |
-| Quality and maintenance staff | Checks, alerts; requests, equipment | `quality.user`, `quality.manager`, `maintenance.user`, `maintenance.manager` | Full |
-| Logistics coordinator | Shipments, labels, carriers | `delivery.user` | Full |
-| Cost accountant | Valuation, revaluation, landed costs | `product.cost_viewer` (field permission), `stock.valuation_user` | Full |
-| Vendor; carrier | RFQ confirmation on the portal (later in W2); tracking webhooks (W3) | Portal principal; API client | n/a |
-| AI agent | Drafts receipts, count sheets and (from W2) RFQs; cannot validate, confirm or post without a human; uses the same typed commands as people (D80) | Delegated scopes (D18) | n/a |
+| Job role                            | Does                                                                                                                                             | Default permission group                                                     | User type        |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ---------------- |
+| Warehouse operator                  | Receives, picks, counts; scans from W3                                                                                                           | `stock.operator`                                                             | Light (Proposed) |
+| Warehouse manager                   | Configures warehouses and rules, approves adjustments, overrides                                                                                 | `stock.manager`                                                              | Full             |
+| Buyer, purchasing manager (from W2) | RFQs and POs; approvals (later in W2), blanket orders (W3)                                                                                       | `purchase.user`, `purchase.manager`                                          | Full             |
+| Production planner                  | BoMs, MOs, schedule                                                                                                                              | `mrp.user`, `mrp.manager`                                                    | Full             |
+| Shop-floor worker                   | Work orders on a tablet                                                                                                                          | `mrp.operator`                                                               | Light (Proposed) |
+| Quality and maintenance staff       | Checks, alerts; requests, equipment                                                                                                              | `quality.user`, `quality.manager`, `maintenance.user`, `maintenance.manager` | Full             |
+| Logistics coordinator               | Shipments, labels, carriers                                                                                                                      | `delivery.user`                                                              | Full             |
+| Cost accountant                     | Valuation, revaluation, landed costs                                                                                                             | `product.cost_viewer` (field permission), `stock.valuation_user`             | Full             |
+| Vendor; carrier                     | RFQ confirmation on the portal (later in W2); tracking webhooks (W3)                                                                             | Portal principal; API client                                                 | n/a              |
+| AI agent                            | Drafts receipts, count sheets and (from W2) RFQs; cannot validate, confirm or post without a human; uses the same typed commands as people (D80) | Delegated scopes (D18)                                                       | n/a              |
 
 "User type" names a task-scoped or full UI and permission profile (Proposed); it has no pricing meaning, because nothing is priced, metered or counted per seat (OR-2). In W1 there is no buyer in this area: vendor bills are entered in finance, and receipts are keyed in by the warehouse operator or manager.
 
@@ -76,43 +76,43 @@ Permission rows follow the D10 algebra: each names a model, an action and a scop
 
 Wave values are Proposed (D25, D26), except the W1 in and out calls, which are RATIFIED (OR-15). W1 is the D86 cut (OR-13, OR-15): basic stock only (one warehouse), so `purchase` and `purchase_stock` are out of W1 and land in W2, and the stock extensions land in W3 (Proposed landings). Every capability below is first a set of typed commands on CLI, API and MCP and only then a screen (OR-4, D80); section 4.10 lists them. "Odoo C" matches Odoo Community; "Odoo E" matches Odoo Enterprise (Odoo's own edition names, as the public tree shows them [R10 s1]); "Beyond" means obop goes further.
 
-| # | Capability | Description | Wave | Odoo parity |
-|---|---|---|---|---|
-| 1 | Products, UoM, packaging | Storable flag, tracking, exact base-UoM quantities, per-UoM rounding | W1 | Odoo C; beyond on exact decimals [R10 s3.3] |
-| 2 | Warehouse, locations, transfers | One warehouse, location tree, receipt (keyed in by hand in W1), delivery, internal, backorder, return, scrap | W1 | Odoo C |
-| 3 | Quants, reservation, immutable done moves | Unique key, atomic reservation (by date W2), corrections as new moves | W1 | Beyond: no duplicate quants, silent steal or unlock |
-| 4 | Counts and adjustments | Sessions, variance, adjustment moves; scheduled counts W2 | W1 | Odoo C |
-| 5 | Reordering rules | Min, max, multiple, lead days; `buy` action (needs `purchase_stock`); the arithmetic forecast stays a W1 report | W2 | Odoo C |
-| 6 | Valuation FIFO, AVCO | Immutable entries, explicit FIFO consumption | W1 | Odoo C; beyond on explicit layers |
-| 7 | Posting modes | Per-transfer and at-invoicing W1; periodic W2 | W1 | Odoo C for at-invoicing (Odoo 19 model); per-transfer as in Odoo 18 and ERPNext [R10 s3.7] |
-| 8 | Standard cost | Fixed cost, price-difference account | W3 | Odoo C |
-| 9 | Lots, serials, expiry, FEFO | Tracking, expiry alerts, FEFO removal | W3 | Odoo C |
-| 10 | Genealogy and recall | Stored forward and backward edges; through MOs with `mrp` | W3 | Beyond |
-| 11 | Routes, rules, multi-step, multi-warehouse | Pull, push, MTO, transit | W3 | Odoo C |
-| 12 | Packages, putaway, removal strategies | FIFO W1; LIFO, FEFO, closest and packages W3; least packages, capacity W4 | W1-W4 | Odoo C |
-| 13 | Dropshipping, owner and consignment | Supplier to customer without stock; owner in the quant key from W1 | W3 | Odoo C |
-| 14 | Landed costs | Five split methods; MO and subcontract receipts | W3 | Odoo C; beyond on MO targets |
-| 15 | Valuation replay | Backdated changes as adjustment entries | W3 | Beyond |
-| 16 | Batch and wave picking, lot valuation | Grouped picking; cost per lot | W4 | Odoo C |
-| 17 | Statistical forecasting | `Forecaster` trait and baselines owned by `ai` (W3, [ai.md](ai.md)); stock consumes them for draft purchase proposals with intervals | W3 in `ai`; the stock consumer is Proposed | Beyond [R16 s8] |
-| 18 | RFQ, PO, vendor prices | Tiers, lead times, RFQ merge, vendor returns | W2 (was W1) | Odoo C |
-| 19 | Bill control, three-way match | Ordered, received, billed; tolerance; payment hold | W2 (was W1) | Odoo C; beyond on payment hold |
-| 20 | PO approval, vendor portal | Approvals engine with CEL conditions; RFQ confirmation | W2, after rows 18-19; needs the W2 approvals engine and `portal` | Portal Odoo C; one engine beyond [R15] |
-| 21 | Blanket orders, alternatives | Agreements, call-offs, comparison | W3 | Odoo C |
-| 22 | Vendor OTIF and quality rate | On-time-in-full, quality rate | W3 | Odoo 20 quality rate; OTIF beyond |
-| 23 | BoM, kits, by-products | Normal, phantom, cost share, validity periods | W3 | Odoo C |
-| 24 | Work centers, routings, work orders | Time logs, loss reasons | W3 | Odoo C |
-| 25 | MO, backorder, unbuild, scrap, costing | Always flexible consumption; expected and real cost; optional WIP | W3 | Odoo C (Odoo 20) |
-| 26 | Subcontracting | Per-vendor location, hidden MO | W3 | Odoo C |
-| 27 | Shop Floor | Tablet work-order screen | W3 | Odoo E |
-| 28 | MPS and MRP run | Suggestions, not orders | W4+ | MPS Odoo E; MRP run beyond |
-| 29 | Quality | Control points, checks, alerts | W3 | Odoo E |
-| 30 | PLM | ECO, BoM revisions | W4+ | Odoo E |
-| 31 | Maintenance, downtime link | Preventive, MTBF, MTTR; requests block work centers | W3 | Odoo C; link Odoo E |
-| 32 | Repairs | Parts as moves, service lines | W4+ | Odoo C |
-| 33 | Barcode | Barcode fields from W1; nomenclature and scan-to-add, then scan screens and the edge command outbox, all W3 (D13); depth W4 | W3-W4 | Engine Odoo C; screens Odoo E (verified, section 4.7) |
-| 34 | Carriers | Rate rules, connectors, signed tracking webhooks | W3 | Rules Odoo C; connectors Odoo E (none in the 20.0 public tree [R10 s1]) |
-| 35 | Not built | IoT box, unlock of done transfers, duplicate-quant merge; WMS slotting, labour, yard, 3PL billing | n/a | Deliberately skipped or out of scope |
+| #   | Capability                                 | Description                                                                                                                          | Wave                                                             | Odoo parity                                                                                |
+| --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 1   | Products, UoM, packaging                   | Storable flag, tracking, exact base-UoM quantities, per-UoM rounding                                                                 | W1                                                               | Odoo C; beyond on exact decimals [R10 s3.3]                                                |
+| 2   | Warehouse, locations, transfers            | One warehouse, location tree, receipt (keyed in by hand in W1), delivery, internal, backorder, return, scrap                         | W1                                                               | Odoo C                                                                                     |
+| 3   | Quants, reservation, immutable done moves  | Unique key, atomic reservation (by date W2), corrections as new moves                                                                | W1                                                               | Beyond: no duplicate quants, silent steal or unlock                                        |
+| 4   | Counts and adjustments                     | Sessions, variance, adjustment moves; scheduled counts W2                                                                            | W1                                                               | Odoo C                                                                                     |
+| 5   | Reordering rules                           | Min, max, multiple, lead days; `buy` action (needs `purchase_stock`); the arithmetic forecast stays a W1 report                      | W2                                                               | Odoo C                                                                                     |
+| 6   | Valuation FIFO, AVCO                       | Immutable entries, explicit FIFO consumption                                                                                         | W1                                                               | Odoo C; beyond on explicit layers                                                          |
+| 7   | Posting modes                              | Per-transfer and at-invoicing W1; periodic W2                                                                                        | W1                                                               | Odoo C for at-invoicing (Odoo 19 model); per-transfer as in Odoo 18 and ERPNext [R10 s3.7] |
+| 8   | Standard cost                              | Fixed cost, price-difference account                                                                                                 | W3                                                               | Odoo C                                                                                     |
+| 9   | Lots, serials, expiry, FEFO                | Tracking, expiry alerts, FEFO removal                                                                                                | W3                                                               | Odoo C                                                                                     |
+| 10  | Genealogy and recall                       | Stored forward and backward edges; through MOs with `mrp`                                                                            | W3                                                               | Beyond                                                                                     |
+| 11  | Routes, rules, multi-step, multi-warehouse | Pull, push, MTO, transit                                                                                                             | W3                                                               | Odoo C                                                                                     |
+| 12  | Packages, putaway, removal strategies      | FIFO W1; LIFO, FEFO, closest and packages W3; least packages, capacity W4                                                            | W1-W4                                                            | Odoo C                                                                                     |
+| 13  | Dropshipping, owner and consignment        | Supplier to customer without stock; owner in the quant key from W1                                                                   | W3                                                               | Odoo C                                                                                     |
+| 14  | Landed costs                               | Five split methods; MO and subcontract receipts                                                                                      | W3                                                               | Odoo C; beyond on MO targets                                                               |
+| 15  | Valuation replay                           | Backdated changes as adjustment entries                                                                                              | W3                                                               | Beyond                                                                                     |
+| 16  | Batch and wave picking, lot valuation      | Grouped picking; cost per lot                                                                                                        | W4                                                               | Odoo C                                                                                     |
+| 17  | Statistical forecasting                    | `Forecaster` trait and baselines owned by `ai` (W3, [ai.md](ai.md)); stock consumes them for draft purchase proposals with intervals | W3 in `ai`; the stock consumer is Proposed                       | Beyond [R16 s8]                                                                            |
+| 18  | RFQ, PO, vendor prices                     | Tiers, lead times, RFQ merge, vendor returns                                                                                         | W2 (was W1)                                                      | Odoo C                                                                                     |
+| 19  | Bill control, three-way match              | Ordered, received, billed; tolerance; payment hold                                                                                   | W2 (was W1)                                                      | Odoo C; beyond on payment hold                                                             |
+| 20  | PO approval, vendor portal                 | Approvals engine with CEL conditions; RFQ confirmation                                                                               | W2, after rows 18-19; needs the W2 approvals engine and `portal` | Portal Odoo C; one engine beyond [R15]                                                     |
+| 21  | Blanket orders, alternatives               | Agreements, call-offs, comparison                                                                                                    | W3                                                               | Odoo C                                                                                     |
+| 22  | Vendor OTIF and quality rate               | On-time-in-full, quality rate                                                                                                        | W3                                                               | Odoo 20 quality rate; OTIF beyond                                                          |
+| 23  | BoM, kits, by-products                     | Normal, phantom, cost share, validity periods                                                                                        | W3                                                               | Odoo C                                                                                     |
+| 24  | Work centers, routings, work orders        | Time logs, loss reasons                                                                                                              | W3                                                               | Odoo C                                                                                     |
+| 25  | MO, backorder, unbuild, scrap, costing     | Always flexible consumption; expected and real cost; optional WIP                                                                    | W3                                                               | Odoo C (Odoo 20)                                                                           |
+| 26  | Subcontracting                             | Per-vendor location, hidden MO                                                                                                       | W3                                                               | Odoo C                                                                                     |
+| 27  | Shop Floor                                 | Tablet work-order screen                                                                                                             | W3                                                               | Odoo E                                                                                     |
+| 28  | MPS and MRP run                            | Suggestions, not orders                                                                                                              | W4+                                                              | MPS Odoo E; MRP run beyond                                                                 |
+| 29  | Quality                                    | Control points, checks, alerts                                                                                                       | W3                                                               | Odoo E                                                                                     |
+| 30  | PLM                                        | ECO, BoM revisions                                                                                                                   | W4+                                                              | Odoo E                                                                                     |
+| 31  | Maintenance, downtime link                 | Preventive, MTBF, MTTR; requests block work centers                                                                                  | W3                                                               | Odoo C; link Odoo E                                                                        |
+| 32  | Repairs                                    | Parts as moves, service lines                                                                                                        | W4+                                                              | Odoo C                                                                                     |
+| 33  | Barcode                                    | Barcode fields from W1; nomenclature and scan-to-add, then scan screens and the edge command outbox, all W3 (D13); depth W4          | W3-W4                                                            | Engine Odoo C; screens Odoo E (verified, section 4.7)                                      |
+| 34  | Carriers                                   | Rate rules, connectors, signed tracking webhooks                                                                                     | W3                                                               | Rules Odoo C; connectors Odoo E (none in the 20.0 public tree [R10 s1])                    |
+| 35  | Not built                                  | IoT box, unlock of done transfers, duplicate-quant merge; WMS slotting, labour, yard, 3PL billing                                    | n/a                                                              | Deliberately skipped or out of scope                                                       |
 
 ## 4. Per-app specification
 
@@ -124,39 +124,39 @@ Wave values are Proposed (D25, D26), except the W1 in and out calls, which are R
 
 #### 4.1.1 Core entities
 
-| Entity | Purpose | Key fields | States |
-|---|---|---|---|
-| `stock_warehouse` | Site | company, code, address, reception steps (1-3), delivery steps (ship, pick-ship, pick-pack-ship); W1 fixes one step in and ship only, more steps are W3 | active, archived |
-| `stock_location` | Tree node | parent (`ltree` path [R22 s4]; contrib extension, availability on managed PostgreSQL unverified, D34), usage (supplier, view, internal, customer, inventory_loss, production, transit), valued flag, `allow_negative`, owner party, barcode | active |
-| `stock_picking_type` | Operation template | code, default locations, reservation method (at_confirm, manual, by_date), lot policy, backorder policy, quality enforcement | active |
-| `stock_transfer` | Document | number, type, party, dates, policy (direct or one), `backorder_of_id`, origin reference | see 4.1.3 |
-| `stock_move` | Movement of one product | demand (move UoM) and `demand_base`, reserved and done base, locations, procure method (MTS, MTO, MTS-else-MTO), rule, `origin_returned_move_id` | see 4.1.3 |
-| `stock_move_link` | Chain edge | `orig_move_id`, `dest_move_id`, base quantity | n/a |
-| `stock_move_line` | Detail and audit ledger | move, product, lot, package, result package, owner, locations, quantity, picked, done date | open, done |
-| `stock_quant` | On-hand per key | `UNIQUE NULLS NOT DISTINCT` on company, product, location, lot, package, owner; quantity, reserved, `in_date` | n/a |
-| `stock_lot` | Lot or serial | product, name, expiration, use, removal and alert dates, properties | active |
-| `stock_package` | Container | type, parent, location, SSCC barcode | active |
-| `stock_route`, `stock_rule` | Procurement as data | action (pull, push, pull_push, buy, manufacture, dropship), procure method, locations, picking type, delay | active |
-| `stock_reorder_rule` | Replenishment | product, location, min, max, multiple, trigger, lead days, snoozed until | active, snoozed |
-| `stock_valuation_entry` | Immutable value row | product, lot, move line, direction, qty, `value_minor` bigint, effective_at, source kind, method snapshot, provisional | immutable |
-| `stock_fifo_layer`, `stock_fifo_consumption` | Mutable remaining projection; explicit consumption | entry, remaining qty and value; out entry, in entry, qty, value | n/a |
-| `stock_cost_state` | Running totals | company, product, lot, quantity, value, `dirty_from`, method | n/a |
-| `stock_landed_cost`, `stock_revaluation` | Added costs; manual cost change | bill lines, transfers, split method; product, delta, reason | draft, posted, cancelled |
-| `stock_inventory_count` | Count session | filters, expected snapshot, counted lines, variance | draft, counting, applied |
-| `stock_trace_edge` | Genealogy written at validation (W3) | parent lot, child lot, via transfer or MO, quantity | immutable |
+| Entity                                       | Purpose                                            | Key fields                                                                                                                                                                                                                                  | States                   |
+| -------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `stock_warehouse`                            | Site                                               | company, code, address, reception steps (1-3), delivery steps (ship, pick-ship, pick-pack-ship); W1 fixes one step in and ship only, more steps are W3                                                                                      | active, archived         |
+| `stock_location`                             | Tree node                                          | parent (`ltree` path [R22 s4]; contrib extension, availability on managed PostgreSQL unverified, D34), usage (supplier, view, internal, customer, inventory_loss, production, transit), valued flag, `allow_negative`, owner party, barcode | active                   |
+| `stock_picking_type`                         | Operation template                                 | code, default locations, reservation method (at_confirm, manual, by_date), lot policy, backorder policy, quality enforcement                                                                                                                | active                   |
+| `stock_transfer`                             | Document                                           | number, type, party, dates, policy (direct or one), `backorder_of_id`, origin reference                                                                                                                                                     | see 4.1.3                |
+| `stock_move`                                 | Movement of one product                            | demand (move UoM) and `demand_base`, reserved and done base, locations, procure method (MTS, MTO, MTS-else-MTO), rule, `origin_returned_move_id`                                                                                            | see 4.1.3                |
+| `stock_move_link`                            | Chain edge                                         | `orig_move_id`, `dest_move_id`, base quantity                                                                                                                                                                                               | n/a                      |
+| `stock_move_line`                            | Detail and audit ledger                            | move, product, lot, package, result package, owner, locations, quantity, picked, done date                                                                                                                                                  | open, done               |
+| `stock_quant`                                | On-hand per key                                    | `UNIQUE NULLS NOT DISTINCT` on company, product, location, lot, package, owner; quantity, reserved, `in_date`                                                                                                                               | n/a                      |
+| `stock_lot`                                  | Lot or serial                                      | product, name, expiration, use, removal and alert dates, properties                                                                                                                                                                         | active                   |
+| `stock_package`                              | Container                                          | type, parent, location, SSCC barcode                                                                                                                                                                                                        | active                   |
+| `stock_route`, `stock_rule`                  | Procurement as data                                | action (pull, push, pull_push, buy, manufacture, dropship), procure method, locations, picking type, delay                                                                                                                                  | active                   |
+| `stock_reorder_rule`                         | Replenishment                                      | product, location, min, max, multiple, trigger, lead days, snoozed until                                                                                                                                                                    | active, snoozed          |
+| `stock_valuation_entry`                      | Immutable value row                                | product, lot, move line, direction, qty, `value_minor` bigint, effective_at, source kind, method snapshot, provisional                                                                                                                      | immutable                |
+| `stock_fifo_layer`, `stock_fifo_consumption` | Mutable remaining projection; explicit consumption | entry, remaining qty and value; out entry, in entry, qty, value                                                                                                                                                                             | n/a                      |
+| `stock_cost_state`                           | Running totals                                     | company, product, lot, quantity, value, `dirty_from`, method                                                                                                                                                                                | n/a                      |
+| `stock_landed_cost`, `stock_revaluation`     | Added costs; manual cost change                    | bill lines, transfers, split method; product, delta, reason                                                                                                                                                                                 | draft, posted, cancelled |
+| `stock_inventory_count`                      | Count session                                      | filters, expected snapshot, counted lines, variance                                                                                                                                                                                         | draft, counting, applied |
+| `stock_trace_edge`                           | Genealogy written at validation (W3)               | parent lot, child lot, via transfer or MO, quantity                                                                                                                                                                                         | immutable                |
 
 Waves of the entities above (Proposed, after the OR-13 cut): everything is W1 except `stock_reorder_rule` (W2, with `purchase_stock`), `stock_landed_cost` (W3), `stock_trace_edge` (W3) and the editing of `stock_route` and `stock_rule` (W3). `stock_lot` and `stock_package` tables exist from W1 as dormant models, like the dormant `branch` of D28, so the quant key is final; they are not exposed through the catalogue and no screen uses them until W3. `stock_revaluation` (manual cost change) is W1. `stock_reference` names a chain of moves (Odoo's procurement group). `uom` and `product_uom` (packaging as a per-product UoM with barcode) belong to `product` [R23 B.1]. Quantities are `NUMERIC(24,6)` in base UoM, valuation is `value_minor bigint`, unit costs `NUMERIC(24,8)` (D9, [R23 DR-5]); UoM rounding is per UoM, applied at entry, conversion rounds half-up. Odoo uses floats and one global "Product Unit" precision [R10 s3.3].
 
 #### 4.1.2 Hard problems and solutions
 
-| Problem | obop solution | Enforced in |
-|---|---|---|
-| Unique quant key (Odoo tolerates duplicates and merges later [R10 s3.2]) | One `UNIQUE NULLS NOT DISTINCT` key; every change through one upsert | PostgreSQL (D30) |
-| Reservation (Odoo frees other moves' reservations on a forced done move [R10 s3.1]) | Conditional atomic update; no silent steal; explicit override event | Rust plus CHECK |
-| Concurrency (Odoo: REPEATABLE READ, up to 5 attempts [R10 s3.2]) | READ COMMITTED, atomic statements, deterministic lock order, retry on 40001, 40P01, 55P03 [R22 s6] | Rust plus PostgreSQL |
-| Immutable done moves (Odoo can unlock and replay by mutation [R10 s3.6, s6.1]) | Trigger blocks edits; corrections are new moves plus adjustment entries | PostgreSQL (D30) |
-| Negative stock | Policy per company, warehouse, location; provisional entries settled later | CHECK plus Rust |
-| Valuation | Immutable entries; locked `stock_cost_state`; replay writes adjustments | PostgreSQL (D30) |
+| Problem                                                                             | obop solution                                                                                      | Enforced in          |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------- |
+| Unique quant key (Odoo tolerates duplicates and merges later [R10 s3.2])            | One `UNIQUE NULLS NOT DISTINCT` key; every change through one upsert                               | PostgreSQL (D30)     |
+| Reservation (Odoo frees other moves' reservations on a forced done move [R10 s3.1]) | Conditional atomic update; no silent steal; explicit override event                                | Rust plus CHECK      |
+| Concurrency (Odoo: REPEATABLE READ, up to 5 attempts [R10 s3.2])                    | READ COMMITTED, atomic statements, deterministic lock order, retry on 40001, 40P01, 55P03 [R22 s6] | Rust plus PostgreSQL |
+| Immutable done moves (Odoo can unlock and replay by mutation [R10 s3.6, s6.1])      | Trigger blocks edits; corrections are new moves plus adjustment entries                            | PostgreSQL (D30)     |
+| Negative stock                                                                      | Policy per company, warehouse, location; provisional entries settled later                         | CHECK plus Rust      |
+| Valuation                                                                           | Immutable entries; locked `stock_cost_state`; replay writes adjustments                            | PostgreSQL (D30)     |
 
 **Reservation algorithm** (`ReserveMove`):
 
@@ -189,11 +189,11 @@ Constraints: `CHECK (reserved_quantity >= 0 AND reserved_quantity <= GREATEST(qu
 
 **Valuation.** An entry is immutable; a move's current value is the sum of its entries. The value source of an incoming move follows Odoo's hierarchy [R10 s3.6]: manual revaluation, posted vendor bill, production cost, order price, return at original cost, inter-company source (W3), standard cost (W3). Odoo 19.0 has the same list without the inter-company step; extra costs such as landed costs are added on top of any non-manual source [R10 s3.6]. In W1 there is no purchase order, so "order price" is replaced by the unit cost the operator enters on the receipt line (default: the product's cost), and a posted vendor bill is a value source only when its line names the receipt line it bills (Proposed, section 4.1.9; OQ-18); otherwise the accountant corrects value with a manual revaluation. Landed costs (W3) link a vendor-bill line to validated receipts, split equally or by quantity, current cost, weight or volume [R10 s3.8], apply to FIFO and AVCO products only [R10 s3.8], and add adjustment entries: the in-stock share raises stock value and the consumed share goes to COGS (section 5.7; this split is Proposed, R10 does not say Odoo does it).
 
-| Method | Outbound entry | Rounding |
-|---|---|---|
-| FIFO | Consumes layers oldest first; each consumption is a `stock_fifo_consumption` row | The last unit of a layer takes the remainder |
-| AVCO | `round(total_value * qty / total_qty)` | The entry that empties stock takes the whole remaining value [R23 DR-5] |
-| Standard (W3) | Fixed cost; receipt difference to a price-difference account | n/a |
+| Method        | Outbound entry                                                                   | Rounding                                                                |
+| ------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| FIFO          | Consumes layers oldest first; each consumption is a `stock_fifo_consumption` row | The last unit of a layer takes the remainder                            |
+| AVCO          | `round(total_value * qty / total_qty)`                                           | The entry that empties stock takes the whole remaining value [R23 DR-5] |
+| Standard (W3) | Fixed cost; receipt difference to a price-difference account                     | n/a                                                                     |
 
 LIFO is a removal strategy only, never a valuation method [R10 s3.6]. `stock_fifo_layer` is the only mutable valuation table and is rebuildable from the consumption rows. A foreign-currency receipt is valued at the rate stored on it (D9); later rate differences on the bill are exchange differences in finance, not revaluation (Proposed). When a bill arrives at a different price, adjustment entries split the delta: under FIFO by layer between remaining stock and consumed units (a COGS catch-up, as Odoo 20 does retroactively [R10 s1]); under AVCO the consumed share is `max(0, min(receipt_qty, receipt_qty - on_hand))` of the receipt (Proposed).
 
@@ -226,12 +226,12 @@ stateDiagram-v2
 
 The transfer state is derived from its non-cancelled moves and stored by the handler in the same transaction ([R23 B.2] principle 4):
 
-| Transfer state | Rule |
-|---|---|
-| draft; done; cancelled | All moves draft; all done; all cancelled |
-| waiting | No move ready and at least one waiting on an upstream move |
-| confirmed | Demand confirmed, reservation incomplete |
-| ready | Policy `direct`: at least one move has reserved quantity. Policy `one`: all moves assigned |
+| Transfer state         | Rule                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| draft; done; cancelled | All moves draft; all done; all cancelled                                                   |
+| waiting                | No move ready and at least one waiting on an upstream move                                 |
+| confirmed              | Demand confirmed, reservation incomplete                                                   |
+| ready                  | Policy `direct`: at least one move has reserved quantity. Policy `one`: all moves assigned |
 
 #### 4.1.4 Main workflows
 
@@ -274,34 +274,34 @@ Each workflow is a sequence of typed commands (section 4.10); a person, a script
 
 #### 4.1.5 Automatic flows
 
-| Direction | Event or port | Counterpart | Mechanism |
-|---|---|---|---|
-| Consumed by a bridge | `SaleOrderConfirmed` | `sale_stock` calls `DemandPort::raise` | TxEvent |
-| Consumed by a bridge (W2) | `PurchaseOrderConfirmed` | `purchase_stock` creates receipt moves; in W1 receipts are keyed in by hand (section 4.1.4) | TxEvent |
-| Consumed by a bridge (W3) | `PosSessionClosed` | `pos_stock` raises one transfer | TxEvent |
-| Consumed by a bridge | `SaleOrderCancelled` | `sale_stock` cancels the order's open deliveries through `CancelTransfer`; a delivery with a done move is not cancelled and is corrected by a return | TxEvent |
-| Consumed by `stock` (W3) | `ReturnRequested`, `WithdrawalRequested` (emitted by `ecommerce`, [retail-commerce-marketing.md](retail-commerce-marketing.md)) | Creates a return transfer linked by `origin_returned_move_id` (section 4.1.4), valued at the original cost; `invoicing` consumes the same events for the credit note | Durable event |
-| Emits | `TransferConfirmed`, `MoveReserved`, `ReservationLost`, `NegativeStockCreated` | Quality, chatter, activities | TxEvent |
-| Emits | `TransferDone` | `sale_stock`, `purchase_stock` from W2 (`QtyContributionPort`); `stock_account` (`PostingPort`); sweep | TxEvent |
-| Runs | `BeforeTransferValidate` (an extension point, not an event) | Quality adds guards | Extension point |
-| Emits | `StockLevelChanged` (coalesced), `TransferDone` | `ecommerce` (availability), `pos`, `mrp`, channel pushers and channel sync, website cache tags, webhooks, analytics, AI index | Durable event |
-| Emits (W2) | `ReplenishmentFailed` (Proposed; listed in the supply-chain line of [CONVENTIONS.md](../CONVENTIONS.md) 3.5) | The buyer activity through `mail`; webhooks, analytics; no other named consumer | Durable event |
-| Offers | `DemandPort` | `sale_stock`, `pos_stock`, `mrp`, `repair`, `planning` (van stock) | Port |
-| Offers | `StockMovePort` (create, confirm, reserve, cancel), `StockQueryPort` (availability, forecast) | `sale_stock`, `pos_stock`, `mrp`, `repair`, `quality` (hold moves) | Port |
+| Direction                 | Event or port                                                                                                                   | Counterpart                                                                                                                                                          | Mechanism       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| Consumed by a bridge      | `SaleOrderConfirmed`                                                                                                            | `sale_stock` calls `DemandPort::raise`                                                                                                                               | TxEvent         |
+| Consumed by a bridge (W2) | `PurchaseOrderConfirmed`                                                                                                        | `purchase_stock` creates receipt moves; in W1 receipts are keyed in by hand (section 4.1.4)                                                                          | TxEvent         |
+| Consumed by a bridge (W3) | `PosSessionClosed`                                                                                                              | `pos_stock` raises one transfer                                                                                                                                      | TxEvent         |
+| Consumed by a bridge      | `SaleOrderCancelled`                                                                                                            | `sale_stock` cancels the order's open deliveries through `CancelTransfer`; a delivery with a done move is not cancelled and is corrected by a return                 | TxEvent         |
+| Consumed by `stock` (W3)  | `ReturnRequested`, `WithdrawalRequested` (emitted by `ecommerce`, [retail-commerce-marketing.md](retail-commerce-marketing.md)) | Creates a return transfer linked by `origin_returned_move_id` (section 4.1.4), valued at the original cost; `invoicing` consumes the same events for the credit note | Durable event   |
+| Emits                     | `TransferConfirmed`, `MoveReserved`, `ReservationLost`, `NegativeStockCreated`                                                  | Quality, chatter, activities                                                                                                                                         | TxEvent         |
+| Emits                     | `TransferDone`                                                                                                                  | `sale_stock`, `purchase_stock` from W2 (`QtyContributionPort`); `stock_account` (`PostingPort`); sweep                                                               | TxEvent         |
+| Runs                      | `BeforeTransferValidate` (an extension point, not an event)                                                                     | Quality adds guards                                                                                                                                                  | Extension point |
+| Emits                     | `StockLevelChanged` (coalesced), `TransferDone`                                                                                 | `ecommerce` (availability), `pos`, `mrp`, channel pushers and channel sync, website cache tags, webhooks, analytics, AI index                                        | Durable event   |
+| Emits (W2)                | `ReplenishmentFailed` (Proposed; listed in the supply-chain line of [CONVENTIONS.md](../CONVENTIONS.md) 3.5)                    | The buyer activity through `mail`; webhooks, analytics; no other named consumer                                                                                      | Durable event   |
+| Offers                    | `DemandPort`                                                                                                                    | `sale_stock`, `pos_stock`, `mrp`, `repair`, `planning` (van stock)                                                                                                   | Port            |
+| Offers                    | `StockMovePort` (create, confirm, reserve, cancel), `StockQueryPort` (availability, forecast)                                   | `sale_stock`, `pos_stock`, `mrp`, `repair`, `quality` (hold moves)                                                                                                   | Port            |
 
 Rule actions are an extension point: `stock` owns `pull`, `push`, `pull_push`; `purchase_stock` registers `buy` (W2) and `dropship` (W3); `mrp` registers `manufacture` and `subcontract`. In W1 the warehouse generates its rules (one-step reception and delivery) and routes are not user-editable; `buy` appears with `purchase_stock` in W2, and route and rule editing arrives in W3 (D25, D86). Bridges depend on `*-api` crates only (D27). The first six rows are specified here; the last four are specified in the spec named in their row and are listed because every bridge appears in the module table of each spec it touches ([CONVENTIONS.md](../CONVENTIONS.md) 7.2):
 
-| Module | Depends on | Responsibility | Wave |
-|---|---|---|---|
-| `sale_stock` | sales-api, stock-api | `DemandPort::raise` on confirmation, cancel and quantity propagation, `QtyContributionPort`, returns | W1 |
-| `purchase_stock` | purchase-api, stock-api | Receipts, `buy` (and `dropship` from W3), received quantity, vendor returns | W2 (was W1) |
-| `stock_account` | stock-api, account-api | Valuation entries, `PostingPort`, COGS at `BeforeInvoicePost`, revaluation; landed costs from W3 | W1 |
-| `mrp_account` | mrp-api, stock-api, account-api | Production cost entries, optional WIP | W3 |
-| `sale_mrp`, `purchase_mrp` | sales-api or purchase-api, mrp-api | Kits and MTO; subcontract orders | W3 |
-| `pos_stock` | pos-api, stock-api | One consolidated transfer per session at close through `DemandPort`; pending POS quantity in published availability (section 1.3). Specified in [retail-commerce-marketing.md](retail-commerce-marketing.md) | W3 |
-| `rental_stock` | rental-api, stock-api | Pickup wizard raises a transfer, return wizard receives stock. Specified in [sales-crm.md](sales-crm.md) (Proposed) | Per its spec |
-| `subscription_stock` | subscriptions-api, stock-api | Goods delivered with each subscription invoice. Specified in [sales-crm.md](sales-crm.md) (Proposed) | Per its spec |
-| `sale_payment` | sales-api, payment-api | Confirms the order at `prepayment_percent` when `PaymentTransactionDone` arrives; no stock edge. Specified in [sales-crm.md](sales-crm.md) (Proposed; whether `payment` publishes a hub port instead is open there) | Per its spec |
+| Module                     | Depends on                         | Responsibility                                                                                                                                                                                                      | Wave         |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `sale_stock`               | sales-api, stock-api               | `DemandPort::raise` on confirmation, cancel and quantity propagation, `QtyContributionPort`, returns                                                                                                                | W1           |
+| `purchase_stock`           | purchase-api, stock-api            | Receipts, `buy` (and `dropship` from W3), received quantity, vendor returns                                                                                                                                         | W2 (was W1)  |
+| `stock_account`            | stock-api, account-api             | Valuation entries, `PostingPort`, COGS at `BeforeInvoicePost`, revaluation; landed costs from W3                                                                                                                    | W1           |
+| `mrp_account`              | mrp-api, stock-api, account-api    | Production cost entries, optional WIP                                                                                                                                                                               | W3           |
+| `sale_mrp`, `purchase_mrp` | sales-api or purchase-api, mrp-api | Kits and MTO; subcontract orders                                                                                                                                                                                    | W3           |
+| `pos_stock`                | pos-api, stock-api                 | One consolidated transfer per session at close through `DemandPort`; pending POS quantity in published availability (section 1.3). Specified in [retail-commerce-marketing.md](retail-commerce-marketing.md)        | W3           |
+| `rental_stock`             | rental-api, stock-api              | Pickup wizard raises a transfer, return wizard receives stock. Specified in [sales-crm.md](sales-crm.md) (Proposed)                                                                                                 | Per its spec |
+| `subscription_stock`       | subscriptions-api, stock-api       | Goods delivered with each subscription invoice. Specified in [sales-crm.md](sales-crm.md) (Proposed)                                                                                                                | Per its spec |
+| `sale_payment`             | sales-api, payment-api             | Confirms the order at `prepayment_percent` when `PaymentTransactionDone` arrives; no stock edge. Specified in [sales-crm.md](sales-crm.md) (Proposed; whether `payment` publishes a hub port instead is open there) | Per its spec |
 
 #### 4.1.6 Permissions and sensitive data
 
@@ -313,29 +313,29 @@ Stock on hand by location (and by lot and package from W3); forecast by date; in
 
 #### 4.1.8 Configuration
 
-| Setting | Scope | Default |
-|---|---|---|
-| Posting mode | Company | `perpetual_at_invoicing` (Proposed) |
-| Allow negative stock | Company, warehouse, location | Off |
-| Cost method | Product profile (per company) | AVCO (Proposed) |
-| Reservation method; removal strategy | Picking type; company, category | At confirmation; FIFO (the only strategy in W1) |
-| Stock lock date | Company | None (Proposed) |
-| Expired lots reservable (W3) | Company | No |
-| Reception and delivery steps | Warehouse | 1 and ship only (fixed in W1; a setting from W3) |
-| Lead times (delivery in W1; vendor and purchase security from W2) | Product, vendor, company | 0 days |
+| Setting                                                           | Scope                           | Default                                          |
+| ----------------------------------------------------------------- | ------------------------------- | ------------------------------------------------ |
+| Posting mode                                                      | Company                         | `perpetual_at_invoicing` (Proposed)              |
+| Allow negative stock                                              | Company, warehouse, location    | Off                                              |
+| Cost method                                                       | Product profile (per company)   | AVCO (Proposed)                                  |
+| Reservation method; removal strategy                              | Picking type; company, category | At confirmation; FIFO (the only strategy in W1)  |
+| Stock lock date                                                   | Company                         | None (Proposed)                                  |
+| Expired lots reservable (W3)                                      | Company                         | No                                               |
+| Reception and delivery steps                                      | Warehouse                       | 1 and ship only (fixed in W1; a setting from W3) |
+| Lead times (delivery in W1; vendor and purchase security from W2) | Product, vendor, company        | 0 days                                           |
 
 #### 4.1.9 Posting modes
 
 Account roles, not account ids, are requested through `PostingPort`: `stock_valuation`, `grni`, `cogs`, `stock_variation`, `inventory_loss`, `price_difference`, `production_cost`, `work_center_absorption`, `landed_cost_clearing` (role names are Proposed; the registry is `account_role` in [finance.md](finance.md) 4.1.1, with the names listed in [CONVENTIONS.md](../CONVENTIONS.md) section 6). The company posting mode is `perpetual_at_invoicing` (default), `perpetual_per_transfer` or `periodic`, as named in finance.md [R10 s6.4]. One journal entry per validated transfer or MO, never per line [R10 SHOULD 9]. Tax is omitted.
 
-| Event | Per transfer (W1) | At invoicing (W1, default) | Periodic (W2) |
-|---|---|---|---|
-| Receipt validated | Dr stock valuation, Cr GRNI | Nothing | Nothing |
-| Vendor bill | Dr GRNI (and variance), Cr payable | Dr stock valuation, Cr payable | Dr expense, Cr payable |
-| Delivery validated | Dr COGS, Cr stock valuation | Nothing | Nothing |
-| Customer invoice | Revenue only | Revenue plus COGS lines from `BeforeInvoicePost` | Revenue only |
-| Adjustment | Dr or Cr stock valuation against `inventory_loss` | Same | At closing |
-| Period end | Reconciliation report | Closing entry and accruals | Dr stock valuation, Cr `stock_variation` |
+| Event              | Per transfer (W1)                                 | At invoicing (W1, default)                       | Periodic (W2)                            |
+| ------------------ | ------------------------------------------------- | ------------------------------------------------ | ---------------------------------------- |
+| Receipt validated  | Dr stock valuation, Cr GRNI                       | Nothing                                          | Nothing                                  |
+| Vendor bill        | Dr GRNI (and variance), Cr payable                | Dr stock valuation, Cr payable                   | Dr expense, Cr payable                   |
+| Delivery validated | Dr COGS, Cr stock valuation                       | Nothing                                          | Nothing                                  |
+| Customer invoice   | Revenue only                                      | Revenue plus COGS lines from `BeforeInvoicePost` | Revenue only                             |
+| Adjustment         | Dr or Cr stock valuation against `inventory_loss` | Same                                             | At closing                               |
+| Period end         | Reconciliation report                             | Closing entry and accruals                       | Dr stock valuation, Cr `stock_variation` |
 
 At-invoicing and its closing entry follow Odoo 19; Odoo 20 posts accruals straight to the valuation account, read only from release notes [R10 s3.7]. The ledger side is in [finance.md](finance.md).
 
@@ -355,14 +355,14 @@ The FDA FSMA 204 compliance date is proposed for 2028-07-20 and no final rule wa
 
 **Capabilities.** W2: RFQ to PO, vendor price tiers with validity and lead time, reorder-driven RFQs (with the reordering rules of 4.1.4), receipt link, bill control (received or ordered), three-way match, vendor returns, PDFs. Later in W2, once the approvals engine and `portal` exist: approvals and the vendor portal. W3: blanket orders, tenders, alternatives comparison, OTIF and quality rate. Each is a set of typed commands on CLI, API and MCP (section 4.10).
 
-| Entity | Purpose | Key fields | States |
-|---|---|---|---|
-| `purchase_order` | Header | vendor party, currency, dates, terms, fiscal position, incoterm, `sent_at`, `locked`, totals minor | draft, confirmed, cancelled; progress: `approval_state`, `receipt_status`, `bill_status` |
-| `purchase_order_line` | Line | product, qty, UoM, price NUMERIC(24,8), discount, taxes, planned date | n/a |
-| `purchase_vendor_price` | Vendor pricelist | vendor, product, min qty, price, currency, validity (no overlap: `EXCLUDE` on 17, `WITHOUT OVERLAPS` on 18, D8), lead days | active |
-| `purchase_agreement` | Blanket order or tender | vendor, type, quantity and price commitments | draft, open, closed |
-| `purchase_line_qty_contribution` | Derived quantities | line, source reference, kind (received, billed), qty; unique on line and source | n/a |
-| `purchase_bill_match` | Match result | bill line, PO line, quantity, price delta | matched, within_tolerance, exception |
+| Entity                           | Purpose                 | Key fields                                                                                                                 | States                                                                                   |
+| -------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `purchase_order`                 | Header                  | vendor party, currency, dates, terms, fiscal position, incoterm, `sent_at`, `locked`, totals minor                         | draft, confirmed, cancelled; progress: `approval_state`, `receipt_status`, `bill_status` |
+| `purchase_order_line`            | Line                    | product, qty, UoM, price NUMERIC(24,8), discount, taxes, planned date                                                      | n/a                                                                                      |
+| `purchase_vendor_price`          | Vendor pricelist        | vendor, product, min qty, price, currency, validity (no overlap: `EXCLUDE` on 17, `WITHOUT OVERLAPS` on 18, D8), lead days | active                                                                                   |
+| `purchase_agreement`             | Blanket order or tender | vendor, type, quantity and price commitments                                                                               | draft, open, closed                                                                      |
+| `purchase_line_qty_contribution` | Derived quantities      | line, source reference, kind (received, billed), qty; unique on line and source                                            | n/a                                                                                      |
+| `purchase_bill_match`            | Match result            | bill line, PO line, quantity, price delta                                                                                  | matched, within_tolerance, exception                                                     |
 
 ```mermaid
 stateDiagram-v2
@@ -401,14 +401,14 @@ Bill control defaults to received quantity for goods and ordered quantity for se
 
 **Capabilities.** W3 MVP: BoM (normal, kit, subcontract) with validity periods; by-products with cost share; work centers with hourly cost and calendars; routings; MO with component, finished and by-product moves; work orders with time logs and loss reasons; backorder MOs; unbuild; scrap; expected and real cost; optional WIP; subcontracting; lot-tracked production and genealogy; Shop Floor tablet screen after the core, same wave (Proposed). Later: W4 OEE dashboards; W4+ MPS, MRP run.
 
-| Entity | Purpose | Key fields | States |
-|---|---|---|---|
-| `mrp_bom`, `mrp_bom_line` | Recipe; component | product, quantity, UoM, type (normal, phantom, subcontract), vendors, `valid_during` (temporal), revision; component, qty, operation | active, archived |
-| `mrp_bom_byproduct` | By-product | product, qty, `cost_share_pct` (sum at most 100) | n/a |
-| `mrp_operation`, `mrp_work_center` | Routing step; resource | work center, fixed and per-cycle minutes; calendar, capacity, efficiency, cost per hour minor, OEE target | active, blocked |
-| `mrp_production` | MO | product, qty, BoM revision snapshot, lot to produce, schedule, backorder of, subcontract flag | see below |
-| `mrp_work_order`, `mrp_work_order_time_log` | Operation run; time | operation, work center, expected and real minutes; user, start, end, loss reason | blocked, ready, progress, done, cancelled |
-| `mrp_unbuild` | Disassembly | MO, qty, lot | draft, done |
+| Entity                                      | Purpose                | Key fields                                                                                                                           | States                                    |
+| ------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `mrp_bom`, `mrp_bom_line`                   | Recipe; component      | product, quantity, UoM, type (normal, phantom, subcontract), vendors, `valid_during` (temporal), revision; component, qty, operation | active, archived                          |
+| `mrp_bom_byproduct`                         | By-product             | product, qty, `cost_share_pct` (sum at most 100)                                                                                     | n/a                                       |
+| `mrp_operation`, `mrp_work_center`          | Routing step; resource | work center, fixed and per-cycle minutes; calendar, capacity, efficiency, cost per hour minor, OEE target                            | active, blocked                           |
+| `mrp_production`                            | MO                     | product, qty, BoM revision snapshot, lot to produce, schedule, backorder of, subcontract flag                                        | see below                                 |
+| `mrp_work_order`, `mrp_work_order_time_log` | Operation run; time    | operation, work center, expected and real minutes; user, start, end, loss reason                                                     | blocked, ready, progress, done, cancelled |
+| `mrp_unbuild`                               | Disassembly            | MO, qty, lot                                                                                                                         | draft, done                               |
 
 Component, finished and by-product moves are ordinary `stock_move` rows with `production_id` and a role.
 
@@ -453,11 +453,11 @@ Derived beside the state: reservation state and component availability (availabl
 
 **Capabilities.** W3 MVP: control points by picking type, product, category or work-order operation; frequency all, random (percent), periodic, on demand; check types instructions, photo, pass-fail, measure (norm with tolerance from and to) [R10 s4]; alerts; failure location; vendor quality rate.
 
-| Entity | Key fields | States |
-|---|---|---|
-| `quality_point` | trigger, scope, check type, frequency, norm and tolerance, instructions | active |
-| `quality_check` | point, source reference, lot, result, measured value, photo | todo, pass, fail (final) |
-| `quality_alert` | check, product, lot, vendor, action | new, confirmed, action_proposed, solved, cancelled (Proposed) |
+| Entity          | Key fields                                                              | States                                                        |
+| --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `quality_point` | trigger, scope, check type, frequency, norm and tolerance, instructions | active                                                        |
+| `quality_check` | point, source reference, lot, result, measured value, photo             | todo, pass, fail (final)                                      |
+| `quality_alert` | check, product, lot, vendor, action                                     | new, confirmed, action_proposed, solved, cancelled (Proposed) |
 
 **Workflow.**
 
@@ -473,8 +473,8 @@ Derived beside the state: reservation state and component availability (availabl
 
 **Capabilities.** First wave: none; W4+ or community (T3). `mrp_eco` with type (BoM, product), stages, approvals through the generic approvals engine, effective date, new BoM revision. `valid_during` and the MO's stored revision exist from W3, so PLM adds process, not schema.
 
-| Entity | Key fields | States |
-|---|---|---|
+| Entity    | Key fields                                                                | States                                        |
+| --------- | ------------------------------------------------------------------------- | --------------------------------------------- |
 | `mrp_eco` | type, product, old and new BoM revision, effective date, approval request | draft, in_progress, approval, done, cancelled |
 
 **Workflow.**
@@ -491,10 +491,10 @@ Derived beside the state: reservation state and component availability (availabl
 
 **Capabilities.** W3 MVP: equipment with category, serial, vendor, warranty, assignment; teams; corrective and preventive requests with user-defined stages and recurrence; MTBF, MTTR and estimated next failure [R10 s2.1]; spare parts as stock moves; a request that blocks a work center creates an unavailable interval the MO scheduler respects (Odoo Enterprise `mrp_maintenance`). Later: meter-based triggers. Definitions (Proposed): MTBF is the mean days between completions of consecutive corrective requests; MTTR is the mean request-to-close time of corrective requests.
 
-| Entity | Key fields | States |
-|---|---|---|
-| `maintenance_equipment` | category, serial, vendor, warranty end, work center, location | active, scrapped |
-| `maintenance_request` | type, equipment, team, scheduled date, duration, recurrence, blocks work center | user-defined stages with a done flag |
+| Entity                  | Key fields                                                                      | States                               |
+| ----------------------- | ------------------------------------------------------------------------------- | ------------------------------------ |
+| `maintenance_equipment` | category, serial, vendor, warranty end, work center, location                   | active, scrapped                     |
+| `maintenance_request`   | type, equipment, team, scheduled date, duration, recurrence, blocks work center | user-defined stages with a done flag |
 
 **Workflow.**
 
@@ -511,10 +511,10 @@ Derived beside the state: reservation state and component availability (availabl
 
 **Capabilities.** W1: barcode fields on product, packaging UoM and location are ordinary fields, so a code can be typed or pasted into search; the lot and package fields come with lots and packages in W3. W3 (Proposed; the OR-13 cut moved scan-to-add here from W2): a nomenclature engine with rules by type; EAN and GS1-128 parsing; scan-to-add in ordinary forms through a keyboard wedge; then purpose-built scan screens (receive, pick, deliver, internal, count, lookup; R19 lists a scan screen as a v1 view, not metadata-rendered [R19 s6]) and the edge command outbox (D13). Resolving a code is a read command (`barcode resolve <code>`, section 4.10), so a script or an agent can use the same engine as a scanner. W4 (D25): GS1 depth, batch and wave screens, pack-and-ship, ZPL labels through the device bridge [R15 s14].
 
-| Entity | Key fields |
-|---|---|
-| `barcode_nomenclature` | name, kind (EAN, GS1) |
-| `barcode_rule` | nomenclature, sequence, pattern or application identifier, type (product, lot, serial, expiry, quantity, package, location) |
+| Entity                 | Key fields                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `barcode_nomenclature` | name, kind (EAN, GS1)                                                                                                       |
+| `barcode_rule`         | nomenclature, sequence, pattern or application identifier, type (product, lot, serial, expiry, quantity, package, location) |
 
 GS1 parsing uses application identifiers 00 (SSCC), 01 (GTIN), 10 (lot), 17 (expiry, YYMMDD) and 21 (serial), with FNC1 (`\x1D`) ending variable-length fields, as in Odoo's rule table; the GS1 General Specifications were not read [R10 s3.9]. Input is normalised to NFKC so full-width digits parse [R19 s9]. Camera scanning uses the browser `BarcodeDetector`, else the `barcode-detector` 3.2.2 ponyfill (as of 2026-10-01, [R19 s10]); code rendering uses `rxing` [R15 s14]. Hardware beyond a keyboard wedge needs the native shell and bridge (D37).
 
@@ -532,10 +532,10 @@ GS1 parsing uses application identifiers 00 (SSCC), 01 (GTIN), 10 (lot), 17 (exp
 
 **Capabilities.** First wave: none; W4+ or community (T3). `repair_order` with product, lot or serial, warranty flag, parts lines (add, remove, recycle) as ordinary moves, service lines, availability (available, expected, late), link to sale order, invoice and return receipt; customer-owned units use the quant owner and are not valued (owner-held stock is excluded from valuation in Odoo [R10 s4]; applying it to repairs is Proposed) [R10 s2.1, R14 s9].
 
-| Entity | Key fields | States |
-|---|---|---|
-| `repair_order` | product, lot, owner, warranty flag, schedule, sale order link | draft, confirmed, done, cancelled (Odoo 20 removed "Under Repair" [R10 s1]) |
-| `repair_line` | type (part add, remove, recycle; service), product, qty, price | n/a |
+| Entity         | Key fields                                                     | States                                                                      |
+| -------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `repair_order` | product, lot, owner, warranty flag, schedule, sale order link  | draft, confirmed, done, cancelled (Odoo 20 removed "Under Repair" [R10 s1]) |
+| `repair_line`  | type (part add, remove, recycle; service), product, qty, price | n/a                                                                         |
 
 **Workflow.**
 
@@ -551,10 +551,10 @@ GS1 parsing uses application identifiers 00 (SSCC), 01 (GTIN), 10 (lot), 17 (exp
 
 **Capabilities.** W3 MVP: `delivery_carrier` with fixed or rule-based prices (weight, volume, quantity, price), free-over amount, margin; shipments with packages, labels, tracking. The `CarrierProvider` trait has `rate`, `create_label`, `cancel`, `track`, `manifest`, `pickup` [R21 s6.4, R10 SHOULD 14]. Later: pickups and manifests per carrier, ZPL labels (W4).
 
-| Entity | Key fields | States |
-|---|---|---|
-| `delivery_carrier`, `delivery_price_rule` | provider kind (fixed, rule-based, connector), account, margin, free-over amount; variable, operator, base price, factor | active |
-| `stock_shipment` | transfer, carrier, service, tracking reference, label blob, cost minor, packages | draft, label_created, in_transit, delivered, voided, exception |
+| Entity                                    | Key fields                                                                                                              | States                                                         |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `delivery_carrier`, `delivery_price_rule` | provider kind (fixed, rule-based, connector), account, margin, free-over amount; variable, operator, base price, factor | active                                                         |
+| `stock_shipment`                          | transfer, carrier, service, tracking reference, label blob, cost minor, packages                                        | draft, label_created, in_transit, delivered, voided, exception |
 
 Connectors are plugins, that is packages (D32): they are listed in the free plugin registry (which lists only plugins with an OSI-approved licence, OR-17), installed version-pinned or copied as source into the business's own instance with the `obop plugin` commands ([cli.md](cli.md) 4), and the registry handles no payments, fees or commission (OR-2, OR-3, D81). Carrier and aggregator accounts belong to the business, which pays the provider directly on the provider's own terms; obop resells no label credit and operates no carrier gateway (OR-2, OR-11). First adapters (Proposed): Sendcloud (its full-support origins include Germany) and EasyPost, then Shippo; DHL Express via MyDHL (REST, v3.3.2 of 2026-09-06, as of 2026-10-01); UPS over OAuth REST. A direct FedEx integration is not promised: Odoo blocked new FedEx setups from 2025-10-21 during FedEx's validation, and its docs are inconsistent since a May 2026 rewrite [R10 s4]. No Rust crate exists for EasyPost or Sendcloud [R21 s6.4]; adapters are Wasm components (X3, which ships in W3 with `delivery`, D86) over host-mediated HTTP, with a first-party native X5 crate as fallback (D11; third-party in-process Rust is unsupported; Proposed). The Karrio sidecar is optional, never default (I-1).
 
@@ -575,44 +575,44 @@ OR-4 makes the command the unit of delivery. Every capability of this area is a 
 
 **W1: basic stock.**
 
-| Flow | Command (wire id) | Effect | Permission | Notes |
-|---|---|---|---|---|
-| Create or edit a transfer: receipt, delivery, internal, scrap | `obop stock_transfer create\|update --body @transfer.json` (`stock_transfer.create`) | draft | `stock.operator` | A scrap is a transfer of the scrap picking type with a reason. A W1 receipt line carries quantity and unit cost. Deliveries normally come from `sale_stock` |
-| Confirm | `obop stock_transfer confirm <id>` (`ConfirmTransfer`) | commit | `stock.operator` | Moves `draft` to `confirmed` |
-| Reserve, release | `obop stock_move reserve\|unreserve <id>` (`ReserveMove`, `UnreserveMove`) | draft (reversible, no ledger effect; Proposed class) | `stock.operator`; release needs `stock.unreserve`, another user's reservation `stock.unreserve_others` | `--steal` needs `stock.override_reservation` (an audited elevation, D10) and is not exposed to agents |
-| Record picked quantities | `obop stock_move_line update <id> --set quantity=5 --set picked=true` | draft | `stock.operator` | Lot or serial from W3 |
-| Validate | `obop stock_transfer validate <id> [--backorder create\|none]` (`ValidateTransfer`) | commit | `stock.validate` | One transaction, idempotent on the idempotency key (`command_id`, D9). A short transfer without `--backorder` fails `validation_failed` (exit 14) instead of prompting. `insufficient_stock` and `stock_reserved_by_other` exit 7 (a domain rule says no, [cli.md](cli.md) 2.4). Negative stock needs `stock.override_negative`, not exposed to agents |
-| Cancel | `obop stock_transfer cancel <id>` (`CancelTransfer`) | commit | `stock.operator` | Refused once a move is done; a done delivery is corrected by a return |
-| Return | `obop stock_transfer return <id>` | draft | `stock.operator` | Creates a draft reverse transfer linked by `origin_returned_move_id`, valued at the original cost (Proposed action name) |
-| Count | `obop stock_inventory_count create\|start\|apply <id>`; `obop stock_inventory_count_line update` | draft; `apply` commit | `stock.adjust` to apply | `start` snapshots the expected quantities for a blind count; `apply` writes the adjustment moves; above a threshold an approval is required from W2 |
-| Revalue | `obop stock_revaluation create\|post` | draft; `post` commit | `stock.revalue` | A manual cost change; reading it needs `product.cost_viewer` |
-| Read stock and value | `obop stock_quant list\|aggregate`; `obop stock_quant forecast --product <id> [--at <date>]`; `obop stock_valuation_entry list\|aggregate`; `obop stock_move_line list` | read | `stock.operator`; valuation needs `product.cost_viewer` | `forecast` is a typed read over `StockQueryPort` (Proposed). `aggregate` serves agent and script reads until `analytics` (W3) |
-| Configure | Generated CRUD on `stock_warehouse`, `stock_location`, `stock_picking_type`; `stock_route` and `stock_rule` read-only in W1 | draft or commit | `stock.manager` | |
-| Opening balances | `obop data import <file> --model <model>` with a dry-run, through staging (section 6, [cli.md](cli.md) 3.4) | commit | import right | Never a direct quant write |
+| Flow                                                          | Command (wire id)                                                                                                                                                       | Effect                                               | Permission                                                                                             | Notes                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Create or edit a transfer: receipt, delivery, internal, scrap | `obop stock_transfer create\|update --body @transfer.json` (`stock_transfer.create`)                                                                                    | draft                                                | `stock.operator`                                                                                       | A scrap is a transfer of the scrap picking type with a reason. A W1 receipt line carries quantity and unit cost. Deliveries normally come from `sale_stock`                                                                                                                                                                                            |
+| Confirm                                                       | `obop stock_transfer confirm <id>` (`ConfirmTransfer`)                                                                                                                  | commit                                               | `stock.operator`                                                                                       | Moves `draft` to `confirmed`                                                                                                                                                                                                                                                                                                                           |
+| Reserve, release                                              | `obop stock_move reserve\|unreserve <id>` (`ReserveMove`, `UnreserveMove`)                                                                                              | draft (reversible, no ledger effect; Proposed class) | `stock.operator`; release needs `stock.unreserve`, another user's reservation `stock.unreserve_others` | `--steal` needs `stock.override_reservation` (an audited elevation, D10) and is not exposed to agents                                                                                                                                                                                                                                                  |
+| Record picked quantities                                      | `obop stock_move_line update <id> --set quantity=5 --set picked=true`                                                                                                   | draft                                                | `stock.operator`                                                                                       | Lot or serial from W3                                                                                                                                                                                                                                                                                                                                  |
+| Validate                                                      | `obop stock_transfer validate <id> [--backorder create\|none]` (`ValidateTransfer`)                                                                                     | commit                                               | `stock.validate`                                                                                       | One transaction, idempotent on the idempotency key (`command_id`, D9). A short transfer without `--backorder` fails `validation_failed` (exit 14) instead of prompting. `insufficient_stock` and `stock_reserved_by_other` exit 7 (a domain rule says no, [cli.md](cli.md) 2.4). Negative stock needs `stock.override_negative`, not exposed to agents |
+| Cancel                                                        | `obop stock_transfer cancel <id>` (`CancelTransfer`)                                                                                                                    | commit                                               | `stock.operator`                                                                                       | Refused once a move is done; a done delivery is corrected by a return                                                                                                                                                                                                                                                                                  |
+| Return                                                        | `obop stock_transfer return <id>`                                                                                                                                       | draft                                                | `stock.operator`                                                                                       | Creates a draft reverse transfer linked by `origin_returned_move_id`, valued at the original cost (Proposed action name)                                                                                                                                                                                                                               |
+| Count                                                         | `obop stock_inventory_count create\|start\|apply <id>`; `obop stock_inventory_count_line update`                                                                        | draft; `apply` commit                                | `stock.adjust` to apply                                                                                | `start` snapshots the expected quantities for a blind count; `apply` writes the adjustment moves; above a threshold an approval is required from W2                                                                                                                                                                                                    |
+| Revalue                                                       | `obop stock_revaluation create\|post`                                                                                                                                   | draft; `post` commit                                 | `stock.revalue`                                                                                        | A manual cost change; reading it needs `product.cost_viewer`                                                                                                                                                                                                                                                                                           |
+| Read stock and value                                          | `obop stock_quant list\|aggregate`; `obop stock_quant forecast --product <id> [--at <date>]`; `obop stock_valuation_entry list\|aggregate`; `obop stock_move_line list` | read                                                 | `stock.operator`; valuation needs `product.cost_viewer`                                                | `forecast` is a typed read over `StockQueryPort` (Proposed). `aggregate` serves agent and script reads until `analytics` (W3)                                                                                                                                                                                                                          |
+| Configure                                                     | Generated CRUD on `stock_warehouse`, `stock_location`, `stock_picking_type`; `stock_route` and `stock_rule` read-only in W1                                             | draft or commit                                      | `stock.manager`                                                                                        |                                                                                                                                                                                                                                                                                                                                                        |
+| Opening balances                                              | `obop data import <file> --model <model>` with a dry-run, through staging (section 6, [cli.md](cli.md) 3.4)                                                             | commit                                               | import right                                                                                           | Never a direct quant write                                                                                                                                                                                                                                                                                                                             |
 
 Delivery slips and picking lists are rendered by the report engine (Typst, D20) from the same records; the rendering commands belong to the platform layer ([platform.md](platform.md)) and are not restated here.
 
 **W2: purchase and replenishment.**
 
-| Flow | Command (wire id) | Effect | Permission | Notes |
-|---|---|---|---|---|
-| Vendor prices | `obop purchase_vendor_price create\|update\|list` | draft | `purchase.user` | |
-| RFQ to PO | `obop purchase_order create\|update`; `send`; `confirm` (`ConfirmPurchaseOrder`); `cancel` (`CancelPurchaseOrder`) | draft; `send` external; `confirm`, `cancel` commit | `purchase.user`; `purchase.confirm` | An agent drafts an RFQ freely; `confirm` returns a plan that a human commits |
-| Reorder | `obop stock_reorder_rule create\|update\|snooze`; `obop stock_reorder_rule run` (runs with `--dry-run` to show what would be drafted); `obop replenishment_failure list` | draft; `run` draft | `stock.manager` | The `buy` action extends or creates draft RFQs (section 4.1.4) |
-| Three-way match | `obop purchase_bill_match list\|get` | read | `purchase.user` | A mismatch sets `payment_hold` through finance and raises an approval item, decided with `obop approval decide` ([cli.md](cli.md) 3.9); payment release is a finance command |
-| Approve a PO (later in W2) | `obop approval decide` on the PO's approval item | commit | `purchase.approve` | Human principals only; an agent never approves (D18) |
-| Vendor return | `obop stock_transfer return <id>` on a receipt | draft | `stock.operator` | Same command as a customer return |
+| Flow                       | Command (wire id)                                                                                                                                                        | Effect                                             | Permission                          | Notes                                                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vendor prices              | `obop purchase_vendor_price create\|update\|list`                                                                                                                        | draft                                              | `purchase.user`                     |                                                                                                                                                                              |
+| RFQ to PO                  | `obop purchase_order create\|update`; `send`; `confirm` (`ConfirmPurchaseOrder`); `cancel` (`CancelPurchaseOrder`)                                                       | draft; `send` external; `confirm`, `cancel` commit | `purchase.user`; `purchase.confirm` | An agent drafts an RFQ freely; `confirm` returns a plan that a human commits                                                                                                 |
+| Reorder                    | `obop stock_reorder_rule create\|update\|snooze`; `obop stock_reorder_rule run` (runs with `--dry-run` to show what would be drafted); `obop replenishment_failure list` | draft; `run` draft                                 | `stock.manager`                     | The `buy` action extends or creates draft RFQs (section 4.1.4)                                                                                                               |
+| Three-way match            | `obop purchase_bill_match list\|get`                                                                                                                                     | read                                               | `purchase.user`                     | A mismatch sets `payment_hold` through finance and raises an approval item, decided with `obop approval decide` ([cli.md](cli.md) 3.9); payment release is a finance command |
+| Approve a PO (later in W2) | `obop approval decide` on the PO's approval item                                                                                                                         | commit                                             | `purchase.approve`                  | Human principals only; an agent never approves (D18)                                                                                                                         |
+| Vendor return              | `obop stock_transfer return <id>` on a receipt                                                                                                                           | draft                                              | `stock.operator`                    | Same command as a customer return                                                                                                                                            |
 
 **W3 and later.** Same grammar; names Proposed and specified when each app is built.
 
-| App (wave) | Commands beyond CRUD | Notes |
-|---|---|---|
-| `stock` extensions (W3) | `stock_lot trace <id> --forward\|--backward`; `stock_landed_cost post` (`stock.revalue`); route and rule editing by CRUD | Replay runs as a job (`obop job wait`, [cli.md](cli.md) 3.8); `dropship` is a route action, not a command |
-| `mrp` (W3) | `mrp_production confirm\|close\|cancel` (`ConfirmProduction`, `CloseProduction`; `mrp.confirm`, `mrp.close`); `mrp_work_order start\|finish`; `mrp_unbuild create\|validate` (`mrp.unbuild`) | Costs read only with `product.cost_viewer` |
-| `quality`, `maintenance` (W3) | `quality_check pass\|fail` (a recorded result is immutable); `quality_alert` state actions; `maintenance_request` stage changes by `update` | |
-| `delivery` (W3) | `stock_shipment rate\|create_label\|void\|track`; `delivery_carrier` CRUD | External effect; credentials come from the secret store and are never passed as arguments ([cli.md](cli.md) 2.12) |
-| Barcode (W3) | `barcode resolve <code>` (read); `barcode_nomenclature` and `barcode_rule` CRUD | The scan screens call `barcode resolve`, so a script or an agent uses the same engine |
-| PLM, `repair` (W4+ or community) | `mrp_eco` and `repair_order` state actions | Follow the same pattern when built |
+| App (wave)                       | Commands beyond CRUD                                                                                                                                                                         | Notes                                                                                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `stock` extensions (W3)          | `stock_lot trace <id> --forward\|--backward`; `stock_landed_cost post` (`stock.revalue`); route and rule editing by CRUD                                                                     | Replay runs as a job (`obop job wait`, [cli.md](cli.md) 3.8); `dropship` is a route action, not a command         |
+| `mrp` (W3)                       | `mrp_production confirm\|close\|cancel` (`ConfirmProduction`, `CloseProduction`; `mrp.confirm`, `mrp.close`); `mrp_work_order start\|finish`; `mrp_unbuild create\|validate` (`mrp.unbuild`) | Costs read only with `product.cost_viewer`                                                                        |
+| `quality`, `maintenance` (W3)    | `quality_check pass\|fail` (a recorded result is immutable); `quality_alert` state actions; `maintenance_request` stage changes by `update`                                                  |                                                                                                                   |
+| `delivery` (W3)                  | `stock_shipment rate\|create_label\|void\|track`; `delivery_carrier` CRUD                                                                                                                    | External effect; credentials come from the secret store and are never passed as arguments ([cli.md](cli.md) 2.12) |
+| Barcode (W3)                     | `barcode resolve <code>` (read); `barcode_nomenclature` and `barcode_rule` CRUD                                                                                                              | The scan screens call `barcode resolve`, so a script or an agent uses the same engine                             |
+| PLM, `repair` (W4+ or community) | `mrp_eco` and `repair_order` state actions                                                                                                                                                   | Follow the same pattern when built                                                                                |
 
 **UI.** The W1 UI for this area is list, form and kanban views (a transfer board by state, quants and valuation lists, the count form) plus search and the report viewer (DECISIONS 5.3). Each view action is bound to a catalogue command, so the UI shows and does only what the commands expose. Pivot and graph views come later (slip order 5 of DECISIONS 5.3), scan screens in W3 (4.7), the Gantt with `project` (D25).
 
@@ -643,11 +643,11 @@ W1 has no purchase order: the receipts are keyed in by hand with the unit cost t
 - **When** the last 5 are delivered, **Then** COGS is 62.50 and total COGS 225.00, equal to purchases of 100.00 + 125.00.
 - Under at-invoicing the same events give the same valuation state after the late bill: bills debit stock valuation (100.00, 125.00); the invoice adds COGS 160.00; the late bill adds a 2.50 catch-up; the stock account holds 100.00 + 125.00 - 160.00 - 2.50 = 62.50 = 5 x 12.50.
 
-| First 15 units | FIFO | AVCO | Standard 11.00 (W3) |
-|---|---|---|---|
-| COGS | 160.00 | 165.00 (220.00 / 20 x 15) | 165.00 |
-| Remaining 5 units | 60.00 | 55.00 | 55.00 |
-| Price difference | none | none | net 0 (-10.00, then +10.00) |
+| First 15 units    | FIFO   | AVCO                      | Standard 11.00 (W3)         |
+| ----------------- | ------ | ------------------------- | --------------------------- |
+| COGS              | 160.00 | 165.00 (220.00 / 20 x 15) | 165.00                      |
+| Remaining 5 units | 60.00  | 55.00                     | 55.00                       |
+| Price difference  | none   | none                      | net 0 (-10.00, then +10.00) |
 
 In every method COGS plus remaining stock equals 220.00.
 
@@ -711,19 +711,19 @@ In every method COGS plus remaining stock equals 220.00.
 
 **Data-integrity invariants** (checked by a job and by property tests [R27 A2, R10 s6.1]):
 
-| # | Invariant | Enforced by |
-|---|---|---|
-| I1 | One quant row per key | Unique constraint |
-| I2 | Reserved is between 0 and quantity | CHECK |
-| I3 | Reserved equals the sum of open move-line quantities | Job, proptest |
-| I4 | Quantity equals the sum of done line deltas | Job, proptest |
-| I5 | Done moves and lines never change | Trigger (D30) |
-| I6 | `stock_cost_state` equals the sum of entries; FIFO remaining equals on-hand | Job |
-| I7 | A serial exists in at most one place (from W3, with serials) | Partial unique index on a denormalised flag (Proposed) |
-| I8 | Quantity is conserved along move chains and per MO within UoM rounding | Proptest |
-| I9 | On hand = available + reserved + quality hold + safety buffer; incoming outside the sum ([R10 s3.1]) | Report test |
-| I10 | By-product cost shares sum to at most 100 | CHECK |
-| I11 | Gapless legal delivery numbers where a pack requires them | Counter row (D30) |
+| #   | Invariant                                                                                            | Enforced by                                            |
+| --- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| I1  | One quant row per key                                                                                | Unique constraint                                      |
+| I2  | Reserved is between 0 and quantity                                                                   | CHECK                                                  |
+| I3  | Reserved equals the sum of open move-line quantities                                                 | Job, proptest                                          |
+| I4  | Quantity equals the sum of done line deltas                                                          | Job, proptest                                          |
+| I5  | Done moves and lines never change                                                                    | Trigger (D30)                                          |
+| I6  | `stock_cost_state` equals the sum of entries; FIFO remaining equals on-hand                          | Job                                                    |
+| I7  | A serial exists in at most one place (from W3, with serials)                                         | Partial unique index on a denormalised flag (Proposed) |
+| I8  | Quantity is conserved along move chains and per MO within UoM rounding                               | Proptest                                               |
+| I9  | On hand = available + reserved + quality hold + safety buffer; incoming outside the sum ([R10 s3.1]) | Report test                                            |
+| I10 | By-product cost shares sum to at most 100                                                            | CHECK                                                  |
+| I11 | Gapless legal delivery numbers where a pack requires them                                            | Counter row (D30)                                      |
 
 **Concurrency.** As in section 4.1.2; user edits use `row_version` and conflict responses [R22 s6, R08]. `ON CONFLICT` on a `NULLS NOT DISTINCT` key is a W0 spike item (OQ-7).
 
@@ -735,13 +735,13 @@ In every method COGS plus remaining stock equals 220.00.
 
 **Performance** (target, on the SMB shape of [R22 s10]; no multiple over Odoo is claimed, D21):
 
-| Operation | Target |
-|---|---|
-| Validate a 50-line transfer | p95 under 400 ms |
-| Validate a 5,000-line adjustment | under 30 s |
-| Replenishment run over 10,000 active rules | under 2 min |
-| Lot trace over 1,000,000 move lines | under 2 s |
-| Opening-balance import of 100,000 lines through staging | under 5 min |
+| Operation                                               | Target           |
+| ------------------------------------------------------- | ---------------- |
+| Validate a 50-line transfer                             | p95 under 400 ms |
+| Validate a 5,000-line adjustment                        | under 30 s       |
+| Replenishment run over 10,000 active rules              | under 2 min      |
+| Lot trace over 1,000,000 move lines                     | under 2 s        |
+| Opening-balance import of 100,000 lines through staging | under 5 min      |
 
 Imports stage through non-RLS tables [R22 s1.3]. `stock_move_line` and `stock_valuation_entry` are append-heavy; partitioning and the `IdType` key choice wait for the 2026-11-27 spike (D9, [R22 s1.2]).
 
@@ -751,18 +751,18 @@ Imports stage through non-RLS tables [R22 s1.3]. `stock_move_line` and `stock_va
 
 Pain ranks are those of [R04 s4].
 
-| Odoo behaviour | obop | Pain |
-|---|---|---|
-| Duplicate quants merged later [R10 s3.2]; quant corruption issue in 13.0 [R22 s3.1] | Unique key, single upsert | Performance (rank 7) and data trust (unranked) |
-| Done transfers editable; replay by mutation | Immutable done, adjustment entries | Upgrades (rank 1); audit trust is unranked |
-| A forced done move frees others' reservations | Explicit override and event | Trust |
-| Valuation tied to accounting; model changed in 19 and again in 20 [R10 s1] | Entries independent of posting | Upgrades (rank 1) |
-| Quality, PLM, MPS, barcode UI, carrier connectors proprietary [R10 s1] | All Apache-2.0 and free, no proprietary layer (OR-1, OR-2) | Open-core surprises (rank 2) |
-| Warehouse operations driven mainly from screens and server actions, with an external API that is plan-gated and whose RPC is to be removed in 2028 [D31 rationale; R21] | Every operation is a typed command on CLI, REST and MCP, free and ungated, with dry-run plans and idempotency keys (D31, D80) | Open-core surprises (rank 2) |
-| Customization by inheritance | Routes, rules, states, check types as data; custom fields as properties | Customization debt (rank 3) |
-| Users report difficulty with inventories above about 20k items (a review-site summary of 118 reviews, not a measurement) [R04 s3] | Set-based SQL, section 6 targets | Performance (rank 7) |
-| Row-by-row ORM import [R22 s8] | Staged `COPY`, dry-run, `module.name` ids (D22) | Migration |
-| Direct carrier dependence (FedEx) | Aggregator first | Not ranked in R04 |
+| Odoo behaviour                                                                                                                                                          | obop                                                                                                                          | Pain                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Duplicate quants merged later [R10 s3.2]; quant corruption issue in 13.0 [R22 s3.1]                                                                                     | Unique key, single upsert                                                                                                     | Performance (rank 7) and data trust (unranked) |
+| Done transfers editable; replay by mutation                                                                                                                             | Immutable done, adjustment entries                                                                                            | Upgrades (rank 1); audit trust is unranked     |
+| A forced done move frees others' reservations                                                                                                                           | Explicit override and event                                                                                                   | Trust                                          |
+| Valuation tied to accounting; model changed in 19 and again in 20 [R10 s1]                                                                                              | Entries independent of posting                                                                                                | Upgrades (rank 1)                              |
+| Quality, PLM, MPS, barcode UI, carrier connectors proprietary [R10 s1]                                                                                                  | All Apache-2.0 and free, no proprietary layer (OR-1, OR-2)                                                                    | Open-core surprises (rank 2)                   |
+| Warehouse operations driven mainly from screens and server actions, with an external API that is plan-gated and whose RPC is to be removed in 2028 [D31 rationale; R21] | Every operation is a typed command on CLI, REST and MCP, free and ungated, with dry-run plans and idempotency keys (D31, D80) | Open-core surprises (rank 2)                   |
+| Customization by inheritance                                                                                                                                            | Routes, rules, states, check types as data; custom fields as properties                                                       | Customization debt (rank 3)                    |
+| Users report difficulty with inventories above about 20k items (a review-site summary of 118 reviews, not a measurement) [R04 s3]                                       | Set-based SQL, section 6 targets                                                                                              | Performance (rank 7)                           |
+| Row-by-row ORM import [R22 s8]                                                                                                                                          | Staged `COPY`, dry-run, `module.name` ids (D22)                                                                               | Migration                                      |
+| Direct carrier dependence (FedEx)                                                                                                                                       | Aggregator first                                                                                                              | Not ranked in R04                              |
 
 obop keeps what is sound: three layers, chaining, routes as data, scheduler batches, flexible MOs.
 
@@ -780,29 +780,29 @@ obop keeps what is sound: three layers, chaining, routes as data, scheduler batc
 
 ### 9.1 Questions
 
-| # | Question | Needed from |
-|---|---|---|
-| OQ-1 | Default posting mode: at-invoicing (Odoo 19 target, assumed by the sales and finance specs) or per-transfer (simpler audit); periodic in W2? | Owner, accountant |
-| OQ-2 | Backdating rule for valued moves in W1 (section 4.1.2) | Owner |
-| OQ-3 | Barcode timing: R20 s9.3 puts barcode out of the MVP (phase 3, month 20 or later), R19 s6 lists a scan screen in its v1 view catalogue, D25 puts depth in W4; the OR-13 cut moved scan-to-add from W2 to W3, next to the scan screens. Confirm W3 for the nomenclature engine, scan-to-add and the screens | Owner |
-| OQ-4 | Standard cost: the cut places it in W3 (it was W2). Does any design partner need it earlier? | Owner, design partners |
-| OQ-5 | Are in-transit goods valued? Proposed yes | Accountant |
-| OQ-6 | May a company enable negative stock without approval? | Owner |
-| OQ-7 | Does `ON CONFLICT ON CONSTRAINT` detect NULL-key conflicts on PostgreSQL 17 and 18? The INSERT docs require a non-deferrable arbiter and do not mention `NULLS NOT DISTINCT`, so the quant key must not be deferrable | W0 spike |
-| OQ-8 | Serial uniqueness scope: per product and company, or wider | Design partners |
-| OQ-9 | Quality enforcement default, soft or hard | Design partner |
-| OQ-10 | Licence terms for embedding the GS1 application-identifier table | Counsel |
-| OQ-11 | FSMA 204 final rule and EU equivalents; which pack carries traceability exports | Localization owner |
-| OQ-12 | Valuation-method restrictions by country | Pack owners |
-| OQ-13 | Hash chain over the stock ledger | Security |
-| OQ-14 | Meter-based maintenance triggers; which carrier first (Sendcloud or EasyPost); FedEx programme terms | Design partners, owner |
-| OQ-15 | Which manufacturing design partner unlocks W3 (D25) | Owner |
-| OQ-16 | Confirm that Odoo 20's "Ship orders without Inventory" and "Valuation without Inventory" stay not planned (section 8), or add a lightweight standalone shipment record or stock-on-hand mode, and in which wave; R01 s8 item 5 rates the decoupling a MUST | Owner |
-| OQ-17 | Record the single rule for cost data in the data-class rules of [security-privacy.md](security-privacy.md) 4.2 (Proposed, [CONVENTIONS.md](../CONVENTIONS.md) sections 4, 5 and 9.2): product cost, valuation, landed cost and margin are the field permission `product.cost_viewer` and no data class; wage, cost rate and timesheet cost snapshots are `financial`, with `timesheet.cost_viewer` as the extra field permission ([services.md](services.md)); [sales-crm.md](sales-crm.md) and [services.md](services.md) use the same names | Security |
-| OQ-18 | How does a W1 vendor bill reach a receipt that was keyed in by hand, now that `purchase` is W2 (sections 4.1.2 and 4.1.9)? The proposal is an optional reference from a bill line to a validated receipt line, with manual revaluation as the fallback. The alternative is manual revaluation only until W2. Finance owns the bill line | Owner, accountant, [finance.md](finance.md) |
-| OQ-19 | Reordering rules move to W2 with the `buy` action because `buy` is their only action in this area (section 4.1.4). Keep that, or ship rules in W1 as a low-stock report and activity with no RFQ? | Owner |
-| OQ-20 | Lots and serials are W3 after the cut, so a design partner that sells serial-tracked or expiring goods is not served by W1 or W2. Pull lots and serials alone forward if such a partner signs, and at the cost of which W2 item? (D86 states the slip order for W1 only) | Owner, design partners |
-| OQ-21 | OR-16 makes UI parity literal: every command of every shipped module gets a UI before the first stable release (1.0, 2028-04-18), except owner-approved operator-only commands. The W3 apps of this area (`mrp`, `quality`, `maintenance`, `delivery`, the barcode scan screens) ship after 1.0. Does the gate also bind modules that ship after 1.0 (each needs its UI before it is called stable), or only the modules shipped by 1.0? The ruling does not say and no default is assumed here | Owner |
+| #     | Question                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Needed from                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| OQ-1  | Default posting mode: at-invoicing (Odoo 19 target, assumed by the sales and finance specs) or per-transfer (simpler audit); periodic in W2?                                                                                                                                                                                                                                                                                                                                                                                                  | Owner, accountant                           |
+| OQ-2  | Backdating rule for valued moves in W1 (section 4.1.2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Owner                                       |
+| OQ-3  | Barcode timing: R20 s9.3 puts barcode out of the MVP (phase 3, month 20 or later), R19 s6 lists a scan screen in its v1 view catalogue, D25 puts depth in W4; the OR-13 cut moved scan-to-add from W2 to W3, next to the scan screens. Confirm W3 for the nomenclature engine, scan-to-add and the screens                                                                                                                                                                                                                                    | Owner                                       |
+| OQ-4  | Standard cost: the cut places it in W3 (it was W2). Does any design partner need it earlier?                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Owner, design partners                      |
+| OQ-5  | Are in-transit goods valued? Proposed yes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Accountant                                  |
+| OQ-6  | May a company enable negative stock without approval?                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Owner                                       |
+| OQ-7  | Does `ON CONFLICT ON CONSTRAINT` detect NULL-key conflicts on PostgreSQL 17 and 18? The INSERT docs require a non-deferrable arbiter and do not mention `NULLS NOT DISTINCT`, so the quant key must not be deferrable                                                                                                                                                                                                                                                                                                                         | W0 spike                                    |
+| OQ-8  | Serial uniqueness scope: per product and company, or wider                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Design partners                             |
+| OQ-9  | Quality enforcement default, soft or hard                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Design partner                              |
+| OQ-10 | Licence terms for embedding the GS1 application-identifier table                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Counsel                                     |
+| OQ-11 | FSMA 204 final rule and EU equivalents; which pack carries traceability exports                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Localization owner                          |
+| OQ-12 | Valuation-method restrictions by country                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Pack owners                                 |
+| OQ-13 | Hash chain over the stock ledger                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Security                                    |
+| OQ-14 | Meter-based maintenance triggers; which carrier first (Sendcloud or EasyPost); FedEx programme terms                                                                                                                                                                                                                                                                                                                                                                                                                                          | Design partners, owner                      |
+| OQ-15 | Which manufacturing design partner unlocks W3 (D25)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Owner                                       |
+| OQ-16 | Confirm that Odoo 20's "Ship orders without Inventory" and "Valuation without Inventory" stay not planned (section 8), or add a lightweight standalone shipment record or stock-on-hand mode, and in which wave; R01 s8 item 5 rates the decoupling a MUST                                                                                                                                                                                                                                                                                    | Owner                                       |
+| OQ-17 | Record the single rule for cost data in the data-class rules of [security-privacy.md](security-privacy.md) 4.2 (Proposed, [CONVENTIONS.md](../CONVENTIONS.md) sections 4, 5 and 9.2): product cost, valuation, landed cost and margin are the field permission `product.cost_viewer` and no data class; wage, cost rate and timesheet cost snapshots are `financial`, with `timesheet.cost_viewer` as the extra field permission ([services.md](services.md)); [sales-crm.md](sales-crm.md) and [services.md](services.md) use the same names | Security                                    |
+| OQ-18 | How does a W1 vendor bill reach a receipt that was keyed in by hand, now that `purchase` is W2 (sections 4.1.2 and 4.1.9)? The proposal is an optional reference from a bill line to a validated receipt line, with manual revaluation as the fallback. The alternative is manual revaluation only until W2. Finance owns the bill line                                                                                                                                                                                                       | Owner, accountant, [finance.md](finance.md) |
+| OQ-19 | Reordering rules move to W2 with the `buy` action because `buy` is their only action in this area (section 4.1.4). Keep that, or ship rules in W1 as a low-stock report and activity with no RFQ?                                                                                                                                                                                                                                                                                                                                             | Owner                                       |
+| OQ-20 | Lots and serials are W3 after the cut, so a design partner that sells serial-tracked or expiring goods is not served by W1 or W2. Pull lots and serials alone forward if such a partner signs, and at the cost of which W2 item? (D86 states the slip order for W1 only)                                                                                                                                                                                                                                                                      | Owner, design partners                      |
+| OQ-21 | OR-16 makes UI parity literal: every command of every shipped module gets a UI before the first stable release (1.0, 2028-04-18), except owner-approved operator-only commands. The W3 apps of this area (`mrp`, `quality`, `maintenance`, `delivery`, the barcode scan screens) ship after 1.0. Does the gate also bind modules that ship after 1.0 (each needs its UI before it is called stable), or only the modules shipped by 1.0? The ruling does not say and no default is assumed here                                               | Owner                                       |
 
 ### 9.2 Proposed choices made in this document
 
@@ -816,25 +816,25 @@ obop keeps what is sound: three layers, chaining, routes as data, scheduler batc
 
 Research tags map to files relative to this document; decision IDs (D-, Q-) and owner rulings (OR-1 to OR-21) map to [DECISIONS.md](../DECISIONS.md); names follow [CONVENTIONS.md](../CONVENTIONS.md); commands follow [cli.md](cli.md).
 
-| Tag | File |
-|---|---|
-| Rulings | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS.md](../DECISIONS.md) |
-| CLI | [cli.md](cli.md) (grammar, output and exit codes, agent protocol, plugin registry client) |
-| Licence files | [LICENSE](../../LICENSE) (Apache-2.0) and [NOTICE](../../NOTICE) |
-| Conventions | [CONVENTIONS.md](../CONVENTIONS.md) |
-| R01 | [01-odoo-app-catalog.md](../research/01-odoo-app-catalog.md) |
-| R04 | [04-odoo-voice-of-customer.md](../research/04-odoo-voice-of-customer.md) |
-| R08 | [08-metadata-platforms-dynamic-orm.md](../research/08-metadata-platforms-dynamic-orm.md) |
-| R09 | [09-accounting-finance-compliance.md](../research/09-accounting-finance-compliance.md) |
-| R10 | [10-supply-chain-manufacturing.md](../research/10-supply-chain-manufacturing.md) |
-| R12 | [12-retail-pos-ecommerce-marketing.md](../research/12-retail-pos-ecommerce-marketing.md) |
-| R14 | [14-services-project-helpdesk-field.md](../research/14-services-project-helpdesk-field.md) |
-| R15 | [15-platform-collaboration-documents.md](../research/15-platform-collaboration-documents.md) |
-| R16 | [16-ai-native-erp.md](../research/16-ai-native-erp.md) |
-| R18 | [18-security-compliance-deployment-ops.md](../research/18-security-compliance-deployment-ops.md) |
-| R19 | [19-ux-design-system.md](../research/19-ux-design-system.md) |
-| R20 | [20-market-personas-mvp-gtm.md](../research/20-market-personas-mvp-gtm.md) |
-| R21 | [21-integrations-interoperability-api.md](../research/21-integrations-interoperability-api.md) |
-| R22 | [22-data-layer-sync-realtime-performance.md](../research/22-data-layer-sync-realtime-performance.md) |
-| R23 | [23-kernel-model-architecture-decisions.md](../research/23-kernel-model-architecture-decisions.md) |
-| R27 | [27-quality-release-engineering.md](../research/27-quality-release-engineering.md) |
+| Tag           | File                                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------------------- |
+| Rulings       | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS.md](../DECISIONS.md)                       |
+| CLI           | [cli.md](cli.md) (grammar, output and exit codes, agent protocol, plugin registry client)            |
+| Licence files | [LICENSE](../../LICENSE) (Apache-2.0) and [NOTICE](../../NOTICE)                                     |
+| Conventions   | [CONVENTIONS.md](../CONVENTIONS.md)                                                                  |
+| R01           | [01-odoo-app-catalog.md](../research/01-odoo-app-catalog.md)                                         |
+| R04           | [04-odoo-voice-of-customer.md](../research/04-odoo-voice-of-customer.md)                             |
+| R08           | [08-metadata-platforms-dynamic-orm.md](../research/08-metadata-platforms-dynamic-orm.md)             |
+| R09           | [09-accounting-finance-compliance.md](../research/09-accounting-finance-compliance.md)               |
+| R10           | [10-supply-chain-manufacturing.md](../research/10-supply-chain-manufacturing.md)                     |
+| R12           | [12-retail-pos-ecommerce-marketing.md](../research/12-retail-pos-ecommerce-marketing.md)             |
+| R14           | [14-services-project-helpdesk-field.md](../research/14-services-project-helpdesk-field.md)           |
+| R15           | [15-platform-collaboration-documents.md](../research/15-platform-collaboration-documents.md)         |
+| R16           | [16-ai-native-erp.md](../research/16-ai-native-erp.md)                                               |
+| R18           | [18-security-compliance-deployment-ops.md](../research/18-security-compliance-deployment-ops.md)     |
+| R19           | [19-ux-design-system.md](../research/19-ux-design-system.md)                                         |
+| R20           | [20-market-personas-mvp-gtm.md](../research/20-market-personas-mvp-gtm.md)                           |
+| R21           | [21-integrations-interoperability-api.md](../research/21-integrations-interoperability-api.md)       |
+| R22           | [22-data-layer-sync-realtime-performance.md](../research/22-data-layer-sync-realtime-performance.md) |
+| R23           | [23-kernel-model-architecture-decisions.md](../research/23-kernel-model-architecture-decisions.md)   |
+| R27           | [27-quality-release-engineering.md](../research/27-quality-release-engineering.md)                   |

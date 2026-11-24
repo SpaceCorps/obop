@@ -155,6 +155,15 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    description: "the name of a trip",
+    up: async (tx) => {
+      // What the driver calls a trip ("Meeting with the customer"), typed at Stop or later; the
+      // trips before this version have none.
+      await tx.exec("ALTER TABLE trip ADD COLUMN name TEXT");
+    },
+  },
 ];
 
 /** The version of the tables this build works with. */

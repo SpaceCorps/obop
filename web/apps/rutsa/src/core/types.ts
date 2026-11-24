@@ -34,7 +34,9 @@ export interface Trip {
    * hand has no segments, and this is its start.
    */
   segmentStartedAt: number;
-  /** Where the trip began and ended, as the driver wrote it (manual trips); `null` when not given. */
+  /** What the driver calls the trip, typed at Stop or later; `null` when not given. */
+  name: string | null;
+  /** Where the trip began and ended, as the driver wrote it; `null` when not given. */
   from: string | null;
   to: string | null;
   note: string | null;

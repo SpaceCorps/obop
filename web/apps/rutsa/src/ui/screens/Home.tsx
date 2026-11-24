@@ -1,6 +1,7 @@
 import { Banner, Button, Screen, Text, type BannerTone } from "@obop/ui-native";
 import { useEffect, useRef, useState } from "react";
-import { Alert, View } from "react-native";
+import { Switch, View } from "react-native";
+import type { TripDetails } from "../../core/details.ts";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
 import { durationParts, formatKm, phoneTimeZone, totals } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
@@ -14,7 +15,16 @@ import {
 } from "../../native/actions.ts";
 import { announce } from "../announce.ts";
 import { lastEndedTrip, tripDurationMs, whenText } from "../home.ts";
-import { useNow, useProgress, useRegistered, useTrips, type Check } from "../hooks.ts";
+import {
+  useNow,
+  useProgress,
+  useRegistered,
+  useStopDetails,
+  useTrips,
+  type Check,
+} from "../hooks.ts";
+import { StopSheet } from "../StopSheet.tsx";
+import { tripTitle } from "../trip-label.ts";
 import { tOs } from "../os-text.ts";
 import {
   buttonsFor,
@@ -135,6 +145,10 @@ export function Home({
   const [restartBlocked, setRestartBlocked] = useState<Blocked | null>(null);
   // A check of C5 older than this was answered here (a restart or a resume that worked).
   const [checkHandledAt, setCheckHandledAt] = useState(0);
+  // The window of Stop is open, from this button (D4b); `null` while it is closed.
+  const [stopSheet, setStopSheet] = useState<Busy>(null);
+  const [stopFailed, setStopFailed] = useState(false);
+  const [detailsAtStop, setDetailsAtStop] = useStopDetails();
 
   // Said to a screen reader: a trip that starts, a recording that stops by itself.
   const shownId = useRef<string | null>(null);
@@ -182,6 +196,18 @@ export function Home({
     signal: progress?.signal ?? null,
   });
   const buttons = buttonsFor(active?.state ?? null);
+  const elapsedText = formatElapsed(
+    active === null || progress === null
+      ? 0
+      : elapsedMs({
+          // The state the count was read in: right after a Pause or a Resume, until it is read
+          // again (at once), the clock goes on as it went, and nothing jumps.
+          state: progress.state,
+          closedMs: progress.closedMs,
+          segmentStartedAt: active.segmentStartedAt,
+          now,
+        }),
+  );
 
   /**
    * Runs the action of a button; only that button shows that it works (`which`), so the other one
@@ -202,19 +228,36 @@ export function Home({
       .finally(() => setBusy(null));
   };
 
+  /**
+   * Stop (D4b): with the switch on, the window with the details of the trip; off, the trip ends at
+   * once, with no window and no confirmation.
+   */
   const confirmStop = (which: Busy, id: string) => {
-    Alert.alert(t("home.stop.title"), t("home.stop.message"), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("home.stop"),
-        style: "destructive",
-        onPress: () =>
-          act(which, async () => {
-            await stopTrip(id);
-            announce(t("announce.recording.stopped"));
-          }),
-      },
-    ]);
+    if (detailsAtStop) {
+      setStopFailed(false);
+      setStopSheet(which);
+      return;
+    }
+    act(which, async () => {
+      await stopTrip(id);
+      announce(t("announce.recording.stopped"));
+    });
+  };
+
+  /** "Stop trip" in the window: the trip ends with the details; a failure keeps the window open. */
+  const stopWith = (details: TripDetails) => {
+    if (!active || stopSheet === null) return;
+    setBusy(stopSheet);
+    setStopFailed(false);
+    stopTrip(active.id, details)
+      .then(
+        () => {
+          announce(t("announce.recording.stopped"));
+          setStopSheet(null);
+        },
+        () => setStopFailed(true),
+      )
+      .finally(() => setBusy(null));
   };
 
   const restart = () => {
@@ -315,6 +358,7 @@ export function Home({
       footer={
         // The big button is centred on its own; the small one lies over the top left corner of
         // the footer, out of the flow, so it moves nothing when it comes, goes or changes.
+        // The switch "Details at Stop" (D4b) lies over the bottom left corner, also out of the flow.
         <View style={{ alignItems: "center", justifyContent: "center" }}>
           {mainButton}
           {sideButton ? (
@@ -322,6 +366,20 @@ export function Home({
               {sideButton}
             </View>
           ) : null}
+          <View
+            style={{ position: "absolute", left: 0, bottom: 0, width: SIDE_WIDTH, gap: 2 }}
+            testID="details-at-stop"
+          >
+            <Text variant="caption" tone="muted">
+              {t("home.details_at_stop")}
+            </Text>
+            <Switch
+              value={detailsAtStop}
+              onValueChange={setDetailsAtStop}
+              accessibilityLabel={t("home.details_at_stop")}
+              testID="details-at-stop-switch"
+            />
+          </View>
         </View>
       }
     >
@@ -349,18 +407,7 @@ export function Home({
               : t("home.current")}
           </Text>
           <Text variant="display" accessibilityRole="timer" testID="elapsed">
-            {formatElapsed(
-              progress === null
-                ? 0
-                : elapsedMs({
-                    // The state the count was read in: right after a Pause or a Resume, until it is
-                    // read again (at once), the clock goes on as it went, and nothing jumps.
-                    state: progress.state,
-                    closedMs: progress.closedMs,
-                    segmentStartedAt: active.segmentStartedAt,
-                    now,
-                  }),
-            )}
+            {elapsedText}
           </Text>
           <Text variant="title" testID="current-km">
             {formatKm(progress?.distanceM ?? 0, LANGUAGE)}
@@ -408,17 +455,27 @@ export function Home({
       <Text tone="muted" testID="last-trip">
         {last === null || last.distanceM === null
           ? t("home.none")
-          : lastDuration === null
-            ? t("home.last", {
-                distance: formatKm(last.distanceM, LANGUAGE),
-                when: when(last.startedAt),
-              })
-            : t("home.last.duration", {
-                distance: formatKm(last.distanceM, LANGUAGE),
-                duration: durationText(lastDuration),
-                when: when(last.startedAt),
-              })}
+          : t("home.last", {
+              // Its name or places when typed, its km, its time without the pauses, and when.
+              details: [
+                tripTitle(last),
+                formatKm(last.distanceM, LANGUAGE),
+                lastDuration === null ? null : durationText(lastDuration),
+                when(last.startedAt),
+              ]
+                .filter((part) => part !== null)
+                .join(", "),
+            })}
       </Text>
+
+      <StopSheet
+        visible={stopSheet !== null}
+        summary={`${elapsedText} · ${formatKm(progress?.distanceM ?? 0, LANGUAGE)}`}
+        busy={busy !== null}
+        failed={stopFailed}
+        onCancel={() => setStopSheet(null)}
+        onStop={stopWith}
+      />
     </Screen>
   );
 }

@@ -181,8 +181,21 @@ Components from `@obop/ui-native`.
       notifications that are off are said by the status banner of D3. The temporary panel, its
       lines for testing (health, service, check) and the recording route go; the permissions end
       on the home screen
+- [x] D4b `feat(rutsa): trip details at Stop`: Stop opens a window over the screen with the
+      details of the trip, all optional: Name, From, To (a recorded trip has no addresses, they
+      can be typed here), Note; Cancel keeps recording, "Stop trip" ends the trip with what was
+      typed, also with nothing typed (Stop is never blocked). It replaces the confirmation of
+      Stop of D4. A column for the name (migration 5); From, To and Note exist already. A switch
+      "Details at Stop" in the footer of the home screen, under the small button and moving
+      nothing: on by default; off, Stop ends the trip at once, with no window and no
+      confirmation. The switch is kept in `meta`. It is a compromise, not an answer: how a trip
+      is best ended (with a name or without, at once or with a step) is an open question, and the
+      switch keeps both ways until it is answered (see "Proposed for stage 2"). The details can
+      be typed later too, on the trip's screen (D6) and in its edit (D8), since a trip can end
+      without the window (the switch off, an app ended by Android, the automatic stop of stage 4).
+      The category (work, private, commute) joins this window in stage 2, with the classification
 - [ ] D5 `feat(rutsa): trips list`: trips by day; each trip shows its kind (a trip added by hand
-      is marked; mixed comes with D8)
+      is marked; mixed comes with D8) and its name, else From → To, else its times
 - [ ] D6 `feat(rutsa): trip detail`: times, km, duration (without the pauses), its kind, delete;
       the way to its edit screen comes with D8
 - [ ] D7 `feat(rutsa): manual add`: a grey underlined "Manual add" on the home screen (under the
@@ -216,10 +229,10 @@ Components from `@obop/ui-native`.
       what was forgotten (a late Start) is added after Stop. The checks of a part: not in the
       future, its end after its start, no overlap with another part or another trip, its km and
       its speed as in D7. Deleting the whole trip stays on its screen (D6)
-Checkpoint: the app runs on the emulator; every check of `CHECKS.md` is run; Start, Pause, Resume,
-Stop, the list, a trip added by hand and a trip edited by hand work when tried by hand; the clock
-times and km on the screen are right (`Intl` of Hermes:
-`mileage-app` notes that an engine without data for a language or time zone falls back quietly).
+      Checkpoint: the app runs on the emulator; every check of `CHECKS.md` is run; Start, Pause, Resume,
+      Stop, the list, a trip added by hand and a trip edited by hand work when tried by hand; the clock
+      times and km on the screen are right (`Intl` of Hermes:
+      `mileage-app` notes that an engine without data for a language or time zone falls back quietly).
 
 ### E. Check on the emulator and the simulator
 
@@ -260,6 +273,16 @@ driver's.
 
 **Statuses of a trip**: today a trip is open (recording or paused) or ended. A later state, such as
 a trip in a sent report, could lock it against an edit.
+
+**How a trip is ended** (an open question; the switch "Details at Stop" of D4b is the compromise
+in the meantime): with a name and details or without, at once or with a step that asks for them.
+Its answer decides the switch: it stays a setting (then it moves to the settings screen, with the
+language and the app lock of BR-35), or one way wins and the switch goes. It belongs with the
+classification of stage 2 (BR-4, US-3, US-4) and with the end of a trip from its notification
+(BR-27) and the automatic stop of stage 4, which end a trip without the window.
+
+**Joining two trips** that follow each other, in the edit of a trip (D8): for a trip split in two by
+a Stop pressed by mistake while the switch is off.
 
 ## Dependencies
 
@@ -455,5 +478,20 @@ D23).
   gaps between parts are allowed and count for nothing); km and time are the sums of the parts;
   the kind (recorded, manual, mixed) follows the parts, and the km measured and typed come from
   them, so nothing else needs keeping for honesty; the list sorts itself when a changed part
-  loses the focus; only an ended trip can be edited, as often as the driver likes. Not in `docs/spec/rutsa.md` (BR-28 has only the trip added by
+  loses the focus; only an ended trip can be edited, as often as the driver likes.
+- 2026-11-24: before D5, a new step D4b: Stop opens a window with the details of the trip (Name,
+  From, To, Note, all optional; Cancel or "Stop trip"), which replaces the confirmation of D4,
+  and a switch "Details at Stop" (on by default, kept in `meta`) ends a trip at once when off.
+  The switch is a compromise while the question of how a trip is best ended stays open; it and
+  the joining of two trips split by a Stop pressed by mistake are written under "Proposed for
+  stage 2". The list of D5 shows the name, else From → To, else the times.
+- 2026-11-24: D4b as built: the rules of the details (trimmed, optional, at most 100 characters
+  for the name, 200 for From and To, 1,000 for the note, counted in code points) are in
+  `core/details.ts`, used by the window (a message under the field) and by the store, which
+  stores them in the transaction of Stop and refuses a field that is too long before anything is
+  written (`DetailsTooLong`); `Recording.stop` checks them before the updates are stopped. The
+  window is a `Modal` of React Native (`ui/StopSheet.tsx`); the switch is a `Switch` of React
+  Native with its label, over the bottom left corner of the footer; its value is `stop_details`
+  in `meta`. `ui/trip-label.ts` (`tripTitle`) gives the name, else From → To, else nothing; the
+  last trip of the home screen already uses it. Not in `docs/spec/rutsa.md` (BR-28 has only the trip added by
   hand); the spec is brought in line at F1.

@@ -124,3 +124,19 @@ The checks of D3 with a recording route went with D4, which records on the home 
 - [ ] Resume with location off: the screen of the permissions; location on, back: the trip goes on by itself
 - [ ] Positions too imprecise for a minute (`adb emu geo fix` cannot give an accuracy; tested in `signal.test.ts` and `sql-store.test.ts`)
 - [ ] TalkBack on: "Recording started" at Start, "Recording stopped ..." at Stop
+
+## D4b. Details at Stop
+
+- [x] 2026-11-24 `smoke` Stop opens the window "Stop the trip?" with the time and km of the trip, Name, From, To and Note, Cancel and Stop trip
+- [x] 2026-11-24 `smoke` Type a name, Stop trip: the trip ends, the last trip line starts with the name ("Last trip: Meeting, 0.5 km, 3 min, Today 17:17")
+- [x] 2026-11-24 `smoke` Cancel: the window closes and the trip goes on recording
+- [x] 2026-11-24 `smoke` The switch "Details at Stop" off: Stop ends the trip at once, with no window; force stop and open the app: the switch is still off
+- [x] 2026-11-24 `smoke` The app installed over the last build (migration 5) keeps every trip and its km
+- [ ] Stop trip with nothing typed: the trip ends, the last trip line has no name
+- [ ] From and To with no name: the last trip line starts with "From → To"
+- [ ] The back button of Android in the window is Cancel
+- [ ] The keyboard does not hide the field being typed in, Note included (several lines)
+- [ ] A name of 100 characters is taken; the field takes no more (the limit is shown if one is pasted)
+- [ ] The small Stop of a paused trip opens the same window, and ends the trip with the details
+- [ ] The switch sits in the bottom left corner of the footer and moves neither button
+- [ ] The window opens empty each time, also after a Cancel with something typed

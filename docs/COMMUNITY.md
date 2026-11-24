@@ -6,23 +6,23 @@ The control plane (`obop platform serve`) serves two dynamic, server-rendered pa
 
 ## Layout in the code
 
-| Piece | Where |
-|---|---|
-| Logic, rendering, tests (no web framework) | `crates/kernel/obop-community` |
-| axum adapter, the only place the two meet (D29) | `crates/kernel/obop-http/src/community.rs` (`obop_http::community::router`) |
-| Wiring, checker start, CLI | `crates/obop/src/main.rs` (`platform_serve`, `status_probes`, `status_incident`) |
+| Piece                                           | Where                                                                            |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| Logic, rendering, tests (no web framework)      | `crates/kernel/obop-community`                                                   |
+| axum adapter, the only place the two meet (D29) | `crates/kernel/obop-http/src/community.rs` (`obop_http::community::router`)      |
+| Wiring, checker start, CLI                      | `crates/obop/src/main.rs` (`platform_serve`, `status_probes`, `status_incident`) |
 
 `Community::handle(&Req) -> Resp` is the whole interface; `Req` and `Resp` are small framework-neutral structs. The router is merged into the platform router: `platform_router(api, static_dir).merge(community::router(community))`.
 
 ## Configuration
 
-| Variable | Meaning | Default |
-|---|---|---|
-| `OBOP_PLATFORM_ADMINS` | Comma-separated emails. These accounts are staff: moderate the forum, post in Announcements, run `/status/admin`. | none |
-| `OBOP_PUBLIC_URL` | Public origin for canonical links, Open Graph, feeds, sitemaps and JSON (`https://obop.example`). Set it in production. | taken from the request `Host` |
-| `OBOP_STATUS_INTERVAL_SECS` | Seconds between status checks (minimum 5). | `60` |
-| `OBOP_CELL_ADMIN_URL` | Cell PostgreSQL admin URL. When set, a `SELECT 1` check adds the **Cell database** component. | unset (component omitted) |
-| `--db` / `OBOP_DATABASE_URL` | Storage for everything below (SQLite, PostgreSQL or `memory:`), shared with the platform. | `sqlite://obop-platform.db` |
+| Variable                     | Meaning                                                                                                                 | Default                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `OBOP_PLATFORM_ADMINS`       | Comma-separated emails. These accounts are staff: moderate the forum, post in Announcements, run `/status/admin`.       | none                          |
+| `OBOP_PUBLIC_URL`            | Public origin for canonical links, Open Graph, feeds, sitemaps and JSON (`https://obop.example`). Set it in production. | taken from the request `Host` |
+| `OBOP_STATUS_INTERVAL_SECS`  | Seconds between status checks (minimum 5).                                                                              | `60`                          |
+| `OBOP_CELL_ADMIN_URL`        | Cell PostgreSQL admin URL. When set, a `SELECT 1` check adds the **Cell database** component.                           | unset (component omitted)     |
+| `--db` / `OBOP_DATABASE_URL` | Storage for everything below (SQLite, PostgreSQL or `memory:`), shared with the platform.                               | `sqlite://obop-platform.db`   |
 
 TLS terminates at the proxy: send `X-Forwarded-Proto: https` so cookies get `Secure`.
 
@@ -38,19 +38,19 @@ TLS terminates at the proxy: send `X-Forwarded-Proto: https` so cookies get `Sec
 
 ### Pages
 
-| URL | Content |
-|---|---|
-| `/community` | categories with counts and latest activity, pinned announcements, recent threads |
-| `/community/c/{slug}` | threads of a category, pinned first, then newest activity, 25 per page (`?page=`) |
-| `/community/t/{id}-{slug}` | thread with posts, 30 per page; a wrong slug is a `301` to the canonical URL |
-| `/community/c/{slug}/new`, `/community/t/{id}/reply`, `/community/p/{id}/edit` | forms (also POST targets) |
-| `/community/u/{name}` | profile: post count, join date, recent threads |
-| `/community/search?q=` | case-insensitive substring over titles and bodies, 20 per page, `noindex` |
-| `/community/feed.xml`, `/community/c/{slug}/feed.xml` | Atom, latest 30 threads |
-| `/community/sitemap.xml` | sitemap with `xhtml:link` language alternates |
-| `/community/login`, `/signup`, `/logout` | accounts |
-| `/community/mod/log` | staff only: audit log |
-| `/community/assets/app.css` | the one stylesheet (immutable, versioned with `?v=`) |
+| URL                                                                            | Content                                                                           |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `/community`                                                                   | categories with counts and latest activity, pinned announcements, recent threads  |
+| `/community/c/{slug}`                                                          | threads of a category, pinned first, then newest activity, 25 per page (`?page=`) |
+| `/community/t/{id}-{slug}`                                                     | thread with posts, 30 per page; a wrong slug is a `301` to the canonical URL      |
+| `/community/c/{slug}/new`, `/community/t/{id}/reply`, `/community/p/{id}/edit` | forms (also POST targets)                                                         |
+| `/community/u/{name}`                                                          | profile: post count, join date, recent threads                                    |
+| `/community/search?q=`                                                         | case-insensitive substring over titles and bodies, 20 per page, `noindex`         |
+| `/community/feed.xml`, `/community/c/{slug}/feed.xml`                          | Atom, latest 30 threads                                                           |
+| `/community/sitemap.xml`                                                       | sitemap with `xhtml:link` language alternates                                     |
+| `/community/login`, `/signup`, `/logout`                                       | accounts                                                                          |
+| `/community/mod/log`                                                           | staff only: audit log                                                             |
+| `/community/assets/app.css`                                                    | the one stylesheet (immutable, versioned with `?v=`)                              |
 
 Categories are seeded on first run: General, Help, Show and tell, Modules, Agents and MCP, Self-hosting, Feature requests, Announcements (staff only). Threads and posts are JSON documents in `community_thread` and `community_post`; the forum is held in memory as a cache and written through; since D59 several control-plane processes may share one database: a write takes a database lock, reloads the copy if another process changed anything (a shared version number) and bumps the version, and a read reloads when the number moved (checked at most every 250 ms).
 
@@ -84,14 +84,14 @@ Landmarks (header, nav, main, footer, search), a skip link, one `<h1>` per page,
 
 `obop platform serve` starts a checker thread. Every `OBOP_STATUS_INTERVAL_SECS` it probes:
 
-| Component | Check |
-|---|---|
-| Website and docs | an internal `GET http://127.0.0.1:{port}/` (only when `--static` is given) |
-| Control plane API | storage write/read/delete round trip |
-| Community | storage round trip on the community table |
-| Provisioning | `sliplane --version` for `--provisioner sliplane` (5 s limit); operational for `local` and `fake` |
-| Cell database | `SELECT 1` over `OBOP_CELL_ADMIN_URL`; omitted when unset |
-| Customer instances | `HEAD /` with a 5 s timeout on every `running` instance, in parallel |
+| Component          | Check                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| Website and docs   | an internal `GET http://127.0.0.1:{port}/` (only when `--static` is given)                        |
+| Control plane API  | storage write/read/delete round trip                                                              |
+| Community          | storage round trip on the community table                                                         |
+| Provisioning       | `sliplane --version` for `--provisioner sliplane` (5 s limit); operational for `local` and `fake` |
+| Cell database      | `SELECT 1` over `OBOP_CELL_ADMIN_URL`; omitted when unset                                         |
+| Customer instances | `HEAD /` with a 5 s timeout on every `running` instance, in parallel                              |
 
 The instance probe is hardened: only the stored URL of a `running` instance is requested; it must be exactly `https://<dns name>` (no userinfo, port, path, IP literal or `http`), redirects are not followed, and every address the name resolves to must be public. Only instance **names** appear on the page: the percentage up and the degraded instances. All up is operational, some down is degraded, most down (of at least three) is a major outage.
 

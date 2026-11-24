@@ -168,6 +168,18 @@ describe("migrate", () => {
     expect(await db.one("SELECT ended_at FROM segment")).toEqual({ ended_at: null });
   });
 
+  test("a file of version 4 keeps its trips, which have no name yet", async () => {
+    const db = memoryDb();
+    await migrate(db, MIGRATIONS.slice(0, 4));
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, from_text) VALUES ('m', 'ended', 'manual', 1000, 2000, 500, 'Office')",
+    );
+    expect(await migrate(db)).toEqual({ from: 4, to: SCHEMA_VERSION });
+    expect(await db.all("SELECT id, name, from_text, distance_m FROM trip")).toEqual([
+      { id: "m", name: null, from_text: "Office", distance_m: 500 },
+    ]);
+  });
+
   test("a segment cannot end before it starts", async () => {
     const db = memoryDb();
     await migrate(db);

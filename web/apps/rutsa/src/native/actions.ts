@@ -1,3 +1,4 @@
+import type { TripDetails } from "../core/details.ts";
 import { createRecording, type Ensured, type Recording } from "../core/recording.ts";
 import { createSerial } from "../core/serial.ts";
 import type { Trip } from "../core/types.ts";
@@ -47,8 +48,9 @@ export function resumeTrip(tripId: string): Promise<Trip> {
   return run((r) => r.resume(tripId));
 }
 
-export function stopTrip(tripId: string): Promise<Trip> {
-  return run((r) => r.stop(tripId));
+/** Ends the trip, with the details typed at Stop when given (D4b). */
+export function stopTrip(tripId: string, details?: TripDetails): Promise<Trip> {
+  return run((r) => r.stop(tripId, details));
 }
 
 /**

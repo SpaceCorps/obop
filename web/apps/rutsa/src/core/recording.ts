@@ -1,3 +1,4 @@
+import { cleanDetails, type TripDetails } from "./details.ts";
 import type { Readiness } from "./liveness.ts";
 import type { TripRepository } from "./repository.ts";
 import type { Trip } from "./types.ts";
@@ -63,11 +64,13 @@ export interface Recording {
    */
   resume(tripId: string): Promise<Trip>;
   /**
-   * Stops the location updates, then ends the trip, which computes its distance. The trip is ended
-   * also when the updates cannot be stopped (the system may have ended them already); the task
-   * stops them at its next delivery, since no trip is active then.
+   * Stops the location updates, then ends the trip, which computes its distance, with the details
+   * typed at Stop when given (D4b). The trip is ended also when the updates cannot be stopped (the
+   * system may have ended them already); the task stops them at its next delivery, since no trip
+   * is active then. Details that are too long are checked first (`DetailsTooLong`): then the
+   * updates are not touched and the trip goes on recording.
    */
-  stop(tripId: string): Promise<Trip>;
+  stop(tripId: string, details?: TripDetails): Promise<Trip>;
   /**
    * Makes the location updates match the open trip; called when the app opens and whenever it
    * comes back to the front. Android does not start the foreground service again after the app's
@@ -137,9 +140,10 @@ export function createRecording(deps: {
       return trip;
     },
 
-    async stop(tripId) {
+    async stop(tripId, details) {
+      if (details !== undefined) cleanDetails(details);
       await location.stop().catch(() => undefined);
-      return store.stopTrip(tripId, now());
+      return store.stopTrip(tripId, now(), details);
     },
 
     async ensure() {

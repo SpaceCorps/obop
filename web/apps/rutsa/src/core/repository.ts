@@ -1,3 +1,4 @@
+import type { TripDetails } from "./details.ts";
 import type { TripProgress } from "./progress.ts";
 import type { NewFix, StoredPoint, Trip } from "./types.ts";
 
@@ -44,9 +45,11 @@ export interface TripRepository {
 
   /**
    * `recording` or `paused` to `ended` at `at`; the distance is computed from the stored points,
-   * segment by segment (`analyseTrack` of `@obop/trip-core`). Throws `TripStateError` from `ended`.
+   * segment by segment (`analyseTrack` of `@obop/trip-core`). The details typed at Stop (D4b), when
+   * given, are stored in the same transaction, trimmed (`details.ts`); a detail that is too long
+   * throws `DetailsTooLong` and nothing is changed. Throws `TripStateError` from `ended`.
    */
-  stopTrip(tripId: string, at: number): Promise<Trip>;
+  stopTrip(tripId: string, at: number, details?: TripDetails): Promise<Trip>;
 
   /** A trip the driver types afterwards: ended, source `manual`, no points. */
   addManualTrip(input: ManualTrip): Promise<Trip>;

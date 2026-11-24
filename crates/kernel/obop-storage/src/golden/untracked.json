@@ -74,7 +74,7 @@
         {
           "big": 9007199254740993,
           "float": 3.75,
-          "huge": 1.5e+300,
+          "huge": 1.5e300,
           "max": 9223372036854775807,
           "min": -9223372036854775808,
           "neg": -0.25,
@@ -334,101 +334,33 @@
         "o1",
         "{\"note\": \"x\", \"state\": \"closed\", \"total\": 120, \"nested\": {\"a\": [1, 2, {\"b\": null}], \"ü\": \"ñ\"}, \"number\": \"SO-1\", \"created_at\": \"2026-01-01T00:00:00Z\", \"updated_by\": \"someone\", \"row_version\": 7, \"sys_backfilled\": true}"
       ],
-      [
-        "line",
-        "l1",
-        "{\"qty\": 1, \"order\": \"o1\"}"
-      ],
-      [
-        "line",
-        "l2",
-        "{\"qty\": 2, \"order\": \"o1\"}"
-      ],
-      [
-        "stock",
-        "s1",
-        "{\"qty\": 8, \"sku\": \"S-1\"}"
-      ],
-      [
-        "stock",
-        "s9",
-        "{\"qty\": 1, \"sku\": \"Z\"}"
-      ],
-      [
-        "order",
-        "o3",
-        "{\"n\": 2, \"number\": \"SO-3b\"}"
-      ],
+      ["line", "l1", "{\"qty\": 1, \"order\": \"o1\"}"],
+      ["line", "l2", "{\"qty\": 2, \"order\": \"o1\"}"],
+      ["stock", "s1", "{\"qty\": 8, \"sku\": \"S-1\"}"],
+      ["stock", "s9", "{\"qty\": 1, \"sku\": \"Z\"}"],
+      ["order", "o3", "{\"n\": 2, \"number\": \"SO-3b\"}"],
       [
         "num",
         "n1",
         "{\"big\": 9007199254740993, \"max\": 9223372036854775807, \"min\": -9223372036854775808, \"neg\": -0.25, \"huge\": 1500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, \"tiny\": 0.0000001, \"umax\": 18446744073709551615, \"zero\": 0, \"float\": 3.75, \"tenth\": 0.1}"
       ],
-      [
-        "num",
-        "n2",
-        "{\"big\": 9007199254740993, \"umax\": 18446744073709551615, \"float\": 2.25}"
-      ],
-      [
-        "odd",
-        "",
-        "{\"i\": 0, \"touched\": true}"
-      ],
-      [
-        "odd",
-        "with space",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd",
-        "ünï/cødé ☃",
-        "{\"i\": 2}"
-      ],
-      [
-        "odd",
-        "quote\"id",
-        "{\"i\": 3}"
-      ],
-      [
-        "odd",
-        "back\\slash",
-        "{\"i\": 5}"
-      ],
+      ["num", "n2", "{\"big\": 9007199254740993, \"umax\": 18446744073709551615, \"float\": 2.25}"],
+      ["odd", "", "{\"i\": 0, \"touched\": true}"],
+      ["odd", "with space", "{\"i\": 1}"],
+      ["odd", "ünï/cødé ☃", "{\"i\": 2}"],
+      ["odd", "quote\"id", "{\"i\": 3}"],
+      ["odd", "back\\slash", "{\"i\": 5}"],
       [
         "odd",
         "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
         "{\"i\": 6}"
       ],
-      [
-        "odd2",
-        "",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "with space",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "ünï/cødé ☃",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "quote\"id",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "it's",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "back\\slash",
-        "{\"i\": 1}"
-      ],
+      ["odd2", "", "{\"i\": 1}"],
+      ["odd2", "with space", "{\"i\": 1}"],
+      ["odd2", "ünï/cødé ☃", "{\"i\": 1}"],
+      ["odd2", "quote\"id", "{\"i\": 1}"],
+      ["odd2", "it's", "{\"i\": 1}"],
+      ["odd2", "back\\slash", "{\"i\": 1}"],
       [
         "odd2",
         "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -439,11 +371,7 @@
         "sys-i",
         "{\"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 4, \"sys_backfilled\": true}"
       ],
-      [
-        "sysk",
-        "sys-p",
-        "{\"name\": \"again\", \"row_version\": 8}"
-      ],
+      ["sysk", "sys-p", "{\"name\": \"again\", \"row_version\": 8}"],
       [
         "sysk",
         "sys-m",
@@ -454,21 +382,13 @@
         "sys-c",
         "{\"name\": \"c\", \"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
       ],
-      [
-        "sysk",
-        "sys-a",
-        "{\"row_version\": 2}"
-      ],
+      ["sysk", "sys-a", "{\"row_version\": 2}"],
       [
         "sysk",
         "sys-n",
         "{\"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
       ],
-      [
-        "secret",
-        "k1",
-        "{\"other\": \"kept\", \"token\": \"sealed:2\"}"
-      ]
+      ["secret", "k1", "{\"other\": \"kept\", \"token\": \"sealed:2\"}"]
     ],
     "raw_before_restore": [
       [
@@ -476,101 +396,33 @@
         "o1",
         "{\"note\": \"x\", \"state\": \"closed\", \"total\": 120, \"nested\": {\"a\": [1, 2, {\"b\": null}], \"ü\": \"ñ\"}, \"number\": \"SO-1\", \"created_at\": \"2026-01-01T00:00:00Z\", \"updated_by\": \"someone\", \"row_version\": 7, \"sys_backfilled\": true}"
       ],
-      [
-        "line",
-        "l1",
-        "{\"qty\": 1, \"order\": \"o1\"}"
-      ],
-      [
-        "line",
-        "l2",
-        "{\"qty\": 2, \"order\": \"o1\"}"
-      ],
-      [
-        "stock",
-        "s1",
-        "{\"qty\": 8, \"sku\": \"S-1\"}"
-      ],
-      [
-        "stock",
-        "s9",
-        "{\"qty\": 1, \"sku\": \"Z\"}"
-      ],
-      [
-        "order",
-        "o3",
-        "{\"n\": 2, \"number\": \"SO-3b\"}"
-      ],
+      ["line", "l1", "{\"qty\": 1, \"order\": \"o1\"}"],
+      ["line", "l2", "{\"qty\": 2, \"order\": \"o1\"}"],
+      ["stock", "s1", "{\"qty\": 8, \"sku\": \"S-1\"}"],
+      ["stock", "s9", "{\"qty\": 1, \"sku\": \"Z\"}"],
+      ["order", "o3", "{\"n\": 2, \"number\": \"SO-3b\"}"],
       [
         "num",
         "n1",
         "{\"big\": 9007199254740993, \"max\": 9223372036854775807, \"min\": -9223372036854775808, \"neg\": -0.25, \"huge\": 1500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, \"tiny\": 0.0000001, \"umax\": 18446744073709551615, \"zero\": 0, \"float\": 3.75, \"tenth\": 0.1}"
       ],
-      [
-        "num",
-        "n2",
-        "{\"big\": 9007199254740993, \"umax\": 18446744073709551615, \"float\": 2.25}"
-      ],
-      [
-        "odd",
-        "",
-        "{\"i\": 0, \"touched\": true}"
-      ],
-      [
-        "odd",
-        "with space",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd",
-        "ünï/cødé ☃",
-        "{\"i\": 2}"
-      ],
-      [
-        "odd",
-        "quote\"id",
-        "{\"i\": 3}"
-      ],
-      [
-        "odd",
-        "back\\slash",
-        "{\"i\": 5}"
-      ],
+      ["num", "n2", "{\"big\": 9007199254740993, \"umax\": 18446744073709551615, \"float\": 2.25}"],
+      ["odd", "", "{\"i\": 0, \"touched\": true}"],
+      ["odd", "with space", "{\"i\": 1}"],
+      ["odd", "ünï/cødé ☃", "{\"i\": 2}"],
+      ["odd", "quote\"id", "{\"i\": 3}"],
+      ["odd", "back\\slash", "{\"i\": 5}"],
       [
         "odd",
         "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
         "{\"i\": 6}"
       ],
-      [
-        "odd2",
-        "",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "with space",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "ünï/cødé ☃",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "quote\"id",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "it's",
-        "{\"i\": 1}"
-      ],
-      [
-        "odd2",
-        "back\\slash",
-        "{\"i\": 1}"
-      ],
+      ["odd2", "", "{\"i\": 1}"],
+      ["odd2", "with space", "{\"i\": 1}"],
+      ["odd2", "ünï/cødé ☃", "{\"i\": 1}"],
+      ["odd2", "quote\"id", "{\"i\": 1}"],
+      ["odd2", "it's", "{\"i\": 1}"],
+      ["odd2", "back\\slash", "{\"i\": 1}"],
       [
         "odd2",
         "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -581,11 +433,7 @@
         "sys-i",
         "{\"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 4, \"sys_backfilled\": true}"
       ],
-      [
-        "sysk",
-        "sys-p",
-        "{\"name\": \"again\", \"row_version\": 8}"
-      ],
+      ["sysk", "sys-p", "{\"name\": \"again\", \"row_version\": 8}"],
       [
         "sysk",
         "sys-m",
@@ -596,21 +444,13 @@
         "sys-c",
         "{\"name\": \"c\", \"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
       ],
-      [
-        "sysk",
-        "sys-a",
-        "{\"row_version\": 2}"
-      ],
+      ["sysk", "sys-a", "{\"row_version\": 2}"],
       [
         "sysk",
         "sys-n",
         "{\"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
       ],
-      [
-        "secret",
-        "k1",
-        "{\"other\": \"kept\", \"token\": \"sealed:2\"}"
-      ]
+      ["secret", "k1", "{\"other\": \"kept\", \"token\": \"sealed:2\"}"]
     ],
     "restored": 28,
     "rows": [
@@ -684,7 +524,7 @@
         {
           "big": 9007199254740993,
           "float": 3.75,
-          "huge": 1.5e+300,
+          "huge": 1.5e300,
           "max": 9223372036854775807,
           "min": -9223372036854775808,
           "neg": -0.25,
@@ -944,101 +784,33 @@
         "o1",
         "{\"created_at\":\"2026-01-01T00:00:00Z\",\"nested\":{\"a\":[1,2,{\"b\":null}],\"ü\":\"ñ\"},\"note\":\"x\",\"number\":\"SO-1\",\"row_version\":7,\"state\":\"closed\",\"sys_backfilled\":true,\"total\":120,\"updated_by\":\"someone\"}"
       ],
-      [
-        "line",
-        "l1",
-        "{\"order\":\"o1\",\"qty\":1}"
-      ],
-      [
-        "line",
-        "l2",
-        "{\"order\":\"o1\",\"qty\":2}"
-      ],
-      [
-        "stock",
-        "s1",
-        "{\"qty\":8,\"sku\":\"S-1\"}"
-      ],
-      [
-        "stock",
-        "s9",
-        "{\"qty\":1,\"sku\":\"Z\"}"
-      ],
-      [
-        "order",
-        "o3",
-        "{\"n\":2,\"number\":\"SO-3b\"}"
-      ],
+      ["line", "l1", "{\"order\":\"o1\",\"qty\":1}"],
+      ["line", "l2", "{\"order\":\"o1\",\"qty\":2}"],
+      ["stock", "s1", "{\"qty\":8,\"sku\":\"S-1\"}"],
+      ["stock", "s9", "{\"qty\":1,\"sku\":\"Z\"}"],
+      ["order", "o3", "{\"n\":2,\"number\":\"SO-3b\"}"],
       [
         "num",
         "n1",
         "{\"big\":9007199254740993,\"float\":3.75,\"huge\":1.5e+300,\"max\":9223372036854775807,\"min\":-9223372036854775808,\"neg\":-0.25,\"tenth\":0.1,\"tiny\":1e-7,\"umax\":18446744073709551615,\"zero\":0}"
       ],
-      [
-        "num",
-        "n2",
-        "{\"big\":9007199254740993,\"float\":2.25,\"umax\":18446744073709551615}"
-      ],
-      [
-        "odd",
-        "",
-        "{\"i\":0,\"touched\":true}"
-      ],
-      [
-        "odd",
-        "with space",
-        "{\"i\":1}"
-      ],
-      [
-        "odd",
-        "ünï/cødé ☃",
-        "{\"i\":2}"
-      ],
-      [
-        "odd",
-        "quote\"id",
-        "{\"i\":3}"
-      ],
-      [
-        "odd",
-        "back\\slash",
-        "{\"i\":5}"
-      ],
+      ["num", "n2", "{\"big\":9007199254740993,\"float\":2.25,\"umax\":18446744073709551615}"],
+      ["odd", "", "{\"i\":0,\"touched\":true}"],
+      ["odd", "with space", "{\"i\":1}"],
+      ["odd", "ünï/cødé ☃", "{\"i\":2}"],
+      ["odd", "quote\"id", "{\"i\":3}"],
+      ["odd", "back\\slash", "{\"i\":5}"],
       [
         "odd",
         "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
         "{\"i\":6}"
       ],
-      [
-        "odd2",
-        "",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "with space",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "ünï/cødé ☃",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "quote\"id",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "it's",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "back\\slash",
-        "{\"i\":1}"
-      ],
+      ["odd2", "", "{\"i\":1}"],
+      ["odd2", "with space", "{\"i\":1}"],
+      ["odd2", "ünï/cødé ☃", "{\"i\":1}"],
+      ["odd2", "quote\"id", "{\"i\":1}"],
+      ["odd2", "it's", "{\"i\":1}"],
+      ["odd2", "back\\slash", "{\"i\":1}"],
       [
         "odd2",
         "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1049,11 +821,7 @@
         "sys-i",
         "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"row_version\":4,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
       ],
-      [
-        "sysk",
-        "sys-p",
-        "{\"name\":\"again\",\"row_version\":8}"
-      ],
+      ["sysk", "sys-p", "{\"name\":\"again\",\"row_version\":8}"],
       [
         "sysk",
         "sys-m",
@@ -1064,21 +832,13 @@
         "sys-c",
         "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"name\":\"c\",\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
       ],
-      [
-        "sysk",
-        "sys-a",
-        "{\"row_version\":2}"
-      ],
+      ["sysk", "sys-a", "{\"row_version\":2}"],
       [
         "sysk",
         "sys-n",
         "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
       ],
-      [
-        "secret",
-        "k1",
-        "{\"other\":\"kept\",\"token\":\"sealed:2\"}"
-      ]
+      ["secret", "k1", "{\"other\":\"kept\",\"token\":\"sealed:2\"}"]
     ],
     "raw_before_restore": [
       [
@@ -1086,101 +846,33 @@
         "o1",
         "{\"created_at\":\"2026-01-01T00:00:00Z\",\"nested\":{\"a\":[1,2,{\"b\":null}],\"ü\":\"ñ\"},\"note\":\"x\",\"number\":\"SO-1\",\"row_version\":7,\"state\":\"closed\",\"sys_backfilled\":true,\"total\":120,\"updated_by\":\"someone\"}"
       ],
-      [
-        "line",
-        "l1",
-        "{\"order\":\"o1\",\"qty\":1}"
-      ],
-      [
-        "line",
-        "l2",
-        "{\"order\":\"o1\",\"qty\":2}"
-      ],
-      [
-        "stock",
-        "s1",
-        "{\"qty\":8,\"sku\":\"S-1\"}"
-      ],
-      [
-        "stock",
-        "s9",
-        "{\"qty\":1,\"sku\":\"Z\"}"
-      ],
-      [
-        "order",
-        "o3",
-        "{\"n\":2,\"number\":\"SO-3b\"}"
-      ],
+      ["line", "l1", "{\"order\":\"o1\",\"qty\":1}"],
+      ["line", "l2", "{\"order\":\"o1\",\"qty\":2}"],
+      ["stock", "s1", "{\"qty\":8,\"sku\":\"S-1\"}"],
+      ["stock", "s9", "{\"qty\":1,\"sku\":\"Z\"}"],
+      ["order", "o3", "{\"n\":2,\"number\":\"SO-3b\"}"],
       [
         "num",
         "n1",
         "{\"big\":9007199254740993,\"float\":3.75,\"huge\":1.5e+300,\"max\":9223372036854775807,\"min\":-9223372036854775808,\"neg\":-0.25,\"tenth\":0.1,\"tiny\":1e-7,\"umax\":18446744073709551615,\"zero\":0}"
       ],
-      [
-        "num",
-        "n2",
-        "{\"big\":9007199254740993,\"float\":2.25,\"umax\":18446744073709551615}"
-      ],
-      [
-        "odd",
-        "",
-        "{\"i\":0,\"touched\":true}"
-      ],
-      [
-        "odd",
-        "with space",
-        "{\"i\":1}"
-      ],
-      [
-        "odd",
-        "ünï/cødé ☃",
-        "{\"i\":2}"
-      ],
-      [
-        "odd",
-        "quote\"id",
-        "{\"i\":3}"
-      ],
-      [
-        "odd",
-        "back\\slash",
-        "{\"i\":5}"
-      ],
+      ["num", "n2", "{\"big\":9007199254740993,\"float\":2.25,\"umax\":18446744073709551615}"],
+      ["odd", "", "{\"i\":0,\"touched\":true}"],
+      ["odd", "with space", "{\"i\":1}"],
+      ["odd", "ünï/cødé ☃", "{\"i\":2}"],
+      ["odd", "quote\"id", "{\"i\":3}"],
+      ["odd", "back\\slash", "{\"i\":5}"],
       [
         "odd",
         "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
         "{\"i\":6}"
       ],
-      [
-        "odd2",
-        "",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "with space",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "ünï/cødé ☃",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "quote\"id",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "it's",
-        "{\"i\":1}"
-      ],
-      [
-        "odd2",
-        "back\\slash",
-        "{\"i\":1}"
-      ],
+      ["odd2", "", "{\"i\":1}"],
+      ["odd2", "with space", "{\"i\":1}"],
+      ["odd2", "ünï/cødé ☃", "{\"i\":1}"],
+      ["odd2", "quote\"id", "{\"i\":1}"],
+      ["odd2", "it's", "{\"i\":1}"],
+      ["odd2", "back\\slash", "{\"i\":1}"],
       [
         "odd2",
         "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1191,11 +883,7 @@
         "sys-i",
         "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"row_version\":4,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
       ],
-      [
-        "sysk",
-        "sys-p",
-        "{\"name\":\"again\",\"row_version\":8}"
-      ],
+      ["sysk", "sys-p", "{\"name\":\"again\",\"row_version\":8}"],
       [
         "sysk",
         "sys-m",
@@ -1206,21 +894,13 @@
         "sys-c",
         "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"name\":\"c\",\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
       ],
-      [
-        "sysk",
-        "sys-a",
-        "{\"row_version\":2}"
-      ],
+      ["sysk", "sys-a", "{\"row_version\":2}"],
       [
         "sysk",
         "sys-n",
         "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
       ],
-      [
-        "secret",
-        "k1",
-        "{\"other\":\"kept\",\"token\":\"sealed:2\"}"
-      ]
+      ["secret", "k1", "{\"other\":\"kept\",\"token\":\"sealed:2\"}"]
     ],
     "restored": 28,
     "rows": [
@@ -1294,7 +974,7 @@
         {
           "big": 9007199254740993,
           "float": 3.75,
-          "huge": 1.5e+300,
+          "huge": 1.5e300,
           "max": 9223372036854775807,
           "min": -9223372036854775808,
           "neg": -0.25,

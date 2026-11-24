@@ -20,61 +20,61 @@ description = "A dashboard: a titled, ordered collection of widgets"
 read_group = "dashboards.user"
 write_group = "dashboards.manager"
 
-  [model.access]
-  own = "owner"
-  public_field = "shared"
-  see_all_group = "dashboards.manager"
+[model.access]
+own = "owner"
+public_field = "shared"
+see_all_group = "dashboards.manager"
 
-  [model.ui]
-  title = "{title}"
-  subtitle = "{owner}"
-  list = ["title", "owner", "shared", "position"]
-  quick_create = ["title", "description"]
-  order = "position asc, title asc"
-  default_view = "list"
-  menu = "configuration"
-  menu_section = "Manage"
-  menu_order = 1
+[model.ui]
+title = "{title}"
+subtitle = "{owner}"
+list = ["title", "owner", "shared", "position"]
+quick_create = ["title", "description"]
+order = "position asc, title asc"
+default_view = "list"
+menu = "configuration"
+menu_section = "Manage"
+menu_order = 1
 
-  [[model.child]]
-  model = "dashboards_widget"
-  via = "dashboard_id"
-  shape = "list"
+[[model.child]]
+model = "dashboards_widget"
+via = "dashboard_id"
+shape = "list"
 
-  [[model.field]]
-  name = "title"
-  description = "Dashboard title, for example Sales overview"
-  class = "none"
-  required = true
+[[model.field]]
+name = "title"
+description = "Dashboard title, for example Sales overview"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "owner"
-  description = "User name of the person who owns the dashboard; the person who creates it unless set otherwise"
-  class = "internal"
-  personal_data = true
-  required = true
-  default = "$user"
+[[model.field]]
+name = "owner"
+description = "User name of the person who owns the dashboard; the person who creates it unless set otherwise"
+class = "internal"
+personal_data = true
+required = true
+default = "$user"
 
-  [[model.field]]
-  name = "description"
-  description = "What the dashboard shows and for whom"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "description"
+description = "What the dashboard shows and for whom"
+class = "none"
+kind = "longtext"
 
-  [[model.field]]
-  name = "shared"
-  description = "Whether everyone who may read dashboards sees it (and its tiles), or only the owner and dashboards.manager; the server enforces it"
-  class = "none"
-  kind = "bool"
+[[model.field]]
+name = "shared"
+description = "Whether everyone who may read dashboards sees it (and its tiles), or only the owner and dashboards.manager; the server enforces it"
+class = "none"
+kind = "bool"
 
-  [[model.field]]
-  name = "position"
-  description = "Order among dashboards, lowest first"
-  class = "none"
-  kind = "number"
+[[model.field]]
+name = "position"
+description = "Order among dashboards, lowest first"
+class = "none"
+kind = "number"
 
-    [model.field.ui]
-    aggregate = "none"
+[model.field.ui]
+aggregate = "none"
 
 [[model]]
 name = "dashboards_widget"
@@ -82,85 +82,85 @@ description = "One tile on a dashboard, defined by what to read and how to aggre
 read_group = "dashboards.user"
 write_group = "dashboards.manager"
 
-  [model.access]
-  via = "dashboard_id"
+[model.access]
+via = "dashboard_id"
 
-  [model.ui]
-  title = "{title}"
-  subtitle = "{dashboard_id}"
-  list = ["title", "dashboard_id", "kind", "model_name", "aggregate", "position"]
-  quick_create = ["title", "dashboard_id", "kind", "model_name"]
-  order = "position asc, title asc"
-  default_view = "list"
-  menu = "configuration"
-  menu_section = "Manage"
-  menu_order = 2
+[model.ui]
+title = "{title}"
+subtitle = "{dashboard_id}"
+list = ["title", "dashboard_id", "kind", "model_name", "aggregate", "position"]
+quick_create = ["title", "dashboard_id", "kind", "model_name"]
+order = "position asc, title asc"
+default_view = "list"
+menu = "configuration"
+menu_section = "Manage"
+menu_order = 2
 
-  [[model.field]]
-  name = "dashboard_id"
-  description = "The dashboard the widget is on"
-  class = "none"
-  kind = "ref"
-  to = "dashboards_dashboard"
-  required = true
+[[model.field]]
+name = "dashboard_id"
+description = "The dashboard the widget is on"
+class = "none"
+kind = "ref"
+to = "dashboards_dashboard"
+required = true
 
-  [[model.field]]
-  name = "title"
-  description = "Tile title, for example Paid orders"
-  class = "none"
-  required = true
+[[model.field]]
+name = "title"
+description = "Tile title, for example Paid orders"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "kind"
-  description = "How the tile is drawn: kpi, bar, line, pie, table"
-  class = "none"
-  kind = "select"
-  options = ["kpi", "bar", "line", "pie", "table"]
-  required = true
+[[model.field]]
+name = "kind"
+description = "How the tile is drawn: kpi, bar, line, pie, table"
+class = "none"
+kind = "select"
+options = ["kpi", "bar", "line", "pie", "table"]
+required = true
 
-  [[model.field]]
-  name = "model_name"
-  description = "Model the tile reads, for example sale_order"
-  class = "none"
-  required = true
+[[model.field]]
+name = "model_name"
+description = "Model the tile reads, for example sale_order"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "measure_field"
-  description = "Field to aggregate: a number or money field of the model; empty when counting"
-  class = "none"
+[[model.field]]
+name = "measure_field"
+description = "Field to aggregate: a number or money field of the model; empty when counting"
+class = "none"
 
-  [[model.field]]
-  name = "aggregate"
-  description = "How records are combined: count or sum"
-  class = "none"
-  kind = "select"
-  options = ["count", "sum"]
-  required = true
-  default = "count"
+[[model.field]]
+name = "aggregate"
+description = "How records are combined: count or sum"
+class = "none"
+kind = "select"
+options = ["count", "sum"]
+required = true
+default = "count"
 
-  [[model.field]]
-  name = "group_by"
-  description = "Field to split the result by (a select, ref or date field); empty for one value"
-  class = "none"
+[[model.field]]
+name = "group_by"
+description = "Field to split the result by (a select, ref or date field); empty for one value"
+class = "none"
 
-  [[model.field]]
-  name = "period"
-  description = "When group_by is a date or a date and time: the period its values are counted per (day, week, iso_week, month or year); empty means month"
-  class = "none"
-  kind = "select"
-  options = ["day", "week", "iso_week", "month", "year"]
+[[model.field]]
+name = "period"
+description = "When group_by is a date or a date and time: the period its values are counted per (day, week, iso_week, month or year); empty means month"
+class = "none"
+kind = "select"
+options = ["day", "week", "iso_week", "month", "year"]
 
-  [[model.field]]
-  name = "filter"
-  description = "JSON object of field names to exact values that records must match, for example {\"state\":\"paid\"}; empty means all records"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "filter"
+description = "JSON object of field names to exact values that records must match, for example {\"state\":\"paid\"}; empty means all records"
+class = "none"
+kind = "longtext"
 
-  [[model.field]]
-  name = "position"
-  description = "Order of the tile on the dashboard, lowest first"
-  class = "none"
-  kind = "number"
+[[model.field]]
+name = "position"
+description = "Order of the tile on the dashboard, lowest first"
+class = "none"
+kind = "number"
 
-    [model.field.ui]
-    aggregate = "none"
+[model.field.ui]
+aggregate = "none"

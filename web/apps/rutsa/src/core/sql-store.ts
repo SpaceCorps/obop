@@ -1,3 +1,4 @@
+import { cleanDetails, cleanText } from "./details.ts";
 import { analyseRecorded, progressOf, type SegmentTimes } from "./progress.ts";
 import {
   TripAlreadyActive,
@@ -44,6 +45,7 @@ interface TripRow {
   segment: number;
   /** `null` for a trip added by hand, which has no segments. */
   segment_started_at: number | null;
+  name: string | null;
   from_text: string | null;
   to_text: string | null;
   note: string | null;
@@ -63,7 +65,7 @@ interface PointRow {
 const TRIP_COLUMNS = `id, state, source, started_at, ended_at, distance_m, segment,
   (SELECT s.started_at FROM segment s WHERE s.trip_id = trip.id AND s.segment = trip.segment)
     AS segment_started_at,
-  from_text, to_text, note`;
+  name, from_text, to_text, note`;
 const ACTIVE = "state IN ('recording', 'paused')";
 
 function isState(value: string): value is TripState {
@@ -88,6 +90,7 @@ function toTrip(row: TripRow): Trip {
     distanceM: row.distance_m,
     segment: row.segment,
     segmentStartedAt: row.segment_started_at ?? row.started_at,
+    name: row.name,
     from: row.from_text,
     to: row.to_text,
     note: row.note,
@@ -107,11 +110,8 @@ function toPoint(row: PointRow): StoredPoint {
   };
 }
 
-/** A typed text of the driver: trimmed, and `null` when nothing is left. */
-function text(value: string | null | undefined): string | null {
-  const trimmed = value?.trim() ?? "";
-  return trimmed === "" ? null : trimmed;
-}
+/** A typed text of the driver: trimmed, and `null` when nothing is left (`details.ts`). */
+const text = cleanText;
 
 export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripRepository {
   const thinning = options.thinning ?? RECORDING_THINNING;
@@ -229,10 +229,12 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
         return mustRead(tx, tripId);
       }),
 
-    stopTrip: (tripId, at) =>
+    stopTrip: (tripId, at, details) =>
       db.transaction(async (tx) => {
         const trip = await mustRead(tx, tripId);
         if (trip.state === "ended") throw new TripStateError(tripId, trip.state, "stopped");
+        // Checked before anything is written: a detail that is too long stops nothing.
+        const typed = details === undefined ? null : cleanDetails(details);
         const { distanceM } = analyseRecorded(
           await readPoints(tx, tripId),
           await readStarts(tx, tripId),
@@ -248,6 +250,13 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
         // A trip stopped while it records ends its segment now; one stopped from a pause has it
         // ended at the Pause already.
         await endSegment(tx, trip, endedAt);
+        // The details typed at Stop, in the same transaction: a trip is never ended without them.
+        if (typed !== null) {
+          await tx.run(
+            "UPDATE trip SET name = ?, from_text = ?, to_text = ?, note = ? WHERE id = ?",
+            [typed.name, typed.from, typed.to, typed.note, tripId],
+          );
+        }
         return mustRead(tx, tripId);
       }),
 

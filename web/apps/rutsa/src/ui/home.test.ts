@@ -22,6 +22,7 @@ const trip = (
     distanceM: state === "ended" ? 1_000 : null,
     segment: 1,
     segmentStartedAt: startedAt,
+    name: null,
     from: null,
     to: null,
     note: null,

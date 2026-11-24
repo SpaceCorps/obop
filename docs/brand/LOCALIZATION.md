@@ -10,23 +10,23 @@ downloaded.
 
 ## 1 How it works
 
-| Piece | Where |
-|---|---|
-| Runtime (messages, plurals, rich text, Intl formatters, locale-aware amounts) | `web/packages/ui/src/i18n/` |
-| Catalogues | `locales/<lang>/messages.json` + `status.json` in `web/packages/ui`, `web/apps/backoffice`, `web/apps/platform` |
-| Tooling (extract, check, status, sync) | `web/packages/ui/scripts/i18n.ts` |
-| Server metadata labels (module, model, field, option, action names) | `web/apps/backoffice/src/labels.ts`, `metaLabels.ts`; the texts themselves: `packages/labels/<lang>/<id>.toml` (section 8) |
-| Server message patterns | `web/apps/backoffice/src/serverMessage.ts`, `web/apps/platform/src/serverMessage.ts` |
+| Piece                                                                         | Where                                                                                                                      |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Runtime (messages, plurals, rich text, Intl formatters, locale-aware amounts) | `web/packages/ui/src/i18n/`                                                                                                |
+| Catalogues                                                                    | `locales/<lang>/messages.json` + `status.json` in `web/packages/ui`, `web/apps/backoffice`, `web/apps/platform`            |
+| Tooling (extract, check, status, sync)                                        | `web/packages/ui/scripts/i18n.ts`                                                                                          |
+| Server metadata labels (module, model, field, option, action names)           | `web/apps/backoffice/src/labels.ts`, `metaLabels.ts`; the texts themselves: `packages/labels/<lang>/<id>.toml` (section 8) |
+| Server message patterns                                                       | `web/apps/backoffice/src/serverMessage.ts`, `web/apps/platform/src/serverMessage.ts`                                       |
 
 ### 1.1 Message ids are the English text
 
 ```tsx
-t("Save");                                          // plain
+t("Save"); // plain
 t("Delete {noun} “{label}”? This cannot be undone.", { noun, label });
-t("{count, plural, one {# record} other {# records}}", { count });   // ICU plural, # is formatted
-tx("field", "Stage");                               // a context separates words that translate differently
-rich("<kbd>⌘S</kbd> save", {}, { kbd: (c) => <Kbd>{c}</Kbd> });     // tags become elements, never HTML
-msg("List");                                        // mark for extraction now, translate later with t(id)
+t("{count, plural, one {# record} other {# records}}", { count }); // ICU plural, # is formatted
+tx("field", "Stage"); // a context separates words that translate differently
+rich("<kbd>⌘S</kbd> save", {}, { kbd: (c) => <Kbd>{c}</Kbd> }); // tags become elements, never HTML
+msg("List"); // mark for extraction now, translate later with t(id)
 ```
 
 Why the English text and not a key: the code reads as the screen reads, a missing translation falls back to
@@ -81,18 +81,18 @@ All formatting goes through `fmt` (`fmt.money`, `fmt.number`, `fmt.date`, `fmt.d
 Money is an integer in minor units (D9). It is turned into text from a decimal digit string (`minorToDecimal`)
 so no floating point touches an amount, and typed text is parsed back by digits (`parseNumber`, `parseMoney`):
 
-| Typed | Locale | Result | Note |
-|---|---|---|---|
-| `12,50` | de, fr, pl, fi, sv, es | 12.50 | the locale's own decimal mark |
-| `12.50` | any | 12.50 | the numpad or a habit; two digits cannot be a group |
-| `1.250,00` | de, es | 1250.00 | |
-| `1 250,5` (space, NBSP or narrow NBSP) | fr, pl, fi, sv | 1250.50 | all three are group marks |
-| `1'250.50` | de-CH | 1250.50 | |
-| `1.250` | de | 1250.00 | `.` is the group mark of `de` |
-| `1,250` | de | 1250.00, **shown first** | three digits after a mark that is not the locale's group mark: the form shows "Read as 1.250,00 €" before commit |
-| `12,505` | de | 12.505,00, **shown first** | three digits after a mark: read as a group, flagged like `1,250` |
-| `12,5055` | any | rejected | more decimals than the currency allows, and not a group |
-| `１２，５０` | any | 12.50 | full-width digits are NFKC-normalised |
+| Typed                                  | Locale                 | Result                     | Note                                                                                                             |
+| -------------------------------------- | ---------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `12,50`                                | de, fr, pl, fi, sv, es | 12.50                      | the locale's own decimal mark                                                                                    |
+| `12.50`                                | any                    | 12.50                      | the numpad or a habit; two digits cannot be a group                                                              |
+| `1.250,00`                             | de, es                 | 1250.00                    |                                                                                                                  |
+| `1 250,5` (space, NBSP or narrow NBSP) | fr, pl, fi, sv         | 1250.50                    | all three are group marks                                                                                        |
+| `1'250.50`                             | de-CH                  | 1250.50                    |                                                                                                                  |
+| `1.250`                                | de                     | 1250.00                    | `.` is the group mark of `de`                                                                                    |
+| `1,250`                                | de                     | 1250.00, **shown first**   | three digits after a mark that is not the locale's group mark: the form shows "Read as 1.250,00 €" before commit |
+| `12,505`                               | de                     | 12.505,00, **shown first** | three digits after a mark: read as a group, flagged like `1,250`                                                 |
+| `12,5055`                              | any                    | rejected                   | more decimals than the currency allows, and not a group                                                          |
+| `１２，５０`                           | any                    | 12.50                      | full-width digits are NFKC-normalised                                                                            |
 
 The edit field shows the value in the locale (`12,50`), never grouped. The server still receives `1250`.
 
@@ -165,15 +165,15 @@ below, not reviewed by a native speaker). Treat them as good drafts.
 
 ## 3 Style per language
 
-| | de | fr | pl | fi | sv | es |
-|---|---|---|---|---|---|---|
-| Address | formal "Sie"; avoid where possible | "vous" | impersonal or "Twoje" | "sinä", rarely written | "du" | "tú", impersonal where possible |
-| Buttons | verb (infinitive or imperative form): Speichern | infinitive: Enregistrer | imperative: Zapisz | imperative: Tallenna | imperative: Spara | infinitive: Guardar |
-| Capitals | Nouns capitalised; labels in sentence case | sentence case | sentence case | sentence case, no capitalised nouns | sentence case | sentence case |
-| Quotes | „…“ | « … » | „…” | ”…” | ”…” | «…» |
-| Space before `: ; ? !` | no | no-break space before `: ; ? !` | no | no | no | no |
-| Percent, currency | 12 % , 12,50 € | 12 % , 12,50 € | 12% , 12,50 zł | 12 % , 12,50 € | 12 % , 12,50 kr | 12 % , 12,50 € |
-| Ellipsis | … (one character), never ... | same | same | same | same | same |
+|                        | de                                              | fr                              | pl                    | fi                                  | sv                | es                              |
+| ---------------------- | ----------------------------------------------- | ------------------------------- | --------------------- | ----------------------------------- | ----------------- | ------------------------------- |
+| Address                | formal "Sie"; avoid where possible              | "vous"                          | impersonal or "Twoje" | "sinä", rarely written              | "du"              | "tú", impersonal where possible |
+| Buttons                | verb (infinitive or imperative form): Speichern | infinitive: Enregistrer         | imperative: Zapisz    | imperative: Tallenna                | imperative: Spara | infinitive: Guardar             |
+| Capitals               | Nouns capitalised; labels in sentence case      | sentence case                   | sentence case         | sentence case, no capitalised nouns | sentence case     | sentence case                   |
+| Quotes                 | „…“                                             | « … »                           | „…”                   | ”…”                                 | ”…”               | «…»                             |
+| Space before `: ; ? !` | no                                              | no-break space before `: ; ? !` | no                    | no                                  | no                | no                              |
+| Percent, currency      | 12 % , 12,50 €                                  | 12 % , 12,50 €                  | 12% , 12,50 zł        | 12 % , 12,50 €                      | 12 % , 12,50 kr   | 12 % , 12,50 €                  |
+| Ellipsis               | … (one character), never ...                    | same                            | same                  | same                                | same              | same                            |
 
 In a message, write the no-break space as the real character (U+00A0). Currency and percent in messages are
 produced by `fmt`, not typed.
@@ -183,58 +183,58 @@ produced by `fmt`, not typed.
 One term, one translation, everywhere. Add a row before inventing a second word. "Odoo" is the usual
 reference for the ERP vocabulary of each market; where it differs from everyday usage the usual word wins.
 
-| # | English | Deutsch | Français | Polski | Suomi | Svenska | Español |
-|---|---|---|---|---|---|---|---|
-| 1 | lead | Lead | piste | lead | liidi | lead | oportunidad (cliente potencial in prose) |
-| 2 | quote (quotation) | Angebot | devis | oferta | tarjous | offert | presupuesto |
-| 3 | sale order | Verkaufsauftrag | commande client | zamówienie sprzedaży | myyntitilaus | försäljningsorder | pedido de venta |
-| 4 | invoice | Rechnung | facture | faktura | lasku | faktura | factura |
-| 5 | credit note | Gutschrift | avoir | faktura korygująca | hyvityslasku | kreditfaktura | nota de crédito |
-| 6 | contact | Kontakt | contact | kontakt | yhteystieto | kontakt | contacto |
-| 7 | party (person or organisation) | Geschäftspartner | tiers | kontrahent | osapuoli | part | tercero |
-| 8 | customer | Kunde | client | klient | asiakas | kund | cliente |
-| 9 | vendor | Lieferant | fournisseur | dostawca | toimittaja | leverantör | proveedor |
-| 10 | product | Produkt | produit | produkt | tuote | produkt | producto |
-| 11 | price | Preis | prix | cena | hinta | pris | precio |
-| 12 | amount | Betrag | montant | kwota | summa | belopp | importe |
-| 13 | total | Gesamt | total | razem | yhteensä | totalt | total |
-| 14 | tax | Steuer | taxe | podatek | vero | skatt | impuesto |
-| 15 | payment | Zahlung | paiement | płatność | maksu | betalning | pago |
-| 16 | workflow | Workflow | flux de travail | przepływ pracy | työnkulku | arbetsflöde | flujo de trabajo |
-| 17 | status | Status | statut | status | tila | status | estado |
-| 18 | stage | Phase | étape | etap | vaihe | fas | etapa |
-| 19 | approval | Genehmigung | approbation | zatwierdzenie | hyväksyntä | godkännande | aprobación |
-| 20 | draft | Entwurf | brouillon | wersja robocza | luonnos | utkast | borrador |
-| 21 | posted (accounting) | gebucht | comptabilisé | zaksięgowany | kirjattu | bokförd | contabilizado |
-| 22 | confirmed | bestätigt | confirmé | potwierdzony | vahvistettu | bekräftad | confirmado |
-| 23 | cancelled | storniert | annulé | anulowany | peruutettu | annullerad | cancelado |
-| 24 | won / lost | gewonnen / verloren | gagné / perdu | wygrany / przegrany | voitettu / hävitty | vunnen / förlorad | ganado / perdido |
-| 25 | module | Modul | module | moduł | moduuli | modul | módulo |
-| 26 | app | App | application | aplikacja | sovellus | app | aplicación |
-| 27 | marketplace | Marktplatz | place de marché | marketplace | moduulikauppa | marknadsplats | mercado |
-| 28 | instance | Instanz | instance | instancja | instanssi | instans | instancia |
-| 29 | permission group | Berechtigungsgruppe | groupe de droits | grupa uprawnień | käyttöoikeusryhmä | behörighetsgrupp | grupo de permisos |
-| 30 | data class | Datenklasse | classe de données | klasa danych | tietoluokka | dataklass | clase de datos |
-| 31 | personal data | personenbezogene Daten | données personnelles | dane osobowe | henkilötiedot | personuppgifter | datos personales |
-| 32 | masked | maskiert | masqué | zamaskowane | peitetty | maskerad | enmascarado |
-| 33 | agent | Agent | agent | agent | agentti | agent | agente |
-| 34 | token | Token | jeton | token | tunniste (token) | token | token |
-| 35 | record | Datensatz | enregistrement | rekord | tietue | post | registro |
-| 36 | field | Feld | champ | pole | kenttä | fält | campo |
-| 37 | list | Liste | liste | lista | luettelo | lista | lista |
-| 38 | board (kanban) | Kanban | kanban | kanban | kanban | kanban | kanban |
-| 39 | pivot | Pivot | tableau croisé | tabela przestawna | pivot-taulukko | pivottabell | tabla dinámica |
-| 40 | dashboard | Dashboard | tableau de bord | pulpit | koontinäyttö | instrumentpanel | panel de control |
-| 41 | tile | Kachel | tuile | kafelek | ruutu | ruta | tarjeta (mosaico) |
-| 42 | filter | Filter | filtre | filtr | suodatin | filter | filtro |
-| 43 | favorite (saved search) | Favorit | favori | ulubione | suosikki | favorit | favorito |
-| 44 | group by | Gruppieren nach | regrouper par | grupuj według | ryhmittele | gruppera efter | agrupar por |
-| 45 | customize | Anpassen | personnaliser | dostosuj | mukauta | anpassa | personalizar |
-| 46 | theme | Erscheinungsbild | thème | motyw | teema | tema | tema |
-| 47 | sign in / sign out | anmelden / abmelden | se connecter / se déconnecter | zaloguj się / wyloguj się | kirjaudu sisään / kirjaudu ulos | logga in / logga ut | iniciar sesión / cerrar sesión |
-| 48 | account | Konto | compte | konto | tili | konto | cuenta |
-| 49 | password | Passwort | mot de passe | hasło | salasana | lösenord | contraseña |
-| 50 | save / discard / delete | speichern / verwerfen / löschen | enregistrer / annuler les modifications / supprimer | zapisz / odrzuć / usuń | tallenna / hylkää / poista | spara / förkasta / ta bort | guardar / descartar / eliminar |
+| #   | English                        | Deutsch                         | Français                                            | Polski                    | Suomi                           | Svenska                    | Español                                  |
+| --- | ------------------------------ | ------------------------------- | --------------------------------------------------- | ------------------------- | ------------------------------- | -------------------------- | ---------------------------------------- |
+| 1   | lead                           | Lead                            | piste                                               | lead                      | liidi                           | lead                       | oportunidad (cliente potencial in prose) |
+| 2   | quote (quotation)              | Angebot                         | devis                                               | oferta                    | tarjous                         | offert                     | presupuesto                              |
+| 3   | sale order                     | Verkaufsauftrag                 | commande client                                     | zamówienie sprzedaży      | myyntitilaus                    | försäljningsorder          | pedido de venta                          |
+| 4   | invoice                        | Rechnung                        | facture                                             | faktura                   | lasku                           | faktura                    | factura                                  |
+| 5   | credit note                    | Gutschrift                      | avoir                                               | faktura korygująca        | hyvityslasku                    | kreditfaktura              | nota de crédito                          |
+| 6   | contact                        | Kontakt                         | contact                                             | kontakt                   | yhteystieto                     | kontakt                    | contacto                                 |
+| 7   | party (person or organisation) | Geschäftspartner                | tiers                                               | kontrahent                | osapuoli                        | part                       | tercero                                  |
+| 8   | customer                       | Kunde                           | client                                              | klient                    | asiakas                         | kund                       | cliente                                  |
+| 9   | vendor                         | Lieferant                       | fournisseur                                         | dostawca                  | toimittaja                      | leverantör                 | proveedor                                |
+| 10  | product                        | Produkt                         | produit                                             | produkt                   | tuote                           | produkt                    | producto                                 |
+| 11  | price                          | Preis                           | prix                                                | cena                      | hinta                           | pris                       | precio                                   |
+| 12  | amount                         | Betrag                          | montant                                             | kwota                     | summa                           | belopp                     | importe                                  |
+| 13  | total                          | Gesamt                          | total                                               | razem                     | yhteensä                        | totalt                     | total                                    |
+| 14  | tax                            | Steuer                          | taxe                                                | podatek                   | vero                            | skatt                      | impuesto                                 |
+| 15  | payment                        | Zahlung                         | paiement                                            | płatność                  | maksu                           | betalning                  | pago                                     |
+| 16  | workflow                       | Workflow                        | flux de travail                                     | przepływ pracy            | työnkulku                       | arbetsflöde                | flujo de trabajo                         |
+| 17  | status                         | Status                          | statut                                              | status                    | tila                            | status                     | estado                                   |
+| 18  | stage                          | Phase                           | étape                                               | etap                      | vaihe                           | fas                        | etapa                                    |
+| 19  | approval                       | Genehmigung                     | approbation                                         | zatwierdzenie             | hyväksyntä                      | godkännande                | aprobación                               |
+| 20  | draft                          | Entwurf                         | brouillon                                           | wersja robocza            | luonnos                         | utkast                     | borrador                                 |
+| 21  | posted (accounting)            | gebucht                         | comptabilisé                                        | zaksięgowany              | kirjattu                        | bokförd                    | contabilizado                            |
+| 22  | confirmed                      | bestätigt                       | confirmé                                            | potwierdzony              | vahvistettu                     | bekräftad                  | confirmado                               |
+| 23  | cancelled                      | storniert                       | annulé                                              | anulowany                 | peruutettu                      | annullerad                 | cancelado                                |
+| 24  | won / lost                     | gewonnen / verloren             | gagné / perdu                                       | wygrany / przegrany       | voitettu / hävitty              | vunnen / förlorad          | ganado / perdido                         |
+| 25  | module                         | Modul                           | module                                              | moduł                     | moduuli                         | modul                      | módulo                                   |
+| 26  | app                            | App                             | application                                         | aplikacja                 | sovellus                        | app                        | aplicación                               |
+| 27  | marketplace                    | Marktplatz                      | place de marché                                     | marketplace               | moduulikauppa                   | marknadsplats              | mercado                                  |
+| 28  | instance                       | Instanz                         | instance                                            | instancja                 | instanssi                       | instans                    | instancia                                |
+| 29  | permission group               | Berechtigungsgruppe             | groupe de droits                                    | grupa uprawnień           | käyttöoikeusryhmä               | behörighetsgrupp           | grupo de permisos                        |
+| 30  | data class                     | Datenklasse                     | classe de données                                   | klasa danych              | tietoluokka                     | dataklass                  | clase de datos                           |
+| 31  | personal data                  | personenbezogene Daten          | données personnelles                                | dane osobowe              | henkilötiedot                   | personuppgifter            | datos personales                         |
+| 32  | masked                         | maskiert                        | masqué                                              | zamaskowane               | peitetty                        | maskerad                   | enmascarado                              |
+| 33  | agent                          | Agent                           | agent                                               | agent                     | agentti                         | agent                      | agente                                   |
+| 34  | token                          | Token                           | jeton                                               | token                     | tunniste (token)                | token                      | token                                    |
+| 35  | record                         | Datensatz                       | enregistrement                                      | rekord                    | tietue                          | post                       | registro                                 |
+| 36  | field                          | Feld                            | champ                                               | pole                      | kenttä                          | fält                       | campo                                    |
+| 37  | list                           | Liste                           | liste                                               | lista                     | luettelo                        | lista                      | lista                                    |
+| 38  | board (kanban)                 | Kanban                          | kanban                                              | kanban                    | kanban                          | kanban                     | kanban                                   |
+| 39  | pivot                          | Pivot                           | tableau croisé                                      | tabela przestawna         | pivot-taulukko                  | pivottabell                | tabla dinámica                           |
+| 40  | dashboard                      | Dashboard                       | tableau de bord                                     | pulpit                    | koontinäyttö                    | instrumentpanel            | panel de control                         |
+| 41  | tile                           | Kachel                          | tuile                                               | kafelek                   | ruutu                           | ruta                       | tarjeta (mosaico)                        |
+| 42  | filter                         | Filter                          | filtre                                              | filtr                     | suodatin                        | filter                     | filtro                                   |
+| 43  | favorite (saved search)        | Favorit                         | favori                                              | ulubione                  | suosikki                        | favorit                    | favorito                                 |
+| 44  | group by                       | Gruppieren nach                 | regrouper par                                       | grupuj według             | ryhmittele                      | gruppera efter             | agrupar por                              |
+| 45  | customize                      | Anpassen                        | personnaliser                                       | dostosuj                  | mukauta                         | anpassa                    | personalizar                             |
+| 46  | theme                          | Erscheinungsbild                | thème                                               | motyw                     | teema                           | tema                       | tema                                     |
+| 47  | sign in / sign out             | anmelden / abmelden             | se connecter / se déconnecter                       | zaloguj się / wyloguj się | kirjaudu sisään / kirjaudu ulos | logga in / logga ut        | iniciar sesión / cerrar sesión           |
+| 48  | account                        | Konto                           | compte                                              | konto                     | tili                            | konto                      | cuenta                                   |
+| 49  | password                       | Passwort                        | mot de passe                                        | hasło                     | salasana                        | lösenord                   | contraseña                               |
+| 50  | save / discard / delete        | speichern / verwerfen / löschen | enregistrer / annuler les modifications / supprimer | zapisz / odrzuć / usuń    | tallenna / hylkää / poista      | spara / förkasta / ta bort | guardar / descartar / eliminar           |
 
 | 51 | ticket (helpdesk) | Ticket | ticket | zgłoszenie | tiketti | ärende | ticket |
 | 52 | warehouse | Lager | entrepôt | magazyn | varasto | lagerställe | almacén |
@@ -258,7 +258,7 @@ Swedish "offert" is a quote, "faktura" an invoice (not "räkning"). Spanish uses
 quote, "pedido" for an order. Polish "faktura" is an invoice and "oferta" a quote; "kontrahent" is the legal
 word for a counterparty, "klient" and "dostawca" are used where the role is known.
 
-The model "Party" (a person or organisation the business deals with) is the *party*, not the *contact*.
+The model "Party" (a person or organisation the business deals with) is the _party_, not the _contact_.
 
 ## 5 Library decision
 

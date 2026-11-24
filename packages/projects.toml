@@ -24,139 +24,139 @@ description = "A body of work with a goal"
 read_group = "projects.user"
 write_group = "projects.manager"
 
-  [model.ui]
-  title = "{code} {name} | {name}"
-  subtitle = "{project_manager}"
-  list = ["code", "name", "project_manager", "start_on", "deadline", "progress", "budget", "state"]
-  card = ["name", "project_manager", "deadline", "progress"]
-  quick_create = ["name", "code", "project_manager"]
-  order = "deadline asc, name asc"
-  default_view = "kanban"
-  menu = "main"
-  menu_order = 1
-  calendar = { start = "start_on", end = "deadline" }
+[model.ui]
+title = "{code} {name} | {name}"
+subtitle = "{project_manager}"
+list = ["code", "name", "project_manager", "start_on", "deadline", "progress", "budget", "state"]
+card = ["name", "project_manager", "deadline", "progress"]
+quick_create = ["name", "code", "project_manager"]
+order = "deadline asc, name asc"
+default_view = "kanban"
+menu = "main"
+menu_order = 1
+calendar = { start = "start_on", end = "deadline" }
 
-  [[model.child]]
-  model = "projects_milestone"
-  via = "project_id"
-  shape = "list"
+[[model.child]]
+model = "projects_milestone"
+via = "project_id"
+shape = "list"
 
-  [[model.child]]
-  model = "projects_task"
-  via = "project_id"
-  shape = "list"
+[[model.child]]
+model = "projects_task"
+via = "project_id"
+shape = "list"
 
-  [[model.field]]
-  name = "name"
-  description = "Project name"
-  class = "none"
-  required = true
+[[model.field]]
+name = "name"
+description = "Project name"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "code"
-  description = "Short reference used in reports, for example WEB-24"
-  class = "none"
+[[model.field]]
+name = "code"
+description = "Short reference used in reports, for example WEB-24"
+class = "none"
 
-  [[model.field]]
-  name = "project_manager"
-  description = "Name of the person accountable for the project"
-  class = "internal"
-  personal_data = true
+[[model.field]]
+name = "project_manager"
+description = "Name of the person accountable for the project"
+class = "internal"
+personal_data = true
 
-  [[model.field]]
-  name = "start_on"
-  description = "Planned start date (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
+[[model.field]]
+name = "start_on"
+description = "Planned start date (YYYY-MM-DD)"
+class = "none"
+kind = "date"
 
-  [[model.field]]
-  name = "deadline"
-  description = "Date the project must be finished (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
-  [model.field.ui]
-  warn_before_days = 14
+[[model.field]]
+name = "deadline"
+description = "Date the project must be finished (YYYY-MM-DD)"
+class = "none"
+kind = "date"
+[model.field.ui]
+warn_before_days = 14
 
-  [[model.field]]
-  name = "budget"
-  description = "Agreed budget for the project (minor currency units, e.g. cents)"
-  class = "none"
-  kind = "money"
+[[model.field]]
+name = "budget"
+description = "Agreed budget for the project (minor currency units, e.g. cents)"
+class = "none"
+kind = "money"
 
-  [[model.field]]
-  name = "customer_id"
-  description = "The customer the project's billable time is invoiced to"
-  class = "none"
-  kind = "ref"
-  to = "party"
+[[model.field]]
+name = "customer_id"
+description = "The customer the project's billable time is invoiced to"
+class = "none"
+kind = "ref"
+to = "party"
 
-  [[model.field]]
-  name = "hourly_rate"
-  description = "Price of one hour of billable time when the project's time is invoiced (minor currency units, e.g. cents)"
-  class = "none"
-  kind = "money"
-  min = 0
+[[model.field]]
+name = "hourly_rate"
+description = "Price of one hour of billable time when the project's time is invoiced (minor currency units, e.g. cents)"
+class = "none"
+kind = "money"
+min = 0
 
-  [[model.field]]
-  name = "description"
-  description = "Goal and scope of the project"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "description"
+description = "Goal and scope of the project"
+class = "none"
+kind = "longtext"
 
-  [[model.field]]
-  name = "estimate_minutes"
-  description = "Time estimated for all tasks of the project that are not cancelled, in minutes"
-  class = "none"
-  kind = "number"
-  computed = 'sum(projects_task.estimate_minutes where state != "cancelled")'
-  [model.field.ui]
-  display = "duration_minutes"
+[[model.field]]
+name = "estimate_minutes"
+description = "Time estimated for all tasks of the project that are not cancelled, in minutes"
+class = "none"
+kind = "number"
+computed = 'sum(projects_task.estimate_minutes where state != "cancelled")'
+[model.field.ui]
+display = "duration_minutes"
 
-  [[model.field]]
-  name = "progress"
-  description = "Share of the project's tasks that are done, in percent; cancelled tasks do not count"
-  class = "none"
-  kind = "number"
-  computed = 'if(count(projects_task where state != "cancelled") == 0, 0, count(projects_task where state == "done") * 100 / count(projects_task where state != "cancelled"))'
-  [model.field.ui]
-  display = "percent"
-  aggregate = "avg"
+[[model.field]]
+name = "progress"
+description = "Share of the project's tasks that are done, in percent; cancelled tasks do not count"
+class = "none"
+kind = "number"
+computed = 'if(count(projects_task where state != "cancelled") == 0, 0, count(projects_task where state == "done") * 100 / count(projects_task where state != "cancelled"))'
+[model.field.ui]
+display = "percent"
+aggregate = "avg"
 
-  [[model.field]]
-  name = "state"
-  description = "Project status: planned, active, done"
-  class = "none"
-  kind = "select"
-  options = ["planned", "active", "done"]
-  required = true
-  [model.field.ui]
-  tones = { planned = "info", active = "warn", done = "ok" }
+[[model.field]]
+name = "state"
+description = "Project status: planned, active, done"
+class = "none"
+kind = "select"
+options = ["planned", "active", "done"]
+required = true
+[model.field.ui]
+tones = { planned = "info", active = "warn", done = "ok" }
 
-  [[model.action]]
-  name = "start"
-  description = "Move a planned project to active"
-  field = "state"
-  from = "planned"
-  to = "active"
-  [model.action.ui]
-  primary = true
+[[model.action]]
+name = "start"
+description = "Move a planned project to active"
+field = "state"
+from = "planned"
+to = "active"
+[model.action.ui]
+primary = true
 
-  [[model.action]]
-  name = "finish"
-  description = "Mark an active project as done"
-  field = "state"
-  from = "active"
-  to = "done"
-  [model.action.ui]
-  primary = true
-  done = "Project done"
+[[model.action]]
+name = "finish"
+description = "Mark an active project as done"
+field = "state"
+from = "active"
+to = "done"
+[model.action.ui]
+primary = true
+done = "Project done"
 
-  [[model.action]]
-  name = "reopen"
-  description = "Reopen a finished project"
-  field = "state"
-  from = "done"
-  to = "active"
+[[model.action]]
+name = "reopen"
+description = "Reopen a finished project"
+field = "state"
+from = "done"
+to = "active"
 
 [[model]]
 name = "projects_milestone"
@@ -164,92 +164,92 @@ description = "A checkpoint in a project"
 read_group = "projects.user"
 write_group = "projects.manager"
 
-  [model.ui]
-  title = "{name}"
-  subtitle = "{project_id}"
-  list = ["name", "project_id", "due_on", "state"]
-  card = ["name", "project_id", "due_on"]
-  quick_create = ["name", "project_id", "due_on"]
-  order = "due_on asc"
-  default_view = "list"
-  menu = "main"
-  menu_order = 3
-  calendar = { start = "due_on", color = "project_id" }
+[model.ui]
+title = "{name}"
+subtitle = "{project_id}"
+list = ["name", "project_id", "due_on", "state"]
+card = ["name", "project_id", "due_on"]
+quick_create = ["name", "project_id", "due_on"]
+order = "due_on asc"
+default_view = "list"
+menu = "main"
+menu_order = 3
+calendar = { start = "due_on", color = "project_id" }
 
-  [[model.field]]
-  name = "project_id"
-  description = "The project the milestone belongs to"
-  class = "none"
-  kind = "ref"
-  to = "projects_project"
-  required = true
+[[model.field]]
+name = "project_id"
+description = "The project the milestone belongs to"
+class = "none"
+kind = "ref"
+to = "projects_project"
+required = true
 
-  [[model.field]]
-  name = "name"
-  description = "Milestone name, for example Design approved"
-  class = "none"
-  required = true
+[[model.field]]
+name = "name"
+description = "Milestone name, for example Design approved"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "due_on"
-  description = "Date the milestone is due (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
-  [model.field.ui]
-  warn_before_days = 7
+[[model.field]]
+name = "due_on"
+description = "Date the milestone is due (YYYY-MM-DD)"
+class = "none"
+kind = "date"
+[model.field.ui]
+warn_before_days = 7
 
-  [[model.field]]
-  name = "description"
-  description = "What must be true for the milestone to count as reached"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "description"
+description = "What must be true for the milestone to count as reached"
+class = "none"
+kind = "longtext"
 
-  [[model.field]]
-  name = "state"
-  description = "Milestone status: pending, reached, missed"
-  class = "none"
-  kind = "select"
-  options = ["pending", "reached", "missed"]
-  required = true
-  [model.field.ui]
-  tones = { pending = "info", reached = "ok", missed = "bad" }
+[[model.field]]
+name = "state"
+description = "Milestone status: pending, reached, missed"
+class = "none"
+kind = "select"
+options = ["pending", "reached", "missed"]
+required = true
+[model.field.ui]
+tones = { pending = "info", reached = "ok", missed = "bad" }
 
-  [[model.action]]
-  name = "reach"
-  description = "Mark a pending milestone as reached"
-  field = "state"
-  from = "pending"
-  to = "reached"
-  [model.action.ui]
-  primary = true
+[[model.action]]
+name = "reach"
+description = "Mark a pending milestone as reached"
+field = "state"
+from = "pending"
+to = "reached"
+[model.action.ui]
+primary = true
 
-  [[model.action]]
-  name = "miss"
-  description = "Record that a pending milestone was missed"
-  field = "state"
-  from = "pending"
-  to = "missed"
-  [model.action.ui]
-  danger = true
-  confirm = "Record this milestone as missed?"
+[[model.action]]
+name = "miss"
+description = "Record that a pending milestone was missed"
+field = "state"
+from = "pending"
+to = "missed"
+[model.action.ui]
+danger = true
+confirm = "Record this milestone as missed?"
 
-  [[model.action]]
-  name = "reset"
-  description = "Set a reached milestone back to pending, for example when it was marked by mistake"
-  field = "state"
-  from = "reached"
-  to = "pending"
-  [model.action.ui]
-  group = "reset"
+[[model.action]]
+name = "reset"
+description = "Set a reached milestone back to pending, for example when it was marked by mistake"
+field = "state"
+from = "reached"
+to = "pending"
+[model.action.ui]
+group = "reset"
 
-  [[model.action]]
-  name = "reset_missed"
-  description = "Set a missed milestone back to pending, for example when its date moved"
-  field = "state"
-  from = "missed"
-  to = "pending"
-  [model.action.ui]
-  group = "reset"
+[[model.action]]
+name = "reset_missed"
+description = "Set a missed milestone back to pending, for example when its date moved"
+field = "state"
+from = "missed"
+to = "pending"
+[model.action.ui]
+group = "reset"
 
 [[model]]
 name = "projects_task"
@@ -257,148 +257,157 @@ description = "A unit of work inside a project"
 read_group = "projects.user"
 write_group = "projects.user"
 
-  [model.ui]
-  title = "{title}"
-  subtitle = "{project_id}"
-  list = ["title", "project_id", "milestone_id", "assignee", "priority", "due_on", "estimate_minutes", "state"]
-  card = ["title", "project_id", "assignee", "due_on", "priority", "estimate_minutes"]
-  card_sum = "estimate_minutes"
-  quick_create = ["title", "project_id", "assignee"]
-  default_view = "kanban"
-  menu = "main"
-  menu_order = 2
-  calendar = { start = "due_on", color = "project_id" }
-  report = { rows = "project_id", cols = "state", measure = "estimate_minutes" }
+[model.ui]
+title = "{title}"
+subtitle = "{project_id}"
+list = [
+  "title",
+  "project_id",
+  "milestone_id",
+  "assignee",
+  "priority",
+  "due_on",
+  "estimate_minutes",
+  "state",
+]
+card = ["title", "project_id", "assignee", "due_on", "priority", "estimate_minutes"]
+card_sum = "estimate_minutes"
+quick_create = ["title", "project_id", "assignee"]
+default_view = "kanban"
+menu = "main"
+menu_order = 2
+calendar = { start = "due_on", color = "project_id" }
+report = { rows = "project_id", cols = "state", measure = "estimate_minutes" }
 
-  [[model.ui.filter]]
-  label = "Open"
-  where = "state != done && state != cancelled"
+[[model.ui.filter]]
+label = "Open"
+where = "state != done && state != cancelled"
 
-  [[model.ui.filter]]
-  label = "Overdue"
-  where = "due_on != null && due_on < today && state != done && state != cancelled"
+[[model.ui.filter]]
+label = "Overdue"
+where = "due_on != null && due_on < today && state != done && state != cancelled"
 
-  [[model.field]]
-  name = "title"
-  description = "What needs doing"
-  class = "none"
-  required = true
+[[model.field]]
+name = "title"
+description = "What needs doing"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "project_id"
-  description = "The project this task belongs to; empty for a private task"
-  class = "none"
-  kind = "ref"
-  to = "projects_project"
-  ref_filter = "state != done"
+[[model.field]]
+name = "project_id"
+description = "The project this task belongs to; empty for a private task"
+class = "none"
+kind = "ref"
+to = "projects_project"
+ref_filter = "state != done"
 
-  [[model.field]]
-  name = "milestone_id"
-  description = "The milestone this task contributes to"
-  class = "none"
-  kind = "ref"
-  to = "projects_milestone"
-  ref_filter = "project_id = $project_id"
+[[model.field]]
+name = "milestone_id"
+description = "The milestone this task contributes to"
+class = "none"
+kind = "ref"
+to = "projects_milestone"
+ref_filter = "project_id = $project_id"
 
-  [[model.field]]
-  name = "assignee"
-  description = "Name of the person responsible"
-  class = "internal"
-  personal_data = true
+[[model.field]]
+name = "assignee"
+description = "Name of the person responsible"
+class = "internal"
+personal_data = true
 
-  [[model.field]]
-  name = "priority"
-  description = "How important the task is: low, normal, high"
-  class = "none"
-  kind = "select"
-  options = ["low", "normal", "high"]
-  default = "normal"
-  [model.field.ui]
-  tones = { low = "neutral", normal = "neutral", high = "warn" }
+[[model.field]]
+name = "priority"
+description = "How important the task is: low, normal, high"
+class = "none"
+kind = "select"
+options = ["low", "normal", "high"]
+default = "normal"
+[model.field.ui]
+tones = { low = "neutral", normal = "neutral", high = "warn" }
 
-  [[model.field]]
-  name = "due_on"
-  description = "Date the task is due (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
-  [model.field.ui]
-  warn_before_days = 3
+[[model.field]]
+name = "due_on"
+description = "Date the task is due (YYYY-MM-DD)"
+class = "none"
+kind = "date"
+[model.field.ui]
+warn_before_days = 3
 
-  [[model.field]]
-  name = "estimate_minutes"
-  description = "Planned effort in minutes"
-  class = "none"
-  kind = "number"
-  [model.field.ui]
-  display = "duration_minutes"
+[[model.field]]
+name = "estimate_minutes"
+description = "Planned effort in minutes"
+class = "none"
+kind = "number"
+[model.field.ui]
+display = "duration_minutes"
 
-  [[model.field]]
-  name = "description"
-  description = "Details, acceptance criteria and links"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "description"
+description = "Details, acceptance criteria and links"
+class = "none"
+kind = "longtext"
 
-  [[model.field]]
-  name = "state"
-  description = "Task status: todo, doing, done, cancelled"
-  class = "none"
-  kind = "select"
-  options = ["todo", "doing", "done", "cancelled"]
-  [model.field.ui]
-  tones = { todo = "info", doing = "warn", done = "ok", cancelled = "neutral" }
+[[model.field]]
+name = "state"
+description = "Task status: todo, doing, done, cancelled"
+class = "none"
+kind = "select"
+options = ["todo", "doing", "done", "cancelled"]
+[model.field.ui]
+tones = { todo = "info", doing = "warn", done = "ok", cancelled = "neutral" }
 
-  [[model.action]]
-  name = "begin"
-  description = "Start working on a todo task"
-  field = "state"
-  from = "todo"
-  to = "doing"
-  [model.action.ui]
-  primary = true
+[[model.action]]
+name = "begin"
+description = "Start working on a todo task"
+field = "state"
+from = "todo"
+to = "doing"
+[model.action.ui]
+primary = true
 
-  [[model.action]]
-  name = "complete"
-  description = "Mark a task in progress as done"
-  field = "state"
-  from = "doing"
-  to = "done"
-  [model.action.ui]
-  primary = true
-  group = "complete"
+[[model.action]]
+name = "complete"
+description = "Mark a task in progress as done"
+field = "state"
+from = "doing"
+to = "done"
+[model.action.ui]
+primary = true
+group = "complete"
 
-  [[model.action]]
-  name = "cancel"
-  description = "Drop a task that was never started"
-  field = "state"
-  from = "todo"
-  to = "cancelled"
-  [model.action.ui]
-  danger = true
-  confirm = "Cancel this task?"
+[[model.action]]
+name = "cancel"
+description = "Drop a task that was never started"
+field = "state"
+from = "todo"
+to = "cancelled"
+[model.action.ui]
+danger = true
+confirm = "Cancel this task?"
 
-  [[model.action]]
-  name = "complete_now"
-  description = "Mark a todo task as done without starting it first"
-  field = "state"
-  from = "todo"
-  to = "done"
-  [model.action.ui]
-  group = "complete"
+[[model.action]]
+name = "complete_now"
+description = "Mark a todo task as done without starting it first"
+field = "state"
+from = "todo"
+to = "done"
+[model.action.ui]
+group = "complete"
 
-  [[model.action]]
-  name = "reopen"
-  description = "Reopen a done task, back to todo"
-  field = "state"
-  from = "done"
-  to = "todo"
-  [model.action.ui]
-  group = "reopen"
+[[model.action]]
+name = "reopen"
+description = "Reopen a done task, back to todo"
+field = "state"
+from = "done"
+to = "todo"
+[model.action.ui]
+group = "reopen"
 
-  [[model.action]]
-  name = "reopen_cancelled"
-  description = "Reopen a cancelled task, back to todo"
-  field = "state"
-  from = "cancelled"
-  to = "todo"
-  [model.action.ui]
-  group = "reopen"
+[[model.action]]
+name = "reopen_cancelled"
+description = "Reopen a cancelled task, back to todo"
+field = "state"
+from = "cancelled"
+to = "todo"
+[model.action.ui]
+group = "reopen"

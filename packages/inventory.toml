@@ -24,43 +24,43 @@ description = "A building or site where stock is kept"
 read_group = "inventory.user"
 write_group = "inventory.manager"
 
-  [model.ui]
-  title = "{name}"
-  subtitle = "{code}"
-  list = ["code", "name", "address", "active"]
-  quick_create = ["name", "code"]
-  order = "name asc"
-  default_view = "list"
-  menu = "configuration"
-  menu_order = 1
+[model.ui]
+title = "{name}"
+subtitle = "{code}"
+list = ["code", "name", "address", "active"]
+quick_create = ["name", "code"]
+order = "name asc"
+default_view = "list"
+menu = "configuration"
+menu_order = 1
 
-  [[model.field]]
-  name = "name"
-  description = "Warehouse name"
-  class = "none"
-  required = true
+[[model.field]]
+name = "name"
+description = "Warehouse name"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "code"
-  description = "Short code printed on documents, for example WH1"
-  class = "none"
-  required = true
+[[model.field]]
+name = "code"
+description = "Short code printed on documents, for example WH1"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "address"
-  description = "Postal address of the site"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "address"
+description = "Postal address of the site"
+class = "none"
+kind = "longtext"
 
-    [model.field.ui]
-    display = "address"
+[model.field.ui]
+display = "address"
 
-  [[model.field]]
-  name = "active"
-  description = "Whether the warehouse is in use"
-  class = "none"
-  kind = "bool"
-  default = true
+[[model.field]]
+name = "active"
+description = "Whether the warehouse is in use"
+class = "none"
+kind = "bool"
+default = true
 
 [[model]]
 name = "inventory_location"
@@ -68,45 +68,45 @@ description = "A place inside a warehouse where stock can sit"
 read_group = "inventory.user"
 write_group = "inventory.manager"
 
-  [model.ui]
-  title = "{name}"
-  subtitle = "{warehouse_id} · {kind}"
-  list = ["name", "warehouse_id", "kind", "active"]
-  quick_create = ["name", "warehouse_id", "kind"]
-  order = "name asc"
-  default_view = "list"
-  menu = "configuration"
-  menu_order = 2
+[model.ui]
+title = "{name}"
+subtitle = "{warehouse_id} · {kind}"
+list = ["name", "warehouse_id", "kind", "active"]
+quick_create = ["name", "warehouse_id", "kind"]
+order = "name asc"
+default_view = "list"
+menu = "configuration"
+menu_order = 2
 
-  [[model.field]]
-  name = "name"
-  description = "Location name, for example Shelf A3"
-  class = "none"
-  required = true
+[[model.field]]
+name = "name"
+description = "Location name, for example Shelf A3"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "warehouse_id"
-  description = "The warehouse the location belongs to"
-  class = "none"
-  kind = "ref"
-  to = "inventory_warehouse"
-  required = true
-  ref_filter = "active = true"
+[[model.field]]
+name = "warehouse_id"
+description = "The warehouse the location belongs to"
+class = "none"
+kind = "ref"
+to = "inventory_warehouse"
+required = true
+ref_filter = "active = true"
 
-  [[model.field]]
-  name = "kind"
-  description = "What the location is used for: internal, receiving, shipping, transit, scrap"
-  class = "none"
-  kind = "select"
-  options = ["internal", "receiving", "shipping", "transit", "scrap"]
-  required = true
+[[model.field]]
+name = "kind"
+description = "What the location is used for: internal, receiving, shipping, transit, scrap"
+class = "none"
+kind = "select"
+options = ["internal", "receiving", "shipping", "transit", "scrap"]
+required = true
 
-  [[model.field]]
-  name = "active"
-  description = "Whether the location is in use"
-  class = "none"
-  kind = "bool"
-  default = true
+[[model.field]]
+name = "active"
+description = "Whether the location is in use"
+class = "none"
+kind = "bool"
+default = true
 
 [[model]]
 name = "inventory_item"
@@ -114,77 +114,77 @@ description = "The quantity of one product held at one location"
 read_group = "inventory.user"
 write_group = "inventory.manager"
 
-  [model.ui]
-  title = "{product_id} @ {location_id}"
-  subtitle = "{lot}"
-  list = ["product_id", "location_id", "lot", "quantity", "reorder_level", "below_reorder"]
-  card = ["product_id", "location_id", "quantity", "reorder_level"]
-  card_sum = "quantity"
-  quick_create = ["product_id", "location_id", "reorder_level"]
-  default_view = "list"
-  menu = "main"
-  menu_order = 1
-  report = { rows = "product_id", cols = "location_id", measure = "quantity" }
+[model.ui]
+title = "{product_id} @ {location_id}"
+subtitle = "{lot}"
+list = ["product_id", "location_id", "lot", "quantity", "reorder_level", "below_reorder"]
+card = ["product_id", "location_id", "quantity", "reorder_level"]
+card_sum = "quantity"
+quick_create = ["product_id", "location_id", "reorder_level"]
+default_view = "list"
+menu = "main"
+menu_order = 1
+report = { rows = "product_id", cols = "location_id", measure = "quantity" }
 
-  [[model.ui.filter]]
-  label = "Low stock"
-  where = "below_reorder = true"
+[[model.ui.filter]]
+label = "Low stock"
+where = "below_reorder = true"
 
-  [[model.ui.filter]]
-  label = "In stock"
-  where = "quantity > 0"
+[[model.ui.filter]]
+label = "In stock"
+where = "quantity > 0"
 
-  [model.guard]
-  mutable_fields = ["quantity", "reorder_level"]
-  message = "A stock item keeps its product, location and lot. Move the stock to change where it is."
+[model.guard]
+mutable_fields = ["quantity", "reorder_level"]
+message = "A stock item keeps its product, location and lot. Move the stock to change where it is."
 
-  [[model.field]]
-  name = "product_id"
-  description = "The product held; there is one item per product, location and lot"
-  class = "none"
-  kind = "ref"
-  to = "product"
-  required = true
-  unique = true
-  unique_with = ["location_id", "lot"]
+[[model.field]]
+name = "product_id"
+description = "The product held; there is one item per product, location and lot"
+class = "none"
+kind = "ref"
+to = "product"
+required = true
+unique = true
+unique_with = ["location_id", "lot"]
 
-  [[model.field]]
-  name = "location_id"
-  description = "Where it is held"
-  class = "none"
-  kind = "ref"
-  to = "inventory_location"
-  required = true
+[[model.field]]
+name = "location_id"
+description = "Where it is held"
+class = "none"
+kind = "ref"
+to = "inventory_location"
+required = true
 
-  [[model.field]]
-  name = "quantity"
-  description = "Units on hand; changed only by validated stock moves"
-  class = "none"
-  kind = "number"
-  required = true
-  default = 0
-  readonly = true
+[[model.field]]
+name = "quantity"
+description = "Units on hand; changed only by validated stock moves"
+class = "none"
+kind = "number"
+required = true
+default = 0
+readonly = true
 
-  [[model.field]]
-  name = "reorder_level"
-  description = "Quantity at or below which the product should be replenished"
-  class = "none"
-  kind = "number"
+[[model.field]]
+name = "reorder_level"
+description = "Quantity at or below which the product should be replenished"
+class = "none"
+kind = "number"
 
-    [model.field.ui]
-    aggregate = "none"
+[model.field.ui]
+aggregate = "none"
 
-  [[model.field]]
-  name = "lot"
-  description = "Lot or batch number, if tracked"
-  class = "none"
+[[model.field]]
+name = "lot"
+description = "Lot or batch number, if tracked"
+class = "none"
 
-  [[model.field]]
-  name = "below_reorder"
-  description = "Whether the item needs attention: the quantity is below zero, or at or below the reorder level"
-  class = "none"
-  kind = "bool"
-  computed = "quantity < 0 || (is_set(reorder_level) && quantity <= reorder_level)"
+[[model.field]]
+name = "below_reorder"
+description = "Whether the item needs attention: the quantity is below zero, or at or below the reorder level"
+class = "none"
+kind = "bool"
+computed = "quantity < 0 || (is_set(reorder_level) && quantity <= reorder_level)"
 
 [[model]]
 name = "inventory_move"
@@ -192,188 +192,196 @@ description = "A movement of a product between locations, or into or out of the 
 read_group = "inventory.user"
 write_group = "inventory.user"
 
-  [model.ui]
-  title = "{product_id} × {quantity}"
-  subtitle = "{from_location_id} → {to_location_id} | → {to_location_id} | {from_location_id} →"
-  list = ["reference", "product_id", "from_location_id", "to_location_id", "quantity", "scheduled_on", "state"]
-  card = ["reference", "product_id", "quantity", "kind", "scheduled_on"]
-  quick_create = ["product_id", "quantity", "from_location_id", "to_location_id"]
-  order = "scheduled_on desc, reference desc"
-  default_view = "list"
-  menu = "main"
-  menu_order = 2
-  calendar = { start = "scheduled_on", color = "state" }
-  report = { rows = "product_id", cols = "state", measure = "quantity" }
+[model.ui]
+title = "{product_id} × {quantity}"
+subtitle = "{from_location_id} → {to_location_id} | → {to_location_id} | {from_location_id} →"
+list = [
+  "reference",
+  "product_id",
+  "from_location_id",
+  "to_location_id",
+  "quantity",
+  "scheduled_on",
+  "state",
+]
+card = ["reference", "product_id", "quantity", "kind", "scheduled_on"]
+quick_create = ["product_id", "quantity", "from_location_id", "to_location_id"]
+order = "scheduled_on desc, reference desc"
+default_view = "list"
+menu = "main"
+menu_order = 2
+calendar = { start = "scheduled_on", color = "state" }
+report = { rows = "product_id", cols = "state", measure = "quantity" }
 
-  [[model.ui.filter]]
-  label = "To do"
-  where = "state = draft"
+[[model.ui.filter]]
+label = "To do"
+where = "state = draft"
 
-  [[model.ui.filter]]
-  label = "Receipts"
-  where = "from_location_id = null"
+[[model.ui.filter]]
+label = "Receipts"
+where = "from_location_id = null"
 
-  [[model.ui.filter]]
-  label = "Deliveries"
-  where = "to_location_id = null && kind != scrap"
+[[model.ui.filter]]
+label = "Deliveries"
+where = "to_location_id = null && kind != scrap"
 
-  [[model.ui.filter]]
-  label = "Stock counts"
-  where = "kind = adjustment"
+[[model.ui.filter]]
+label = "Stock counts"
+where = "kind = adjustment"
 
-  [[model.ui.filter]]
-  label = "Scrap"
-  where = "kind = scrap"
+[[model.ui.filter]]
+label = "Scrap"
+where = "kind = scrap"
 
-  [[model.ui.filter]]
-  label = "Late"
-  where = "scheduled_on < today && state = draft"
+[[model.ui.filter]]
+label = "Late"
+where = "scheduled_on < today && state = draft"
 
-  [model.guard]
-  immutable_when = ["done", "cancelled"]
-  message = "A done or cancelled move cannot be changed. Make a new move to correct the stock."
+[model.guard]
+immutable_when = ["done", "cancelled"]
+message = "A done or cancelled move cannot be changed. Make a new move to correct the stock."
 
-  [[model.field]]
-  name = "reference"
-  description = "Number of the move such as MV-00042, assigned when the move is created"
-  class = "none"
-  kind = "sequence"
-  format = "MV-{seq:05}"
+[[model.field]]
+name = "reference"
+description = "Number of the move such as MV-00042, assigned when the move is created"
+class = "none"
+kind = "sequence"
+format = "MV-{seq:05}"
 
-  [[model.field]]
-  name = "product_id"
-  description = "The product moved"
-  class = "none"
-  kind = "ref"
-  to = "product"
-  required = true
+[[model.field]]
+name = "product_id"
+description = "The product moved"
+class = "none"
+kind = "ref"
+to = "product"
+required = true
 
-  [[model.field]]
-  name = "from_location_id"
-  description = "Where it leaves; empty for a receipt from a supplier"
-  class = "none"
-  kind = "ref"
-  to = "inventory_location"
-  ref_filter = "active = true"
+[[model.field]]
+name = "from_location_id"
+description = "Where it leaves; empty for a receipt from a supplier"
+class = "none"
+kind = "ref"
+to = "inventory_location"
+ref_filter = "active = true"
 
-  [[model.field]]
-  name = "to_location_id"
-  description = "Where it arrives; empty for a delivery to a customer or for scrap"
-  class = "none"
-  kind = "ref"
-  to = "inventory_location"
-  ref_filter = "active = true"
+[[model.field]]
+name = "to_location_id"
+description = "Where it arrives; empty for a delivery to a customer or for scrap"
+class = "none"
+kind = "ref"
+to = "inventory_location"
+ref_filter = "active = true"
 
-  [[model.field]]
-  name = "quantity"
-  description = "Units moved"
-  class = "none"
-  kind = "number"
-  required = true
+[[model.field]]
+name = "quantity"
+description = "Units moved"
+class = "none"
+kind = "number"
+required = true
 
-  [[model.field]]
-  name = "kind"
-  description = "What the move is: a receipt from a supplier, a delivery to a customer, an internal transfer, scrap, an adjustment after a stock count, or production (components used and products made)"
-  class = "none"
-  kind = "select"
-  options = ["receipt", "delivery", "internal", "scrap", "adjustment", "production"]
+[[model.field]]
+name = "kind"
+description = "What the move is: a receipt from a supplier, a delivery to a customer, an internal transfer, scrap, an adjustment after a stock count, or production (components used and products made)"
+class = "none"
+kind = "select"
+options = ["receipt", "delivery", "internal", "scrap", "adjustment", "production"]
 
-    [model.field.ui]
-    tones = { receipt = "info", delivery = "info", scrap = "warn", adjustment = "neutral" }
+[model.field.ui]
+tones = { receipt = "info", delivery = "info", scrap = "warn", adjustment = "neutral" }
 
-  [[model.field]]
-  name = "lot"
-  description = "The lot or batch moved, when the product is tracked in lots; validating changes the stock item of that lot (made when missing)"
-  class = "none"
+[[model.field]]
+name = "lot"
+description = "The lot or batch moved, when the product is tracked in lots; validating changes the stock item of that lot (made when missing)"
+class = "none"
 
-  [[model.field]]
-  name = "origin"
-  description = "The document the move came from, for example a purchase order number such as PO-00042 or a manufacturing order"
-  class = "none"
+[[model.field]]
+name = "origin"
+description = "The document the move came from, for example a purchase order number such as PO-00042 or a manufacturing order"
+class = "none"
 
-  [[model.field]]
-  name = "scheduled_on"
-  description = "Date the move is planned for (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
-  default = "today"
+[[model.field]]
+name = "scheduled_on"
+description = "Date the move is planned for (YYYY-MM-DD)"
+class = "none"
+kind = "date"
+default = "today"
 
-  [[model.field]]
-  name = "state"
-  description = "Move status: draft, done, cancelled"
-  class = "none"
-  kind = "select"
-  options = ["draft", "done", "cancelled"]
-  required = true
+[[model.field]]
+name = "state"
+description = "Move status: draft, done, cancelled"
+class = "none"
+kind = "select"
+options = ["draft", "done", "cancelled"]
+required = true
 
-    [model.field.ui]
-    tones = { done = "ok", cancelled = "neutral" }
+[model.field.ui]
+tones = { done = "ok", cancelled = "neutral" }
 
-  [[model.action]]
-  name = "validate"
-  description = "Confirm that the goods really moved: the quantity leaves the source item and arrives at the destination item (stock managers only); a done move cannot be undone"
-  field = "state"
-  from = "draft"
-  to = "done"
-  group = "inventory.manager"
-  approval = true
+[[model.action]]
+name = "validate"
+description = "Confirm that the goods really moved: the quantity leaves the source item and arrives at the destination item (stock managers only); a done move cannot be undone"
+field = "state"
+from = "draft"
+to = "done"
+group = "inventory.manager"
+approval = true
 
-    [model.action.ui]
-    primary = true
-    confirm = "Validate this move? The stock changes now, and a done move cannot be undone."
-    done = "Stock updated"
+[model.action.ui]
+primary = true
+confirm = "Validate this move? The stock changes now, and a done move cannot be undone."
+done = "Stock updated"
 
-    [[model.action.effect]]
-    kind = "adjust"
-    model = "inventory_item"
-    match = { product_id = "$self.product_id", location_id = "$self.from_location_id" }
-    field = "quantity"
-    op = "subtract"
-    by = "$self.quantity"
-    create_missing = true
-    when = "is_set(from_location_id) && !is_set(lot)"
+[[model.action.effect]]
+kind = "adjust"
+model = "inventory_item"
+match = { product_id = "$self.product_id", location_id = "$self.from_location_id" }
+field = "quantity"
+op = "subtract"
+by = "$self.quantity"
+create_missing = true
+when = "is_set(from_location_id) && !is_set(lot)"
 
-    [[model.action.effect]]
-    kind = "adjust"
-    model = "inventory_item"
-    match = { product_id = "$self.product_id", location_id = "$self.from_location_id", lot = "$self.lot" }
-    field = "quantity"
-    op = "subtract"
-    by = "$self.quantity"
-    create_missing = true
-    when = "is_set(from_location_id) && is_set(lot)"
+[[model.action.effect]]
+kind = "adjust"
+model = "inventory_item"
+match = { product_id = "$self.product_id", location_id = "$self.from_location_id", lot = "$self.lot" }
+field = "quantity"
+op = "subtract"
+by = "$self.quantity"
+create_missing = true
+when = "is_set(from_location_id) && is_set(lot)"
 
-    [[model.action.effect]]
-    kind = "adjust"
-    model = "inventory_item"
-    match = { product_id = "$self.product_id", location_id = "$self.to_location_id" }
-    field = "quantity"
-    op = "add"
-    by = "$self.quantity"
-    create_missing = true
-    when = "is_set(to_location_id) && !is_set(lot)"
+[[model.action.effect]]
+kind = "adjust"
+model = "inventory_item"
+match = { product_id = "$self.product_id", location_id = "$self.to_location_id" }
+field = "quantity"
+op = "add"
+by = "$self.quantity"
+create_missing = true
+when = "is_set(to_location_id) && !is_set(lot)"
 
-    [[model.action.effect]]
-    kind = "adjust"
-    model = "inventory_item"
-    match = { product_id = "$self.product_id", location_id = "$self.to_location_id", lot = "$self.lot" }
-    field = "quantity"
-    op = "add"
-    by = "$self.quantity"
-    create_missing = true
-    when = "is_set(to_location_id) && is_set(lot)"
+[[model.action.effect]]
+kind = "adjust"
+model = "inventory_item"
+match = { product_id = "$self.product_id", location_id = "$self.to_location_id", lot = "$self.lot" }
+field = "quantity"
+op = "add"
+by = "$self.quantity"
+create_missing = true
+when = "is_set(to_location_id) && is_set(lot)"
 
-  [[model.action]]
-  name = "cancel"
-  description = "Cancel a draft move"
-  field = "state"
-  from = "draft"
-  to = "cancelled"
+[[model.action]]
+name = "cancel"
+description = "Cancel a draft move"
+field = "state"
+from = "draft"
+to = "cancelled"
 
-    [model.action.ui]
-    danger = true
-    confirm = "Cancel this move?"
-    done = "Move cancelled"
+[model.action.ui]
+danger = true
+confirm = "Cancel this move?"
+done = "Move cancelled"
 
 [[migration]]
 from = "<0.4.0"

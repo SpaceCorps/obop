@@ -8,14 +8,14 @@ two screens built on top of them. The rules in [BRAND.md](BRAND.md) and the comp
 
 ## New primitives in `@obop/ui`
 
-| Component | Use |
-|---|---|
-| `ConfirmDialog` | The in-app replacement for `window.confirm` (never use the native one). States the consequence, keeps focus on Cancel, stays open to show a failure in its alert area, and can switch to a result with only a Close button. |
-| `Pager` | "1–50 of 1,234", previous and next, rows per page (25, 50, 100, 200). A live region announces the range. Sits under the table and stays in view. |
-| `Stat` | One number with a label and a hint: a KPI tile. Tabular figures. |
-| `CodeBlock` | A code block with a copy button that announces "Copied". Highlights `toml`, `json` and `sh` from tokens, never from markup, so source text is always rendered as text. |
-| `Menu` item `description` | A second line under a disabled item that says why, also its tooltip. |
-| `Tooltip` `align` | `start` or `end` for controls near a panel edge. |
+| Component                 | Use                                                                                                                                                                                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ConfirmDialog`           | The in-app replacement for `window.confirm` (never use the native one). States the consequence, keeps focus on Cancel, stays open to show a failure in its alert area, and can switch to a result with only a Close button. |
+| `Pager`                   | "1–50 of 1,234", previous and next, rows per page (25, 50, 100, 200). A live region announces the range. Sits under the table and stays in view.                                                                            |
+| `Stat`                    | One number with a label and a hint: a KPI tile. Tabular figures.                                                                                                                                                            |
+| `CodeBlock`               | A code block with a copy button that announces "Copied". Highlights `toml`, `json` and `sh` from tokens, never from markup, so source text is always rendered as text.                                                      |
+| `Menu` item `description` | A second line under a disabled item that says why, also its tooltip.                                                                                                                                                        |
+| `Tooltip` `align`         | `start` or `end` for controls near a panel edge.                                                                                                                                                                            |
 
 Each has a specimen in the Brand book (Components).
 

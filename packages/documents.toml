@@ -21,39 +21,39 @@ description = "A folder that groups documents"
 read_group = "documents.user"
 write_group = "documents.manager"
 
-  [model.ui]
-  title = "{name}"
-  subtitle = "{parent_id}"
-  list = ["name", "parent_id", "description"]
-  quick_create = ["name", "parent_id"]
-  order = "name asc"
-  default_view = "tree"
-  menu = "configuration"
-  menu_order = 1
+[model.ui]
+title = "{name}"
+subtitle = "{parent_id}"
+list = ["name", "parent_id", "description"]
+quick_create = ["name", "parent_id"]
+order = "name asc"
+default_view = "tree"
+menu = "configuration"
+menu_order = 1
 
-  [[model.child]]
-  model = "documents_document"
-  via = "folder_id"
-  shape = "list"
+[[model.child]]
+model = "documents_document"
+via = "folder_id"
+shape = "list"
 
-  [[model.field]]
-  name = "name"
-  description = "Folder name"
-  class = "none"
-  required = true
+[[model.field]]
+name = "name"
+description = "Folder name"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "parent_id"
-  description = "The folder this one sits in"
-  class = "none"
-  kind = "ref"
-  to = "documents_folder"
+[[model.field]]
+name = "parent_id"
+description = "The folder this one sits in"
+class = "none"
+kind = "ref"
+to = "documents_folder"
 
-  [[model.field]]
-  name = "description"
-  description = "What belongs in the folder"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "description"
+description = "What belongs in the folder"
+class = "none"
+kind = "longtext"
 
 [[model]]
 name = "documents_document"
@@ -61,157 +61,166 @@ description = "A contract, policy, certificate or other document on record"
 read_group = "documents.user"
 write_group = "documents.user"
 
-  [model.access]
-  own = "owner"
-  public_field = "open_to_all"
-  see_all_group = "documents.manager"
+[model.access]
+own = "owner"
+public_field = "open_to_all"
+see_all_group = "documents.manager"
 
-  [model.ui]
-  title = "{title}"
-  subtitle = "{folder_id} · {kind} | {kind}"
-  list = ["title", "folder_id", "kind", "confidentiality", "owner", "expires_on", "state"]
-  card = ["attachment", "title", "kind", "confidentiality", "expires_on"]
-  quick_create = ["title", "folder_id", "kind"]
-  order = "title asc"
-  default_view = "list"
-  menu = "main"
-  menu_order = 1
-  calendar = { start = "expires_on", color = "kind" }
-  report = { rows = "folder_id", cols = "kind" }
+[model.ui]
+title = "{title}"
+subtitle = "{folder_id} · {kind} | {kind}"
+list = ["title", "folder_id", "kind", "confidentiality", "owner", "expires_on", "state"]
+card = ["attachment", "title", "kind", "confidentiality", "expires_on"]
+quick_create = ["title", "folder_id", "kind"]
+order = "title asc"
+default_view = "list"
+menu = "main"
+menu_order = 1
+calendar = { start = "expires_on", color = "kind" }
+report = { rows = "folder_id", cols = "kind" }
 
-  [[model.ui.section]]
-  label = "Document"
-  fields = ["attachment", "title", "folder_id", "kind", "confidentiality", "owner", "expires_on", "summary"]
+[[model.ui.section]]
+label = "Document"
+fields = [
+  "attachment",
+  "title",
+  "folder_id",
+  "kind",
+  "confidentiality",
+  "owner",
+  "expires_on",
+  "summary",
+]
 
-  [[model.ui.section]]
-  label = "Where it is kept"
-  fields = ["reference", "location"]
-  collapsed = true
+[[model.ui.section]]
+label = "Where it is kept"
+fields = ["reference", "location"]
+collapsed = true
 
-  [[model.ui.filter]]
-  label = "Expiring soon"
-  where = "state = published && expires_on != null && expires_on <= today+30"
+[[model.ui.filter]]
+label = "Expiring soon"
+where = "state = published && expires_on != null && expires_on <= today+30"
 
-  [[model.ui.filter]]
-  label = "Drafts"
-  where = "state = draft"
+[[model.ui.filter]]
+label = "Drafts"
+where = "state = draft"
 
-  [[model.ui.filter]]
-  label = "Confidential"
-  where = "confidentiality = confidential"
+[[model.ui.filter]]
+label = "Confidential"
+where = "confidentiality = confidential"
 
-  [[model.field]]
-  name = "title"
-  description = "Document title"
-  class = "none"
-  required = true
+[[model.field]]
+name = "title"
+description = "Document title"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "folder_id"
-  description = "The folder the document is filed in"
-  class = "none"
-  kind = "ref"
-  to = "documents_folder"
+[[model.field]]
+name = "folder_id"
+description = "The folder the document is filed in"
+class = "none"
+kind = "ref"
+to = "documents_folder"
 
-  [[model.field]]
-  name = "kind"
-  description = "Type of document: contract, invoice, policy, report, certificate, other"
-  class = "none"
-  kind = "select"
-  options = ["contract", "invoice", "policy", "report", "certificate", "other"]
-  required = true
+[[model.field]]
+name = "kind"
+description = "Type of document: contract, invoice, policy, report, certificate, other"
+class = "none"
+kind = "select"
+options = ["contract", "invoice", "policy", "report", "certificate", "other"]
+required = true
 
-  [[model.field]]
-  name = "confidentiality"
-  description = "Who may see it: public and internal documents everyone who may read documents, confidential and restricted ones only the owner and documents.manager"
-  class = "none"
-  kind = "select"
-  options = ["public", "internal", "confidential", "restricted"]
-  required = true
-  default = "internal"
+[[model.field]]
+name = "confidentiality"
+description = "Who may see it: public and internal documents everyone who may read documents, confidential and restricted ones only the owner and documents.manager"
+class = "none"
+kind = "select"
+options = ["public", "internal", "confidential", "restricted"]
+required = true
+default = "internal"
 
-    [model.field.ui]
-    tones = { public = "info", internal = "neutral", confidential = "warn", restricted = "bad" }
+[model.field.ui]
+tones = { public = "info", internal = "neutral", confidential = "warn", restricted = "bad" }
 
-  [[model.field]]
-  name = "open_to_all"
-  description = "Whether everyone who may read documents can see this one: true for public and internal documents"
-  class = "none"
-  kind = "bool"
-  computed = 'confidentiality == "public" || confidentiality == "internal"'
+[[model.field]]
+name = "open_to_all"
+description = "Whether everyone who may read documents can see this one: true for public and internal documents"
+class = "none"
+kind = "bool"
+computed = 'confidentiality == "public" || confidentiality == "internal"'
 
-    [model.field.ui]
-    hidden = true
+[model.field.ui]
+hidden = true
 
-  [[model.field]]
-  name = "owner"
-  description = "User name of the person responsible for the document; the person who creates it unless set otherwise. Owners see their confidential documents"
-  class = "internal"
-  personal_data = true
-  default = "$user"
+[[model.field]]
+name = "owner"
+description = "User name of the person responsible for the document; the person who creates it unless set otherwise. Owners see their confidential documents"
+class = "internal"
+personal_data = true
+default = "$user"
 
-  [[model.field]]
-  name = "reference"
-  description = "Reference number, for example a contract number"
-  class = "none"
+[[model.field]]
+name = "reference"
+description = "Reference number, for example a contract number"
+class = "none"
 
-  [[model.field]]
-  name = "location"
-  description = "Where the file is stored, such as a link or archive box"
-  class = "none"
+[[model.field]]
+name = "location"
+description = "Where the file is stored, such as a link or archive box"
+class = "none"
 
-  [[model.field]]
-  name = "attachment"
-  description = "The document file itself (PDF, image, text, spreadsheet or office document, up to 25 MiB); served only as a download to people who may read the record"
-  class = "internal"
-  kind = "file"
+[[model.field]]
+name = "attachment"
+description = "The document file itself (PDF, image, text, spreadsheet or office document, up to 25 MiB); served only as a download to people who may read the record"
+class = "internal"
+kind = "file"
 
-  [[model.field]]
-  name = "expires_on"
-  description = "Date after which the document is no longer valid (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
+[[model.field]]
+name = "expires_on"
+description = "Date after which the document is no longer valid (YYYY-MM-DD)"
+class = "none"
+kind = "date"
 
-    [model.field.ui]
-    warn_before_days = 30
+[model.field.ui]
+warn_before_days = 30
 
-  [[model.field]]
-  name = "summary"
-  description = "What the document says, in a few lines"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "summary"
+description = "What the document says, in a few lines"
+class = "none"
+kind = "longtext"
 
-  [[model.field]]
-  name = "state"
-  description = "Document status: draft, published, archived"
-  class = "none"
-  kind = "select"
-  options = ["draft", "published", "archived"]
-  required = true
+[[model.field]]
+name = "state"
+description = "Document status: draft, published, archived"
+class = "none"
+kind = "select"
+options = ["draft", "published", "archived"]
+required = true
 
-    [model.field.ui]
-    tones = { draft = "neutral", published = "ok", archived = "neutral" }
+[model.field.ui]
+tones = { draft = "neutral", published = "ok", archived = "neutral" }
 
-  [[model.action]]
-  name = "publish"
-  description = "Make a draft document the current version"
-  field = "state"
-  from = "draft"
-  to = "published"
+[[model.action]]
+name = "publish"
+description = "Make a draft document the current version"
+field = "state"
+from = "draft"
+to = "published"
 
-    [model.action.ui]
-    primary = true
-    done = "The document is published"
+[model.action.ui]
+primary = true
+done = "The document is published"
 
-  [[model.action]]
-  name = "archive"
-  description = "Archive a published document (manager only)"
-  field = "state"
-  from = "published"
-  to = "archived"
-  group = "documents.manager"
+[[model.action]]
+name = "archive"
+description = "Archive a published document (manager only)"
+field = "state"
+from = "published"
+to = "archived"
+group = "documents.manager"
 
-    [model.action.ui]
-    danger = true
-    confirm = "Archive this document? No step brings it back."
-    done = "The document is archived"
+[model.action.ui]
+danger = true
+confirm = "Archive this document? No step brings it back."
+done = "The document is archived"

@@ -10,7 +10,8 @@ import { ensureRecording } from "../native/actions.ts";
 import { onChange } from "../native/bus.ts";
 import { locationReadiness, notificationsAllowed } from "../native/permissions.ts";
 import { isRecording } from "../native/recorder.ts";
-import { databaseInfo, getStore } from "../native/store.ts";
+import { STOP_DETAILS, stopDetailsOn } from "../core/settings.ts";
+import { databaseInfo, getSettings, getStore } from "../native/store.ts";
 import { onForeground } from "./foreground.ts";
 import type { PhoneStatus } from "./status.ts";
 
@@ -182,6 +183,33 @@ export function useRegistered(asking: boolean): boolean | null {
     };
   }, [asking]);
   return registered;
+}
+
+/**
+ * The switch "Details at Stop" (D4b): `true` (the window opens at Stop) until the driver turns it
+ * off, kept in the settings of the app. The answer is shown at once and stored after.
+ */
+export function useStopDetails(): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    getSettings()
+      .then((s) => s.get(STOP_DETAILS))
+      .then(
+        (value) => alive && setOn(stopDetailsOn(value)),
+        () => undefined,
+      );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const set = (value: boolean) => {
+    setOn(value);
+    getSettings()
+      .then((s) => s.set(STOP_DETAILS, value ? "on" : "off"))
+      .catch(() => undefined);
+  };
+  return [on, set];
 }
 
 /** What the last check of the recording found (`Recording.ensure`), and when. */

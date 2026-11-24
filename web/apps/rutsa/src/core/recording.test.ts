@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "vite-plus/test";
 import { memoryDb } from "../test-support/memory-db.ts";
 import { storeDelivery } from "./delivery.ts";
+import { DetailsTooLong } from "./details.ts";
 import type { Position } from "./fix.ts";
 import type { Readiness } from "./liveness.ts";
 import {
@@ -186,6 +187,22 @@ describe("Stop", () => {
     expect((await recording.stop(trip.id)).state).toBe("ended");
     // The next delivery finds no trip and the task stops the updates (C3).
     expect(await storeDelivery(store, drive(2, MIN))).toEqual({ stored: 0, stopUpdates: true });
+  });
+
+  test("the details typed at Stop are stored with the end", async () => {
+    const trip = await recording.start();
+    const ended = await recording.stop(trip.id, { name: "Meeting", to: "Uppsala" });
+    expect(ended).toMatchObject({ state: "ended", name: "Meeting", to: "Uppsala" });
+    expect(location.running).toBe(false);
+  });
+
+  test("details that are too long stop nothing: the updates run on and the trip records", async () => {
+    const trip = await recording.start();
+    await expect(recording.stop(trip.id, { note: "x".repeat(1001) })).rejects.toThrow(
+      DetailsTooLong,
+    );
+    expect(location.running).toBe(true);
+    expect((await store.activeTrip())?.state).toBe("recording");
   });
 
   test("an ended trip cannot be stopped again", async () => {

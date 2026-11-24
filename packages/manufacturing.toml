@@ -25,55 +25,55 @@ description = "A recipe: the components needed to make a product"
 read_group = "manufacturing.user"
 write_group = "manufacturing.manager"
 
-  [model.ui]
-  title = "{name}"
-  subtitle = "{product_id}"
-  list = ["name", "product_id", "quantity", "active"]
-  quick_create = ["product_id", "name", "quantity"]
-  order = "name asc"
-  default_view = "list"
-  menu = "main"
-  menu_order = 2
+[model.ui]
+title = "{name}"
+subtitle = "{product_id}"
+list = ["name", "product_id", "quantity", "active"]
+quick_create = ["product_id", "name", "quantity"]
+order = "name asc"
+default_view = "list"
+menu = "main"
+menu_order = 2
 
-  [[model.child]]
-  model = "manufacturing_bom_line"
-  via = "bom_id"
-  shape = "lines"
+[[model.child]]
+model = "manufacturing_bom_line"
+via = "bom_id"
+shape = "lines"
 
-  [[model.field]]
-  name = "product_id"
-  description = "The finished product the recipe makes"
-  class = "none"
-  kind = "ref"
-  to = "product"
-  required = true
+[[model.field]]
+name = "product_id"
+description = "The finished product the recipe makes"
+class = "none"
+kind = "ref"
+to = "product"
+required = true
 
-  [[model.field]]
-  name = "name"
-  description = "Name of the recipe, for example Standard assembly"
-  class = "none"
-  required = true
+[[model.field]]
+name = "name"
+description = "Name of the recipe, for example Standard assembly"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "quantity"
-  description = "Units of the finished product one run produces"
-  class = "none"
-  kind = "number"
-  required = true
-  default = 1
+[[model.field]]
+name = "quantity"
+description = "Units of the finished product one run produces"
+class = "none"
+kind = "number"
+required = true
+default = 1
 
-  [[model.field]]
-  name = "instructions"
-  description = "Assembly notes for the shop floor"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "instructions"
+description = "Assembly notes for the shop floor"
+class = "none"
+kind = "longtext"
 
-  [[model.field]]
-  name = "active"
-  description = "Whether the recipe can be used for new orders"
-  class = "none"
-  kind = "bool"
-  default = true
+[[model.field]]
+name = "active"
+description = "Whether the recipe can be used for new orders"
+class = "none"
+kind = "bool"
+default = true
 
 [[model]]
 name = "manufacturing_bom_line"
@@ -81,37 +81,37 @@ description = "One component of a bill of materials"
 read_group = "manufacturing.user"
 write_group = "manufacturing.manager"
 
-  [model.ui]
-  title = "{component_id} × {quantity}"
-  subtitle = "{bom_id}"
-  list = ["component_id", "quantity"]
-  quick_create = ["component_id", "quantity"]
-  default_view = "list"
-  menu = "hidden"
+[model.ui]
+title = "{component_id} × {quantity}"
+subtitle = "{bom_id}"
+list = ["component_id", "quantity"]
+quick_create = ["component_id", "quantity"]
+default_view = "list"
+menu = "hidden"
 
-  [[model.field]]
-  name = "bom_id"
-  description = "The recipe the component belongs to"
-  class = "none"
-  kind = "ref"
-  to = "manufacturing_bom"
-  required = true
+[[model.field]]
+name = "bom_id"
+description = "The recipe the component belongs to"
+class = "none"
+kind = "ref"
+to = "manufacturing_bom"
+required = true
 
-  [[model.field]]
-  name = "component_id"
-  description = "The product consumed"
-  class = "none"
-  kind = "ref"
-  to = "product"
-  required = true
+[[model.field]]
+name = "component_id"
+description = "The product consumed"
+class = "none"
+kind = "ref"
+to = "product"
+required = true
 
-  [[model.field]]
-  name = "quantity"
-  description = "Units of the component used per run"
-  class = "none"
-  kind = "number"
-  required = true
-  default = 1
+[[model.field]]
+name = "quantity"
+description = "Units of the component used per run"
+class = "none"
+kind = "number"
+required = true
+default = 1
 
 [[model]]
 name = "manufacturing_order"
@@ -119,176 +119,176 @@ description = "An instruction to produce a quantity of a product"
 read_group = "manufacturing.user"
 write_group = "manufacturing.user"
 
-  [model.ui]
-  title = "{number}"
-  subtitle = "{product_id} × {quantity} | {bom_id} × {quantity}"
-  list = ["number", "bom_id", "quantity", "location_id", "planned_on", "deadline", "state"]
-  card = ["number", "product_id", "quantity", "deadline"]
-  quick_create = ["bom_id", "quantity", "location_id"]
-  order = "planned_on desc, number desc"
-  default_view = "list"
-  menu = "main"
-  menu_order = 1
-  calendar = { start = "planned_on", end = "deadline", color = "state" }
-  report = { rows = "product_id", cols = "state", measure = "quantity" }
+[model.ui]
+title = "{number}"
+subtitle = "{product_id} × {quantity} | {bom_id} × {quantity}"
+list = ["number", "bom_id", "quantity", "location_id", "planned_on", "deadline", "state"]
+card = ["number", "product_id", "quantity", "deadline"]
+quick_create = ["bom_id", "quantity", "location_id"]
+order = "planned_on desc, number desc"
+default_view = "list"
+menu = "main"
+menu_order = 1
+calendar = { start = "planned_on", end = "deadline", color = "state" }
+report = { rows = "product_id", cols = "state", measure = "quantity" }
 
-  [[model.ui.filter]]
-  label = "In progress"
-  where = "state = in_progress"
+[[model.ui.filter]]
+label = "In progress"
+where = "state = in_progress"
 
-  [[model.ui.filter]]
-  label = "Late"
-  where = "deadline < today && state != done && state != cancelled"
+[[model.ui.filter]]
+label = "Late"
+where = "deadline < today && state != done && state != cancelled"
 
-  [[model.child]]
-  model = "manufacturing_order_line"
-  via = "order_id"
-  shape = "lines"
+[[model.child]]
+model = "manufacturing_order_line"
+via = "order_id"
+shape = "lines"
 
-  [model.guard]
-  immutable_when = ["done", "cancelled"]
-  message = "A done or cancelled manufacturing order cannot be changed."
+[model.guard]
+immutable_when = ["done", "cancelled"]
+message = "A done or cancelled manufacturing order cannot be changed."
 
-  [[model.field]]
-  name = "number"
-  description = "Order number such as MO-00042, assigned when the order is created"
-  class = "none"
-  kind = "sequence"
-  format = "MO-{seq:05}"
+[[model.field]]
+name = "number"
+description = "Order number such as MO-00042, assigned when the order is created"
+class = "none"
+kind = "sequence"
+format = "MO-{seq:05}"
 
-  [[model.field]]
-  name = "bom_id"
-  description = "The recipe to follow"
-  class = "none"
-  kind = "ref"
-  to = "manufacturing_bom"
-  required = true
-  ref_filter = "active = true"
+[[model.field]]
+name = "bom_id"
+description = "The recipe to follow"
+class = "none"
+kind = "ref"
+to = "manufacturing_bom"
+required = true
+ref_filter = "active = true"
 
-  [[model.field]]
-  name = "product_id"
-  description = "The finished product made; taken from the bill of materials when left out"
-  class = "none"
-  kind = "ref"
-  to = "product"
-  fill_from = "bom_id.product_id"
+[[model.field]]
+name = "product_id"
+description = "The finished product made; taken from the bill of materials when left out"
+class = "none"
+kind = "ref"
+to = "product"
+fill_from = "bom_id.product_id"
 
-  [[model.field]]
-  name = "location_id"
-  description = "The production location: finishing the order makes the stock moves that take the components from here and put the finished product here; empty makes no moves"
-  class = "none"
-  kind = "ref"
-  to = "inventory_location"
-  ref_filter = "active = true"
+[[model.field]]
+name = "location_id"
+description = "The production location: finishing the order makes the stock moves that take the components from here and put the finished product here; empty makes no moves"
+class = "none"
+kind = "ref"
+to = "inventory_location"
+ref_filter = "active = true"
 
-  [[model.field]]
-  name = "quantity"
-  description = "Units of the finished product to make"
-  class = "none"
-  kind = "number"
-  required = true
-  fill_from = "bom_id.quantity"
+[[model.field]]
+name = "quantity"
+description = "Units of the finished product to make"
+class = "none"
+kind = "number"
+required = true
+fill_from = "bom_id.quantity"
 
-    [model.field.ui]
-    aggregate = "none"
+[model.field.ui]
+aggregate = "none"
 
-  [[model.field]]
-  name = "planned_on"
-  description = "Date production should start (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
-  default = "today"
+[[model.field]]
+name = "planned_on"
+description = "Date production should start (YYYY-MM-DD)"
+class = "none"
+kind = "date"
+default = "today"
 
-  [[model.field]]
-  name = "deadline"
-  description = "Date the goods are needed (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
+[[model.field]]
+name = "deadline"
+description = "Date the goods are needed (YYYY-MM-DD)"
+class = "none"
+kind = "date"
 
-    [model.field.ui]
-    warn_before_days = 3
+[model.field.ui]
+warn_before_days = 3
 
-  [[model.field]]
-  name = "responsible"
-  description = "Name of the person in charge of the run"
-  class = "internal"
-  personal_data = true
+[[model.field]]
+name = "responsible"
+description = "Name of the person in charge of the run"
+class = "internal"
+personal_data = true
 
-  [[model.field]]
-  name = "state"
-  description = "Order status: draft, confirmed, in_progress, done, cancelled"
-  class = "none"
-  kind = "select"
-  options = ["draft", "confirmed", "in_progress", "done", "cancelled"]
-  required = true
+[[model.field]]
+name = "state"
+description = "Order status: draft, confirmed, in_progress, done, cancelled"
+class = "none"
+kind = "select"
+options = ["draft", "confirmed", "in_progress", "done", "cancelled"]
+required = true
 
-    [model.field.ui]
-    tones = { confirmed = "info", in_progress = "warn", done = "ok", cancelled = "neutral" }
+[model.field.ui]
+tones = { confirmed = "info", in_progress = "warn", done = "ok", cancelled = "neutral" }
 
-  [[model.action]]
-  name = "confirm"
-  description = "Confirm a draft order so production can be planned; it needs the finished product, a production location and at least one component line"
-  field = "state"
-  from = "draft"
-  to = "confirmed"
-  group = "manufacturing.manager"
-  assert = [
-    { expr = "is_set(product_id)", message = "Choose the finished product first: finishing the order puts it into stock at the production location", key = "has_product" },
-    { expr = "is_set(location_id)", message = "Choose the production location first: finishing the order moves the components out and the product in there", key = "has_location" },
-    { expr = "count(lines) > 0", message = "Add the components first: an order without components moves no stock when it is finished", key = "has_components" },
-  ]
+[[model.action]]
+name = "confirm"
+description = "Confirm a draft order so production can be planned; it needs the finished product, a production location and at least one component line"
+field = "state"
+from = "draft"
+to = "confirmed"
+group = "manufacturing.manager"
+assert = [
+  { expr = "is_set(product_id)", message = "Choose the finished product first: finishing the order puts it into stock at the production location", key = "has_product" },
+  { expr = "is_set(location_id)", message = "Choose the production location first: finishing the order moves the components out and the product in there", key = "has_location" },
+  { expr = "count(lines) > 0", message = "Add the components first: an order without components moves no stock when it is finished", key = "has_components" },
+]
 
-    [model.action.ui]
-    primary = true
-    done = "Order confirmed"
+[model.action.ui]
+primary = true
+done = "Order confirmed"
 
-  [[model.action]]
-  name = "start"
-  description = "Start production on a confirmed order"
-  field = "state"
-  from = "confirmed"
-  to = "in_progress"
+[[model.action]]
+name = "start"
+description = "Start production on a confirmed order"
+field = "state"
+from = "confirmed"
+to = "in_progress"
 
-    [model.action.ui]
-    primary = true
-    done = "Production started"
+[model.action.ui]
+primary = true
+done = "Production started"
 
-  [[model.action]]
-  name = "finish"
-  description = "Mark production as finished: with a production location, a draft stock move takes each component out of stock there and one puts the finished product there, with the order number as their source document, for the warehouse to validate (needs the inventory.user group)"
-  field = "state"
-  from = "in_progress"
-  to = "done"
+[[model.action]]
+name = "finish"
+description = "Mark production as finished: with a production location, a draft stock move takes each component out of stock there and one puts the finished product there, with the order number as their source document, for the warehouse to validate (needs the inventory.user group)"
+field = "state"
+from = "in_progress"
+to = "done"
 
-    [model.action.ui]
-    primary = true
-    confirm = "Mark production as finished? Stock moves take the components out and put the finished product in at the production location. A done order can no longer be changed."
-    done = "Production finished"
+[model.action.ui]
+primary = true
+confirm = "Mark production as finished? Stock moves take the components out and put the finished product in at the production location. A done order can no longer be changed."
+done = "Production finished"
 
-    [[model.action.effect]]
-    kind = "create"
-    model = "inventory_move"
-    for_each = "lines"
-    when = "is_set(location_id)"
-    map = { product_id = "$line.component_id", from_location_id = "$self.location_id", quantity = "$line.quantity", scheduled_on = "$today", kind = "production", origin = "$self.number" }
+[[model.action.effect]]
+kind = "create"
+model = "inventory_move"
+for_each = "lines"
+when = "is_set(location_id)"
+map = { product_id = "$line.component_id", from_location_id = "$self.location_id", quantity = "$line.quantity", scheduled_on = "$today", kind = "production", origin = "$self.number" }
 
-    [[model.action.effect]]
-    kind = "create"
-    model = "inventory_move"
-    when = "is_set(location_id) && is_set(product_id)"
-    map = { product_id = "$self.product_id", to_location_id = "$self.location_id", quantity = "$self.quantity", scheduled_on = "$today", kind = "production", origin = "$self.number" }
+[[model.action.effect]]
+kind = "create"
+model = "inventory_move"
+when = "is_set(location_id) && is_set(product_id)"
+map = { product_id = "$self.product_id", to_location_id = "$self.location_id", quantity = "$self.quantity", scheduled_on = "$today", kind = "production", origin = "$self.number" }
 
-  [[model.action]]
-  name = "cancel"
-  description = "Cancel an order that has not been confirmed"
-  field = "state"
-  from = "draft"
-  to = "cancelled"
+[[model.action]]
+name = "cancel"
+description = "Cancel an order that has not been confirmed"
+field = "state"
+from = "draft"
+to = "cancelled"
 
-    [model.action.ui]
-    danger = true
-    confirm = "Cancel this order?"
-    done = "Order cancelled"
+[model.action.ui]
+danger = true
+confirm = "Cancel this order?"
+done = "Order cancelled"
 
 [[model]]
 name = "manufacturing_order_line"
@@ -296,42 +296,42 @@ description = "One component a manufacturing order uses, with the units it takes
 read_group = "manufacturing.user"
 write_group = "manufacturing.user"
 
-  [model.ui]
-  title = "{component_id} × {quantity}"
-  subtitle = "{order_id}"
-  list = ["component_id", "quantity"]
-  quick_create = ["component_id", "quantity"]
-  default_view = "list"
-  menu = "hidden"
+[model.ui]
+title = "{component_id} × {quantity}"
+subtitle = "{order_id}"
+list = ["component_id", "quantity"]
+quick_create = ["component_id", "quantity"]
+default_view = "list"
+menu = "hidden"
 
-  [model.guard]
-  children_of = "order_id"
-  message = "The components of a done or cancelled manufacturing order cannot be changed."
+[model.guard]
+children_of = "order_id"
+message = "The components of a done or cancelled manufacturing order cannot be changed."
 
-  [[model.field]]
-  name = "order_id"
-  description = "The manufacturing order that uses the component"
-  class = "none"
-  kind = "ref"
-  to = "manufacturing_order"
-  required = true
+[[model.field]]
+name = "order_id"
+description = "The manufacturing order that uses the component"
+class = "none"
+kind = "ref"
+to = "manufacturing_order"
+required = true
 
-  [[model.field]]
-  name = "component_id"
-  description = "The product consumed"
-  class = "none"
-  kind = "ref"
-  to = "product"
-  required = true
+[[model.field]]
+name = "component_id"
+description = "The product consumed"
+class = "none"
+kind = "ref"
+to = "product"
+required = true
 
-  [[model.field]]
-  name = "quantity"
-  description = "Units of the component the whole order uses"
-  class = "none"
-  kind = "number"
-  required = true
-  default = 1
-  min = 0
+[[model.field]]
+name = "quantity"
+description = "Units of the component the whole order uses"
+class = "none"
+kind = "number"
+required = true
+default = 1
+min = 0
 
 [[migration]]
 from = "<0.2.1"

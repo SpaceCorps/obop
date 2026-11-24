@@ -28,9 +28,9 @@ Personality: calm, precise, confident. One business, one platform; privacy-respe
 
 All colours are OKLCH ramps with the same lightness ladder in every hue, 50 to 950:
 
-| Step | 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 950 |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| L | .972 | .945 | .89 | .825 | .745 | .66 | .57 | .485 | .40 | .32 | .235 |
+| Step | 50   | 100  | 200 | 300  | 400  | 500 | 600 | 700  | 800 | 900 | 950  |
+| ---- | ---- | ---- | --- | ---- | ---- | --- | --- | ---- | --- | --- | ---- |
+| L    | .972 | .945 | .89 | .825 | .745 | .66 | .57 | .485 | .40 | .32 | .235 |
 
 - **Neutral:** cool grey (hue 265, chroma 0.004 to 0.022).
 - **Accent:** one hue chosen by the person or the instance admin; its ramp is generated.
@@ -105,15 +105,15 @@ Tooltip, Table, Skeleton, EmptyState, Kbd, Avatar, Spinner, Notice. Rules:
 
 Plain, specific, calm, honest, helpful, human.
 
-| Don't | Do |
-|---|---|
-| Invalid input. | Enter an email like name@company.com. |
-| Oops! Something went wrong! | Could not save the lead. Check your connection and try again. |
-| No data. | No leads yet. Create the first one to start your pipeline. |
-| Are you sure? | Delete 3 leads? This cannot be undone. |
-| Submit | Create invoice |
-| Operation completed successfully. | Invoice INV-0042 posted. |
-| Action pending. | Waiting for a human to approve: post invoice INV-0042. |
+| Don't                             | Do                                                            |
+| --------------------------------- | ------------------------------------------------------------- |
+| Invalid input.                    | Enter an email like name@company.com.                         |
+| Oops! Something went wrong!       | Could not save the lead. Check your connection and try again. |
+| No data.                          | No leads yet. Create the first one to start your pipeline.    |
+| Are you sure?                     | Delete 3 leads? This cannot be undone.                        |
+| Submit                            | Create invoice                                                |
+| Operation completed successfully. | Invoice INV-0042 posted.                                      |
+| Action pending.                   | Waiting for a human to approve: post invoice INV-0042.        |
 
 Words: record (not entity), app (not module, in the UI), sign in, delete (irreversible) vs archive,
 agent, approve. Sentence case everywhere; no exclamation marks; no invented customers, quotes or

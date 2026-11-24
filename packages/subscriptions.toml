@@ -24,58 +24,58 @@ description = "A recurring offer customers can subscribe to"
 read_group = "subscriptions.user"
 write_group = "subscriptions.manager"
 
-  [model.ui]
-  title = "{name}"
-  subtitle = "{code}"
-  list = ["name", "code", "interval", "price", "trial_days", "active"]
-  order = "name asc"
-  default_view = "list"
-  menu = "configuration"
+[model.ui]
+title = "{name}"
+subtitle = "{code}"
+list = ["name", "code", "interval", "price", "trial_days", "active"]
+order = "name asc"
+default_view = "list"
+menu = "configuration"
 
-  [[model.field]]
-  name = "name"
-  description = "Plan name, for example Team yearly"
-  class = "none"
-  required = true
+[[model.field]]
+name = "name"
+description = "Plan name, for example Team yearly"
+class = "none"
+required = true
 
-  [[model.field]]
-  name = "code"
-  description = "Short code of the plan"
-  class = "none"
+[[model.field]]
+name = "code"
+description = "Short code of the plan"
+class = "none"
 
-  [[model.field]]
-  name = "interval"
-  description = "How often the customer is billed: monthly, quarterly, yearly"
-  class = "none"
-  kind = "select"
-  options = ["monthly", "quarterly", "yearly"]
-  required = true
-  [model.field.ui]
-  tones = { monthly = "neutral", quarterly = "neutral", yearly = "neutral" }
+[[model.field]]
+name = "interval"
+description = "How often the customer is billed: monthly, quarterly, yearly"
+class = "none"
+kind = "select"
+options = ["monthly", "quarterly", "yearly"]
+required = true
+[model.field.ui]
+tones = { monthly = "neutral", quarterly = "neutral", yearly = "neutral" }
 
-  [[model.field]]
-  name = "price"
-  description = "Standard price per billing interval (minor currency units, e.g. cents)"
-  class = "none"
-  kind = "money"
-  required = true
-  [model.field.ui]
-  aggregate = "none"
+[[model.field]]
+name = "price"
+description = "Standard price per billing interval (minor currency units, e.g. cents)"
+class = "none"
+kind = "money"
+required = true
+[model.field.ui]
+aggregate = "none"
 
-  [[model.field]]
-  name = "trial_days"
-  description = "Length of the free trial in days"
-  class = "none"
-  kind = "number"
-  [model.field.ui]
-  aggregate = "none"
+[[model.field]]
+name = "trial_days"
+description = "Length of the free trial in days"
+class = "none"
+kind = "number"
+[model.field.ui]
+aggregate = "none"
 
-  [[model.field]]
-  name = "active"
-  description = "Whether new customers can pick the plan"
-  class = "none"
-  kind = "bool"
-  default = true
+[[model.field]]
+name = "active"
+description = "Whether new customers can pick the plan"
+class = "none"
+kind = "bool"
+default = true
 
 [[model]]
 name = "subscriptions_subscription"
@@ -83,175 +83,183 @@ description = "A customer's recurring subscription to a plan"
 read_group = "subscriptions.user"
 write_group = "subscriptions.manager"
 
-  [model.ui]
-  title = "{customer_id} · {plan_id}"
-  list = ["customer_id", "plan_id", "started_on", "next_invoice_on", "seats", "recurring_amount", "state"]
-  card = ["customer_id", "plan_id", "recurring_amount", "next_invoice_on"]
-  card_sum = "recurring_amount"
-  quick_create = ["customer_id", "plan_id"]
-  default_view = "kanban"
-  menu = "main"
-  menu_order = 1
-  calendar = { start = "next_invoice_on", color = "plan_id" }
-  report = { rows = "plan_id", cols = "state", measure = "recurring_amount" }
+[model.ui]
+title = "{customer_id} · {plan_id}"
+list = [
+  "customer_id",
+  "plan_id",
+  "started_on",
+  "next_invoice_on",
+  "seats",
+  "recurring_amount",
+  "state",
+]
+card = ["customer_id", "plan_id", "recurring_amount", "next_invoice_on"]
+card_sum = "recurring_amount"
+quick_create = ["customer_id", "plan_id"]
+default_view = "kanban"
+menu = "main"
+menu_order = 1
+calendar = { start = "next_invoice_on", color = "plan_id" }
+report = { rows = "plan_id", cols = "state", measure = "recurring_amount" }
 
-  [[model.ui.section]]
-  label = "Billing"
-  fields = ["recurring_amount", "currency", "seats", "next_invoice_on"]
+[[model.ui.section]]
+label = "Billing"
+fields = ["recurring_amount", "currency", "seats", "next_invoice_on"]
 
-  [[model.ui.section]]
-  label = "Cancellation"
-  fields = ["cancel_reason"]
-  show_in = ["cancelled"]
+[[model.ui.section]]
+label = "Cancellation"
+fields = ["cancel_reason"]
+show_in = ["cancelled"]
 
-  [[model.ui.filter]]
-  label = "Trial ends this week"
-  where = "state = trial && trial_ends_on != null && trial_ends_on <= today+7"
+[[model.ui.filter]]
+label = "Trial ends this week"
+where = "state = trial && trial_ends_on != null && trial_ends_on <= today+7"
 
-  [[model.ui.filter]]
-  label = "Invoice due"
-  where = "state != cancelled && next_invoice_on != null && next_invoice_on <= today"
+[[model.ui.filter]]
+label = "Invoice due"
+where = "state != cancelled && next_invoice_on != null && next_invoice_on <= today"
 
-  [model.guard]
-  immutable_when = ["cancelled"]
-  mutable_fields = ["cancel_reason"]
-  message = "A cancelled subscription cannot be changed. Start a new subscription instead."
+[model.guard]
+immutable_when = ["cancelled"]
+mutable_fields = ["cancel_reason"]
+message = "A cancelled subscription cannot be changed. Start a new subscription instead."
 
-  [[model.field]]
-  name = "customer_id"
-  description = "The customer who subscribed"
-  class = "none"
-  kind = "ref"
-  to = "party"
-  required = true
+[[model.field]]
+name = "customer_id"
+description = "The customer who subscribed"
+class = "none"
+kind = "ref"
+to = "party"
+required = true
 
-  [[model.field]]
-  name = "plan_id"
-  description = "The plan subscribed to"
-  class = "none"
-  kind = "ref"
-  to = "subscriptions_plan"
-  required = true
+[[model.field]]
+name = "plan_id"
+description = "The plan subscribed to"
+class = "none"
+kind = "ref"
+to = "subscriptions_plan"
+required = true
 
-  [[model.field]]
-  name = "started_on"
-  description = "Date the subscription began (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
-  default = "today"
+[[model.field]]
+name = "started_on"
+description = "Date the subscription began (YYYY-MM-DD)"
+class = "none"
+kind = "date"
+default = "today"
 
-  [[model.field]]
-  name = "trial_ends_on"
-  description = "Date the free trial ends (YYYY-MM-DD)"
-  class = "none"
-  kind = "date"
-  [model.field.ui]
-  warn_before_days = 7
+[[model.field]]
+name = "trial_ends_on"
+description = "Date the free trial ends (YYYY-MM-DD)"
+class = "none"
+kind = "date"
+[model.field.ui]
+warn_before_days = 7
 
-  [[model.field]]
-  name = "next_invoice_on"
-  description = "Date the next invoice is due (YYYY-MM-DD), typed in by hand: no invoice is made from a subscription yet, so make it in Invoicing"
-  class = "none"
-  kind = "date"
-  [model.field.ui]
-  warn_before_days = 7
+[[model.field]]
+name = "next_invoice_on"
+description = "Date the next invoice is due (YYYY-MM-DD), typed in by hand: no invoice is made from a subscription yet, so make it in Invoicing"
+class = "none"
+kind = "date"
+[model.field.ui]
+warn_before_days = 7
 
-  [[model.field]]
-  name = "recurring_amount"
-  description = "Amount billed each interval after discounts (minor currency units, e.g. cents); the plan's price unless given"
-  class = "none"
-  kind = "money"
-  required = true
-  fill_from = "plan_id.price"
+[[model.field]]
+name = "recurring_amount"
+description = "Amount billed each interval after discounts (minor currency units, e.g. cents); the plan's price unless given"
+class = "none"
+kind = "money"
+required = true
+fill_from = "plan_id.price"
 
-  [[model.field]]
-  name = "currency"
-  description = "ISO 4217 currency code, for example EUR; the instance currency unless given"
-  class = "none"
-  default = "$instance.currency"
+[[model.field]]
+name = "currency"
+description = "ISO 4217 currency code, for example EUR; the instance currency unless given"
+class = "none"
+default = "$instance.currency"
 
-  [[model.field]]
-  name = "seats"
-  description = "Number of licences or users covered"
-  class = "none"
-  kind = "number"
-  default = 1
+[[model.field]]
+name = "seats"
+description = "Number of licences or users covered"
+class = "none"
+kind = "number"
+default = 1
 
-  [[model.field]]
-  name = "cancel_reason"
-  description = "Why the customer cancelled"
-  class = "none"
-  kind = "longtext"
+[[model.field]]
+name = "cancel_reason"
+description = "Why the customer cancelled"
+class = "none"
+kind = "longtext"
 
-  [[model.field]]
-  name = "state"
-  description = "Subscription status: trial, active, past_due, cancelled"
-  class = "none"
-  kind = "select"
-  options = ["trial", "active", "past_due", "cancelled"]
-  required = true
-  [model.field.ui]
-  tones = { trial = "info", active = "ok", past_due = "warn", cancelled = "neutral" }
+[[model.field]]
+name = "state"
+description = "Subscription status: trial, active, past_due, cancelled"
+class = "none"
+kind = "select"
+options = ["trial", "active", "past_due", "cancelled"]
+required = true
+[model.field.ui]
+tones = { trial = "info", active = "ok", past_due = "warn", cancelled = "neutral" }
 
-  [[model.action]]
-  name = "activate"
-  description = "Start billing at the end of the trial"
-  field = "state"
-  from = "trial"
-  to = "active"
-  [model.action.ui]
-  primary = true
+[[model.action]]
+name = "activate"
+description = "Start billing at the end of the trial"
+field = "state"
+from = "trial"
+to = "active"
+[model.action.ui]
+primary = true
 
-  [[model.action]]
-  name = "mark_past_due"
-  description = "Flag an active subscription whose payment failed"
-  field = "state"
-  from = "active"
-  to = "past_due"
-  [model.action.ui]
-  danger = true
+[[model.action]]
+name = "mark_past_due"
+description = "Flag an active subscription whose payment failed"
+field = "state"
+from = "active"
+to = "past_due"
+[model.action.ui]
+danger = true
 
-  [[model.action]]
-  name = "recover"
-  description = "Return a past due subscription to active after payment"
-  field = "state"
-  from = "past_due"
-  to = "active"
-  [model.action.ui]
-  primary = true
+[[model.action]]
+name = "recover"
+description = "Return a past due subscription to active after payment"
+field = "state"
+from = "past_due"
+to = "active"
+[model.action.ui]
+primary = true
 
-  [[model.action]]
-  name = "cancel_trial"
-  description = "Cancel a subscription during its trial"
-  field = "state"
-  from = "trial"
-  to = "cancelled"
-  approval = true
-  [model.action.ui]
-  danger = true
-  confirm = "Cancel this subscription? It cannot be changed afterwards."
-  group = "cancel"
+[[model.action]]
+name = "cancel_trial"
+description = "Cancel a subscription during its trial"
+field = "state"
+from = "trial"
+to = "cancelled"
+approval = true
+[model.action.ui]
+danger = true
+confirm = "Cancel this subscription? It cannot be changed afterwards."
+group = "cancel"
 
-  [[model.action]]
-  name = "cancel"
-  description = "Cancel an active subscription"
-  field = "state"
-  from = "active"
-  to = "cancelled"
-  approval = true
-  [model.action.ui]
-  danger = true
-  confirm = "Cancel this subscription? It cannot be changed afterwards."
-  group = "cancel"
+[[model.action]]
+name = "cancel"
+description = "Cancel an active subscription"
+field = "state"
+from = "active"
+to = "cancelled"
+approval = true
+[model.action.ui]
+danger = true
+confirm = "Cancel this subscription? It cannot be changed afterwards."
+group = "cancel"
 
-  [[model.action]]
-  name = "cancel_overdue"
-  description = "Cancel a past due subscription"
-  field = "state"
-  from = "past_due"
-  to = "cancelled"
-  approval = true
-  [model.action.ui]
-  danger = true
-  confirm = "Cancel this subscription? It cannot be changed afterwards."
-  group = "cancel"
+[[model.action]]
+name = "cancel_overdue"
+description = "Cancel a past due subscription"
+field = "state"
+from = "past_due"
+to = "cancelled"
+approval = true
+[model.action.ui]
+danger = true
+confirm = "Cancel this subscription? It cannot be changed afterwards."
+group = "cancel"
