@@ -4,7 +4,7 @@ import type { Trip } from "../core/types.ts";
 /**
  * What a trip is called on a line of the screen, from what the driver typed: its name, else
  * "From → To" (or the one of them that was typed), else `null`, and the screen shows its times
- * instead (the list of D5) or leaves the title out (the last trip of the home screen).
+ * instead (the list of D5).
  */
 export function tripTitle(trip: Pick<Trip, "name" | "from" | "to">): string | null {
   const name = cleanText(trip.name);

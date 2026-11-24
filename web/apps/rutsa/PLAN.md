@@ -194,7 +194,7 @@ Components from `@obop/ui-native`.
       be typed later too, on the trip's screen (D6) and in its edit (D8), since a trip can end
       without the window (the switch off, an app ended by Android, the automatic stop of stage 4).
       The category (work, private, commute) joins this window in stage 2, with the classification
-- [ ] D5 `feat(rutsa): trips list`: trips by day; each trip shows its kind (a trip added by hand
+- [x] D5 `feat(rutsa): trips list`: trips by day; each trip shows its kind (a trip added by hand
       is marked; mixed comes with D8) and its name, else From → To, else its times
 - [ ] D6 `feat(rutsa): trip detail`: times, km, duration (without the pauses), its kind, delete;
       the way to its edit screen comes with D8
@@ -495,3 +495,22 @@ D23).
   in `meta`. `ui/trip-label.ts` (`tripTitle`) gives the name, else From → To, else nothing; the
   last trip of the home screen already uses it. Not in `docs/spec/rutsa.md` (BR-28 has only the trip added by
   hand); the spec is brought in line at F1.
+- 2026-11-24: D5 as built: `ui/screens/Trips.tsx` shows the days of `byDay` (B7) newest first, each
+  headed `Today · 2 trips · 12.5 km` (Yesterday, else the weekday and date of `formatDay`, with the
+  year for another year); a trip is a `Row` with its name, else From → To, else its times
+  (`08:30–09:15`; the times go under a name), its km and "Added by hand" for a manual trip
+  (`ui/trips-list.ts`). The open trip is in its day with Recording or Paused and no km (the km of
+  the day leave it out, as Today does) and leads to the home screen; an ended one opens `trip`
+  (D6). The home screen has a row Trips with their number under the last trip (`Row` "Trips" of
+  the Home of `mileage-app`, which has it in the footer, where Rutsa has its buttons). No duration
+  in the list (the screen of the trip has it, D6) and a plain list in the scrolling `Screen` as in
+  `mileage-app`, not a `SectionList` (it would not virtualise inside the `ScrollView` of `Screen`).
+  Tried on the emulator, then changed: the open trip stands alone on top under a header Current in
+  the style of the days, and the days count only the trips that ended (`tripSections`); every day
+  but today is named by its date, with no "Yesterday"; the last trip line of the home screen goes
+  into the row Trips as its subtitle, "Last trip: 0.5 km, Today 17:17" (km and when, without the
+  name and the duration of D4 and D4b: the list has the name, the trip's screen the duration).
+  Then: the list and its row on the home screen are called History. A temporary button added ten
+  sample trips on the five days before today to the emulator's database (recorded ones through
+  Start, positions and Stop of the store, two added by hand), so the days could be looked at; it
+  was used once and removed before the commit, and the trips stay in that database for the checks.

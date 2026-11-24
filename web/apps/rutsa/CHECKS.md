@@ -97,7 +97,7 @@ Changing the flag needs a fresh bundle: delete `android\app\build\generated\asse
 - [ ] Closed for the notifications, then location off: the banner is back: "Location and notifications are off."
 - [ ] Location switched off in the quick settings without leaving the app: the banner comes within about 15 s
 - [ ] No banner on the screen of the permissions, which says the same in full
-- [ ] Trips over two days: "Yesterday HH:MM" for a trip of yesterday (change the date of the emulator, or wait a day)
+- [ ] Trips over two days: the row History on Home says "Last trip: X km, Yesterday HH:MM" for a trip of yesterday (the sample trips of D5 give one)
 - [ ] After midnight Today starts at 0.0 km, This month keeps the month (or at the start of a month, This month starts at 0.0 km)
 - [ ] The note about a replaced backup file cannot be made on Android (the app's backup is off); its open is tested by `open-db.test.ts`
 
@@ -132,11 +132,35 @@ The checks of D3 with a recording route went with D4, which records on the home 
 - [x] 2026-11-24 `smoke` Cancel: the window closes and the trip goes on recording
 - [x] 2026-11-24 `smoke` The switch "Details at Stop" off: Stop ends the trip at once, with no window; force stop and open the app: the switch is still off
 - [x] 2026-11-24 `smoke` The app installed over the last build (migration 5) keeps every trip and its km
-- [ ] Stop trip with nothing typed: the trip ends, the last trip line has no name
-- [ ] From and To with no name: the last trip line starts with "From → To"
+- [ ] Stop trip with nothing typed: the trip ends, and the list shows it by its times
+- [ ] From and To with no name: the list shows it as "From → To"
+
+Since D5 the name is shown in the list only; the row History on Home says "Last trip: 0.5 km, Today 17:17".
+
 - [ ] The back button of Android in the window is Cancel
 - [ ] The keyboard does not hide the field being typed in, Note included (several lines)
 - [ ] A name of 100 characters is taken; the field takes no more (the limit is shown if one is pasted)
 - [ ] The small Stop of a paused trip opens the same window, and ends the trip with the details
 - [ ] The switch sits in the bottom left corner of the footer and moves neither button
 - [ ] The window opens empty each time, also after a Cancel with something typed
+
+## D5. The list of trips
+
+The emulator's database holds ten sample trips on the five days before 2026-11-24, added once by a
+temporary button of D5 (removed before its commit); `pm clear` erases them.
+
+- [x] 2026-11-24 `smoke` Home has no separate last trip line; the row "History" under Today and This month has "Last trip: X km, Today HH:MM" under its title (km and when, never the name) and the number of trips at the right; it opens the list "History" with Back
+- [x] 2026-11-24 `smoke` The trips of today under "Today · N trips · X km", newest first; the km of the day are the sum of its trips and the same as Today on Home
+- [x] 2026-11-24 `smoke` A trip with a name shows the name and its times under it ("08:30–09:15"); one with nothing typed shows its times as the title; each has its km at the right
+- [x] 2026-11-24 `smoke` Start, then the list: the open trip alone on top under the header "Current" (the same style as the days), with "Recording" and no km; Today does not count it (neither the trips nor the km); tap it: Home with Current. Pause: "Paused" in the list
+- [x] 2026-11-24 `smoke` Stop, then the list: no Current; the trip is the newest of Today, which counts it now
+- [x] 2026-11-24 `smoke` Tap an ended trip: the screen of the trip (until D6 the temporary "comes in a later step")
+- [x] 2026-11-24 `smoke` The days before today follow Today, newest first, each under its date with its trips and km ("Mon, Nov 23 · 3 trips · 50.3 km", no "Yesterday")
+- [ ] Back of Android on the list and the Back button go to Home
+- [ ] `pm clear`, open the app: the row History says "No trips yet." with no number; the list says "No trips yet."
+- [ ] A trip with From and To but no name: "From → To" as the title (the samples "Home → Office", "Home → Airport")
+- [ ] A day of another year has the year (tested in `trips-list.test.ts`; on the emulator only with its date set back)
+- [ ] The sample over midnight is under the day of its start (five days ago): "23:40–00:20"
+- [ ] Location off on the phone (`set-location-enabled false`): the list opens and shows the trips, with the banner at the top
+- [ ] The two samples added by hand show "Added by hand": "Uppsala → Stockholm" with its times and the mark under it; the other with its times as the title and only the mark under it
+- [ ] TalkBack: the header of a day is read as a heading, a trip as its title, times and km

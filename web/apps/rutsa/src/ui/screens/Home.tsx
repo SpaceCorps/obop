@@ -1,9 +1,9 @@
-import { Banner, Button, Screen, Text, type BannerTone } from "@obop/ui-native";
+import { Banner, Button, Row, Screen, Text, type BannerTone } from "@obop/ui-native";
 import { useEffect, useRef, useState } from "react";
 import { Switch, View } from "react-native";
 import type { TripDetails } from "../../core/details.ts";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
-import { durationParts, formatKm, phoneTimeZone, totals } from "../../core/present.ts";
+import { formatKm, phoneTimeZone, totals } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
 import { LANGUAGE, t, tp, type MessageKey } from "../../i18n/index.ts";
 import {
@@ -14,7 +14,7 @@ import {
   stopTrip,
 } from "../../native/actions.ts";
 import { announce } from "../announce.ts";
-import { lastEndedTrip, tripDurationMs, whenText } from "../home.ts";
+import { lastEndedTrip, whenText } from "../home.ts";
 import {
   useNow,
   useProgress,
@@ -24,7 +24,6 @@ import {
   type Check,
 } from "../hooks.ts";
 import { StopSheet } from "../StopSheet.tsx";
-import { tripTitle } from "../trip-label.ts";
 import { tOs } from "../os-text.ts";
 import {
   buttonsFor,
@@ -51,35 +50,6 @@ const BLOCKED_TEXT: Readonly<Record<Blocked, MessageKey>> = {
   no_permission: "recording.blocked.no_permission",
   approximate: "recording.blocked.approximate",
 };
-
-/** A duration in the words of the catalogue: `12 min`, `1 h 5 min`. */
-function durationText(ms: number): string {
-  const { hours, minutes } = durationParts(0, ms);
-  return hours === 0
-    ? t("duration.minutes", { minutes })
-    : t("duration.hoursMinutes", { hours, minutes });
-}
-
-/**
- * The time of the segments of an ended recorded trip (`closedMs` of its count), read when the
- * trip changes; `null` while it is read, and for no trip.
- */
-function useLastClosedMs(store: TripRepository, tripId: string | null): number | null {
-  const [closedMs, setClosedMs] = useState<number | null>(null);
-  useEffect(() => {
-    setClosedMs(null);
-    if (tripId === null) return;
-    let alive = true;
-    store.progress(tripId).then(
-      (p) => alive && setClosedMs(p?.closedMs ?? null),
-      () => undefined,
-    );
-    return () => {
-      alive = false;
-    };
-  }, [store, tripId]);
-  return closedMs;
-}
 
 /** The words, the tone and the button of a warning (`warningOf`). */
 function warningBanner(
@@ -170,8 +140,6 @@ export function Home({
   const zone = phoneTimeZone();
   const sum = totals(trips, now, zone);
   const last = lastEndedTrip(trips);
-  const lastClosedMs = useLastClosedMs(store, last?.source === "recorded" ? last.id : null);
-  const lastDuration = last === null ? null : tripDurationMs(last, lastClosedMs);
   const words = { today: t("day.today"), yesterday: t("day.yesterday") };
   const when = (ms: number) => whenText(ms, now, LANGUAGE, zone, words);
 
@@ -452,21 +420,21 @@ export function Home({
         </View>
       </View>
 
-      <Text tone="muted" testID="last-trip">
-        {last === null || last.distanceM === null
-          ? t("home.none")
-          : t("home.last", {
-              // Its name or places when typed, its km, its time without the pauses, and when.
-              details: [
-                tripTitle(last),
-                formatKm(last.distanceM, LANGUAGE),
-                lastDuration === null ? null : durationText(lastDuration),
-                when(last.startedAt),
-              ]
-                .filter((part) => part !== null)
-                .join(", "),
-            })}
-      </Text>
+      {/* The way to the list of trips (D5), with their number and the last trip under it: its
+          km and when, never its name (the list has the rest). */}
+      <Row
+        title={t("home.trips")}
+        subtitle={
+          last === null || last.distanceM === null
+            ? t("home.none")
+            : t("home.last", {
+                details: `${formatKm(last.distanceM, LANGUAGE)}, ${when(last.startedAt)}`,
+              })
+        }
+        value={trips.length === 0 ? undefined : tp("trips.count", trips.length)}
+        onPress={() => nav.push({ name: "trips" })}
+        testID="open-trips"
+      />
 
       <StopSheet
         visible={stopSheet !== null}

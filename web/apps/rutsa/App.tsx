@@ -11,6 +11,7 @@ import { canGoBack, current, reduce, type Nav, type Route } from "./src/ui/route
 import { Failed } from "./src/ui/screens/Failed.tsx";
 import { Home } from "./src/ui/screens/Home.tsx";
 import { Permissions } from "./src/ui/screens/Permissions.tsx";
+import { Trips } from "./src/ui/screens/Trips.tsx";
 import { bannerShown, problemsOf, type Problem } from "./src/ui/status.ts";
 
 /** Hands the space of the system bars to the components of `@obop/ui-native`. */
@@ -27,7 +28,7 @@ function Loading() {
   );
 }
 
-/** TEMPORARY: the routes whose screens come in D5 to D7; nothing leads to them yet. */
+/** TEMPORARY: the routes whose screens come in D6 and D7; the list of D5 leads to `trip`. */
 function NotYet({ name, nav }: { name: Route["name"]; nav: Nav }) {
   return (
     <Screen title={name} onBack={nav.back}>
@@ -104,6 +105,8 @@ function Routes({
       screen = <Permissions nav={nav} next={route.next} />;
       break;
     case "trips":
+      screen = <Trips store={store} nav={nav} />;
+      break;
     case "trip":
     case "add":
       screen = <NotYet name={route.name} nav={nav} />;

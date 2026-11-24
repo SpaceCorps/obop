@@ -113,6 +113,20 @@ export function formatShortDate(ms: number, locale: string, timeZone: string): s
   );
 }
 
+/**
+ * A day with its weekday, as the language writes it: `Wed, Nov 18` in English, and with the year
+ * when asked (`Tue, Nov 18, 2025`), for a day of another year than the current one.
+ */
+export function formatDay(ms: number, locale: string, timeZone: string, withYear: boolean): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    ...(withYear ? { year: "numeric" } : {}),
+  }).format(new Date(ms));
+}
+
 /** The day before a `YYYY-MM-DD` key (across months, years and leap days). */
 export function dayBefore(day: string): string {
   const [year, month, date] = day.split("-").map(Number) as [number, number, number];

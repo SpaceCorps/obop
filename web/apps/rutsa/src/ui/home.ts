@@ -18,7 +18,8 @@ export function lastEndedTrip(trips: readonly Trip[]): Trip | null {
 /**
  * How long an ended trip took: a recorded one without its pauses (`closedMs`, the sum of its
  * segments, from the store), one added by hand from its start to its end. `null` while the
- * segments of a recorded trip are not read yet.
+ * segments of a recorded trip are not read yet. The home screen showed it with the last trip until
+ * D5, which keeps only the km and when; the screen of a trip (D6) shows it.
  */
 export function tripDurationMs(
   trip: Pick<Trip, "source" | "startedAt" | "endedAt">,

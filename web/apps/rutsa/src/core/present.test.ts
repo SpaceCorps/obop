@@ -5,6 +5,7 @@ import {
   dayKey,
   durationParts,
   formatClock,
+  formatDay,
   formatKm,
   formatShortDate,
   monthKey,
@@ -131,6 +132,13 @@ describe("numbers and times for the screen", () => {
     expect(formatShortDate(at("2026-11-18T08:00:00Z"), "en", STOCKHOLM)).toBe("Nov 18");
     // 00:30 on 1 December in Stockholm, still November in UTC.
     expect(formatShortDate(at("2026-11-30T23:30:00Z"), "en", STOCKHOLM)).toBe("Dec 1");
+  });
+
+  test("a day with its weekday, with the year only when asked, in the time zone given", () => {
+    expect(formatDay(at("2026-11-18T08:00:00Z"), "en", STOCKHOLM, false)).toBe("Wed, Nov 18");
+    expect(formatDay(at("2025-11-18T08:00:00Z"), "en", STOCKHOLM, true)).toBe("Tue, Nov 18, 2025");
+    // 00:30 on Friday 1 January 2027 in Stockholm, still 2026 in UTC.
+    expect(formatDay(at("2026-12-31T23:30:00Z"), "en", STOCKHOLM, true)).toBe("Fri, Jan 1, 2027");
   });
 
   test("the day before, across a month, a year and a leap day", () => {

@@ -28,6 +28,12 @@ export const en = {
 
   "trips.count.one": "{count} trip",
   "trips.count.other": "{count} trips",
+  "trips.title": "History",
+  "trips.empty": "No trips yet.",
+  "trips.manual": "Added by hand",
+  "trips.recording": "Recording",
+  "trips.paused": "Paused",
+  "trips.open.hint": "Shows the trip on the home screen",
 
   "home.start": "Start",
   "home.start.hint": "Starts recording a trip",
@@ -43,6 +49,7 @@ export const en = {
   "home.resume": "Resume",
   "home.waiting": "Waiting for the first position. Go outside or wait a moment.",
   "home.details_at_stop": "Details at Stop",
+  "home.trips": "History",
 
   "stop.title": "Stop the trip?",
   "stop.hint": "All optional. You can add them later too.",
