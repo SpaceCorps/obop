@@ -6,8 +6,10 @@ import type { TripRepository } from "../core/repository.ts";
 import type { Trip } from "../core/types.ts";
 import { ensureRecording } from "../native/actions.ts";
 import { onChange } from "../native/bus.ts";
+import { locationReadiness, notificationsAllowed } from "../native/permissions.ts";
 import { databaseInfo, getStore } from "../native/store.ts";
 import { onForeground } from "./foreground.ts";
+import type { PhoneStatus } from "./status.ts";
 
 /**
  * The data the screens read, as React hooks. What they wrap is tested where it lives (`core/` and
@@ -88,6 +90,39 @@ export function useNow(intervalMs = 1000): number {
     return () => clearInterval(id);
   }, [intervalMs]);
   return now;
+}
+
+/**
+ * What the phone says about recording (`ui/status.ts`): the readiness of the location and whether
+ * notifications are allowed. Read now, on every return to the front (back from the settings), and
+ * every 15 s, since location can be switched in the quick settings without leaving the app. `null`
+ * until the first answer.
+ */
+export function usePhoneStatus(): PhoneStatus | null {
+  const [status, setStatus] = useState<PhoneStatus | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const read = () => {
+      Promise.all([locationReadiness(), notificationsAllowed()]).then(
+        ([readiness, notifications]) =>
+          alive &&
+          setStatus((s) =>
+            s?.readiness === readiness && s.notifications === notifications
+              ? s
+              : { readiness, notifications },
+          ),
+        () => undefined,
+      );
+    };
+    const stop = onForeground(AppState, read);
+    const timer = setInterval(read, 15_000);
+    return () => {
+      alive = false;
+      stop();
+      clearInterval(timer);
+    };
+  }, []);
+  return status;
 }
 
 /** What the last check of the recording found (`Recording.ensure`), and when. */

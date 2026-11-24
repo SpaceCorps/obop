@@ -157,23 +157,28 @@ Components from `@obop/ui-native`.
       `ui/permission-step.ts` and its tests; the reading of the explanation is kept in the table
       `meta` (migration 3) through `core/settings.ts`; `tOn` and `ui/os-text.ts` for the texts of
       one system; `openLocationSettings` opens the location settings of Android
-- [ ] D3 `feat(rutsa): home screen`: Start; km today and this month; a note when a database file
-      from a backup that no key could open was replaced at this start; a quiet note, before any
-      Start, while the phone cannot record (location off, no permission, approximate only), with
-      Open settings, checked again on every return to the front (BR-36); the rest of the screen
-      works as usual
+- [x] D3 `feat(rutsa): home screen`: Start; km today and this month; a note when a database file
+      from a backup that no key could open was replaced at this start; a status banner at the top
+      of every screen while the phone cannot record well: location (off on the phone, no
+      permission, approximate only, BR-36) and the notifications of Android 13 (the trip records
+      but is not shown, BR-14), each said only when it applies; Open settings (the location
+      settings when location is off, else the app's page) and a close button that folds the
+      banner up until the next start of the app; it goes away by itself when the cause is gone,
+      checked again on every return to the front; made in the app from `@obop/ui-native` parts;
+      the rest of the screen works as usual
 - [ ] D4 `feat(rutsa): recording screen`: elapsed time, km so far, Pause, Resume, Stop; a note
       when no position has come for a while or the updates are not registered (C5), with a button
       that starts the recording again and a message when that fails; the reason when the check of
       C5 finds that the phone cannot record, and a Resume that cannot record, lead to the
-      permissions (`next: "resume"`); a note while the notifications of Android 13 are off
+      permissions (`next: "resume"`); the notifications that are off are said by the status
+      banner of D3
 - [ ] D5 `feat(rutsa): trips list`: trips by day
 - [ ] D6 `feat(rutsa): trip detail`: times, km, duration, delete
 - [ ] D7 `feat(rutsa): add a trip by hand`: date, time, from, to, km; marked as manual. Date and
       time are typed and checked (no date picker package in this stage)
 
-Checkpoint: the app runs on the emulator; Start, Pause, Resume, Stop, the list and a trip added by
-hand work when tried by hand; the clock times and km on the screen are right (`Intl` of Hermes:
+Checkpoint: the app runs on the emulator; every check of `CHECKS.md` is run; Start, Pause, Resume,
+Stop, the list and a trip added by hand work when tried by hand; the clock times and km on the screen are right (`Intl` of Hermes:
 `mileage-app` notes that an engine without data for a language or time zone falls back quietly).
 
 ### E. Check on the emulator and the simulator
@@ -196,7 +201,7 @@ Checkpoint: the APK builds and installs, a route gives a trip with the expected 
       app); phase 1 becomes the local prototype (the calendar reminder moves to stage 3); 5.5
       without "Calls to obop" for Rutsa; what was run and what was not
 - [ ] F2 `docs: add the Rutsa app to the README`
-- [ ] F3 delete this file, then "Ready for review"
+- [ ] F3 delete this file and `CHECKS.md`, then "Ready for review"
 
 ## Dependencies
 
@@ -316,3 +321,23 @@ D23).
   D3 gains a quiet note on the home screen while the phone cannot record (asked for while trying
   D2; `mileage-app` has none): the driver sees it before pressing Start. A placeholder where a map
   needs a position comes with the map (stage 2 or later).
+- 2026-11-24: the note of D3 becomes a status banner at the top of every screen, asked for after
+  trying D2: it says what keeps the phone from recording well, location and the notifications of
+  Android 13, each only when it applies (a driver who refused the notifications would otherwise
+  forget why a trip is not shown); Open settings and a close button that folds it up until the
+  next start of the app; it leaves by itself when the cause is gone. D4 no longer has its own
+  note on the notifications. `main` had nothing new (fetched, already merged).
+- 2026-11-24: from D3 on, a step is tried on the emulator with a short smoke test only; all its
+  manual checks go into `CHECKS.md` (with those already run for C, D1 and D2), and the whole list
+  is run at the checkpoint after block D.
+- 2026-11-24: D3 also shows the last trip and a note while a trip is open (both from the Home of
+  `mileage-app`); the row to the trips comes with D5. The temporary panel becomes the recording
+  route until D4 (Start is on the home screen; the permissions lead to the recording), and the
+  stack starts on it when a trip is open (`openTripFirst` of D1). The banner takes the top inset
+  and the screen under it gets none; a problem closed in it stays closed until the next start of
+  the app, a new one shows it again. `present.ts` gains `formatShortDate`, `dayBefore` and
+  `phoneTimeZone`. Tried on the emulator: the banner is one low line without a title ("Location is
+  off.", "Notifications are off.", "Location and notifications are off.", one sentence per case in
+  the catalogue, `bannerText`), with Open settings and × in the middle at the right. Asked for, to
+  be decided at the analysis of D4: the recording shown on the home screen while a trip is open,
+  instead of a screen of its own.

@@ -93,8 +93,8 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
       try {
         setNotificationsOff(!(await notifications(byTap).catch(() => true)));
         await carryOut(next);
-        // The screen of the recording comes in D4; until then the home screen shows the trip.
-        nav.home();
+        // The recording route (the temporary panel until D4) replaces this screen; Back is home.
+        nav.replace({ name: "recording" });
       } catch (e) {
         setStarting(false);
         if (e instanceof CannotRecord) {

@@ -29,6 +29,30 @@ export const en = {
   "trips.count.one": "{count} trip",
   "trips.count.other": "{count} trips",
 
+  "home.start": "Start",
+  "home.start.hint": "Starts recording a trip",
+  "home.today": "Today",
+  "home.month": "This month",
+  "home.last": "Last trip: {distance}, {when}",
+  "home.none": "No trips yet.",
+  "home.open.recording": "A trip is being recorded",
+  "home.open.paused": "A trip is paused",
+  "home.open.message": "Started: {when}.",
+  "home.open.action": "Open trip",
+  "home.restored.title": "The trips of a backup could not be opened",
+  "home.restored.message":
+    "The key of the trips stays on the phone they were made on, so the trips that came back with a backup could not be opened here. They were replaced by an empty list.",
+  "home.restored.action": "Got it",
+
+  "status.location_off": "Location is off.",
+  "status.no_permission": "Location access is off.",
+  "status.approximate": "Precise location is off.",
+  "status.notifications_off": "Notifications are off.",
+  "status.location_off.notifications": "Location and notifications are off.",
+  "status.no_permission.notifications": "Location access and notifications are off.",
+  "status.approximate.notifications": "Precise location and notifications are off.",
+  "status.close": "Close this note",
+
   "recording.notification.title": "Recording a trip",
   "recording.notification.body":
     "Rutsa is recording the route of your trip. Open the app to pause or stop it.",

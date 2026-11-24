@@ -13,9 +13,9 @@ import { databaseInfo, getStore } from "../../native/store.ts";
 import type { Check } from "../hooks.ts";
 
 /**
- * TEMPORARY: the panel that drives a recording on the emulator until the screens of block D
- * replace it (the home route shows it until D3). Its words are not in the catalogue, since it goes
- * away.
+ * TEMPORARY: the panel that drives a recording on the emulator until the screen of the recording
+ * (D4) replaces it; since D3 it is the recording route, and Start is on the home screen. Its words
+ * are not in the catalogue, since it goes away.
  */
 
 /** One line that shows the database on the phone opened, encrypted, with its number of trips. */
@@ -83,7 +83,7 @@ function healthText(health: Health): string {
  * level of the app, `useRecordingCheck`). Every 5 s the health is computed again and the system is
  * asked whether the updates are still registered.
  */
-function RecordingPanel({ check, onStart }: { check: Check | null; onStart: () => void }) {
+function RecordingPanel({ check }: { check: Check | null }) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [points, setPoints] = useState(0);
   // `undefined` until the positions of the open trip have been read.
@@ -172,9 +172,6 @@ function RecordingPanel({ check, onStart }: { check: Check | null; onStart: () =
           {line.text}
         </Text>
       )}
-      {trip === null || trip.state === "ended" ? (
-        <Button label="Start" busy={busy} onPress={onStart} />
-      ) : null}
       {trip?.state === "recording" ? (
         <Button
           label="Pause"
@@ -199,13 +196,12 @@ function RecordingPanel({ check, onStart }: { check: Check | null; onStart: () =
   );
 }
 
-/** `onStart` opens the way to a recording (the screen of the permissions, D2). */
-export function Panel({ check, onStart }: { check: Check | null; onStart: () => void }) {
+/** The screen of the recording route until D4; Start is on the home screen since D3. */
+export function Panel({ check, onBack }: { check: Check | null; onBack: () => void }) {
   return (
-    <Screen title="Rutsa">
-      <Text tone="muted">Mileage log</Text>
+    <Screen title="Recording" onBack={onBack}>
       <DatabaseLine />
-      <RecordingPanel check={check} onStart={onStart} />
+      <RecordingPanel check={check} />
     </Screen>
   );
 }

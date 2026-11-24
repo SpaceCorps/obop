@@ -1,11 +1,14 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
   byDay,
+  dayBefore,
   dayKey,
   durationParts,
   formatClock,
   formatKm,
+  formatShortDate,
   monthKey,
+  phoneTimeZone,
   totals,
 } from "./present.ts";
 import type { Trip } from "./types.ts";
@@ -121,6 +124,25 @@ describe("numbers and times for the screen", () => {
     expect(durationParts(start, start + 65 * MIN)).toEqual({ hours: 1, minutes: 5 });
     expect(durationParts(start, start + 29_000)).toEqual({ hours: 0, minutes: 0 });
     expect(durationParts(start, start + 31_000)).toEqual({ hours: 0, minutes: 1 });
+  });
+
+  test("a day without its year, in the time zone given", () => {
+    expect(formatShortDate(at("2026-11-18T08:00:00Z"), "en", STOCKHOLM)).toBe("Nov 18");
+    // 00:30 on 1 December in Stockholm, still November in UTC.
+    expect(formatShortDate(at("2026-11-30T23:30:00Z"), "en", STOCKHOLM)).toBe("Dec 1");
+  });
+
+  test("the day before, across a month, a year and a leap day", () => {
+    expect(dayBefore("2026-11-18")).toBe("2026-11-17");
+    expect(dayBefore("2026-12-01")).toBe("2026-11-30");
+    expect(dayBefore("2027-01-01")).toBe("2026-12-31");
+    expect(dayBefore("2028-03-01")).toBe("2028-02-29");
+  });
+
+  test("the time zone of the phone is a name the formatter takes", () => {
+    const zone = phoneTimeZone();
+    expect(zone.length).toBeGreaterThan(0);
+    expect(() => dayKey(Date.now(), zone)).not.toThrow();
   });
 
   test("an end before the start is no negative duration", () => {

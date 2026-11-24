@@ -106,6 +106,28 @@ export function formatClock(ms: number, locale: string, timeZone: string): strin
   }).format(new Date(ms));
 }
 
+/** A day without its year, as the language writes it: `Nov 18` in English. */
+export function formatShortDate(ms: number, locale: string, timeZone: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone, day: "numeric", month: "short" }).format(
+    new Date(ms),
+  );
+}
+
+/** The day before a `YYYY-MM-DD` key (across months, years and leap days). */
+export function dayBefore(day: string): string {
+  const [year, month, date] = day.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
+}
+
+/** The time zone of the phone; UTC where the engine cannot say. */
+export function phoneTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 /**
  * How long a trip took, rounded to the minute, in hours and minutes; the screen puts the words
  * around them. A trip still recording passes the current time as its end.
