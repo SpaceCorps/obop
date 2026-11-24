@@ -6,9 +6,8 @@ import { formatKm } from "../../core/present.ts";
 import { TripAlreadyActive, TripNotFound, TripStateError } from "../../core/repository.ts";
 import type { Trip } from "../../core/types.ts";
 import { t, tp } from "../../i18n/index.ts";
-import { CannotRecord, pauseTrip, resumeTrip, startTrip, stopTrip } from "../../native/actions.ts";
+import { CannotRecord, pauseTrip, resumeTrip, stopTrip } from "../../native/actions.ts";
 import { onChange } from "../../native/bus.ts";
-import { locationAccess, requestLocation, requestNotifications } from "../../native/permissions.ts";
 import { isRecording } from "../../native/recorder.ts";
 import { databaseInfo, getStore } from "../../native/store.ts";
 import type { Check } from "../hooks.ts";
@@ -52,16 +51,6 @@ function problem(error: unknown): string {
   return `${t("error.generic")} (${error instanceof Error ? error.message : String(error)})`;
 }
 
-/**
- * Start asks for the permissions itself while the permissions screen (D2) does not exist: the
- * location dialog when it can still be shown, and the notification permission of Android 13.
- */
-async function startWithPermissions(): Promise<void> {
-  if ((await locationAccess()) === "ask") await requestLocation();
-  await requestNotifications();
-  await startTrip();
-}
-
 /** The time of day on the phone's clock. */
 const timeOfDay = (at: number) => new Date(at).toTimeString().slice(0, 8);
 
@@ -94,7 +83,7 @@ function healthText(health: Health): string {
  * level of the app, `useRecordingCheck`). Every 5 s the health is computed again and the system is
  * asked whether the updates are still registered.
  */
-function RecordingPanel({ check }: { check: Check | null }) {
+function RecordingPanel({ check, onStart }: { check: Check | null; onStart: () => void }) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [points, setPoints] = useState(0);
   // `undefined` until the positions of the open trip have been read.
@@ -184,7 +173,7 @@ function RecordingPanel({ check }: { check: Check | null }) {
         </Text>
       )}
       {trip === null || trip.state === "ended" ? (
-        <Button label="Start" busy={busy} onPress={() => act(startWithPermissions)} />
+        <Button label="Start" busy={busy} onPress={onStart} />
       ) : null}
       {trip?.state === "recording" ? (
         <Button
@@ -210,12 +199,13 @@ function RecordingPanel({ check }: { check: Check | null }) {
   );
 }
 
-export function Panel({ check }: { check: Check | null }) {
+/** `onStart` opens the way to a recording (the screen of the permissions, D2). */
+export function Panel({ check, onStart }: { check: Check | null; onStart: () => void }) {
   return (
     <Screen title="Rutsa">
       <Text tone="muted">Mileage log</Text>
       <DatabaseLine />
-      <RecordingPanel check={check} />
+      <RecordingPanel check={check} onStart={onStart} />
     </Screen>
   );
 }

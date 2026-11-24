@@ -8,6 +8,7 @@ import { useRecordingCheck, useStore } from "./src/ui/hooks.ts";
 import { canGoBack, current, reduce, type Nav, type Route } from "./src/ui/router.ts";
 import { Failed } from "./src/ui/screens/Failed.tsx";
 import { Panel } from "./src/ui/screens/Panel.tsx";
+import { Permissions } from "./src/ui/screens/Permissions.tsx";
 
 /** Hands the space of the system bars to the components of `@obop/ui-native`. */
 function Insets({ children }: { children: ReactNode }) {
@@ -23,7 +24,7 @@ function Loading() {
   );
 }
 
-/** TEMPORARY: the routes whose screens come in D2 to D7; nothing leads to them yet. */
+/** TEMPORARY: the routes whose screens come in D4 to D7; nothing leads to them yet. */
 function NotYet({ name, nav }: { name: Route["name"]; nav: Nav }) {
   return (
     <Screen title={name} onBack={nav.back}>
@@ -64,8 +65,11 @@ function Routes() {
   const route = current(stack);
   switch (route.name) {
     case "home":
-      return <Panel check={check} />;
+      return (
+        <Panel check={check} onStart={() => nav.push({ name: "permissions", next: "start" })} />
+      );
     case "permissions":
+      return <Permissions nav={nav} next={route.next} />;
     case "recording":
     case "trips":
     case "trip":

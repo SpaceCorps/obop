@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import type { TripRepository } from "../core/repository.ts";
+import { createSettings, type Settings } from "../core/settings.ts";
 import { createSqlStore } from "../core/sql-store.ts";
 import { openDatabase } from "./database.ts";
 
@@ -19,6 +20,11 @@ export function getStore(): Promise<TripRepository> {
       throw error;
     });
   return store;
+}
+
+/** The settings of the app, in the same database (`core/settings.ts`). */
+export async function getSettings(): Promise<Settings> {
+  return createSettings((await openDatabase()).db);
 }
 
 /** What the database says about itself: the SQLCipher version, and whether a stale file was replaced. */

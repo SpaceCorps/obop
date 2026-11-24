@@ -32,6 +32,41 @@ export const en = {
   "recording.notification.title": "Recording a trip",
   "recording.notification.body":
     "Rutsa is recording the route of your trip. Open the app to pause or stop it.",
+  "recording.error.start": "The trip could not be started. Try again.",
+
+  "disclosure.title": "How Rutsa uses your location",
+  "disclosure.body":
+    "Rutsa records your location to measure how far you drove. It does this only between Start and Stop, and it keeps recording when the screen is off or the app is in the background, so that the whole trip is measured. A notification shows while it records. The route stays on this phone, encrypted, and is not sent anywhere.",
+  "disclosure.body.ios":
+    "Rutsa records your location to measure how far you drove. It does this only between Start and Stop, and it keeps recording when the screen is off or the app is in the background, so that the whole trip is measured. The system shows a location indicator while it records. The route stays on this phone, encrypted, and is not sent anywhere.",
+  "disclosure.continue": "Continue",
+  "disclosure.decline": "Not now",
+
+  "permission.denied.title": "Location is needed to record a trip",
+  "permission.denied.message":
+    "Without your location Rutsa cannot measure the trip. Press Continue to be asked again.",
+  "permission.blocked.title": "Location is turned off for Rutsa",
+  "permission.blocked.message":
+    "Open the settings of the app and allow location. When you come back, the trip starts.",
+  "permission.approximate.title": "Precise location is needed",
+  "permission.approximate.message":
+    "You allowed only an approximate location, and a trip cannot be measured with it. Open the settings of the app and turn on Precise location. When you come back, the trip starts.",
+  "permission.services.title": "Location is switched off on this phone",
+  "permission.services.message":
+    "Switch location on in the settings or the quick settings of the phone. When you come back, the trip starts.",
+  "permission.services.message.ios":
+    "Switch on Location Services in the Settings app, under Privacy & Security. When you come back, the trip starts.",
+  "permission.settings": "Open settings",
+  "permission.notifications.title": "Notifications are off",
+  "permission.notifications.message":
+    "Android will not show that a trip is recording. Recording still works. You can turn notifications on in the settings of the app.",
+
+  "guide.title": "Keep the app running",
+  "guide.body":
+    "Some phones stop apps to save battery. Do not force-stop Rutsa while you drive. If a trip stops recording, set the battery use of Rutsa to Unrestricted in the Android settings, and open the app: it starts recording again.",
+  "guide.body.ios":
+    "Do not close Rutsa from the app switcher while you drive: iPhone stops recording when you do. If a trip stops recording, open the app: it starts recording again.",
+  "guide.start": "Start the trip",
 
   "error.generic": "Something went wrong. Try again.",
   "error.alreadyActive": "A trip is already being recorded. Stop it before you start a new one.",

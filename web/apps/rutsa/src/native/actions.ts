@@ -1,4 +1,5 @@
 import { createRecording, type Ensured, type Recording } from "../core/recording.ts";
+import { createSerial } from "../core/serial.ts";
 import type { Trip } from "../core/types.ts";
 import { emitChange } from "./bus.ts";
 import { locationReadiness } from "./permissions.ts";
@@ -15,17 +16,23 @@ export { CannotRecord } from "../core/recording.ts";
  *
  * After `mileage-app` (`src/native/actions.ts`), without what talks to its server.
  */
-async function run<T>(action: (recording: Recording) => Promise<T>): Promise<T> {
-  try {
-    const recording = createRecording({
-      store: await getStore(),
-      location: { readiness: locationReadiness, start: startRecording, stop: stopRecording },
-      now: Date.now,
-    });
-    return await action(recording);
-  } finally {
-    emitChange();
-  }
+// The actions run one after another (`core/serial.ts`): the check of a recording and a Start that
+// goes on by itself both run when the app comes back to the front.
+const serial = createSerial();
+
+function run<T>(action: (recording: Recording) => Promise<T>): Promise<T> {
+  return serial(async () => {
+    try {
+      const recording = createRecording({
+        store: await getStore(),
+        location: { readiness: locationReadiness, start: startRecording, stop: stopRecording },
+        now: Date.now,
+      });
+      return await action(recording);
+    } finally {
+      emitChange();
+    }
+  });
 }
 
 export function startTrip(): Promise<Trip> {

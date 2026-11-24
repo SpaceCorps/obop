@@ -106,6 +106,21 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    description: "the settings of the app",
+    up: async (tx) => {
+      // What the app remembers about the driver's choices (`core/settings.ts`): for now when the
+      // explanation of the location was read; later the app lock and the language. It is in the
+      // encrypted file, and goes with the trips.
+      await tx.exec(`
+        CREATE TABLE meta (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
+        ) STRICT, WITHOUT ROWID
+      `);
+    },
+  },
 ];
 
 /** The version of the tables this build works with. */

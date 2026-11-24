@@ -79,7 +79,31 @@ export async function requestNotifications(): Promise<boolean> {
   return result === PermissionsAndroid.RESULTS.GRANTED;
 }
 
+/** Whether the notification of a recording can be shown, without a dialog (Android 13 and later). */
+export async function notificationsAllowed(): Promise<boolean> {
+  if (Platform.OS !== "android" || Number(Platform.Version) < 33) return true;
+  return PermissionsAndroid.check("android.permission.POST_NOTIFICATIONS");
+}
+
 /** The app's own page in the system settings: Settings, Rutsa on iOS; App info on Android. */
 export function openSettings(): Promise<void> {
   return Linking.openSettings();
+}
+
+/**
+ * Where the driver switches location on for the whole phone. Android opens its location settings
+ * directly; where that fails (a phone without that page) it falls back to the app's own page.
+ * iOS lets no app open the page of Location Services, so it opens the app's own page, and the text
+ * on the screen says where to go (Settings, Privacy & Security, Location Services).
+ */
+export async function openLocationSettings(): Promise<void> {
+  if (Platform.OS === "android") {
+    try {
+      await Linking.sendIntent("android.settings.LOCATION_SOURCE_SETTINGS");
+      return;
+    } catch {
+      // Falls back to the app's own page below.
+    }
+  }
+  await Linking.openSettings();
 }

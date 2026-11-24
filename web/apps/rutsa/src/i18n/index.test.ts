@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { en } from "./en.ts";
-import { t, tp } from "./index.ts";
+import { t, tOn, tp } from "./index.ts";
 
 describe("sentences", () => {
   test("a sentence is read by its key", () => {
@@ -22,7 +22,25 @@ describe("sentences", () => {
   });
 });
 
+describe("sentences for one system", () => {
+  test("iOS reads the .ios version where there is one, Android the common one", () => {
+    expect(tOn("ios", "guide.body")).toBe(en["guide.body.ios"]);
+    expect(tOn("android", "guide.body")).toBe(en["guide.body"]);
+  });
+
+  test("a sentence without an .ios version is the same on both", () => {
+    expect(tOn("ios", "guide.title")).toBe(en["guide.title"]);
+    expect(tOn("android", "guide.title")).toBe(en["guide.title"]);
+  });
+});
+
 describe("the catalogue", () => {
+  test("every .ios sentence has the common sentence it stands in for", () => {
+    for (const key of Object.keys(en).filter((k) => k.endsWith(".ios"))) {
+      expect(Object.keys(en), key).toContain(key.slice(0, -".ios".length));
+    }
+  });
+
   const entries = Object.entries(en) as [string, string][];
 
   test("no sentence is empty or has spaces around it", () => {

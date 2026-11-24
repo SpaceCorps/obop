@@ -23,7 +23,7 @@ describe("migrate", () => {
     expect(await schemaVersion(db)).toBe(0);
     expect(await migrate(db)).toEqual({ from: 0, to: SCHEMA_VERSION });
     expect(await schemaVersion(db)).toBe(SCHEMA_VERSION);
-    expect(await tables(db)).toEqual(["point", "segment", "trip"]);
+    expect(await tables(db)).toEqual(["meta", "point", "segment", "trip"]);
   });
 
   test("a file that is up to date is left as it is, with its trips", async () => {
@@ -88,7 +88,7 @@ describe("migrate", () => {
     );
 
     expect(await migrate(db)).toEqual({ from: 1, to: SCHEMA_VERSION });
-    expect(await schemaVersion(db)).toBe(2);
+    expect(await schemaVersion(db)).toBe(SCHEMA_VERSION);
     expect(
       await db.all("SELECT trip_id, segment, started_at FROM segment ORDER BY trip_id, segment"),
     ).toEqual([
@@ -102,6 +102,24 @@ describe("migrate", () => {
       { id: "p", distance_m: null },
     ]);
     expect(await db.one("SELECT COUNT(*) AS n FROM point")).toEqual({ n: 2 });
+  });
+
+  test("a file of version 2 keeps its trips, points and segments, and gets an empty table of settings", async () => {
+    const db = memoryDb();
+    expect(await migrate(db, MIGRATIONS.slice(0, 2))).toEqual({ from: 0, to: 2 });
+    await db.run(
+      "INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, segment) VALUES ('a', 'ended', 'recorded', 1000, 9000, 120, 1)",
+    );
+    await db.run("INSERT INTO segment (trip_id, segment, started_at) VALUES ('a', 1, 1000)");
+    await db.run(
+      "INSERT INTO point (trip_id, seq, segment, t, lat, lon) VALUES ('a', 1, 1, 1000, 59.3, 18)",
+    );
+
+    expect(await migrate(db)).toEqual({ from: 2, to: SCHEMA_VERSION });
+    expect(await db.all("SELECT id, distance_m FROM trip")).toEqual([{ id: "a", distance_m: 120 }]);
+    expect(await db.one("SELECT COUNT(*) AS n FROM point")).toEqual({ n: 1 });
+    expect(await db.one("SELECT COUNT(*) AS n FROM segment")).toEqual({ n: 1 });
+    expect(await db.all("SELECT * FROM meta")).toEqual([]);
   });
 
   test("migrations must be numbered 1, 2, 3 ... in order", async () => {
@@ -218,6 +236,12 @@ describe("the rules of the tables", () => {
     await segment(["t1", 2, 2_000]);
     await db.run("DELETE FROM trip WHERE id = ?", ["t1"]);
     expect(await db.one("SELECT COUNT(*) AS n FROM segment")).toEqual({ n: 0 });
+  });
+
+  test("a setting is kept once per key and always has a value", async () => {
+    await db.run("INSERT INTO meta (key, value) VALUES ('k', 'v')");
+    await expect(db.run("INSERT INTO meta (key, value) VALUES ('k', 'w')")).rejects.toThrow();
+    await expect(db.run("INSERT INTO meta (key, value) VALUES ('n', NULL)")).rejects.toThrow();
   });
 
   test("a column takes only its own type (STRICT)", async () => {

@@ -41,6 +41,8 @@ const native = vi.hoisted(() => ({
   notificationAnswer: "granted",
   notificationRequests: [] as string[],
   settingsOpened: 0,
+  intents: [] as string[],
+  intentFails: false,
 }));
 vi.mock("react-native", () => ({
   Platform: native.platform,
@@ -48,18 +50,30 @@ vi.mock("react-native", () => ({
     openSettings: async () => {
       native.settingsOpened += 1;
     },
+    sendIntent: async (action: string) => {
+      native.intents.push(action);
+      if (native.intentFails) throw new Error("No Activity found to handle Intent");
+    },
   },
   PermissionsAndroid: {
     request: async (permission: string) => {
       native.notificationRequests.push(permission);
       return native.notificationAnswer;
     },
+    check: async () => native.notificationAnswer === "granted",
     RESULTS: { GRANTED: "granted" },
   },
 }));
 
-const { locationAccess, locationReadiness, openSettings, requestLocation, requestNotifications } =
-  await import("./permissions.ts");
+const {
+  locationAccess,
+  locationReadiness,
+  notificationsAllowed,
+  openLocationSettings,
+  openSettings,
+  requestLocation,
+  requestNotifications,
+} = await import("./permissions.ts");
 
 const { state } = location;
 beforeEach(() => {
@@ -71,6 +85,8 @@ beforeEach(() => {
   native.notificationAnswer = "granted";
   native.notificationRequests.length = 0;
   native.settingsOpened = 0;
+  native.intents.length = 0;
+  native.intentFails = false;
 });
 
 describe("iOS", () => {
@@ -173,6 +189,15 @@ describe("Android", () => {
     ]);
   });
 
+  test("whether the notifications are allowed is read without a dialog", async () => {
+    expect(await notificationsAllowed()).toBe(true);
+    native.notificationAnswer = "denied";
+    expect(await notificationsAllowed()).toBe(false);
+    native.platform.Version = 32;
+    expect(await notificationsAllowed()).toBe(true);
+    expect(native.notificationRequests).toEqual([]);
+  });
+
   test("before Android 13 the notification needs no permission: nothing is asked", async () => {
     native.platform.Version = 32;
     expect(await requestNotifications()).toBe(true);
@@ -183,4 +208,27 @@ describe("Android", () => {
 test("the settings of the app are opened by the system", async () => {
   await openSettings();
   expect(native.settingsOpened).toBe(1);
+});
+
+describe("where location is switched on for the whole phone", () => {
+  test("Android opens its location settings directly", async () => {
+    native.platform.OS = "android";
+    await openLocationSettings();
+    expect(native.intents).toEqual(["android.settings.LOCATION_SOURCE_SETTINGS"]);
+    expect(native.settingsOpened).toBe(0);
+  });
+
+  test("a phone without that page gets the app's own page instead", async () => {
+    native.platform.OS = "android";
+    native.intentFails = true;
+    await openLocationSettings();
+    expect(native.settingsOpened).toBe(1);
+  });
+
+  test("iOS opens the app's own page, since no app may open Location Services", async () => {
+    native.platform.OS = "ios";
+    await openLocationSettings();
+    expect(native.intents).toEqual([]);
+    expect(native.settingsOpened).toBe(1);
+  });
 });

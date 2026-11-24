@@ -27,6 +27,18 @@ export function t(key: MessageKey, params: Params = {}): string {
 }
 
 /**
+ * A sentence for the system the app runs on (`os` is `Platform.OS`): the `.ios` version where the
+ * catalogue has one and the app runs on iOS, else the common one. For sentences that name what
+ * one system has and the other has not: a notification, the quick settings, the app switcher.
+ *
+ * After `tOn` of `mileage-app` (`src/i18n/index.ts`).
+ */
+export function tOn(os: string, key: MessageKey, params: Params = {}): string {
+  const text = (os === "ios" ? messages[`${key}.ios`] : undefined) ?? messages[key] ?? key;
+  return fill(text, params);
+}
+
+/**
  * The plural form of a count in the language: `Intl.PluralRules` where the engine has it, else the
  * rule of English (1 is `one`, everything else `other`).
  */

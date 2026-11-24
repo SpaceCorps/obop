@@ -146,19 +146,27 @@ Components from `@obop/ui-native`.
       `EXPO_PUBLIC_RUTSA_TEST_DB_FAILURE` (Metro writes it into the bundle, no new package) to try
       it on the emulator (removed before F3); the temporary panel moves to `ui/screens/Panel.tsx`
       and stays the home route until D3
-- [ ] D2 `feat(rutsa): permissions screen`: why location is needed, what is stored and where (on
+- [x] D2 `feat(rutsa): permissions screen`: why location is needed, what is stored and where (on
       the phone only), then the system dialog of location and of notifications; without location
       (BR-36, US-18) a screen for each case (refused for good, approximate only, location off on
       the phone) with Open Settings and Close, and a new check when the app comes back to the
       front, which goes on by itself; the rest of the app works without location; before the
       first trip a note to keep the app running (Android: battery use Unrestricted; iOS: not
       closed from the app switcher), and a note when the notifications of Android 13 are refused
-      (the trip records but is not shown, BR-14)
+      (the trip records but is not shown, BR-14). `ui/screens/Permissions.tsx`, the steps in
+      `ui/permission-step.ts` and its tests; the reading of the explanation is kept in the table
+      `meta` (migration 3) through `core/settings.ts`; `tOn` and `ui/os-text.ts` for the texts of
+      one system; `openLocationSettings` opens the location settings of Android
 - [ ] D3 `feat(rutsa): home screen`: Start; km today and this month; a note when a database file
-      from a backup that no key could open was replaced at this start
+      from a backup that no key could open was replaced at this start; a quiet note, before any
+      Start, while the phone cannot record (location off, no permission, approximate only), with
+      Open settings, checked again on every return to the front (BR-36); the rest of the screen
+      works as usual
 - [ ] D4 `feat(rutsa): recording screen`: elapsed time, km so far, Pause, Resume, Stop; a note
       when no position has come for a while or the updates are not registered (C5), with a button
-      that starts the recording again and a message when that fails
+      that starts the recording again and a message when that fails; the reason when the check of
+      C5 finds that the phone cannot record, and a Resume that cannot record, lead to the
+      permissions (`next: "resume"`); a note while the notifications of Android 13 are off
 - [ ] D5 `feat(rutsa): trips list`: trips by day
 - [ ] D6 `feat(rutsa): trip detail`: times, km, duration, delete
 - [ ] D7 `feat(rutsa): add a trip by hand`: date, time, from, to, km; marked as manual. Date and
@@ -293,3 +301,18 @@ D23).
   error), the helper for a return to the front and the check of C5 at the level of the app; D2
   gains the note to keep the app running and the note on refused notifications (both from
   `mileage-app`); D3 gains the note on a replaced backup file.
+- 2026-11-22: D2 keeps the reading of the explanation in a new table `meta` (migration 3,
+  `core/settings.ts`; `mileage-app` keeps it in the meta table of its host), and goes on by itself
+  when the driver comes back from the settings with location allowed (US-18 AC5; `mileage-app`
+  has a Retry button there). A start that goes on by itself does not pass the note about the
+  notifications, so D4 shows that note while they are off. A return counts only after a move to
+  the background that no dialog of the app caused (`onReturnFromAway`: on Android a permission
+  dialog sends the app to the background), and the actions on a recording run one after another
+  (`core/serial.ts`), so the check of C5 on the same return cannot stop the updates of that start.
+  Tried on the emulator: the dialog of the notifications came again before every start (Android 13
+  gives a second chance after a refusal) and on the start after a return from the settings; it is
+  now shown once in the life of the app (`notifications_asked_at` in `meta`), only after a tap,
+  and otherwise the app only reads the answer (`notificationsStep`, `notificationsAllowed`).
+  D3 gains a quiet note on the home screen while the phone cannot record (asked for while trying
+  D2; `mileage-app` has none): the driver sees it before pressing Start. A placeholder where a map
+  needs a position comes with the map (stage 2 or later).
