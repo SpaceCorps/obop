@@ -1364,6 +1364,52 @@ mod tests {
         );
     }
 
+    #[test]
+    fn accounting_0_7_drops_the_stored_reconciled_flag_with_a_declared_step() {
+        // accounting 0.7.0 removes accounting_move_line.reconciled, which nothing ever set to
+        // true (whether an item is paid is the computed `settled`). An instance on 0.6.2 with
+        // journal items must upgrade without a blocker, and be told the values are deleted.
+        let new_text = include_str!("../../../../packages/accounting.toml");
+        let settled = "  [[model.field]]\n  name = \"settled\"\n";
+        assert_eq!(new_text.matches(settled).count(), 1);
+        // 0.6.2 had the field and not the step that drops it.
+        let step = new_text
+            .find("[[migration]]\nfrom = \"<0.7.0\"\nop = \"drop_field\"")
+            .expect("the drop_field step of 0.7.0");
+        let end = new_text[step + 1..]
+            .find("[[migration]]")
+            .map_or(new_text.len(), |i| step + 1 + i);
+        let old_text = format!("{}{}", &new_text[..step], &new_text[end..])
+            .replacen("version = \"0.7.0\"", "version = \"0.6.2\"", 1)
+            .replacen(
+                settled,
+                &format!(
+                    "  [[model.field]]\n  name = \"reconciled\"\n  description = \"Whether the line has been matched against a payment\"\n  class = \"none\"\n  kind = \"bool\"\n\n{settled}"
+                ),
+                1,
+            );
+        let old = Manifest::parse(&old_text).unwrap();
+        let new = Manifest::parse(new_text).unwrap();
+        assert!(field_of(&old, "accounting_move_line", "reconciled").is_some());
+        assert!(field_of(&new, "accounting_move_line", "reconciled").is_none());
+        let p = plan_data(&old, &new, &|_| 40);
+        assert!(p.blockers.is_empty(), "{:?}", p.blockers);
+        assert!(
+            p.steps
+                .iter()
+                .any(|s| s.op == "drop_field" && s.field == "reconciled"),
+            "{:?}",
+            p.steps.iter().map(|s| s.summary()).collect::<Vec<_>>()
+        );
+        assert!(
+            p.warnings
+                .iter()
+                .any(|w| w.contains("deletes the values of accounting_move_line.reconciled")),
+            "{:?}",
+            p.warnings
+        );
+    }
+
     fn m(version: &str, fields: &str, migrations: &str) -> Manifest {
         Manifest::parse(&format!(
             "[module]\nid = \"mig\"\nversion = \"{version}\"\nname = \"M\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\n[[model]]\nname = \"mig_item\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{fields}\n{migrations}"

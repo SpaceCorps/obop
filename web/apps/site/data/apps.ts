@@ -898,14 +898,13 @@ export const APP_COPY: AppCopy[] = [
     // The balance and an amount are asserted when post runs (has_amount, balanced); a posted, cancelled or
     // reversed entry and its lines are frozen by the D77 guard, and so is an entry dated in a closed period
     // (lock_date closed_by accounting_period); closed periods and fiscal years are frozen until reopened. Nothing in
-    // crates/ or web/apps/backoffice/src reads reconcile, reconciled, due_on, price_included, tax_account_id or
+    // crates/ or web/apps/backoffice/src reads reconcile, due_on, price_included, tax_account_id or
     // default_account_id (the importers only write reconcile: crates/obop/src/import_oas/mod.rs:924,
     // crates/obop/src/sie/import.rs:507), and a journal's currency is a text field with no check (:99-101).
     // deprecated is read by nothing; active on journals and taxes is a D95 ref_filter (active = true), so the
     // server refuses an inactive journal or tax on a new entry or line.
     fieldText: {
       "accounting_account.reconcile": "A label only; nothing uses it.",
-      "accounting_move_line.reconciled": "A label only; nothing uses it.",
       "accounting_move_line.due_on": "A date you enter; nothing uses it.",
       "accounting_tax.price_included": "A label only; nothing uses it.",
       "accounting_tax.tax_account_id": "A label only; nothing uses it.",

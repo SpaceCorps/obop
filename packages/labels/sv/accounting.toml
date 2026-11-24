@@ -300,10 +300,6 @@ description = "Skatt som raden bär, om någon"
 label = "Förfallodatum"
 description = "Förfallodatum för kundfordrings- och leverantörsskuldsrader (ÅÅÅÅ-MM-DD)"
 
-[labels.sv.model.accounting_move_line.field.reconciled]
-label = "Avstämd"
-description = "Om raden har matchats mot en betalning"
-
 [labels.sv.model.accounting_bank_statement_line]
 name = "Kontoutdragsrad"
 plural = "Kontoutdragsrader"

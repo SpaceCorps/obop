@@ -783,8 +783,6 @@ fn entries(pl: &Planned) -> (String, Vec<(&'static str, String, Value)>) {
         f.insert("label".into(), J::from(l.label.as_str()));
         f.insert("debit".into(), J::from(l.debit));
         f.insert("credit".into(), J::from(l.credit));
-        // Stated, so the filters "Open items" and "Overdue" (reconciled = false) find the item.
-        f.insert("reconciled".into(), J::Bool(false));
         if !pl.party_id.is_empty() {
             f.insert("partner_id".into(), J::from(pl.party_id.as_str()));
         }
