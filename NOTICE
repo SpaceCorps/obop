@@ -15,3 +15,11 @@ Third-party components that obop redistributes in its web interface and website:
 
 Ported from open-accounting-sweden (MIT, Copyright 2026 SpaceCorps), our own project:
   crates/kernel/obop-sie (SIE4 export) and the domain model of packages/accounting_se.toml.
+
+Test data that obop redistributes (not part of any build):
+
+  XRechnung testsuite, 48 business cases in testdata/e-invoices/kosit
+  (https://github.com/itplr-kosit/xrechnung-testsuite, tag v2026-08-31,
+  commit 44c3905c69ca236aa3b94c04be1b7e9bd066ba03), unchanged copies.
+  Published by the Koordinierungsstelle für IT-Standards (KoSIT).
+  Licensed under the Apache License, Version 2.0 (testdata/e-invoices/kosit/LICENSE).

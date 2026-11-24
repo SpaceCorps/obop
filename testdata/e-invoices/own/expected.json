@@ -1,0 +1,456 @@
+[
+  {
+    "file": "01-valid-cii-one-line.xml",
+    "expect": "ok",
+    "note": "A plain valid invoice: one line, 19% VAT.",
+    "fields": {
+      "format": "xrechnung-cii",
+      "type_code": "380",
+      "number": "RE-2026-4711",
+      "issue_date": "2026-11-12",
+      "due_date": "2026-12-12",
+      "seller": {
+        "name": "Musterbüro Papier & Co. GmbH (TEST)",
+        "vat_id": "DE000000001"
+      },
+      "buyer": {
+        "name": "obop Demo Kunde GmbH (TEST)",
+        "vat_id": "DE000000099"
+      },
+      "lines": [
+        {
+          "name": "Druckerpapier A4, 500 Blatt",
+          "quantity": "40",
+          "unit_price_minor": 2500,
+          "net_minor": 100000,
+          "vat_rate": "19"
+        }
+      ],
+      "net_minor": 100000,
+      "vat_minor": 19000,
+      "gross_minor": 119000,
+      "due_payable_minor": 119000,
+      "currency": "EUR"
+    }
+  },
+  {
+    "file": "02-valid-ubl-consulting.xml",
+    "expect": "ok",
+    "note": "The same kind of invoice in the UBL syntax.",
+    "fields": {
+      "format": "xrechnung-ubl",
+      "type_code": "380",
+      "number": "BB-2026-0815",
+      "issue_date": "2026-11-14",
+      "due_date": "2026-11-28",
+      "seller": {
+        "name": "Beispiel Beratung AG (TEST)",
+        "vat_id": "DE000000002"
+      },
+      "buyer": {
+        "name": "obop Demo Kunde GmbH (TEST)",
+        "vat_id": "DE000000099"
+      },
+      "lines": [
+        {
+          "name": "Beratung Buchhaltung, Stunden",
+          "quantity": "8",
+          "unit_price_minor": 12000,
+          "net_minor": 96000,
+          "vat_rate": "19"
+        }
+      ],
+      "net_minor": 96000,
+      "vat_minor": 18240,
+      "gross_minor": 114240,
+      "due_payable_minor": 114240,
+      "currency": "EUR"
+    }
+  },
+  {
+    "file": "03-valid-cii-two-vat-rates.xml",
+    "expect": "ok",
+    "note": "Two VAT rates (19% and 7%): two tax breakdowns must add up.",
+    "fields": {
+      "format": "xrechnung-cii",
+      "type_code": "380",
+      "number": "RE-2026-4720",
+      "issue_date": "2026-11-15",
+      "due_date": "2026-12-15",
+      "seller": {
+        "name": "Musterbüro Papier & Co. GmbH (TEST)",
+        "vat_id": "DE000000001"
+      },
+      "buyer": {
+        "name": "obop Demo Kunde GmbH (TEST)",
+        "vat_id": "DE000000099"
+      },
+      "lines": [
+        {
+          "name": "Büromöbel: Schreibtischstuhl",
+          "quantity": "2",
+          "unit_price_minor": 25000,
+          "net_minor": 50000,
+          "vat_rate": "19"
+        },
+        {
+          "name": "Fachbuch Buchhaltung",
+          "quantity": "4",
+          "unit_price_minor": 5000,
+          "net_minor": 20000,
+          "vat_rate": "7"
+        }
+      ],
+      "net_minor": 70000,
+      "vat_minor": 10900,
+      "gross_minor": 80900,
+      "due_payable_minor": 80900,
+      "currency": "EUR"
+    }
+  },
+  {
+    "file": "04-valid-cii-credit-note.xml",
+    "expect": "ok",
+    "note": "A credit note (type 381) that refers to RE-2026-4711.",
+    "fields": {
+      "format": "xrechnung-cii",
+      "type_code": "381",
+      "number": "GS-2026-0012",
+      "issue_date": "2026-11-18",
+      "due_date": "2026-12-18",
+      "seller": {
+        "name": "Musterbüro Papier & Co. GmbH (TEST)",
+        "vat_id": "DE000000001"
+      },
+      "buyer": {
+        "name": "obop Demo Kunde GmbH (TEST)",
+        "vat_id": "DE000000099"
+      },
+      "lines": [
+        {
+          "name": "Gutschrift: beschädigtes Papier",
+          "quantity": "4",
+          "unit_price_minor": 2500,
+          "net_minor": 10000,
+          "vat_rate": "19"
+        }
+      ],
+      "net_minor": 10000,
+      "vat_minor": 1900,
+      "gross_minor": 11900,
+      "due_payable_minor": 11900,
+      "currency": "EUR",
+      "preceding_invoice": "RE-2026-4711"
+    }
+  },
+  {
+    "file": "05-error-wrong-total.xml",
+    "expect": "error: total with VAT is 1200.00 but net 1000.00 + VAT 190.00 = 1190.00",
+    "note": "The grand total does not match net plus VAT (EN 16931 rule BR-CO-15).",
+    "fields": {
+      "format": "xrechnung-cii",
+      "type_code": "380",
+      "number": "RE-2026-4730",
+      "issue_date": "2026-11-16",
+      "due_date": "2026-12-16",
+      "seller": {
+        "name": "Musterbüro Papier & Co. GmbH (TEST)",
+        "vat_id": "DE000000001"
+      },
+      "buyer": {
+        "name": "obop Demo Kunde GmbH (TEST)",
+        "vat_id": "DE000000099"
+      },
+      "lines": [
+        {
+          "name": "Toner schwarz",
+          "quantity": "10",
+          "unit_price_minor": 10000,
+          "net_minor": 100000,
+          "vat_rate": "19"
+        }
+      ],
+      "net_minor": 100000,
+      "vat_minor": 19000,
+      "gross_minor": 120000,
+      "due_payable_minor": 120000,
+      "currency": "EUR"
+    }
+  },
+  {
+    "file": "06-error-no-due-date-no-terms.xml",
+    "expect": "error: an amount is due but there is neither a due date nor payment terms",
+    "note": "A positive amount due with no due date and no payment terms (rule BR-CO-25).",
+    "fields": {
+      "format": "xrechnung-cii",
+      "type_code": "380",
+      "number": "RE-2026-4731",
+      "issue_date": "2026-11-17",
+      "due_date": null,
+      "seller": {
+        "name": "Musterbüro Papier & Co. GmbH (TEST)",
+        "vat_id": "DE000000001"
+      },
+      "buyer": {
+        "name": "obop Demo Kunde GmbH (TEST)",
+        "vat_id": "DE000000099"
+      },
+      "lines": [
+        {
+          "name": "Ordner, 10 Stück",
+          "quantity": "5",
+          "unit_price_minor": 3000,
+          "net_minor": 15000,
+          "vat_rate": "19"
+        }
+      ],
+      "net_minor": 15000,
+      "vat_minor": 2850,
+      "gross_minor": 17850,
+      "due_payable_minor": 17850,
+      "currency": "EUR"
+    }
+  },
+  {
+    "file": "07-duplicate-of-01.xml",
+    "expect": "ok on its own; duplicate if 01 was already taken in (same seller VAT id and number)",
+    "note": "For the duplicate check.",
+    "fields": {
+      "format": "xrechnung-cii",
+      "type_code": "380",
+      "number": "RE-2026-4711",
+      "issue_date": "2026-11-12",
+      "due_date": "2026-12-12",
+      "seller": {
+        "name": "Musterbüro Papier & Co. GmbH (TEST)",
+        "vat_id": "DE000000001"
+      },
+      "buyer": {
+        "name": "obop Demo Kunde GmbH (TEST)",
+        "vat_id": "DE000000099"
+      },
+      "lines": [
+        {
+          "name": "Druckerpapier A4, 500 Blatt",
+          "quantity": "40",
+          "unit_price_minor": 2500,
+          "net_minor": 100000,
+          "vat_rate": "19"
+        }
+      ],
+      "net_minor": 100000,
+      "vat_minor": 19000,
+      "gross_minor": 119000,
+      "due_payable_minor": 119000,
+      "currency": "EUR"
+    }
+  },
+  {
+    "file": "08-not-an-einvoice.xml",
+    "expect": "error: unknown format (neither CII nor UBL invoice)",
+    "note": "Valid XML, wrong document: the format detection must refuse it.",
+    "fields": null
+  },
+  {
+    "file": "09-broken-xml.xml",
+    "expect": "error: not well-formed XML",
+    "note": "A cut-off file: the reader must fail cleanly, not panic.",
+    "fields": null
+  },
+  {
+    "file": "10-valid-peppol-se-25.xml",
+    "expect": "ok",
+    "note": "Peppol BIS 3.0 for Sweden, SEK, standard rate 25%, paid by bankgiro.",
+    "fields": {
+      "format": "peppol-bis-3",
+      "type_code": "380",
+      "number": "F-2026-1001",
+      "issue_date": "2026-11-20",
+      "due_date": "2026-12-20",
+      "seller": {
+        "name": "Exempelkonsult Norden AB (TEST)",
+        "vat_id": "SE990000001001",
+        "org_number": "9900000010"
+      },
+      "buyer": {
+        "name": "Testkund Sverige AB (TEST)",
+        "vat_id": "SE990000002801",
+        "org_number": "9900000028"
+      },
+      "lines": [
+        {
+          "name": "Konsulttjänst redovisning, timmar",
+          "quantity": "8",
+          "unit_price_minor": 95000,
+          "net_minor": 760000,
+          "vat_rate": "25",
+          "vat_category": "S"
+        }
+      ],
+      "vat_breakdown": [
+        {
+          "category": "S",
+          "rate": "25",
+          "taxable_minor": 760000,
+          "vat_minor": 190000
+        }
+      ],
+      "net_minor": 760000,
+      "vat_minor": 190000,
+      "gross_minor": 950000,
+      "due_payable_minor": 950000,
+      "currency": "SEK"
+    }
+  },
+  {
+    "file": "11-valid-peppol-se-12.xml",
+    "expect": "ok",
+    "note": "Peppol BIS 3.0 for Sweden, SEK, reduced rate 12% (hotel nights).",
+    "fields": {
+      "format": "peppol-bis-3",
+      "type_code": "380",
+      "number": "HP-2026-0042",
+      "issue_date": "2026-11-21",
+      "due_date": "2026-12-21",
+      "seller": {
+        "name": "Hotell Provnatt AB (TEST)",
+        "vat_id": "SE990000003601",
+        "org_number": "9900000036"
+      },
+      "buyer": {
+        "name": "Testkund Sverige AB (TEST)",
+        "vat_id": "SE990000002801",
+        "org_number": "9900000028"
+      },
+      "lines": [
+        {
+          "name": "Hotellrum enkelrum, nätter",
+          "quantity": "2",
+          "unit_price_minor": 124550,
+          "net_minor": 249100,
+          "vat_rate": "12",
+          "vat_category": "S"
+        }
+      ],
+      "vat_breakdown": [
+        {
+          "category": "S",
+          "rate": "12",
+          "taxable_minor": 249100,
+          "vat_minor": 29892
+        }
+      ],
+      "net_minor": 249100,
+      "vat_minor": 29892,
+      "gross_minor": 278992,
+      "due_payable_minor": 278992,
+      "currency": "SEK"
+    }
+  },
+  {
+    "file": "12-valid-peppol-se-6-and-25.xml",
+    "expect": "ok",
+    "note": "Two VAT groups, 6% (books) and 25%. The 6% group is 249.90 x 6% = 14.994, rounded once per group to 14.99 (EN 16931 per-group rounding, D9).",
+    "fields": {
+      "format": "peppol-bis-3",
+      "type_code": "380",
+      "number": "F-2026-1002",
+      "issue_date": "2026-11-22",
+      "due_date": "2026-12-22",
+      "seller": {
+        "name": "Exempelkonsult Norden AB (TEST)",
+        "vat_id": "SE990000001001",
+        "org_number": "9900000010"
+      },
+      "buyer": {
+        "name": "Testkund Sverige AB (TEST)",
+        "vat_id": "SE990000002801",
+        "org_number": "9900000028"
+      },
+      "lines": [
+        {
+          "name": "Facklitteratur: Bokföring i praktiken",
+          "quantity": "3",
+          "unit_price_minor": 8330,
+          "net_minor": 24990,
+          "vat_rate": "6",
+          "vat_category": "S"
+        },
+        {
+          "name": "USB-minne 64 GB",
+          "quantity": "1",
+          "unit_price_minor": 19900,
+          "net_minor": 19900,
+          "vat_rate": "25",
+          "vat_category": "S"
+        }
+      ],
+      "vat_breakdown": [
+        {
+          "category": "S",
+          "rate": "6",
+          "taxable_minor": 24990,
+          "vat_minor": 1499
+        },
+        {
+          "category": "S",
+          "rate": "25",
+          "taxable_minor": 19900,
+          "vat_minor": 4975
+        }
+      ],
+      "net_minor": 44890,
+      "vat_minor": 6474,
+      "gross_minor": 51364,
+      "due_payable_minor": 51364,
+      "currency": "SEK"
+    }
+  },
+  {
+    "file": "13-valid-peppol-se-reverse-charge.xml",
+    "expect": "ok",
+    "note": "Swedish domestic reverse charge for construction services: category AE, 0% VAT, exemption reason \"Omvänd betalningsskyldighet\" (VATEX-EU-AE); the buyer accounts for the VAT.",
+    "fields": {
+      "format": "peppol-bis-3",
+      "type_code": "380",
+      "number": "TB-2026-0310",
+      "issue_date": "2026-11-23",
+      "due_date": "2026-12-23",
+      "seller": {
+        "name": "Byggfirma Testbygg AB (TEST)",
+        "vat_id": "SE990000004401",
+        "org_number": "9900000044"
+      },
+      "buyer": {
+        "name": "Testkund Sverige AB (TEST)",
+        "vat_id": "SE990000002801",
+        "org_number": "9900000028"
+      },
+      "lines": [
+        {
+          "name": "Takläggning, arbete i timmar",
+          "quantity": "40",
+          "unit_price_minor": 65000,
+          "net_minor": 2600000,
+          "vat_rate": "0",
+          "vat_category": "AE"
+        }
+      ],
+      "vat_breakdown": [
+        {
+          "category": "AE",
+          "rate": "0",
+          "taxable_minor": 2600000,
+          "vat_minor": 0,
+          "exemption_reason_code": "VATEX-EU-AE",
+          "exemption_reason": "Omvänd betalningsskyldighet"
+        }
+      ],
+      "net_minor": 2600000,
+      "vat_minor": 0,
+      "gross_minor": 2600000,
+      "due_payable_minor": 2600000,
+      "currency": "SEK"
+    }
+  }
+]

@@ -14,3 +14,6 @@
 # Generated: written by `obop openapi` and `vp run generate:types` (web/packages/client), checked by CI.
 web/packages/client/openapi.json linguist-generated
 web/packages/client/src/generated/** linguist-generated
+
+# E-invoice samples: committed byte for byte, so the SHA-256 in testdata/e-invoices/provenance.json holds.
+testdata/e-invoices/** -text

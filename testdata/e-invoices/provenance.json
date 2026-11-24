@@ -1,0 +1,311 @@
+{
+  "about": "Where every e-invoice sample used by obop's tests comes from (docs/LOCALIZATION.md 1.6, provenance manifest). Checked by crates/obop/tests/e_invoice_samples.rs: every .xml under testdata/e-invoices is listed here with its SHA-256, and the fetched sets match fetch.txt.",
+  "sets": [
+    {
+      "id": "kosit",
+      "name": "XRechnung testsuite, business cases",
+      "authority": "Koordinierungsstelle für IT-Standards (KoSIT)",
+      "url": "https://github.com/itplr-kosit/xrechnung-testsuite",
+      "licence": "Apache-2.0",
+      "licence_file": "kosit/LICENSE",
+      "tag": "v2026-08-31",
+      "commit": "44c3905c69ca236aa3b94c04be1b7e9bd066ba03",
+      "retrieved": "2026-11-24",
+      "mode": "vendored",
+      "dir": "kosit",
+      "source_dir": "src/test/business-cases",
+      "selection": "The 48 business cases under 100 KB, of 72 (UBL and CII of the same cases). The 24 larger ones carry embedded attachments and are not committed. Unchanged copies; checked against the git blob ids of the pinned commit when retrieved.",
+      "files": [
+        {
+          "path": "extension/04.01a-INVOICE_ubl.xml",
+          "sha256": "bd93caab863ad27cf16e98f61b737b64fd5773c2bdbf452bb573b15f867f1ea6"
+        },
+        {
+          "path": "extension/04.02a-INVOICE_ubl.xml",
+          "sha256": "46d993acf7d68994acc67524d256a46e6bb85ecb947c56321ddc1856110934a3"
+        },
+        {
+          "path": "extension/04.03a-INVOICE_ubl.xml",
+          "sha256": "f50a6ed345e344008638c02d477b3113356083ed970050b44de084fa3b47cfaf"
+        },
+        {
+          "path": "extension/04.04a-INVOICE_ubl.xml",
+          "sha256": "275929283c921191be88f9c5fcd947432d62e57a14f692d8b9003d6debb37237"
+        },
+        {
+          "path": "extension/04.05a-INVOICE_uncefact.xml",
+          "sha256": "5ab587a3c10b18f1da85626054de3bcd9162cfc4add31b2e3fa44be0b40bcf3e"
+        },
+        {
+          "path": "extension/05.01a-INVOICE_ubl.xml",
+          "sha256": "ba11d1f57e88b51642390a400cfe4882a58ab51e86c9aa745059649fda06a7fc"
+        },
+        {
+          "path": "standard/01.01a-INVOICE_ubl.xml",
+          "sha256": "74fb09c609d5fba15a8c543060998d3b92858f56a81fb5b0ed244d6794e498d1"
+        },
+        {
+          "path": "standard/01.01a-INVOICE_uncefact.xml",
+          "sha256": "727b51982a84c9b406599a7384783570910440ed405c9bb6d918b22442636886"
+        },
+        {
+          "path": "standard/01.02a-INVOICE_ubl.xml",
+          "sha256": "0250e3d8d45b14f0ba31c0e928d532ca4fb228442a204d392775aee1cb725501"
+        },
+        {
+          "path": "standard/01.02a-INVOICE_uncefact.xml",
+          "sha256": "4d04b67a753b3cac8e1e7759745b27bc6a19ce9913ab303942384b634bc1fae0"
+        },
+        {
+          "path": "standard/01.03a-INVOICE_ubl.xml",
+          "sha256": "281ed60e09df9921d5a963eb9d42d30868a1f628880335fc0fcf222812aaeaf3"
+        },
+        {
+          "path": "standard/01.03a-INVOICE_uncefact.xml",
+          "sha256": "4926207a26939a034845d9342ea6f5d664020da6f1c0dedf7c408564e6a19da2"
+        },
+        {
+          "path": "standard/01.04a-INVOICE_ubl.xml",
+          "sha256": "91208ec877fabe65228471fb76b5ff7a24deeb6aa5ed88b568edded6e3968724"
+        },
+        {
+          "path": "standard/01.04a-INVOICE_uncefact.xml",
+          "sha256": "42ac152e480463adb81999aa7d70da490a8b709808e239f54531c7ddd4319b4f"
+        },
+        {
+          "path": "standard/01.05a-INVOICE_ubl.xml",
+          "sha256": "09cff10c3ad2a6934e4825b1f5e1ab595410443ff2f150d3cda634d2f0eedc6c"
+        },
+        {
+          "path": "standard/01.05a-INVOICE_uncefact.xml",
+          "sha256": "8f95097b5231474c835bf6685aa215bd41076af8ac0c0c8be0e98fdd93001764"
+        },
+        {
+          "path": "standard/01.06a-INVOICE_ubl.xml",
+          "sha256": "71d357d848e6911ecd5365d2ef61a5caba9241ae6cfd9f5e53aa8c27477748c7"
+        },
+        {
+          "path": "standard/01.06a-INVOICE_uncefact.xml",
+          "sha256": "2f073590a86308b020671dc40b41feb76f0e8918ae04d7066f7984b1aaa0fd17"
+        },
+        {
+          "path": "standard/01.07a-INVOICE_ubl.xml",
+          "sha256": "dfc84cc824a9cb9b1aa1e866550e6e6fc0aa06f69203a68e70f2a6d515d23d96"
+        },
+        {
+          "path": "standard/01.07a-INVOICE_uncefact.xml",
+          "sha256": "6c8ece702656e7592acf1fbe9155965e07981fec4ad7bb65c2908c1e2685a945"
+        },
+        {
+          "path": "standard/01.08a-INVOICE_ubl.xml",
+          "sha256": "b38c9d2666dd6e18f992a955b5d3f94950252dbdfa1927420f0fe511734ae37c"
+        },
+        {
+          "path": "standard/01.08a-INVOICE_uncefact.xml",
+          "sha256": "96db4c3c6e5ce9fdc28fec75f911274ea2f7d94bed5ddfce195fdaf357ba4a75"
+        },
+        {
+          "path": "standard/01.09a-INVOICE_ubl.xml",
+          "sha256": "93aa62fbf2fe463aa71c0081fe69444f356e02045ff7f6ca9e7e3c33e7a949e6"
+        },
+        {
+          "path": "standard/01.09a-INVOICE_uncefact.xml",
+          "sha256": "36aa85ae8a80f681b75b30cbaedb86477cee200461bf1b7c4b28e247ea5affde"
+        },
+        {
+          "path": "standard/01.10a-INVOICE_ubl.xml",
+          "sha256": "a0a788d308eeeee9256932e30be0b67f5c881f22ae5c6e24f02771e32c7dc983"
+        },
+        {
+          "path": "standard/01.10a-INVOICE_uncefact.xml",
+          "sha256": "3755ea7764f6e2c8c7427ab24777d64add1cc4e489362ed9c3d1049fdb2629d3"
+        },
+        {
+          "path": "standard/01.11a-INVOICE_ubl.xml",
+          "sha256": "3f413a4f33c3844e184480f609d3f4eb31c8165431be03157d6eb84f53be514d"
+        },
+        {
+          "path": "standard/01.11a-INVOICE_uncefact.xml",
+          "sha256": "0cbcf2d8e4a2f9d8ac2ae9d5a70ed21292233a8e18b7a512c7fb7809803fe847"
+        },
+        {
+          "path": "standard/01.12a-INVOICE_ubl.xml",
+          "sha256": "cc281f765dd41b38a81d7b4cc9bb995b4b92ee846654cfcbd0e2ab9859e7a2c7"
+        },
+        {
+          "path": "standard/01.12a-INVOICE_uncefact.xml",
+          "sha256": "b6b3186df8ade85abaea25b083e34864a5e3427cdbee62bf929a996bbd304c1d"
+        },
+        {
+          "path": "standard/01.13a-INVOICE_ubl.xml",
+          "sha256": "03558b27fea3e1270786eb8da84a31457bcbd7c0cfe018698cf6bd54c154db52"
+        },
+        {
+          "path": "standard/01.13a-INVOICE_uncefact.xml",
+          "sha256": "bf3a7deaeb49fe4ea1e03edeb5642df662f5ed71d5dfad5637a534b398e22b20"
+        },
+        {
+          "path": "standard/01.14a-INVOICE_ubl.xml",
+          "sha256": "44699c5b9089800e8cc8b5d952ca809c19d6bbfbb17557916cb9447b824f0751"
+        },
+        {
+          "path": "standard/01.14a-INVOICE_uncefact.xml",
+          "sha256": "8c6b4a9e40f140bc633bd67d01c549c4cff227f5e500dcdea1a75eb1bb905c03"
+        },
+        {
+          "path": "standard/01.17a-INVOICE_ubl.xml",
+          "sha256": "54f477a8ddc0488f0b5a03977ab1fa8b94d735c7b90f0a51e56aeff6112f3392"
+        },
+        {
+          "path": "standard/01.17a-INVOICE_uncefact.xml",
+          "sha256": "99832b7873fcf11c85506f9fd3614fa3841e0fda435ca424bb37ce0833294fdc"
+        },
+        {
+          "path": "standard/01.18a-INVOICE_ubl.xml",
+          "sha256": "55f90ad3793e46131eabfdbd36a4d2c3f9c989313ff0e44b7da72a2d6fde0be0"
+        },
+        {
+          "path": "standard/01.18a-INVOICE_uncefact.xml",
+          "sha256": "6be54635ad7afff2516151458f68eeb59340cbb602463f3123b60de348b3861f"
+        },
+        {
+          "path": "standard/01.19a-INVOICE_ubl.xml",
+          "sha256": "c3d3744cf48e83e4089eb2b8e1c1ebfaf8addcda5edf3ea7ce6444547062ffcf"
+        },
+        {
+          "path": "standard/01.19a-INVOICE_uncefact.xml",
+          "sha256": "c1f62d00d1d0dac9dc1c3387bb76e47b58fe98881fe0c879901fdf3f8c474f47"
+        },
+        {
+          "path": "standard/01.20a-INVOICE_ubl.xml",
+          "sha256": "51fe9b285d86eb57bdb5bfe2682e62dce485af71c003b56b447d5bdc1b61c368"
+        },
+        {
+          "path": "standard/01.20a-INVOICE_uncefact.xml",
+          "sha256": "b86fb34c45e0c30cc8b8f50a375ef8d68d0914ac902a3aac6e0009d35f73196b"
+        },
+        {
+          "path": "standard/01.21a-INVOICE_ubl.xml",
+          "sha256": "8ed131cc276bb37d160ffc243dee9eade601de9ed04392ab38eac5ce26e9ac77"
+        },
+        {
+          "path": "standard/01.21a-INVOICE_uncefact.xml",
+          "sha256": "e88c6b6498bf96f78aa1ff20d20d0751fa790704e8e879fd388c0499df2c1ee1"
+        },
+        {
+          "path": "standard/03.03a-INVOICE_ubl.xml",
+          "sha256": "68110106c5f68ff7e7f3b493a744e74b7bc4f86739ebef44bc591e384452fec0"
+        },
+        {
+          "path": "standard/03.03a-INVOICE_uncefact.xml",
+          "sha256": "6d61b2ebce34ec02fcd8395debc59b235af6364aa9cf5bfde7cc40b5bb0729f0"
+        },
+        {
+          "path": "standard/03.06a-INVOICE_ubl.xml",
+          "sha256": "e6a5cd7fce70f9b729db01be2e035e87b2cba594fb436b8c554d39defbcc3a4a"
+        },
+        {
+          "path": "standard/03.06a-INVOICE_uncefact.xml",
+          "sha256": "7401cbb320bd2dd9665b27eb594dcfe5d577184cd6c1c85a22773a643da71d35"
+        }
+      ]
+    },
+    {
+      "id": "own",
+      "name": "obop's own fictitious e-invoices",
+      "authority": "obop contributors",
+      "url": "https://github.com/SpaceCorps/obop",
+      "licence": "Apache-2.0",
+      "tag": null,
+      "commit": null,
+      "retrieved": "2026-11-24",
+      "mode": "own",
+      "dir": "own",
+      "fictitious": true,
+      "selection": "Written for obop. Every company, person, VAT id, organisation number, bankgiro and amount is invented and marked FAKE TEST DATA in the file; expected.json says what a reader must return for each file.",
+      "files": [
+        {
+          "path": "01-valid-cii-one-line.xml",
+          "sha256": "ba89a0b16b0bea982e4a6d3d63cc39939c8918173f9ef7c431c53b7b9110146d"
+        },
+        {
+          "path": "02-valid-ubl-consulting.xml",
+          "sha256": "00fa364ece15f72ded24a6236765a51d8f1f343030e468615314631ff5b7162c"
+        },
+        {
+          "path": "03-valid-cii-two-vat-rates.xml",
+          "sha256": "1639968096b92e770905d7af8702dadfd9d3fd0c3696305ad8cd598504258b61"
+        },
+        {
+          "path": "04-valid-cii-credit-note.xml",
+          "sha256": "eaa6847f244c606d92bc2b8c142102006cf0155c064988a235cc5355d0c7ebb9"
+        },
+        {
+          "path": "05-error-wrong-total.xml",
+          "sha256": "cecdea1884148b62b5aa80979614807dce27d9e8cdb309f3390edc21256ef58e"
+        },
+        {
+          "path": "06-error-no-due-date-no-terms.xml",
+          "sha256": "ce9653ef00b820b6d707afc287317c3336becc4a6b18c322fcdc18d2d5235f46"
+        },
+        {
+          "path": "07-duplicate-of-01.xml",
+          "sha256": "ba89a0b16b0bea982e4a6d3d63cc39939c8918173f9ef7c431c53b7b9110146d"
+        },
+        {
+          "path": "08-not-an-einvoice.xml",
+          "sha256": "b2525e1fcb11b53c9a1baccb86f0d522fc9f0f0815b3d70d77a779e2919a9445"
+        },
+        {
+          "path": "09-broken-xml.xml",
+          "sha256": "2ecfb0aec391bc34e56a1c09a4242e4017339c014a1abd329f7b17cab240c69c"
+        },
+        {
+          "path": "10-valid-peppol-se-25.xml",
+          "sha256": "0e37d39d5cdf89f36c59c8fde63c77ab8f424705948e4399023253721b4d1cf7"
+        },
+        {
+          "path": "11-valid-peppol-se-12.xml",
+          "sha256": "72104cdce333cd4bf44fb5531c16da75e9502d2c7fd34ca30f34b406c2c76c1e"
+        },
+        {
+          "path": "12-valid-peppol-se-6-and-25.xml",
+          "sha256": "33ff94dea9b99fd9262eea0280763cf551ee33778855f56544d3dd1530d2d119"
+        },
+        {
+          "path": "13-valid-peppol-se-reverse-charge.xml",
+          "sha256": "34d91464417f8aec3f493d894cf965c83eca6964dcac7ca14ade9cc526478384"
+        }
+      ]
+    },
+    {
+      "id": "cen",
+      "name": "EN 16931 validation artefacts, UBL and CII examples",
+      "authority": "CEN/TC 434 validation artefacts, maintained by the European Commission (ConnectingEurope)",
+      "url": "https://github.com/ConnectingEurope/eInvoicing-EN16931",
+      "licence": "EUPL-1.2",
+      "tag": "validation-1.3.17",
+      "commit": "d0dea7300c2ad60d50af4a4f31e122fdbf7c0ed3",
+      "retrieved": "2026-11-24",
+      "mode": "fetched",
+      "source_dir": "ubl/examples, cii/examples",
+      "selection": "All 32 examples (17 UBL, 15 CII). EUPL-1.2 is not on the Apache-2.0 allow-list (deny.toml), so the files are fetched, never committed.",
+      "files_list": "fetch.txt"
+    },
+    {
+      "id": "peppol",
+      "name": "Peppol BIS Billing 3.0, examples and snippets",
+      "authority": "OpenPeppol AISBL",
+      "url": "https://github.com/OpenPEPPOL/peppol-bis-invoice-3",
+      "licence": "unclear",
+      "licence_note": "No licence file, README note or header found at this tag; licence status unclear, question for counsel. Fetched, never committed.",
+      "tag": "3.0.22",
+      "commit": "38d693d71d28d813781323a6ca97324edcc4d239",
+      "retrieved": "2026-11-24",
+      "mode": "fetched",
+      "source_dir": "rules/examples, rules/snippets",
+      "selection": "All 26 files of rules/examples and rules/snippets.",
+      "files_list": "fetch.txt"
+    }
+  ]
+}

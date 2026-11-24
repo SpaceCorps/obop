@@ -26,6 +26,9 @@ jobs:
       # The pool tests that restart a server or put PgBouncer in front of it start containers of
       # their own, also only when asked for (crates/kernel/obop-storage/src/pg_pool_tests.rs).
       OBOP_TEST_DOCKER: "1"
+      # The fetched e-invoice samples (CEN, OpenPeppol) must be there: a missing one fails the test
+      # that checks them instead of skipping (crates/obop/tests/e_invoice_samples.rs).
+      OBOP_REQUIRE_EINVOICE_SAMPLES: "1"
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Toolchain from rust-toolchain.toml
@@ -33,6 +36,8 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo fmt --all -- --check
       - run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Fetch the e-invoice samples obop does not commit (pinned commits, SHA-256 checked)
+        run: deploy/fetch-einvoice-samples.sh
       - run: cargo test --locked
       - name: Install gate over every linked module
         run: cargo run --locked -q -- modules check
