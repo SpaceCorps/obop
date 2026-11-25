@@ -273,6 +273,10 @@ driver's.
   leaving the phone, against the local-only idea of Rutsa: a privacy decision goes with it.
 - A company setting that forbids typed km, in the version for companies.
 
+**The driver at the top of the home screen** (a placeholder since D6, `ui/UserBadge.tsx`): their
+name and avatar, and what a tap opens (a profile, the settings with the language and the app lock
+of BR-35). Stage 1 has no sign-in; where the name comes from is decided with it.
+
 **Statuses of a trip**: today a trip is open (recording or paused) or ended. A later state, such as
 a trip in a sent report, could lock it against an edit.
 
@@ -583,3 +587,19 @@ out`: `progress` gains `dropped`, the positions the distance leaves out for thei
   button is the app's own (`ui/RoundButton.tsx`, 144 instead of the shared 176 of `Button
 size="big"`), so one more recent trip fits; the small button (Pause, Stop while paused) stands
   at the top right of the footer.
+  Tried, then changed: the details are changed in place on the trip's screen (`ui/InlineText.tsx`, a
+  text field with no frame that looks like the text around it and keeps what was typed when it
+  loses the focus or the screen goes): the name is the title (`titleSlot`, a new optional property
+  of `Screen` in `@obop/ui-native`, which draws it in the place of the title text), with the
+  default of an untitled trip as its text; From and To at the right of their rows ("Not given");
+  the note under its label ("Empty"). Edit details and its window (`DetailsSheet`) are gone; Back
+  moves from the top into the footer, at the left of Delete trip.
+  The block Note reaches down to the footer (its least height measured on the screen, as the
+  recent trips are, and again when the keyboard comes or goes), and its field fills it.
+  History has its Back in the footer too, across it, as the screen of the open trip.
+  `Screen` of `@obop/ui-native` keeps the space under the title in its header, which does not
+  scroll, instead of at the top of the content: at rest every screen looks the same, and content
+  scrolled up goes out of sight that far below the title (asked for on History).
+  A placeholder for stage 2 at the right of the title of the home screen: "User" and a round
+  avatar with its first letter (`ui/UserBadge.tsx`); it does nothing yet (no sign-in or profile in
+  stage 1).

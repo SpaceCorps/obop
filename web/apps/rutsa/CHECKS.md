@@ -38,6 +38,10 @@ Useful commands:
 `pm revoke` of the location keeps Expo's own note that it asked already, so the app reads it as
 refused for good; `pm clear` resets both.
 
+A change in a shared package only (`web/packages/ui-native`, `trip-core`) is not seen by Gradle,
+which keeps the last bundle: delete `android\app\build\generated\assets\react`,
+`android\app\build\generated\res\react` and `$env:TEMP\metro-*` before the build.
+
 ## C. Recording (regression, run again at the checkpoint)
 
 - [x] 2026-11-21 Start, fixes, Stop: a 1.6 km route gives 1.6 km
@@ -216,3 +220,19 @@ Since the fourth round of D6: Start without the screen of the permissions when n
 - [ ] `pm clear`, Start: the explanation, as before (the screen of the permissions still comes when something stands in the way)
 - [ ] Location off on the phone, Start: the screen "Location is switched off on this phone", as before
 - [ ] Notifications not asked yet (`pm clear`, then through the explanation once; or a fresh install): the dialog of the notifications comes once, at a Start
+
+Since the fifth round of D6: no Edit details and no window; the details are changed in place; Back is in the footer. (The checks above that name Edit details or the window now mean the same change in place.)
+
+- [ ] `smoke` The trip's screen has no Back at the top; the footer has Back at the left and Delete trip at the right (the open trip: Back across the footer); Back and the back button of Android go back
+- [ ] `smoke` The title of an untitled trip is "Untitled trip N" as text: tap it, type a name, tap elsewhere (or Done): it is kept, and History and the widget show it; clear it all and tap elsewhere: "Untitled trip N" comes back with the same number
+- [ ] `smoke` From and To show "Not given" in grey at the right; tap, type "Office", tap elsewhere or Done: kept (open the trip again: still there); clear it: "Not given" again
+- [ ] `smoke` Note shows "Empty"; tap, type several lines (Enter makes a new line), tap elsewhere: kept, and the block grows with it
+- [ ] Type in From and press Back of the footer (or the back button of Android) without leaving the field: what was typed is kept
+- [ ] Change the name, then at once From: both are kept
+- [ ] The keyboard does not hide the Note while it is typed in
+- [ ] TalkBack: the fields are read as Name, From, To, Note
+- [ ] `smoke` An empty From, To or Note, and the title of an untitled trip once cleared: with the cursor in it the field is empty, with no grey "Not given", "Empty" or default name; tap elsewhere with nothing typed: the grey text is back
+- [ ] `smoke` The block Note reaches down to the footer, with the same space above the footer as on the home screen; a tap anywhere in it puts the cursor in it; a long note makes it grow and the screen scroll
+- [ ] `smoke` History has no Back at the top; one long Back across the footer, as on the open trip's screen; it and the back button of Android go to Home
+- [ ] `smoke` History, scrolled: the rows go out of sight as far below the title as the first header stands from it before scrolling; the home screen and the trip's screen look as before at rest
+- [ ] `smoke` Home: at the right of the title Rutsa, "User" in grey and a round avatar with "U"; the header is as high as before (Recent trips keeps its rows); a tap on it does nothing (a placeholder for stage 2)

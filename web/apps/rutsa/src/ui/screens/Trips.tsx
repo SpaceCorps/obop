@@ -1,4 +1,4 @@
-import { Row, Screen, Text, useTheme } from "@obop/ui-native";
+import { Button, Row, Screen, Text, useTheme, useWords } from "@obop/ui-native";
 import { View } from "react-native";
 import { phoneTimeZone } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
@@ -20,6 +20,7 @@ import { tripSections, type ListWords } from "../trips-list.ts";
  */
 export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
   const theme = useTheme();
+  const shared = useWords();
   const { trips, loaded } = useTrips(store);
   // Today follows the clock; a minute is close enough for the names of the days.
   const now = useNow(60_000);
@@ -31,7 +32,13 @@ export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
   const sections = tripSections(trips, now, LANGUAGE, phoneTimeZone(), words);
 
   return (
-    <Screen title={t("trips.title")} onBack={nav.back}>
+    <Screen
+      title={t("trips.title")}
+      // Back across the footer, as on the screen of the open trip, not at the top.
+      footer={
+        <Button label={shared.back} variant="secondary" onPress={nav.back} testID="trips-back" />
+      }
+    >
       {loaded && sections.length === 0 ? (
         <Text tone="muted" testID="trips-empty">
           {t("trips.empty")}

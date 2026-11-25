@@ -13,6 +13,8 @@ import { Text } from "./Text.tsx";
 
 export type ScreenProps = {
   title: string;
+  /** Drawn in the place of the title text, for a title that can be changed in place; `title` stays its name for the rest. */
+  titleSlot?: ReactNode;
   /** Shows a back button in the header. */
   onBack?: () => void;
   /** Actions pinned under the content (the Stop button, Submit). */
@@ -31,6 +33,7 @@ export type ScreenProps = {
 /** The frame of a screen: background, space for the system bars, a title and an optional footer. */
 export function Screen({
   title,
+  titleSlot,
   onBack,
   footer,
   scroll = true,
@@ -47,7 +50,13 @@ export function Screen({
   const back = onBack ? (
     <Button label={words.back} variant="ghost" onPress={onBack} fit={backAtStart || inline} />
   ) : null;
-  const body = <View style={{ gap: t.space[4], padding: t.space[4] }}>{children}</View>;
+  // The space under the title belongs to the header, which does not scroll: content that scrolls
+  // up goes out of sight that far below the title, as far as it stood from it at the start.
+  const body = (
+    <View style={{ gap: t.space[4], paddingHorizontal: t.space[4], paddingBottom: t.space[4] }}>
+      {children}
+    </View>
+  );
   const frame = {
     flex: 1,
     backgroundColor: t.c.bg,
@@ -64,18 +73,24 @@ export function Screen({
             alignItems: "center",
             paddingHorizontal: t.space[4],
             paddingTop: t.space[2],
+            paddingBottom: t.space[4],
             gap: t.space[3],
           }}
         >
           {back}
-          <View style={{ flexShrink: 1 }}>
-            <Text variant="title">{title}</Text>
-          </View>
+          <View style={{ flexShrink: 1 }}>{titleSlot ?? <Text variant="title">{title}</Text>}</View>
         </View>
       ) : (
-        <View style={{ paddingHorizontal: t.space[4], paddingTop: t.space[3], gap: t.space[2] }}>
+        <View
+          style={{
+            paddingHorizontal: t.space[4],
+            paddingTop: t.space[3],
+            paddingBottom: t.space[4],
+            gap: t.space[2],
+          }}
+        >
           {back === null ? null : <View style={{ alignItems: "flex-start" }}>{back}</View>}
-          <Text variant="title">{title}</Text>
+          {titleSlot ?? <Text variant="title">{title}</Text>}
         </View>
       )}
       {scroll ? (

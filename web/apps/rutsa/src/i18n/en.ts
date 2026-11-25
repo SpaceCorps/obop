@@ -49,12 +49,12 @@ export const en = {
   "home.resume": "Resume",
   "home.recent": "Recent trips",
   "home.history": "Open history",
+  "home.user": "User",
 
   "details.name": "Name",
   "details.from": "From",
   "details.to": "To",
   "details.note": "Note",
-  "details.too_long": "At most {max} characters.",
 
   "trip.title": "Trip",
   "trip.untitled": "Untitled trip {number}",
@@ -69,8 +69,6 @@ export const en = {
   "trip.positions.count.other": "{count} positions",
   "trip.positions.dropped": "{positions}, {dropped} left out",
   "trip.none": "Not given",
-  "trip.details.edit": "Edit details",
-  "trip.details.title": "Trip details",
   "trip.details.failed": "The details could not be saved. Try again.",
   "trip.delete": "Delete trip",
   "trip.delete.title": "Delete this trip?",

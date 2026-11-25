@@ -29,6 +29,7 @@ vi.mock("../theme.tsx", () => ({
 
 const { Screen } = await import("./Screen.tsx");
 const { Button } = await import("./Button.tsx");
+const { Text } = await import("./Text.tsx");
 
 /** Every element of a tree, depth first. */
 function elements(node: ReactNode): ReactElement[] {
@@ -57,5 +58,20 @@ describe("the back link of a screen (L26)", () => {
   test("a screen without onBack has none", () => {
     const tree = Screen({ title: "Home", children: null });
     expect(elements(tree).filter((e) => e.type === Button)).toHaveLength(0);
+  });
+});
+
+describe("the title of a screen", () => {
+  test("is its text by default", () => {
+    const tree = Screen({ title: "Trip", children: null });
+    const titles = elements(tree).filter((e) => e.type === Text);
+    expect(titles.map((e) => (e.props as { children: ReactNode }).children)).toEqual(["Trip"]);
+  });
+
+  test("a slot takes the place of the text, for a title changed in place", () => {
+    const slot = <input data-testid="slot" />;
+    const tree = Screen({ title: "Trip", titleSlot: slot, children: null });
+    expect(elements(tree).filter((e) => e.type === Text)).toHaveLength(0);
+    expect(elements(tree)).toContain(slot);
   });
 });

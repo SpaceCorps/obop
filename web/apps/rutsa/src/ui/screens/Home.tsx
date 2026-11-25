@@ -17,6 +17,7 @@ import { announce } from "../announce.ts";
 import { CurrentWidget } from "../CurrentWidget.tsx";
 import { RecentTrips } from "../RecentTrips.tsx";
 import { RoundButton } from "../RoundButton.tsx";
+import { UserBadge } from "../UserBadge.tsx";
 import { lastEndedTrip, tripDurationMs, whenText } from "../home.ts";
 import { useNow, useProgress, useRegistered, useTrips, type Check } from "../hooks.ts";
 import { tOs } from "../os-text.ts";
@@ -319,6 +320,15 @@ export function Home({
   return (
     <Screen
       title={t("app.title")}
+      // The title, and the driver at the right (a placeholder for stage 2).
+      titleSlot={
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text variant="title">{t("app.title")}</Text>
+          </View>
+          <UserBadge />
+        </View>
+      }
       footer={
         // The big button is centred on its own; the small one lies over the top right corner of
         // the footer, out of the flow, so it moves nothing when it comes, goes or changes.

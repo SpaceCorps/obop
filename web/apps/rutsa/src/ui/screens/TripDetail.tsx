@@ -1,12 +1,12 @@
-import { Banner, Button, Row, Screen, Text, useTheme } from "@obop/ui-native";
-import { useState } from "react";
-import { Alert, View } from "react-native";
-import type { TripDetails } from "../../core/details.ts";
+import { Banner, Button, Row, Screen, Text, useTheme, useWords } from "@obop/ui-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Keyboard, View, type HostInstance } from "react-native";
+import { DETAIL_MAX, type TripDetails } from "../../core/details.ts";
 import { durationParts, formatKm, phoneTimeZone } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
 import { LANGUAGE, t, tp } from "../../i18n/index.ts";
 import { deleteTrip, updateTripDetails } from "../../native/actions.ts";
-import { DetailsSheet } from "../DetailsSheet.tsx";
+import { InlineText } from "../InlineText.tsx";
 import { tripDurationMs } from "../home.ts";
 import { useNow, useProgress, useTrips } from "../hooks.ts";
 import { elapsedMs, formatElapsed } from "../recording-view.ts";
@@ -28,9 +28,10 @@ function durationText(ms: number): string {
  * pauses, its km, how many positions a recorded trip has and how many the distance left out (the
  * kind of a trip is marked in the list, BR-28); then its note ("Empty"), as long as it is. While
  * the trip is open (from the current widget of the home screen) its time, km and positions grow
- * as it records, and it has no Delete: it is stopped on the home screen. In the footer, Edit
- * details (the window with the details as stored, the default name of an untitled trip in Name,
- * and Save) and Delete trip (asked first). The way to the edit of its parts comes with D8.
+ * as it records, and it has no Delete: it is stopped on the home screen. The name, From, To and
+ * Note are changed where they stand (`InlineText`): a tap, typing, and they are kept when they lose
+ * the focus; the name is the title, with the default of an untitled trip as its text. In the
+ * footer, Back and Delete trip (asked first). The way to the edit of its parts comes with D8.
  *
  * After `TripDetail` of `mileage-app` (`src/ui/screens/TripDetail.tsx`), without its server: no
  * purpose (stage 2), no submit, and Delete instead of Discard with a reason.
@@ -47,11 +48,46 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
     trip?.state ?? null,
   );
   const now = useNow(open ? 1000 : 60_000);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const words = useWords();
+  // The details sent by the last change, until the list is read again (`save`).
+  const sent = useRef<TripDetails | null>(null);
+  useEffect(() => {
+    sent.current = null;
+  }, [trip]);
   const [saveFailed, setSaveFailed] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
+
+  // The note reaches down to the footer: its block is as high as the room between its top and the
+  // footer's frame, less the padding at the bottom of the screen, measured on the screen after
+  // each render and layout (as the recent trips of the home screen).
+  const footerRef = useRef<HostInstance>(null);
+  const noteRef = useRef<HostInstance>(null);
+  const [noteRoom, setNoteRoom] = useState(0);
+  const measureNote = useCallback(() => {
+    const note = noteRef.current;
+    const footer = footerRef.current;
+    if (!note || !footer) return;
+    note.measureInWindow((_x, top) => {
+      footer.measureInWindow((_fx, footerContentTop, _width, footerHeight) => {
+        if (footerHeight <= 0) return;
+        // The footer's frame starts its padding and its top border above its content.
+        setNoteRoom(Math.max(0, Math.floor(footerContentTop - 1 - 2 * theme.space[4] - top)));
+      });
+    });
+  }, [theme]);
+  useEffect(() => {
+    measureNote();
+  });
+  // The keyboard makes the window of Android smaller and gives the room back when it closes.
+  useEffect(() => {
+    const shown = Keyboard.addListener("keyboardDidShow", measureNote);
+    const hidden = Keyboard.addListener("keyboardDidHide", measureNote);
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, [measureNote]);
 
   if (trip === null) {
     return (
@@ -92,23 +128,23 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
             positions: tp("trip.positions.count", progress.points),
             dropped: progress.dropped,
           });
-  const given = (text: string | null) => text ?? t("trip.none");
   const name = tripName(trip, (number) =>
     number === null ? t("trip.title") : t("trip.untitled", { number }),
   );
-  // The default an untitled trip is called by; the window opens with it in the field Name.
+  // The default an untitled trip is called by; the title holds it as text, to be typed over.
   const defaultName = trip.name === null ? name : null;
 
-  const save = (details: TripDetails) => {
-    setSaving(true);
-    setSaveFailed(false);
+  /**
+   * Keeps one detail typed in place. The others are sent as stored, or as sent a moment ago when
+   * the list has not been read again yet, so two changes in a row do not undo each other.
+   */
+  const save = (field: keyof TripDetails, text: string) => {
+    const base = sent.current ?? { name: trip.name, from: trip.from, to: trip.to, note: trip.note };
     // The default left as it is stays no name, so the trip keeps its number.
-    updateTripDetails(trip.id, { ...details, name: typedName(details.name, defaultName) })
-      .then(
-        () => setEditing(false),
-        () => setSaveFailed(true),
-      )
-      .finally(() => setSaving(false));
+    const details = { ...base, [field]: field === "name" ? typedName(text, defaultName) : text };
+    sent.current = details;
+    setSaveFailed(false);
+    updateTripDetails(trip.id, details).catch(() => setSaveFailed(true));
   };
 
   const confirmDelete = () => {
@@ -132,24 +168,61 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
     ]);
   };
 
+  /** A row with its label at the left and the detail, changed in place, at the right. */
+  const placeRow = (field: "from" | "to") => (
+    <View
+      style={{
+        minHeight: theme.control.height,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: theme.space[3],
+        paddingVertical: theme.space[2],
+        paddingHorizontal: theme.space[4],
+        backgroundColor: theme.c.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.c.border,
+      }}
+    >
+      <Text variant="label">{t(field === "from" ? "details.from" : "details.to")}</Text>
+      <InlineText
+        value={trip[field]}
+        placeholder={t("trip.none")}
+        label={t(field === "from" ? "details.from" : "details.to")}
+        onCommit={(text) => save(field, text)}
+        look="value"
+        maxLength={DETAIL_MAX[field]}
+        testID={`trip-${field}`}
+      />
+    </View>
+  );
+
   return (
     <Screen
       title={name}
-      onBack={nav.back}
+      // The name is changed where it stands, as the title of the screen.
+      titleSlot={
+        <InlineText
+          value={trip.name ?? defaultName}
+          placeholder={name}
+          label={t("details.name")}
+          onCommit={(text) => save("name", text)}
+          look="title"
+          maxLength={DETAIL_MAX.name}
+          restoreWhenEmpty
+          testID="trip-name"
+        />
+      }
       footer={
-        // Two halves: Edit details at the left, Delete trip at the right; the open trip has no
-        // Delete (it is stopped on the home screen).
-        <View style={{ flexDirection: "row", gap: theme.space[3] }}>
+        // Back at the left, Delete trip at the right; the open trip has no Delete (it is stopped
+        // on the home screen), so Back takes the whole footer.
+        <View ref={footerRef} style={{ flexDirection: "row", gap: theme.space[3] }}>
           <View style={{ flex: 1 }}>
             <Button
-              label={t("trip.details.edit")}
+              label={words.back}
               variant="secondary"
               disabled={deleting}
-              onPress={() => {
-                setSaveFailed(false);
-                setEditing(true);
-              }}
-              testID="trip-edit-details"
+              onPress={nav.back}
+              testID="trip-back"
             />
           </View>
           {open ? null : (
@@ -169,10 +242,13 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
       {deleteFailed ? (
         <Banner tone="danger" title={t("trip.delete.failed")} testID="trip-delete-failed" />
       ) : null}
+      {saveFailed ? (
+        <Banner tone="danger" title={t("trip.details.failed")} testID="trip-save-failed" />
+      ) : null}
 
       <View>
-        <Row title={t("details.from")} value={given(trip.from)} testID="trip-from" />
-        <Row title={t("details.to")} value={given(trip.to)} testID="trip-to" />
+        {placeRow("from")}
+        {placeRow("to")}
       </View>
 
       <View>
@@ -201,24 +277,32 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
         ) : null}
       </View>
 
-      {/* The note under its label, as long as it is: it wraps and the screen scrolls. */}
-      <Row
-        title={t("details.note")}
-        subtitle={trip.note ?? t("trip.note.empty")}
-        testID="trip-note"
-      />
-
-      <DetailsSheet
-        visible={editing}
-        title={t("trip.details.title")}
-        initial={{ name: trip.name ?? defaultName, from: trip.from, to: trip.to, note: trip.note }}
-        confirmLabel={t("common.save")}
-        busy={saving}
-        failedText={saveFailed ? t("trip.details.failed") : null}
-        onCancel={() => setEditing(false)}
-        onConfirm={save}
-        testID="trip-details-sheet"
-      />
+      {/* The note under its label, changed in place: it reaches down to the footer, and a longer
+          note makes it grow and the screen scroll. */}
+      <View
+        ref={noteRef}
+        onLayout={measureNote}
+        style={{
+          minHeight: noteRoom,
+          gap: theme.space[1],
+          paddingVertical: theme.space[3],
+          paddingHorizontal: theme.space[4],
+          backgroundColor: theme.c.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.c.border,
+        }}
+      >
+        <Text variant="label">{t("details.note")}</Text>
+        <InlineText
+          value={trip.note}
+          placeholder={t("trip.note.empty")}
+          label={t("details.note")}
+          onCommit={(text) => save("note", text)}
+          look="note"
+          maxLength={DETAIL_MAX.note}
+          testID="trip-note"
+        />
+      </View>
     </Screen>
   );
 }
