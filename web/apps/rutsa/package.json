@@ -14,7 +14,10 @@
     "ios:prebuild": "expo prebuild --platform ios --no-install",
     "ios:pods": "node scripts/ios/xcode.mjs pods",
     "ios:build:simulator": "node scripts/ios/xcode.mjs build-simulator",
-    "ios:run:device": "expo run:ios --device --configuration Release"
+    "ios:run:device": "expo run:ios --device --configuration Release",
+    "emulator:route": "node scripts/emulator/route.mjs",
+    "emulator:drive": "node scripts/emulator/drive.mjs",
+    "simulator:route": "node scripts/simulator/route.mjs"
   },
   "dependencies": {
     "@obop/trip-core": "workspace:*",

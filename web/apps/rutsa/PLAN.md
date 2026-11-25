@@ -224,7 +224,7 @@ Components from `@obop/ui-native`.
 
 ### E. Check on the emulator and the simulator
 
-- [ ] E1 `feat(rutsa): route scripts`: `scripts/emulator/route.mjs` (the synthetic route and its
+- [x] E1 `feat(rutsa): route scripts`: `scripts/emulator/route.mjs` (the synthetic route and its
       reference length), `scripts/emulator/drive.mjs` (feeds it with `adb emu geo fix`, without
       the airplane mode schedule of `mileage-app`, which tests its upload),
       `scripts/simulator/route.mjs` and `route-lib.mjs` (`xcrun simctl location`),
@@ -650,3 +650,13 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   the manual checks (67 open in `CHECKS.md`) is not made at the checkpoint of block D: it moves to
   stage 2, where the app is worked over and gains new functions on this base; F1 writes the
   checks not run into the spec, so they outlive `CHECKS.md`.
+- 2026-11-25: E1 as built, from `mileage-app`: `scripts/emulator/route.mjs` (the rectangle of 41
+  waypoints 100 m apart, 3,989.44 m by haversine, 4,000.00 m geodesic, the same as `mileage-app`'s,
+  so the two apps can be compared), `scripts/lib/is-main.mjs`, `scripts/simulator/route-lib.mjs` and
+  `route.mjs` with their tests and type declarations, copied with their comments made Rutsa's (the
+  app counts at Stop, not a server). `scripts/emulator/drive.mjs` keeps the screen off at
+  waypoint 8 and on at 34 (the recording in the background, C3) and drops airplane mode (the
+  upload of `mileage-app`); its steps (`adbRunner`, `moveTo`, `drive`) are exported for E2. Tasks
+  `emulator:route`, `emulator:drive`, `simulator:route`. Not taken: `check-trip.mjs` and
+  `server-lib.mjs` (its server), `route-feed.mjs` and `thinning-replay.mjs` (a study of the
+  thinning on its server), `simulator/ui` (the XCUITest drive on the Mac).
