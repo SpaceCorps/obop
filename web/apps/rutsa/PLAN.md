@@ -215,10 +215,12 @@ Components from `@obop/ui-native`.
       count twice); a dialog, not a refusal, when the average speed is over about 150 km/h. Times
       are typed in the phone's time zone and stored in UTC, like recorded ones. Reachable without location (US-18 AC1). The edit of the parts of a
       trip (the old D8) moved to stage 2
-      Checkpoint: the app runs on the emulator; every check of `CHECKS.md` is run; Start, Pause, Resume,
-      Stop, History, a trip's screen and a trip added by hand work when tried by hand; the clock
-      times and km on the screen are right (`Intl` of Hermes:
-      `mileage-app` notes that an engine without data for a language or time zone falls back quietly).
+      Checkpoint: the app runs on the emulator; every smoke check of `CHECKS.md` is run; Start, Pause,
+      Resume, Stop, History, a trip's screen and a trip added by hand work when tried by hand; the
+      clock times and km on the screen are right (`Intl` of Hermes: `mileage-app` notes that an
+      engine without data for a language or time zone falls back quietly). The run of the full
+      checks moves to stage 2 (decided 2026-11-25), where the app is worked over on this base; F1
+      keeps the ones not run, so they outlive `CHECKS.md`
 
 ### E. Check on the emulator and the simulator
 
@@ -238,10 +240,12 @@ Checkpoint: the APK builds and installs, a route gives a trip with the expected 
 - [ ] F1 `docs(rutsa): the local prototype`: `docs/spec/rutsa.md` 1.1 describes two products
       (Rutsa, local, no sign-in; companies on obop use the `mileage` module with the obop phone
       app); phase 1 becomes the local prototype (the calendar reminder moves to stage 3); 5.5
-      without "Calls to obop" for Rutsa; what was run and what was not; the proposals below for
-      stage 2 go into the spec as PROPOSED, so they outlive this file
+      without "Calls to obop" for Rutsa; what was run and what was not, with the manual checks of
+      `CHECKS.md` not run yet as the list for stage 2; the proposals below for stage 2 go into the
+      spec as PROPOSED, so they outlive this file
 - [ ] F2 `docs: add the Rutsa app to the README`
-- [ ] F3 delete this file and `CHECKS.md`, then "Ready for review"
+- [ ] F3 remove the test flag `EXPO_PUBLIC_RUTSA_TEST_DB_FAILURE` of D1 (`core/open-db.ts`,
+      `native/database.ts`, their tests), delete this file and `CHECKS.md`, then "Ready for review"
 
 ## Proposed for stage 2 (not built in this stage)
 
@@ -642,3 +646,7 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   picker of iOS in the row (`ui/pick.tsx`); no Today and Yesterday buttons. "Add trip" reaches
   over the line of the header of Recent trips with a negative margin, so the header keeps its
   height and the rows their room.
+- 2026-11-25: D7 committed; block D is built. The smoke checks of D6 and D7 are run. The full run of
+  the manual checks (67 open in `CHECKS.md`) is not made at the checkpoint of block D: it moves to
+  stage 2, where the app is worked over and gains new functions on this base; F1 writes the
+  checks not run into the spec, so they outlive `CHECKS.md`.
