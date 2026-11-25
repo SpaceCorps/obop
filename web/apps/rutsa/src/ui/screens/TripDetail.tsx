@@ -1,12 +1,14 @@
 import { Banner, Button, Row, Screen, Text, useTheme, useWords } from "@obop/ui-native";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Keyboard, View, type HostInstance } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Alert, View } from "react-native";
 import { DETAIL_MAX, type TripDetails } from "../../core/details.ts";
 import { durationParts, formatKm, phoneTimeZone } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
 import { LANGUAGE, t, tp } from "../../i18n/index.ts";
 import { deleteTrip, updateTripDetails } from "../../native/actions.ts";
+import { DetailRow } from "../DetailRow.tsx";
 import { InlineText } from "../InlineText.tsx";
+import { useFillToFooter } from "../fill.ts";
 import { tripDurationMs } from "../home.ts";
 import { useNow, useProgress, useTrips } from "../hooks.ts";
 import { elapsedMs, formatElapsed } from "../recording-view.ts";
@@ -58,36 +60,8 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
   const [deleting, setDeleting] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
 
-  // The note reaches down to the footer: its block is as high as the room between its top and the
-  // footer's frame, less the padding at the bottom of the screen, measured on the screen after
-  // each render and layout (as the recent trips of the home screen).
-  const footerRef = useRef<HostInstance>(null);
-  const noteRef = useRef<HostInstance>(null);
-  const [noteRoom, setNoteRoom] = useState(0);
-  const measureNote = useCallback(() => {
-    const note = noteRef.current;
-    const footer = footerRef.current;
-    if (!note || !footer) return;
-    note.measureInWindow((_x, top) => {
-      footer.measureInWindow((_fx, footerContentTop, _width, footerHeight) => {
-        if (footerHeight <= 0) return;
-        // The footer's frame starts its padding and its top border above its content.
-        setNoteRoom(Math.max(0, Math.floor(footerContentTop - 1 - 2 * theme.space[4] - top)));
-      });
-    });
-  }, [theme]);
-  useEffect(() => {
-    measureNote();
-  });
-  // The keyboard makes the window of Android smaller and gives the room back when it closes.
-  useEffect(() => {
-    const shown = Keyboard.addListener("keyboardDidShow", measureNote);
-    const hidden = Keyboard.addListener("keyboardDidHide", measureNote);
-    return () => {
-      shown.remove();
-      hidden.remove();
-    };
-  }, [measureNote]);
+  // The note reaches down to the footer (`useFillToFooter`).
+  const note = useFillToFooter();
 
   if (trip === null) {
     return (
@@ -170,20 +144,7 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
 
   /** A row with its label at the left and the detail, changed in place, at the right. */
   const placeRow = (field: "from" | "to") => (
-    <View
-      style={{
-        minHeight: theme.control.height,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: theme.space[3],
-        paddingVertical: theme.space[2],
-        paddingHorizontal: theme.space[4],
-        backgroundColor: theme.c.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.c.border,
-      }}
-    >
-      <Text variant="label">{t(field === "from" ? "details.from" : "details.to")}</Text>
+    <DetailRow label={t(field === "from" ? "details.from" : "details.to")}>
       <InlineText
         value={trip[field]}
         placeholder={t("trip.none")}
@@ -193,7 +154,7 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
         maxLength={DETAIL_MAX[field]}
         testID={`trip-${field}`}
       />
-    </View>
+    </DetailRow>
   );
 
   return (
@@ -215,7 +176,7 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
       footer={
         // Back at the left, Delete trip at the right; the open trip has no Delete (it is stopped
         // on the home screen), so Back takes the whole footer.
-        <View ref={footerRef} style={{ flexDirection: "row", gap: theme.space[3] }}>
+        <View ref={note.footerRef} style={{ flexDirection: "row", gap: theme.space[3] }}>
           <View style={{ flex: 1 }}>
             <Button
               label={words.back}
@@ -280,10 +241,10 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
       {/* The note under its label, changed in place: it reaches down to the footer, and a longer
           note makes it grow and the screen scroll. */}
       <View
-        ref={noteRef}
-        onLayout={measureNote}
+        ref={note.blockRef}
+        onLayout={note.onLayout}
         style={{
-          minHeight: noteRoom,
+          minHeight: note.minHeight,
           gap: theme.space[1],
           paddingVertical: theme.space[3],
           paddingHorizontal: theme.space[4],

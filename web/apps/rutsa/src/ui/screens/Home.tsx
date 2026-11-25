@@ -422,6 +422,7 @@ export function Home({
         footerRef={footerRef}
         onOpen={(id) => nav.push({ name: "trip", id })}
         onHistory={() => nav.push({ name: "trips" })}
+        onAdd={() => nav.push({ name: "add" })}
       />
     </Screen>
   );

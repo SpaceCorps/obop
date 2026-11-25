@@ -1,6 +1,6 @@
 import { useTheme } from "@obop/ui-native";
 import { useEffect, useRef, useState } from "react";
-import { TextInput } from "react-native";
+import { TextInput, type TextInputProps } from "react-native";
 
 /**
  * A text that is changed where it stands (D6): it looks like the text around it, with no frame;
@@ -15,6 +15,8 @@ export function InlineText({
   placeholder,
   label,
   onCommit,
+  onChange,
+  keyboardType,
   look,
   maxLength,
   restoreWhenEmpty = false,
@@ -26,7 +28,13 @@ export function InlineText({
   /** What it is, for a screen reader: Name, From, To, Note. */
   label: string;
   /** Called with the text when it differs from `value`; the caller stores it. */
-  onCommit: (text: string) => void;
+  onCommit?: (text: string) => void;
+  /**
+   * Called on every change: for a form whose Save may be pressed while the cursor is still in the
+   * field (D7), not only when it loses the focus.
+   */
+  onChange?: (text: string) => void;
+  keyboardType?: TextInputProps["keyboardType"];
   /** `title` (the name, as the title of the screen), `value` (at the right of a row), `note` (lines). */
   look: "title" | "value" | "note";
   maxLength: number;
@@ -52,7 +60,7 @@ export function InlineText({
 
   const commit = () => {
     const { text: typed, value: stored, onCommit: save } = latest.current;
-    if (typed !== (stored ?? "")) save(typed);
+    if (save && typed !== (stored ?? "")) save(typed);
   };
 
   // Typed and not yet kept when the screen goes (Back while the cursor is in it): keep it.
@@ -71,7 +79,11 @@ export function InlineText({
   return (
     <TextInput
       value={text}
-      onChangeText={setText}
+      onChangeText={(next) => {
+        setText(next);
+        onChange?.(next);
+      }}
+      keyboardType={keyboardType}
       onFocus={() => {
         focused.current = true;
         setEditing(true);

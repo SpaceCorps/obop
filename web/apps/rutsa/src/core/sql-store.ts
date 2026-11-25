@@ -1,4 +1,4 @@
-import { cleanDetails, cleanText, type StoredDetails } from "./details.ts";
+import { cleanDetails, type StoredDetails } from "./details.ts";
 import { analyseRecorded, progressOf, type SegmentTimes } from "./progress.ts";
 import {
   TripAlreadyActive,
@@ -127,9 +127,6 @@ function toPoint(row: PointRow): StoredPoint {
     speedMps: row.speed_mps,
   };
 }
-
-/** A typed text of the driver: trimmed, and `null` when nothing is left (`details.ts`). */
-const text = cleanText;
 
 export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripRepository {
   const thinning = options.thinning ?? RECORDING_THINNING;
@@ -293,12 +290,31 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
       if (!Number.isFinite(distanceM) || distanceM < 0) {
         return Promise.reject(new RangeError("The distance must be 0 or more"));
       }
+      // The rules of the details typed at Stop (`details.ts`): a text that is too long is refused.
+      let typed: ReturnType<typeof cleanDetails>;
+      try {
+        typed = cleanDetails(input);
+      } catch (e) {
+        return Promise.reject(e);
+      }
       return db.transaction(async (tx) => {
         const id = options.newId();
+        // An untitled trip gets the next number; one with a name has none (migration 7).
         await tx.run(
-          `INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, segment, from_text, to_text, note, number)
-            VALUES (?, 'ended', 'manual', ?, ?, ?, 1, ?, ?, ?, (${NEXT_NUMBER}))`,
-          [id, startedAt, endedAt, distanceM, text(input.from), text(input.to), text(input.note)],
+          `INSERT INTO trip (id, state, source, started_at, ended_at, distance_m, segment, name, from_text, to_text, note, number)
+            VALUES (?, 'ended', 'manual', ?, ?, ?, 1, ?, ?, ?, ?,
+              CASE WHEN ? IS NULL THEN (${NEXT_NUMBER}) ELSE NULL END)`,
+          [
+            id,
+            startedAt,
+            endedAt,
+            distanceM,
+            typed.name,
+            typed.from,
+            typed.to,
+            typed.note,
+            typed.name,
+          ],
         );
         return mustRead(tx, id);
       });

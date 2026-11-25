@@ -19,6 +19,7 @@
   "dependencies": {
     "@obop/trip-core": "workspace:*",
     "@obop/ui-native": "workspace:*",
+    "@react-native-community/datetimepicker": "9.2.1",
     "expo": "58.0.16",
     "expo-crypto": "58.0.7",
     "expo-dev-client": "58.0.14",

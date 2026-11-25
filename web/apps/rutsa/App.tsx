@@ -1,4 +1,4 @@
-import { Button, InsetsProvider, Screen, Text, ThemeProvider, useInsets } from "@obop/ui-native";
+import { InsetsProvider, Screen, Text, ThemeProvider, useInsets } from "@obop/ui-native";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
 import { BackHandler, LayoutAnimation, View } from "react-native";
@@ -8,6 +8,7 @@ import { t } from "./src/i18n/index.ts";
 import { StatusBanner } from "./src/ui/StatusBanner.tsx";
 import { usePhoneStatus, useRecordingCheck, useStore, useTrips } from "./src/ui/hooks.ts";
 import { canGoBack, current, reduce, type Nav, type Route } from "./src/ui/router.ts";
+import { AddTrip } from "./src/ui/screens/AddTrip.tsx";
 import { Failed } from "./src/ui/screens/Failed.tsx";
 import { Home } from "./src/ui/screens/Home.tsx";
 import { Permissions } from "./src/ui/screens/Permissions.tsx";
@@ -25,16 +26,6 @@ function Loading() {
   return (
     <Screen title={t("app.title")} scroll={false}>
       <Text tone="muted">{t("common.loading")}</Text>
-    </Screen>
-  );
-}
-
-/** TEMPORARY: the route whose screen comes in D7; nothing leads to it yet. */
-function NotYet({ name, nav }: { name: Route["name"]; nav: Nav }) {
-  return (
-    <Screen title={name} onBack={nav.back}>
-      <Text tone="muted">This screen comes in a later step of block D.</Text>
-      <Button label="Home" variant="secondary" onPress={nav.home} />
     </Screen>
   );
 }
@@ -110,7 +101,7 @@ function Routes({
       screen = <TripDetail store={store} nav={nav} id={route.id} />;
       break;
     case "add":
-      screen = <NotYet name={route.name} nav={nav} />;
+      screen = <AddTrip store={store} nav={nav} />;
       break;
   }
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
   byDay,
+  dayAfter,
   dayBefore,
   dayKey,
   durationParts,
@@ -8,6 +9,7 @@ import {
   formatDay,
   formatKm,
   formatShortDate,
+  momentOf,
   monthKey,
   phoneTimeZone,
   totals,
@@ -147,6 +149,25 @@ describe("numbers and times for the screen", () => {
     expect(dayBefore("2026-12-01")).toBe("2026-11-30");
     expect(dayBefore("2027-01-01")).toBe("2026-12-31");
     expect(dayBefore("2028-03-01")).toBe("2028-02-29");
+  });
+
+  test("the day after, across a month, a year and a leap day", () => {
+    expect(dayAfter("2026-11-24")).toBe("2026-11-25");
+    expect(dayAfter("2026-11-30")).toBe("2026-12-01");
+    expect(dayAfter("2026-12-31")).toBe("2027-01-01");
+    expect(dayAfter("2028-02-28")).toBe("2028-02-29");
+  });
+
+  test("a clock time typed in Stockholm is its moment in UTC, in winter and in summer", () => {
+    expect(momentOf("2026-11-24", 8, 30, STOCKHOLM)).toBe(at("2026-11-24T07:30:00Z"));
+    expect(momentOf("2026-07-01", 8, 30, STOCKHOLM)).toBe(at("2026-07-01T06:30:00Z"));
+    expect(momentOf("2026-12-31", 23, 59, STOCKHOLM)).toBe(at("2026-12-31T22:59:00Z"));
+    expect(momentOf("2026-11-24", 8, 30, "UTC")).toBe(at("2026-11-24T08:30:00Z"));
+  });
+
+  test("a clock time that the change to summer time skips is taken an hour on", () => {
+    // 29 March 2026: the clocks of Stockholm go from 02:00 to 03:00.
+    expect(momentOf("2026-03-29", 2, 30, STOCKHOLM)).toBe(at("2026-03-29T01:30:00Z"));
   });
 
   test("the time zone of the phone is a name the formatter takes", () => {

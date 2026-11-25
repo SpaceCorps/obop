@@ -464,6 +464,34 @@ describe("the positions left out of the distance", () => {
 });
 
 describe("trips added by hand", () => {
+  test("a name is kept, and a named trip has no number; an untitled one has the next", async () => {
+    const named = await store.addManualTrip({
+      startedAt: T0,
+      endedAt: T0 + 30 * MIN,
+      distanceM: 1000,
+      name: " Client ",
+    });
+    expect(named).toMatchObject({ name: "Client", number: null });
+    const untitled = await store.addManualTrip({
+      startedAt: T0 + 60 * MIN,
+      endedAt: T0 + 90 * MIN,
+      distanceM: 1000,
+    });
+    expect(untitled).toMatchObject({ name: null, number: 1 });
+  });
+
+  test("a text that is too long is refused and nothing is stored", async () => {
+    await expect(
+      store.addManualTrip({
+        startedAt: T0,
+        endedAt: T0 + MIN,
+        distanceM: 1000,
+        from: "x".repeat(201),
+      }),
+    ).rejects.toThrow(DetailsTooLong);
+    expect(await store.listTrips()).toEqual([]);
+  });
+
   test("are ended, manual, with the typed distance and texts", async () => {
     const trip = await store.addManualTrip({
       startedAt: T0,

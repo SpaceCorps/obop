@@ -1,6 +1,6 @@
 import type { TripDetails } from "../core/details.ts";
 import { createRecording, type Ensured, type Recording } from "../core/recording.ts";
-import type { TripRepository } from "../core/repository.ts";
+import type { ManualTrip, TripRepository } from "../core/repository.ts";
 import { createSerial } from "../core/serial.ts";
 import type { Trip } from "../core/types.ts";
 import { emitChange } from "./bus.ts";
@@ -68,6 +68,11 @@ function change<T>(work: (store: TripRepository) => Promise<T>): Promise<T> {
 /** Changes the details of a trip that ended, from its screen (D6). */
 export function updateTripDetails(tripId: string, details: TripDetails): Promise<Trip> {
   return change((store) => store.updateDetails(tripId, details));
+}
+
+/** Adds a trip typed by hand (D7), checked before (`core/manual.ts`). */
+export function addManualTrip(input: ManualTrip): Promise<Trip> {
+  return change((store) => store.addManualTrip(input));
 }
 
 /** Deletes a trip that ended, with its positions, from its screen (D6). */

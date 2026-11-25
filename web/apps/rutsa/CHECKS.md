@@ -236,3 +236,23 @@ Since the fifth round of D6: no Edit details and no window; the details are chan
 - [ ] `smoke` History has no Back at the top; one long Back across the footer, as on the open trip's screen; it and the back button of Android go to Home
 - [ ] `smoke` History, scrolled: the rows go out of sight as far below the title as the first header stands from it before scrolling; the home screen and the trip's screen look as before at rest
 - [ ] `smoke` Home: at the right of the title Rutsa, "User" in grey and a round avatar with "U"; the header is as high as before (Recent trips keeps its rows); a tap on it does nothing (a placeholder for stage 2)
+
+## D7. Manual add
+
+- [ ] `smoke` Home: "Open history" a little to the left and a small filled purple "Add trip" at its right; the space between This month and Recent trips is as before, and Recent trips keeps its 6 rows
+- [ ] `smoke` "Add trip" opens "Manual add" in the look of a trip's screen: Name ("Optional"), From and To ("Not given") typed in place; a space; Date (today), Start and End ("Choose"), Distance (km) ("0.0"); a space; Note down to the footer; Back and Save in the footer; no Today and Yesterday buttons
+- [ ] `smoke` Date: a tap opens the calendar of Android (no day after today); Start and End: a tap opens the clock, 24 h
+- [ ] `smoke` Yesterday, 08:30, 09:15, 12.4, Office, Client, Save: back on Home; the trip is in Recent trips ("Office → Client", "Yesterday 08:30–09:15 · Added by hand", 12.4 km) and in History under its day; This month grew by 12.4 km
+- [ ] `smoke` Save with nothing chosen or typed: "Type the time as 08:30." under Start and End, "Type the km as a number, like 12.4." under Distance, "Required." under From and To, in red under their rows; nothing is saved
+- [ ] `smoke` 23:40 to 00:20: "Ends the next day." in grey under End; saved, the trip is under the day of its start
+- [ ] `smoke` 150 km in 45 min: "Is this right?" "That is 200 km/h on average." with Cancel and Save anyway; Cancel stays on the form
+- [ ] Type in From and press Save at once, the cursor still in it: the text counts
+- [ ] Today, a start or an end after now: "This time is still to come."
+- [ ] Over another trip (the same times as one in History): "Another trip runs at this time." under Start; the open trip counts until now
+- [ ] 0 km: "The km must be more than 0."; 2001 km: "At most 2,000 km."; 12,4 with a comma is taken
+- [ ] A name: the trip shows it and has no number; no name: "Untitled trip N", the next number
+- [ ] The trip added by hand opens its screen: no Positions, Duration from its start to its end; Delete works
+- [ ] Back and the back button of Android leave the form and save nothing; the dialog of a picker closed with Cancel changes nothing
+- [ ] Location off on the phone: "Add trip" and Save work (US-18 AC1)
+- [ ] The keyboard: decimal for the km; it does not hide the field being typed in, Note included
+- [ ] The trip's screen (D6) still looks the same: From and To rows, the Note down to the footer

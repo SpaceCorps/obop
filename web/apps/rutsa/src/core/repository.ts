@@ -58,7 +58,11 @@ export interface TripRepository {
    */
   updateDetails(tripId: string, details: TripDetails): Promise<Trip>;
 
-  /** A trip the driver types afterwards: ended, source `manual`, no points. */
+  /**
+   * A trip the driver types afterwards (D7): ended, source `manual`, no points; its texts by the
+   * rules of `details.ts` (`DetailsTooLong` refuses one that is too long). The checks of the typed
+   * times and km against the clock and the other trips are made before (`core/manual.ts`).
+   */
   addManualTrip(input: ManualTrip): Promise<Trip>;
 
   /** One trip, or `null` when there is none with this id. */
@@ -91,6 +95,8 @@ export interface ManualTrip {
   endedAt: number;
   /** Metres, 0 or more. */
   distanceM: number;
+  /** What the driver calls it; untitled, it gets the next number (D7). */
+  name?: string | null;
   from?: string | null;
   to?: string | null;
   note?: string | null;

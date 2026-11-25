@@ -201,20 +201,19 @@ Components from `@obop/ui-native`.
       among the untitled trips), times, km, duration (without the pauses), the positions stored
       and those the distance left out, its details (From, To, Note) changed in place (promised by
       D4b), delete; the edit of its parts is in stage 2
-- [ ] D7 `feat(rutsa): manual add`: the last step of the screens. A button "Add trip" in the header
+- [x] D7 `feat(rutsa): manual add`: the last step of the screens. A button "Add trip" in the header
       of Recent trips on the home screen, at the right of "Open history" (which stays a link and
       moves to its left), a small filled button of the main colour, opens a screen of its own (the
       route `add`), in the style of the trip's screen: Back and Save in its footer. It adds a new
-      trip typed by hand: name (optional; untitled gets its number), date (Today, Yesterday, or
-      typed as `2026-11-24`), start and end times (24 h; an end before the start is the next day,
-      said under the field), km (a dot or a comma), From and To (required text, the addresses in
+      trip typed by hand: name (optional; untitled gets its number), date, start and end times
+      (chosen with the pickers of the system, 24 h; an end before the start is the next day, said
+      under the field), km (a dot or a comma), From and To (required text, the addresses in
       effect), Note (optional, for example why it was typed). The trip is of the kind manual
       (BR-28), marked "Added by hand" in History and in Recent trips. The checks, each under its
       field: a real date and times, no start or end in the future, km over 0 and under a sane
       maximum (about 2,000 km), no overlap with another trip, the open one included (its km would
       count twice); a dialog, not a refusal, when the average speed is over about 150 km/h. Times
-      are typed in the phone's time zone and stored in UTC, like recorded ones. No date picker
-      package in this stage. Reachable without location (US-18 AC1). The edit of the parts of a
+      are typed in the phone's time zone and stored in UTC, like recorded ones. Reachable without location (US-18 AC1). The edit of the parts of a
       trip (the old D8) moved to stage 2
       Checkpoint: the app runs on the emulator; every check of `CHECKS.md` is run; Start, Pause, Resume,
       Stop, History, a trip's screen and a trip added by hand work when tried by hand; the clock
@@ -307,6 +306,7 @@ D23).
 | C1        | `expo-sqlite` 58.0.13, `expo-secure-store` 58.0.2, `expo-crypto` 58.0.7                                                                                                                                           |
 | C2        | `expo-location` 58.0.18                                                                                                                                                                                           |
 | C3        | `expo-task-manager` 58.0.12                                                                                                                                                                                       |
+| D7        | `@react-native-community/datetimepicker` 9.2.1 (the version of Expo SDK 58, MIT; the pickers of date and time of the system)                                                                                      |
 | Not taken | `@obop/client`, `expo-web-browser` (no sign-in); `expo-constants` (the server settings of `mileage-app`); `react-dom` (no stated reason in `mileage-app`; added only if a check needs it, with the reason)        |
 
 ## Taken from `mileage-app`, and left out
@@ -617,3 +617,28 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   (a table, a migration, the kind mixed, an edit screen), D6 already edits the details in place
   and D7 adds a forgotten trip whole, and it belongs with the report of stage 2, which separates
   the km measured and typed. The checkpoint of block D no longer has "a trip edited by hand".
+- 2026-11-25: D7 as built: `ui/screens/AddTrip.tsx` (route `add`, title "Manual add", Back and
+  Save in the footer) with the fields of the plan; Date is typed (`2026-11-24`) or set by Today
+  and Yesterday; times are typed as `08:30`, `8.30` or `0830` (the number pad of Android has no
+  colon). The checks are pure in `core/manual.ts` (`checkManual`): a real date and times, nothing
+  in the future, an end before the start on the next day (said under End), an end equal to the
+  start refused, km over 0 and at most 2,000 (a dot or a comma), From and To required, the
+  lengths of `details.ts`, no overlap with another trip (the open one until now; trips that only
+  touch do not overlap), and the average speed, which over 150 km/h asks "Is this right?" with
+  Save anyway. Problems show under their fields once Save was pressed. `present.ts` gains
+  `momentOf` (a clock time on a day in a time zone, in UTC, right in summer and winter time) and
+  `dayAfter`. The store's `addManualTrip` takes a name and the rules of `details.ts`, and a
+  named trip gets no number. "Add trip" is a small filled button at the right of "Open history";
+  saved, the screen goes back and the trip is in Recent trips and History, marked "Added by
+  hand". The temporary `NotYet` of `App.tsx` is gone: every route has its screen.
+  Tried, then changed: the form has the look of a trip's screen (`ui/DetailRow.tsx`, shared with
+  From and To there): Name, From and To typed in place (`InlineText`, which now also reports every
+  change, so Save sees a field that still has the cursor), then Date, Start and End chosen with
+  the pickers of the system and Distance typed in place, then Note down to the footer
+  (`ui/fill.ts`, `useFillToFooter`, shared with the trip's screen). The pickers are
+  `@react-native-community/datetimepicker` 9.2.1, the version Expo SDK 58 expects (MIT; a native
+  module, so the build needs `android:prebuild`), against the "no date picker package" of the plan,
+  asked for after trying the typed fields: the dialog of Android on a tap on the row, the compact
+  picker of iOS in the row (`ui/pick.tsx`); no Today and Yesterday buttons. "Add trip" reaches
+  over the line of the header of Recent trips with a negative margin, so the header keeps its
+  height and the rows their room.

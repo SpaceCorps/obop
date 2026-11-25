@@ -133,6 +133,56 @@ export function dayBefore(day: string): string {
   return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
 }
 
+/** The day after a `YYYY-MM-DD` key. */
+export function dayAfter(day: string): string {
+  const [year, month, date] = day.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
+}
+
+const clockFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** The wall clock of a moment in a time zone, written as if it were UTC (to read its offset). */
+function wallClockAsUtc(ms: number, timeZone: string): number {
+  let format = clockFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+    clockFormats.set(timeZone, format);
+  }
+  const parts = format.formatToParts(new Date(ms));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return Date.UTC(
+    part("year"),
+    part("month") - 1,
+    part("day"),
+    part("hour") % 24,
+    part("minute"),
+    part("second"),
+  );
+}
+
+/**
+ * The moment of a clock time on a day (`YYYY-MM-DD`) in a time zone: what a driver types in the
+ * phone's time zone, to be stored in UTC (D7). The offset is read for the moment itself, so
+ * summer and winter time are each right; a clock time that a change of the clock skips is taken
+ * an hour on.
+ */
+export function momentOf(day: string, hour: number, minute: number, timeZone: string): number {
+  const [year, month, date] = day.split("-").map(Number) as [number, number, number];
+  const wall = Date.UTC(year, month - 1, date, hour, minute);
+  const first = wall - (wallClockAsUtc(wall, timeZone) - wall);
+  return wall - (wallClockAsUtc(first, timeZone) - first);
+}
+
 /** The time zone of the phone; UTC where the engine cannot say. */
 export function phoneTimeZone(): string {
   try {
