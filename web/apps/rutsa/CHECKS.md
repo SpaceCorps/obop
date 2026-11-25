@@ -250,8 +250,8 @@ Since the fifth round of D6: no Edit details and no window; the details are chan
 - [x] 2026-11-25 `smoke` 23:40 to 00:20: "Ends the next day." in grey under End; saved, the trip is under the day of its start
 - [x] 2026-11-25 `smoke` 150 km in 45 min: "Is this right?" "That is 200 km/h on average." with Cancel and Save anyway; Cancel stays on the form
 - [ ] Type in From and press Save at once, the cursor still in it: the text counts
-- [ ] Today, a start or an end after now: "This time is still to come."
-- [ ] Over another trip (the same times as one in History): "Another trip runs at this time." under Start; the open trip counts until now
+- [ ] Today, a start after now: "The start is still to come." under Time
+- [ ] Over another trip (the same times as one in History): "Another trip runs at this time." under Time; the open trip counts until now
 - [ ] 0 km: "The km must be more than 0."; 2001 km: "At most 2,000 km."; 12,4 with a comma is taken
 - [ ] A name: the trip shows it and has no number; no name: "Untitled trip N", the next number
 - [ ] The trip added by hand opens its screen: no Positions, Duration from its start to its end; Delete works
@@ -283,3 +283,94 @@ Since the fifth round of D6: no Edit details and no window; the details are chan
 - [x] 2026-11-25 `smoke` Home → widget → trip's screen → Back, many times, while a trip records: the trip's screen never shows the bare "Trip" with Back at the top
 - [x] 2026-11-25 `smoke` A trip that ended: the widget's bottom right says when it ended (on Home and on its screen); an open trip: when it started
 - [x] 2026-11-25 `smoke` The trip's screen has no Duration and no Distance rows: Date, Time, Positions only
+
+## The header
+
+- [ ] `smoke` Home: "Welcome, User!" at the left, the avatar "U" at the right; a tap on the avatar does nothing; Recent trips shows 6 rows
+- [ ] `smoke` The trip's screen ("Trip"), History ("History") and Manual add ("Manual add") have the same header with the avatar in the same place
+- [ ] `smoke` An untitled trip, on Home's widget and on its screen: "Untitled trip N" in grey; a tap gives an empty field with the cursor; type a name, tap elsewhere: kept (both screens and History show it); a field left empty: "Untitled trip N" in grey again, same number
+- [ ] `smoke` Home's widget: a tap on the name edits it, a tap elsewhere on the card opens the trip
+- [ ] `smoke` Stop, Pause and Resume many times while a trip records: the red "Recording has stopped" never flashes
+- [ ] A name of spaces only: the field is empty again and the trip stays untitled
+
+## Manual add around the widget
+
+- [ ] `smoke` "Untitled trip N" is black (not grey) on Home's widget, on a trip's screen and on Manual add
+- [ ] `smoke` "Add trip": the widget "Untitled trip N" (the next number), a purple dot and "New", 0:00:00, "0.0 km", and at the bottom right the time the screen opened; under it From and To, then Date (today) and Time ("HH:MM–HH:MM", the same twice), then Note; no rows Name, Start, End, Distance
+- [ ] `smoke` Tap the time at the bottom right: the clock of Android; choose 08:30: the corner says 08:30, Time "08:30–08:30"
+- [ ] `smoke` Tap 0:00:00: the clock; choose 0:45: the widget says 0:45:00, Time "08:30–09:15"
+- [ ] `smoke` Tap 0.0: the decimal keyboard; type 12.4: "12.4 km"; Office, Client, Save: back on Home, the trip in Recent trips and History with 08:30–09:15 and 12.4 km
+- [ ] `smoke` Save with no km: "Type the km as a number, like 12.4." in red under the widget; duration 0:00: "Choose how long it took." under Time
+- [ ] Start 23:40, duration 0:40: Time "23:40–00:20", "Ends the next day." under it
+- [ ] Today, the start the time the screen opened and a duration of 1:00: "It would end after now: choose an earlier start." under Time
+- [ ] A name typed in the widget: the trip saved has it and no number
+- [ ] The clock dialog closed with Cancel changes nothing
+
+## Headers of iOS and the switcher
+
+- [x] 2026-11-25 `smoke` (screenshots by the agent) Record: "Welcome, User!" in the middle, no corner buttons, the widget, Today and This month, Recent trips, Start on the background with no panel, the switcher Profile, History, Record with Record marked
+- [x] 2026-11-25 `smoke` (screenshots by the agent) History: the title in the middle, a filled purple "+" at the right, no Back; the switcher with History marked; the list scrolls above the switcher
+- [x] 2026-11-25 `smoke` (screenshots by the agent) A trip's screen: a purple ring "<" at the left, "Trip", a ring with a bin at the right; no footer; Note down to the bottom; no switcher
+- [x] 2026-11-25 `smoke` (screenshots by the agent) Manual add: a ring "x" at the left, a filled "✓" at the right; no footer; no switcher
+- [ ] `smoke` Profile: the big avatar "U", "User", "Your profile and the settings come here later."
+- [ ] `smoke` The switcher: each tab shows its screen at once, and History and Profile are as they were left when shown again
+- [ ] `smoke` "Open history" on Record switches to the tab History; "Add trip" and "+" open Manual add
+- [ ] `smoke` A trip's screen: "<" goes back to the tab it came from (Record or History); the bin asks, then deletes; while the trip is open the bin is greyed and does nothing
+- [ ] `smoke` Manual add: "x" leaves and saves nothing; "✓" saves (a spinner while it saves) and goes back
+- [ ] The back button of Android: from a trip's screen or Manual add one screen back; on Profile or History to Record; on Record it leaves the app
+- [ ] Start without location: the permissions with "<" at the left of the header, their main button at the bottom with no panel, no Close
+- [ ] A trip records, Record shows 1 fewer recent trip than before the switcher; the round button and Pause do not hide under the switcher
+- [ ] `vp run emulator:check` with History or a trip's screen left open: it goes back to Record by itself
+- [ ] Dark theme of the system: the switcher and the round buttons can be seen
+
+Since the second round: the order of the tabs, "Record" with Edit, the sort and the search of History, Back on Manual add, a trip read only until Edit.
+
+- [x] 2026-11-25 `smoke` (screenshots by the agent) The switcher: History, Record, Profile; the app opens on Record, marked
+- [x] 2026-11-25 `smoke` (screenshots by the agent) Record: "Record" in the middle, the pill "Edit" with a purple ring and word at the left, nothing at the right
+- [x] 2026-11-25 `smoke` (screenshots by the agent) History: a ring with three lines (sort) at the left, "+" at the right, a round-ended "Search" field under the header
+- [x] 2026-11-25 `smoke` (screenshots by the agent) A trip's screen: "<" at the left, the pill "Edit" at the right; Edit: it becomes a filled "Done", and a red "Delete trip" with a bin comes under the note, which ends above it
+- [ ] `smoke` Record's Edit, History's sort and its search do nothing when tapped
+- [ ] `smoke` Manual add: "<" at the left leaves and saves nothing; "✓" at the right saves
+- [ ] `smoke` A trip's screen, read only: a tap on the name, From, To or Note brings no cursor and no keyboard
+- [ ] `smoke` Edit, type a name and a note, Done: the keyboard goes, the texts are kept (History and Record show the name), and the fields are read only again
+- [ ] `smoke` Edit, Delete trip: asked; Delete removes it and goes back; Cancel stays in the edit
+- [ ] Edit, type in From, then "<" at once: the text is kept
+- [ ] The open trip: Edit lets the name, From, To and Note be typed, and there is no Delete trip
+- [ ] Record's widget: the name is still typed in place there, with no Edit
+
+Since the third round: grey for what is not given, black for what is.
+
+- [x] 2026-11-25 `smoke` (screenshots by the agent) Manual add: a yellow dot and "New"; "Untitled trip N", 0:00:00 and "0.0 km" grey, "0.0" and "km" a space apart; Date black; the start at the bottom right, Time and the note's placeholder grey
+- [x] 2026-11-25 `smoke` (screenshots by the agent) Type 12.4 in the km: "12.4 km" black; type Office in From: black
+- [ ] `smoke` Choose a duration: the big time turns black; type a name: black
+- [ ] `smoke` A trip's screen: From and To that were typed are black, "Not given" grey; the untitled name stays black ("Untitled trip N" is its name there)
+- [ ] Clear the km: "0.0 km" grey again
+
+Since the fourth round: Cancel and Done while editing a trip, no Date row, no placeholder in the note.
+
+- [x] 2026-11-25 `smoke` (screenshots by the agent) A trip's screen, read only: "<", "Trip", the pill "Edit"; no Date row (Time, Positions); Note an empty block with no "Empty"
+- [x] 2026-11-25 `smoke` (screenshots by the agent) Edit: a round "x" at the left, a round filled "✓" at the right, "Untitled trip N" grey, Delete trip red on the background under the note
+- [x] 2026-11-25 `smoke` (by the agent) Edit, type "Cafe" in From, "x": From is "Not given" again; Edit, "Cafe", "✓": From is "Cafe" (cleared again after)
+- [ ] `smoke` Manual add: "km" black next to a grey "0.0"; the note an empty block, a tap in it and the cursor is there
+- [ ] `smoke` Edit, type a name, a note and To, "✓": all three kept at once; Record's widget and History show the name
+- [ ] Edit, type, then the back button of Android: nothing is kept, and the screen goes back
+- [ ] A trip of yesterday: the widget says "Yesterday HH:MM", the day the Date row said
+
+The duration with seconds:
+
+- [x] 2026-11-25 `smoke` (by the agent) Manual add: the big "0:00:00" is a grey "0", "00" and "00" with black colons; type 45 in the minutes and 30 in the seconds: "0:45:30" with the 0 grey and 45 and 30 black, Time "19:49–20:34"
+- [ ] `smoke` A duration of 0:45:30 from 08:30, 12.4 km, Office, Client, Save: the trip ends at 09:15:30; History says 08:30–09:15
+- [ ] `smoke` 75 in the minutes, Save: "Hours go up to 23, minutes and seconds up to 59." under the widget
+- [ ] `smoke` Nothing in the duration, Save: "Type how long it took." under the widget
+- [ ] Clear a part: it is a grey "00" again and counts as 0
+- [x] 2026-11-25 `smoke` (by the agent) Record: "Statistics" over Today and This month in grey, "Recent trips" with "Show more" and no "Add trip", five recent trips above a smaller Start and the switcher
+- [x] 2026-11-25 `smoke` (by the agent) Start: Pause at the left of the red Stop and Restart at its right, both centred on its height with a small gap
+- [x] 2026-11-25 `smoke` (by the agent) Restart after 25 s: "Restart the trip?" with Cancel and Restart; Restart: still "Untitled trip 90", Recording, the timer from 0 again, the start time now (the trip stopped and deleted after)
+- [ ] `smoke` Restart while paused: the trip records again (red, Stop and Pause), the timer from 0
+- [ ] `smoke` Cancel in the dialog of Restart changes nothing
+- [ ] Restart after a drive: the km go back to 0.0 and grow again; Stop: the km of the drive after the restart only
+- [ ] Start the next trip after a restarted untitled one: it takes the next number (no gap, none taken twice)
+- [ ] `smoke` "Show more" opens the tab History
+- [ ] `smoke` Start, then Pause and Resume: the red Stop and Resume fit in the smaller circle, Pause stands at the top right of the footer, nothing under the switcher
+- [ ] A trip records with a warning banner on Record: fewer recent rows, nothing hidden under the switcher
+- [x] 2026-11-25 `smoke` (by the agent, an enlarged screenshot) The grey "0" and "00" and the typed black "45" stand on one line, the colons with them (the fields had a line height that Android gives to typed text only, which put it lower)

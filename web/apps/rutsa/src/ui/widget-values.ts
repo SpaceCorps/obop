@@ -3,6 +3,19 @@ import type { Trip } from "../core/types.ts";
 import { tripDurationMs, whenText } from "./home.ts";
 import { elapsedMs, formatElapsed } from "./recording-view.ts";
 
+/** The time at the bottom right of the widget: the clock time today, else with its day. */
+function clockOf(
+  at: number,
+  now: number,
+  locale: string,
+  timeZone: string,
+  words: { today: string; yesterday: string },
+): string {
+  return dayKey(at, timeZone) === dayKey(now, timeZone)
+    ? formatClock(at, locale, timeZone)
+    : whenText(at, now, locale, timeZone, words);
+}
+
 /**
  * What the current widget shows of a trip, the same on the home screen and on the trip's screen:
  * its time without the pauses (`H:MM:SS`; running while it records, standing while it is paused,
@@ -34,9 +47,9 @@ export function widgetValues(
     : (tripDurationMs(trip, count?.closedMs ?? null) ?? 0);
   const metres = open ? (count?.distanceM ?? 0) : (trip.distanceM ?? 0);
   const at = open ? trip.startedAt : (trip.endedAt ?? trip.startedAt);
-  const clock =
-    dayKey(at, timeZone) === dayKey(now, timeZone)
-      ? formatClock(at, locale, timeZone)
-      : whenText(at, now, locale, timeZone, words);
-  return { elapsed: formatElapsed(ms), km: formatKm(metres, locale), clock };
+  return {
+    elapsed: formatElapsed(ms),
+    km: formatKm(metres, locale),
+    clock: clockOf(at, now, locale, timeZone, words),
+  };
 }

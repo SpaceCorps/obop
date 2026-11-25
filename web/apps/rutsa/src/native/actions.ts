@@ -54,6 +54,11 @@ export function stopTrip(tripId: string, details?: TripDetails): Promise<Trip> {
   return run((r) => r.stop(tripId, details));
 }
 
+/** Starts the open trip again from now: the same trip and number, its positions cleared. */
+export function restartTrip(tripId: string): Promise<Trip> {
+  return run((r) => r.restart(tripId));
+}
+
 /** A change of the store alone, in the same queue, after which the open screens are told. */
 function change<T>(work: (store: TripRepository) => Promise<T>): Promise<T> {
   return serial(async () => {

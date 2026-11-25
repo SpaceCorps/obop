@@ -280,9 +280,12 @@ driver's.
   leaving the phone, against the local-only idea of Rutsa: a privacy decision goes with it.
 - A company setting that forbids typed km, in the version for companies.
 
-**The driver at the top of the home screen** (a placeholder since D6, `ui/UserBadge.tsx`): their
-name and avatar, and what a tap opens (a profile, the settings with the language and the app lock
-of BR-35). Stage 1 has no sign-in; where the name comes from is decided with it.
+**The tab Profile** (a placeholder since D6, `ui/screens/Profile.tsx`): the avatar, "User" and
+the name in "Welcome, User!". Stage 2 fills it: the profile, the settings with the app lock of
+BR-35 and the export of trips, the theme (its choice is kept in `meta` and applied by `App.tsx`
+already: `ui/theme-choice.ts`) and the language (Swedish). Stage 1 has no sign-in; where the name
+comes from is decided with it. The switcher at the bottom (`ui/TabBar.tsx`) gets its finer look
+in stage 2 too.
 
 **Statuses of a trip**: today a trip is open (recording or paused) or ended. A later state, such as
 a trip in a sent report, could lock it against an edit.
@@ -687,3 +690,103 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   that opens shows it at once and the fresh read replaces it. The bottom right of the widget says
   when a trip that ended ended (when an open one started), on both screens; the rows Duration
   and Distance leave the trip's screen, since the widget says them.
+- 2026-11-25: asked for: the header of the home screen is the driver at the left (the avatar,
+  then "User", a placeholder) and "⋯" at the right, in place of the title Rutsa
+  (`ui/HomeHeader.tsx`, 36 high, the height the trip's screen gives its empty title, so the
+  widget does not move). "⋯" opens a menu under it: Language (English only, "Swedish comes
+  later"), Theme (System, Light or Dark in a dialog of the system; the key `theme` in `meta`,
+  `themeChoiceOf`; `ui/theme-choice.ts` keeps one choice for the app, and `App.tsx` gives it to
+  the screens once the trips are open, with the status bar to match) and Settings, a new route and
+  screen (`ui/screens/Settings.tsx`: Theme and Language as rows, and what comes later).
+  Tried, then changed: the header is 31 high, the line of the title it took the place of (36 had
+  pushed the screen down and cost the sixth recent trip), and the trip's screen shows the same
+  header, so the driver, "⋯" and the widget stay where they are when a trip is opened.
+  Changed again: the header has the title at the left, "Welcome, User!" on the home screen and
+  "Trip" on the trip's screen, and the driver's avatar at the right in place of "⋯"; the avatar
+  opens the menu: Profile and Settings, greyed until stage 2 (the screen Settings and its route
+  are gone), then Theme and Language. The red "Recording has stopped" that flashed at a Stop is
+  fixed: Stop stops the updates before it ends the trip (and Resume opens the segment before it
+  starts them), and the check of the updates every 5 s could fall in between; it is not asked
+  while a button's action runs, and asked again at once after.
+  Changed again: the avatar opens no menu (it is gone, with its dialogs); stage 2 makes it open the
+  driver's screen, where the theme comes back. History and Manual add have the same header (their
+  title, the avatar). The name of a trip is typed in place in the widget on the home screen too
+  (`ui/TripNameInput.tsx`, shared with the trip's screen; a tap on the name puts the cursor there,
+  a tap elsewhere on the card opens the trip), and "Untitled trip N" is its grey placeholder: a tap
+  gives an empty field, a name typed is kept, a field left empty keeps the trip untitled.
+  Changed again: "Untitled trip N" is a black placeholder, as the name it stands for. Manual add
+  is built around the current widget too, with the state New (a purple dot): the name and the km
+  are typed in place on it; the big time is the duration and the time at the bottom right the
+  start, each chosen with a tap (the clock of the system; the start is at first the moment the
+  screen opened, the duration 0:00). The form keeps the start and the duration (`ManualForm.duration`
+  in place of `end`): the end is the start plus the duration as it passed, so a change of the
+  clock in between is right, and the problems `duration_format`, `duration_zero` and
+  `end_future` take the place of the end's. Under the widget From and To, then Date and Time
+  (`08:30–09:15`, read only, "Ends the next day." under it), then Note; the rows Name, Start,
+  End and Distance are gone.
+- 2026-11-25: asked for: the look of iOS and a switcher as in Telegram. Every screen has a header
+  with its title in the middle and a round button at each corner, either of which may be left out
+  or greyed (`ui/ScreenHeader.tsx`; `filled`: the main colour with a white ring and symbol,
+  `outline`: a ring and a symbol of the main colour; the symbols are drawn with views,
+  `ui/icons.tsx`, no package added). The footers with Back and Delete are gone: a trip's screen
+  has Back and Delete trip (greyed while it is open) in its header, Manual add Close and Save
+  (filled), History "+" (Manual add, filled), the permissions Back (their Close is gone, their
+  main buttons stay at the bottom with no panel), the home screen none. The Note reaches down to
+  the bottom of the screen (`useFillToBottom` in place of `useFillToFooter`). At the bottom of the
+  screens without a screen over them, a small round-ended switcher lies over them
+  (`ui/TabBar.tsx`): Profile (a placeholder, `ui/screens/Profile.tsx`), History and Record, the
+  home screen, whose big button now stands on the background with no panel (`footerBare`, a new
+  property of `Screen` of `@obop/ui-native`, off by default). History is a tab and no longer a
+  route (`Route` has no `trips`; `Nav.tab`); "Open history" switches to it. A trip's screen, Manual
+  add and the permissions lie over the tabs without the switcher. The back button of Android goes
+  back one screen, else from Profile or History to Record, else leaves the app (`backPress`). The
+  avatar of the header is gone: Profile is its tab. `emulator:check` goes back to Record from any
+  screen or tab before it starts.
+  Changed again: the switcher is History, Record (in the middle, shown at the start) and Profile.
+  The home screen's title is "Record" (no "Welcome, User!"), with a pill "Edit" at the left (a
+  placeholder of stage 2: no tap) and nothing at the right; a header button is round with a
+  symbol or a pill with a word, and the two corners are as wide as each other so the title stays
+  in the middle. History has a sort at the left (three lines, as Telegram's contacts) and a search
+  field under its header, both placeholders of stage 2. Manual add's left button is Back ("<"),
+  not "x". A trip's screen is read only until Edit (a pill at the right) is pressed: then the
+  name, From, To and Note are typed in place, Edit becomes Done (filled; it keeps what is being
+  typed), and a red "Delete trip" comes under the note for a trip that ended (asked first); the
+  bin of the header is gone.
+  Changed again: on Manual add the dot of New is yellow, and a field not given is grey while a
+  field given is black, in the widget too: the name ("Untitled trip N" grey there), 0:00:00 until
+  a duration is chosen, "0.0 km" until the km are typed (the number and "km" a space apart, the
+  "0.0" kept while the km are typed so the empty field keeps its width). The date is black (it is
+  given from the start); the start at the bottom right of the widget, the Time row (read only) and
+  the placeholder of the note stay grey. What is typed in From and To is black on every screen.
+  Changed again: "km" is always black on Manual add (only the number is grey until typed). The
+  note has no placeholder on Manual add and on a trip's screen ("Empty" and "Optional, ..." are
+  gone): an empty block, a tap in it and the note is typed. A trip's screen has no Date row (the
+  widget says the day of a trip that was not today). While a trip is edited, Back becomes Cancel
+  (a round "x") and Done a round filled "✓"; what is typed is a draft, kept all at once by "✓"
+  and dropped by "x" (the fields are drawn again with what is stored); the fields no longer keep
+  their text when they lose the focus there. "Untitled trip N" is grey while editing (an empty
+  field), black when read only (the trip's name). Delete trip stands on the background, red with
+  its bin, with no white block.
+  Asked for and decided: the edit of a trip keeps to the name, From, To and Note; its duration,
+  km and start are not changed on its screen (a recorded trip's are measured): that stays with
+  the edit of a trip in stage 2. The duration of Manual add has seconds: `ManualForm.duration` is
+  `1:15:30` (`parseDuration` reads it, with or without seconds; `durationText` writes it), and it
+  is chosen in a window of three wheels, hours, minutes and seconds (`ui/DurationPicker.tsx`; a
+  tap on a line turns the wheel to it), since the clock of the system has no seconds.
+  Changed again: no window; the big duration of the widget is three fields typed in place, hours,
+  minutes and seconds (`InlineText` look `display`, the number pad), with black colons between
+  them; a part left empty is 0 and shows a grey "0" or "00", a part typed is black
+  (`durationFromParts` makes the text `parseDuration` checks). Minutes or seconds over 59 (or
+  hours over 23) and no duration at all are said under the widget, an end after now under Time.
+- 2026-11-25: asked for, on Record: a grey header "Statistics" over Today and This month, in the
+  look of "Recent trips"; "Add trip" leaves the header of Recent trips (Manual add is the "+" of
+  History) and "Open history" is called "Show more"; Recent trips shows five trips, so the round
+  button is 88 (was 144, its word one size smaller and fitted to the circle) and the switcher 56
+  high with 4 above it (was 60 and 8).
+- 2026-11-25: asked for: the small buttons stand at the sides of the round one, centred on its
+  height with a small gap: Pause (Stop while paused) at its left and a new Restart at its right,
+  in places of the same width that stay when they are not there. Restart asks first, as Stop
+  ("Restart the trip?"), and starts the open trip again from now: `restartTrip` of the store
+  deletes its positions and segments and makes it record in a new segment 1 from now; it is the
+  same trip, so an untitled one keeps its number and its details stay (`Recording.restart` checks
+  that the phone can record first, and pauses the trip when the updates cannot start).

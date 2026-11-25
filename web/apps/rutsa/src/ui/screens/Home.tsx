@@ -1,4 +1,4 @@
-import { Banner, Button, Screen, Text, type BannerTone } from "@obop/ui-native";
+import { Banner, Button, Screen, Text, useTheme, type BannerTone } from "@obop/ui-native";
 import { useEffect, useRef, useState } from "react";
 import { Alert, View, type HostInstance } from "react-native";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
@@ -9,6 +9,7 @@ import {
   CannotRecord,
   ensureRecording,
   pauseTrip,
+  restartTrip,
   resumeTrip,
   stopTrip,
 } from "../../native/actions.ts";
@@ -17,8 +18,9 @@ import { announce } from "../announce.ts";
 import { CurrentWidget } from "../CurrentWidget.tsx";
 import { RecentTrips } from "../RecentTrips.tsx";
 import { RoundButton } from "../RoundButton.tsx";
+import { TripNameInput } from "../TripNameInput.tsx";
 import { widgetValues } from "../widget-values.ts";
-import { UserBadge } from "../UserBadge.tsx";
+import { ScreenHeader } from "../ScreenHeader.tsx";
 import { lastEndedTrip } from "../home.ts";
 import { useNow, useProgress, useRegistered, useTrips, type Check } from "../hooks.ts";
 import { tOs } from "../os-text.ts";
@@ -32,10 +34,13 @@ let restoredNoteRead = false;
 type Blocked = Exclude<Readiness, "ready">;
 
 /** Which button's action runs: only that one shows it. */
-type Busy = "main" | "side" | "restart" | null;
+type Busy = "main" | "side" | "again" | "restart" | null;
 
-/** The width of the small button, the same for Pause and Stop, so nothing moves when it changes. */
-const SIDE_WIDTH = 92;
+/**
+ * The width of a small button at a side of the round one (Pause or Stop at the left, Restart at
+ * the right), the same for each, so nothing moves when one comes, goes or changes.
+ */
+const SIDE_WIDTH = 100;
 
 const BLOCKED_TEXT: Readonly<Record<Blocked, MessageKey>> = {
   services_off: "recording.blocked.services_off",
@@ -75,7 +80,7 @@ function warningBanner(
 }
 
 /**
- * The first screen, and the screen of a recording (D4): the big button goes Start, then a red Stop
+ * The first screen, the tab Record, and the screen of a recording (D4): the big button goes Start, then a red Stop
  * with Pause at its left, then Resume with Stop at its left while paused; Stop asks first. While a
  * trip is open it shows on top: Recording or Paused and its name ("Untitled trip 33" until it is
  * named in History), its elapsed time, its km so far (the same count Stop makes) and its start,
@@ -97,6 +102,7 @@ export function Home({
   recoveredStaleFile: boolean;
   check: Check | null;
 }) {
+  const theme = useTheme();
   const { trips, active } = useTrips(store);
   // The content of the footer: the recent trips end above it.
   const footerRef = useRef<HostInstance>(null);
@@ -111,9 +117,12 @@ export function Home({
     active === null && last?.source === "recorded" ? last.id : null,
     last?.state ?? null,
   );
-  const registered = useRegistered(active?.state === "recording");
-  const [restoredRead, setRestoredRead] = useState(restoredNoteRead);
   const [busy, setBusy] = useState<Busy>(null);
+  // Not asked while a button's action runs: Stop stops the updates before it ends the trip, and
+  // Resume opens the segment before it starts them, so an answer in between is a false "stopped".
+  // Asked again at once when the action is done.
+  const registered = useRegistered(active?.state === "recording" && busy === null);
+  const [restoredRead, setRestoredRead] = useState(restoredNoteRead);
   const [actionFailed, setActionFailed] = useState(false);
   const [restartFailed, setRestartFailed] = useState(false);
   const [restartBlocked, setRestartBlocked] = useState<Blocked | null>(null);
@@ -186,6 +195,33 @@ export function Home({
    * Stop asks first, in a dialog of the system. The details of the trip are typed afterwards on its
    * screen (D6), not at Stop: the window of D4b and its switch went after they were tried.
    */
+  /**
+   * Restart asks first, as Stop: the open trip starts again from now, the same trip (its number
+   * stays), its time and km so far cleared. A phone that cannot record goes to the permissions.
+   */
+  const confirmRestart = (trip: { id: string; state: "recording" | "paused" }) => {
+    Alert.alert(t("home.restart.title"), t("home.restart.message"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("home.restart"),
+        style: "destructive",
+        onPress: () =>
+          act(
+            "again",
+            async () => {
+              await restartTrip(trip.id);
+              setCheckHandledAt(Date.now());
+            },
+            () =>
+              nav.push({
+                name: "permissions",
+                next: trip.state === "paused" ? "resume" : "restart",
+              }),
+          ),
+      },
+    ]);
+  };
+
   const confirmStop = (which: Busy, id: string) => {
     Alert.alert(t("home.stop.title"), t("home.stop.message"), [
       { text: t("common.cancel"), style: "cancel" },
@@ -299,28 +335,57 @@ export function Home({
       />
     );
 
+  const restartButton =
+    active && active.state !== "ended" ? (
+      <Button
+        label={t("home.restart")}
+        variant="secondary"
+        busy={busy === "again"}
+        onPress={() =>
+          confirmRestart({
+            id: active.id,
+            state: active.state === "paused" ? "paused" : "recording",
+          })
+        }
+        testID="restart-trip"
+      />
+    ) : null;
+
   return (
     <Screen
       title={t("app.title")}
-      // The title, and the driver at the right (a placeholder for stage 2).
+      // "Record" in the middle and the pill Edit at the left (a PLACEHOLDER of stage 2: no tap
+      // yet), as high as the other headers, so the current widget stands where it stands on the
+      // trip's screen.
       titleSlot={
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <Text variant="title">{t("app.title")}</Text>
-          </View>
-          <UserBadge />
-        </View>
+        <ScreenHeader
+          title={t("tabs.record")}
+          left={{
+            text: t("header.edit"),
+            label: t("header.edit"),
+            inactive: true,
+            testID: "record-edit",
+          }}
+        />
       }
+      // The big button stands on the background, above the switcher, with no panel.
+      footerBare
       footer={
-        // The big button is centred on its own; the small one lies over the top right corner of
-        // the footer, out of the flow, so it moves nothing when it comes, goes or changes.
-        <View ref={footerRef} style={{ alignItems: "center", justifyContent: "center" }}>
+        // The round button in the middle; Pause (or Stop while paused) at its left and Restart at
+        // its right, centred on its height, a small gap from it, in places of the same width that
+        // stay when the buttons are not there, so nothing moves when they come or go.
+        <View
+          ref={footerRef}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: theme.space[3],
+          }}
+        >
+          <View style={{ width: SIDE_WIDTH }}>{sideButton}</View>
           {mainButton}
-          {sideButton ? (
-            <View style={{ position: "absolute", right: 0, top: 0, width: SIDE_WIDTH }}>
-              {sideButton}
-            </View>
-          ) : null}
+          <View style={{ width: SIDE_WIDTH }}>{restartButton}</View>
         </View>
       }
     >
@@ -346,6 +411,8 @@ export function Home({
         {...(widgetTrip === null
           ? { elapsed: "", km: "", clock: "" }
           : widgetValues(widgetTrip, active ? progress : lastProgress, now, LANGUAGE, zone, words))}
+        // The name is typed in place here too; a tap elsewhere on the card opens the trip.
+        nameSlot={widgetTrip === null ? undefined : <TripNameInput trip={widgetTrip} />}
         onPress={() => widgetTrip && nav.push({ name: "trip", id: widgetTrip.id })}
       />
 
@@ -363,18 +430,24 @@ export function Home({
         </Text>
       ) : null}
 
-      <View style={{ flexDirection: "row", gap: 24 }}>
-        <View style={{ flex: 1 }}>
-          <Text tone="muted">{t("home.today")}</Text>
-          <Text variant="title" testID="today-km">
-            {formatKm(sum.todayM, LANGUAGE)}
-          </Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text tone="muted">{t("home.month")}</Text>
-          <Text variant="title" testID="month-km">
-            {formatKm(sum.monthM, LANGUAGE)}
-          </Text>
+      {/* The totals under a grey header, as Recent trips. */}
+      <View style={{ gap: theme.space[2] }} testID="statistics">
+        <Text variant="label" tone="muted" accessibilityRole="header">
+          {t("home.statistics")}
+        </Text>
+        <View style={{ flexDirection: "row", gap: 24 }}>
+          <View style={{ flex: 1 }}>
+            <Text tone="muted">{t("home.today")}</Text>
+            <Text variant="title" testID="today-km">
+              {formatKm(sum.todayM, LANGUAGE)}
+            </Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text tone="muted">{t("home.month")}</Text>
+            <Text variant="title" testID="month-km">
+              {formatKm(sum.monthM, LANGUAGE)}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -390,8 +463,7 @@ export function Home({
         )}
         footerRef={footerRef}
         onOpen={(id) => nav.push({ name: "trip", id })}
-        onHistory={() => nav.push({ name: "trips" })}
-        onAdd={() => nav.push({ name: "add" })}
+        onHistory={() => nav.tab("history")}
       />
     </Screen>
   );

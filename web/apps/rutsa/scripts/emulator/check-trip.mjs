@@ -90,14 +90,27 @@ function openApp() {
   run(["shell", "monkey", "-p", PACKAGE, "-c", "android.intent.category.LAUNCHER", "1"]);
 }
 
-/** The screens over the home screen, known by the testIDs of their parts. */
-const OVER_HOME = ["trip-", "trips-", "section-", "manual-"];
+/**
+ * The screens other than the home screen (the tab Record), known by the testIDs of their parts: a
+ * trip's screen (its widget has a state too), Manual add, the permissions, and the tabs History
+ * and Profile.
+ */
+const OVER_HOME = [
+  "trip-",
+  "trips-",
+  "section-",
+  "manual-",
+  "permissions-",
+  "history-",
+  "profile-",
+];
 
 /**
  * The home screen, whatever was left open on the phone (a trip's screen, History, the form of a
- * trip added by hand): the back button of Android until the current widget shows, and the app
- * opened again if it left. Gives the state of the current widget (Recording, Paused, Ended), or
- * its "No trips yet." before the first trip.
+ * trip added by hand): the back button of Android until the current widget of the home screen
+ * shows (on Profile and History it goes to Record), and the app opened again if it left. Gives
+ * the state of the current widget (Recording, Paused, Ended), or its "No trips yet." before the
+ * first trip.
  * @param {string} when
  */
 function homeScreen(when) {
@@ -105,14 +118,14 @@ function homeScreen(when) {
   return waitFor(
     `the home screen ${when}`,
     (nodes) => {
+      if (nodes.some((node) => OVER_HOME.some((prefix) => node.id.startsWith(prefix)))) {
+        run(["shell", "input", "keyevent", "4"]);
+        return null;
+      }
       // The state of the widget, or its "No trips yet." before the first trip.
       const state = byId(nodes, "current-state") ?? byId(nodes, "current-none");
       if (state) return state;
-      if (nodes.some((node) => OVER_HOME.some((prefix) => node.id.startsWith(prefix)))) {
-        run(["shell", "input", "keyevent", "4"]);
-      } else {
-        openApp();
-      }
+      openApp();
       return null;
     },
     20,

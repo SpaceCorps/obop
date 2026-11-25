@@ -52,6 +52,15 @@ export interface TripRepository {
   stopTrip(tripId: string, at: number, details?: TripDetails): Promise<Trip>;
 
   /**
+   * Restart: the open trip (`recording` or `paused`) starts again at `at`, as if Start had been
+   * pressed now: its positions and segments are deleted, it records in a new segment 1 from `at`.
+   * It stays the same trip: its id, its number (an untitled trip keeps "Untitled trip N", no new
+   * number is taken) and its details. Throws `TripStateError` from `ended`, `TripNotFound` when
+   * there is none.
+   */
+  restartTrip(tripId: string, at: number): Promise<Trip>;
+
+  /**
    * Changes the details of a trip (D6), the open one too: its name, From, To and Note, all four at
    * once, trimmed (`details.ts`); a field left empty is cleared. A detail that is too long throws
    * `DetailsTooLong` and nothing is changed. Throws `TripNotFound` when there is none.

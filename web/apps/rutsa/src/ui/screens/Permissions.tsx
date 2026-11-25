@@ -1,4 +1,4 @@
-import { Banner, Button, Screen, Text } from "@obop/ui-native";
+import { Banner, Button, Screen, Text, useWords } from "@obop/ui-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { DISCLOSURE_ACCEPTED } from "../../core/settings.ts";
@@ -25,6 +25,7 @@ import {
   type Step,
 } from "../permission-step.ts";
 import type { Nav, Route } from "../router.ts";
+import { ScreenHeader } from "../ScreenHeader.tsx";
 
 type Next = Extract<Route, { name: "permissions" }>["next"];
 
@@ -56,12 +57,14 @@ async function carryOut(next: Next): Promise<void> {
  * dialog (what is recorded, when, and that the route stays on this phone); then the permission
  * (precise, not approximate) and the notification of Android 13; then, the first time, the note
  * about keeping the app running. A driver who has done all of it goes straight to the trip.
- * Whatever stops it is shown with a way on (Open settings) and Close, which goes back to where the
- * driver was; coming back from the settings checks again and goes on by itself (US-18 AC5).
+ * Whatever stops it is shown with a way on (Open settings) and the round back button of the
+ * header, which goes back to where the driver was; coming back from the settings checks again
+ * and goes on by itself (US-18 AC5).
  *
  * After `Permissions` of `mileage-app` (`src/ui/screens/Permissions.tsx`).
  */
 export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
+  const words = useWords();
   const [step, setStep] = useState<Step>("check");
   const [notificationsOff, setNotificationsOff] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -175,11 +178,21 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
     if (access === "granted") setNotificationsOff(!(await notifications(true)));
   };
 
-  const close = <Button label={t("common.close")} variant="ghost" onPress={nav.back} />;
+  // Back to where the driver was: the round button at the left of the header.
+  const header = (title: string) => (
+    <ScreenHeader
+      title={title}
+      left={{ icon: "back", label: words.back, onPress: nav.back, testID: "permissions-back" }}
+    />
+  );
 
   if (step === "check") {
     return (
-      <Screen title={t("disclosure.title")} onBack={nav.back} scroll={false}>
+      <Screen
+        title={t("disclosure.title")}
+        titleSlot={header(t("disclosure.title"))}
+        scroll={false}
+      >
         <Text tone="muted">{t("common.loading")}</Text>
       </Screen>
     );
@@ -189,7 +202,8 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
     return (
       <Screen
         title={t("disclosure.title")}
-        onBack={nav.back}
+        titleSlot={header(t("disclosure.title"))}
+        footerBare
         footer={
           <>
             <Button
@@ -210,7 +224,8 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
     return (
       <Screen
         title={t("permission.denied.title")}
-        onBack={nav.back}
+        titleSlot={header(t("permission.denied.title"))}
+        footerBare
         footer={
           <>
             <Button
@@ -218,7 +233,6 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
               onPress={() => void askAgain()}
               testID="denied-continue"
             />
-            {close}
           </>
         }
       >
@@ -248,7 +262,8 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
     return (
       <Screen
         title={title}
-        onBack={nav.back}
+        titleSlot={header(title)}
+        footerBare
         footer={
           <>
             <Button
@@ -257,7 +272,6 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
               onPress={() => void (services ? openLocationSettings() : openSettings())}
               testID={`${step}-settings`}
             />
-            {close}
           </>
         }
       >
@@ -269,7 +283,8 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
   return (
     <Screen
       title={t("guide.title")}
-      onBack={nav.back}
+      titleSlot={header(t("guide.title"))}
+      footerBare
       footer={
         <>
           <Button
@@ -278,7 +293,6 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
             busy={starting}
             testID="guide-start"
           />
-          {close}
         </>
       }
     >

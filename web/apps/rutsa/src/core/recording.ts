@@ -72,6 +72,14 @@ export interface Recording {
    */
   stop(tripId: string, details?: TripDetails): Promise<Trip>;
   /**
+   * Restart (asked first on the home screen): checks that the phone can record (`CannotRecord`,
+   * the trip is not changed), starts the open trip again from now, the same trip with its number
+   * and details but none of its positions (`restartTrip`), then starts the location updates (they
+   * were stopped if it was paused). If they cannot start, the trip is paused and the error of the
+   * system is thrown.
+   */
+  restart(tripId: string): Promise<Trip>;
+  /**
    * Makes the location updates match the open trip; called when the app opens and whenever it
    * comes back to the front. Android does not start the foreground service again after the app's
    * process was ended (low memory, swiped away, force stop, a restart of the phone), and the trip
@@ -144,6 +152,18 @@ export function createRecording(deps: {
       if (details !== undefined) cleanDetails(details);
       await location.stop().catch(() => undefined);
       return store.stopTrip(tripId, now(), details);
+    },
+
+    async restart(tripId) {
+      await mustBeReady();
+      const trip = await store.restartTrip(tripId, now());
+      try {
+        await location.start();
+      } catch (error) {
+        await store.pauseTrip(tripId, now()).catch(() => undefined);
+        throw error;
+      }
+      return trip;
     },
 
     async ensure() {

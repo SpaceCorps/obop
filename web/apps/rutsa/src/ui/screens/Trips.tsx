@@ -1,17 +1,21 @@
-import { Button, Row, Screen, Text, useTheme, useWords } from "@obop/ui-native";
+import { Row, Screen, Text, useTheme } from "@obop/ui-native";
 import { View } from "react-native";
 import { phoneTimeZone } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
 import { LANGUAGE, t, tp } from "../../i18n/index.ts";
 import { useNow, useTrips } from "../hooks.ts";
+import { Icon } from "../icons.tsx";
 import type { Nav } from "../router.ts";
+import { ScreenHeader } from "../ScreenHeader.tsx";
 import { tripSections, type ListWords } from "../trips-list.ts";
 
 /**
- * The trips on this phone that ended, called History (D5), by the day of their start, newest
- * first, each day with its number of trips and its km; each trip with its name (else From → To,
- * else its times), its km and the mark of a trip added by hand, and a tap opens its screen. The
- * open trip is not history yet: the home screen shows it. Reachable without location (BR-36, US-18 AC1).
+ * The trips on this phone that ended, called History (D5), a tab of the switcher, by the day of
+ * their start, newest first, each day with its number of trips and its km; each trip with its
+ * name (else From → To, else its times), its km and the mark of a trip added by hand, and a tap
+ * opens its screen. The open trip is not history yet: the home screen shows it. The round "+" of
+ * the header adds a trip by hand (D7); the sort at its left and the search under it are
+ * placeholders of stage 2. Reachable without location (BR-36, US-18 AC1).
  *
  * After `Trips` of `mileage-app` (`src/ui/screens/Trips.tsx`), by day, without its server.
  *
@@ -20,7 +24,6 @@ import { tripSections, type ListWords } from "../trips-list.ts";
  */
 export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
   const theme = useTheme();
-  const shared = useWords();
   const { trips, loaded } = useTrips(store);
   // Today follows the clock; a minute is close enough for the names of the days.
   const now = useNow(60_000);
@@ -34,11 +37,43 @@ export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
   return (
     <Screen
       title={t("trips.title")}
-      // Back across the footer, as on the screen of the open trip, not at the top.
-      footer={
-        <Button label={shared.back} variant="secondary" onPress={nav.back} testID="trips-back" />
+      titleSlot={
+        <ScreenHeader
+          title={t("trips.title")}
+          // A PLACEHOLDER of stage 2, as the sort of Telegram's contacts: no tap yet.
+          left={{ icon: "sort", label: t("history.sort"), inactive: true, testID: "history-sort" }}
+          right={{
+            icon: "plus",
+            label: t("home.add"),
+            onPress: () => nav.push({ name: "add" }),
+            look: "filled",
+            testID: "history-add",
+          }}
+        />
       }
     >
+      {/* A PLACEHOLDER of stage 2, as the search of Telegram's contacts: not typed in yet. */}
+      <View
+        accessible
+        accessibilityLabel={t("history.search")}
+        accessibilityState={{ disabled: true }}
+        testID="history-search"
+        style={{
+          height: 40,
+          borderRadius: 20,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: theme.space[2],
+          backgroundColor: theme.c.surface,
+          borderWidth: 1,
+          borderColor: theme.c.border,
+        }}
+      >
+        <Icon name="search" color={theme.c.textMuted} size={18} />
+        <Text tone="muted">{t("history.search")}</Text>
+      </View>
+
       {loaded && sections.length === 0 ? (
         <Text tone="muted" testID="trips-empty">
           {t("trips.empty")}

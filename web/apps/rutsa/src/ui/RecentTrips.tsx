@@ -8,9 +8,8 @@ import type { TripLine } from "./trips-list.ts";
 const FIRST_GUESS = 3;
 
 /**
- * The recent trips of the home screen: a grey header "Recent trips" with "Open history" (the
- * colour of Back), which opens History, and a small filled "Add trip" (D7) at its right; under
- * it the newest trips that ended, as in History, as many as fit between the header and the
+ * The recent trips of the home screen: a grey header "Recent trips" with "Show more" at its
+ * right (the main colour), which opens the tab History; under it the newest trips that ended, as in History, as many as fit between the header and the
  * footer of the screen without scrolling (at least one). The room is measured on the screen
  * (`measureInWindow`) against the top of the footer, again after every render (the clock of the
  * home screen renders it every second while a trip records, every 30 s otherwise) and on every
@@ -22,16 +21,14 @@ export function RecentTrips({
   footerRef,
   onOpen,
   onHistory,
-  onAdd,
 }: {
   /** All the trips that ended, newest first; the rows that fit are taken from the start. */
   lines: readonly TripLine[];
   /** The content of the footer of the screen: the list ends above its frame. */
   footerRef: RefObject<HostInstance | null>;
   onOpen: (tripId: string) => void;
+  /** "Show more": the tab History. */
   onHistory: () => void;
-  /** "Add trip": a trip typed by hand (D7). */
-  onAdd: () => void;
 }) {
   const theme = useTheme();
   const listRef = useRef<HostInstance>(null);
@@ -60,8 +57,7 @@ export function RecentTrips({
   });
 
   return (
-    // 2 up, closer to Today and This month: the list keeps its place under the 2 it gave the button.
-    <View style={{ gap: theme.space[2], marginTop: -2 }} testID="recent">
+    <View style={{ gap: theme.space[2] }} testID="recent">
       <View style={{ flexDirection: "row", alignItems: "center" }}>
         <View style={{ flex: 1 }}>
           <Text variant="label" tone="muted" accessibilityRole="header">
@@ -78,32 +74,8 @@ export function RecentTrips({
             {t("home.history")}
           </Text>
         </Pressable>
-        {/* A small filled button of the main colour; its padding reaches over the line of the header
-            (a negative margin), so the header is no higher than before and the rows keep their room. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityHint={t("home.add.hint")}
-          onPress={onAdd}
-          hitSlop={8}
-          android_ripple={{ color: theme.c.accentSoft }}
-          testID="add-trip"
-          style={({ pressed }) => ({
-            marginLeft: theme.space[4],
-            marginVertical: -theme.space[1],
-            paddingHorizontal: theme.space[3],
-            paddingVertical: theme.space[1],
-            borderRadius: theme.radius.pill,
-            backgroundColor: theme.c.accentFill,
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <Text variant="label" color={theme.c.onAccent}>
-            {t("home.add")}
-          </Text>
-        </Pressable>
       </View>
-      {/* 2 more under the header, where "Add trip" reaches below its line. */}
-      <View ref={listRef} onLayout={measure} style={{ marginTop: 2 }} testID="recent-list">
+      <View ref={listRef} onLayout={measure} testID="recent-list">
         {lines.slice(0, fit).map((line, i) => (
           <View
             key={line.id}

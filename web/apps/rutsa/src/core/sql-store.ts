@@ -273,6 +273,24 @@ export function createSqlStore(db: SqlDb, options: SqlStoreOptions): TripReposit
         return mustRead(tx, tripId);
       }),
 
+    restartTrip: (tripId, at) =>
+      db.transaction(async (tx) => {
+        const trip = await mustRead(tx, tripId);
+        if (trip.state === "ended") throw new TripStateError(tripId, trip.state, "restarted");
+        await tx.run("DELETE FROM point WHERE trip_id = ?", [tripId]);
+        await tx.run("DELETE FROM segment WHERE trip_id = ?", [tripId]);
+        // The same row: its number and details stay; it records from `at` as a trip just started.
+        await tx.run(
+          "UPDATE trip SET state = 'recording', started_at = ?, segment = 1 WHERE id = ?",
+          [at, tripId],
+        );
+        await tx.run("INSERT INTO segment (trip_id, segment, started_at) VALUES (?, 1, ?)", [
+          tripId,
+          at,
+        ]);
+        return mustRead(tx, tripId);
+      }),
+
     updateDetails: (tripId, details) =>
       db.transaction(async (tx) => {
         // Any trip, the open one too: it can be named while it records (D6).

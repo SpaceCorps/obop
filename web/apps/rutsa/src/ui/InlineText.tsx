@@ -6,8 +6,9 @@ import { TextInput, type TextInputProps } from "react-native";
  * A text that is changed where it stands (D6): it looks like the text around it, with no frame;
  * a tap puts the cursor in it, and what was typed is kept when it loses the focus (a tap
  * elsewhere, the key Done of a line, the keyboard closed), or when the screen goes while it is
- * being typed. An empty field shows its placeholder in grey ("Not given", "Empty", the default
- * name) while it is not being typed in; with the cursor in it, it is simply empty. The stored
+ * being typed. An empty field shows its placeholder ("Not given", "Empty" in grey, the default
+ * name of a trip in black) while it is not being typed in; with the cursor in it, it is simply
+ * empty. What was typed is black. The stored
  * value comes back in it when it changes elsewhere and the field is not being typed in.
  */
 export function InlineText({
@@ -19,7 +20,8 @@ export function InlineText({
   keyboardType,
   look,
   maxLength,
-  restoreWhenEmpty = false,
+  placeholderTone = look === "label" ? "text" : "muted",
+  editable = true,
   testID,
 }: {
   /** As stored; `null` shows the placeholder. */
@@ -36,16 +38,19 @@ export function InlineText({
   onChange?: (text: string) => void;
   keyboardType?: TextInputProps["keyboardType"];
   /**
-   * `title` (a title of a screen), `label` (the name in the current widget, D6), `value` (at the
-   * right of a row), `note` (lines).
+   * `label` (the name in the current widget, D6; its default in black, as the name it stands for),
+   * `km` (the big km of the widget of a trip added by hand, D7), `display` (a part of its big
+   * duration: hours, minutes or seconds), `value` (at the right of a row), `note` (lines).
    */
-  look: "title" | "label" | "value" | "note";
+  look: "label" | "km" | "display" | "value" | "note";
   maxLength: number;
   /**
-   * An empty field shows `value` again when it loses the focus: for the name, whose `value` is the
-   * default while the trip has none, so clearing it brings the default back at once.
+   * The colour of the placeholder: grey (`muted`) for an empty field; black (`text`) for the
+   * default name of a trip, which is its name until it is named. By default black for `label`.
    */
-  restoreWhenEmpty?: boolean;
+  placeholderTone?: "muted" | "text";
+  /** `false`: read only, as the trip's screen until Edit is pressed; it looks the same. */
+  editable?: boolean;
   testID?: string;
 }) {
   const theme = useTheme();
@@ -75,12 +80,18 @@ export function InlineText({
     [],
   );
 
+  // The km and the parts of the duration are as wide as their text.
+  const fit = look === "km" || look === "display";
   const font =
-    look === "title"
-      ? { fontSize: theme.fontSize["2xl"], fontWeight: theme.fontWeight.bold }
+    look === "display"
+      ? // No line height: Android gives it to the text typed and not to the placeholder, so the
+        // typed digits stood lower than the grey "00".
+        { fontSize: theme.fontSize["4xl"], fontWeight: theme.fontWeight.bold }
       : look === "label"
         ? { fontSize: theme.fontSize.md, fontWeight: theme.fontWeight.semibold }
-        : { fontSize: theme.fontSize.md, fontWeight: theme.fontWeight.regular };
+        : look === "km"
+          ? { fontSize: theme.fontSize["2xl"], fontWeight: theme.fontWeight.bold }
+          : { fontSize: theme.fontSize.md, fontWeight: theme.fontWeight.regular };
   return (
     <TextInput
       value={text}
@@ -89,6 +100,7 @@ export function InlineText({
         onChange?.(next);
       }}
       keyboardType={keyboardType}
+      editable={editable}
       onFocus={() => {
         focused.current = true;
         setEditing(true);
@@ -97,13 +109,18 @@ export function InlineText({
         focused.current = false;
         setEditing(false);
         commit();
-        if (restoreWhenEmpty && latest.current.text.trim() === "")
-          setText(latest.current.value ?? "");
+        // Spaces only are nothing: the field is empty again, and its placeholder shows.
+        if (latest.current.text.trim() === "") setText("");
       }}
-      placeholder={editing ? undefined : placeholder}
-      placeholderTextColor={theme.c.textMuted}
+      // The km ("0.0") and the parts of the duration ("00") keep their placeholder while they are
+      // typed in: they are as wide as their text, and an empty field would have no width and
+      // lose the focus.
+      placeholder={editing && !fit ? undefined : placeholder}
+      // An empty field is grey, what was typed is black; the default name of a trip is its name
+      // until it is named, so it is not greyed where it stands for the trip's name.
+      placeholderTextColor={placeholderTone === "text" ? theme.c.text : theme.c.textMuted}
       maxLength={maxLength}
-      multiline={look === "title" || look === "note"}
+      multiline={look === "note"}
       // A name and a place end with Done; a note takes new lines and is kept when it loses the focus.
       submitBehavior={look === "note" ? "newline" : "blurAndSubmit"}
       returnKeyType={look === "note" ? "default" : "done"}
@@ -112,14 +129,14 @@ export function InlineText({
       testID={testID}
       style={{
         ...font,
-        color: look === "value" ? theme.c.textMuted : theme.c.text,
+        color: theme.c.text,
         textAlign: look === "value" ? "right" : "left",
         padding: 0,
         margin: 0,
         borderWidth: 0,
         // A value takes the rest of its row; a note the rest of its block, so a tap anywhere in it
-        // puts the cursor there.
-        ...(look === "title" ? {} : { flex: 1 }),
+        // puts the cursor there. The km and the parts of the duration are as wide as their text.
+        ...(fit ? {} : { flex: 1 }),
         ...(look === "note" ? { textAlignVertical: "top" as const } : {}),
       }}
     />

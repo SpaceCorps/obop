@@ -1,5 +1,5 @@
 import { DETAIL_MAX, cleanText, codePoints } from "./details.ts";
-import { dayAfter, dayKey, momentOf } from "./present.ts";
+import { dayKey, momentOf } from "./present.ts";
 import type { ManualTrip } from "./repository.ts";
 import type { Trip } from "./types.ts";
 
@@ -21,7 +21,8 @@ export interface ManualForm {
   date: string;
   /** `08:30` (also `8:30`, `8.30`, `0830` or `830`). */
   start: string;
-  end: string;
+  /** How long it took, `1:15:30` (hours, minutes and seconds; `parseDuration`); the end follows. */
+  duration: string;
   /** `12.4` or `12,4`. */
   km: string;
   from: string;
@@ -36,7 +37,9 @@ export type ManualProblem =
   | "date_future"
   | "time_format"
   | "time_future"
-  | "time_same"
+  | "duration_format"
+  | "duration_zero"
+  | "end_future"
   | "overlap"
   | "km_format"
   | "km_zero"
@@ -47,10 +50,16 @@ export type ManualProblem =
 export interface ManualCheck {
   /** At most one problem per field. */
   problems: Partial<Record<ManualField, ManualProblem>>;
-  /** The end is before the start, so it is on the next day (said under the field). */
+  /** The end is on the day after the start (said under the times). */
   nextDay: boolean;
   /** The average speed, once the times and the km are right; asked about over `FAST_KMH`. */
   speedKmh: number | null;
+  /**
+   * The start and the end (the start and the duration) once the date, the start and the duration
+   * are times, also when they are still to come or meet another trip (said under them): the
+   * screen shows them as `08:30–09:15`.
+   */
+  times: { startedAt: number; endedAt: number } | null;
   /** What is stored, when there is no problem. */
   trip: ManualTrip | null;
 }
@@ -74,6 +83,36 @@ function parseClock(text: string): { hour: number; minute: number } | null {
   const hour = Number(match[1]);
   const minute = Number(match[2]);
   return hour < 24 && minute < 60 ? { hour, minute } : null;
+}
+
+/**
+ * `1:15:30` (hours, minutes and seconds) as seconds, up to `23:59:59`; also `1:15` (no seconds)
+ * and the forms of `start` (`1.15`, `115`, `01:15`); else `null`.
+ */
+export function parseDuration(text: string): number | null {
+  const full = /^(\d{1,2}):(\d{2}):(\d{2})$/.exec(text.trim());
+  if (full) {
+    const [hour, minute, second] = [Number(full[1]), Number(full[2]), Number(full[3])];
+    return hour < 24 && minute < 60 && second < 60 ? hour * 3600 + minute * 60 + second : null;
+  }
+  const clock = parseClock(text);
+  return clock === null ? null : clock.hour * 3600 + clock.minute * 60;
+}
+
+/**
+ * The duration from its three fields as typed (hours, minutes, seconds): a field left empty is 0.
+ * Gives the text `parseDuration` reads; a field that is not a number, or minutes or seconds over
+ * 59, give a text it refuses.
+ */
+export function durationFromParts(hours: string, minutes: string, seconds: string): string {
+  const part = (text: string) => (text.trim() === "" ? "0" : text.trim());
+  return `${part(hours)}:${part(minutes).padStart(2, "0")}:${part(seconds).padStart(2, "0")}`;
+}
+
+/** `4530` seconds as `1:15:30`, the form the duration is kept in. */
+export function durationText(seconds: number): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${Math.floor(seconds / 3600)}:${two(Math.floor((seconds % 3600) / 60))}:${two(seconds % 60)}`;
 }
 
 /** `12.4` or `12,4` as a number, else `null`. */
@@ -115,30 +154,25 @@ export function checkManual(
   else if (day > dayKey(now, timeZone)) problems.date = "date_future";
 
   const start = parseClock(form.start);
-  const end = parseClock(form.end);
+  const seconds = parseDuration(form.duration);
   if (start === null) problems.start = "time_format";
-  if (end === null) problems.end = "time_format";
+  if (seconds === null) problems.duration = "duration_format";
+  else if (seconds === 0) problems.duration = "duration_zero";
 
-  if (day !== null && problems.date === undefined && start !== null && end !== null) {
+  if (day !== null && problems.date === undefined && start !== null && seconds !== null) {
     startedAt = momentOf(day, start.hour, start.minute, timeZone);
-    const sameDayEnd = momentOf(day, end.hour, end.minute, timeZone);
-    if (sameDayEnd === startedAt) {
-      problems.end = "time_same";
-    } else if (sameDayEnd < startedAt) {
-      nextDay = true;
-      endedAt = momentOf(dayAfter(day), end.hour, end.minute, timeZone);
-    } else {
-      endedAt = sameDayEnd;
-    }
+    // The time it took, as it passed: a change of the clock in between does not add or take an hour.
+    endedAt = startedAt + seconds * 1000;
+    nextDay = dayKey(endedAt, timeZone) !== day;
     if (startedAt > now) problems.start = "time_future";
-    if (endedAt !== null && endedAt > now) problems.end = "time_future";
+    else if (endedAt > now && problems.duration === undefined) problems.duration = "end_future";
   }
 
   if (
     startedAt !== null &&
     endedAt !== null &&
     problems.start === undefined &&
-    problems.end === undefined
+    problems.duration === undefined
   ) {
     const from = startedAt;
     const to = endedAt;
@@ -164,7 +198,7 @@ export function checkManual(
     startedAt !== null &&
     endedAt !== null &&
     problems.start === undefined &&
-    problems.end === undefined;
+    problems.duration === undefined;
   const speedKmh =
     timesRight && km !== null && problems.km === undefined && startedAt !== null && endedAt !== null
       ? km / ((endedAt - startedAt) / 3_600_000)
@@ -175,6 +209,7 @@ export function checkManual(
     problems,
     nextDay,
     speedKmh,
+    times: startedAt !== null && endedAt !== null ? { startedAt, endedAt } : null,
     trip:
       ok && startedAt !== null && endedAt !== null && km !== null
         ? {

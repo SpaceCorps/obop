@@ -6,15 +6,18 @@ import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-cont
 import type { TripRepository } from "./src/core/repository.ts";
 import { t } from "./src/i18n/index.ts";
 import { StatusBanner } from "./src/ui/StatusBanner.tsx";
+import { TabBar, TAB_BAR_ROOM } from "./src/ui/TabBar.tsx";
 import { usePhoneStatus, useRecordingCheck, useStore, useTrips } from "./src/ui/hooks.ts";
-import { canGoBack, current, reduce, type Nav, type Route } from "./src/ui/router.ts";
+import { backPress, current, reduce, type Nav, type Route, type Tab } from "./src/ui/router.ts";
 import { AddTrip } from "./src/ui/screens/AddTrip.tsx";
 import { Failed } from "./src/ui/screens/Failed.tsx";
 import { Home } from "./src/ui/screens/Home.tsx";
 import { Permissions } from "./src/ui/screens/Permissions.tsx";
+import { Profile } from "./src/ui/screens/Profile.tsx";
 import { TripDetail } from "./src/ui/screens/TripDetail.tsx";
 import { Trips } from "./src/ui/screens/Trips.tsx";
 import { bannerShown, problemsOf, type Problem } from "./src/ui/status.ts";
+import { useThemeChoice } from "./src/ui/theme-choice.ts";
 
 /** Hands the space of the system bars to the components of `@obop/ui-native`. */
 function Insets({ children }: { children: ReactNode }) {
@@ -35,11 +38,13 @@ function Loading() {
 const closedProblems = new Set<Problem>();
 
 /**
- * The screens, once the trips could be opened: a small stack (`ui/router.ts`) on the home screen,
- * where a trip is also recorded (D4), the back button of Android, the check of a recording (C5),
- * which runs here whatever screen is open, and the status banner above every screen but the one
- * of the permissions, which says the same in full. While a trip is open the home screen says what
- * keeps it from recording (with its way on), so the banner keeps only the notifications.
+ * The screens, once the trips could be opened: the three tabs of the switcher at the bottom
+ * (History, Record in the middle, the home screen where a trip is recorded, D4, and Profile), a small stack
+ * (`ui/router.ts`) of the screens pushed over them without the switcher (a trip, Manual add, the
+ * permissions), the back button of Android, the check of a recording (C5), which runs here
+ * whatever screen is open, and the status banner above every screen but the one of the
+ * permissions, which says the same in full. While a trip is open the home screen says what keeps
+ * it from recording (with its way on), so the banner keeps only the notifications.
  */
 function Routes({
   store,
@@ -49,36 +54,56 @@ function Routes({
   recoveredStaleFile: boolean;
 }) {
   const [stack, dispatch] = useReducer(reduce, [{ name: "home" }] as Route[]);
+  const [tab, setTab] = useState<Tab>("record");
+  // A tab is drawn once it was shown, and then kept, so coming back to it finds it as it was.
+  const [opened, setOpened] = useState<ReadonlySet<Tab>>(() => new Set<Tab>(["record"]));
   const { active } = useTrips(store);
   const check = useRecordingCheck();
   const status = usePhoneStatus();
   const insets = useInsets();
   const [, setClosings] = useState(0);
 
-  const nav: Nav = useMemo(
-    () => ({
+  const nav: Nav = useMemo(() => {
+    const show = (next: Tab) => {
+      setTab(next);
+      setOpened((seen) => (seen.has(next) ? seen : new Set([...seen, next])));
+    };
+    return {
       push: (route) => dispatch({ type: "push", route }),
       replace: (route) => dispatch({ type: "replace", route }),
       back: () => dispatch({ type: "back" }),
       home: () => dispatch({ type: "home" }),
-    }),
-    [],
-  );
+      tab: (next) => {
+        dispatch({ type: "home" });
+        show(next);
+      },
+    };
+  }, []);
 
-  // One screen back while there is one; on the first screen the system leaves the app.
+  // One screen back while there is one; Profile and History go to Record; on Record the system
+  // leaves the app.
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (!canGoBack(stack)) return false;
-      nav.back();
-      return true;
+      switch (backPress(stack, tab)) {
+        case "back":
+          nav.back();
+          return true;
+        case "record":
+          nav.tab("record");
+          return true;
+        case "leave":
+          return false;
+      }
     });
     return () => subscription.remove();
-  }, [stack, nav]);
+  }, [stack, tab, nav]);
 
   const route = current(stack);
   const all = status === null ? [] : problemsOf(status);
   const problems = active ? all.filter((p) => p === "notifications_off") : all;
   const banner = route.name !== "permissions" && bannerShown(problems, closedProblems);
+  // Under the status banner the screens have no space of the status bar to keep.
+  const shown = banner ? { ...insets, top: 0 } : insets;
   const closeBanner = () => {
     // The banner folds up; the screen under it takes the space back.
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -86,16 +111,13 @@ function Routes({
     setClosings((n) => n + 1);
   };
 
-  // The screen over the home screen; `null` on the home screen.
+  // The screen over the tabs; `null` while a tab is shown.
   let screen: ReactNode = null;
   switch (route.name) {
     case "home":
       break;
     case "permissions":
       screen = <Permissions nav={nav} next={route.next} />;
-      break;
-    case "trips":
-      screen = <Trips store={store} nav={nav} />;
       break;
     case "trip":
       screen = <TripDetail store={store} nav={nav} id={route.id} />;
@@ -108,12 +130,28 @@ function Routes({
   return (
     <View style={{ flex: 1 }}>
       {banner ? <StatusBanner problems={problems} insets={insets} onClose={closeBanner} /> : null}
-      <InsetsProvider insets={banner ? { ...insets, top: 0 } : insets}>
-        {/* The home screen stays mounted under the others, hidden while one is open, as in a
-            navigation stack: coming back to it (from History, or from the permissions after
-            Start) finds it as it was, read and drawn, with no flash of empty values. */}
+      <InsetsProvider insets={shown}>
+        {/* The tabs stay mounted under the screens over them, hidden while one is open, as in a
+            navigation stack: coming back to them (from a trip, or from the permissions after
+            Start) finds them as they were, read and drawn, with no flash of empty values. They
+            keep room at their bottom for the switcher, which lies over them. */}
         <View style={{ flex: 1, display: screen === null ? "flex" : "none" }}>
-          <Home store={store} nav={nav} recoveredStaleFile={recoveredStaleFile} check={check} />
+          <InsetsProvider insets={{ ...shown, bottom: shown.bottom + TAB_BAR_ROOM }}>
+            <View style={{ flex: 1, display: tab === "record" ? "flex" : "none" }}>
+              <Home store={store} nav={nav} recoveredStaleFile={recoveredStaleFile} check={check} />
+            </View>
+            {opened.has("history") ? (
+              <View style={{ flex: 1, display: tab === "history" ? "flex" : "none" }}>
+                <Trips store={store} nav={nav} />
+              </View>
+            ) : null}
+            {opened.has("profile") ? (
+              <View style={{ flex: 1, display: tab === "profile" ? "flex" : "none" }}>
+                <Profile />
+              </View>
+            ) : null}
+          </InsetsProvider>
+          <TabBar tab={tab} onTab={nav.tab} bottom={shown.bottom} />
         </View>
         {screen === null ? null : <View style={{ flex: 1 }}>{screen}</View>}
       </InsetsProvider>
@@ -128,7 +166,25 @@ function Root() {
   if (loaded.state === "failed") {
     return <Failed message={loaded.message} problem={loaded.problem} retry={loaded.retry} />;
   }
-  return <Routes store={loaded.store} recoveredStaleFile={loaded.recoveredStaleFile} />;
+  return (
+    <ChosenTheme>
+      <Routes store={loaded.store} recoveredStaleFile={loaded.recoveredStaleFile} />
+    </ChosenTheme>
+  );
+}
+
+/**
+ * The look the driver chose (in Profile, stage 2), once the trips are open: light,
+ * dark, or the system's. Loading and the screen of a failure follow the system.
+ */
+function ChosenTheme({ children }: { children: ReactNode }) {
+  const [choice] = useThemeChoice();
+  return (
+    <ThemeProvider mode={choice === "system" ? undefined : choice}>
+      {children}
+      <StatusBar style={choice === "system" ? "auto" : choice === "dark" ? "light" : "dark"} />
+    </ThemeProvider>
+  );
 }
 
 export default function App() {

@@ -5,6 +5,9 @@ import type { Trip } from "../core/types.ts";
 import { t } from "../i18n/index.ts";
 import { tripName } from "./trip-label.ts";
 
+/** The yellow dot of a trip being added by hand (New); the theme has no yellow. */
+const NEW_DOT = "#f4b400";
+
 /**
  * The current widget: one white card on the home screen, like the row History, always there. It
  * shows the open trip, else the last trip that ended, else "No trips yet.": the trip's name at the
@@ -12,7 +15,9 @@ import { tripName } from "./trip-label.ts";
  * Recording, grey Paused, green Ended), the big time without the pauses (running while it
  * records), its km at the bottom left and at the bottom right when it started (open) or ended.
  * A tap opens the trip's screen (D6), which shows the same card in the same place of the screen, with the name
- * typed in place (`nameSlot`) and no tap, over the rest of the trip.
+ * typed in place (`nameSlot`) and no tap, over the rest of the trip. The screen Manual add (D7)
+ * shows it too, for the trip being typed: the state New, the km typed in place (`kmSlot`), and
+ * the duration (`elapsedSlot`) and the start at the bottom right (`clockSlot`) chosen with a tap.
  */
 export function CurrentWidget({
   trip,
@@ -21,9 +26,12 @@ export function CurrentWidget({
   clock,
   onPress,
   nameSlot,
+  kmSlot,
+  elapsedSlot,
+  clockSlot,
 }: {
-  /** `null` before the first trip. */
-  trip: Pick<Trip, "state" | "name" | "number"> | null;
+  /** `null` before the first trip; the state `new` for a trip being added by hand. */
+  trip: (Pick<Trip, "name" | "number"> & { state: Trip["state"] | "new" }) | null;
   /** `H:MM:SS` without the pauses. */
   elapsed: string;
   /** Its km: so far while it is open, as Stop counts them. */
@@ -37,6 +45,12 @@ export function CurrentWidget({
   onPress?: () => void;
   /** Drawn in the place of the name: the name typed in place on the trip's screen. */
   nameSlot?: ReactNode;
+  /** Drawn in the place of the km: the km typed in place on the screen Manual add. */
+  kmSlot?: ReactNode;
+  /** Drawn in the place of the big time: the duration chosen on the screen Manual add. */
+  elapsedSlot?: ReactNode;
+  /** Drawn in the place of the time at the bottom right: the start chosen on Manual add. */
+  clockSlot?: ReactNode;
 }) {
   const theme = useTheme();
   const card = {
@@ -65,7 +79,10 @@ export function CurrentWidget({
       ? { text: t("home.recording"), color: theme.c.danger.fill }
       : trip.state === "paused"
         ? { text: t("home.paused"), color: theme.c.textMuted }
-        : { text: t("home.ended"), color: theme.c.success.fill };
+        : trip.state === "new"
+          ? { text: t("manual.new"), color: NEW_DOT }
+          : { text: t("home.ended"), color: theme.c.success.fill };
+  const running = trip.state === "recording" || trip.state === "paused";
   const content = (
     <>
       <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space[2] }}>
@@ -81,13 +98,11 @@ export function CurrentWidget({
           {state.text}
         </Text>
       </View>
-      <Text
-        variant="display"
-        accessibilityRole={trip.state === "ended" ? undefined : "timer"}
-        testID="elapsed"
-      >
-        {elapsed}
-      </Text>
+      {elapsedSlot ?? (
+        <Text variant="display" accessibilityRole={running ? "timer" : undefined} testID="elapsed">
+          {elapsed}
+        </Text>
+      )}
       <View
         style={{
           flexDirection: "row",
@@ -96,12 +111,16 @@ export function CurrentWidget({
           gap: theme.space[3],
         }}
       >
-        <Text variant="title" testID="current-km">
-          {km}
-        </Text>
-        <Text tone="muted" testID="current-clock">
-          {clock}
-        </Text>
+        {kmSlot ?? (
+          <Text variant="title" testID="current-km">
+            {km}
+          </Text>
+        )}
+        {clockSlot ?? (
+          <Text tone="muted" testID="current-clock">
+            {clock}
+          </Text>
+        )}
       </View>
     </>
   );

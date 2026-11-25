@@ -210,6 +210,48 @@ describe("pause, resume and the distance", () => {
   });
 });
 
+describe("restart", () => {
+  test("the open trip starts again from now: its positions and segments gone, segment 1", async () => {
+    const trip = await store.startTrip(T0);
+    await store.appendFixes(trip.id, drive(21, 5000, 10));
+    await store.pauseTrip(trip.id, T0 + 2 * MIN);
+    await store.resumeTrip(trip.id, T0 + 3 * MIN);
+    const restarted = await store.restartTrip(trip.id, T0 + 10 * MIN);
+    expect(restarted).toMatchObject({
+      id: trip.id,
+      state: "recording",
+      startedAt: T0 + 10 * MIN,
+      segment: 1,
+      segmentStartedAt: T0 + 10 * MIN,
+      number: trip.number,
+    });
+    expect(await store.points(trip.id)).toEqual([]);
+    // It records on as a new trip would: 1 km from the restart, nothing from before.
+    await store.appendFixes(trip.id, drive(21, 5000, 10, 10 * MIN));
+    const ended = await store.stopTrip(trip.id, T0 + 12 * MIN);
+    expect(ended.distanceM).toBeCloseTo(1000, 0);
+    expect((await store.progress(trip.id))?.closedMs).toBe(2 * MIN);
+  });
+
+  test("it keeps its number and its details; the next trip takes the next number", async () => {
+    const trip = await store.startTrip(T0);
+    await store.updateDetails(trip.id, { name: null, from: "Office", to: null, note: "x" });
+    const restarted = await store.restartTrip(trip.id, T0 + MIN);
+    expect(restarted).toMatchObject({ number: 1, from: "Office", note: "x" });
+    await store.stopTrip(trip.id, T0 + 2 * MIN);
+    expect((await store.startTrip(T0 + 3 * MIN)).number).toBe(2);
+  });
+
+  test("a paused trip records again after Restart; an ended one cannot be restarted", async () => {
+    const trip = await store.startTrip(T0);
+    await store.pauseTrip(trip.id, T0 + MIN);
+    expect((await store.restartTrip(trip.id, T0 + 2 * MIN)).state).toBe("recording");
+    await store.stopTrip(trip.id, T0 + 3 * MIN);
+    await expect(store.restartTrip(trip.id, T0 + 4 * MIN)).rejects.toThrow(TripStateError);
+    await expect(store.restartTrip("nobody", T0)).rejects.toThrow(TripNotFound);
+  });
+});
+
 describe("the count while a trip records", () => {
   test("the km so far are the km Stop then stores, also across a pause", async () => {
     const trip = await store.startTrip(T0);

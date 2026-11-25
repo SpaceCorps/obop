@@ -3,10 +3,10 @@ import { ActivityIndicator, Pressable, View } from "react-native";
 
 /**
  * The big round button of the home screen (Start, Stop, Resume): `Button size="big"` of
- * `@obop/ui-native` with a smaller circle, so the footer leaves room for one more recent trip. The
- * size of `big` is a shared token (176), and the other apps keep it.
+ * `@obop/ui-native` with a smaller circle and word, so Recent trips keeps five rows above it and
+ * the switcher. The size of `big` is a shared token (176), and the other apps keep it.
  */
-export const ROUND_SIZE = 144;
+export const ROUND_SIZE = 88;
 
 export function RoundButton({
   label,
@@ -51,7 +51,7 @@ export function RoundButton({
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space[2] }}>
         {busy ? <ActivityIndicator color={ink} /> : null}
-        <Text variant="title" color={ink}>
+        <Text variant="heading" color={ink} numberOfLines={1} adjustsFontSizeToFit>
           {label}
         </Text>
       </View>

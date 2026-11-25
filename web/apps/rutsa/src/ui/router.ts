@@ -1,7 +1,9 @@
 /**
- * The screens of the stack, as data. The app has five routes, so the state is a small stack in
- * `App.tsx` and not a navigation library: fewer native modules, fewer versions to pin. The
- * recording is on the home screen (D4), not on a route of its own.
+ * The screens of the stack, as data. The app has four routes, so the state is a small stack in
+ * `App.tsx` and not a navigation library: fewer native modules, fewer versions to pin. At the
+ * bottom of the stack (`home`) are the three tabs of the switcher (`Tab`): History, Profile and
+ * Record, the home screen where a trip is recorded (D4); a trip's screen, Manual add and the
+ * permissions are pushed over them, without the switcher.
  *
  * Location is a route and never a gate (BR-36, US-18): without location access the trips and the
  * trips added by hand stay reachable; only what needs a position goes to `permissions`, and Close
@@ -19,7 +21,6 @@ export type Route =
    * object with `then` is taken for a promise by `await`.)
    */
   | { name: "permissions"; next: "start" | "resume" | "restart" }
-  | { name: "trips" }
   | { name: "trip"; id: string }
   /** A trip added by hand (D7). */
   | { name: "add" };
@@ -32,7 +33,13 @@ export interface Nav {
   back: () => void;
   /** Back to the home screen, whatever is on the stack. */
   home: () => void;
+  /** Shows a tab of the switcher, over nothing (the stack is emptied to the tabs). */
+  tab: (tab: Tab) => void;
 }
+
+/** The tabs of the switcher at the bottom, in its order; Record, in the middle, is the home screen. */
+export type Tab = "history" | "record" | "profile";
+export const TABS: readonly Tab[] = ["history", "record", "profile"];
 
 export type NavAction = { type: "push" | "replace"; route: Route } | { type: "back" | "home" };
 
@@ -63,4 +70,14 @@ export function current(stack: readonly Route[]): Route {
  */
 export function canGoBack(stack: readonly Route[]): boolean {
   return stack.length > 1;
+}
+
+/**
+ * What the back button of Android does: one screen back while one is pushed over the tabs; on
+ * Profile or History it goes to Record; on Record the press is left to the system, which leaves
+ * the app.
+ */
+export function backPress(stack: readonly Route[], tab: Tab): "back" | "record" | "leave" {
+  if (canGoBack(stack)) return "back";
+  return tab === "record" ? "leave" : "record";
 }

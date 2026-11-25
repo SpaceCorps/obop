@@ -61,6 +61,27 @@ describe("the back link of a screen (L26)", () => {
   });
 });
 
+describe("the footer of a screen", () => {
+  const footerStyle = (props: Partial<Parameters<typeof Screen>[0]>) => {
+    const tree = Screen({ title: "Home", footer: <Text>Start</Text>, children: null, ...props });
+    const frame = elements(tree).find(
+      (e) => (e.props as { testID?: string }).testID === "screen-footer",
+    );
+    expect(frame).toBeDefined();
+    return (frame!.props as { style: Record<string, unknown> }).style;
+  };
+
+  test("has a ground and a line above it by default", () => {
+    expect(footerStyle({})).toMatchObject({ backgroundColor: "#fff", borderTopWidth: 1 });
+  });
+
+  test("a bare footer has neither", () => {
+    const style = footerStyle({ footerBare: true });
+    expect(style.backgroundColor).toBeUndefined();
+    expect(style.borderTopWidth).toBeUndefined();
+  });
+});
+
 describe("the title of a screen", () => {
   test("is its text by default", () => {
     const tree = Screen({ title: "Trip", children: null });

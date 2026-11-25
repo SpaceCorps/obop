@@ -1,6 +1,6 @@
-import { Banner, Button, Row, Screen, Text, useTheme, useWords } from "@obop/ui-native";
+import { Banner, Row, Screen, Text, useTheme, useWords } from "@obop/ui-native";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Animated, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, Keyboard, Pressable, View } from "react-native";
 import { DETAIL_MAX, type TripDetails } from "../../core/details.ts";
 import { phoneTimeZone } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
@@ -8,24 +8,30 @@ import { LANGUAGE, t, tp } from "../../i18n/index.ts";
 import { deleteTrip, updateTripDetails } from "../../native/actions.ts";
 import { CurrentWidget } from "../CurrentWidget.tsx";
 import { DetailRow } from "../DetailRow.tsx";
+import { Icon } from "../icons.tsx";
 import { InlineText } from "../InlineText.tsx";
-import { useFillToFooter } from "../fill.ts";
+import { ScreenHeader } from "../ScreenHeader.tsx";
+import { TripNameInput } from "../TripNameInput.tsx";
+import { useFillToBottom } from "../fill.ts";
 import { useNow, useProgress, useTrips } from "../hooks.ts";
 import type { Nav } from "../router.ts";
 import { tripName, typedName } from "../trip-label.ts";
-import { tripDate, tripTimes } from "../trip-view.ts";
+import { tripTimes } from "../trip-view.ts";
 import { widgetValues } from "../widget-values.ts";
 
 /**
  * One trip (D6), the open one too. On top the current widget of the home screen, in the same place
- * (an empty title above it): its name, typed in place, its state, its time without the pauses, its
- * km and when it started or ended. Under it From and To ("Not given" when empty), then its date
- * and times and how many positions a recorded trip has and how many the distance left out (the
- * kind of a trip is marked in the list, BR-28), then its note ("Empty"), down to the footer. While
- * the trip is open its time, km and positions grow as it records, and it has no Delete: it is
- * stopped on the home screen. The name, From, To and Note are changed where they stand
- * (`InlineText`): a tap, typing, and they are kept when they lose the focus. In the footer, Back
- * and Delete trip (asked first). The edit of its parts is in stage 2.
+ * (under the same header): its name, typed in place, its state, its time without the pauses, its
+ * km and when it started or ended (with its day when not today). Under it From and To ("Not
+ * given" when empty), then its times and how many positions a recorded trip has and how many the
+ * distance left out (the kind of a trip is marked in the list, BR-28), then its note (an empty
+ * block when there is none), down to the bottom. While the trip is open its time, km and
+ * positions grow as it records. Back at the left of the header, Edit at the right: the screen is
+ * read only until Edit is pressed; then the name, From, To and Note are typed where they stand
+ * (`InlineText`), Back becomes Cancel ("x": what was typed is dropped) and Edit becomes Done
+ * ("✓": what was typed is kept, all at once), and a red Delete trip (asked first) comes under
+ * the note; the open trip has none: it is stopped on the home screen. The edit of its parts
+ * (times, km) is in stage 2.
  *
  * After `TripDetail` of `mileage-app` (`src/ui/screens/TripDetail.tsx`), without its server: no
  * purpose (stage 2), no submit, and Delete instead of Discard with a reason.
@@ -43,17 +49,21 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
   );
   const now = useNow(open ? 1000 : 60_000);
   const words = useWords();
-  // The details sent by the last change, until the list is read again (`save`).
-  const sent = useRef<TripDetails | null>(null);
-  useEffect(() => {
-    sent.current = null;
-  }, [trip]);
   const [saveFailed, setSaveFailed] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
+  // Read only until Edit is pressed.
+  const [editing, setEditing] = useState(false);
+  // What was typed while editing, kept by Done and dropped by Cancel.
+  const [draft, setDraft] = useState<Partial<Record<keyof TripDetails, string>>>({});
+  // Changed by Cancel, so the fields are drawn again with what is stored.
+  const [session, setSession] = useState(0);
+  // The height of Delete trip, kept under the note while the trip is edited.
+  const [deleteHeight, setDeleteHeight] = useState(0);
+  const deletable = editing && !open;
 
-  // The note reaches down to the footer (`useFillToFooter`).
-  const note = useFillToFooter();
+  // The note reaches down to the bottom of the screen (`useFillToBottom`), above Delete trip.
+  const note = useFillToBottom(deletable ? deleteHeight + theme.space[4] : 0);
   // The details come in softly under the card of the trip, which does not move.
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -62,7 +72,15 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
 
   if (trip === null) {
     return (
-      <Screen title={t("trip.title")} onBack={nav.back}>
+      <Screen
+        title={t("trip.title")}
+        titleSlot={
+          <ScreenHeader
+            title={t("trip.title")}
+            left={{ icon: "back", label: words.back, onPress: nav.back, testID: "trip-back" }}
+          />
+        }
+      >
         {loaded ? (
           <Text tone="muted" testID="trip-notfound">
             {t("trip.notfound")}
@@ -88,17 +106,34 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
   // The default an untitled trip is called by; the title holds it as text, to be typed over.
   const defaultName = trip.name === null ? name : null;
 
-  /**
-   * Keeps one detail typed in place. The others are sent as stored, or as sent a moment ago when
-   * the list has not been read again yet, so two changes in a row do not undo each other.
-   */
-  const save = (field: keyof TripDetails, text: string) => {
-    const base = sent.current ?? { name: trip.name, from: trip.from, to: trip.to, note: trip.note };
-    // The default left as it is stays no name, so the trip keeps its number.
-    const details = { ...base, [field]: field === "name" ? typedName(text, defaultName) : text };
-    sent.current = details;
-    setSaveFailed(false);
-    updateTripDetails(trip.id, details).catch(() => setSaveFailed(true));
+  /** One detail as it is typed, kept in the draft until Done. */
+  const type = (field: keyof TripDetails) => (text: string) =>
+    setDraft((d) => ({ ...d, [field]: text }));
+
+  /** Done: keeps what was typed, all of it at once, and the screen is read only again. */
+  const done = () => {
+    Keyboard.dismiss();
+    setEditing(false);
+    if (Object.keys(draft).length > 0) {
+      const details: TripDetails = {
+        // The default left as it is stays no name, so the trip keeps its number.
+        name: draft.name === undefined ? trip.name : typedName(draft.name, defaultName),
+        from: draft.from ?? trip.from,
+        to: draft.to ?? trip.to,
+        note: draft.note ?? trip.note,
+      };
+      setSaveFailed(false);
+      updateTripDetails(trip.id, details).catch(() => setSaveFailed(true));
+    }
+    setDraft({});
+  };
+
+  /** Cancel: what was typed is dropped, the fields show what is stored, read only again. */
+  const cancel = () => {
+    Keyboard.dismiss();
+    setEditing(false);
+    setDraft({});
+    setSession((s) => s + 1);
   };
 
   const confirmDelete = () => {
@@ -126,12 +161,14 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
   const placeRow = (field: "from" | "to") => (
     <DetailRow label={t(field === "from" ? "details.from" : "details.to")}>
       <InlineText
+        key={session}
         value={trip[field]}
         placeholder={t("trip.none")}
         label={t(field === "from" ? "details.from" : "details.to")}
-        onCommit={(text) => save(field, text)}
+        onChange={type(field)}
         look="value"
         maxLength={DETAIL_MAX[field]}
+        editable={editing}
         testID={`trip-${field}`}
       />
     </DetailRow>
@@ -140,38 +177,47 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
   return (
     <Screen
       title={name}
-      // An empty title as high as the one of the home screen, so the current widget stands where it
-      // stood there when it was tapped.
+      // A header as high as the home screen's, so the current widget stands where it stood there
+      // when it was tapped. Back at the left and the pill Edit at the right; while editing, Cancel
+      // ("x") at the left and Done ("✓", filled) at the right.
       titleSlot={
-        <Text variant="title" accessibilityElementsHidden importantForAccessibility="no">
-          {" "}
-        </Text>
-      }
-      footer={
-        // Back at the left, Delete trip at the right; the open trip has no Delete (it is stopped
-        // on the home screen), so Back takes the whole footer.
-        <View ref={note.footerRef} style={{ flexDirection: "row", gap: theme.space[3] }}>
-          <View style={{ flex: 1 }}>
-            <Button
-              label={words.back}
-              variant="secondary"
-              disabled={deleting}
-              onPress={nav.back}
-              testID="trip-back"
-            />
-          </View>
-          {open ? null : (
-            <View style={{ flex: 1 }}>
-              <Button
-                label={t("trip.delete")}
-                variant="danger"
-                busy={deleting}
-                onPress={confirmDelete}
-                testID="trip-delete"
-              />
-            </View>
-          )}
-        </View>
+        <ScreenHeader
+          title={t("trip.title")}
+          left={
+            editing
+              ? {
+                  icon: "close",
+                  label: t("common.cancel"),
+                  onPress: cancel,
+                  disabled: deleting,
+                  testID: "trip-cancel",
+                }
+              : {
+                  icon: "back",
+                  label: words.back,
+                  onPress: nav.back,
+                  disabled: deleting,
+                  testID: "trip-back",
+                }
+          }
+          right={
+            editing
+              ? {
+                  icon: "check",
+                  label: t("header.done"),
+                  look: "filled",
+                  onPress: done,
+                  disabled: deleting,
+                  testID: "trip-done",
+                }
+              : {
+                  text: t("header.edit"),
+                  label: t("header.edit"),
+                  onPress: () => setEditing(true),
+                  testID: "trip-edit",
+                }
+          }
+        />
       }
     >
       {/* The card of the trip, as on the home screen, with its name typed in place. */}
@@ -182,15 +228,14 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
           yesterday: t("day.yesterday"),
         })}
         nameSlot={
-          <InlineText
-            value={trip.name ?? defaultName}
-            placeholder={name}
-            label={t("details.name")}
-            onCommit={(text) => save("name", text)}
-            look="label"
-            maxLength={DETAIL_MAX.name}
-            restoreWhenEmpty
-            testID="trip-name"
+          <TripNameInput
+            key={session}
+            trip={trip}
+            onChange={type("name")}
+            editable={editing}
+            // Read only, "Untitled trip N" is the trip's name (black); while editing it is an
+            // empty field (grey), as on Manual add.
+            placeholderTone={editing ? "muted" : "text"}
           />
         }
       />
@@ -209,12 +254,8 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
           {placeRow("to")}
         </View>
 
+        {/* No date row: the widget says the day of a trip that was not today. */}
         <View>
-          <Row
-            title={t("trip.date")}
-            value={tripDate(trip, Date.now(), LANGUAGE, zone)}
-            testID="trip-date"
-          />
           <Row
             title={t("trip.time")}
             value={
@@ -233,8 +274,10 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
           ) : null}
         </View>
 
-        {/* The note under its label, changed in place: it reaches down to the footer, and a longer
-          note makes it grow and the screen scroll. */}
+        {/* The note under its label, with no placeholder: an empty note is an empty block, and a
+          tap anywhere in it while editing puts the cursor there. It reaches down to the bottom
+          (above Delete trip while editing), and a longer note makes it grow and the screen
+          scroll. */}
         <View
           ref={note.blockRef}
           onLayout={note.onLayout}
@@ -250,15 +293,49 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
         >
           <Text variant="label">{t("details.note")}</Text>
           <InlineText
+            key={session}
             value={trip.note}
-            placeholder={t("trip.note.empty")}
+            placeholder=""
             label={t("details.note")}
-            onCommit={(text) => save("note", text)}
+            onChange={type("note")}
             look="note"
             maxLength={DETAIL_MAX.note}
+            editable={editing}
             testID="trip-note"
           />
         </View>
+
+        {/* While editing a trip that ended: Delete trip, red, on the background, asked first. */}
+        {deletable ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("trip.delete")}
+            accessibilityState={{ busy: deleting }}
+            disabled={deleting}
+            onPress={confirmDelete}
+            onLayout={(e) => setDeleteHeight(e.nativeEvent.layout.height)}
+            hitSlop={8}
+            testID="trip-delete"
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              alignSelf: "flex-start",
+              gap: theme.space[3],
+              paddingHorizontal: theme.space[4],
+              paddingVertical: theme.space[2],
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color={theme.c.danger.ink} />
+            ) : (
+              <Icon name="trash" color={theme.c.danger.ink} size={20} />
+            )}
+            <Text variant="label" tone="danger">
+              {t("trip.delete")}
+            </Text>
+          </Pressable>
+        ) : null}
       </Animated.View>
     </Screen>
   );

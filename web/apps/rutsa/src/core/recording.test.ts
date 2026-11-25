@@ -169,6 +169,51 @@ describe("Resume", () => {
   });
 });
 
+describe("Restart", () => {
+  test("a recording trip starts again from now, the same trip, its positions gone", async () => {
+    const trip = await recording.start();
+    await storeDelivery(store, drive(5, 0));
+    clock += 3 * MIN;
+    const restarted = await recording.restart(trip.id);
+    expect(restarted).toMatchObject({
+      id: trip.id,
+      number: trip.number,
+      state: "recording",
+      startedAt: T0 + 3 * MIN,
+      segment: 1,
+    });
+    expect(await store.points(trip.id)).toEqual([]);
+    expect(location.running).toBe(true);
+  });
+
+  test("a paused trip records again and its updates start", async () => {
+    const trip = await recording.start();
+    await recording.pause(trip.id);
+    expect(location.running).toBe(false);
+    clock += MIN;
+    expect((await recording.restart(trip.id)).state).toBe("recording");
+    expect(location.running).toBe(true);
+  });
+
+  test("a phone that cannot record says why, and the trip is not changed", async () => {
+    const trip = await recording.start();
+    await storeDelivery(store, drive(5, 0));
+    location.ready = "no_permission";
+    clock += MIN;
+    await expect(recording.restart(trip.id)).rejects.toThrow(CannotRecord);
+    expect(await store.getTrip(trip.id)).toMatchObject({ startedAt: T0, state: "recording" });
+    expect((await store.points(trip.id)).length).toBeGreaterThan(0);
+  });
+
+  test("when the system refuses the updates, the trip is paused", async () => {
+    const trip = await recording.start();
+    location.failStart = true;
+    clock += MIN;
+    await expect(recording.restart(trip.id)).rejects.toThrow("the system refused");
+    expect((await store.getTrip(trip.id))?.state).toBe("paused");
+  });
+});
+
 describe("Stop", () => {
   test("stops the updates and ends the trip, recording or paused", async () => {
     const a = await recording.start();
