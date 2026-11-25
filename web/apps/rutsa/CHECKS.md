@@ -262,3 +262,10 @@ Since the fifth round of D6: no Edit details and no window; the details are chan
 - [x] 2026-11-25 `smoke` `vp run emulator:route`: 41 waypoints, 3989.44 m (haversine), 4000.00 m (geodesic)
 - [x] 2026-11-25 `smoke` Start in the app, `vp run emulator:drive` (4 min; the screen goes off at waypoint 8 and on at 34), Stop: the widget says 4.0 km (3,989 m, at most a few tens of metres less for the thinning at the corners); run: 4.0 km, 63 positions (the emulator repeats the last fix while it waits)
 - [ ] `vp run simulator:route` (on Windows too): prints the route and the `xcrun` command, runs nothing
+
+## E2. Check a recorded trip
+
+- [x] 2026-11-25 `smoke` With no trip open and location allowed: `vp run emulator:check` presses Start (the widget turns red), drives the route (4 min, the screen off and on), presses Stop and confirms; it prints "ok 4.0 km on the screen, 3.989 km expected ..." and ends with status 0; run: "ok   4.0 km on the screen, 3.989 km expected, off by 0.011 km (allowed 0.130)"
+- [x] 2026-11-25 (a trip's screen left open before the run) A trip's screen or History left open before the run, Stop pressed by hand during the drive, or a trip's screen opened: it goes back to the home screen by itself, says "the trip was stopped already" and checks the km
+- [ ] With a trip open: it stops at once with "a trip is open (Recording): stop it first", status 1
+- [ ] `--tolerance 0` still passes (4.0 km is within the rounding of 3.989 km)

@@ -14,3 +14,6 @@ web-build/
 *.keystore
 *.jks
 local.properties
+
+# The screen saved by a failed `vp run emulator:check` (E2).
+scripts/emulator/check-trip-screen.xml

@@ -229,7 +229,7 @@ Components from `@obop/ui-native`.
       the airplane mode schedule of `mileage-app`, which tests its upload),
       `scripts/simulator/route.mjs` and `route-lib.mjs` (`xcrun simctl location`),
       `scripts/lib/is-main.mjs`
-- [ ] E2 `test(rutsa): check a recorded trip on the emulator`: Start and Stop are pressed in the
+- [x] E2 `test(rutsa): check a recorded trip on the emulator`: Start and Stop are pressed in the
       app (by hand or with `adb shell input`); the script feeds the route, reads the km on the
       screen (`adb shell uiautomator dump`) and compares it with the reference length
 
@@ -660,3 +660,18 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   `emulator:route`, `emulator:drive`, `simulator:route`. Not taken: `check-trip.mjs` and
   `server-lib.mjs` (its server), `route-feed.mjs` and `thinning-replay.mjs` (a study of the
   thinning on its server), `simulator/ui` (the XCUITest drive on the Mac).
+- 2026-11-25: E2 as built: `scripts/emulator/check-trip.mjs` (`vp run emulator:check`) puts the
+  emulator at the start of the route, opens Rutsa (`monkey`, after `wm dismiss-keyguard`), presses
+  Start, feeds the route with `drive` of E1 (the screen off and on again), opens the app again,
+  presses Stop and the positive button of the dialog, waits for Ended and reads the km of the
+  current widget, which `judgeKm` compares with the length of the route: 0.05 km of rounding of
+  the screen and 2 % (`--tolerance`) of loss or gain. Buttons are found in `uiautomator dump` by
+  their testID (the `resource-id` React Native gives a view on Android), else by their words, and
+  pressed with `adb shell input tap`; a step that does not come stops it with the dump saved next
+  to it (ignored by git). Tried: the testIDs are in the dump as `resource-id`; a Stop pressed by
+  hand made it wait for a button that was gone, so before the start and after the drive it goes
+  back to the home screen by itself (`homeScreen`: the back button of Android while a screen over
+  it shows), refuses to start over an open trip, and reads a trip stopped by hand as it is. The reading of the dump and the judgement are pure in
+  `scripts/emulator/check-lib.mjs`, with tests. Before: location allowed and its explanation read,
+  no trip open. Unlike `mileage-app`, which reads the trip from its server, the km are those the
+  driver sees.
