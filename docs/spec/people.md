@@ -16,18 +16,18 @@ Users are every employee (self-service), line managers, HR, recruiters, payroll 
 
 ### 1.2 Modules
 
-| App                                                   | Module                                                        | Tier        | Wave                      | Main command subjects (4.13)                                       |
-| ----------------------------------------------------- | ------------------------------------------------------------- | ----------- | ------------------------- | ------------------------------------------------------------------ |
-| Employees: versions, org chart, contracts, departures | `hr` (employee core first, D86)                               | T1          | W3                        | `employee`, `employee_version`, `employment_contract`, `departure` |
-| Time off                                              | `hr` (same module, D25)                                       | T1          | W3                        | `leave_type`, `leave_allocation`, `leave_request`                  |
-| Skills; Onboarding/offboarding                        | `hr` (Proposed: inside the module)                            | T1 via `hr` | W3                        | `employee_skill`, `plan_template`, `plan_instance`                 |
-| Expenses (HR side)                                    | `expenses`                                                    | T1          | W3                        | `expense_claim`, `expense_line`                                    |
-| Recruitment/ATS                                       | `recruitment`                                                 | T2          | W3                        | `job_opening`, `application`, `offer`                              |
-| Attendance                                            | `attendances`                                                 | T2          | W3                        | `attendance`, `attendance_correction`                              |
-| Payroll engine                                        | `payroll`                                                     | T2          | W3                        | `pay_run`, `payslip`, `pay_input`                                  |
-| Payroll reference pack                                | `payroll_<cc>` (Proposed name)                                | T2          | W4                        | `pack` ([CLI](cli.md) 3.3)                                         |
-| Appraisals/OKRs                                       | `appraisals` (Proposed name)                                  | T3          | W4 or later, or community | `appraisal_cycle`, `appraisal`                                     |
-| Employee self-service                                 | `portal` shell (T0, W2) plus pages contributed by each module | n/a         | W3                        | The same commands, in scope `hr.self`                              |
+| App | Module | Tier | Wave | Main command subjects (4.13) |
+|---|---|---|---|---|
+| Employees: versions, org chart, contracts, departures | `hr` (employee core first, D86) | T1 | W3 | `employee`, `employee_version`, `employment_contract`, `departure` |
+| Time off | `hr` (same module, D25) | T1 | W3 | `leave_type`, `leave_allocation`, `leave_request` |
+| Skills; Onboarding/offboarding | `hr` (Proposed: inside the module) | T1 via `hr` | W3 | `employee_skill`, `plan_template`, `plan_instance` |
+| Expenses (HR side) | `expenses` | T1 | W3 | `expense_claim`, `expense_line` |
+| Recruitment/ATS | `recruitment` | T2 | W3 | `job_opening`, `application`, `offer` |
+| Attendance | `attendances` | T2 | W3 | `attendance`, `attendance_correction` |
+| Payroll engine | `payroll` | T2 | W3 | `pay_run`, `payslip`, `pay_input` |
+| Payroll reference pack | `payroll_<cc>` (Proposed name) | T2 | W4 | `pack` ([CLI](cli.md) 3.3) |
+| Appraisals/OKRs | `appraisals` (Proposed name) | T3 | W4 or later, or community | `appraisal_cycle`, `appraisal` |
+| Employee self-service | `portal` shell (T0, W2) plus pages contributed by each module | n/a | W3 | The same commands, in scope `hr.self` |
 
 Every module above is Apache-2.0 and free (OR-1, OR-2); there is no paid tier, seat or service in this area. Tier and placement are Proposed (D25, Q8), the wave windows are RATIFIED (D26, OR-13) and the W1 cut is RATIFIED (D86, OR-13, OR-15). Skills and onboarding are not listed in D25 (unlisted modules default to T3), so placing them in `hr` is a proposal. W1 ships none of People (D86). **Employee core with the services variant.** The services variant opens W3 (D86; that `project` and `timesheet` go to W3 is RATIFIED, OR-15): `timesheet`, `project` and the employee core of `hr` (employee, version, department, job, calendar) come first, together with `resource` (T0, W3), because `timesheet` needs an employee and a working calendar; the placement of the employee core and `resource` in that opening is Proposed (D25, Q8). The rest of `hr` (contracts, departures, time off, skills, onboarding), `expenses`, `recruitment`, `attendances` and `payroll` follow in W3 in demand order, each needing a design partner (D25); the payroll reference pack is W4 and appraisals are W4 or later. W3 runs 2028-07-01 to 2029-06-30. The team is the owner plus AI agents (D84), so People breadth is paced by what that team can build and verify, not by funding or headcount; it is an ordered backlog, not a promise (DECISIONS 5.1). Consumed from [Platform](platform.md): the approvals engine (in `automation`, T0, W2), `portal` (T0, W2) and, in W3, `sign`, `documents`, `calendar` and `analytics`. Consumed from [Retail](retail-commerce-marketing.md): `website` (T2, W3).
 
@@ -35,15 +35,15 @@ Bridges (D27, `auto_install`; names Proposed): `expenses_payroll`, `expenses_sal
 
 ### 1.3 Boundaries
 
-| Neighbour                                   | Stays there                                                                                                              | Interface (names Proposed)                                                                                                                                                                                                                                      |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Finance](finance.md)                       | Vendor bills, journal entries, payments, SEPA files, lock dates, tax; the financial side of `expenses` (finance.md 4.11) | `PostingPort` [R23 D.2] (payroll lines carry pack-mapped chart accounts, 4.10); `ExpenseClaimApproved` (finance creates the draft bill) and `PaymentPosted`, `PaymentReconciled` and `PaymentVoided` (people follows the payout and marks the claim reimbursed) |
-| [Services](services.md)                     | `resource` calendars and leaves, timesheets (analytic lines), planning, field service, helpdesk assignment               | `EmployeePort` (with `cost_rate(employee, date)`, Proposed in services.md), `SkillPort` (Later); `LeaveApproved` and `LeaveCancelled` through the `hr_resource` bridge                                                                                          |
-| [Platform](platform.md)                     | Party, principal, company, chatter, activities, approvals engine, documents, sign, calendar, portal shell                | Ports and durable events (D27)                                                                                                                                                                                                                                  |
-| [Security and privacy](security-privacy.md) | Permission algebra (D10), encryption, audit log, erasure                                                                 | People declares data classes and purposes (4.11)                                                                                                                                                                                                                |
-| [AI](ai.md)                                 | Agent surface, approval policy engine                                                                                    | People declares AI features and defaults (4.12)                                                                                                                                                                                                                 |
-| [CLI](cli.md)                               | Grammar, global flags, output and exit-code contracts, the parity test, the plugin registry client                       | People registers its commands in the catalogue (4.13) and restates none of those rules                                                                                                                                                                          |
-| [Localization](../LOCALIZATION.md)          | Pack operating model and gates                                                                                           | People consumes packs                                                                                                                                                                                                                                           |
+| Neighbour | Stays there | Interface (names Proposed) |
+|---|---|---|
+| [Finance](finance.md) | Vendor bills, journal entries, payments, SEPA files, lock dates, tax; the financial side of `expenses` (finance.md 4.11) | `PostingPort` [R23 D.2] (payroll lines carry pack-mapped chart accounts, 4.10); `ExpenseClaimApproved` (finance creates the draft bill) and `PaymentPosted`, `PaymentReconciled` and `PaymentVoided` (people follows the payout and marks the claim reimbursed) |
+| [Services](services.md) | `resource` calendars and leaves, timesheets (analytic lines), planning, field service, helpdesk assignment | `EmployeePort` (with `cost_rate(employee, date)`, Proposed in services.md), `SkillPort` (Later); `LeaveApproved` and `LeaveCancelled` through the `hr_resource` bridge |
+| [Platform](platform.md) | Party, principal, company, chatter, activities, approvals engine, documents, sign, calendar, portal shell | Ports and durable events (D27) |
+| [Security and privacy](security-privacy.md) | Permission algebra (D10), encryption, audit log, erasure | People declares data classes and purposes (4.11) |
+| [AI](ai.md) | Agent surface, approval policy engine | People declares AI features and defaults (4.12) |
+| [CLI](cli.md) | Grammar, global flags, output and exit-code contracts, the parity test, the plugin registry client | People registers its commands in the catalogue (4.13) and restates none of those rules |
+| [Localization](../LOCALIZATION.md) | Pack operating model and gates | People consumes packs |
 
 ### 1.4 Open and free
 
@@ -78,53 +78,53 @@ Solid arrows point from a module to the `*-api` crates or ports it uses (D27); d
 
 Permission group names are proposals, spelled as in [CONVENTIONS](../CONVENTIONS.md) 4. This table uses the HR seed names listed in [Security and privacy](security-privacy.md) 2 (`hr.officer`, `hr.admin`, `hr.special_reader`, `hr.line_manager`, `hr.self`, `payroll.preparer`, `payroll.approver`) and defines them for that document. Retired: `hr.manager`, `hr.user` and `hr.auditor` (now `hr.admin`, `hr.officer` and `audit.reader`; [CONVENTIONS](../CONVENTIONS.md) 8). `hr.retro_change` and `hr.correct` (4.1) are named actions granted by rows of a group, not groups. Every grant follows the D10 algebra: default-deny, an explicit scope, data-class grants separate from record grants. Widening a data-class grant is an audited event.
 
-| Persona                          | Permission group                                                                                                           | Scope                                 | Data classes readable by default                                     | Notable limits                                                                                                                                                                                                                                      |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Employee                         | `hr.self`, in addition to `base.user`                                                                                      | own                                   | all data classes of own record, own payslips                         | Sensitive edits need approval                                                                                                                                                                                                                       |
-| Line manager                     | `hr.line_manager` (derived from the reporting line, never granted by hand)                                                 | domain: reports                       | `public_directory`, `internal`; leave dates (type hidden if private) | No `confidential_hr`, `special_category`, `financial`                                                                                                                                                                                               |
-| HR officer                       | `hr.officer`                                                                                                               | company                               | `public_directory`, `internal`; `confidential_hr` open (question 14) | `special_category` and `financial` need separate grants. Whether `confidential_hr` is readable by default or needs an explicit grant is an open owner decision (question 14; security-privacy.md open question 17); neither reading is adopted here |
-| HR administrator                 | `hr.admin`                                                                                                                 | company                               | as officer, same open point (question 14), plus configuration        | Can grant classes to others, audited; owns HR AI switches with `ai.hr_feature_owner` ([AI](ai.md) 2)                                                                                                                                                |
-| HR business partner              | `hr.hrbp`                                                                                                                  | domain: assigned departments          | as officer, in scope, same open point (question 14)                  |                                                                                                                                                                                                                                                     |
-| Special-category reader          | `hr.special_reader`                                                                                                        | domain or company                     | special_category                                                     | Every read audited with a purpose                                                                                                                                                                                                                   |
-| Recruiter                        | `recruitment.recruiter`                                                                                                    | domain: own openings                  | candidate and application data                                       | No diversity fields                                                                                                                                                                                                                                 |
-| Interviewer, hiring manager      | `recruitment.interviewer`                                                                                                  | domain: assigned applications         | limited application fields                                           | No expected salary, no diversity fields                                                                                                                                                                                                             |
-| Payroll preparer                 | `payroll.preparer`                                                                                                         | company                               | financial, internal                                                  | Cannot approve own run                                                                                                                                                                                                                              |
-| Payroll approver                 | `payroll.approver`                                                                                                         | company                               | financial                                                            | Differs from the preparer                                                                                                                                                                                                                           |
-| Kiosk device                     | `attendances.kiosk`, held by an API client principal registered to the device (Proposed; D28 has no device principal kind) | own, via badge or PIN                 | none                                                                 | Check-in and check-out only                                                                                                                                                                                                                         |
-| Auditor, data protection officer | `audit.reader`, `privacy.officer` (security-privacy.md 2)                                                                  | company                               | metadata and audit log                                               | Read-only; data only through grants                                                                                                                                                                                                                 |
-| Candidate                        | guest principal with capability token [R23 B.1]                                                                            | own                                   | own application                                                      |                                                                                                                                                                                                                                                     |
-| AI agent                         | agent principal (D18)                                                                                                      | intersection of user and token scopes | none of the sensitive classes by default (Proposed)                  | Drafts only; cannot approve or pay; uses the same typed commands as people (D80)                                                                                                                                                                    |
+| Persona | Permission group | Scope | Data classes readable by default | Notable limits |
+|---|---|---|---|---|
+| Employee | `hr.self`, in addition to `base.user` | own | all data classes of own record, own payslips | Sensitive edits need approval |
+| Line manager | `hr.line_manager` (derived from the reporting line, never granted by hand) | domain: reports | `public_directory`, `internal`; leave dates (type hidden if private) | No `confidential_hr`, `special_category`, `financial` |
+| HR officer | `hr.officer` | company | `public_directory`, `internal`; `confidential_hr` open (question 14) | `special_category` and `financial` need separate grants. Whether `confidential_hr` is readable by default or needs an explicit grant is an open owner decision (question 14; security-privacy.md open question 17); neither reading is adopted here |
+| HR administrator | `hr.admin` | company | as officer, same open point (question 14), plus configuration | Can grant classes to others, audited; owns HR AI switches with `ai.hr_feature_owner` ([AI](ai.md) 2) |
+| HR business partner | `hr.hrbp` | domain: assigned departments | as officer, in scope, same open point (question 14) | |
+| Special-category reader | `hr.special_reader` | domain or company | special_category | Every read audited with a purpose |
+| Recruiter | `recruitment.recruiter` | domain: own openings | candidate and application data | No diversity fields |
+| Interviewer, hiring manager | `recruitment.interviewer` | domain: assigned applications | limited application fields | No expected salary, no diversity fields |
+| Payroll preparer | `payroll.preparer` | company | financial, internal | Cannot approve own run |
+| Payroll approver | `payroll.approver` | company | financial | Differs from the preparer |
+| Kiosk device | `attendances.kiosk`, held by an API client principal registered to the device (Proposed; D28 has no device principal kind) | own, via badge or PIN | none | Check-in and check-out only |
+| Auditor, data protection officer | `audit.reader`, `privacy.officer` (security-privacy.md 2) | company | metadata and audit log | Read-only; data only through grants |
+| Candidate | guest principal with capability token [R23 B.1] | own | own application | |
+| AI agent | agent principal (D18) | intersection of user and token scopes | none of the sensitive classes by default (Proposed) | Drafts only; cannot approve or pay; uses the same typed commands as people (D80) |
 
 ## 3. Capability map
 
 Waves follow D25 and D26 (the windows are RATIFIED by OR-13; placements are Proposed). "Later" means after the app's first wave. The Odoo parity column compares features: "Community" and "Enterprise" are Odoo's editions, and every capability here is free in obop. Each row is a set of typed commands reachable through the CLI, the API and MCP (4.13); a capability is not done until it has all three (D80).
 
-| Capability                                   | Description                                                                                            | Wave                                       | Odoo parity                                                                             |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Employee master, directory, departures       | Person-linked identity, narrow public read model, dated exits                                          | W3 (employee core first, with `timesheet`) | Matches Community                                                                       |
-| Effective-dated versions                     | Change versus correction, DB-enforced non-overlap, retro flag                                          | W3                                         | Matches Community in concept (`hr.version`); beyond on guarantees                       |
-| Org chart                                    | Reporting tree with as-of-date view                                                                    | W3                                         | Matches Community; as-of beyond                                                         |
-| Employment contracts                         | Period, probation, signed document                                                                     | W3                                         | Matches Community; e-signature matches Enterprise (Sign)                                |
-| Onboarding/offboarding plans                 | Dated checklists, responsibles, triggers                                                               | W3                                         | Matches Community (activity plans)                                                      |
-| Skills and resume                            | Types, levels, history, job requirements                                                               | W3                                         | Matches Community                                                                       |
-| Leave requests and approval                  | Half-days, multi-step approval, calendar                                                               | W3                                         | Matches Community                                                                       |
-| Allocations, accruals, holidays              | Levels, caps, carry-over, append-only ledger, pack holidays                                            | W3                                         | Matches Community; ledger beyond                                                        |
-| Attendance and overtime rules                | Kiosk, web, mobile; time rules; corrections by approval                                                | W3                                         | Matches Community (Odoo 20 rules)                                                       |
-| Geo, IP, photo capture; biometric feeds      | Off by default with DPIA gate; biometrics only as extensions                                           | W3; later                                  | Matches Community; default-off beyond; biometrics deliberately skipped                  |
-| Openings, pipeline, applications             | Stages, refusal reasons, sources, alias, talent pool                                                   | W3                                         | Matches Community                                                                       |
-| Interviews, feedback, offers, consent timers | Structured feedback, e-signed offer, purpose-bound consent and expiry                                  | W3                                         | Matches Enterprise in part (Sign); consent timers beyond                                |
-| Candidate ranking, auto-reject               | High-risk AI                                                                                           | Not shipped                                | Deliberately skipped (4.12)                                                             |
-| Expense claims and policies                  | Lines, receipts, limits, per diem, mileage                                                             | W3                                         | Matches Community                                                                       |
-| Reimbursement via payroll                    | Payslip reimbursement                                                                                  | W3                                         | Matches Enterprise; free here                                                           |
-| Receipt extraction                           | Optional AI, drafts only                                                                               | Later                                      | Beyond (BYOK, no credits)                                                               |
-| Appraisals, 360, goals                       | Cycles, templates, key results from measures                                                           | W4 or later                                | Matches Enterprise; free here                                                           |
-| Employee self-service                        | Profile, payslips, leave, expenses, directory                                                          | W3                                         | Beyond (no seats, for every employee)                                                   |
-| Payroll rule engine                          | Structures, rules, dated parameters, categories, inputs, CEL                                           | W3                                         | Matches Enterprise in concept; explainable, CEL beyond                                  |
-| Payslips, pay runs, posting, payment files   | Regular, off-cycle, correction, forecast; posting templates; pain.001; basic garnishments and advances | W3                                         | Matches Enterprise; retro and forecast beyond                                           |
-| Provider connectors, bureau export           | Import runs, push employees, pull payslips; time by external code                                      | W3 first connector                         | Matches Enterprise (Employment Hero, ADP, SD Worx)                                      |
-| Country payroll packs                        | Signed, versioned, golden-case-gated                                                                   | W4 first                                   | Enterprise ships about two dozen; obop one reference, then third-party maintainers (L2) |
-| Statutory filing                             | RTI, DSN, Dimona, ELSTER and similar                                                                   | Not in core                                | Deliberately skipped (D19)                                                              |
-| Command surface                              | Every capability above as a typed command in CLI, API and MCP (4.13)                                   | With each app (D80)                        | Beyond: Odoo gates its external API by plan (D31)                                       |
+| Capability | Description | Wave | Odoo parity |
+|---|---|---|---|
+| Employee master, directory, departures | Person-linked identity, narrow public read model, dated exits | W3 (employee core first, with `timesheet`) | Matches Community |
+| Effective-dated versions | Change versus correction, DB-enforced non-overlap, retro flag | W3 | Matches Community in concept (`hr.version`); beyond on guarantees |
+| Org chart | Reporting tree with as-of-date view | W3 | Matches Community; as-of beyond |
+| Employment contracts | Period, probation, signed document | W3 | Matches Community; e-signature matches Enterprise (Sign) |
+| Onboarding/offboarding plans | Dated checklists, responsibles, triggers | W3 | Matches Community (activity plans) |
+| Skills and resume | Types, levels, history, job requirements | W3 | Matches Community |
+| Leave requests and approval | Half-days, multi-step approval, calendar | W3 | Matches Community |
+| Allocations, accruals, holidays | Levels, caps, carry-over, append-only ledger, pack holidays | W3 | Matches Community; ledger beyond |
+| Attendance and overtime rules | Kiosk, web, mobile; time rules; corrections by approval | W3 | Matches Community (Odoo 20 rules) |
+| Geo, IP, photo capture; biometric feeds | Off by default with DPIA gate; biometrics only as extensions | W3; later | Matches Community; default-off beyond; biometrics deliberately skipped |
+| Openings, pipeline, applications | Stages, refusal reasons, sources, alias, talent pool | W3 | Matches Community |
+| Interviews, feedback, offers, consent timers | Structured feedback, e-signed offer, purpose-bound consent and expiry | W3 | Matches Enterprise in part (Sign); consent timers beyond |
+| Candidate ranking, auto-reject | High-risk AI | Not shipped | Deliberately skipped (4.12) |
+| Expense claims and policies | Lines, receipts, limits, per diem, mileage | W3 | Matches Community |
+| Reimbursement via payroll | Payslip reimbursement | W3 | Matches Enterprise; free here |
+| Receipt extraction | Optional AI, drafts only | Later | Beyond (BYOK, no credits) |
+| Appraisals, 360, goals | Cycles, templates, key results from measures | W4 or later | Matches Enterprise; free here |
+| Employee self-service | Profile, payslips, leave, expenses, directory | W3 | Beyond (no seats, for every employee) |
+| Payroll rule engine | Structures, rules, dated parameters, categories, inputs, CEL | W3 | Matches Enterprise in concept; explainable, CEL beyond |
+| Payslips, pay runs, posting, payment files | Regular, off-cycle, correction, forecast; posting templates; pain.001; basic garnishments and advances | W3 | Matches Enterprise; retro and forecast beyond |
+| Provider connectors, bureau export | Import runs, push employees, pull payslips; time by external code | W3 first connector | Matches Enterprise (Employment Hero, ADP, SD Worx) |
+| Country payroll packs | Signed, versioned, golden-case-gated | W4 first | Enterprise ships about two dozen; obop one reference, then third-party maintainers (L2) |
+| Statutory filing | RTI, DSN, Dimona, ELSTER and similar | Not in core | Deliberately skipped (D19) |
+| Command surface | Every capability above as a typed command in CLI, API and MCP (4.13) | With each app (D80) | Beyond: Odoo gates its external API by plan (D31) |
 
 ## 4. Per-app specification
 
@@ -143,21 +143,20 @@ Waves follow D25 and D26 (the windows are RATIFIED by OR-13; placements are Prop
 
 **MVP.** Employee master, versions, departments, jobs, work locations, types, tags, contracts, org chart (as-of date), public read model, bank accounts with trusted flag, departures. The employee core (employee, version, department, job, calendar) ships first, with `resource`, `timesheet` and the services variant at the start of W3 (D25, D86; Proposed, Q8), and the rest follows in W3. **Later.** Concurrent contracts, cross-company secondment.
 
-| Entity                       | Purpose                                                                                               | Key fields                                                                                                                                                                                                                                                                                                                                                                                                                                       | States                             |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `employee`                   | Identity                                                                                              | `party_id` (person, required), `principal_id` (nullable), `company_id`, `branch_id`, badge and PIN hashes, `resource_id`                                                                                                                                                                                                                                                                                                                         | active, archived                   |
-| `employee_version`           | Time-varying data                                                                                     | `valid_during`, department, job, title, manager, coach, work location, calendar, type, `employment_contract_id`, pay structure type, wage (`financial`), hourly cost (`financial`, because wage can be recomputed from it; served by `EmployeePort::cost_rate`, Proposed in services.md, with `timesheet.cost_viewer` as the extra field permission; Odoo keeps `hourly_cost` on the employee [R14 s4.1]), `kind` (change or correction), reason | scheduled, current, past (derived) |
-| `employment_contract`        | Legal agreement                                                                                       | type, start, end, trial end, fixed term, document ref                                                                                                                                                                                                                                                                                                                                                                                            | draft, running, ended, cancelled   |
-| `employee_private`           | Classed personal data                                                                                 | national id (encrypted), birth date, passport, dependants, private address, emergency contact                                                                                                                                                                                                                                                                                                                                                    | confidential_hr                    |
-| `employee_bank_account`      | Payout target, kept apart from the party's `party_bank_account` [R23 B.1] so the class stays separate | IBAN (encrypted), `trusted`, split                                                                                                                                                                                                                                                                                                                                                                                                               | financial                          |
-| `departure`                  | Exit                                                                                                  | reason, notice date, effective date, apply (now or on date)                                                                                                                                                                                                                                                                                                                                                                                      | planned, effective                 |
-| `hr_employee_public`         | SQL view                                                                                              | Directory fields only                                                                                                                                                                                                                                                                                                                                                                                                                            | n/a                                |
-| `employee_reporting_closure` | Derived                                                                                               | ancestor, descendant, depth, `valid_during`                                                                                                                                                                                                                                                                                                                                                                                                      | derived                            |
+| Entity | Purpose | Key fields | States |
+|---|---|---|---|
+| `employee` | Identity | `party_id` (person, required), `principal_id` (nullable), `company_id`, `branch_id`, badge and PIN hashes, `resource_id` | active, archived |
+| `employee_version` | Time-varying data | `valid_during`, department, job, title, manager, coach, work location, calendar, type, `employment_contract_id`, pay structure type, wage (`financial`), hourly cost (`financial`, because wage can be recomputed from it; served by `EmployeePort::cost_rate`, Proposed in services.md, with `timesheet.cost_viewer` as the extra field permission; Odoo keeps `hourly_cost` on the employee [R14 s4.1]), `kind` (change or correction), reason | scheduled, current, past (derived) |
+| `employment_contract` | Legal agreement | type, start, end, trial end, fixed term, document ref | draft, running, ended, cancelled |
+| `employee_private` | Classed personal data | national id (encrypted), birth date, passport, dependants, private address, emergency contact | confidential_hr |
+| `employee_bank_account` | Payout target, kept apart from the party's `party_bank_account` [R23 B.1] so the class stays separate | IBAN (encrypted), `trusted`, split | financial |
+| `departure` | Exit | reason, notice date, effective date, apply (now or on date) | planned, effective |
+| `hr_employee_public` | SQL view | Directory fields only | n/a |
+| `employee_reporting_closure` | Derived | ancestor, descendant, depth, `valid_during` | derived |
 
 The employee's party holds only name and work contact; everything else sits in classified tables, and a restriction row hides employee-linked parties from non-HR search beyond those fields (Proposed) [R23 B.1, R13 s3.1].
 
 **Workflow: change versus correction (Proposed).**
-
 1. HR picks an effective date and edits. The current version is split at that date; the new version has `kind = change`; history is preserved.
 2. An effective date earlier than the end of the latest confirmed pay run is retroactive: it needs the named action `hr.retro_change` and a reason, and marks affected runs stale (4.10).
 3. A correction fixes wrongly entered data in place: the named action `hr.correct`, old and new values written to the audit log, same stale rule for payroll fields.
@@ -181,21 +180,20 @@ The employee's party holds only name and work contact; everything else sits in c
 
 **MVP.** Types, allocations, accrual plans with levels and carry-over, requests with half-days and hours, approval rules, mandatory days, public holidays (pack), team calendar, balances report, attachment rules. **Later.** Encashment rules, blackout periods.
 
-| Entity                          | Purpose          | Key fields                                                                                                                                                                  | States                                         |
-| ------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `leave_type`                    | Policy           | unit (day or hour), approval policy ([Platform](platform.md) 4.12), needs allocation, negative limit, `sensitivity` (normal or private), work entry type, document required | active                                         |
-| `leave_allocation`              | Grant            | target (employee, department, tag, all), amount, validity, plan, carry-over                                                                                                 | draft, approved, closed                        |
-| `accrual_plan`, `accrual_level` | Accrual rules    | start, milestone, added value, frequency, caps, carry-over, validity [R13 s3.2]                                                                                             | active                                         |
-| `leave_ledger_entry`            | Balance source   | employee, type, delta, effective date, source, ref, `idempotency_key`                                                                                                       | immutable                                      |
-| `leave_request`                 | Request          | employee, type, `tstzrange` in employee time zone, half-day flags, duration (computed), attachment, approval ref                                                            | draft, requested, approved, refused, cancelled |
-| `mandatory_day`                 | Company calendar | region, date, name, validity                                                                                                                                                | active                                         |
+| Entity | Purpose | Key fields | States |
+|---|---|---|---|
+| `leave_type` | Policy | unit (day or hour), approval policy ([Platform](platform.md) 4.12), needs allocation, negative limit, `sensitivity` (normal or private), work entry type, document required | active |
+| `leave_allocation` | Grant | target (employee, department, tag, all), amount, validity, plan, carry-over | draft, approved, closed |
+| `accrual_plan`, `accrual_level` | Accrual rules | start, milestone, added value, frequency, caps, carry-over, validity [R13 s3.2] | active |
+| `leave_ledger_entry` | Balance source | employee, type, delta, effective date, source, ref, `idempotency_key` | immutable |
+| `leave_request` | Request | employee, type, `tstzrange` in employee time zone, half-day flags, duration (computed), attachment, approval ref | draft, requested, approved, refused, cancelled |
+| `mandatory_day` | Company calendar | region, date, name, validity | active |
 
 Public holidays are not an `hr` table: a country pack loads them as `resource_leave` rows of kind `public_holiday` ([Services](services.md) 4.1), and `hr` reads them for duration arithmetic.
 
 The balance is the sum of ledger entries, append-only (Frappe also models leave as a ledger entry [R13 s7.1]); cancelling approved leave appends a reversal. Available balance is balance minus requested-but-undecided days. States: draft, requested (balance reserved), approved, refused, cancelled; "taken" is derived from the date.
 
 **Workflow.**
-
 1. The employee picks type and dates; the form shows computed duration and projected balance (a dry run of the same command, `obop leave_request submit --dry-run`, or its API and MCP equivalents).
 2. Submit (`SubmitLeaveRequest`, wire id `leave_request.submit`, idempotent by `command_id`) locks the employee-type balance row, checks overlap (`EXCLUDE` on live requests) and balance, and creates the approval request from the policy matched for the type; CEL conditions add steps ([Platform](platform.md) 4.12).
 3. Approvers decide in the inbox, or with `obop approval decide` ([CLI](cli.md) 3.9; only humans decide); exclusive approval prevents one user approving two steps; delegation covers absences [R15 s9].
@@ -214,12 +212,12 @@ The balance is the sum of ledger entries, append-only (Frappe also models leave 
 
 **MVP.** Kiosk, web and mobile check-in and out, one open attendance per employee, corrections by approval, time rules for overtime classification, hours-versus-expected report. **Later.** Device feeds (extension packages), geofencing, shift-aware rules with `planning`.
 
-| Entity                  | Key fields                                                                                                                                                    | States                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `attendance`            | employee, check-in, check-out, source, method, `client_uuid`, device time, server time, stale flag; optional geo, IP, photo (off by default, confidential_hr) | open, closed                  |
-| `attendance_correction` | original ref, proposed times, reason, approval ref                                                                                                            | requested, approved, refused  |
-| `time_rule`             | country or company filter, threshold, period, weekdays, window, tolerance, source and target work entry type, premium (basis points) [R13 s3.3]               | active                        |
-| `overtime_entry`        | employee, period, hours by class, approval ref                                                                                                                | computed, approved, converted |
+| Entity | Key fields | States |
+|---|---|---|
+| `attendance` | employee, check-in, check-out, source, method, `client_uuid`, device time, server time, stale flag; optional geo, IP, photo (off by default, confidential_hr) | open, closed |
+| `attendance_correction` | original ref, proposed times, reason, approval ref | requested, approved, refused |
+| `time_rule` | country or company filter, threshold, period, weekdays, window, tolerance, source and target work entry type, premium (basis points) [R13 s3.3] | active |
+| `overtime_entry` | employee, period, hours by class, approval ref | computed, approved, converted |
 
 **Workflow.** Check-in creates an open attendance (partial unique index); check-out closes it; the classifier applies time rules in sequence order to produce classified intervals; overtime above tolerance goes to approval; approved overtime becomes payroll input or compensatory allocation per configuration. Closed attendances are never edited; corrections are records.
 
@@ -233,19 +231,18 @@ The balance is the sum of ledger entries, append-only (Frappe also models leave 
 
 **MVP.** Openings, candidates, applications, stages, refusal reasons, sources, email alias per opening, careers page (with `website`), interviews and structured feedback (via `calendar`), offers with e-signature (`sign`), talent pool with consent, hire-to-employee. **Later.** Job-board connectors (extensions), requisition workflow.
 
-| Entity                                                                                                            | Key fields                                                                                                                                                                                                                                                                                  | States                                                               |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `job_opening`                                                                                                     | position, openings count, recruiter, hiring manager, pay range (min, max, currency, period), alias, published                                                                                                                                                                               | draft, open, paused, closed                                          |
-| `candidate`                                                                                                       | person party, contact, source, `retention_until`                                                                                                                                                                                                                                            | active, anonymized                                                   |
+| Entity | Key fields | States |
+|---|---|---|
+| `job_opening` | position, openings count, recruiter, hiring manager, pay range (min, max, currency, period), alias, published | draft, open, paused, closed |
+| `candidate` | person party, contact, source, `retention_until` | active, anonymized |
 | `consent_record` (ledger of `base`, owned by [Security and privacy](security-privacy.md) 4.6; not a People table) | Candidate consent as rows written through `ConsentPort`: subject, purpose, basis, time, kind (`grant` or `withdrawal`) and an expiry that People needs the ledger to carry (Proposed; replaces the former `candidate_consent` table, and security-privacy.md 4.6 lists no expiry field yet) | append-only; active, withdrawn and expired are derived from the rows |
-| `application`                                                                                                     | opening, candidate, stage, refusal reason, expected salary (`confidential_hr`)                                                                                                                                                                                                              | open, hired, refused, withdrawn                                      |
-| `interview`, `interview_feedback`                                                                                 | schedule, interviewers, criteria ratings, comments                                                                                                                                                                                                                                          | scheduled, done; submitted                                           |
-| `offer`                                                                                                           | application, proposed version fields, expiry, signature ref                                                                                                                                                                                                                                 | draft, sent, accepted, declined, expired                             |
+| `application` | opening, candidate, stage, refusal reason, expected salary (`confidential_hr`) | open, hired, refused, withdrawn |
+| `interview`, `interview_feedback` | schedule, interviewers, criteria ratings, comments | scheduled, done; submitted |
+| `offer` | application, proposed version fields, expiry, signature ref | draft, sent, accepted, declined, expired |
 
 Stage is a user-defined column (sequence, fold, hired flag, mail template); state is a fixed enum, as for tasks [R14 s3.1]. Reviewers see others' feedback only after submitting their own (Proposed).
 
 **Workflow.**
-
 1. An opening is published (careers page, alias, connectors). Pay range is a field on the opening; application forms carry no salary-history question (lint, Proposed, pay-transparency rules unverified in [R13 s9.1]).
 2. A candidate applies; consent is written to the consent ledger through `ConsentPort`, per purpose and with an expiry (Proposed); duplicates are detected deterministically by contact fingerprint.
 3. Humans move stages; stage entry sends templated mail.
@@ -266,17 +263,16 @@ Stage is a user-defined column (sequence, fold, hired flag, mail template); stat
 
 **MVP.** Claims with lines, receipts, categories, per diem and mileage via rate tables, policy checks, approval, draft vendor bill, bank or payroll reimbursement, project and customer re-invoicing (bridge). **Later.** Company-card feeds, cash advances, OCR of receipts (optional AI), and expense lines of kind `mileage` made from the confirmed trips of the `mileage` package (D87, [mobile.md](mobile.md) 5.9).
 
-| Entity             | Key fields                                                                                                                                                                       | States                                         |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `expense_claim`    | employee, title, period, currency, total (derived), reimbursement method, bill ref                                                                                               | draft, submitted, approved, refused, cancelled |
-| `expense_line`     | date, category, amount (minor units), tax config, paid by (employee or card), receipts, attendees, quantity and unit, analytic distribution, duplicate fingerprint, policy flags | n/a                                            |
-| `expense_category` | account role, default tax, kind (`standard`, `per_diem`, `mileage`), limits, receipt threshold, rate table                                                                       | active                                         |
-| `rate_table`       | unit, rate `NUMERIC(24,8)`, `valid_during`                                                                                                                                       | pack data                                      |
+| Entity | Key fields | States |
+|---|---|---|
+| `expense_claim` | employee, title, period, currency, total (derived), reimbursement method, bill ref | draft, submitted, approved, refused, cancelled |
+| `expense_line` | date, category, amount (minor units), tax config, paid by (employee or card), receipts, attendees, quantity and unit, analytic distribution, duplicate fingerprint, policy flags | n/a |
+| `expense_category` | account role, default tax, kind (`standard`, `per_diem`, `mileage`), limits, receipt threshold, rate table | active |
+| `rate_table` | unit, rate `NUMERIC(24,8)`, `valid_during` | pack data |
 
 Progress `reimbursement_state` (`not_due`, `to_reimburse`, `in_payroll`, `reimbursed`) is derived from links, not written. A claim header is kept because approval and payout batch are per claim; Odoo 19 removed expense reports [R01 s3.2], so this is a Proposed difference (open question 4), and [Finance](finance.md) 4.11 already assumes the claim states draft, submitted, approved, refused.
 
 **Workflow.**
-
 1. Capture on web or mobile (share-to-create from camera or PDF [R19 s10]) or by email alias.
 2. Submit runs deterministic checks: totals, duplicate fingerprint, receipt rules, dates, category limits. Warnings and blocks are rule severities.
 3. Approval by rule (manager; CEL adds finance above a threshold). The engine may auto-approve under policy; it never auto-refuses.
@@ -293,15 +289,14 @@ Progress `reimbursement_state` (`not_due`, `to_reimburse`, `in_payroll`, `reimbu
 
 **MVP.** The entities below, certification-expiry reminders, skill matrix. **Later.** Manager validation flows, skill evolution reports (with appraisals).
 
-| Entity                               | Key fields                                                                                     |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `skill_type`, `skill`, `skill_level` | type with ordered levels; numeric progress per level [R13 s3.4]                                |
-| `employee_skill`                     | employee, skill, level, `valid_from`, source (self, manager, certification), `certified_until` |
-| `resume_line`                        | typed entries (experience, education, certification), dates                                    |
-| `job_skill`                          | position, skill, required level                                                                |
+| Entity | Key fields |
+|---|---|
+| `skill_type`, `skill`, `skill_level` | type with ordered levels; numeric progress per level [R13 s3.4] |
+| `employee_skill` | employee, skill, level, `valid_from`, source (self, manager, certification), `certified_until` |
+| `resume_line` | typed entries (experience, education, certification), dates |
+| `job_skill` | position, skill, required level |
 
 **Workflow.**
-
 1. The employee or manager records a skill and level.
 2. The previous row is closed, so history is kept.
 3. Expiry of `certified_until` raises an activity for the employee and manager.
@@ -314,14 +309,13 @@ Progress `reimbursement_state` (`not_due`, `to_reimburse`, `in_payroll`, `reimbu
 
 **MVP.** Plan templates and instances backed by `mail` activities [R13 s3.1]. **Later.** Equipment return tracking with assets.
 
-| Entity                | Key fields                                                                                                                                                                                                                        | States                       |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `plan_template`       | type (onboarding, offboarding), applicability by company, department, job or employee type                                                                                                                                        | active                       |
-| `plan_template_item`  | title; responsible (employee, manager, HR business partner, named user or permission group); offset in days from start or departure date; kind (`todo`, `document_request`, `signature`, `principal_provisioning`); CEL condition | n/a                          |
-| `plan_instance`, task | employee, anchor date, progress                                                                                                                                                                                                   | active, completed, cancelled |
+| Entity | Key fields | States |
+|---|---|---|
+| `plan_template` | type (onboarding, offboarding), applicability by company, department, job or employee type | active |
+| `plan_template_item` | title; responsible (employee, manager, HR business partner, named user or permission group); offset in days from start or departure date; kind (`todo`, `document_request`, `signature`, `principal_provisioning`); CEL condition | n/a |
+| `plan_instance`, task | employee, anchor date, progress | active, completed, cancelled |
 
 **Workflow.**
-
 1. `EmployeeCreated` instantiates the matching onboarding plan, and `EmployeeDeparted` (emitted when a departure is recorded, carrying its effective date) the offboarding plan, so items can sit before the effective date.
 2. Each item creates an activity for its responsible person at anchor plus offset.
 3. Document requests and signatures run through `documents` and `sign`; provisioning creates the principal disabled until the start date.
@@ -335,15 +329,14 @@ Progress `reimbursement_state` (`not_due`, `to_reimburse`, `in_payroll`, `reimbu
 
 **MVP (W4).** Cycles, templates, self and manager review, calibration, objectives with key results. **Later.** 360 feedback with anonymity thresholds, skill-evolution links.
 
-| Entity                     | Key fields                                                                              | States                                                        |
-| -------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `appraisal_cycle`          | period, scope, template                                                                 | draft, open, closed                                           |
-| `appraisal`                | employee, cycle, reviewers                                                              | draft, self_review, manager_review, calibration, shared, done |
-| `objective`, `key_result`  | owner, weight, metric source (manual or an `analytics` measure), start, target, current | open, met, dropped                                            |
-| `feedback_request` (later) | reviewers, anonymity threshold                                                          | open, closed                                                  |
+| Entity | Key fields | States |
+|---|---|---|
+| `appraisal_cycle` | period, scope, template | draft, open, closed |
+| `appraisal` | employee, cycle, reviewers | draft, self_review, manager_review, calibration, shared, done |
+| `objective`, `key_result` | owner, weight, metric source (manual or an `analytics` measure), start, target, current | open, met, dropped |
+| `feedback_request` (later) | reviewers, anonymity threshold | open, closed |
 
 **Workflow.**
-
 1. HR opens a cycle for a scope.
 2. Employees and managers complete reviews.
 3. HR calibrates across a department.
@@ -357,16 +350,16 @@ Progress `reimbursement_state` (`not_due`, `to_reimburse`, `in_payroll`, `reimbu
 
 **MVP.** The pages below. **Later.** Native apps: React Native (Expo) apps are allowed as obop clients (OR-34) and the proposal limits them to cases a PWA cannot serve (Proposed, D87, [mobile.md](mobile.md)); the first is Mileage, which is not a self-service page. The phone client is planned as one host app that holds modules, Mileage the first (Proposed: a direction relayed to the project and not yet confirmed by the owner; D93, [mobile-host.md](mobile-host.md)).
 
-| Page                                                        | Backing module             | Scope     |
-| ----------------------------------------------------------- | -------------------------- | --------- |
-| Profile and change requests                                 | `hr`                       | own       |
-| Payslips (PDF/UA from `obop-report`, stored in `documents`) | `payroll`                  | own       |
-| Leave: request, balances, team calendar                     | `hr`                       | own, team |
-| Expenses: capture, submit, status                           | `expenses`                 | own       |
-| Timesheets, check-in                                        | `timesheet`, `attendances` | own       |
-| Directory and org chart                                     | `hr` (public view)         | company   |
-| Documents to sign or read                                   | `documents`, `sign`        | own       |
-| Approvals inbox (managers)                                  | `automation`               | assigned  |
+| Page | Backing module | Scope |
+|---|---|---|
+| Profile and change requests | `hr` | own |
+| Payslips (PDF/UA from `obop-report`, stored in `documents`) | `payroll` | own |
+| Leave: request, balances, team calendar | `hr` | own, team |
+| Expenses: capture, submit, status | `expenses` | own |
+| Timesheets, check-in | `timesheet`, `attendances` | own |
+| Directory and org chart | `hr` (public view) | company |
+| Documents to sign or read | `documents`, `sign` | own |
+| Approvals inbox (managers) | `automation` | assigned |
 
 **Workflow.** Sensitive profile edits (bank account, legal name, contract terms) create a change request, routed by approval rule, and apply as a new version on approval. Payslip notifications carry a link, never content.
 
@@ -378,25 +371,25 @@ Progress `reimbursement_state` (`not_due`, `to_reimburse`, `in_payroll`, `reimbu
 
 **Three layers.**
 
-| Layer                    | Content                                                                                                                                              | Licence and warranty                                                    |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Engine (core, `payroll`) | Rule evaluation, runs, payslips, posting, payment files, trace, golden-case harness                                                                  | Apache-2.0, free, as is                                                 |
-| Country packs            | Signed, versioned, effective-dated rules, parameters, categories, inputs, templates; optional Wasm for statutory algorithms; filing payload builders | Rule content open and free, no warranty, no payroll service (OR-2, D19) |
-| Provider connectors      | `PayrollProvider`: import pay runs and journals, push employees and deductions, pull payslips                                                        | Interface and connectors open and free                                  |
+| Layer | Content | Licence and warranty |
+|---|---|---|
+| Engine (core, `payroll`) | Rule evaluation, runs, payslips, posting, payment files, trace, golden-case harness | Apache-2.0, free, as is |
+| Country packs | Signed, versioned, effective-dated rules, parameters, categories, inputs, templates; optional Wasm for statutory algorithms; filing payload builders | Rule content open and free, no warranty, no payroll service (OR-2, D19) |
+| Provider connectors | `PayrollProvider`: import pay runs and journals, push employees and deductions, pull payslips | Interface and connectors open and free |
 
 Core contains no country tax code [R13 Implications #3]. Core never transmits a statutory filing; packs may build and validate payloads, and transmission is a provider's job, or an adapter that a third party publishes as a plugin (D81) and the user runs with their own credentials; SpaceCorps operates no filing gateway (D19, D17, OR-11). Pack code is X1 declarative, X3 Wasm (the host arrives in W3 after the OR-13 cut, D86) or X4 remote (D11); a payroll pack is installed and verified with the same typed commands as a localisation pack (`obop pack install`, `obop pack verify`, [CLI](cli.md) 3.3; Proposed); the manifest is `obop.toml` with `valid_from`, `valid_to`, `requires_core` and oracle versions (D32, [R25 B5]).
 
 **Rule model** (the six blocks practitioners know [R13 s4.1]).
 
-| Entity                                                | Purpose                      | Key fields                                                                                                                      |
-| ----------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `pay_structure_type`, `pay_structure`                 | Groups and ordered rule sets | frequency, wage type, default calendar, rules                                                                                   |
-| `pay_rule`                                            | One line                     | code, category, sequence, condition (CEL), amount mode (percentage, fixed, input, CEL), display, posting template, content hash |
-| `pay_rule_category`                                   | Totals addressable by code   | parent, code                                                                                                                    |
-| `pay_parameter`                                       | Dated values                 | name, value, `valid_during` (`EXCLUDE` overlap)                                                                                 |
-| `pay_input_type`, `pay_input`                         | One-off typed lines          | type, employee, date, amount or quantity, source ref, state (pending, consumed, void)                                           |
-| `pay_run`, `payslip`, `payslip_line`, `payslip_trace` | Runs                         | period, kind, inputs digest, pack and engine versions; line amount, quantity, rate, total, category, YTD                        |
-| `salary_attachment`                                   | Garnishment, loan, advance   | priority, cap, schedule                                                                                                         |
+| Entity | Purpose | Key fields |
+|---|---|---|
+| `pay_structure_type`, `pay_structure` | Groups and ordered rule sets | frequency, wage type, default calendar, rules |
+| `pay_rule` | One line | code, category, sequence, condition (CEL), amount mode (percentage, fixed, input, CEL), display, posting template, content hash |
+| `pay_rule_category` | Totals addressable by code | parent, code |
+| `pay_parameter` | Dated values | name, value, `valid_during` (`EXCLUDE` overlap) |
+| `pay_input_type`, `pay_input` | One-off typed lines | type, employee, date, amount or quantity, source ref, state (pending, consumed, void) |
+| `pay_run`, `payslip`, `payslip_line`, `payslip_trace` | Runs | period, kind, inputs digest, pack and engine versions; line amount, quantity, rate, total, category, YTD |
+| `salary_attachment` | Garnishment, loan, advance | priority, cap, schedule |
 
 Rules run in ascending sequence; later rules see earlier results. `total = amount * quantity * rate / 100`. The CEL context exposes the payslip, employee version, prior results and categories, classified intervals, inputs, dated parameters and YTD, with no clock and no I/O, under the D11 limits (4 KB, AST depth 32, step budget, deadline). [R24 s3.2] documents no decimal type for the `cel` crate (0.14.5, 2026-09-07, as of 2026-10-01), yet payroll needs exactness and floats are banned (D9); the W1 CEL spike must choose a host decimal type or scaled integers with explicit rounding modes (open question 5). Amounts persist as minor-unit integers plus currency, quantities as `NUMERIC(24,6)` [R23 DR-5].
 
@@ -432,13 +425,13 @@ States are the stored values of `pay_run`. Kinds are `regular`, `off_cycle`, `co
 
 **Data classes** (tag on every column; untagged columns are denied by default-deny, D10) [R13 s9.3, R23 DR-4]. The registry is [CONVENTIONS](../CONVENTIONS.md) 5; this table assigns the HR fields.
 
-| Class              | Examples                                                                                                  | Read by default                                                                | Protection                                                                                          |
-| ------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `public_directory` | name, work contact, department, title, manager                                                            | all internal principals, via `hr_employee_public`                              | none                                                                                                |
-| `internal`         | type, schedule, skills                                                                                    | manager chain, HR                                                              | audit on change                                                                                     |
-| `confidential_hr`  | contract terms, national id, birth date, dependants, appraisals, disciplinary                             | self; `hr.officer` is open (question 14, security-privacy.md open question 17) | separate tables behind `obop_cls_*` roles; audit on change; reads audited on record open and export |
-| `special_category` | sick-leave type and certificates, union data, diversity, disability, work-permit data as the pack decides | self, `hr.special_reader`                                                      | field encryption, every read audited with purpose, DPIA gate before enabling                        |
-| `financial`        | wage, hourly cost and cost rate, timesheet cost snapshots, bank accounts, tax ids, payslips               | self, payroll groups                                                           | field encryption, read audit, export approval                                                       |
+| Class | Examples | Read by default | Protection |
+|---|---|---|---|
+| `public_directory` | name, work contact, department, title, manager | all internal principals, via `hr_employee_public` | none |
+| `internal` | type, schedule, skills | manager chain, HR | audit on change |
+| `confidential_hr` | contract terms, national id, birth date, dependants, appraisals, disciplinary | self; `hr.officer` is open (question 14, security-privacy.md open question 17) | separate tables behind `obop_cls_*` roles; audit on change; reads audited on record open and export |
+| `special_category` | sick-leave type and certificates, union data, diversity, disability, work-permit data as the pack decides | self, `hr.special_reader` | field encryption, every read audited with purpose, DPIA gate before enabling |
+| `financial` | wage, hourly cost and cost rate, timesheet cost snapshots, bank accounts, tax ids, payslips | self, payroll groups | field encryption, read audit, export approval |
 
 A value from which wage can be recomputed takes wage's class, so hourly cost, cost rate and timesheet cost snapshots are `financial`; `timesheet.cost_viewer` stays the extra field permission ([CONVENTIONS](../CONVENTIONS.md) 5; Proposed until services.md and sales-crm.md adopt it). `secret` (Proposed, security-privacy.md 4.1) covers credentials and holds no HR field.
 
@@ -458,15 +451,15 @@ EU AI Act Annex III high-risk obligations (recruitment, CV sorting, worker manag
 
 **Switches.** A business master switch, then one switch per module (`hr`, `recruitment`, `attendances`, `expenses`, `payroll`, `appraisals`), then one per feature. HR modules ship with all AI off (Proposed). An AI-originated command in a switched-off module is refused and audited; its tools are absent from the agent's tool list (per-principal lists [R16 s5]). Data classes carry an `agent_readable` flag that defaults to false for all but `public_directory` and `internal`. Following the egress default of [AI](ai.md) 4.5 (Proposed), the three sensitive classes (`confidential_hr`, `special_category` and `financial`) never go to a non-local route unless an impact-assessment acknowledgement is recorded (egress policy by class, [R16 s12]). Enabling an HR AI feature needs two keys, `ai.admin` and `hr.admin`, with a recorded reason (ai.md 2; `ai.hr_feature_owner` holds the switches). The switches are records of `ai_feature_switch` ([AI](ai.md)) changed by typed commands that need the same two keys on every surface (D80).
 
-| Feature                                     | Module              | Status                                                                                    |
-| ------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------- |
-| Candidate ranking, scoring, auto-reject     | `recruitment`       | Not shipped first party; an extension must register as high-risk                          |
-| Performance scoring                         | `appraisals`        | Not shipped                                                                               |
-| Attendance anomaly flags                    | `attendances`       | Deterministic rules only                                                                  |
-| CV parsing to fields                        | `recruitment`       | Optional, off; counsel on classification                                                  |
-| Drafting job ads, policy Q&A over knowledge | `recruitment`, `hr` | Optional, off; respects field permissions                                                 |
-| Receipt extraction                          | `expenses`          | Optional, off; draft only, human validates [R16 s7]                                       |
-| Payroll variance narrative                  | `payroll`           | Optional, off; text over a finished run only, never in rule evaluation or results (ai.md) |
+| Feature | Module | Status |
+|---|---|---|
+| Candidate ranking, scoring, auto-reject | `recruitment` | Not shipped first party; an extension must register as high-risk |
+| Performance scoring | `appraisals` | Not shipped |
+| Attendance anomaly flags | `attendances` | Deterministic rules only |
+| CV parsing to fields | `recruitment` | Optional, off; counsel on classification |
+| Drafting job ads, policy Q&A over knowledge | `recruitment`, `hr` | Optional, off; respects field permissions |
+| Receipt extraction | `expenses` | Optional, off; draft only, human validates [R16 s7] |
+| Payroll variance narrative | `payroll` | Optional, off; text over a finished run only, never in rule evaluation or results (ai.md) |
 
 Rules: agents create drafts and never approve or pay; no automation auto-refuses a leave, claim or candidate; an approval policy may auto-approve inside limits. For any AI an extension adds, obop supplies a deployer's scaffolding: suggestion log, human decision record (accepted, edited, rejected), explanation surface and kill switch. R16 marks GDPR Art. 22 unverified; the design assumes it covers refusals.
 
@@ -474,19 +467,19 @@ Rules: agents create drafts and never approve or pay; no automation auto-refuses
 
 **Rule (OR-4, D80).** Every capability in this document is a typed command in the one command catalogue generated from the runtime registry (D29). The `obop` CLI, the REST API (`/api/v1/{model}/...`) and MCP expose it with the same input and output schemas. The wire id is `<model>.<action>` (CONVENTIONS 2.1) and the CLI form is `obop <model> <action> [<id>] [options]` ([CLI](cli.md) 2.1). A People feature is not done until its commands exist in all three surfaces with the D10 permission check, a dry-run with a digest-bound `plan_id` and an idempotency key for mutating commands, an audit entry, generated reference documentation and a passing parity test (D80, D36). The web UI (the pages of 4.9, the org chart, the approvals inbox and the payslip views) is a client of these commands and reaches literal parity with them before the first stable release, 1.0 (OR-4, OR-16); there is no UI-only HR feature. Agents are principals and use the same commands as people, with scopes of the form `<model>:<operation>` (D18). Command names below are Proposed: they are generated from the entities of 4.1 to 4.10, and a name that neither [CLI](cli.md) nor CONVENTIONS fixes can change until the grammar is frozen (Q22).
 
-| Area                                | Main commands (Proposed)                                                                                                                                                                                                                                                                                          | Notes                                                                                                                                                                                                                    |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Employees (4.1)                     | `obop employee list\|get\|create\|update`; `employee_version create` (a change) and `employee_version correct` (named action `hr.correct`); `departure create\|cancel`; `employment_contract create\|end`; `employee_bank_account create\|trust`; `hr_employee_public list` (the directory read model, read-only) | A change dated before the latest confirmed pay run needs `hr.retro_change` and a reason. Wage, bank account and contract changes go through the approvals engine. `trust` needs an approver and is not offered to agents |
-| Time off (4.2)                      | `leave_type`, `accrual_plan`, `mandatory_day`: `create\|list\|get\|update`; `leave_allocation create\|list`; `leave_request create\|submit\|withdraw\|cancel\|list\|get`; `leave_ledger_entry list`                                                                                                               | `submit` is idempotent by `command_id`, and `--dry-run` returns duration, projected balance and approval steps. Decisions use `obop approval decide`, by humans only                                                     |
-| Attendance (4.3)                    | `attendance check_in\|check_out\|list`; `attendance_correction create\|list`; `time_rule create\|list`; `overtime_entry list`                                                                                                                                                                                     | Kiosk and mobile call the same API through the kiosk client principal. Corrections are records, never edits                                                                                                              |
-| Recruitment (4.4)                   | `job_opening create\|publish\|pause\|close`; `candidate create\|anonymize`; `application create\|move_stage\|refuse\|withdraw\|hire`; `interview schedule`; `interview_feedback submit`; `offer create\|send`                                                                                                     | No `rank`, `score` or auto-reject command exists (4.12). `hire` calls `EmployeePort::create_draft`. Consent is written through `ConsentPort`, not a People command                                                       |
-| Expenses (4.5)                      | `expense_claim create\|submit\|cancel\|list\|get`; `expense_line create\|update`                                                                                                                                                                                                                                  | Approval goes through `approval decide`. Agents may create and dry-run draft claims and never approve or pay                                                                                                             |
-| Skills and onboarding (4.6, 4.7)    | `employee_skill create` (closes the previous row); `resume_line create`; `plan_template create`; `plan_instance list\|get\|cancel`                                                                                                                                                                                |                                                                                                                                                                                                                          |
-| Appraisals (4.8, W4 or later)       | `appraisal_cycle create\|open\|close`; `appraisal share`; `objective`, `key_result`: `create\|update`                                                                                                                                                                                                             |                                                                                                                                                                                                                          |
-| Payroll (4.10)                      | `pay_structure`, `pay_rule`, `pay_parameter`, `pay_input_type`: `create\|list\|get\|update`; `pay_input create\|void`; `pay_run create\|compute\|confirm\|post\|reverse\|list\|get`; `payslip list\|get`; `salary_attachment create`                                                                              | `confirm` enforces that the approver differs from the preparer; a dry-run `compute` leaves nothing behind; `payslip get` can return the evaluation trace. `confirm`, `post` and payouts are not offered to agents        |
-| Payroll packs and connectors (4.10) | `obop pack install\|verify payroll_<cc>` ([CLI](cli.md) 3.3); the `import`, `push` and `pull` actions that each provider connector package registers (D81)                                                                                                                                                        | `pack verify` prints the gate reached; a pack without golden cases cannot be `stable`                                                                                                                                    |
-| Read audit (4.11)                   | `obop audit tail` streams `DataRead` and other `security_event` rows to `audit.reader` ([CLI](cli.md) 3.7)                                                                                                                                                                                                        | A special_category read states a purpose on every surface                                                                                                                                                                |
-| AI switches (4.12)                  | `ai_feature_switch` set by `ai.admin` and `hr.admin` together ([AI](ai.md))                                                                                                                                                                                                                                       | Tools vanish from the agent's list when a switch is off                                                                                                                                                                  |
+| Area | Main commands (Proposed) | Notes |
+|---|---|---|
+| Employees (4.1) | `obop employee list\|get\|create\|update`; `employee_version create` (a change) and `employee_version correct` (named action `hr.correct`); `departure create\|cancel`; `employment_contract create\|end`; `employee_bank_account create\|trust`; `hr_employee_public list` (the directory read model, read-only) | A change dated before the latest confirmed pay run needs `hr.retro_change` and a reason. Wage, bank account and contract changes go through the approvals engine. `trust` needs an approver and is not offered to agents |
+| Time off (4.2) | `leave_type`, `accrual_plan`, `mandatory_day`: `create\|list\|get\|update`; `leave_allocation create\|list`; `leave_request create\|submit\|withdraw\|cancel\|list\|get`; `leave_ledger_entry list` | `submit` is idempotent by `command_id`, and `--dry-run` returns duration, projected balance and approval steps. Decisions use `obop approval decide`, by humans only |
+| Attendance (4.3) | `attendance check_in\|check_out\|list`; `attendance_correction create\|list`; `time_rule create\|list`; `overtime_entry list` | Kiosk and mobile call the same API through the kiosk client principal. Corrections are records, never edits |
+| Recruitment (4.4) | `job_opening create\|publish\|pause\|close`; `candidate create\|anonymize`; `application create\|move_stage\|refuse\|withdraw\|hire`; `interview schedule`; `interview_feedback submit`; `offer create\|send` | No `rank`, `score` or auto-reject command exists (4.12). `hire` calls `EmployeePort::create_draft`. Consent is written through `ConsentPort`, not a People command |
+| Expenses (4.5) | `expense_claim create\|submit\|cancel\|list\|get`; `expense_line create\|update` | Approval goes through `approval decide`. Agents may create and dry-run draft claims and never approve or pay |
+| Skills and onboarding (4.6, 4.7) | `employee_skill create` (closes the previous row); `resume_line create`; `plan_template create`; `plan_instance list\|get\|cancel` | |
+| Appraisals (4.8, W4 or later) | `appraisal_cycle create\|open\|close`; `appraisal share`; `objective`, `key_result`: `create\|update` | |
+| Payroll (4.10) | `pay_structure`, `pay_rule`, `pay_parameter`, `pay_input_type`: `create\|list\|get\|update`; `pay_input create\|void`; `pay_run create\|compute\|confirm\|post\|reverse\|list\|get`; `payslip list\|get`; `salary_attachment create` | `confirm` enforces that the approver differs from the preparer; a dry-run `compute` leaves nothing behind; `payslip get` can return the evaluation trace. `confirm`, `post` and payouts are not offered to agents |
+| Payroll packs and connectors (4.10) | `obop pack install\|verify payroll_<cc>` ([CLI](cli.md) 3.3); the `import`, `push` and `pull` actions that each provider connector package registers (D81) | `pack verify` prints the gate reached; a pack without golden cases cannot be `stable` |
+| Read audit (4.11) | `obop audit tail` streams `DataRead` and other `security_event` rows to `audit.reader` ([CLI](cli.md) 3.7) | A special_category read states a purpose on every surface |
+| AI switches (4.12) | `ai_feature_switch` set by `ai.admin` and `hr.admin` together ([AI](ai.md)) | Tools vanish from the agent's list when a switch is off |
 
 **Agents and plans.** An agent's write at `commit` effect or above yields a plan and exit 10, not an effect ([CLI](cli.md) 5.5). Commands of the effect classes `money_and_payee` and `destructive` are fail-closed for agents until approve-by-role exists (W2, [CLI](cli.md) 5.5). People keeps the stricter rule of 4.12 beyond that: approval decisions, pay-run confirmation and posting, payouts and bank-account trust are human-only, so `pay_run.confirm`, `pay_run.post`, payouts and `employee_bank_account.trust` are not offered to agents (Proposed, open question 17).
 
@@ -553,7 +546,6 @@ Illustrative; flag spellings are Proposed ([CLI](cli.md) 2.2). The path is a gol
 ## 6. Non-functional requirements
 
 **Integrity (database-enforced where possible, D30).**
-
 - No overlapping versions or running contracts per employee; no overlapping live leave requests; one open attendance per employee.
 - The leave ledger is append-only; balance equals the ledger sum; serialised per employee and type.
 - Confirmed pay runs and payslips are immutable; corrections are new rows.
@@ -575,18 +567,18 @@ Illustrative; flag spellings are Proposed ([CLI](cli.md) 2.2). The path is a gol
 
 ## 7. Where obop deliberately differs from Odoo
 
-| Area                  | Odoo                                                                               | obop                                                                                                                                                                  | Why                                                                                                             |
-| --------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Payroll               | Enterprise only; open payroll left Community in 13.0 [R13 s1]                      | Engine and pack rule content open and free; no payroll service and no warranty (OR-2, D19)                                                                            | Open-core surprise is pain 2 [R04 s4.2]                                                                         |
-| Payroll rules         | Python expressions in rule records, `safe_eval` in the OCA backport [R13 s4.2]     | CEL plus Wasm for statutory algorithms, no code in data                                                                                                               | Code in the database is a security and maintenance weakness [R13 s4.2]; customisation debt is pain 3 [R04 s4.3] |
-| Versions              | Dated `hr.version` snapshots [R13 s3.1]                                            | Date ranges with DB-enforced non-overlap, change versus correction, retro flag (Proposed)                                                                             | Payroll correctness [R13 Implications #2]                                                                       |
-| Field security        | Groups skip related fields; no read audit in Community [R13 s9.2]                  | Data-layer classes, compiler rejection, read audit                                                                                                                    | Enforce below the UI                                                                                            |
-| Self-service          | Internal or Light User seats [R13 s2]                                              | No seats: self-service for every employee at no cost (OR-2)                                                                                                           | ESS count equals headcount                                                                                      |
-| Appraisals, approvals | Enterprise [R01 s5, R15 s9]                                                        | Open and free; one generic approvals engine                                                                                                                           | Gating is pain 2                                                                                                |
-| Statutory filing      | Country reports, exports and some automated submission (Belgium Dimona) [R13 s5.2] | None in core; packs, providers, adapters a third party may publish (D81)                                                                                              | Liability and accreditation [R13 s6]                                                                            |
-| AI                    | IAP-credit metered [R16 s2.1]                                                      | BYOK, off by default in HR, switchable per module (D18)                                                                                                               | AI Act exposure, no credit wall                                                                                 |
-| Upgrades              | Breaking yearly, partner-dependent [R04 s4.1]                                      | Customisation as data, packs versioned apart from core, N-1 upgrades and a 12-month deprecation window before 1.0 (D85, OR-12; the window after 1.0 is Proposed, Q28) | Pain 1                                                                                                          |
-| Surfaces              | UI first; the external API is gated by plan (D31)                                  | Command first: every HR capability is a typed command in CLI, API and MCP, and the UI is a client (D80)                                                               | Agents and scripts get the same capabilities as people                                                          |
+| Area | Odoo | obop | Why |
+|---|---|---|---|
+| Payroll | Enterprise only; open payroll left Community in 13.0 [R13 s1] | Engine and pack rule content open and free; no payroll service and no warranty (OR-2, D19) | Open-core surprise is pain 2 [R04 s4.2] |
+| Payroll rules | Python expressions in rule records, `safe_eval` in the OCA backport [R13 s4.2] | CEL plus Wasm for statutory algorithms, no code in data | Code in the database is a security and maintenance weakness [R13 s4.2]; customisation debt is pain 3 [R04 s4.3] |
+| Versions | Dated `hr.version` snapshots [R13 s3.1] | Date ranges with DB-enforced non-overlap, change versus correction, retro flag (Proposed) | Payroll correctness [R13 Implications #2] |
+| Field security | Groups skip related fields; no read audit in Community [R13 s9.2] | Data-layer classes, compiler rejection, read audit | Enforce below the UI |
+| Self-service | Internal or Light User seats [R13 s2] | No seats: self-service for every employee at no cost (OR-2) | ESS count equals headcount |
+| Appraisals, approvals | Enterprise [R01 s5, R15 s9] | Open and free; one generic approvals engine | Gating is pain 2 |
+| Statutory filing | Country reports, exports and some automated submission (Belgium Dimona) [R13 s5.2] | None in core; packs, providers, adapters a third party may publish (D81) | Liability and accreditation [R13 s6] |
+| AI | IAP-credit metered [R16 s2.1] | BYOK, off by default in HR, switchable per module (D18) | AI Act exposure, no credit wall |
+| Upgrades | Breaking yearly, partner-dependent [R04 s4.1] | Customisation as data, packs versioned apart from core, N-1 upgrades and a 12-month deprecation window before 1.0 (D85, OR-12; the window after 1.0 is Proposed, Q28) | Pain 1 |
+| Surfaces | UI first; the external API is gated by plan (D31) | Command first: every HR capability is a typed command in CLI, API and MCP, and the UI is a client (D80) | Agents and scripts get the same capabilities as people |
 
 ## 8. Out of scope, non-goals and later
 
@@ -622,20 +614,20 @@ Illustrative; flag spellings are Proposed ([CLI](cli.md) 2.2). The path is a gol
 
 Decision IDs (D19, D25, D80 and others) and owner rulings (OR-n) refer to [DECISIONS](../DECISIONS.md). Spellings of events, permission groups, data classes, states and ports follow [CONVENTIONS](../CONVENTIONS.md).
 
-| Tag     | File                                                                                                                                                      |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R01     | [Odoo app catalog](../research/01-odoo-app-catalog.md)                                                                                                    |
-| R04     | [Voice of customer](../research/04-odoo-voice-of-customer.md)                                                                                             |
-| R13     | [HR and payroll](../research/13-hr-payroll.md)                                                                                                            |
-| R14     | [Services](../research/14-services-project-helpdesk-field.md)                                                                                             |
-| R15     | [Platform, collaboration, documents](../research/15-platform-collaboration-documents.md)                                                                  |
-| R16     | [AI-native ERP](../research/16-ai-native-erp.md)                                                                                                          |
-| R18     | [Security, compliance, operations](../research/18-security-compliance-deployment-ops.md)                                                                  |
-| R19     | [UX and design system](../research/19-ux-design-system.md)                                                                                                |
-| R21     | [Integrations and API](../research/21-integrations-interoperability-api.md)                                                                               |
-| R23     | [Kernel model and architecture decisions](../research/23-kernel-model-architecture-decisions.md)                                                          |
-| R24     | [Extension platform](../research/24-extension-platform-sdk.md)                                                                                            |
-| R25     | [Localization operating model](../research/25-localization-operating-model.md)                                                                            |
-| R26     | [Business model and pricing](../research/26-business-model-pricing-risk.md) (historical; its pricing and funding material is superseded by OR-2 and OR-6) |
-| CLI     | [CLI and the agentic command surface](cli.md)                                                                                                             |
-| Rulings | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS](../DECISIONS.md)                                                                               |
+| Tag | File |
+|---|---|
+| R01 | [Odoo app catalog](../research/01-odoo-app-catalog.md) |
+| R04 | [Voice of customer](../research/04-odoo-voice-of-customer.md) |
+| R13 | [HR and payroll](../research/13-hr-payroll.md) |
+| R14 | [Services](../research/14-services-project-helpdesk-field.md) |
+| R15 | [Platform, collaboration, documents](../research/15-platform-collaboration-documents.md) |
+| R16 | [AI-native ERP](../research/16-ai-native-erp.md) |
+| R18 | [Security, compliance, operations](../research/18-security-compliance-deployment-ops.md) |
+| R19 | [UX and design system](../research/19-ux-design-system.md) |
+| R21 | [Integrations and API](../research/21-integrations-interoperability-api.md) |
+| R23 | [Kernel model and architecture decisions](../research/23-kernel-model-architecture-decisions.md) |
+| R24 | [Extension platform](../research/24-extension-platform-sdk.md) |
+| R25 | [Localization operating model](../research/25-localization-operating-model.md) |
+| R26 | [Business model and pricing](../research/26-business-model-pricing-risk.md) (historical; its pricing and funding material is superseded by OR-2 and OR-6) |
+| CLI | [CLI and the agentic command surface](cli.md) |
+| Rulings | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS](../DECISIONS.md) |

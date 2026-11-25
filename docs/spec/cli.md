@@ -18,12 +18,12 @@ OR-4 is "AGENTIC FIRST EVERYTHING CLI FOR EVERYTHING". This spec turns it into t
 
 **Parity rule added here.** A surface may expose a command only if the catalogue contains it (Proposed). UI parity is literal (RATIFIED, OR-16): every command of every shipped module gets a UI before the first stable release. The catalogue may contain a command without a surface only through an entry on the **exemption list** (RATIFIED mechanism, OR-16): operator-only commands that the owner approves as CLI-only, each with a written reason and the surfaces it lacks. An entry lacks the UI, and lacks REST and MCP too only when it says so; a command on no approved entry has all four surfaces (CLI, REST, MCP and, by 1.0, the UI). Nothing is exempt until the owner approves it, so the entries below are Proposed until the owner approves them one by one, and in any document a command called exempt is a proposed entry until then. This subsection is the single enumerated list of entries: other documents cite it and do not restate a subset. The groups below are only a Proposed way to organise the list. A step that only a person can perform is not an exemption (below the table).
 
-| Proposed entries (group)                                       | Why a surface is missing                                                                                                                                                                                                                                                                                                                                                                    | Surfaces lacked | Commands                                                                                                                                                                                                                                                                                                                                                                                         |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Bootstrap**                                                  | Must work before or without a running server, or replaces it                                                                                                                                                                                                                                                                                                                                | UI, REST, MCP   | `init`, `serve`, `up`, `down`, `migrate`, `upgrade`, `dev` (all subcommands), `self update\|verify`                                                                                                                                                                                                                                                                                              |
-| **Local**                                                      | Acts on the user's machine, its files or its credential store, with no server data                                                                                                                                                                                                                                                                                                          | UI, REST, MCP   | `version`, `api`, `completion`, `man`, `config`, `catalogue sync`, `login`, `logout`, `diag`, `business verify`, `mcp bridge`, `plugin new\|lint\|test\|package\|dev\|migrate\|fork\|diff\|publish\|publisher`, and the register-local hardware operations of [retail-commerce-marketing.md](retail-commerce-marketing.md) (open question 20: print a test page, pulse the drawer, read a scale) |
-| **Operator-only** (the examples named in OR-16)                | Run by whoever operates the instance, from a shell, a scheduler or CI, not as a business screen; the server already serves them, so REST and MCP exist (proposed; today `backup`, `restore`, `drill`, `storage` and `migrate` are command line only, with no page or API route, and D73 asks the owner to approve that exemption). `upgrade`, the fourth example, is in the bootstrap group | UI              | `backup create\|verify\|list\|restore`, `doctor`, `pack verify`                                                                                                                                                                                                                                                                                                                                  |
-| **Owner-database credentials** (D77, Q52; Proposed, not built) | Need the credentials of the database owner role, which the web server must never hold, or act on the instance's database roles from outside it                                                                                                                                                                                                                                              | UI, REST, MCP   | `storage grants`, `storage split-roles`, `storage guards replace\|remove`, `modules tamper`, `platform split-roles`                                                                                                                                                                                                                                                                              |
+| Proposed entries (group) | Why a surface is missing | Surfaces lacked | Commands |
+|---|---|---|---|
+| **Bootstrap** | Must work before or without a running server, or replaces it | UI, REST, MCP | `init`, `serve`, `up`, `down`, `migrate`, `upgrade`, `dev` (all subcommands), `self update\|verify` |
+| **Local** | Acts on the user's machine, its files or its credential store, with no server data | UI, REST, MCP | `version`, `api`, `completion`, `man`, `config`, `catalogue sync`, `login`, `logout`, `diag`, `business verify`, `mcp bridge`, `plugin new\|lint\|test\|package\|dev\|migrate\|fork\|diff\|publish\|publisher`, and the register-local hardware operations of [retail-commerce-marketing.md](retail-commerce-marketing.md) (open question 20: print a test page, pulse the drawer, read a scale) |
+| **Operator-only** (the examples named in OR-16) | Run by whoever operates the instance, from a shell, a scheduler or CI, not as a business screen; the server already serves them, so REST and MCP exist (proposed; today `backup`, `restore`, `drill`, `storage` and `migrate` are command line only, with no page or API route, and D73 asks the owner to approve that exemption). `upgrade`, the fourth example, is in the bootstrap group | UI | `backup create\|verify\|list\|restore`, `doctor`, `pack verify` |
+| **Owner-database credentials** (D77, Q52; Proposed, not built) | Need the credentials of the database owner role, which the web server must never hold, or act on the instance's database roles from outside it | UI, REST, MCP | `storage grants`, `storage split-roles`, `storage guards replace\|remove`, `modules tamper`, `platform split-roles` |
 
 **Human acts are not an exemption (not adopted: OR-16 covers CLI-only operator commands only, and OR-4 bars UI-only features).** A step that only a person can perform (the browser consent of a mailbox or calendar connection, a signer's own act on the link a sign request issues, the permission prompt of a Web Push subscription; platform 4.6 to 4.11) is part of a catalogue command that exists on all three surfaces. The command starts the step and hands the person a URL, a status command reads its state and a revoke command undoes it. An agent that reaches the human act stops there, as it does for step-up (2.11), and cannot perform it. The live co-editing socket is a transport, not a capability: the content it edits stays readable and writable as commands. [platform.md](platform.md) 4.20 point 5 and its open question 16 follow this reading.
 
@@ -49,21 +49,21 @@ OR-4 is "AGENTIC FIRST EVERYTHING CLI FOR EVERYTHING". This spec turns it into t
 
 The `obop` binary exists (`crates/obop`, `obop --help` prints one usage page; the user-facing page is `web/apps/site/content/en/docs/reference/cli.md`). It is a thin set of hand-written commands over the one `Dispatcher` (REST, MCP and CLI share it), not yet the catalogue-generated tree of 2.1. The grammar is `obop <command> [options]`, not `obop <subject> <action>`. This table is a statement of fact about the code; the right-hand column says what the rest of this file proposes for the same thing, and every rename in it is Proposed (Q22).
 
-| Built today                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Proposed counterpart in this file                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `serve [--addr] [--static DIR] [--public-site] [--trust-proxy]`; `platform serve ...` (the control plane: sign-up, instances, forum, status page)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `serve` (3.1); the control plane is operator tooling outside this catalogue                                                           |
-| `call [--token T] <model> <command> [key=value ...]` (runs in process against the database of `--db`, through the same dispatcher that serves `POST /api/{model}/{command}`; values converted by field type; `filter`, `order`, `aggregate` as JSON text)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `<subject> <action>` (2.1), `api` (2.8)                                                                                               |
-| `upload FILE --field MODEL.FIELD [--record ID] [--content-type TYPE] [--url URL]` (2026-11-14, a D60 amendment, PROPOSED: a local file becomes an upload for an image or file field through `BlobService::upload`, the service behind `POST /api/blobs`, and with `--record` the value of that field through the generated `update`; prints `id`, `content_type`, `size`, `sha256`, `filename` as JSON. Without `--url` it runs in process on the database of `--db`, like `call`. With `--url` (or `OBOP_URL`) it is a client of a running instance (`POST /api/blobs`, then `POST /api/{model}/update`, the token as the bearer, `https` or loopback only, no redirects): **the first and only HTTP client mode of the CLI**, added because the bytes of a file have no typed command (below) and so no other way from a command line to a hosted instance. There is no MCP form: an agent on MCP still cannot send bytes)                                                                                                         | `data` (3.4) and the thin HTTP client of 1.3; a typed command that takes `content_base64` is the other possible form and is not built |
-| `openapi [--out FILE]` (the OpenAPI 3.1 document of the linked modules for an account that holds every group: every command of every model that has a `list` command, a placeholder address, sorted keys, the same bytes on every run; it builds an app in memory and opens no database. The REST form is `GET /api/openapi.json`, which serves the document for the caller; there is no MCP or UI form. It feeds `web/packages/client`, [mobile.md](mobile.md) 8.4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `schema --openapi` (2.9)                                                                                                              |
-| `commands [--token T]` (the commands this token may see, read in process from the registry; the server serves the same list at `GET /api/commands`, and `GET /api/meta` and `GET /api/openapi.json`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `catalogue list`, `schema` (2.9)                                                                                                      |
-| `import <model> FILE.csv [--mode partial] [--dry-run] [--key K] [--source-system S --source-table T --source-ids FILE [--on-existing error]]` (through the generated `bulk_create`, D70; the `--source-*` options record the import map, 3.4a)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `data import` (3.4)                                                                                                                   |
-| `sie export --year YYYY [--out FILE]`; `sie import FILE [--dry-run] [--post] [--default-account-types \| --account-types FILE]` (SIE 4 files for the `accounting` models, [accounting-se.md](accounting-se.md) 4; the typed commands `sie_exchange.export` and `sie_exchange.import`, groups `accounting.user` and `accounting.manager`, on REST, MCP and the generated surface. **A command that returns a file returns it as `content_base64` (the bytes as base64 text) with `filename`, `sha256` and counts, and a command that takes a file takes `content_base64`: no platform command returns raw bytes.** `--post` is the CLI's only: it runs the real `accounting_move.post` as the signed-in person with `accounting.approver`. An agent may call `sie_exchange.import` with `dry_run` only, because a plan that a person approves runs under the dispatcher's transaction lock and the import makes its own writes through the commands; the full run is a person's. Not verified against the official SIE specification) | `data import` / `audit_file export` (3.4)                                                                                             |
-| `import-map search --source-system S --source-table T --source-id ID [--model M]`; `import-map get MODEL ID` (the commands `import_map.search` and `import_map.get`, group `api.import_map_read`; 3.4a)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `data import` and the `external_ref` ledger of integrations 4 (3.4a)                                                                  |
-| `mcp [--token T]` (stdio); hosted MCP at `/mcp` with OAuth sign-in (D51, D64)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `mcp bridge` (2.11, 3.9), the hosted endpoint is the server's                                                                         |
-| `admin create\|users\|groups\|offboard\|disable\|enable\|import\|reset-mfa`; `agent-token USER --scopes ...`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `agent` and security commands (3.7, 3.9)                                                                                              |
-| `modules check\|describe\|list\|tree\|plan\|market\|install\|install-from\|uninstall\|updates\|update\|update-all\|rollback\|labels`; `sequences backfill`; `connectors purge`; `site seed\|show\|set`; `status incident ...`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `pack`, `plugin` (3.3, 4.3) and `customize` (3.6) for the package parts; the rest are module or operator commands                     |
-| `migrate status\|verify\|plan\|run\|rehearse\|rollback`; `update check\|status\|start\|rollback`; `platform release ...`, `platform upgrade-instances`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `migrate`, `upgrade` (3.1)                                                                                                            |
-| `backup`, `backup verify`, `backup run\|list\|prune`, `restore`, `drill`, `storage check\|attest\|show`, `secrets status\|rotate`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `backup create\|verify\|list\|restore`, `doctor` (3.1)                                                                                |
+| Built today | Proposed counterpart in this file |
+|---|---|
+| `serve [--addr] [--static DIR] [--public-site] [--trust-proxy]`; `platform serve ...` (the control plane: sign-up, instances, forum, status page) | `serve` (3.1); the control plane is operator tooling outside this catalogue |
+| `call [--token T] <model> <command> [key=value ...]` (runs in process against the database of `--db`, through the same dispatcher that serves `POST /api/{model}/{command}`; values converted by field type; `filter`, `order`, `aggregate` as JSON text) | `<subject> <action>` (2.1), `api` (2.8) |
+| `upload FILE --field MODEL.FIELD [--record ID] [--content-type TYPE] [--url URL]` (2026-11-14, a D60 amendment, PROPOSED: a local file becomes an upload for an image or file field through `BlobService::upload`, the service behind `POST /api/blobs`, and with `--record` the value of that field through the generated `update`; prints `id`, `content_type`, `size`, `sha256`, `filename` as JSON. Without `--url` it runs in process on the database of `--db`, like `call`. With `--url` (or `OBOP_URL`) it is a client of a running instance (`POST /api/blobs`, then `POST /api/{model}/update`, the token as the bearer, `https` or loopback only, no redirects): **the first and only HTTP client mode of the CLI**, added because the bytes of a file have no typed command (below) and so no other way from a command line to a hosted instance. There is no MCP form: an agent on MCP still cannot send bytes) | `data` (3.4) and the thin HTTP client of 1.3; a typed command that takes `content_base64` is the other possible form and is not built |
+| `openapi [--out FILE]` (the OpenAPI 3.1 document of the linked modules for an account that holds every group: every command of every model that has a `list` command, a placeholder address, sorted keys, the same bytes on every run; it builds an app in memory and opens no database. The REST form is `GET /api/openapi.json`, which serves the document for the caller; there is no MCP or UI form. It feeds `web/packages/client`, [mobile.md](mobile.md) 8.4) | `schema --openapi` (2.9) |
+| `commands [--token T]` (the commands this token may see, read in process from the registry; the server serves the same list at `GET /api/commands`, and `GET /api/meta` and `GET /api/openapi.json`) | `catalogue list`, `schema` (2.9) |
+| `import <model> FILE.csv [--mode partial] [--dry-run] [--key K] [--source-system S --source-table T --source-ids FILE [--on-existing error]]` (through the generated `bulk_create`, D70; the `--source-*` options record the import map, 3.4a) | `data import` (3.4) |
+| `sie export --year YYYY [--out FILE]`; `sie import FILE [--dry-run] [--post] [--default-account-types \| --account-types FILE]` (SIE 4 files for the `accounting` models, [accounting-se.md](accounting-se.md) 4; the typed commands `sie_exchange.export` and `sie_exchange.import`, groups `accounting.user` and `accounting.manager`, on REST, MCP and the generated surface. **A command that returns a file returns it as `content_base64` (the bytes as base64 text) with `filename`, `sha256` and counts, and a command that takes a file takes `content_base64`: no platform command returns raw bytes.** `--post` is the CLI's only: it runs the real `accounting_move.post` as the signed-in person with `accounting.approver`. An agent may call `sie_exchange.import` with `dry_run` only, because a plan that a person approves runs under the dispatcher's transaction lock and the import makes its own writes through the commands; the full run is a person's. Not verified against the official SIE specification) | `data import` / `audit_file export` (3.4) |
+| `import-map search --source-system S --source-table T --source-id ID [--model M]`; `import-map get MODEL ID` (the commands `import_map.search` and `import_map.get`, group `api.import_map_read`; 3.4a) | `data import` and the `external_ref` ledger of integrations 4 (3.4a) |
+| `mcp [--token T]` (stdio); hosted MCP at `/mcp` with OAuth sign-in (D51, D64) | `mcp bridge` (2.11, 3.9), the hosted endpoint is the server's |
+| `admin create\|users\|groups\|offboard\|disable\|enable\|import\|reset-mfa`; `agent-token USER --scopes ...` | `agent` and security commands (3.7, 3.9) |
+| `modules check\|describe\|list\|tree\|plan\|market\|install\|install-from\|uninstall\|updates\|update\|update-all\|rollback\|labels`; `sequences backfill`; `connectors purge`; `site seed\|show\|set`; `status incident ...` | `pack`, `plugin` (3.3, 4.3) and `customize` (3.6) for the package parts; the rest are module or operator commands |
+| `migrate status\|verify\|plan\|run\|rehearse\|rollback`; `update check\|status\|start\|rollback`; `platform release ...`, `platform upgrade-instances` | `migrate`, `upgrade` (3.1) |
+| `backup`, `backup verify`, `backup run\|list\|prune`, `restore`, `drill`, `storage check\|attest\|show`, `secrets status\|rotate` | `backup create\|verify\|list\|restore`, `doctor` (3.1) |
 
 Global options built today: `--db URL` (or `OBOP_DATABASE_URL`), `--token` (or `OBOP_TOKEN`), `--demo`, `--dev-auth`, `--version` (one line: `obop 0.2.1 (abcdef012345)`, the core version and the first 12 digits of the commit the binary was built from, or `(unknown)`; docs/DEPLOY.md "The published image"). None of the global flags of 2.2, no profiles, no `--format`, no `--dry-run` as a global flag (several commands have their own `--dry-run`), no `--plan`, no `--idempotency-key` (only `import --key`), no shell completions, no `config.toml` and no login flow exist yet. Output is the command's own text or JSON; there is no common envelope (2.3). The REST surface is `POST /api/{model}/{command}` with bearer tokens, not the dated `/api/v1` of 2.1. Every command of this table except `serve`, `platform serve`, the hosted `/mcp` endpoint, `openapi`, `modules check FILE` and `modules describe` opens the database itself (`--db` or `OBOP_DATABASE_URL`, with a token for the business commands) and works without a running server; the CLI is no HTTP client yet, except `upload --url` (the row above), so section 1.3 (a thin HTTP client of `/api/v1`, no direct-database mode) is a Proposed change from today's design. The commands that act on a database and have no API route or page (`migrate`, `backup`, `restore`, `drill`, `storage`, `secrets`) are why 1.1 proposes them as CLI-only entries. Exit statuses built today are in 2.4.
 
@@ -83,38 +83,38 @@ The command tree is built at run time from the catalogue the server publishes (`
 
 **Naming rules this file proposes for CONVENTIONS (all Proposed).**
 
-| #   | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Example                                                      |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| N1  | The subject is the model id verbatim (snake_case). A hyphenated spelling is accepted on input and never printed                                                                                                                                                                                                                                                                                                                                                                                             | `obop sale_order confirm` (also `sale-order`)                |
-| N2  | Reserved words cannot be model ids: the first word of every command in 3 that no model backs (`init`, `upgrade`, `backup`, `business`, `pack`, `plugin`, `agent`, `data`, `dev`, `self` and the rest). The registry refuses a colliding id; an `xtask` lint checks it                                                                                                                                                                                                                                       | Q22 reserves `plugin`, `upgrade`, `diag`, `dev`, `telemetry` |
-| N3  | A model may declare one short CLI alias in registry metadata, published in the catalogue. Only `plan` (for `command_plan`) and `approval` (for `approval_request`) exist in W1 and W2. The `plan` alias is provisional: it collides with the W3 sales-crm model `plan` (CONVENTIONS 2.4; open question 13)                                                                                                                                                                                                  | `obop plan show <id>`                                        |
-| N4  | Typed flags are the kebab-case of input property names; `--set name=value` and `--body` use the exact names                                                                                                                                                                                                                                                                                                                                                                                                 | `--partner-id`, `--set x_customer_po=PO-7781`                |
-| N5  | A CLI `error.code` is the RFC 9457 `code` slug unchanged (CONVENTIONS "Problem code"); exit codes are a coarse class (2.4)                                                                                                                                                                                                                                                                                                                                                                                  | `lock_date_violation`, exit 7                                |
-| N6  | JSON keys are snake_case and sorted; money is `*_minor` as a string plus `currency_code` (ARCHITECTURE 8.1, CONVENTIONS 3.3)                                                                                                                                                                                                                                                                                                                                                                                | `"amount_total_minor": "119000"`                             |
-| N7  | Client environment variables use the areas `CLI` and `AUTH`, with `_FILE` for secrets (CONVENTIONS 2.1). The consumer-side lock file is `obop.lock`, the client config `config.toml`; `obop.toml` stays the package manifest (D32)                                                                                                                                                                                                                                                                          | `OBOP_CLI_PROFILE`, `OBOP_AUTH_API_KEY_FILE`                 |
-| N8  | Renames (all Proposed): `obop ext ...` becomes `obop plugin ...` (`ext apply` becomes `plugin install ./pkg`, `ext migrate` becomes `plugin migrate`, 3.10); `obop restore` becomes `obop business import`. `restore` is built and has stable exit statuses 3, 4 and 5 (2.4), so a rename keeps the old spelling as an alias (OR-31: today's built spellings keep working). Documents to conform: platform 5.4, ux 4.x, ARCHITECTURE 3.1 and 9.3, ENGINEERING 4.4, integrations 4.9 and 4.11, finance 4.1.4 | `obop business import <archive>`                             |
+| # | Rule | Example |
+|---|---|---|
+| N1 | The subject is the model id verbatim (snake_case). A hyphenated spelling is accepted on input and never printed | `obop sale_order confirm` (also `sale-order`) |
+| N2 | Reserved words cannot be model ids: the first word of every command in 3 that no model backs (`init`, `upgrade`, `backup`, `business`, `pack`, `plugin`, `agent`, `data`, `dev`, `self` and the rest). The registry refuses a colliding id; an `xtask` lint checks it | Q22 reserves `plugin`, `upgrade`, `diag`, `dev`, `telemetry` |
+| N3 | A model may declare one short CLI alias in registry metadata, published in the catalogue. Only `plan` (for `command_plan`) and `approval` (for `approval_request`) exist in W1 and W2. The `plan` alias is provisional: it collides with the W3 sales-crm model `plan` (CONVENTIONS 2.4; open question 13) | `obop plan show <id>` |
+| N4 | Typed flags are the kebab-case of input property names; `--set name=value` and `--body` use the exact names | `--partner-id`, `--set x_customer_po=PO-7781` |
+| N5 | A CLI `error.code` is the RFC 9457 `code` slug unchanged (CONVENTIONS "Problem code"); exit codes are a coarse class (2.4) | `lock_date_violation`, exit 7 |
+| N6 | JSON keys are snake_case and sorted; money is `*_minor` as a string plus `currency_code` (ARCHITECTURE 8.1, CONVENTIONS 3.3) | `"amount_total_minor": "119000"` |
+| N7 | Client environment variables use the areas `CLI` and `AUTH`, with `_FILE` for secrets (CONVENTIONS 2.1). The consumer-side lock file is `obop.lock`, the client config `config.toml`; `obop.toml` stays the package manifest (D32) | `OBOP_CLI_PROFILE`, `OBOP_AUTH_API_KEY_FILE` |
+| N8 | Renames (all Proposed): `obop ext ...` becomes `obop plugin ...` (`ext apply` becomes `plugin install ./pkg`, `ext migrate` becomes `plugin migrate`, 3.10); `obop restore` becomes `obop business import`. `restore` is built and has stable exit statuses 3, 4 and 5 (2.4), so a rename keeps the old spelling as an alias (OR-31: today's built spellings keep working). Documents to conform: platform 5.4, ux 4.x, ARCHITECTURE 3.1 and 9.3, ENGINEERING 4.4, integrations 4.9 and 4.11, finance 4.1.4 | `obop business import <archive>` |
 
 A positional `<id>` is a UUIDv7 or an external id `module.name`. The canonical input is a JSON body (`--body @file` or `--body -`); `--set` and typed flags are sugar for it. Help text is the registry `help` string that D38 already requires for every model, field, action and error code.
 
 ### 2.2 Global flags
 
-| Flag                                                  | Meaning                                                                                                                       | Default                                                  |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `--profile <name>`                                    | Server, business and credentials                                                                                              | `default_profile`, else `default`                        |
-| `--business <slug>`                                   | Business to act on, resolved to the host name `BusinessRouter` routes on (integrations 4.1); there is no database-name header | The profile's                                            |
-| `--company <id>`                                      | Active company, sent as `Obop-Company` (W2, multi-company)                                                                    | The principal's default                                  |
-| `--format <f>`, `--json`                              | `table`, `json`, `ndjson`, `csv`; `--json` is `--format json`                                                                 | `table` on a terminal, `json` otherwise                  |
-| `--fields <spec>`                                     | Nested field selection, the API `fields=` spec                                                                                | Catalogue default                                        |
-| `--dry-run`                                           | Print the plan; write nothing. Accepted and ignored on a read command, so a blanket flag is safe                              | Off                                                      |
-| `--plan <id\|file>`                                   | Commit a plan after checking it matches this command and arguments (2.7)                                                      | None                                                     |
-| `--yes`                                               | Answer the local confirmation prompt. Not a credential; it never satisfies a server-side approval                             | Off                                                      |
-| `--no-input`                                          | Never prompt; fail with exit 2 or 12 if input or login is needed. Implied off a terminal or when `CI` is set                  | Off                                                      |
-| `--idempotency-key <k>`                               | Use this key (up to 255 characters)                                                                                           | A UUIDv7 per invocation, reused on the CLI's own retries |
-| `--wait`, `--no-wait`, `--timeout <d>`, `--retry <n>` | Wait for job commands; request timeout; retries on network error, 429 and 5xx with jittered backoff                           | `--wait` up to 10 minutes; 30 s; 3                       |
-| `--api-version <date>`                                | Sent as `Obop-Version`                                                                                                        | Pinned in the profile                                    |
-| `--quiet`, `--verbose`                                | Suppress non-essential stderr; add request ids and a redacted HTTP trace                                                      | Neither                                                  |
-| `--color <auto\|always\|never>`                       | `NO_COLOR` is honoured; JSON never carries colour                                                                             | `auto`                                                   |
-| `--strict`                                            | Turn deprecation warnings into failures (6)                                                                                   | Off                                                      |
+| Flag | Meaning | Default |
+|---|---|---|
+| `--profile <name>` | Server, business and credentials | `default_profile`, else `default` |
+| `--business <slug>` | Business to act on, resolved to the host name `BusinessRouter` routes on (integrations 4.1); there is no database-name header | The profile's |
+| `--company <id>` | Active company, sent as `Obop-Company` (W2, multi-company) | The principal's default |
+| `--format <f>`, `--json` | `table`, `json`, `ndjson`, `csv`; `--json` is `--format json` | `table` on a terminal, `json` otherwise |
+| `--fields <spec>` | Nested field selection, the API `fields=` spec | Catalogue default |
+| `--dry-run` | Print the plan; write nothing. Accepted and ignored on a read command, so a blanket flag is safe | Off |
+| `--plan <id\|file>` | Commit a plan after checking it matches this command and arguments (2.7) | None |
+| `--yes` | Answer the local confirmation prompt. Not a credential; it never satisfies a server-side approval | Off |
+| `--no-input` | Never prompt; fail with exit 2 or 12 if input or login is needed. Implied off a terminal or when `CI` is set | Off |
+| `--idempotency-key <k>` | Use this key (up to 255 characters) | A UUIDv7 per invocation, reused on the CLI's own retries |
+| `--wait`, `--no-wait`, `--timeout <d>`, `--retry <n>` | Wait for job commands; request timeout; retries on network error, 429 and 5xx with jittered backoff | `--wait` up to 10 minutes; 30 s; 3 |
+| `--api-version <date>` | Sent as `Obop-Version` | Pinned in the profile |
+| `--quiet`, `--verbose` | Suppress non-essential stderr; add request ids and a redacted HTTP trace | Neither |
+| `--color <auto\|always\|never>` | `NO_COLOR` is honoured; JSON never carries colour | `auto` |
+| `--strict` | Turn deprecation warnings into failures (6) | Off |
 
 ### 2.3 Output
 
@@ -169,22 +169,22 @@ A failure prints the same envelope with `ok: false`, an `error` object and `exit
 
 **Proposed classes.** A client with a richer error model (2.5) needs coarse classes beyond these. The table keeps the classes of the earlier draft but moves the numbers that collide with the built statuses: auth, denied and invalid are 12, 13 and 14 (the draft had 3, 4 and 5), and busy is 75, the built status (the draft had 8; 8 stays unassigned). The other classes are unchanged. Under OR-23 a script retries on 75 only; the retry advice of the other rows applies once the idempotency-key flow of 2.7 exists. The owner accepted this numbering (OR-27). The statuses 0, 1, 2, 3, 4, 5 and 75 are built; the classes 6, 7, 9 to 14 and 130 are not built yet.
 
-| Code    | Name        | Meaning                                                                                              | Retry                  |
-| ------- | ----------- | ---------------------------------------------------------------------------------------------------- | ---------------------- |
-| 0       | ok          | Success, including an idempotent replay and a valid dry-run                                          | n/a                    |
-| 1       | internal    | Unexpected client or server error; today also any failed call that is not a store refusal            | If `retryable`         |
-| 2       | usage       | Unknown command, bad flag, or input failing the catalogue schema (built for an unknown command)      | No                     |
-| 3, 4, 5 | (built)     | `restore_key_required`, `backup_not_sealed`, `restore_files_failed` of the backup and restore family | No                     |
-| 6       | conflict    | Stale plan or row version, idempotency key reused or in flight                                       | Re-read, re-plan       |
-| 7       | refused     | A domain or database rule says no (lock date, immutability, balance), or a plan is infeasible        | No                     |
-| 9       | unreachable | No response or a timeout; the operation may have happened                                            | Yes, same key          |
-| 10      | approval    | A plan waits for a human (confirm or approve-by-role)                                                | Wait, then commit      |
-| 11      | partial     | A non-atomic batch or a job finished with failed items                                               | Inspect `data.results` |
-| 12      | auth        | Not logged in, token expired, or step-up needed (a human must act)                                   | After login            |
-| 13      | denied      | 403 or 404, indistinguishable by design (integrations 4.1)                                           | No                     |
-| 14      | invalid     | The server rejected the input; `errors[]` carries pointers                                           | After fixing input     |
-| 75      | busy        | 429 or 503; honour `Retry-After` (built for `call` and `import`: the database refused, OR-23)        | Yes                    |
-| 130     | interrupted | SIGINT; replay with the same key is safe                                                             | Yes                    |
+| Code | Name | Meaning | Retry |
+|---|---|---|---|
+| 0 | ok | Success, including an idempotent replay and a valid dry-run | n/a |
+| 1 | internal | Unexpected client or server error; today also any failed call that is not a store refusal | If `retryable` |
+| 2 | usage | Unknown command, bad flag, or input failing the catalogue schema (built for an unknown command) | No |
+| 3, 4, 5 | (built) | `restore_key_required`, `backup_not_sealed`, `restore_files_failed` of the backup and restore family | No |
+| 6 | conflict | Stale plan or row version, idempotency key reused or in flight | Re-read, re-plan |
+| 7 | refused | A domain or database rule says no (lock date, immutability, balance), or a plan is infeasible | No |
+| 9 | unreachable | No response or a timeout; the operation may have happened | Yes, same key |
+| 10 | approval | A plan waits for a human (confirm or approve-by-role) | Wait, then commit |
+| 11 | partial | A non-atomic batch or a job finished with failed items | Inspect `data.results` |
+| 12 | auth | Not logged in, token expired, or step-up needed (a human must act) | After login |
+| 13 | denied | 403 or 404, indistinguishable by design (integrations 4.1) | No |
+| 14 | invalid | The server rejected the input; `errors[]` carries pointers | After fixing input |
+| 75 | busy | 429 or 503; honour `Retry-After` (built for `call` and `import`: the database refused, OR-23) | Yes |
+| 130 | interrupted | SIGINT; replay with the same key is safe | Yes |
 
 Adding a code is a minor change; repurposing one is a major change (6). The built statuses 3, 4, 5 and 75 are already part of the contract and cannot be repurposed.
 
@@ -192,17 +192,17 @@ Adding a code is a minor change; repurposing one is a major change (6). The buil
 
 The server answers with RFC 9457 `application/problem+json` (`type`, `title`, `status`, `detail`, `code`, `retryable`, `errors[]`, `request_id`, `trace_id`; integrations 4.1, [R21 s5]). The CLI never renames `code`; it adds `exit` from the class below (Proposed numbers of 2.4; today every failed call exits 1 and a refused store exits 75), and the catalogue lists the codes each command can return, so `obop schema` shows them. The documents already name `idempotency_key_required`, `idempotency_key_reuse`, `lock_date_violation`, `unbalanced_entry`, `posted_immutable`, `plan_stale`, `approval_required`, `insufficient_scope`, `field_not_readable` and `endpoint_url_not_allowed`; the other slugs below are Proposed.
 
-| Problem `code`                                                | HTTP          | Exit | Retryable         |
-| ------------------------------------------------------------- | ------------- | ---- | ----------------- |
-| `validation_failed`                                           | 400, 422      | 14   | No                |
-| `unauthenticated`, `token_expired`, `step_up_required`        | 401           | 12   | No (a human acts) |
-| `forbidden`, `not_found`, `insufficient_scope`                | 403, 404      | 13   | No                |
-| `plan_stale`, `precondition_failed`, `idempotency_key_reuse`  | 409, 412, 422 | 6    | No                |
-| `idempotency_in_flight`                                       | 409           | 6    | Yes               |
-| `lock_date_violation`, `unbalanced_entry`, `posted_immutable` | 409, 422      | 7    | No                |
-| `approval_required`                                           | per problem   | 10   | After approval    |
-| `rate_limited`, `unavailable`                                 | 429, 503      | 75   | Yes               |
-| `internal_error`                                              | 5xx           | 1    | Per `retryable`   |
+| Problem `code` | HTTP | Exit | Retryable |
+|---|---|---|---|
+| `validation_failed` | 400, 422 | 14 | No |
+| `unauthenticated`, `token_expired`, `step_up_required` | 401 | 12 | No (a human acts) |
+| `forbidden`, `not_found`, `insufficient_scope` | 403, 404 | 13 | No |
+| `plan_stale`, `precondition_failed`, `idempotency_key_reuse` | 409, 412, 422 | 6 | No |
+| `idempotency_in_flight` | 409 | 6 | Yes |
+| `lock_date_violation`, `unbalanced_entry`, `posted_immutable` | 409, 422 | 7 | No |
+| `approval_required` | per problem | 10 | After approval |
+| `rate_limited`, `unavailable` | 429, 503 | 75 | Yes |
+| `internal_error` | 5xx | 1 | Per `retryable` |
 
 ### 2.6 Lists, streaming, filters and jobs
 
@@ -232,24 +232,13 @@ Every mutating command follows the D18 protocol of ai.md 4.3, which this file do
     "plan": {
       "approval": { "mode": "confirm", "satisfied_by": "human" },
       "args_digest": "sha256:7c1e0a52…",
-      "diff": [
-        {
-          "change": "state draft to posted",
-          "id": "0197a3c4-5d2e-7b10-8f3a-2c6e9d41b7a5",
-          "model": "invoice"
-        }
-      ],
+      "diff": [{ "change": "state draft to posted", "id": "0197a3c4-5d2e-7b10-8f3a-2c6e9d41b7a5", "model": "invoice" }],
       "digest": "sha256:4b7d1e0c…",
       "expires_at": "2027-03-02T14:40:00Z",
       "plan_id": "0197a3d9-6a11-7c3e-9b42-5f0d8e17a2c4",
-      "principal_chain": [
-        { "kind": "agent", "name": "ap-intake" },
-        { "kind": "user", "on_behalf_of": "sven@muster.example" }
-      ],
+      "principal_chain": [{ "kind": "agent", "name": "ap-intake" }, { "kind": "user", "on_behalf_of": "sven@muster.example" }],
       "risk": "medium",
-      "touched": [
-        { "id": "0197a3c4-5d2e-7b10-8f3a-2c6e9d41b7a5", "model": "invoice", "row_version": 3 }
-      ],
+      "touched": [{ "id": "0197a3c4-5d2e-7b10-8f3a-2c6e9d41b7a5", "model": "invoice", "row_version": 3 }],
       "valid": true
     }
   },
@@ -277,11 +266,7 @@ Exit 10 is not a failure of the plan; `ok` is false because nothing was committe
   "id": "invoice.post",
   "idempotent": true,
   "risk": "medium",
-  "surfaces": {
-    "cli": "obop invoice post <id>",
-    "mcp": "invoice.post",
-    "rest": "POST /api/v1/invoice/{id}/post"
-  },
+  "surfaces": { "cli": "obop invoice post <id>", "mcp": "invoice.post", "rest": "POST /api/v1/invoice/{id}/post" },
   "ui": { "binding": "sales.invoice_form#post", "exempt": null }
 }
 ```
@@ -303,12 +288,12 @@ auth        = "device"          # device | loopback | api_key_file | client_cred
 
 ### 2.11 Authentication
 
-| Method                                                                                   | For                             | Notes                                                                                                                                          |
-| ---------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Authorization code with PKCE S256 on a loopback redirect (RFC 8252), the desktop default | Humans                          | The CLI is a pre-registered first-party public client (`obop-cli`, trust level `core`)                                                         |
-| Device authorization grant (RFC 8628)                                                    | Humans on SSH and in containers | A Proposed addition to the OAuth provider, which lists code with PKCE and client credentials only (integrations 4.2; open question 4)          |
-| API key from a file                                                                      | Scripts, CI                     | Scoped, mandatory expiry (default 90 days, Proposed), shown once. Creating one needs step-up, so a person creates it (security-privacy.md 4.1) |
-| Client credentials                                                                       | Service principals, CI, agents  | Short-lived access token (one hour or less), refreshed by the CLI; preferred to long-lived keys                                                |
+| Method | For | Notes |
+|---|---|---|
+| Authorization code with PKCE S256 on a loopback redirect (RFC 8252), the desktop default | Humans | The CLI is a pre-registered first-party public client (`obop-cli`, trust level `core`) |
+| Device authorization grant (RFC 8628) | Humans on SSH and in containers | A Proposed addition to the OAuth provider, which lists code with PKCE and client credentials only (integrations 4.2; open question 4) |
+| API key from a file | Scripts, CI | Scoped, mandatory expiry (default 90 days, Proposed), shown once. Creating one needs step-up, so a person creates it (security-privacy.md 4.1) |
+| Client credentials | Service principals, CI, agents | Short-lived access token (one hour or less), refreshed by the CLI; preferred to long-lived keys |
 
 Service principals use client credentials. Agent principals use a scoped token of either kind (5.4). `obop login`, `logout` (revokes the refresh token, RFC 7009) and `whoami` complete the set. `whoami` prints the principal chain, kind, scopes, expiry and permission groups, so an agent knows what it may do. `obop access check <wire-id> [--record id] [--as principal]` answers "may this principal run this?" and explains the permission and restriction rows, without running anything. **Step-up.** When the server demands a fresh passkey or TOTP, an interactive CLI repeats the browser flow and a non-interactive one exits 12 with `step_up_required` and a URL. An agent cannot satisfy step-up, by design. `obop init` alone mints a credential without step-up, because no principal exists yet: it writes a bootstrap profile valid for 24 hours (Proposed; open question 8).
 
@@ -326,54 +311,54 @@ None. The CLI sends no usage data and makes no background network call: it conta
 
 ### 3.1 Installation lifecycle (the "instance" of OR-3)
 
-| Command                                             | What it does                                                                                                                                                                                                                                                                                                         | Kind                     | Wave                                                                                                              |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `obop init`                                         | Creates config and keys, prepares PostgreSQL (embedded for solo, or an existing cluster), runs kernel migrations, creates the first business and owner, writes a 24-hour bootstrap profile                                                                                                                           | M                        | W0                                                                                                                |
-| `obop serve [--roles r,..]`; `obop up`, `obop down` | Run the roles (`http`, `cron`, `bus`, `ext`, `hub`, `all`; D37) in the foreground, or start and stop a managed solo stack with embedded PostgreSQL in the background                                                                                                                                                 | M                        | W0                                                                                                                |
-| `obop status`, `obop version`                       | Version, catalogue hash, pins (Rust, `vite-plus`, pnpm), series and the end of its security-fix window, roles, businesses, migration head, backup age, revoked plugins, advisories                                                                                                                                   | R                        | W0                                                                                                                |
-| `obop doctor [--fix]`                               | Capability checks (PostgreSQL and extensions, PgBouncer mode, clock, disk, egress allow-list, object store); `--fix` prints a plan                                                                                                                                                                                   | R                        | W2 (Proposed); in W1 `init` and `upgrade --dry-run` run the checks they need                                      |
-| `obop diag`                                         | Writes a redacted allow-list diagnostics bundle to a local file for an issue; nothing is uploaded                                                                                                                                                                                                                    | R                        | W2 (Proposed)                                                                                                     |
-| `obop backup create\|verify\|list\|restore`         | Per-business logical dump with manifest; `verify` restores to a scratch database and re-checks checksums, hash chains and erasure-ledger replay; `restore` is destructive                                                                                                                                            | M; `verify`, `list` R    | W1 (5.3 row 22)                                                                                                   |
-| `obop migrate [--business b \| --fleet]`            | Applies tagged migrations; fleet mode fans out with bounded concurrency and resumable per-business state (ENGINEERING 1.5), operator tooling for whoever runs many businesses                                                                                                                                        | M                        | W0 single; `--fleet` W2 (Proposed), until then `upgrade` migrates the businesses of an instance one after another |
-| `obop upgrade`                                      | `--dry-run` prints the plan: path, migrations by kind with lock and duration estimates, disk headroom, compatibility, manual steps, downtime. `--plan <file>` applies a reviewed plan; with neither flag it plans, asks, then applies. Also `--to`, `--rehearse` and `--phase pre\|post` (ENGINEERING 4.5, [R27 C6]) | M                        | W1, dry-run at 0.3 (5.3 row 22)                                                                                   |
-| `obop telemetry preview\|enable\|disable\|status`   | Server usage telemetry, default off; `preview` prints the exact payload                                                                                                                                                                                                                                              | M; `preview`, `status` R | W2 (Proposed)                                                                                                     |
-| `obop self update\|verify`                          | Replaces or verifies a client-only binary (7)                                                                                                                                                                                                                                                                        | M; `verify` R            | W2 (Proposed)                                                                                                     |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop init` | Creates config and keys, prepares PostgreSQL (embedded for solo, or an existing cluster), runs kernel migrations, creates the first business and owner, writes a 24-hour bootstrap profile | M | W0 |
+| `obop serve [--roles r,..]`; `obop up`, `obop down` | Run the roles (`http`, `cron`, `bus`, `ext`, `hub`, `all`; D37) in the foreground, or start and stop a managed solo stack with embedded PostgreSQL in the background | M | W0 |
+| `obop status`, `obop version` | Version, catalogue hash, pins (Rust, `vite-plus`, pnpm), series and the end of its security-fix window, roles, businesses, migration head, backup age, revoked plugins, advisories | R | W0 |
+| `obop doctor [--fix]` | Capability checks (PostgreSQL and extensions, PgBouncer mode, clock, disk, egress allow-list, object store); `--fix` prints a plan | R | W2 (Proposed); in W1 `init` and `upgrade --dry-run` run the checks they need |
+| `obop diag` | Writes a redacted allow-list diagnostics bundle to a local file for an issue; nothing is uploaded | R | W2 (Proposed) |
+| `obop backup create\|verify\|list\|restore` | Per-business logical dump with manifest; `verify` restores to a scratch database and re-checks checksums, hash chains and erasure-ledger replay; `restore` is destructive | M; `verify`, `list` R | W1 (5.3 row 22) |
+| `obop migrate [--business b \| --fleet]` | Applies tagged migrations; fleet mode fans out with bounded concurrency and resumable per-business state (ENGINEERING 1.5), operator tooling for whoever runs many businesses | M | W0 single; `--fleet` W2 (Proposed), until then `upgrade` migrates the businesses of an instance one after another |
+| `obop upgrade` | `--dry-run` prints the plan: path, migrations by kind with lock and duration estimates, disk headroom, compatibility, manual steps, downtime. `--plan <file>` applies a reviewed plan; with neither flag it plans, asks, then applies. Also `--to`, `--rehearse` and `--phase pre\|post` (ENGINEERING 4.5, [R27 C6]) | M | W1, dry-run at 0.3 (5.3 row 22) |
+| `obop telemetry preview\|enable\|disable\|status` | Server usage telemetry, default off; `preview` prints the exact payload | M; `preview`, `status` R | W2 (Proposed) |
+| `obop self update\|verify` | Replaces or verifies a client-only binary (7) | M; `verify` R | W2 (Proposed) |
 
 ### 3.2 Businesses
 
-| Command                                                 | What it does                                                                                                                                                                    | Kind           | Wave          |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------- |
-| `obop business create\|list\|get`                       | Provision a business database from a template with company, country and owner; list and read                                                                                    | M; others R    | W1            |
-| `obop business clone <src> --as <name> [--config-only]` | Template-database copy of a business for testing; `--pseudonymise`, driven by the personal-data flags, arrives with it (Proposed)                                               | M              | W2 (Proposed) |
-| `obop business export`                                  | Full export job: NDJSON per model, attachments by SHA-256, audit log, configuration package, manifest. Needs `api.export_owner` and step-up (integrations 4.9)                  | M (audited)    | W1, by 0.5    |
-| `obop business verify <archive>`                        | Checks manifest digests, hash chains and the absence of secrets                                                                                                                 | R              | W1            |
-| `obop business import <archive>`                        | Loads an export archive into an empty business of the same or a later series under the restore role, keeping ids, legal numbers and hash chain, then replays the erasure ledger | M, destructive | W1            |
-| `obop business delete`                                  | Two-phase removal after an export; not exposed to agents                                                                                                                        | M, destructive | W1            |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop business create\|list\|get` | Provision a business database from a template with company, country and owner; list and read | M; others R | W1 |
+| `obop business clone <src> --as <name> [--config-only]` | Template-database copy of a business for testing; `--pseudonymise`, driven by the personal-data flags, arrives with it (Proposed) | M | W2 (Proposed) |
+| `obop business export` | Full export job: NDJSON per model, attachments by SHA-256, audit log, configuration package, manifest. Needs `api.export_owner` and step-up (integrations 4.9) | M (audited) | W1, by 0.5 |
+| `obop business verify <archive>` | Checks manifest digests, hash chains and the absence of secrets | R | W1 |
+| `obop business import <archive>` | Loads an export archive into an empty business of the same or a later series under the restore role, keeping ids, legal numbers and hash chain, then replays the erasure ledger | M, destructive | W1 |
+| `obop business delete` | Two-phase removal after an export; not exposed to agents | M, destructive | W1 |
 
 ### 3.3 Packs
 
 Country packs travel on their own signed channel (D34, LOCALIZATION 1.5, [R25 B5]). `pack` is the localisation view over the same install engine as `plugin` and writes the same `obop.lock`.
 
-| Command                                                      | What it does                                                                                                                                                                        | Kind | Wave                    |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ----------------------- |
-| `obop pack list\|status`                                     | Installed and available packs per channel (`stable`, `preview`, `edge`), effective dates, the next `PackActivated`                                                                  | R    | W1                      |
-| `obop pack install\|update <id> [--channel c] [--company c]` | Installs the signed, effective-dated bundle (Germany: pack `l10n-de` with module `l10n_de`); the plan lists the accounts, taxes, journals, sequences and lock dates it instantiates | M    | W1, DE alpha 2027-03-31 |
-| `obop pack verify <id>`                                      | Verifies signature, effective dating, oracle versions and golden-case digest; prints the gate (draft, preview, stable, certified) and the recorded accountant sign-off reference    | R    | W1                      |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop pack list\|status` | Installed and available packs per channel (`stable`, `preview`, `edge`), effective dates, the next `PackActivated` | R | W1 |
+| `obop pack install\|update <id> [--channel c] [--company c]` | Installs the signed, effective-dated bundle (Germany: pack `l10n-de` with module `l10n_de`); the plan lists the accounts, taxes, journals, sequences and lock dates it instantiates | M | W1, DE alpha 2027-03-31 |
+| `obop pack verify <id>` | Verifies signature, effective dating, oracle versions and golden-case digest; prints the gate (draft, preview, stable, certified) and the recorded accountant sign-off reference | R | W1 |
 
 ### 3.4 Data
 
-| Command                                                                     | What it does                                                                                                                                                  | Kind | Wave                                                         |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------ |
-| `obop <model> list\|get`                                                    | Query with domain filters, `--fields`, `--sort` and cursor; `get` takes a UUID or external id                                                                 | R    | W1                                                           |
-| `obop <model> aggregate`                                                    | Group and sum under the caller's access (`--group-by`, `--agg sum:amount_total_minor`); keeps agents able to answer questions if `analytics` slips            | R    | W1                                                           |
-| `obop <model> create\|update\|delete`                                       | CRUD. Documents are created as drafts, `update` sends `If-Match` from `row_version`, posted rows are never deleted (D30)                                      | M    | W1                                                           |
-| `obop <model> <action> [<id>]`                                              | Any registry action: `sale_order confirm`, `lead convert`, `stock_transfer validate`*                                                                         | M    | per module                                                   |
-| `obop data export <model>`                                                  | CSV, XLSX or NDJSON in import-compatible form with external ids; needs the `export` operation; audited                                                        | R    | W1                                                           |
-| `obop data import <file> --model m`                                         | Upload, map, dry-run and commit through `import_run`; `obop import_run rollback <id>` undoes a run                                                            | M    | W1, CSV at 0.3                                               |
-| `obop data import odoo --from-export <dir>` or `--json2 <url> --key-file f` | Odoo importer: partners, products, taxes, chart, open invoices and bills, opening balances as a draft entry with a zero trial-balance diff (integrations 4.8) | M    | W1, 0.6 (slip item 14)                                       |
-| `obop data import quickbooks\|xero\|erpnext`                                | Foreign importers                                                                                                                                             | M    | QuickBooks W2; Xero, ERPNext W3                              |
-| `obop import-map search\|get`                                               | Where an imported record came from: a source key to the record, a record to its source keys (built; 3.4a)                                                     | R    | built                                                        |
-| `obop analytics query`                                                      | A `SemanticQuery` (measures, dimensions, filters, grain, target currency, company scope) with provenance                                                      | R    | W3 (slip item 2, DECISIONS 5.3; until then `aggregate`, 3.4) |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop <model> list\|get` | Query with domain filters, `--fields`, `--sort` and cursor; `get` takes a UUID or external id | R | W1 |
+| `obop <model> aggregate` | Group and sum under the caller's access (`--group-by`, `--agg sum:amount_total_minor`); keeps agents able to answer questions if `analytics` slips | R | W1 |
+| `obop <model> create\|update\|delete` | CRUD. Documents are created as drafts, `update` sends `If-Match` from `row_version`, posted rows are never deleted (D30) | M | W1 |
+| `obop <model> <action> [<id>]` | Any registry action: `sale_order confirm`, `lead convert`, `stock_transfer validate`* | M | per module |
+| `obop data export <model>` | CSV, XLSX or NDJSON in import-compatible form with external ids; needs the `export` operation; audited | R | W1 |
+| `obop data import <file> --model m` | Upload, map, dry-run and commit through `import_run`; `obop import_run rollback <id>` undoes a run | M | W1, CSV at 0.3 |
+| `obop data import odoo --from-export <dir>` or `--json2 <url> --key-file f` | Odoo importer: partners, products, taxes, chart, open invoices and bills, opening balances as a draft entry with a zero trial-balance diff (integrations 4.8) | M | W1, 0.6 (slip item 14) |
+| `obop data import quickbooks\|xero\|erpnext` | Foreign importers | M | QuickBooks W2; Xero, ERPNext W3 |
+| `obop import-map search\|get` | Where an imported record came from: a source key to the record, a record to its source keys (built; 3.4a) | R | built |
+| `obop analytics query` | A `SemanticQuery` (measures, dimensions, filters, grain, target currency, company scope) with provenance | R | W3 (slip item 2, DECISIONS 5.3; until then `aggregate`, 3.4) |
 
 #### 3.4a Import map (built; request IMP-N2, accepted)
 
@@ -389,69 +374,69 @@ Status: built (the Rust and CLI code, with tests on memory and SQLite; PostgreSQ
 
 ### 3.5 Accounting operations
 
-| Command                                                                                        | What it does                                                                                                                                  | Kind            | Wave                                                             |
-| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------- |
-| `obop invoice create_draft\|post\|reverse*`                                                    | Draft; post with number, chain and lock check; reverse by credit note                                                                         | M               | W1                                                               |
-| `obop payment register*`; `obop bank_statement import*`; `obop bank_statement_line reconcile*` | Register a manual payment; import camt.053 or MT940; match a statement line to open items (`ReconcileLines`)                                  | M               | W1                                                               |
-| `obop journal_entry post\|reverse*`                                                            | Post or reverse an entry                                                                                                                      | M               | W1                                                               |
-| `obop lock_date set\|list`, `obop lock_exception grant\|revoke`                                | Fiscal, sale, purchase, tax and hard lock dates; time-boxed exceptions                                                                        | M; `list` R     | W1                                                               |
-| `obop period close <period>`                                                                   | Composite convenience: checks drafts, unreconciled lines and the tax closing, then sets lock dates; the plan shows blockers (open question 9) | M               | W2 (Proposed); in W1 the lock dates are set with `lock_date set` |
-| `obop tax_return compute*`                                                                     | UStVA from tax tags for a period                                                                                                              | R               | W1, DE                                                           |
-| `obop audit_file export*`                                                                      | DATEV EXTF and GoBD exports through `AuditFileExporter`                                                                                       | R               | W1, DE                                                           |
-| `obop e_document validate\|send*`                                                              | EN 16931 validate; send by email or file (the Peppol adapter is W2)                                                                           | M; `validate` R | W1                                                               |
-| `obop ledger verify`                                                                           | Recomputes the per-journal hash chain                                                                                                         | R               | W1                                                               |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop invoice create_draft\|post\|reverse*` | Draft; post with number, chain and lock check; reverse by credit note | M | W1 |
+| `obop payment register*`; `obop bank_statement import*`; `obop bank_statement_line reconcile*` | Register a manual payment; import camt.053 or MT940; match a statement line to open items (`ReconcileLines`) | M | W1 |
+| `obop journal_entry post\|reverse*` | Post or reverse an entry | M | W1 |
+| `obop lock_date set\|list`, `obop lock_exception grant\|revoke` | Fiscal, sale, purchase, tax and hard lock dates; time-boxed exceptions | M; `list` R | W1 |
+| `obop period close <period>` | Composite convenience: checks drafts, unreconciled lines and the tax closing, then sets lock dates; the plan shows blockers (open question 9) | M | W2 (Proposed); in W1 the lock dates are set with `lock_date set` |
+| `obop tax_return compute*` | UStVA from tax tags for a period | R | W1, DE |
+| `obop audit_file export*` | DATEV EXTF and GoBD exports through `AuditFileExporter` | R | W1, DE |
+| `obop e_document validate\|send*` | EN 16931 validate; send by email or file (the Peppol adapter is W2) | M; `validate` R | W1 |
+| `obop ledger verify` | Recomputes the per-journal hash chain | R | W1 |
 
 ### 3.6 Customisation
 
-| Command                                                   | What it does                                                                                                                                                     | Kind        | Wave                            |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------- |
-| `obop custom_field create\|list\|hide\|drop`              | Typed, promoted or JSONB field; the plan classifies schema steps as Instant, Rewrite, Blocking or Concurrent and asks the personal-data question (platform 4.14) | M; `list` R | W1 (admin screen: slip item 15) |
-| `obop customize export --as-package <dir>`                | Exports the business overlay as an `obop.toml` package with `origin = business`; `plugin install ./dir` applies it to another business                           | R           | W1                              |
-| `obop view list\|get`; `obop view_override create\|reset` | Read effective views; patches are F0 patches                                                                                                                     | R; M        | W1; W3 (slip item 1)            |
-| `obop automation_rule create\|test\|enable\|disable`      | Rules as data; `test --record <id>` shows actions and diffs without committing (platform 4.13)                                                                   | M; `test` R | W2 (slip item 6)                |
-| `obop custom_model create`; `obop customize report`       | Custom models with a generated menu entry; deltas from stock with upgrade risk                                                                                   | M; R        | W3; W2                          |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop custom_field create\|list\|hide\|drop` | Typed, promoted or JSONB field; the plan classifies schema steps as Instant, Rewrite, Blocking or Concurrent and asks the personal-data question (platform 4.14) | M; `list` R | W1 (admin screen: slip item 15) |
+| `obop customize export --as-package <dir>` | Exports the business overlay as an `obop.toml` package with `origin = business`; `plugin install ./dir` applies it to another business | R | W1 |
+| `obop view list\|get`; `obop view_override create\|reset` | Read effective views; patches are F0 patches | R; M | W1; W3 (slip item 1) |
+| `obop automation_rule create\|test\|enable\|disable` | Rules as data; `test --record <id>` shows actions and diffs without committing (platform 4.13) | M; `test` R | W2 (slip item 6) |
+| `obop custom_model create`; `obop customize report` | Custom models with a generated menu entry; deltas from stock with upgrade risk | M; R | W3; W2 |
 
 ### 3.7 Security
 
-| Command                                                                                  | What it does                                                                              | Kind        | Wave          |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------- | ------------- |
-| `obop principal invite\|list\|get\|suspend\|deactivate [--kind user\|agent\|api_client]` | Principal management (security-privacy.md 4.1)                                            | M; others R | W1            |
-| `obop permission_group list\|grant\|revoke`                                              | Permission-group membership                                                               | M; `list` R | W1            |
-| `obop access check <wire-id>`                                                            | Explains allow or deny for the caller or, with `security.officer`, another principal      | R           | W1 (Proposed) |
-| `obop api_key create\|list\|revoke`; `obop oauth_client`, `consent_grant list\|revoke`   | Scoped, expiring keys (creation needs step-up); connected clients and consents            | M; `list` R | W1            |
-| `obop audit tail [--follow]`                                                             | Streams the `security_event` and `audit_change` rows the caller may read (`audit.reader`) | R           | W1            |
-| `obop audit verify`                                                                      | Verifies the hash-chained audit log against signed checkpoints                            | R           | W1            |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop principal invite\|list\|get\|suspend\|deactivate [--kind user\|agent\|api_client]` | Principal management (security-privacy.md 4.1) | M; others R | W1 |
+| `obop permission_group list\|grant\|revoke` | Permission-group membership | M; `list` R | W1 |
+| `obop access check <wire-id>` | Explains allow or deny for the caller or, with `security.officer`, another principal | R | W1 (Proposed) |
+| `obop api_key create\|list\|revoke`; `obop oauth_client`, `consent_grant list\|revoke` | Scoped, expiring keys (creation needs step-up); connected clients and consents | M; `list` R | W1 |
+| `obop audit tail [--follow]` | Streams the `security_event` and `audit_change` rows the caller may read (`audit.reader`) | R | W1 |
+| `obop audit verify` | Verifies the hash-chained audit log against signed checkpoints | R | W1 |
 
 ### 3.8 Events and jobs
 
-| Command                                                                                                     | What it does                                                                                          | Kind        | Wave |
-| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------- | ---- |
-| `obop outbox tail [--follow] [--type t] [--from cursor]`                                                    | Streams durable events from a resumable `(xid8, event_id)` cursor under the caller's read permissions | R           | W1   |
-| `obop webhook_endpoint create\|list\|pause\|rotate_secret\|delete`; `obop webhook test\|deliveries\|replay` | Standard Webhooks endpoints; send a test event, read the 30-day delivery log, replay stored bytes     | M; lists R  | W1   |
-| `obop job list\|get\|wait\|cancel`                                                                          | Durable jobs, including those behind `--wait`                                                         | M; others R | W1   |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop outbox tail [--follow] [--type t] [--from cursor]` | Streams durable events from a resumable `(xid8, event_id)` cursor under the caller's read permissions | R | W1 |
+| `obop webhook_endpoint create\|list\|pause\|rotate_secret\|delete`; `obop webhook test\|deliveries\|replay` | Standard Webhooks endpoints; send a test event, read the 30-day delivery log, replay stored bytes | M; lists R | W1 |
+| `obop job list\|get\|wait\|cancel` | Durable jobs, including those behind `--wait` | M; others R | W1 |
 
 ### 3.9 Agents
 
-| Command                                                                  | What it does                                                                                                                                                                 | Kind                | Wave                                                                   |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------- |
-| `obop agent create\|list\|suspend\|revoke`                               | Composite over `principal`, `agent_delegation` and `api_key`: creates the principal, group, expiry and token in one plan; `list` is the inventory with effective permissions | M; `list` R         | W1                                                                     |
-| `obop agent guide [--plugin id]`                                         | Renders the catalogue for the caller's permissions plus the `AGENTS.md` and skills of installed plugins (5.4)                                                                | R                   | W1 (5.3 reason c: renders the generated catalogue and adds no backend) |
-| `obop plan list\|show\|commit\|reject\|wait`                             | Command plans (`command_plan`, alias `plan`)                                                                                                                                 | M; `list`, `show` R | W1                                                                     |
-| `obop approval list\|show\|decide\|delegate`; `obop approval_policy ...` | Approvals engine; decisions only by humans                                                                                                                                   | M                   | W2                                                                     |
-| `obop mcp tools`; `obop mcp bridge`                                      | List the MCP tools of the caller; a stdio to Streamable HTTP bridge in Rust using the CLI's credentials (open question 3)                                                    | R; process          | W1; W2                                                                 |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop agent create\|list\|suspend\|revoke` | Composite over `principal`, `agent_delegation` and `api_key`: creates the principal, group, expiry and token in one plan; `list` is the inventory with effective permissions | M; `list` R | W1 |
+| `obop agent guide [--plugin id]` | Renders the catalogue for the caller's permissions plus the `AGENTS.md` and skills of installed plugins (5.4) | R | W1 (5.3 reason c: renders the generated catalogue and adds no backend) |
+| `obop plan list\|show\|commit\|reject\|wait` | Command plans (`command_plan`, alias `plan`) | M; `list`, `show` R | W1 |
+| `obop approval list\|show\|decide\|delegate`; `obop approval_policy ...` | Approvals engine; decisions only by humans | M | W2 |
+| `obop mcp tools`; `obop mcp bridge` | List the MCP tools of the caller; a stdio to Streamable HTTP bridge in Rust using the CLI's credentials (open question 3) | R; process | W1; W2 |
 
 The configured assistants of `ai` (`ai_agent`, skills, runs) are W3 (D25).
 
 ### 3.10 Development
 
-| Command                                                          | What it does                                                                                                                                                                                                                              | Kind                | Wave                                                                                                  |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
-| `obop dev up\|down\|reset\|logs`; `obop dev parity`              | An optional local demo or development business on SQLite (D44; embedded PostgreSQL is a possible later profile), seeded from the same sample data as the hosted sandbox (D83, OR-20); print the parity matrix (6)                         | M; `parity` R       | W1                                                                                                    |
-| `obop dev new module <id>`                                       | In a repository checkout, scaffolds the `<id>-api` and implementation crates, manifest, permission seed and structural-suite hookup (Proposed)                                                                                            | M                   | W2 (Proposed); contributors use the repository's own tooling until then                               |
-| `obop plugin new\|lint\|test\|package`                           | Scaffold a pack; lint manifest, licence, capabilities and accessibility; run the inherited structural suite in a scratch business; build the OCI artefact                                                                                 | M; `lint`, `test` R | W2 (Proposed), with the registry; the first-party packs are checked by the repository's CI until then |
-| `obop plugin dev`                                                | Watch and sync to a dev business with plan and apply and hot reload                                                                                                                                                                       | M                   | W2                                                                                                    |
-| `obop plugin migrate <path> [--dry-run]`                         | Runs the codemods that a `deprecations.json` entry names over a plugin source tree, printing the patch under `--dry-run`; codemods are versioned with the deprecation list (ENGINEERING 4.4). Replaces the former `obop ext migrate` (N8) | M (local files)     | W3 (Proposed), with the first `N.0` that removes a deprecated contract                                |
-| `obop catalogue`, `schema`, `api`, `completion`, `man`, `config` | Introspection and local tools (2.8 to 2.10)                                                                                                                                                                                               | R                   | W0                                                                                                    |
+| Command | What it does | Kind | Wave |
+|---|---|---|---|
+| `obop dev up\|down\|reset\|logs`; `obop dev parity` | An optional local demo or development business on SQLite (D44; embedded PostgreSQL is a possible later profile), seeded from the same sample data as the hosted sandbox (D83, OR-20); print the parity matrix (6) | M; `parity` R | W1 |
+| `obop dev new module <id>` | In a repository checkout, scaffolds the `<id>-api` and implementation crates, manifest, permission seed and structural-suite hookup (Proposed) | M | W2 (Proposed); contributors use the repository's own tooling until then |
+| `obop plugin new\|lint\|test\|package` | Scaffold a pack; lint manifest, licence, capabilities and accessibility; run the inherited structural suite in a scratch business; build the OCI artefact | M; `lint`, `test` R | W2 (Proposed), with the registry; the first-party packs are checked by the repository's CI until then |
+| `obop plugin dev` | Watch and sync to a dev business with plan and apply and hot reload | M | W2 |
+| `obop plugin migrate <path> [--dry-run]` | Runs the codemods that a `deprecations.json` entry names over a plugin source tree, printing the patch under `--dry-run`; codemods are versioned with the deprecation list (ENGINEERING 4.4). Replaces the former `obop ext migrate` (N8) | M (local files) | W3 (Proposed), with the first `N.0` that removes a deprecated contract |
+| `obop catalogue`, `schema`, `api`, `completion`, `man`, `config` | Introspection and local tools (2.8 to 2.10) | R | W0 |
 
 Frontend tasks are not wrapped. A plugin with a UI tier builds with the project's own `vp` tasks; `obop plugin package` runs the pinned `vp build` as a child process (`vp_required` if absent) and exposes none of its options. The UI SDK reaches plugin projects as release tarballs installed with `vp add <url>` (Q32 default: no npm-registry publication until the owner decides at W2, OR-19). Templates pin `vite-plus` exactly, use pnpm only and carry the D23 supply-chain settings.
 
@@ -463,13 +448,13 @@ OR-3 gives obop a free, open registry of plugins. The CLI can search it, install
 
 ### 4.1 Package kinds
 
-| Code tier                         | Manifest `kind` | Typical plugin                                                                                                         | Install                                     | Copy                                                                        | Lands                 |
-| --------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------- | --------------------- |
-| X1 declarative pack, X2 CEL rules | `pack`          | Fields, models, view patches, automations, CEL validation and formula rules, templates, import mappings, country packs | Yes                                         | Yes: the data files                                                         | Sideload W1; index W2 |
-| X3 Wasm component                 | `wasm`          | Hooks, validators, HTTP connectors                                                                                     | Yes                                         | Source only, built by you                                                   | W3 (slip item 1)      |
-| X4 remote app                     | `remote`        | External SaaS and agents over OAuth, REST, webhooks, MCP                                                               | Yes: registers the OAuth client and consent | The app's source; you run it                                                | W3                    |
-| X5 native crate                   | `native`        | Posting, tax, protocol adapters                                                                                        | First-party only (`core`)                   | Vendor the source into your own build; nothing loads it into a stock binary | Not from the registry |
-| Theme, F2 and F3 UI               | `theme`         | Branding, storefront themes                                                                                            | Yes                                         | Yes                                                                         | W3                    |
+| Code tier | Manifest `kind` | Typical plugin | Install | Copy | Lands |
+|---|---|---|---|---|---|
+| X1 declarative pack, X2 CEL rules | `pack` | Fields, models, view patches, automations, CEL validation and formula rules, templates, import mappings, country packs | Yes | Yes: the data files | Sideload W1; index W2 |
+| X3 Wasm component | `wasm` | Hooks, validators, HTTP connectors | Yes | Source only, built by you | W3 (slip item 1) |
+| X4 remote app | `remote` | External SaaS and agents over OAuth, REST, webhooks, MCP | Yes: registers the OAuth client and consent | The app's source; you run it | W3 |
+| X5 native crate | `native` | Posting, tax, protocol adapters | First-party only (`core`) | Vendor the source into your own build; nothing loads it into a stock binary | Not from the registry |
+| Theme, F2 and F3 UI | `theme` | Branding, storefront themes | Yes | Yes | W3 |
 
 Stage 1 of the index (W2) therefore lists only `pack` plugins; the other kinds arrive with the extension platform (DECISIONS 5.3, item 1).
 
@@ -510,42 +495,42 @@ digest  = "sha256:77d2…"
 
 These are typed catalogue commands (D80); those that work on local files and the index (`fork`, `diff`, `publish`, `publisher`) are proposed as CLI-only (1.1), the rest also exist as REST and MCP. `install` is canonical (D81) and `add` a documented alias. All are W2, because stage 1 of the index is a W2 deliverable (D81, DECISIONS 5.1), except where noted.
 
-| Command                                                      | What it does                                                                                                                                                                                             | Kind |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| `plugin search <q> [--kind k] [--tier t] [--compatible]`     | Queries the local index snapshot, no server; default tier filter is `verified`                                                                                                                           | R    |
-| `plugin info <id>[@v]`                                       | Manifest, versions, tier, signer identities, SBOM summary, capabilities, SPDX licence, revocation, deprecation, agent docs                                                                               | R    |
-| `plugin install <id>[@range]` (alias `add`)                  | Resolves, fetches by digest, verifies, shows the capability diff as the plan, applies on commit, writes the lock. In W1 for a local path or URL with `--sideload`                                        | M    |
-| `plugin copy <id>[@v] --to <dir>`                            | Fetches and verifies the source, registers it as business-own code (`private`) with provenance, and writes a working tree to `<dir>` for editing; `plugin install ./dir` applies later edits. No updates | M    |
-| `plugin fork <id> --as <publisher.name> --to <dir>`          | Re-identifies a copy under your namespace, sets version 0.1.0 and records `[upstream]`, so you may publish a derivative. `copy` never re-identifies                                                      | M    |
-| `plugin update [id]`                                         | Plan: versions in range, capability diff; explicit apply                                                                                                                                                 | M    |
-| `plugin remove <id> [--data archive\|drop_after_days\|keep]` | Uninstalls per the manifest's `[uninstall]` policy after a confirmed export                                                                                                                              | M    |
-| `plugin publish`                                             | Signs the artefact and opens a pull request against the index with the entry (4.9)                                                                                                                       | M    |
-| `plugin publisher init\|verify`                              | Prints and checks the DNS TXT record or GitHub organisation proof needed for `verified`                                                                                                                  | M    |
-| `plugin verify <id\|path>`                                   | Checks digest, signatures, provenance, SBOM, licence, capability manifest and revocation list. W1 for sideloads                                                                                          | R    |
-| `plugin audit`                                               | Installed and copied plugins against revocations, OSV advisories, yanks and deprecations                                                                                                                 | R    |
-| `plugin diff <id>`                                           | Local changes of a copy against its recorded upstream source                                                                                                                                             | R    |
+| Command | What it does | Kind |
+|---|---|---|
+| `plugin search <q> [--kind k] [--tier t] [--compatible]` | Queries the local index snapshot, no server; default tier filter is `verified` | R |
+| `plugin info <id>[@v]` | Manifest, versions, tier, signer identities, SBOM summary, capabilities, SPDX licence, revocation, deprecation, agent docs | R |
+| `plugin install <id>[@range]` (alias `add`) | Resolves, fetches by digest, verifies, shows the capability diff as the plan, applies on commit, writes the lock. In W1 for a local path or URL with `--sideload` | M |
+| `plugin copy <id>[@v] --to <dir>` | Fetches and verifies the source, registers it as business-own code (`private`) with provenance, and writes a working tree to `<dir>` for editing; `plugin install ./dir` applies later edits. No updates | M |
+| `plugin fork <id> --as <publisher.name> --to <dir>` | Re-identifies a copy under your namespace, sets version 0.1.0 and records `[upstream]`, so you may publish a derivative. `copy` never re-identifies | M |
+| `plugin update [id]` | Plan: versions in range, capability diff; explicit apply | M |
+| `plugin remove <id> [--data archive\|drop_after_days\|keep]` | Uninstalls per the manifest's `[uninstall]` policy after a confirmed export | M |
+| `plugin publish` | Signs the artefact and opens a pull request against the index with the entry (4.9) | M |
+| `plugin publisher init\|verify` | Prints and checks the DNS TXT record or GitHub organisation proof needed for `verified` | M |
+| `plugin verify <id\|path>` | Checks digest, signatures, provenance, SBOM, licence, capability manifest and revocation list. W1 for sideloads | R |
+| `plugin audit` | Installed and copied plugins against revocations, OSV advisories, yanks and deprecations | R |
+| `plugin diff <id>` | Local changes of a copy against its recorded upstream source | R |
 
 ### 4.4 Install versus copy
 
-| Dimension              | `install`                                           | `copy`                                                                                                                                                                                                                                         |
-| ---------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| You get                | A signed, version-pinned package fetched by digest  | The plugin's source tree in your extension directory                                                                                                                                                                                           |
-| Who maintains it       | The publisher; you follow versions                  | You, from the moment of copying                                                                                                                                                                                                                |
-| Updates                | Explicit: `plugin update` shows the capability diff | None. `plugin diff` shows your drift; re-copying is manual                                                                                                                                                                                     |
-| Provenance             | Digest and signature identities in the lock         | Source, version, digest, SPDX licence, signature check at copy time and date in the lock and `[upstream]`                                                                                                                                      |
-| Trust level afterwards | The listed tier (`verified` or `community`)         | `private`. Copy adds no privilege: capabilities, egress hosts and UI tier (F2 or F3) stay as the source manifest declared, and raising them, or moving UI to F1, is a separate audited command needing `api.extension_admin` and step-up (Q25) |
-| Registry kill switch   | Disables the version                                | Does not apply; `plugin audit` warns when the upstream version it was copied from is revoked                                                                                                                                                   |
-| Removal and licence    | Honours `[uninstall]`; licence shown at install     | Delete the directory; LICENSE and NOTICE travel with the source                                                                                                                                                                                |
-| Choose it when         | You want the publisher's fixes                      | You must change behaviour, audit every line, or leave the publisher                                                                                                                                                                            |
+| Dimension | `install` | `copy` |
+|---|---|---|
+| You get | A signed, version-pinned package fetched by digest | The plugin's source tree in your extension directory |
+| Who maintains it | The publisher; you follow versions | You, from the moment of copying |
+| Updates | Explicit: `plugin update` shows the capability diff | None. `plugin diff` shows your drift; re-copying is manual |
+| Provenance | Digest and signature identities in the lock | Source, version, digest, SPDX licence, signature check at copy time and date in the lock and `[upstream]` |
+| Trust level afterwards | The listed tier (`verified` or `community`) | `private`. Copy adds no privilege: capabilities, egress hosts and UI tier (F2 or F3) stay as the source manifest declared, and raising them, or moving UI to F1, is a separate audited command needing `api.extension_admin` and step-up (Q25) |
+| Registry kill switch | Disables the version | Does not apply; `plugin audit` warns when the upstream version it was copied from is revoked |
+| Removal and licence | Honours `[uninstall]`; licence shown at install | Delete the directory; LICENSE and NOTICE travel with the source |
+| Choose it when | You want the publisher's fixes | You must change behaviour, audit every line, or leave the publisher |
 
 ### 4.5 Trust tiers
 
-| Tier                   | Meaning                                                                                    | Gates                                                                                                                                                                   | CLI default                                                                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `core`                 | First-party `obop.*`, signed by core keys                                                  | Core release process                                                                                                                                                    | Comes with the binary or the pack channel                                                                                                  |
-| `verified`             | Verified publisher plus all automated gates (signatures, SBOM, capability manifest; OR-17) | Domain or GitHub-organisation proof and good standing (how a publisher is verified is Proposed detail of D81); manual security review is best effort and never promised | Listed and installable                                                                                                                     |
-| `community`            | Automated gates only, labelled unreviewed                                                  | Automated gates                                                                                                                                                         | Hidden from default search; install needs `--tier community` and shows an "unreviewed" notice the user accepts                             |
-| `private` (sideloaded) | Business-own: authored here, copied, or sideloaded                                         | None by the registry                                                                                                                                                    | A plugin from a file or URL outside the index carries the `sideloaded` flag of `package_install`; an unsigned one needs `--allow-unsigned` |
+| Tier | Meaning | Gates | CLI default |
+|---|---|---|---|
+| `core` | First-party `obop.*`, signed by core keys | Core release process | Comes with the binary or the pack channel |
+| `verified` | Verified publisher plus all automated gates (signatures, SBOM, capability manifest; OR-17) | Domain or GitHub-organisation proof and good standing (how a publisher is verified is Proposed detail of D81); manual security review is best effort and never promised | Listed and installable |
+| `community` | Automated gates only, labelled unreviewed | Automated gates | Hidden from default search; install needs `--tier community` and shows an "unreviewed" notice the user accepts |
+| `private` (sideloaded) | Business-own: authored here, copied, or sideloaded | None by the registry | A plugin from a file or URL outside the index carries the `sideloaded` flag of `package_install`; an unsigned one needs `--allow-unsigned` |
 
 Both listed tiers require an OSI-approved SPDX licence (OR-17, 4.7); sideloading is always allowed (D32). `plugin.install` is a high-risk `commit` effect: an agent gets a plan and a human confirms it (exit 10).
 
@@ -583,14 +568,14 @@ A coding agent with a shell already runs commands, reads JSON and branches on ex
 
 The protocol is ai.md 4.3 ([R16 s5]); the CLI binds to it as follows.
 
-| ai.md concept                                                                     | CLI form                                                                             |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `dry_run=true` returns diff, validation, risk, approvals and a `plan_id`          | `--dry-run` prints `data.plan` (2.7)                                                 |
-| Commit with the digest-bound, single-use, principal-bound, time-limited `plan_id` | `--plan <id>` or `obop plan commit <id>`                                             |
-| `plan_stale` (409) when a touched record changed                                  | Exit 6; run `--dry-run` again                                                        |
-| `approval_required`; an agent never approves                                      | Exit 10; `obop plan wait`; a human runs `obop plan commit` or `obop approval decide` |
-| Idempotency key; a replay returns the first result                                | Automatic key; `--idempotency-key` for logical operations                            |
-| Agents create drafts, humans post                                                 | `invoice create_draft` is `auto`; `invoice post` by an agent is `confirm`            |
+| ai.md concept | CLI form |
+|---|---|
+| `dry_run=true` returns diff, validation, risk, approvals and a `plan_id` | `--dry-run` prints `data.plan` (2.7) |
+| Commit with the digest-bound, single-use, principal-bound, time-limited `plan_id` | `--plan <id>` or `obop plan commit <id>` |
+| `plan_stale` (409) when a touched record changed | Exit 6; run `--dry-run` again |
+| `approval_required`; an agent never approves | Exit 10; `obop plan wait`; a human runs `obop plan commit` or `obop approval decide` |
+| Idempotency key; a replay returns the first result | Automatic key; `--idempotency-key` for logical operations |
+| Agents create drafts, humans post | `invoice create_draft` is `auto`; `invoice post` by an agent is `confirm` |
 
 ### 5.3 One source of truth
 
@@ -651,7 +636,7 @@ These are acceptance transcripts (6). They run off a terminal, so output is JSON
 
 ### 8.1 (a) An agent bootstraps a German business from an empty machine (W1, from DE alpha 2027-03-31)
 
-_Given_ a machine with the signed binary and a human who supplied a password file. The agent uses only the shell.
+*Given* a machine with the signed binary and a human who supplied a password file. The agent uses only the shell.
 
 ```sh
 obop init --solo --owner-email owner@muster.example --owner-password-file ./owner.pw
@@ -666,30 +651,17 @@ obop login --profile agent --api-key-file ./agent.key
 obop logout --profile bootstrap          # the 24-hour bootstrap credential is discarded
 ```
 
-_Then_ `pack.plan.json` lists the accounts, taxes, journals, sequences and lock dates the pack instantiates. `pack verify` prints the gate reached, here `preview` (oracles pass on regulator examples; no accountant sign-off is recorded, so not `stable`):
+*Then* `pack.plan.json` lists the accounts, taxes, journals, sequences and lock dates the pack instantiates. `pack verify` prints the gate reached, here `preview` (oracles pass on regulator examples; no accountant sign-off is recorded, so not `stable`):
 
 ```json
-{
-  "command": "pack.verify",
-  "data": {
-    "channel": "preview",
-    "gate": "preview",
-    "oracles": [{ "name": "kosit", "result": "pass", "version": "1.6.3" }],
-    "pack": "l10n-de",
-    "sign_off": null,
-    "signature": "valid",
-    "version": "0.9.0"
-  },
-  "ok": true,
-  "warnings": []
-}
+{ "command": "pack.verify", "data": { "channel": "preview", "gate": "preview", "oracles": [{ "name": "kosit", "result": "pass", "version": "1.6.3" }], "pack": "l10n-de", "sign_off": null, "signature": "valid", "version": "0.9.0" }, "ok": true, "warnings": [] }
 ```
 
-The agent now works under its own narrow token. _When_ it runs `obop invoice post <id>`, _then_ it exits 10 with a plan and nothing is posted; the owner commits it as in 8.4.
+The agent now works under its own narrow token. *When* it runs `obop invoice post <id>`, *then* it exits 10 with a plan and nothing is posted; the owner commits it as in 8.4.
 
 ### 8.2 (b) An implementer copies a plugin, modifies it and publishes it (W2)
 
-_Given_ Sven, an implementer, and the verified pack `acme.dach-quote-terms`.
+*Given* Sven, an implementer, and the verified pack `acme.dach-quote-terms`.
 
 ```sh
 obop plugin search "quote terms" --kind pack
@@ -705,7 +677,7 @@ obop plugin package extensions/sven/plus --out ./dist
 obop plugin publish ./dist --tier community
 ```
 
-_Then_ the copy plan shows provenance (`acme.dach-quote-terms` 1.4.2, digest, `Apache-2.0`), the capability digest and trust level `private`, and `obop.lock` gets a `mode = "copy"` entry. The fork gets a new identity, version 0.1.0 and an `[upstream]` block, and keeps LICENSE and NOTICE. `publish` signs the artefact, runs the gates (`capability_diff`, `licence`, `name_reservation`, `osv`, `secret_scan`) and returns the pull request it opened against the index. Reaching `verified` needs `plugin publisher verify` first (OR-17; how a publisher is verified stays Proposed).
+*Then* the copy plan shows provenance (`acme.dach-quote-terms` 1.4.2, digest, `Apache-2.0`), the capability digest and trust level `private`, and `obop.lock` gets a `mode = "copy"` entry. The fork gets a new identity, version 0.1.0 and an `[upstream]` block, and keeps LICENSE and NOTICE. `publish` signs the artefact, runs the gates (`capability_diff`, `licence`, `name_reservation`, `osv`, `secret_scan`) and returns the pull request it opened against the index. Reaching `verified` needs `plugin publisher verify` first (OR-17; how a publisher is verified stays Proposed).
 
 ### 8.3 (c) CI runs an upgrade dry-run gate (W1, from 0.3)
 
@@ -716,36 +688,17 @@ obop upgrade --dry-run --to 0.4.0 > plan.json      # exit 7 if infeasible
 jq -e '.data.plan.manual_steps | length == 0' plan.json
 ```
 
-_Given_ a CI profile using client credentials, exit 0 means a feasible plan and exit 7 means blockers, which the JSON names:
+*Given* a CI profile using client credentials, exit 0 means a feasible plan and exit 7 means blockers, which the JSON names:
 
 ```json
-{
-  "command": "upgrade.apply",
-  "data": {
-    "plan": {
-      "backup": { "age_hours": 5, "verified": true },
-      "digest": "sha256:c0a4…",
-      "disk_headroom_gb": 41,
-      "downtime_estimate_s": 48,
-      "feasible": true,
-      "from": "0.3.2",
-      "manual_steps": [],
-      "migrations": { "backfill": 2, "contract": 0, "expand": 7 },
-      "plan_file": "upgrade-0.3.2-0.4.0.plan.json",
-      "to": "0.4.0"
-    }
-  },
-  "exit": 0,
-  "ok": true,
-  "warnings": []
-}
+{ "command": "upgrade.apply", "data": { "plan": { "backup": { "age_hours": 5, "verified": true }, "digest": "sha256:c0a4…", "disk_headroom_gb": 41, "downtime_estimate_s": 48, "feasible": true, "from": "0.3.2", "manual_steps": [], "migrations": { "backfill": 2, "contract": 0, "expand": 7 }, "plan_file": "upgrade-0.3.2-0.4.0.plan.json", "to": "0.4.0" } }, "exit": 0, "ok": true, "warnings": [] }
 ```
 
 The release job, gated by an environment approval, applies the same file: `obop upgrade --plan upgrade-0.3.2-0.4.0.plan.json --phase pre`, swap the binary, then `--phase post`. The plan is bound to the binary digest, migration head and backup id, so a changed state fails with exit 6.
 
 ### 8.4 (d) An agent drafts a vendor bill from an emailed PDF; a human approves and posts it (W1 variant; `ai` extraction is W3)
 
-_Given_ agent `ap-intake` holding `invoice:create_draft`, `invoice:post` under policy `confirm`, `party:read` and `attachment:create`, and the vendor's PDF RE-0412, which the agent fetched with its own mail tool (the inbound gateway is W2).
+*Given* agent `ap-intake` holding `invoice:create_draft`, `invoice:post` under policy `confirm`, `party:read` and `attachment:create`, and the vendor's PDF RE-0412, which the agent fetched with its own mail tool (the inbound gateway is W2).
 
 ```sh
 obop party list --filter 'name~Mueller' --fields id,name
@@ -755,14 +708,14 @@ obop invoice post 0197a3c4-5d2e-7b10-8f3a-2c6e9d41b7a5 --dry-run      # plan, ex
 obop invoice post 0197a3c4-5d2e-7b10-8f3a-2c6e9d41b7a5                # exit 10, same plan
 ```
 
-_Then_ the draft has net `100000`, tax `19000` and total `119000` minor units EUR, the PDF attached and a chatter note that agent `ap-intake` drafted it; no number is assigned. The agent reports the plan id, and the human runs:
+*Then* the draft has net `100000`, tax `19000` and total `119000` minor units EUR, the PDF attached and a chatter note that agent `ap-intake` drafted it; no number is assigned. The agent reports the plan id, and the human runs:
 
 ```sh
 obop plan show 0197a3d9-6a11-7c3e-9b42-5f0d8e17a2c4
 obop plan commit 0197a3d9-6a11-7c3e-9b42-5f0d8e17a2c4
 ```
 
-_Then_ the invoice is posted with its legal number, hash-chain link and lock-date check, executed as the human with `ap-intake` recorded as proposer, and a second commit returns the same result with `meta.replayed: true`. _When_ the agent edits the draft after the dry-run and the human commits the old plan, _then_ the exit is 6 with `plan_stale`. _When_ an agent without the scope calls `obop invoice post`, _then_ the exit is 13.
+*Then* the invoice is posted with its legal number, hash-chain link and lock-date check, executed as the human with `ap-intake` recorded as proposer, and a second commit returns the same result with `meta.replayed: true`. *When* the agent edits the draft after the dry-run and the human commits the old plan, *then* the exit is 6 with `plan_stale`. *When* an agent without the scope calls `obop invoice post`, *then* the exit is 13.
 
 ### 8.5 (e) A user exports everything and leaves (W1, by 0.5)
 
@@ -776,18 +729,18 @@ obop audit_file export --kind datev_extf --from 2027-01-01 --to 2027-12-31 --out
 obop plugin lock export > obop.lock
 ```
 
-_Then_ the archive holds NDJSON per model, attachments by SHA-256, the audit log, the erasure ledger, posted entries with legal numbers and hash values, and the customisation as an `obop.toml` package; no key, token or connection credential is present (integrations 4.9). To move to another obop, `obop business import ./muster-export` on an empty business re-verifies the chain; the published CI round trip (export, wipe, import, empty diff) is the guarantee. The owner may then run `obop business delete`, a two-phase destructive command.
+*Then* the archive holds NDJSON per model, attachments by SHA-256, the audit log, the erasure ledger, posted entries with legal numbers and hash values, and the customisation as an `obop.toml` package; no key, token or connection credential is present (integrations 4.9). To move to another obop, `obop business import ./muster-export` on an empty business re-verifies the chain; the published CI round trip (export, wipe, import, empty diff) is the guarantee. The owner may then run `obop business delete`, a two-phase destructive command.
 
 ## 9. Waves
 
 CLI first, then API and MCP generated, then UI parity before the first stable release (D80). Because all three are generated from one catalogue, "CLI first" means the catalogue entry and its CLI are the milestone, REST and MCP arrive in the same change, and the UI follows under the parity matrix.
 
-| Wave         | Window                   | CLI deliverables                                                                                                                                                                                                                                                                                                                                                                                                            | Gates                                                                                                                                                                                                         |
-| ------------ | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W0           | 2026-10-01 to 2026-12-31 | Catalogue skeleton and grammar (Q22 answered by 2026-12-31, frozen before the 0.3 public alpha, OR-31); `init`, `serve` (built), `status`, `login`, `api`, `schema`, `catalogue` (`commands` is built); CRUD for kernel models; 0.1 preview 2026-12-01                                                                                                                                                                      | Parity test started with the first commands (D36)                                                                                                                                                             |
-| W1           | 2027-01-01 to 2027-09-30 | 0.3 (2027-04-06): `upgrade --dry-run`, CSV import, N-1 chain, grammar freeze. 0.5 (2027-07-06): `business export\|import`, N-2 chain. 0.6 (2027-09-07): Odoo importer. Throughout: each module's commands as it ships, `pack`, `customize`, webhooks, outbox, `agent`, `plan`, sideloaded packs                                                                                                                             | Parity test green for every shipped module; golden transcripts a, c, d, e; at least 3 design partners issue real invoices; the DE pack stays beta if the protected core is late (D86)                         |
-| W2           | 2027-10-01 to 2028-06-30 | Registry stage 1 (`plugin search\|install\|copy\|fork\|publish\|audit`), `approval`, `automation_rule`, QuickBooks import, `--company`, `mcp bridge`, `plugin dev`, `plugin new\|lint\|test\|package`; the operator conveniences kept out of the W1 cut (`doctor`, `diag`, `migrate --fleet`, `telemetry`, `self`, `business clone`, `period close`, `dev new module`; open question 12); UI parity work; 1.0 on 2028-04-18 | CLI, API, MCP and UI parity green at 1.0 (every command not on the owner-approved exemption list, OR-16); D85 security-fix process drilled; registry stage 1 is among the first items to slip (DECISIONS 5.3) |
-| W3 and later | from 2028-07-01          | `wasm`, `remote` and `theme` kinds, `custom_model`, `view_override`, `analytics query`, Xero and ERPNext importers, `ai_agent` and skills, compatibility runs, `plugin migrate` with the first `N.0` that removes a deprecated contract, registry stage 2 on demand                                                                                                                                                         | Each item needs a design partner (D25)                                                                                                                                                                        |
+| Wave | Window | CLI deliverables | Gates |
+|---|---|---|---|
+| W0 | 2026-10-01 to 2026-12-31 | Catalogue skeleton and grammar (Q22 answered by 2026-12-31, frozen before the 0.3 public alpha, OR-31); `init`, `serve` (built), `status`, `login`, `api`, `schema`, `catalogue` (`commands` is built); CRUD for kernel models; 0.1 preview 2026-12-01 | Parity test started with the first commands (D36) |
+| W1 | 2027-01-01 to 2027-09-30 | 0.3 (2027-04-06): `upgrade --dry-run`, CSV import, N-1 chain, grammar freeze. 0.5 (2027-07-06): `business export\|import`, N-2 chain. 0.6 (2027-09-07): Odoo importer. Throughout: each module's commands as it ships, `pack`, `customize`, webhooks, outbox, `agent`, `plan`, sideloaded packs | Parity test green for every shipped module; golden transcripts a, c, d, e; at least 3 design partners issue real invoices; the DE pack stays beta if the protected core is late (D86) |
+| W2 | 2027-10-01 to 2028-06-30 | Registry stage 1 (`plugin search\|install\|copy\|fork\|publish\|audit`), `approval`, `automation_rule`, QuickBooks import, `--company`, `mcp bridge`, `plugin dev`, `plugin new\|lint\|test\|package`; the operator conveniences kept out of the W1 cut (`doctor`, `diag`, `migrate --fleet`, `telemetry`, `self`, `business clone`, `period close`, `dev new module`; open question 12); UI parity work; 1.0 on 2028-04-18 | CLI, API, MCP and UI parity green at 1.0 (every command not on the owner-approved exemption list, OR-16); D85 security-fix process drilled; registry stage 1 is among the first items to slip (DECISIONS 5.3) |
+| W3 and later | from 2028-07-01 | `wasm`, `remote` and `theme` kinds, `custom_model`, `view_override`, `analytics query`, Xero and ERPNext importers, `ai_agent` and skills, compatibility runs, `plugin migrate` with the first `N.0` that removes a deprecated contract, registry stage 2 on demand | Each item needs a design partner (D25) |
 
 ## 10. Non-goals
 
@@ -802,37 +755,37 @@ CLI first, then API and MCP generated, then UI parity before the first stable re
 
 Each open item has a recommended default; items 2, 10 and 11 are closed and stay only so that numbers cited by other documents resolve. Q22, Q24, Q25 and Q32 (decided at W2) of DECISIONS remain open and are not restated; Q23 and Q30 are answered (OR-17, OR-16).
 
-1. **Noun spelling (Q22).** Model ids verbatim with a hyphen alias on input, or kebab-case canonical? _Default:_ verbatim, so `obop sale_order confirm` equals the wire id and the MCP tool name.
+1. **Noun spelling (Q22).** Model ids verbatim with a hyphen alias on input, or kebab-case canonical? *Default:* verbatim, so `obop sale_order confirm` equals the wire id and the MCP tool name.
 2. **Exemption list and parity (closed, OR-16).** OR-16 settles the rule: UI parity is literal and the only exceptions are the operator-only commands the owner approves as CLI-only, each with a written reason (the exemption list of 1.1). What stays Proposed is its content: the bootstrap, local, operator-only and owner-database groups of 1.1 (the last is D77, Proposed, not built, and lacks the UI, REST and MCP) are a Proposed way to organise the entries, and each entry needs the owner's approval. `init`, `up`, `serve`, `migrate`, `upgrade` and `self` cannot be served by the server they start or replace, and local commands act on the user's machine, so those groups also lack REST and MCP. Steps that only a person can perform (mailbox consent, a signer's own act, Web Push, the co-editing socket) are not adopted as a UI-only class, because OR-4 bars UI-only features; they are modelled as catalogue commands on all three surfaces that stop at the person's act (1.1). `login` and `logout` are local, register-local hardware operations join the local group as retail-commerce-marketing.md open question 20 proposes, and platform, ux, integrations and ARCHITECTURE cite 1.1 instead of restating a subset.
-3. **Stdio bridge.** integrations 4.4 ships no stdio bridge, to avoid JavaScript tooling; a Rust `obop mcp bridge` needs none. _Default:_ ship it in W2 and amend integrations 4.4.
-4. **Device grant.** Add RFC 8628 to the OAuth provider for headless logins? _Default:_ yes, with loopback PKCE as the desktop default.
-5. **Index signing.** A SpaceCorps key over snapshots with an expiry, or TUF metadata as used for the pack channel (LOCALIZATION 1.5)? _Default:_ reuse TUF so one verifier serves packs and plugins.
-6. **`fork` versus `copy`.** DECISIONS section 4 lists "fork" as a word to avoid for install and copy. _Default:_ keep `fork` as a distinct command (re-identify to publish a derivative) and annotate that vocabulary row.
-7. **Registry service (stage 2).** It is a hosted service for others (OR-11). _Default:_ decide only when stage 1 volume justifies it, by amending D83.
-8. **Bootstrap credential.** May `init` mint a 24-hour admin credential without step-up? _Default:_ yes; it has local machine and database access, and `logout` discards it.
-9. **`period close`.** finance.md defines lock dates and tax closing but no composite. _Default:_ finance defines it as a convenience over them, with blockers in the plan.
+3. **Stdio bridge.** integrations 4.4 ships no stdio bridge, to avoid JavaScript tooling; a Rust `obop mcp bridge` needs none. *Default:* ship it in W2 and amend integrations 4.4.
+4. **Device grant.** Add RFC 8628 to the OAuth provider for headless logins? *Default:* yes, with loopback PKCE as the desktop default.
+5. **Index signing.** A SpaceCorps key over snapshots with an expiry, or TUF metadata as used for the pack channel (LOCALIZATION 1.5)? *Default:* reuse TUF so one verifier serves packs and plugins.
+6. **`fork` versus `copy`.** DECISIONS section 4 lists "fork" as a word to avoid for install and copy. *Default:* keep `fork` as a distinct command (re-identify to publish a derivative) and annotate that vocabulary row.
+7. **Registry service (stage 2).** It is a hosted service for others (OR-11). *Default:* decide only when stage 1 volume justifies it, by amending D83.
+8. **Bootstrap credential.** May `init` mint a 24-hour admin credential without step-up? *Default:* yes; it has local machine and database access, and `logout` discards it.
+9. **`period close`.** finance.md defines lock dates and tax closing but no composite. *Default:* finance defines it as a convenience over them, with blockers in the plan.
 10. **Analytics placement (closed).** DECISIONS 5.3 (slip-order item 2) places the semantic layer in W3, and [ai.md](ai.md) and 3.4 agree; `aggregate` covers agent reads in W1 and W2. Kept only so that the number cited by ai.md open question 11 resolves; whether `aggregate` is enough for the design partners' agents is that document's question.
 11. **Diagnostics (closed).** OR-2 and OR-11 removed any upload to a support service: `obop diag` writes a local file only (3.1), as ENGINEERING 9.2 now states. Kept only so that the number cited by ENGINEERING 9.2 resolves.
-12. **W1 command surface (D86, Q8).** DECISIONS 5.3 rows 1 to 23 and its slip order name none of `doctor`, `diag`, `migrate --fleet`, `telemetry`, `self`, `business clone`, `period close`, `dev new module` or `plugin new|lint|test|package`, and ARCHITECTURE 8.6 lists several of them as W0 to W1. _Default:_ W2, as placed in 3, so the W1 cut gains no unordered scope; `init` and `upgrade --dry-run` run the host checks they need in W1, and `agent guide` stays in W1 as a rendering of the generated catalogue (5.3 reason c). The 5.3 calls are RATIFIED (OR-15); the owner still confirms these placements (Q8).
-13. **The `plan` alias.** CONVENTIONS 2.4 records that the alias `plan` for `command_plan` (N3) collides with the sales-crm model `plan` (W3), and that cli, sales-crm and Q22 settle which gives way; sales-crm open question 20 covers only a `quote` alias. _Default:_ the model keeps `plan` (a model id and an alias cannot share a spelling, N2), the alias is dropped, and command plans are addressed as `command_plan` with `--plan <id>` as the usual short form. Settle it before the grammar freeze at 0.3 (2027-04-06), because removing a spelling afterwards is a major change (6); the examples here use the alias until then.
-14. **Trust attribute spelling.** This file writes `tier` (`obop.lock` and the `--tier` flag of `plugin search`, `install` and `publish`), CONVENTIONS 2.1 names the attribute `trust_level`, and both leave one spelling open (Q25). _Default:_ `trust_level` in `obop.lock` and JSON, and `--trust-level` as the flag (N4 derives it from the property name); "tier" stays prose for the trust tiers of OR-3.
-15. **First-party pack ids.** The commands here use `l10n-de`, while the `obop.*` namespace is reserved for `core` plugins (4.5, 4.7). _Default:_ `pack` commands take the short id and resolve it in the `obop.` namespace, and `obop.lock` and `plugin` commands store and print `obop.l10n-de`; the module id stays `l10n_de`.
-16. **Exit codes (accepted, OR-27).** The earlier draft used 3, 4, 5 and 8 for auth, denied, invalid and busy; the built CLI already uses 3, 4 and 5 for `restore_key_required`, `backup_not_sealed` and `restore_files_failed` and 75 for a refused store (2.4). _Default:_ this file renumbers the proposed classes (auth 12, denied 13, invalid 14, busy 75) and every document that cited the old numbers was conformed; the owner accepted this scheme (OR-27).
-17. **Spellings of the built commands.** `restore`, `backup`, `migrate`, `modules`, `call` and `commands` exist (1.4) and differ from the proposed `business import`, `backup create`, `plugin`, `<subject> <action>` and `catalogue`. _Default (OR-31):_ today's built spellings keep working as aliases; the owner decides which spelling is canonical (Q22).
+12. **W1 command surface (D86, Q8).** DECISIONS 5.3 rows 1 to 23 and its slip order name none of `doctor`, `diag`, `migrate --fleet`, `telemetry`, `self`, `business clone`, `period close`, `dev new module` or `plugin new|lint|test|package`, and ARCHITECTURE 8.6 lists several of them as W0 to W1. *Default:* W2, as placed in 3, so the W1 cut gains no unordered scope; `init` and `upgrade --dry-run` run the host checks they need in W1, and `agent guide` stays in W1 as a rendering of the generated catalogue (5.3 reason c). The 5.3 calls are RATIFIED (OR-15); the owner still confirms these placements (Q8).
+13. **The `plan` alias.** CONVENTIONS 2.4 records that the alias `plan` for `command_plan` (N3) collides with the sales-crm model `plan` (W3), and that cli, sales-crm and Q22 settle which gives way; sales-crm open question 20 covers only a `quote` alias. *Default:* the model keeps `plan` (a model id and an alias cannot share a spelling, N2), the alias is dropped, and command plans are addressed as `command_plan` with `--plan <id>` as the usual short form. Settle it before the grammar freeze at 0.3 (2027-04-06), because removing a spelling afterwards is a major change (6); the examples here use the alias until then.
+14. **Trust attribute spelling.** This file writes `tier` (`obop.lock` and the `--tier` flag of `plugin search`, `install` and `publish`), CONVENTIONS 2.1 names the attribute `trust_level`, and both leave one spelling open (Q25). *Default:* `trust_level` in `obop.lock` and JSON, and `--trust-level` as the flag (N4 derives it from the property name); "tier" stays prose for the trust tiers of OR-3.
+15. **First-party pack ids.** The commands here use `l10n-de`, while the `obop.*` namespace is reserved for `core` plugins (4.5, 4.7). *Default:* `pack` commands take the short id and resolve it in the `obop.` namespace, and `obop.lock` and `plugin` commands store and print `obop.l10n-de`; the module id stays `l10n_de`.
+16. **Exit codes (accepted, OR-27).** The earlier draft used 3, 4, 5 and 8 for auth, denied, invalid and busy; the built CLI already uses 3, 4 and 5 for `restore_key_required`, `backup_not_sealed` and `restore_files_failed` and 75 for a refused store (2.4). *Default:* this file renumbers the proposed classes (auth 12, denied 13, invalid 14, busy 75) and every document that cited the old numbers was conformed; the owner accepted this scheme (OR-27).
+17. **Spellings of the built commands.** `restore`, `backup`, `migrate`, `modules`, `call` and `commands` exist (1.4) and differ from the proposed `business import`, `backup create`, `plugin`, `<subject> <action>` and `catalogue`. *Default (OR-31):* today's built spellings keep working as aliases; the owner decides which spelling is canonical (Q22).
 
 ## 12. Sources
 
 Relative links from `docs/spec/`. D-, OR-, F- and Q-identifiers refer to [DECISIONS.md](../DECISIONS.md); names follow [CONVENTIONS.md](../CONVENTIONS.md). Sibling specs are linked inline.
 
-| Tag       | File                                                                                                                                                                                                                                                                                                                                        |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R06       | [research/06-rust-stack.md](../research/06-rust-stack.md)                                                                                                                                                                                                                                                                                   |
-| R07       | [research/07-vite-plus-frontend.md](../research/07-vite-plus-frontend.md)                                                                                                                                                                                                                                                                   |
-| R16       | [research/16-ai-native-erp.md](../research/16-ai-native-erp.md)                                                                                                                                                                                                                                                                             |
-| R18       | [research/18-security-compliance-deployment-ops.md](../research/18-security-compliance-deployment-ops.md)                                                                                                                                                                                                                                   |
-| R21       | [research/21-integrations-interoperability-api.md](../research/21-integrations-interoperability-api.md)                                                                                                                                                                                                                                     |
-| R24       | [research/24-extension-platform-sdk.md](../research/24-extension-platform-sdk.md)                                                                                                                                                                                                                                                           |
-| R25       | [research/25-localization-operating-model.md](../research/25-localization-operating-model.md)                                                                                                                                                                                                                                               |
-| R27       | [research/27-quality-release-engineering.md](../research/27-quality-release-engineering.md)                                                                                                                                                                                                                                                 |
-| Rulings   | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS.md](../DECISIONS.md)                                                                                                                                                                                                                                                              |
+| Tag | File |
+|---|---|
+| R06 | [research/06-rust-stack.md](../research/06-rust-stack.md) |
+| R07 | [research/07-vite-plus-frontend.md](../research/07-vite-plus-frontend.md) |
+| R16 | [research/16-ai-native-erp.md](../research/16-ai-native-erp.md) |
+| R18 | [research/18-security-compliance-deployment-ops.md](../research/18-security-compliance-deployment-ops.md) |
+| R21 | [research/21-integrations-interoperability-api.md](../research/21-integrations-interoperability-api.md) |
+| R24 | [research/24-extension-platform-sdk.md](../research/24-extension-platform-sdk.md) |
+| R25 | [research/25-localization-operating-model.md](../research/25-localization-operating-model.md) |
+| R27 | [research/27-quality-release-engineering.md](../research/27-quality-release-engineering.md) |
+| Rulings | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS.md](../DECISIONS.md) |
 | Documents | [ARCHITECTURE.md](../ARCHITECTURE.md), [ENGINEERING.md](../ENGINEERING.md), [LOCALIZATION.md](../LOCALIZATION.md), [CONVENTIONS.md](../CONVENTIONS.md), [GLOSSARY.md](../GLOSSARY.md); [ai.md](ai.md), [integrations.md](integrations.md), [platform.md](platform.md), [security-privacy.md](security-privacy.md), [finance.md](finance.md) |

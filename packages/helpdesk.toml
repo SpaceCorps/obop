@@ -21,55 +21,55 @@ description = "A service-level policy: how fast tickets of a priority should be 
 read_group = "helpdesk.agent"
 write_group = "helpdesk.manager"
 
-[model.ui]
-title = "{name}"
-list = ["name", "priority", "first_response_minutes", "resolution_minutes", "active"]
-order = "name asc"
-default_view = "list"
-menu = "configuration"
+  [model.ui]
+  title = "{name}"
+  list = ["name", "priority", "first_response_minutes", "resolution_minutes", "active"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
 
-[[model.field]]
-name = "name"
-description = "Policy name, for example Urgent in 4 hours"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Policy name, for example Urgent in 4 hours"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "priority"
-description = "Ticket priority the policy applies to: low, normal, high, urgent"
-class = "none"
-kind = "select"
-options = ["low", "normal", "high", "urgent"]
-required = true
-[model.field.ui]
-tones = { low = "neutral", normal = "neutral", high = "warn", urgent = "bad" }
+  [[model.field]]
+  name = "priority"
+  description = "Ticket priority the policy applies to: low, normal, high, urgent"
+  class = "none"
+  kind = "select"
+  options = ["low", "normal", "high", "urgent"]
+  required = true
+  [model.field.ui]
+  tones = { low = "neutral", normal = "neutral", high = "warn", urgent = "bad" }
 
-[[model.field]]
-name = "first_response_minutes"
-description = "Target time to the first reply, in minutes"
-class = "none"
-kind = "number"
-required = true
-[model.field.ui]
-display = "duration_minutes"
-aggregate = "none"
+  [[model.field]]
+  name = "first_response_minutes"
+  description = "Target time to the first reply, in minutes"
+  class = "none"
+  kind = "number"
+  required = true
+  [model.field.ui]
+  display = "duration_minutes"
+  aggregate = "none"
 
-[[model.field]]
-name = "resolution_minutes"
-description = "Target time to resolve the ticket, in minutes"
-class = "none"
-kind = "number"
-required = true
-[model.field.ui]
-display = "duration_minutes"
-aggregate = "none"
+  [[model.field]]
+  name = "resolution_minutes"
+  description = "Target time to resolve the ticket, in minutes"
+  class = "none"
+  kind = "number"
+  required = true
+  [model.field.ui]
+  display = "duration_minutes"
+  aggregate = "none"
 
-[[model.field]]
-name = "active"
-description = "Whether the policy can be attached to new tickets"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "active"
+  description = "Whether the policy can be attached to new tickets"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "helpdesk_ticket"
@@ -77,218 +77,218 @@ description = "A customer support request"
 read_group = "helpdesk.agent"
 write_group = "helpdesk.agent"
 
-[model.ui]
-title = "{subject}"
-subtitle = "{number} · {requester_name} | {number} · {requester_email} | {number}"
-list = ["number", "subject", "requester_name", "assignee", "priority", "due_on", "state"]
-card = ["number", "subject", "requester_name", "assignee", "due_on", "priority"]
-quick_create = ["subject", "requester_name", "priority"]
-order = "opened_on desc, number desc"
-default_view = "kanban"
-menu = "main"
-menu_order = 1
-calendar = { start = "due_on", color = "priority" }
-report = { rows = "category", cols = "state" }
+  [model.ui]
+  title = "{subject}"
+  subtitle = "{number} · {requester_name} | {number} · {requester_email} | {number}"
+  list = ["number", "subject", "requester_name", "assignee", "priority", "due_on", "state"]
+  card = ["number", "subject", "requester_name", "assignee", "due_on", "priority"]
+  quick_create = ["subject", "requester_name", "priority"]
+  order = "opened_on desc, number desc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "due_on", color = "priority" }
+  report = { rows = "category", cols = "state" }
 
-[[model.ui.section]]
-label = "Request"
-fields = ["subject", "description", "category", "priority", "severity"]
+  [[model.ui.section]]
+  label = "Request"
+  fields = ["subject", "description", "category", "priority", "severity"]
 
-[[model.ui.section]]
-label = "Requester"
-fields = ["requester_name", "requester_email"]
+  [[model.ui.section]]
+  label = "Requester"
+  fields = ["requester_name", "requester_email"]
 
-[[model.ui.section]]
-label = "Handling"
-fields = ["assignee", "sla_id", "opened_on", "first_response_on", "due_on"]
+  [[model.ui.section]]
+  label = "Handling"
+  fields = ["assignee", "sla_id", "opened_on", "first_response_on", "due_on"]
 
-[[model.ui.section]]
-label = "Resolution"
-fields = ["resolution", "resolved_on"]
-show_in = ["in_progress", "resolved", "closed"]
+  [[model.ui.section]]
+  label = "Resolution"
+  fields = ["resolution", "resolved_on"]
+  show_in = ["in_progress", "resolved", "closed"]
 
-[[model.ui.filter]]
-label = "Not closed"
-where = "state != closed"
+  [[model.ui.filter]]
+  label = "Not closed"
+  where = "state != closed"
 
-[[model.ui.filter]]
-label = "Unassigned"
-where = "assignee = null && state != closed"
+  [[model.ui.filter]]
+  label = "Unassigned"
+  where = "assignee = null && state != closed"
 
-[[model.ui.filter]]
-label = "Mine"
-where = "assignee = $user"
+  [[model.ui.filter]]
+  label = "Mine"
+  where = "assignee = $user"
 
-[[model.ui.filter]]
-label = "Overdue"
-where = "due_on != null && due_on < today && state != resolved && state != closed"
+  [[model.ui.filter]]
+  label = "Overdue"
+  where = "due_on != null && due_on < today && state != resolved && state != closed"
 
-[model.guard]
-immutable_when = ["closed"]
-message = "A closed ticket cannot be changed. Open a new ticket if the problem comes back."
+  [model.guard]
+  immutable_when = ["closed"]
+  message = "A closed ticket cannot be changed. Open a new ticket if the problem comes back."
 
-[[model.field]]
-name = "number"
-description = "Ticket number such as TCK-00042, assigned when the ticket is created"
-class = "none"
-kind = "sequence"
-format = "TCK-{seq:05}"
+  [[model.field]]
+  name = "number"
+  description = "Ticket number such as TCK-00042, assigned when the ticket is created"
+  class = "none"
+  kind = "sequence"
+  format = "TCK-{seq:05}"
 
-[[model.field]]
-name = "subject"
-description = "One-line summary of the problem"
-class = "none"
-required = true
+  [[model.field]]
+  name = "subject"
+  description = "One-line summary of the problem"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "description"
-description = "Full description of the problem and what the customer tried"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "description"
+  description = "Full description of the problem and what the customer tried"
+  class = "none"
+  kind = "longtext"
 
-[[model.field]]
-name = "requester_name"
-description = "Name of the person asking for help"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "requester_name"
+  description = "Name of the person asking for help"
+  class = "internal"
+  personal_data = true
 
-[[model.field]]
-name = "requester_email"
-description = "Email address of the person asking for help"
-class = "internal"
-personal_data = true
-[model.field.ui]
-display = "email"
+  [[model.field]]
+  name = "requester_email"
+  description = "Email address of the person asking for help"
+  class = "internal"
+  personal_data = true
+  [model.field.ui]
+  display = "email"
 
-[[model.field]]
-name = "category"
-description = "What kind of request it is: question, incident, problem, feature_request"
-class = "none"
-kind = "select"
-options = ["question", "incident", "problem", "feature_request"]
+  [[model.field]]
+  name = "category"
+  description = "What kind of request it is: question, incident, problem, feature_request"
+  class = "none"
+  kind = "select"
+  options = ["question", "incident", "problem", "feature_request"]
 
-[[model.field]]
-name = "priority"
-description = "How soon it should be handled: low, normal, high, urgent"
-class = "none"
-kind = "select"
-options = ["low", "normal", "high", "urgent"]
-default = "normal"
-[model.field.ui]
-tones = { low = "neutral", normal = "neutral", high = "warn", urgent = "bad" }
+  [[model.field]]
+  name = "priority"
+  description = "How soon it should be handled: low, normal, high, urgent"
+  class = "none"
+  kind = "select"
+  options = ["low", "normal", "high", "urgent"]
+  default = "normal"
+  [model.field.ui]
+  tones = { low = "neutral", normal = "neutral", high = "warn", urgent = "bad" }
 
-[[model.field]]
-name = "severity"
-description = "How badly the customer is affected: minor, major, critical"
-class = "none"
-kind = "select"
-options = ["minor", "major", "critical"]
-[model.field.ui]
-tones = { minor = "neutral", major = "warn", critical = "bad" }
+  [[model.field]]
+  name = "severity"
+  description = "How badly the customer is affected: minor, major, critical"
+  class = "none"
+  kind = "select"
+  options = ["minor", "major", "critical"]
+  [model.field.ui]
+  tones = { minor = "neutral", major = "warn", critical = "bad" }
 
-[[model.field]]
-name = "assignee"
-description = "Name of the agent working on the ticket; taking the ticket fills in who took it when it is empty"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "assignee"
+  description = "Name of the agent working on the ticket; taking the ticket fills in who took it when it is empty"
+  class = "internal"
+  personal_data = true
 
-[[model.field]]
-name = "sla_id"
-description = "Service-level policy the ticket is measured against"
-class = "none"
-kind = "ref"
-to = "helpdesk_sla"
+  [[model.field]]
+  name = "sla_id"
+  description = "Service-level policy the ticket is measured against"
+  class = "none"
+  kind = "ref"
+  to = "helpdesk_sla"
 
-[[model.field]]
-name = "opened_on"
-description = "Date the ticket was received (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-default = "today"
+  [[model.field]]
+  name = "opened_on"
+  description = "Date the ticket was received (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  default = "today"
 
-[[model.field]]
-name = "first_response_on"
-description = "Date of the first reply to the customer (YYYY-MM-DD)"
-class = "none"
-kind = "date"
+  [[model.field]]
+  name = "first_response_on"
+  description = "Date of the first reply to the customer (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
 
-[[model.field]]
-name = "due_on"
-description = "Date by which it should be solved under the policy (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-[model.field.ui]
-warn_before_days = 2
+  [[model.field]]
+  name = "due_on"
+  description = "Date by which it should be solved under the policy (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  [model.field.ui]
+  warn_before_days = 2
 
-[[model.field]]
-name = "resolved_on"
-description = "Date the problem was solved (YYYY-MM-DD); resolving sets it to today when it is empty"
-class = "none"
-kind = "date"
+  [[model.field]]
+  name = "resolved_on"
+  description = "Date the problem was solved (YYYY-MM-DD); resolving sets it to today when it is empty"
+  class = "none"
+  kind = "date"
 
-[[model.field]]
-name = "resolution"
-description = "How the problem was solved"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "resolution"
+  description = "How the problem was solved"
+  class = "none"
+  kind = "longtext"
 
-[[model.field]]
-name = "state"
-description = "Ticket status: open, in_progress, resolved, closed"
-class = "none"
-kind = "select"
-options = ["open", "in_progress", "resolved", "closed"]
-required = true
-[model.field.ui]
-tones = { open = "info", in_progress = "warn", resolved = "ok", closed = "neutral" }
+  [[model.field]]
+  name = "state"
+  description = "Ticket status: open, in_progress, resolved, closed"
+  class = "none"
+  kind = "select"
+  options = ["open", "in_progress", "resolved", "closed"]
+  required = true
+  [model.field.ui]
+  tones = { open = "info", in_progress = "warn", resolved = "ok", closed = "neutral" }
 
-[[model.action]]
-name = "take"
-description = "Start working on an open ticket"
-field = "state"
-from = "open"
-to = "in_progress"
-[model.action.ui]
-primary = true
-done = "Ticket taken"
+  [[model.action]]
+  name = "take"
+  description = "Start working on an open ticket"
+  field = "state"
+  from = "open"
+  to = "in_progress"
+  [model.action.ui]
+  primary = true
+  done = "Ticket taken"
 
-[[model.action.effect]]
-kind = "set"
-set = { assignee = "$caller" }
-when = "!is_set(assignee)"
+    [[model.action.effect]]
+    kind = "set"
+    set = { assignee = "$caller" }
+    when = "!is_set(assignee)"
 
-[[model.action]]
-name = "resolve"
-description = "Mark a ticket in progress as resolved"
-field = "state"
-from = "in_progress"
-to = "resolved"
-[model.action.ui]
-primary = true
-done = "Ticket resolved"
-needs = ["resolution"]
+  [[model.action]]
+  name = "resolve"
+  description = "Mark a ticket in progress as resolved"
+  field = "state"
+  from = "in_progress"
+  to = "resolved"
+  [model.action.ui]
+  primary = true
+  done = "Ticket resolved"
+  needs = ["resolution"]
 
-[[model.action.effect]]
-kind = "set"
-set = { resolved_on = "$today" }
-when = "!is_set(resolved_on)"
+    [[model.action.effect]]
+    kind = "set"
+    set = { resolved_on = "$today" }
+    when = "!is_set(resolved_on)"
 
-[[model.action]]
-name = "close"
-description = "Close a resolved ticket for good (manager only)"
-field = "state"
-from = "resolved"
-to = "closed"
-group = "helpdesk.manager"
-approval = true
-[model.action.ui]
-primary = true
-confirm = "Close this ticket for good? A closed ticket can no longer be changed."
-done = "Ticket closed"
+  [[model.action]]
+  name = "close"
+  description = "Close a resolved ticket for good (manager only)"
+  field = "state"
+  from = "resolved"
+  to = "closed"
+  group = "helpdesk.manager"
+  approval = true
+  [model.action.ui]
+  primary = true
+  confirm = "Close this ticket for good? A closed ticket can no longer be changed."
+  done = "Ticket closed"
 
-[[model.action]]
-name = "reopen"
-description = "Reopen a resolved ticket when the problem came back"
-field = "state"
-from = "resolved"
-to = "open"
+  [[model.action]]
+  name = "reopen"
+  description = "Reopen a resolved ticket when the problem came back"
+  field = "state"
+  from = "resolved"
+  to = "open"

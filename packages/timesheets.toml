@@ -24,134 +24,134 @@ description = "Time one person spent on one task on one day"
 read_group = "timesheets.user"
 write_group = "timesheets.user"
 
-[model.ui]
-title = "{task_id} · {worked_on}"
-subtitle = "{description}"
-list = ["worked_on", "task_id", "worker", "description", "minutes", "billable", "state"]
-card = ["task_id", "worker", "worked_on", "minutes", "billable"]
-card_sum = "minutes"
-quick_create = ["task_id", "minutes", "description"]
-order = "worked_on desc"
-default_view = "grid"
-menu = "main"
-menu_order = 1
-calendar = { start = "worked_on", color = "task_id" }
-report = { rows = "task_id", cols = "worker", measure = "minutes" }
+  [model.ui]
+  title = "{task_id} · {worked_on}"
+  subtitle = "{description}"
+  list = ["worked_on", "task_id", "worker", "description", "minutes", "billable", "state"]
+  card = ["task_id", "worker", "worked_on", "minutes", "billable"]
+  card_sum = "minutes"
+  quick_create = ["task_id", "minutes", "description"]
+  order = "worked_on desc"
+  default_view = "grid"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "worked_on", color = "task_id" }
+  report = { rows = "task_id", cols = "worker", measure = "minutes" }
 
-[[model.ui.filter]]
-label = "Mine"
-where = "worker = $user"
+  [[model.ui.filter]]
+  label = "Mine"
+  where = "worker = $user"
 
-[[model.ui.filter]]
-label = "To approve"
-where = "state = submitted"
+  [[model.ui.filter]]
+  label = "To approve"
+  where = "state = submitted"
 
-[model.guard]
-immutable_when = ["approved"]
-message = "An approved time entry cannot be changed. Ask a manager to record a correcting entry."
+  [model.guard]
+  immutable_when = ["approved"]
+  message = "An approved time entry cannot be changed. Ask a manager to record a correcting entry."
 
-[model.access]
-own = "worker"
-see_all_group = "timesheets.manager"
+  [model.access]
+  own = "worker"
+  see_all_group = "timesheets.manager"
 
-[[model.field]]
-name = "task_id"
-description = "The task worked on"
-class = "none"
-kind = "ref"
-to = "projects_task"
-required = true
+  [[model.field]]
+  name = "task_id"
+  description = "The task worked on"
+  class = "none"
+  kind = "ref"
+  to = "projects_task"
+  required = true
 
-[[model.field]]
-name = "worker"
-description = "User name of the person who did the work; the person who creates the entry unless set otherwise"
-class = "internal"
-personal_data = true
-required = true
-default = "$user"
+  [[model.field]]
+  name = "worker"
+  description = "User name of the person who did the work; the person who creates the entry unless set otherwise"
+  class = "internal"
+  personal_data = true
+  required = true
+  default = "$user"
 
-[[model.field]]
-name = "worked_on"
-description = "Day the work was done (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-default = "today"
+  [[model.field]]
+  name = "worked_on"
+  description = "Day the work was done (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  default = "today"
 
-[[model.field]]
-name = "minutes"
-description = "Time spent, in minutes"
-class = "none"
-kind = "number"
-required = true
-min = 0
-max = 1440
-[model.field.ui]
-display = "duration_minutes"
-aggregate = "sum"
+  [[model.field]]
+  name = "minutes"
+  description = "Time spent, in minutes"
+  class = "none"
+  kind = "number"
+  required = true
+  min = 0
+  max = 1440
+  [model.field.ui]
+  display = "duration_minutes"
+  aggregate = "sum"
 
-[[model.field]]
-name = "billable"
-description = "Whether the time can be charged to the customer"
-class = "none"
-kind = "bool"
+  [[model.field]]
+  name = "billable"
+  description = "Whether the time can be charged to the customer"
+  class = "none"
+  kind = "bool"
 
-[[model.field]]
-name = "description"
-description = "What was done"
-class = "none"
+  [[model.field]]
+  name = "description"
+  description = "What was done"
+  class = "none"
 
-[[model.field]]
-name = "cost_rate"
-description = "Internal hourly cost of the worker at the time of entry (minor currency units, e.g. cents)"
-class = "financial"
-personal_data = true
-kind = "money"
-group = "timesheets.cost_viewer"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "cost_rate"
+  description = "Internal hourly cost of the worker at the time of entry (minor currency units, e.g. cents)"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  group = "timesheets.cost_viewer"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "state"
-description = "Entry status: draft, submitted, approved"
-class = "none"
-kind = "select"
-options = ["draft", "submitted", "approved"]
-required = true
-[model.field.ui]
-tones = { draft = "info", submitted = "warn", approved = "ok" }
+  [[model.field]]
+  name = "state"
+  description = "Entry status: draft, submitted, approved"
+  class = "none"
+  kind = "select"
+  options = ["draft", "submitted", "approved"]
+  required = true
+  [model.field.ui]
+  tones = { draft = "info", submitted = "warn", approved = "ok" }
 
-[[model.action]]
-name = "submit"
-description = "Submit the entry for approval"
-field = "state"
-from = "draft"
-to = "submitted"
-[model.action.ui]
-primary = true
-done = "Submitted for approval"
+  [[model.action]]
+  name = "submit"
+  description = "Submit the entry for approval"
+  field = "state"
+  from = "draft"
+  to = "submitted"
+  [model.action.ui]
+  primary = true
+  done = "Submitted for approval"
 
-[[model.action]]
-name = "approve"
-description = "Approve a submitted entry (manager only)"
-field = "state"
-from = "submitted"
-to = "approved"
-group = "timesheets.manager"
-approval = true
-[model.action.ui]
-primary = true
-confirm = "Approve this time entry? It can no longer be changed afterwards."
-done = "Approved"
+  [[model.action]]
+  name = "approve"
+  description = "Approve a submitted entry (manager only)"
+  field = "state"
+  from = "submitted"
+  to = "approved"
+  group = "timesheets.manager"
+  approval = true
+  [model.action.ui]
+  primary = true
+  confirm = "Approve this time entry? It can no longer be changed afterwards."
+  done = "Approved"
 
-[[model.action]]
-name = "reject"
-description = "Send a submitted entry back to draft (manager only)"
-field = "state"
-from = "submitted"
-to = "draft"
-group = "timesheets.manager"
-approval = true
-[model.action.ui]
-danger = true
-done = "Sent back to draft"
+  [[model.action]]
+  name = "reject"
+  description = "Send a submitted entry back to draft (manager only)"
+  field = "state"
+  from = "submitted"
+  to = "draft"
+  group = "timesheets.manager"
+  approval = true
+  [model.action.ui]
+  danger = true
+  done = "Sent back to draft"

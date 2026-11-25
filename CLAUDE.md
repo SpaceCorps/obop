@@ -18,7 +18,6 @@ The owner's rulings of 2026-10-01 (OR-1 to OR-21), 2026-10-27 (OR-22 to OR-34), 
   3. the mobile toolchain of React Native (Expo) apps (the owner said "with the mobile-toolchain exception"; these conditions are its recorded form): Metro, the Expo CLI, Gradle and Xcode cannot be run by Vite+, so they are started through `vp env exec` or `vp run` tasks. pnpm stays the only package manager, and `vp check`, `vp test` and `vp build` still cover every shared TypeScript package.
 
   There are no other exceptions. In particular `pnpm licenses list` is not one (OR-9; Q33 is answered); read licence fields from the SBOM or go through `vp`.
-
 - **Native apps** (RATIFIED, OR-36; D87): every native app we build, the Mileage app included, works on both Android and iOS. They are React Native (Expo) apps (OR-34) built with `expo prebuild`; the iOS build runs in Xcode on a Mac (the owner has a Mac mini connected to the same network). The ruling gives no agent an Apple or Google account, a store listing or a publication (Q37 is unchanged).
 - **Pin policy** (RATIFIED, D23, I-3, OR-8): "latest" means the newest release that has passed a cooldown of 7 to 14 days, or its `x.y.1` patch. The toolchain therefore intentionally runs up to about three weeks behind the newest release. Pins are exact; the pnpm major is 12.x (OR-28; `package.json` pins `pnpm@12.6.0`). Adopting Rust 1.99.x follows mechanically from this policy and needs no separate ruling. See `docs/DECISIONS.md` section 1.1.
 

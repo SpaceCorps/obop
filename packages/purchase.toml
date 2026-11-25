@@ -26,60 +26,60 @@ description = "Purchasing terms for a contact you buy from"
 read_group = "purchase.user"
 write_group = "purchase.manager"
 
-[model.ui]
-title = "{party_id}"
-subtitle = "{vendor_reference}"
-list = ["party_id", "vendor_reference", "payment_terms_days", "lead_time_days", "active"]
-quick_create = ["party_id", "vendor_reference"]
-default_view = "list"
-menu = "main"
-menu_order = 2
+  [model.ui]
+  title = "{party_id}"
+  subtitle = "{vendor_reference}"
+  list = ["party_id", "vendor_reference", "payment_terms_days", "lead_time_days", "active"]
+  quick_create = ["party_id", "vendor_reference"]
+  default_view = "list"
+  menu = "main"
+  menu_order = 2
 
-[[model.field]]
-name = "party_id"
-description = "The contact record of the vendor"
-class = "none"
-kind = "ref"
-to = "party"
-required = true
+  [[model.field]]
+  name = "party_id"
+  description = "The contact record of the vendor"
+  class = "none"
+  kind = "ref"
+  to = "party"
+  required = true
 
-[[model.field]]
-name = "vendor_reference"
-description = "Your customer number at this vendor"
-class = "none"
+  [[model.field]]
+  name = "vendor_reference"
+  description = "Your customer number at this vendor"
+  class = "none"
 
-[[model.field]]
-name = "payment_terms_days"
-description = "Days allowed to pay an invoice"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "payment_terms_days"
+  description = "Days allowed to pay an invoice"
+  class = "none"
+  kind = "number"
 
-[model.field.ui]
-aggregate = "none"
+    [model.field.ui]
+    aggregate = "none"
 
-[[model.field]]
-name = "lead_time_days"
-description = "Usual days between order and delivery"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "lead_time_days"
+  description = "Usual days between order and delivery"
+  class = "none"
+  kind = "number"
 
-[model.field.ui]
-aggregate = "none"
+    [model.field.ui]
+    aggregate = "none"
 
-[[model.field]]
-name = "iban"
-description = "Bank account the vendor is paid into"
-class = "financial"
-personal_data = true
-group = "purchase.manager"
-pattern = "iban"
+  [[model.field]]
+  name = "iban"
+  description = "Bank account the vendor is paid into"
+  class = "financial"
+  personal_data = true
+  group = "purchase.manager"
+  pattern = "iban"
 
-[[model.field]]
-name = "active"
-description = "Whether you still buy from this vendor"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "active"
+  description = "Whether you still buy from this vendor"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "purchase_order"
@@ -87,175 +87,175 @@ description = "A request to a vendor to supply goods or services"
 read_group = "purchase.user"
 write_group = "purchase.user"
 
-[model.ui]
-title = "{number}"
-subtitle = "{vendor_id} · {ordered_on} | {vendor_id}"
-list = ["number", "vendor_id", "reference", "ordered_on", "expected_on", "total", "state"]
-card = ["number", "vendor_id", "expected_on", "total"]
-card_sum = "total"
-quick_create = ["vendor_id", "expected_on"]
-order = "number desc"
-default_view = "list"
-menu = "main"
-menu_order = 1
-calendar = { start = "expected_on", color = "state" }
-report = { rows = "vendor_id", cols = "state", measure = "total" }
+  [model.ui]
+  title = "{number}"
+  subtitle = "{vendor_id} · {ordered_on} | {vendor_id}"
+  list = ["number", "vendor_id", "reference", "ordered_on", "expected_on", "total", "state"]
+  card = ["number", "vendor_id", "expected_on", "total"]
+  card_sum = "total"
+  quick_create = ["vendor_id", "expected_on"]
+  order = "number desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "expected_on", color = "state" }
+  report = { rows = "vendor_id", cols = "state", measure = "total" }
 
-[[model.child]]
-model = "purchase_order_line"
-via = "order_id"
-shape = "lines"
+  [[model.child]]
+  model = "purchase_order_line"
+  via = "order_id"
+  shape = "lines"
 
-[[model.ui.filter]]
-label = "To send"
-where = "state = draft"
+  [[model.ui.filter]]
+  label = "To send"
+  where = "state = draft"
 
-[[model.ui.filter]]
-label = "To receive"
-where = "state = confirmed"
+  [[model.ui.filter]]
+  label = "To receive"
+  where = "state = confirmed"
 
-[[model.ui.filter]]
-label = "Late"
-where = "expected_on < today && state = confirmed"
+  [[model.ui.filter]]
+  label = "Late"
+  where = "expected_on < today && state = confirmed"
 
-[model.guard]
-immutable_when = ["received", "cancelled"]
-mutable_fields = ["notes"]
-message = "A received or cancelled order cannot be changed; only its notes can."
+  [model.guard]
+  immutable_when = ["received", "cancelled"]
+  mutable_fields = ["notes"]
+  message = "A received or cancelled order cannot be changed; only its notes can."
 
-[[model.field]]
-name = "number"
-description = "Purchase order number such as PO-00042, assigned when the order is created"
-class = "none"
-kind = "sequence"
-format = "PO-{seq:05}"
+  [[model.field]]
+  name = "number"
+  description = "Purchase order number such as PO-00042, assigned when the order is created"
+  class = "none"
+  kind = "sequence"
+  format = "PO-{seq:05}"
 
-[[model.field]]
-name = "reference"
-description = "The vendor's quote or reference number for this order, if any"
-class = "none"
+  [[model.field]]
+  name = "reference"
+  description = "The vendor's quote or reference number for this order, if any"
+  class = "none"
 
-[[model.field]]
-name = "vendor_id"
-description = "The vendor ordered from"
-class = "none"
-kind = "ref"
-to = "purchase_vendor"
-required = true
-ref_filter = "active = true"
+  [[model.field]]
+  name = "vendor_id"
+  description = "The vendor ordered from"
+  class = "none"
+  kind = "ref"
+  to = "purchase_vendor"
+  required = true
+  ref_filter = "active = true"
 
-[[model.field]]
-name = "ordered_on"
-description = "Date the order was placed (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-default = "today"
+  [[model.field]]
+  name = "ordered_on"
+  description = "Date the order was placed (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  default = "today"
 
-[[model.field]]
-name = "expected_on"
-description = "Date the goods are expected (YYYY-MM-DD)"
-class = "none"
-kind = "date"
+  [[model.field]]
+  name = "expected_on"
+  description = "Date the goods are expected (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
 
-[model.field.ui]
-warn_before_days = 3
+    [model.field.ui]
+    warn_before_days = 3
 
-[[model.field]]
-name = "currency"
-description = "ISO 4217 currency code, for example EUR"
-class = "none"
-default = "$instance.currency"
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code, for example EUR"
+  class = "none"
+  default = "$instance.currency"
 
-[[model.field]]
-name = "receive_location_id"
-description = "Where the goods are to be received; receiving the order creates the stock moves to this location"
-class = "none"
-kind = "ref"
-to = "inventory_location"
-ref_filter = "active = true"
+  [[model.field]]
+  name = "receive_location_id"
+  description = "Where the goods are to be received; receiving the order creates the stock moves to this location"
+  class = "none"
+  kind = "ref"
+  to = "inventory_location"
+  ref_filter = "active = true"
 
-[[model.field]]
-name = "total"
-description = "Order total: the sum of the line amounts (minor currency units, e.g. cents)"
-class = "none"
-kind = "money"
-computed = "sum(lines.amount)"
+  [[model.field]]
+  name = "total"
+  description = "Order total: the sum of the line amounts (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+  computed = "sum(lines.amount)"
 
-[model.field.ui]
-currency_from = "currency"
+    [model.field.ui]
+    currency_from = "currency"
 
-[[model.field]]
-name = "notes"
-description = "Delivery instructions and remarks for the vendor"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "notes"
+  description = "Delivery instructions and remarks for the vendor"
+  class = "none"
+  kind = "longtext"
 
-[[model.field]]
-name = "state"
-description = "Order status: draft, sent, confirmed, received, cancelled"
-class = "none"
-kind = "select"
-options = ["draft", "sent", "confirmed", "received", "cancelled"]
-required = true
+  [[model.field]]
+  name = "state"
+  description = "Order status: draft, sent, confirmed, received, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["draft", "sent", "confirmed", "received", "cancelled"]
+  required = true
 
-[model.field.ui]
-tones = { sent = "info", confirmed = "info", received = "ok", cancelled = "neutral" }
+    [model.field.ui]
+    tones = { sent = "info", confirmed = "info", received = "ok", cancelled = "neutral" }
 
-[[model.action]]
-name = "send"
-description = "Send a draft order to the vendor as a request for quotation"
-field = "state"
-from = "draft"
-to = "sent"
+  [[model.action]]
+  name = "send"
+  description = "Send a draft order to the vendor as a request for quotation"
+  field = "state"
+  from = "draft"
+  to = "sent"
 
-[model.action.ui]
-primary = true
-done = "Marked as sent"
+    [model.action.ui]
+    primary = true
+    done = "Marked as sent"
 
-[[model.action]]
-name = "confirm"
-description = "Commit to the order with the vendor (manager only)"
-field = "state"
-from = "sent"
-to = "confirmed"
-group = "purchase.manager"
-approval = true
+  [[model.action]]
+  name = "confirm"
+  description = "Commit to the order with the vendor (manager only)"
+  field = "state"
+  from = "sent"
+  to = "confirmed"
+  group = "purchase.manager"
+  approval = true
 
-[model.action.ui]
-primary = true
-confirm = "Confirm this order with the vendor?"
-done = "Order confirmed"
+    [model.action.ui]
+    primary = true
+    confirm = "Confirm this order with the vendor?"
+    done = "Order confirmed"
 
-[[model.action]]
-name = "receive"
-description = "Record that the goods arrived: a draft stock move per line is created at the receiving location for the warehouse to validate, for the received quantity of the line when one is given and else for the quantity ordered; the moves carry the order number as their source document (needs the inventory.user group)"
-field = "state"
-from = "confirmed"
-to = "received"
+  [[model.action]]
+  name = "receive"
+  description = "Record that the goods arrived: a draft stock move per line is created at the receiving location for the warehouse to validate, for the received quantity of the line when one is given and else for the quantity ordered; the moves carry the order number as their source document (needs the inventory.user group)"
+  field = "state"
+  from = "confirmed"
+  to = "received"
 
-[[model.action.effect]]
-kind = "create"
-model = "inventory_move"
-for_each = "lines"
-when = "is_set(receive_location_id)"
-map = { product_id = "$line.product_id", to_location_id = "$self.receive_location_id", quantity = "$line.receipt_quantity", scheduled_on = "$self.expected_on", kind = "receipt", origin = "$self.number" }
+    [[model.action.effect]]
+    kind = "create"
+    model = "inventory_move"
+    for_each = "lines"
+    when = "is_set(receive_location_id)"
+    map = { product_id = "$line.product_id", to_location_id = "$self.receive_location_id", quantity = "$line.receipt_quantity", scheduled_on = "$self.expected_on", kind = "receipt", origin = "$self.number" }
 
-[model.action.ui]
-primary = true
-confirm = "Receive the goods? With a receiving location set, a draft stock move is made for each line for the warehouse to validate, and the order can no longer be changed."
-done = "Order received"
+    [model.action.ui]
+    primary = true
+    confirm = "Receive the goods? With a receiving location set, a draft stock move is made for each line for the warehouse to validate, and the order can no longer be changed."
+    done = "Order received"
 
-[[model.action]]
-name = "cancel"
-description = "Cancel an order that was not yet sent"
-field = "state"
-from = "draft"
-to = "cancelled"
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel an order that was not yet sent"
+  field = "state"
+  from = "draft"
+  to = "cancelled"
 
-[model.action.ui]
-danger = true
-confirm = "Cancel this order?"
-done = "Order cancelled"
+    [model.action.ui]
+    danger = true
+    confirm = "Cancel this order?"
+    done = "Order cancelled"
 
 [[model]]
 name = "purchase_order_line"
@@ -263,89 +263,89 @@ description = "One product or service on a purchase order"
 read_group = "purchase.user"
 write_group = "purchase.user"
 
-[model.ui]
-title = "{product_id} × {quantity}"
-subtitle = "{order_id}"
-list = ["product_id", "description", "quantity", "received_quantity", "unit_price", "amount"]
-quick_create = ["product_id", "quantity", "unit_price"]
-default_view = "list"
-menu = "hidden"
+  [model.ui]
+  title = "{product_id} × {quantity}"
+  subtitle = "{order_id}"
+  list = ["product_id", "description", "quantity", "received_quantity", "unit_price", "amount"]
+  quick_create = ["product_id", "quantity", "unit_price"]
+  default_view = "list"
+  menu = "hidden"
 
-[model.guard]
-children_of = "order_id"
-message = "The lines of a received or cancelled order cannot be changed."
+  [model.guard]
+  children_of = "order_id"
+  message = "The lines of a received or cancelled order cannot be changed."
 
-[[model.field]]
-name = "order_id"
-description = "The order the line belongs to"
-class = "none"
-kind = "ref"
-to = "purchase_order"
-required = true
+  [[model.field]]
+  name = "order_id"
+  description = "The order the line belongs to"
+  class = "none"
+  kind = "ref"
+  to = "purchase_order"
+  required = true
 
-[[model.field]]
-name = "product_id"
-description = "The product ordered"
-class = "none"
-kind = "ref"
-to = "product"
-required = true
+  [[model.field]]
+  name = "product_id"
+  description = "The product ordered"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
 
-[[model.field]]
-name = "description"
-description = "Wording for the vendor if different from the product name"
-class = "none"
-fill_from = "product_id.name"
+  [[model.field]]
+  name = "description"
+  description = "Wording for the vendor if different from the product name"
+  class = "none"
+  fill_from = "product_id.name"
 
-[[model.field]]
-name = "quantity"
-description = "Units ordered"
-class = "none"
-kind = "number"
-required = true
-default = 1
+  [[model.field]]
+  name = "quantity"
+  description = "Units ordered"
+  class = "none"
+  kind = "number"
+  required = true
+  default = 1
 
-[[model.field]]
-name = "unit_price"
-description = "Agreed price per unit (minor currency units, e.g. cents)"
-class = "none"
-kind = "money"
-required = true
-fill_from = "product_id.cost_minor"
+  [[model.field]]
+  name = "unit_price"
+  description = "Agreed price per unit (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+  required = true
+  fill_from = "product_id.cost_minor"
 
-[model.field.ui]
-aggregate = "none"
-currency_from = "order_id.currency"
+    [model.field.ui]
+    aggregate = "none"
+    currency_from = "order_id.currency"
 
-[[model.field]]
-name = "amount"
-description = "Line amount: quantity times unit price (minor currency units)"
-class = "none"
-kind = "money"
-computed = "quantity * unit_price"
+  [[model.field]]
+  name = "amount"
+  description = "Line amount: quantity times unit price (minor currency units)"
+  class = "none"
+  kind = "money"
+  computed = "quantity * unit_price"
 
-[model.field.ui]
-currency_from = "order_id.currency"
+    [model.field.ui]
+    currency_from = "order_id.currency"
 
-[[model.field]]
-name = "received_quantity"
-description = "Units that arrived, when fewer or more than ordered; empty means the quantity ordered arrived. Set it before the order is received"
-class = "none"
-kind = "number"
-min = 0
+  [[model.field]]
+  name = "received_quantity"
+  description = "Units that arrived, when fewer or more than ordered; empty means the quantity ordered arrived. Set it before the order is received"
+  class = "none"
+  kind = "number"
+  min = 0
 
-[model.field.ui]
-aggregate = "none"
+    [model.field.ui]
+    aggregate = "none"
 
-[[model.field]]
-name = "receipt_quantity"
-description = "Units the receipt moves into stock: the received quantity when one is given, else the quantity ordered"
-class = "none"
-kind = "number"
-computed = "if(is_set(received_quantity), received_quantity, quantity)"
+  [[model.field]]
+  name = "receipt_quantity"
+  description = "Units the receipt moves into stock: the received quantity when one is given, else the quantity ordered"
+  class = "none"
+  kind = "number"
+  computed = "if(is_set(received_quantity), received_quantity, quantity)"
 
-[model.field.ui]
-hidden = true
+    [model.field.ui]
+    hidden = true
 
 [[migration]]
 from = "<0.3.1"

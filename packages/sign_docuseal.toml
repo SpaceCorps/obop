@@ -25,44 +25,44 @@ description = "One event DocuSeal reported about a signing request, written by t
 read_group = "sign_docuseal.user"
 write_group = "sign_docuseal.manager"
 
-[model.ui]
-title = "{event} · {completed_at} | {event}"
-subtitle = "{status}"
-list = ["event", "status", "request_ref", "completed_at", "submission_id"]
-default_view = "list"
-menu = "main"
-menu_order = 1
+  [model.ui]
+  title = "{event} · {completed_at} | {event}"
+  subtitle = "{status}"
+  list = ["event", "status", "request_ref", "completed_at", "submission_id"]
+  default_view = "list"
+  menu = "main"
+  menu_order = 1
 
-[[model.field]]
-name = "event"
-description = "DocuSeal's event type, for example form.completed, form.declined or submission.expired"
-class = "none"
-required = true
+  [[model.field]]
+  name = "event"
+  description = "DocuSeal's event type, for example form.completed, form.declined or submission.expired"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "request_ref"
-description = "The reference of the signature request the event is about, as the connector sent it (DocuSeal's external_id)"
-class = "none"
+  [[model.field]]
+  name = "request_ref"
+  description = "The reference of the signature request the event is about, as the connector sent it (DocuSeal's external_id)"
+  class = "none"
 
-[[model.field]]
-name = "submission_id"
-description = "DocuSeal's id of the submission, to find it in DocuSeal"
-class = "none"
+  [[model.field]]
+  name = "submission_id"
+  description = "DocuSeal's id of the submission, to find it in DocuSeal"
+  class = "none"
 
-[[model.field]]
-name = "status"
-description = "DocuSeal's status at that moment, for example completed or declined"
-class = "none"
+  [[model.field]]
+  name = "status"
+  description = "DocuSeal's status at that moment, for example completed or declined"
+  class = "none"
 
-[[model.field]]
-name = "document_url"
-description = "Address of the signed document on the DocuSeal server; opening it needs access to DocuSeal"
-class = "internal"
+  [[model.field]]
+  name = "document_url"
+  description = "Address of the signed document on the DocuSeal server; opening it needs access to DocuSeal"
+  class = "internal"
 
-[model.field.ui]
-display = "url"
+    [model.field.ui]
+    display = "url"
 
-[[model.field]]
-name = "completed_at"
-description = "When DocuSeal says the signer finished, as DocuSeal wrote it"
-class = "none"
+  [[model.field]]
+  name = "completed_at"
+  description = "When DocuSeal says the signer finished, as DocuSeal wrote it"
+  class = "none"

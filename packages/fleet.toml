@@ -21,151 +21,151 @@ description = "A vehicle the business operates"
 read_group = "fleet.user"
 write_group = "fleet.manager"
 
-[model.ui]
-title = "{plate}"
-subtitle = "{model}"
-list = ["plate", "model", "driver_id", "fuel", "odometer_km", "state"]
-card = ["plate", "model", "driver_id", "fuel", "odometer_km"]
-quick_create = ["plate", "model", "fuel"]
-order = "plate asc"
-default_view = "kanban"
-menu = "main"
-menu_order = 1
-report = { rows = "fuel", cols = "state" }
+  [model.ui]
+  title = "{plate}"
+  subtitle = "{model}"
+  list = ["plate", "model", "driver_id", "fuel", "odometer_km", "state"]
+  card = ["plate", "model", "driver_id", "fuel", "odometer_km"]
+  quick_create = ["plate", "model", "fuel"]
+  order = "plate asc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+  report = { rows = "fuel", cols = "state" }
 
-[[model.ui.filter]]
-label = "Available"
-where = "state = available"
+  [[model.ui.filter]]
+  label = "Available"
+  where = "state = available"
 
-[[model.ui.filter]]
-label = "In the workshop"
-where = "state = maintenance"
+  [[model.ui.filter]]
+  label = "In the workshop"
+  where = "state = maintenance"
 
-[[model.child]]
-model = "fleet_vehicle_service"
-via = "vehicle_id"
-shape = "list"
+  [[model.child]]
+  model = "fleet_vehicle_service"
+  via = "vehicle_id"
+  shape = "list"
 
-[[model.field]]
-name = "plate"
-description = "Registration plate"
-class = "none"
-required = true
+  [[model.field]]
+  name = "plate"
+  description = "Registration plate"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "model"
-description = "Make and model, for example Renault Master"
-class = "none"
+  [[model.field]]
+  name = "model"
+  description = "Make and model, for example Renault Master"
+  class = "none"
 
-[[model.field]]
-name = "vin"
-description = "Vehicle identification number (chassis number)"
-class = "none"
+  [[model.field]]
+  name = "vin"
+  description = "Vehicle identification number (chassis number)"
+  class = "none"
 
-[[model.field]]
-name = "fuel"
-description = "Fuel or drive type: petrol, diesel, hybrid, electric, other"
-class = "none"
-kind = "select"
-options = ["petrol", "diesel", "hybrid", "electric", "other"]
+  [[model.field]]
+  name = "fuel"
+  description = "Fuel or drive type: petrol, diesel, hybrid, electric, other"
+  class = "none"
+  kind = "select"
+  options = ["petrol", "diesel", "hybrid", "electric", "other"]
 
-[[model.field]]
-name = "odometer_km"
-description = "Last known odometer reading in kilometres"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "odometer_km"
+  description = "Last known odometer reading in kilometres"
+  class = "none"
+  kind = "number"
 
-[model.field.ui]
-aggregate = "none"
+    [model.field.ui]
+    aggregate = "none"
 
-[[model.field]]
-name = "acquired_on"
-description = "Date the vehicle entered the fleet (YYYY-MM-DD)"
-class = "none"
-kind = "date"
+  [[model.field]]
+  name = "acquired_on"
+  description = "Date the vehicle entered the fleet (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
 
-[[model.field]]
-name = "driver"
-description = "Name of the driver currently using the vehicle, as free text"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "driver"
+  description = "Name of the driver currently using the vehicle, as free text"
+  class = "internal"
+  personal_data = true
 
-[model.field.ui]
-hidden = true
+    [model.field.ui]
+    hidden = true
 
-[[model.field]]
-name = "driver_id"
-description = "Driver record currently assigned to the vehicle"
-class = "none"
-kind = "ref"
-to = "fleet_vehicle_driver"
+  [[model.field]]
+  name = "driver_id"
+  description = "Driver record currently assigned to the vehicle"
+  class = "none"
+  kind = "ref"
+  to = "fleet_vehicle_driver"
 
-[[model.field]]
-name = "state"
-description = "Availability: available, in_service, maintenance, retired"
-class = "none"
-kind = "select"
-options = ["available", "in_service", "maintenance", "retired"]
+  [[model.field]]
+  name = "state"
+  description = "Availability: available, in_service, maintenance, retired"
+  class = "none"
+  kind = "select"
+  options = ["available", "in_service", "maintenance", "retired"]
 
-[model.field.ui]
-tones = { available = "ok", in_service = "info", maintenance = "warn", retired = "neutral" }
+    [model.field.ui]
+    tones = { available = "ok", in_service = "info", maintenance = "warn", retired = "neutral" }
 
-[[model.action]]
-name = "dispatch"
-description = "Put an available vehicle in service"
-field = "state"
-from = "available"
-to = "in_service"
+  [[model.action]]
+  name = "dispatch"
+  description = "Put an available vehicle in service"
+  field = "state"
+  from = "available"
+  to = "in_service"
 
-[model.action.ui]
-primary = true
-done = "The vehicle is in service"
+    [model.action.ui]
+    primary = true
+    done = "The vehicle is in service"
 
-[[model.action]]
-name = "return_to_pool"
-description = "Return a vehicle in service to the available pool"
-field = "state"
-from = "in_service"
-to = "available"
+  [[model.action]]
+  name = "return_to_pool"
+  description = "Return a vehicle in service to the available pool"
+  field = "state"
+  from = "in_service"
+  to = "available"
 
-[model.action.ui]
-primary = true
-done = "The vehicle is back in the pool"
+    [model.action.ui]
+    primary = true
+    done = "The vehicle is back in the pool"
 
-[[model.action]]
-name = "retire"
-description = "Remove an available vehicle from the fleet for good (needs the approver)"
-field = "state"
-from = "available"
-to = "retired"
-group = "fleet.approver"
-approval = true
+  [[model.action]]
+  name = "retire"
+  description = "Remove an available vehicle from the fleet for good (needs the approver)"
+  field = "state"
+  from = "available"
+  to = "retired"
+  group = "fleet.approver"
+  approval = true
 
-[model.action.ui]
-danger = true
-confirm = "Retire this vehicle for good? No step brings it back."
-done = "The vehicle is retired"
+    [model.action.ui]
+    danger = true
+    confirm = "Retire this vehicle for good? No step brings it back."
+    done = "The vehicle is retired"
 
-[[model.action]]
-name = "send_to_workshop"
-description = "Send an available vehicle to the workshop for maintenance or repair"
-field = "state"
-from = "available"
-to = "maintenance"
+  [[model.action]]
+  name = "send_to_workshop"
+  description = "Send an available vehicle to the workshop for maintenance or repair"
+  field = "state"
+  from = "available"
+  to = "maintenance"
 
-[model.action.ui]
-done = "The vehicle is in the workshop"
+    [model.action.ui]
+    done = "The vehicle is in the workshop"
 
-[[model.action]]
-name = "back_in_service"
-description = "Return a vehicle from the workshop to the available pool"
-field = "state"
-from = "maintenance"
-to = "available"
+  [[model.action]]
+  name = "back_in_service"
+  description = "Return a vehicle from the workshop to the available pool"
+  field = "state"
+  from = "maintenance"
+  to = "available"
 
-[model.action.ui]
-primary = true
-done = "The vehicle is back in the pool"
+    [model.action.ui]
+    primary = true
+    done = "The vehicle is back in the pool"
 
 [[model]]
 name = "fleet_vehicle_driver"
@@ -173,92 +173,92 @@ description = "A driver on record, with licence details and an active or suspend
 read_group = "fleet.user"
 write_group = "fleet.manager"
 
-[model.ui]
-title = "{name}"
-subtitle = "{phone}"
-list = ["name", "phone", "licence_number", "licence_expiry", "state"]
-card = ["name", "phone", "licence_expiry"]
-quick_create = ["name", "phone"]
-order = "name asc"
-default_view = "list"
-menu = "main"
-menu_order = 2
+  [model.ui]
+  title = "{name}"
+  subtitle = "{phone}"
+  list = ["name", "phone", "licence_number", "licence_expiry", "state"]
+  card = ["name", "phone", "licence_expiry"]
+  quick_create = ["name", "phone"]
+  order = "name asc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 2
 
-[[model.ui.filter]]
-label = "Licence expiring"
-where = "state = active && licence_expiry != null && licence_expiry <= today+30"
+  [[model.ui.filter]]
+  label = "Licence expiring"
+  where = "state = active && licence_expiry != null && licence_expiry <= today+30"
 
-[[model.ui.filter]]
-label = "Suspended"
-where = "state = suspended"
+  [[model.ui.filter]]
+  label = "Suspended"
+  where = "state = suspended"
 
-[[model.field]]
-name = "name"
-description = "Full name of the driver"
-class = "public_directory"
-personal_data = true
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Full name of the driver"
+  class = "public_directory"
+  personal_data = true
+  required = true
 
-[[model.field]]
-name = "phone"
-description = "Work phone number of the driver"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "phone"
+  description = "Work phone number of the driver"
+  class = "internal"
+  personal_data = true
 
-[model.field.ui]
-display = "tel"
+    [model.field.ui]
+    display = "tel"
 
-[[model.field]]
-name = "licence_number"
-description = "Driving licence number"
-class = "confidential_hr"
-personal_data = true
-group = "fleet.manager"
+  [[model.field]]
+  name = "licence_number"
+  description = "Driving licence number"
+  class = "confidential_hr"
+  personal_data = true
+  group = "fleet.manager"
 
-[[model.field]]
-name = "licence_expiry"
-description = "Date the driving licence expires (YYYY-MM-DD)"
-class = "confidential_hr"
-personal_data = true
-kind = "date"
-group = "fleet.manager"
+  [[model.field]]
+  name = "licence_expiry"
+  description = "Date the driving licence expires (YYYY-MM-DD)"
+  class = "confidential_hr"
+  personal_data = true
+  kind = "date"
+  group = "fleet.manager"
 
-[model.field.ui]
-warn_before_days = 30
+    [model.field.ui]
+    warn_before_days = 30
 
-[[model.field]]
-name = "state"
-description = "Driver status: active, suspended"
-class = "none"
-kind = "select"
-options = ["active", "suspended"]
-required = true
+  [[model.field]]
+  name = "state"
+  description = "Driver status: active, suspended"
+  class = "none"
+  kind = "select"
+  options = ["active", "suspended"]
+  required = true
 
-[model.field.ui]
-tones = { active = "info", suspended = "bad" }
+    [model.field.ui]
+    tones = { active = "info", suspended = "bad" }
 
-[[model.action]]
-name = "suspend"
-description = "Mark a driver as suspended, for example after an expired licence"
-field = "state"
-from = "active"
-to = "suspended"
+  [[model.action]]
+  name = "suspend"
+  description = "Mark a driver as suspended, for example after an expired licence"
+  field = "state"
+  from = "active"
+  to = "suspended"
 
-[model.action.ui]
-danger = true
-confirm = "Suspend this driver?"
-done = "The driver is suspended"
+    [model.action.ui]
+    danger = true
+    confirm = "Suspend this driver?"
+    done = "The driver is suspended"
 
-[[model.action]]
-name = "reactivate"
-description = "Set a suspended driver back to active"
-field = "state"
-from = "suspended"
-to = "active"
+  [[model.action]]
+  name = "reactivate"
+  description = "Set a suspended driver back to active"
+  field = "state"
+  from = "suspended"
+  to = "active"
 
-[model.action.ui]
-primary = true
-done = "The driver is active again"
+    [model.action.ui]
+    primary = true
+    done = "The driver is active again"
 
 [[model]]
 name = "fleet_vehicle_service"
@@ -266,112 +266,112 @@ description = "A maintenance, repair or inspection job on a vehicle"
 read_group = "fleet.user"
 write_group = "fleet.user"
 
-[model.ui]
-title = "{vehicle_id} · {kind} · {service_on} | {vehicle_id} · {service_on} | {vehicle_id}"
-subtitle = "{workshop}"
-list = ["vehicle_id", "kind", "service_on", "workshop", "cost", "state"]
-card = ["vehicle_id", "kind", "service_on", "cost"]
-card_sum = "cost"
-quick_create = ["vehicle_id", "kind", "service_on"]
-order = "service_on desc"
-default_view = "list"
-menu = "main"
-menu_order = 3
-calendar = { start = "service_on", color = "state" }
-report = { rows = "vehicle_id", cols = "kind", measure = "cost" }
+  [model.ui]
+  title = "{vehicle_id} · {kind} · {service_on} | {vehicle_id} · {service_on} | {vehicle_id}"
+  subtitle = "{workshop}"
+  list = ["vehicle_id", "kind", "service_on", "workshop", "cost", "state"]
+  card = ["vehicle_id", "kind", "service_on", "cost"]
+  card_sum = "cost"
+  quick_create = ["vehicle_id", "kind", "service_on"]
+  order = "service_on desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 3
+  calendar = { start = "service_on", color = "state" }
+  report = { rows = "vehicle_id", cols = "kind", measure = "cost" }
 
-[[model.ui.filter]]
-label = "Planned"
-where = "state = planned"
+  [[model.ui.filter]]
+  label = "Planned"
+  where = "state = planned"
 
-[[model.ui.filter]]
-label = "Done"
-where = "state = done"
+  [[model.ui.filter]]
+  label = "Done"
+  where = "state = done"
 
-[[model.field]]
-name = "vehicle_id"
-description = "The vehicle serviced"
-class = "none"
-kind = "ref"
-to = "fleet_vehicle"
-required = true
+  [[model.field]]
+  name = "vehicle_id"
+  description = "The vehicle serviced"
+  class = "none"
+  kind = "ref"
+  to = "fleet_vehicle"
+  required = true
 
-[[model.field]]
-name = "kind"
-description = "Type of job: maintenance, repair, inspection, tyres, other"
-class = "none"
-kind = "select"
-options = ["maintenance", "repair", "inspection", "tyres", "other"]
-required = true
+  [[model.field]]
+  name = "kind"
+  description = "Type of job: maintenance, repair, inspection, tyres, other"
+  class = "none"
+  kind = "select"
+  options = ["maintenance", "repair", "inspection", "tyres", "other"]
+  required = true
 
-[[model.field]]
-name = "service_on"
-description = "Date of the job (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-default = "today"
+  [[model.field]]
+  name = "service_on"
+  description = "Date of the job (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  default = "today"
 
-[[model.field]]
-name = "odometer_km"
-description = "Odometer reading in kilometres when serviced"
-class = "none"
-kind = "number"
-fill_from = "vehicle_id.odometer_km"
+  [[model.field]]
+  name = "odometer_km"
+  description = "Odometer reading in kilometres when serviced"
+  class = "none"
+  kind = "number"
+  fill_from = "vehicle_id.odometer_km"
 
-[model.field.ui]
-aggregate = "none"
+    [model.field.ui]
+    aggregate = "none"
 
-[[model.field]]
-name = "cost"
-description = "Total invoiced by the workshop (minor currency units, e.g. cents)"
-class = "none"
-kind = "money"
+  [[model.field]]
+  name = "cost"
+  description = "Total invoiced by the workshop (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
 
-[model.field.ui]
-aggregate = "sum"
+    [model.field.ui]
+    aggregate = "sum"
 
-[[model.field]]
-name = "workshop"
-description = "Name of the workshop or garage"
-class = "none"
+  [[model.field]]
+  name = "workshop"
+  description = "Name of the workshop or garage"
+  class = "none"
 
-[[model.field]]
-name = "notes"
-description = "What was done or found"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "notes"
+  description = "What was done or found"
+  class = "none"
+  kind = "longtext"
 
-[[model.field]]
-name = "state"
-description = "Job status: planned, done, cancelled"
-class = "none"
-kind = "select"
-options = ["planned", "done", "cancelled"]
-required = true
+  [[model.field]]
+  name = "state"
+  description = "Job status: planned, done, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["planned", "done", "cancelled"]
+  required = true
 
-[model.field.ui]
-tones = { planned = "info", done = "ok", cancelled = "neutral" }
+    [model.field.ui]
+    tones = { planned = "info", done = "ok", cancelled = "neutral" }
 
-[[model.action]]
-name = "complete"
-description = "Mark a planned job as done"
-field = "state"
-from = "planned"
-to = "done"
+  [[model.action]]
+  name = "complete"
+  description = "Mark a planned job as done"
+  field = "state"
+  from = "planned"
+  to = "done"
 
-[model.action.ui]
-primary = true
-done = "The service is done"
+    [model.action.ui]
+    primary = true
+    done = "The service is done"
 
-[[model.action]]
-name = "cancel"
-description = "Cancel a planned job"
-field = "state"
-from = "planned"
-to = "cancelled"
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a planned job"
+  field = "state"
+  from = "planned"
+  to = "cancelled"
 
-[model.action.ui]
-danger = true
-confirm = "Cancel this service?"
-done = "The service is cancelled"
+    [model.action.ui]
+    danger = true
+    confirm = "Cancel this service?"
+    done = "The service is cancelled"

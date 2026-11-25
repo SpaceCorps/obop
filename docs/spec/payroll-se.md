@@ -8,13 +8,13 @@ Source of the domain model: `crates/oas-server/src/payroll.rs` of open-accountin
 
 The package depends on `hr` (`^0.3`) and needs core 0.2.1 (field limits, D90). It records what a preparer types in and carries a person's approval; it computes nothing.
 
-| Model                       | Holds                                                                                                                                                              | OAS source                                          |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| `payroll_se_employee`       | A reference to `hr_employee`, personnummer, age class, tax basis (table, percent, adjustment), tax table and column, percentages in basis points, adjustment dates | table `employee` (name, identity, birth year)       |
-| `payroll_se_rate`           | Employer contribution rate in basis points per age class, valid from and to, review state, who verified and when, source                                           | table `payroll_rate` (key, value, source, verified) |
-| `payroll_se_pay_run`        | Period, pay date, computed totals (gross, tax, contribution, net), `rates_confirmed`, state draft, proposed, approved, paid                                        | table `pay_run`                                     |
-| `payroll_se_pay_run_line`   | Employee, gross, preliminary tax, age class, rate in basis points, rate row, employer contribution, computed net                                                   | table `pay_line`                                    |
-| `payroll_se_agi_submission` | Period, pay run, file reference, submitted date, receipt reference, state draft, prepared, recorded_submitted                                                      | none (OAS builds the XML on request)                |
+| Model | Holds | OAS source |
+|---|---|---|
+| `payroll_se_employee` | A reference to `hr_employee`, personnummer, age class, tax basis (table, percent, adjustment), tax table and column, percentages in basis points, adjustment dates | table `employee` (name, identity, birth year) |
+| `payroll_se_rate` | Employer contribution rate in basis points per age class, valid from and to, review state, who verified and when, source | table `payroll_rate` (key, value, source, verified) |
+| `payroll_se_pay_run` | Period, pay date, computed totals (gross, tax, contribution, net), `rates_confirmed`, state draft, proposed, approved, paid | table `pay_run` |
+| `payroll_se_pay_run_line` | Employee, gross, preliminary tax, age class, rate in basis points, rate row, employer contribution, computed net | table `pay_line` |
+| `payroll_se_agi_submission` | Period, pay run, file reference, submitted date, receipt reference, state draft, prepared, recorded_submitted | none (OAS builds the XML on request) |
 
 Money is in minor units (ore); rates are in basis points; there are no floats.
 
@@ -27,14 +27,14 @@ Money is in minor units (ore); rates are in basis points; there are no floats.
 
 ## 2. Data classes, masking, retention and erasure
 
-| Field                                                        | Class                            | Why                                                                                                                                               |
-| ------------------------------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `personnummer`                                               | `confidential_hr`, personal data | national id (CONVENTIONS section 5); masked for readers outside `payroll.preparer` and withheld from agents by D40/D41, no extra mechanism needed |
-| tax basis, table, column, percentages, adjustment dates      | `financial`, personal data       | tax withheld for a named person (money paid to a person)                                                                                          |
-| line gross, preliminary tax, net; run totals gross, tax, net | `financial`, personal data       | pay of named people; the totals are recomputable from the lines, so the gate requires them to carry personal data too                             |
-| employer contribution, run contribution total                | `financial`                      | money, but a figure that is not a pay amount of one person on the line (the total is a sum)                                                       |
-| `file_reference` of an AGI record                            | `financial`                      | refers to a file that carries personnummer                                                                                                        |
-| rate rows, age class labels, states, periods                 | `none`                           | not personal                                                                                                                                      |
+| Field | Class | Why |
+|---|---|---|
+| `personnummer` | `confidential_hr`, personal data | national id (CONVENTIONS section 5); masked for readers outside `payroll.preparer` and withheld from agents by D40/D41, no extra mechanism needed |
+| tax basis, table, column, percentages, adjustment dates | `financial`, personal data | tax withheld for a named person (money paid to a person) |
+| line gross, preliminary tax, net; run totals gross, tax, net | `financial`, personal data | pay of named people; the totals are recomputable from the lines, so the gate requires them to carry personal data too |
+| employer contribution, run contribution total | `financial` | money, but a figure that is not a pay amount of one person on the line (the total is a sum) |
+| `file_reference` of an AGI record | `financial` | refers to a file that carries personnummer |
+| rate rows, age class labels, states, periods | `none` | not personal |
 
 A value from which a protected value can be recomputed carries the strictest class of its inputs (D10); `personal_data` is set on every field the gate requires it on.
 

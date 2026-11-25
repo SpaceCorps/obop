@@ -21,41 +21,41 @@ description = "Something or someone that can be booked"
 read_group = "appointments.user"
 write_group = "appointments.manager"
 
-[model.ui]
-title = "{name}"
-list = ["name", "kind", "capacity", "active"]
-order = "name asc"
-default_view = "list"
-menu = "configuration"
+  [model.ui]
+  title = "{name}"
+  list = ["name", "kind", "capacity", "active"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
 
-[[model.field]]
-name = "name"
-description = "Name of the resource, for example Meeting room 2"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Name of the resource, for example Meeting room 2"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "kind"
-description = "What kind of resource it is: person, room, equipment"
-class = "none"
-kind = "select"
-options = ["person", "room", "equipment"]
-required = true
+  [[model.field]]
+  name = "kind"
+  description = "What kind of resource it is: person, room, equipment"
+  class = "none"
+  kind = "select"
+  options = ["person", "room", "equipment"]
+  required = true
 
-[[model.field]]
-name = "capacity"
-description = "How many people it can serve at once"
-class = "none"
-kind = "number"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "capacity"
+  description = "How many people it can serve at once"
+  class = "none"
+  kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "active"
-description = "Whether the resource can be booked"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "active"
+  description = "Whether the resource can be booked"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "appointments_appointment"
@@ -63,181 +63,179 @@ description = "A booking of a resource at a time"
 read_group = "appointments.user"
 write_group = "appointments.user"
 
-[model.ui]
-title = "{title}"
-subtitle = "{resource_id} · {attendee_name}"
-list = ["title", "resource_id", "day", "start_minute", "end_minute", "attendee_name", "state"]
-card = ["title", "resource_id", "attendee_name", "day", "start_minute", "end_minute"]
-quick_create = ["title", "resource_id", "attendee_name"]
-order = "day asc, start_minute asc"
-default_view = "calendar"
-menu = "main"
-menu_order = 1
-calendar = { start = "day", color = "resource_id" }
-report = { rows = "resource_id", cols = "state" }
+  [model.ui]
+  title = "{title}"
+  subtitle = "{resource_id} · {attendee_name}"
+  list = ["title", "resource_id", "day", "start_minute", "end_minute", "attendee_name", "state"]
+  card = ["title", "resource_id", "attendee_name", "day", "start_minute", "end_minute"]
+  quick_create = ["title", "resource_id", "attendee_name"]
+  order = "day asc, start_minute asc"
+  default_view = "calendar"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "day", color = "resource_id" }
+  report = { rows = "resource_id", cols = "state" }
 
-[[model.ui.section]]
-label = "Appointment"
-fields = ["title", "attendee_name", "attendee_email", "attendee_phone", "notes"]
+  [[model.ui.section]]
+  label = "Appointment"
+  fields = ["title", "attendee_name", "attendee_email", "attendee_phone", "notes"]
 
-[[model.ui.section]]
-label = "Resource and time"
-fields = ["resource_id", "day", "start_minute", "end_minute"]
+  [[model.ui.section]]
+  label = "Resource and time"
+  fields = ["resource_id", "day", "start_minute", "end_minute"]
 
-[[model.ui.filter]]
-label = "Today"
-where = "day = today"
+  [[model.ui.filter]]
+  label = "Today"
+  where = "day = today"
 
-[[model.ui.filter]]
-label = "Coming up"
-where = "day >= today && state != cancelled"
+  [[model.ui.filter]]
+  label = "Coming up"
+  where = "day >= today && state != cancelled"
 
-[model.guard]
-immutable_when = ["done", "cancelled", "no_show"]
-message = "A held, cancelled or missed appointment cannot be changed. Book a new one instead."
+  [model.guard]
+  immutable_when = ["done", "cancelled", "no_show"]
+  message = "A held, cancelled or missed appointment cannot be changed. Book a new one instead."
 
-[[model.rule]]
-key = "ends_after_start"
-expr = "end_minute >= start_minute"
-message = "The appointment ends before it starts: set an end time after the start"
+  [[model.rule]]
+  key = "ends_after_start"
+  expr = "end_minute >= start_minute"
+  message = "The appointment ends before it starts: set an end time after the start"
 
-[model.no_overlap]
-rule = "no_double_booking"
-key = ["resource_id", "day"]
-start = "start_minute"
-end = "end_minute"
-ignore_states = ["cancelled", "no_show"]
-capacity = "resource_id.capacity"
-message = "The resource is already booked at that time: pick another time or another resource"
+  [model.no_overlap]
+  rule = "no_double_booking"
+  key = ["resource_id", "day"]
+  start = "start_minute"
+  end = "end_minute"
+  ignore_states = ["cancelled", "no_show"]
+  capacity = "resource_id.capacity"
+  message = "The resource is already booked at that time: pick another time or another resource"
 
-[[model.field]]
-name = "resource_id"
-description = "The resource booked"
-class = "none"
-kind = "ref"
-to = "appointments_resource"
-required = true
-ref_filter = "active = true"
+  [[model.field]]
+  name = "resource_id"
+  description = "The resource booked"
+  class = "none"
+  kind = "ref"
+  to = "appointments_resource"
+  required = true
+  ref_filter = "active = true"
 
-[[model.field]]
-name = "title"
-description = "What the appointment is for"
-class = "none"
-required = true
+  [[model.field]]
+  name = "title"
+  description = "What the appointment is for"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "day"
-description = "Date of the appointment (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-default = "today"
+  [[model.field]]
+  name = "day"
+  description = "Date of the appointment (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  default = "today"
 
-[[model.field]]
-name = "start_minute"
-description = "Start time as minutes since midnight, for example 540 for 09:00"
-class = "none"
-kind = "number"
-required = true
-min = 0
-max = 1439
-[model.field.ui]
-display = "time_of_day"
-aggregate = "none"
+  [[model.field]]
+  name = "start_minute"
+  description = "Start time as minutes since midnight, for example 540 for 09:00"
+  class = "none"
+  kind = "number"
+  required = true
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
-[[model.field]]
-name = "end_minute"
-description = "End time as minutes since midnight, for example 600 for 10:00"
-class = "none"
-kind = "number"
-required = true
-min = 0
-max = 1440
-[model.field.ui]
-display = "time_of_day"
-aggregate = "none"
+  [[model.field]]
+  name = "end_minute"
+  description = "End time as minutes since midnight, for example 600 for 10:00"
+  class = "none"
+  kind = "number"
+  required = true
+  min = 0
+  max = 1440
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
-[[model.field]]
-name = "attendee_name"
-description = "Name of the person attending"
-class = "internal"
-personal_data = true
-required = true
+  [[model.field]]
+  name = "attendee_name"
+  description = "Name of the person attending"
+  class = "internal"
+  personal_data = true
+  required = true
 
-[[model.field]]
-name = "attendee_email"
-description = "Email address of the attendee"
-class = "internal"
-personal_data = true
-[model.field.ui]
-display = "email"
+  [[model.field]]
+  name = "attendee_email"
+  description = "Email address of the attendee"
+  class = "internal"
+  personal_data = true
+  [model.field.ui]
+  display = "email"
 
-[[model.field]]
-name = "attendee_phone"
-description = "Phone number of the attendee"
-class = "internal"
-personal_data = true
-[model.field.ui]
-display = "tel"
+  [[model.field]]
+  name = "attendee_phone"
+  description = "Phone number of the attendee"
+  class = "internal"
+  personal_data = true
+  [model.field.ui]
+  display = "tel"
 
-[[model.field]]
-name = "notes"
-description = "Anything the host should know beforehand"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "notes"
+  description = "Anything the host should know beforehand"
+  class = "none"
+  kind = "longtext"
 
-[[model.field]]
-name = "state"
-description = "Booking status: scheduled, confirmed, done, cancelled, no_show"
-class = "none"
-kind = "select"
-options = ["scheduled", "confirmed", "done", "cancelled", "no_show"]
-required = true
-[model.field.ui]
-tones = { scheduled = "info", confirmed = "warn", done = "ok", cancelled = "neutral", no_show = "bad" }
+  [[model.field]]
+  name = "state"
+  description = "Booking status: scheduled, confirmed, done, cancelled, no_show"
+  class = "none"
+  kind = "select"
+  options = ["scheduled", "confirmed", "done", "cancelled", "no_show"]
+  required = true
+  [model.field.ui]
+  tones = { scheduled = "info", confirmed = "warn", done = "ok", cancelled = "neutral", no_show = "bad" }
 
-[[model.action]]
-name = "confirm"
-description = "Confirm a scheduled appointment; it must not end before it starts"
-field = "state"
-from = "scheduled"
-to = "confirmed"
-assert = [
-  { expr = "end_minute >= start_minute", message = "The appointment ends before it starts: set an end time after the start", key = "ends_after_start" },
-]
-[model.action.ui]
-primary = true
-done = "Confirmed"
+  [[model.action]]
+  name = "confirm"
+  description = "Confirm a scheduled appointment; it must not end before it starts"
+  field = "state"
+  from = "scheduled"
+  to = "confirmed"
+  assert = [{ expr = "end_minute >= start_minute", message = "The appointment ends before it starts: set an end time after the start", key = "ends_after_start" }]
+  [model.action.ui]
+  primary = true
+  done = "Confirmed"
 
-[[model.action]]
-name = "complete"
-description = "Mark a confirmed appointment as held"
-field = "state"
-from = "confirmed"
-to = "done"
-[model.action.ui]
-primary = true
-done = "Marked as held"
+  [[model.action]]
+  name = "complete"
+  description = "Mark a confirmed appointment as held"
+  field = "state"
+  from = "confirmed"
+  to = "done"
+  [model.action.ui]
+  primary = true
+  done = "Marked as held"
 
-[[model.action]]
-name = "cancel"
-description = "Cancel a scheduled appointment"
-field = "state"
-from = "scheduled"
-to = "cancelled"
-[model.action.ui]
-danger = true
-confirm = "Cancel this appointment? It can no longer be changed afterwards."
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a scheduled appointment"
+  field = "state"
+  from = "scheduled"
+  to = "cancelled"
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this appointment? It can no longer be changed afterwards."
 
-[[model.action]]
-name = "mark_no_show"
-description = "Record that the attendee did not come"
-field = "state"
-from = "confirmed"
-to = "no_show"
-[model.action.ui]
-danger = true
-confirm = "Record that the attendee did not come?"
+  [[model.action]]
+  name = "mark_no_show"
+  description = "Record that the attendee did not come"
+  field = "state"
+  from = "confirmed"
+  to = "no_show"
+  [model.action.ui]
+  danger = true
+  confirm = "Record that the attendee did not come?"
 
 [[migration]]
 from = "<0.3.0"

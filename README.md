@@ -28,12 +28,12 @@ Honest limits: Odoo Community has 642 addon directories and obop starts with a f
 
 ## Tech stack (fixed by the owner)
 
-| Layer                | Rule                                                                                                                                                      |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend              | Latest stable Rust, adopted after a 7 to 14 day cooldown or its `x.y.1` patch                                                                             |
+| Layer | Rule |
+|---|---|
+| Backend | Latest stable Rust, adopted after a 7 to 14 day cooldown or its `x.y.1` patch |
 | Frontend and tooling | Latest Vite+, driven only through the `vp` CLI. Three named exceptions: the nightly exit drill, `pnpm sbom` and the mobile toolchain of React Native apps |
-| Package manager      | pnpm only. Never `npm`, `npx`, `yarn` or `bun`; only `pnpm-lock.yaml` is committed                                                                        |
-| Database             | PostgreSQL 17 and 18 (D8), one database per business; SQLite for local use (D44)                                                                          |
+| Package manager | pnpm only. Never `npm`, `npx`, `yarn` or `bun`; only `pnpm-lock.yaml` is committed |
+| Database | PostgreSQL 17 and 18 (D8), one database per business; SQLite for local use (D44) |
 
 Details and current versions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [CLAUDE.md](CLAUDE.md).
 
@@ -47,44 +47,44 @@ Apache-2.0 for the whole project ([LICENSE](LICENSE), [NOTICE](NOTICE)), with no
 
 ## Where to start
 
-| You are                             | Read                                                                                                                                 |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Anyone                              | [docs/PRODUCT.md](docs/PRODUCT.md), the master product description                                                                   |
-| The owner                           | [docs/DECISIONS.md](docs/DECISIONS.md): your rulings so far, every decision, and the questions still open                            |
-| An agent or script author           | [docs/spec/cli.md](docs/spec/cli.md), [docs/spec/ai.md](docs/spec/ai.md), [docs/spec/integrations.md](docs/spec/integrations.md)     |
-| An engineer                         | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CONVENTIONS.md](docs/CONVENTIONS.md), [docs/ENGINEERING.md](docs/ENGINEERING.md) |
-| An accountant or compliance officer | [docs/LOCALIZATION.md](docs/LOCALIZATION.md), [docs/spec/finance.md](docs/spec/finance.md)                                           |
+| You are | Read |
+|---|---|
+| Anyone | [docs/PRODUCT.md](docs/PRODUCT.md), the master product description |
+| The owner | [docs/DECISIONS.md](docs/DECISIONS.md): your rulings so far, every decision, and the questions still open |
+| An agent or script author | [docs/spec/cli.md](docs/spec/cli.md), [docs/spec/ai.md](docs/spec/ai.md), [docs/spec/integrations.md](docs/spec/integrations.md) |
+| An engineer | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CONVENTIONS.md](docs/CONVENTIONS.md), [docs/ENGINEERING.md](docs/ENGINEERING.md) |
+| An accountant or compliance officer | [docs/LOCALIZATION.md](docs/LOCALIZATION.md), [docs/spec/finance.md](docs/spec/finance.md) |
 
 ## All documents
 
-| Document                                                                         | Covers                                                                                                                                                                                        |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CLAUDE.md](CLAUDE.md)                                                           | Hard constraints and working rules                                                                                                                                                            |
-| [docs/PRODUCT.md](docs/PRODUCT.md)                                               | Master product description                                                                                                                                                                    |
-| [docs/DECISIONS.md](docs/DECISIONS.md)                                           | Owner rulings, decision register, open questions                                                                                                                                              |
-| [docs/CONVENTIONS.md](docs/CONVENTIONS.md)                                       | Names and shared contracts (events, permission groups, data classes, ports)                                                                                                                   |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                                     | System design and stack                                                                                                                                                                       |
-| [docs/ROADMAP.md](docs/ROADMAP.md)                                               | Waves, calendar, capacity, gates                                                                                                                                                              |
-| [docs/BUSINESS.md](docs/BUSINESS.md)                                             | Licensing, governance, sustainability, risks                                                                                                                                                  |
-| [docs/LOCALIZATION.md](docs/LOCALIZATION.md)                                     | Country packs and compliance                                                                                                                                                                  |
-| [docs/ENGINEERING.md](docs/ENGINEERING.md)                                       | Quality, CI/CD, release and support policy, legal pack                                                                                                                                        |
-| [docs/GLOSSARY.md](docs/GLOSSARY.md)                                             | Terms                                                                                                                                                                                         |
-| [docs/spec/finance.md](docs/spec/finance.md)                                     | Accounting, invoicing, tax, e-invoicing                                                                                                                                                       |
-| [docs/spec/sales-crm.md](docs/spec/sales-crm.md)                                 | Catalog, pricing, CRM, sales, subscriptions                                                                                                                                                   |
-| [docs/spec/supply-chain.md](docs/spec/supply-chain.md)                           | Inventory, purchase, manufacturing                                                                                                                                                            |
-| [docs/spec/retail-commerce-marketing.md](docs/spec/retail-commerce-marketing.md) | POS, eCommerce, website, marketing                                                                                                                                                            |
-| [docs/spec/people.md](docs/spec/people.md)                                       | HR, expenses, payroll strategy                                                                                                                                                                |
-| [docs/spec/services.md](docs/spec/services.md)                                   | Projects, timesheets, helpdesk, planning                                                                                                                                                      |
-| [docs/spec/platform.md](docs/spec/platform.md)                                   | Kernel and platform apps                                                                                                                                                                      |
-| [docs/spec/ux.md](docs/spec/ux.md)                                               | Views, design system, accessibility                                                                                                                                                           |
-| [docs/spec/ai.md](docs/spec/ai.md)                                               | Agents and MCP                                                                                                                                                                                |
-| [docs/spec/cli.md](docs/spec/cli.md)                                             | The `obop` CLI, CLI/API/MCP parity, the plugin registry                                                                                                                                       |
-| [docs/spec/integrations.md](docs/spec/integrations.md)                           | API, connectors, portability                                                                                                                                                                  |
-| [docs/spec/security-privacy.md](docs/spec/security-privacy.md)                   | Identity, audit, privacy                                                                                                                                                                      |
-| [docs/spec/mobile.md](docs/spec/mobile.md)                                       | React Native apps, background location, the mileage package                                                                                                                                   |
-| [docs/spec/mobile-host.md](docs/spec/mobile-host.md)                             | The planned phone host app that holds modules, Mileage the first: what a host needs from Mileage and from the server (PROPOSED; the direction is relayed and not confirmed by the owner; D93) |
-| [docs/spec/rutsa.md](docs/spec/rutsa.md)                                         | Rutsa (working name), the mileage product: problem, personas, business rules, rates per country, competitors, phases (PROPOSED)                                                               |
-| [docs/spec/branding.md](docs/spec/branding.md)                                   | Instance branding: one record that names the product where an end user sees it (PROPOSED)                                                                                                     |
-| [docs/research/](docs/research/README.md)                                        | 28-file research corpus (predates the owner rulings; the rulings win)                                                                                                                         |
-| [docs/HANDOFF.md](docs/HANDOFF.md)                                               | Handoff and operations guide for the next agent or a new machine                                                                                                                              |
-| [docs/DEPLOY.md](docs/DEPLOY.md)                                                 | Operator guide: run, back up, upgrade and update obop                                                                                                                                         |
+| Document | Covers |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Hard constraints and working rules |
+| [docs/PRODUCT.md](docs/PRODUCT.md) | Master product description |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Owner rulings, decision register, open questions |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | Names and shared contracts (events, permission groups, data classes, ports) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and stack |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Waves, calendar, capacity, gates |
+| [docs/BUSINESS.md](docs/BUSINESS.md) | Licensing, governance, sustainability, risks |
+| [docs/LOCALIZATION.md](docs/LOCALIZATION.md) | Country packs and compliance |
+| [docs/ENGINEERING.md](docs/ENGINEERING.md) | Quality, CI/CD, release and support policy, legal pack |
+| [docs/GLOSSARY.md](docs/GLOSSARY.md) | Terms |
+| [docs/spec/finance.md](docs/spec/finance.md) | Accounting, invoicing, tax, e-invoicing |
+| [docs/spec/sales-crm.md](docs/spec/sales-crm.md) | Catalog, pricing, CRM, sales, subscriptions |
+| [docs/spec/supply-chain.md](docs/spec/supply-chain.md) | Inventory, purchase, manufacturing |
+| [docs/spec/retail-commerce-marketing.md](docs/spec/retail-commerce-marketing.md) | POS, eCommerce, website, marketing |
+| [docs/spec/people.md](docs/spec/people.md) | HR, expenses, payroll strategy |
+| [docs/spec/services.md](docs/spec/services.md) | Projects, timesheets, helpdesk, planning |
+| [docs/spec/platform.md](docs/spec/platform.md) | Kernel and platform apps |
+| [docs/spec/ux.md](docs/spec/ux.md) | Views, design system, accessibility |
+| [docs/spec/ai.md](docs/spec/ai.md) | Agents and MCP |
+| [docs/spec/cli.md](docs/spec/cli.md) | The `obop` CLI, CLI/API/MCP parity, the plugin registry |
+| [docs/spec/integrations.md](docs/spec/integrations.md) | API, connectors, portability |
+| [docs/spec/security-privacy.md](docs/spec/security-privacy.md) | Identity, audit, privacy |
+| [docs/spec/mobile.md](docs/spec/mobile.md) | React Native apps, background location, the mileage package |
+| [docs/spec/mobile-host.md](docs/spec/mobile-host.md) | The planned phone host app that holds modules, Mileage the first: what a host needs from Mileage and from the server (PROPOSED; the direction is relayed and not confirmed by the owner; D93) |
+| [docs/spec/rutsa.md](docs/spec/rutsa.md) | Rutsa (working name), the mileage product: problem, personas, business rules, rates per country, competitors, phases (PROPOSED) |
+| [docs/spec/branding.md](docs/spec/branding.md) | Instance branding: one record that names the product where an end user sees it (PROPOSED) |
+| [docs/research/](docs/research/README.md) | 28-file research corpus (predates the owner rulings; the rulings win) |
+| [docs/HANDOFF.md](docs/HANDOFF.md) | Handoff and operations guide for the next agent or a new machine |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Operator guide: run, back up, upgrade and update obop |

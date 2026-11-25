@@ -24,24 +24,24 @@ description = "A role a shift is planned for, for example cashier or electrician
 read_group = "planning.user"
 write_group = "planning.manager"
 
-[model.ui]
-title = "{name}"
-list = ["name", "note"]
-order = "name asc"
-default_view = "list"
-menu = "configuration"
+  [model.ui]
+  title = "{name}"
+  list = ["name", "note"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
 
-[[model.field]]
-name = "name"
-description = "Role name"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Role name"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "note"
-description = "What the role involves"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "note"
+  description = "What the role involves"
+  class = "none"
+  kind = "longtext"
 
 [[model]]
 name = "planning_template"
@@ -49,50 +49,50 @@ description = "A named shift pattern with a role and start and end times; no act
 read_group = "planning.user"
 write_group = "planning.manager"
 
-[model.ui]
-title = "{name}"
-subtitle = "{role_id}"
-list = ["name", "role_id", "start_minute", "end_minute"]
-order = "start_minute asc"
-default_view = "list"
-menu = "configuration"
+  [model.ui]
+  title = "{name}"
+  subtitle = "{role_id}"
+  list = ["name", "role_id", "start_minute", "end_minute"]
+  order = "start_minute asc"
+  default_view = "list"
+  menu = "configuration"
 
-[[model.field]]
-name = "name"
-description = "Template name, for example Morning shift"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Template name, for example Morning shift"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "role_id"
-description = "The role the template is for"
-class = "none"
-kind = "ref"
-to = "planning_role"
+  [[model.field]]
+  name = "role_id"
+  description = "The role the template is for"
+  class = "none"
+  kind = "ref"
+  to = "planning_role"
 
-[[model.field]]
-name = "start_minute"
-description = "Start in minutes since midnight (540 is 09:00)"
-class = "none"
-kind = "number"
-required = true
-min = 0
-max = 1439
-[model.field.ui]
-display = "time_of_day"
-aggregate = "none"
+  [[model.field]]
+  name = "start_minute"
+  description = "Start in minutes since midnight (540 is 09:00)"
+  class = "none"
+  kind = "number"
+  required = true
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
-[[model.field]]
-name = "end_minute"
-description = "End in minutes since midnight (1020 is 17:00)"
-class = "none"
-kind = "number"
-required = true
-min = 0
-max = 1439
-[model.field.ui]
-display = "time_of_day"
-aggregate = "none"
+  [[model.field]]
+  name = "end_minute"
+  description = "End in minutes since midnight (1020 is 17:00)"
+  class = "none"
+  kind = "number"
+  required = true
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
 [[model]]
 name = "planning_shift"
@@ -100,138 +100,138 @@ description = "A slot of work on one day for one role, optionally assigned to an
 read_group = "planning.user"
 write_group = "planning.manager"
 
-[model.ui]
-title = "{name} · {employee_id} | {name}"
-subtitle = "{role_id}"
-list = ["work_date", "start_minute", "end_minute", "name", "role_id", "employee_id", "state"]
-card = ["name", "employee_id", "role_id", "work_date", "start_minute", "end_minute"]
-quick_create = ["name", "work_date", "employee_id"]
-order = "work_date asc, start_minute asc"
-default_view = "calendar"
-menu = "main"
-menu_order = 1
-calendar = { start = "work_date", color = "employee_id" }
-report = { rows = "employee_id", cols = "role_id" }
+  [model.ui]
+  title = "{name} · {employee_id} | {name}"
+  subtitle = "{role_id}"
+  list = ["work_date", "start_minute", "end_minute", "name", "role_id", "employee_id", "state"]
+  card = ["name", "employee_id", "role_id", "work_date", "start_minute", "end_minute"]
+  quick_create = ["name", "work_date", "employee_id"]
+  order = "work_date asc, start_minute asc"
+  default_view = "calendar"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "work_date", color = "employee_id" }
+  report = { rows = "employee_id", cols = "role_id" }
 
-[[model.ui.filter]]
-label = "Open shifts"
-where = "employee_id = null"
+  [[model.ui.filter]]
+  label = "Open shifts"
+  where = "employee_id = null"
 
-[[model.ui.filter]]
-label = "Not published"
-where = "state = open"
+  [[model.ui.filter]]
+  label = "Not published"
+  where = "state = open"
 
-[[model.ui.filter]]
-label = "Coming up"
-where = "work_date >= today"
+  [[model.ui.filter]]
+  label = "Coming up"
+  where = "work_date >= today"
 
-[[model.rule]]
-key = "ends_after_start"
-expr = "end_minute >= start_minute"
-message = "The shift ends before it starts: set an end time after the start"
+  [[model.rule]]
+  key = "ends_after_start"
+  expr = "end_minute >= start_minute"
+  message = "The shift ends before it starts: set an end time after the start"
 
-[model.no_overlap]
-rule = "no_double_shift"
-key = ["employee_id", "work_date"]
-start = "start_minute"
-end = "end_minute"
-message = "The employee already has a shift at that time: pick another time or another employee"
+  [model.no_overlap]
+  rule = "no_double_shift"
+  key = ["employee_id", "work_date"]
+  start = "start_minute"
+  end = "end_minute"
+  message = "The employee already has a shift at that time: pick another time or another employee"
 
-[[model.field]]
-name = "name"
-description = "Short title, for example Opening shift"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Short title, for example Opening shift"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "role_id"
-description = "The role needed"
-class = "none"
-kind = "ref"
-to = "planning_role"
+  [[model.field]]
+  name = "role_id"
+  description = "The role needed"
+  class = "none"
+  kind = "ref"
+  to = "planning_role"
 
-[[model.field]]
-name = "employee_id"
-description = "Employee the shift is assigned to; empty for an open shift"
-class = "internal"
-personal_data = true
-kind = "ref"
-to = "hr_employee"
-ref_filter = "state != offboarded"
+  [[model.field]]
+  name = "employee_id"
+  description = "Employee the shift is assigned to; empty for an open shift"
+  class = "internal"
+  personal_data = true
+  kind = "ref"
+  to = "hr_employee"
+  ref_filter = "state != offboarded"
 
-[[model.field]]
-name = "work_date"
-description = "Day of the shift (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-default = "today"
+  [[model.field]]
+  name = "work_date"
+  description = "Day of the shift (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  default = "today"
 
-[[model.field]]
-name = "start_minute"
-description = "Start in minutes since midnight, 0 to 1439 (540 is 09:00)"
-class = "none"
-kind = "number"
-required = true
-min = 0
-max = 1439
-[model.field.ui]
-display = "time_of_day"
-aggregate = "none"
+  [[model.field]]
+  name = "start_minute"
+  description = "Start in minutes since midnight, 0 to 1439 (540 is 09:00)"
+  class = "none"
+  kind = "number"
+  required = true
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
-[[model.field]]
-name = "end_minute"
-description = "End in minutes since midnight, 0 to 1439 (1020 is 17:00)"
-class = "none"
-kind = "number"
-required = true
-min = 0
-max = 1439
-[model.field.ui]
-display = "time_of_day"
-aggregate = "none"
+  [[model.field]]
+  name = "end_minute"
+  description = "End in minutes since midnight, 0 to 1439 (1020 is 17:00)"
+  class = "none"
+  kind = "number"
+  required = true
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
-[[model.field]]
-name = "note"
-description = "Instructions for whoever works the shift"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "note"
+  description = "Instructions for whoever works the shift"
+  class = "none"
+  kind = "longtext"
 
-[[model.field]]
-name = "state"
-description = "Shift status: open, published, confirmed"
-class = "none"
-kind = "select"
-options = ["open", "published", "confirmed"]
-required = true
-[model.field.ui]
-tones = { open = "info", published = "warn", confirmed = "ok" }
+  [[model.field]]
+  name = "state"
+  description = "Shift status: open, published, confirmed"
+  class = "none"
+  kind = "select"
+  options = ["open", "published", "confirmed"]
+  required = true
+  [model.field.ui]
+  tones = { open = "info", published = "warn", confirmed = "ok" }
 
-[[model.action]]
-name = "publish"
-description = "Publish the shift to the assigned employee, or to everyone when it is open"
-field = "state"
-from = "open"
-to = "published"
-group = "planning.manager"
-[model.action.ui]
-primary = true
-done = "Published"
+  [[model.action]]
+  name = "publish"
+  description = "Publish the shift to the assigned employee, or to everyone when it is open"
+  field = "state"
+  from = "open"
+  to = "published"
+  group = "planning.manager"
+  [model.action.ui]
+  primary = true
+  done = "Published"
 
-[[model.action]]
-name = "unpublish"
-description = "Pull a published shift back to open"
-field = "state"
-from = "published"
-to = "open"
-group = "planning.manager"
+  [[model.action]]
+  name = "unpublish"
+  description = "Pull a published shift back to open"
+  field = "state"
+  from = "published"
+  to = "open"
+  group = "planning.manager"
 
-[[model.action]]
-name = "confirm"
-description = "The employee confirms they will work the shift"
-field = "state"
-from = "published"
-to = "confirmed"
-[model.action.ui]
-primary = true
-done = "Confirmed"
+  [[model.action]]
+  name = "confirm"
+  description = "The employee confirms they will work the shift"
+  field = "state"
+  from = "published"
+  to = "confirmed"
+  [model.action.ui]
+  primary = true
+  done = "Confirmed"

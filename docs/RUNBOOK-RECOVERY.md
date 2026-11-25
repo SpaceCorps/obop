@@ -8,25 +8,25 @@
 
 Fill these in. An empty cell means "not measured yet", and that is a finding.
 
-| What                                                  | Target (yours to set) | Last measured | Where it comes from                                                                                             |
-| ----------------------------------------------------- | --------------------- | ------------- | --------------------------------------------------------------------------------------------------------------- |
-| Recovery point, logical backup (how much can be lost) |                       |               | `obop storage show`: "measured recovery point" of the newest passed drill; at worst the backup interval         |
-| Recovery point, with WAL archiving                    |                       |               | `archive_timeout` (60 s or less) plus the archiver lag in `pg_stat_archiver`; proved by the point-in-time drill |
-| Recovery time, logical restore                        |                       |               | `obop drill` prints "recovery time"; `restore_drill` records keep it                                            |
-| Recovery time, loss of primary on a new host          |                       |               | the half-yearly drill, timed by a person from "primary lost" to "serving"                                       |
-| Restore of a base backup plus WAL                     |                       |               | the quarterly point-in-time drill                                                                               |
+| What | Target (yours to set) | Last measured | Where it comes from |
+|---|---|---|---|
+| Recovery point, logical backup (how much can be lost) | | | `obop storage show`: "measured recovery point" of the newest passed drill; at worst the backup interval |
+| Recovery point, with WAL archiving | | | `archive_timeout` (60 s or less) plus the archiver lag in `pg_stat_archiver`; proved by the point-in-time drill |
+| Recovery time, logical restore | | | `obop drill` prints "recovery time"; `restore_drill` records keep it |
+| Recovery time, loss of primary on a new host | | | the half-yearly drill, timed by a person from "primary lost" to "serving" |
+| Restore of a base backup plus WAL | | | the quarterly point-in-time drill |
 
 **Rule for the primary path.** The logical restore is **one transaction** and is not resumable. If its measured time at your data size is more than **half of your recovery-time target**, the primary recovery path is the physical one (base backup plus WAL, section 5) and the logical backup is for portability, migration and a second opinion only. Write down here which it is: `__________`. Above about 10 GB a resumable chunked restore is required and is not built (D73).
 
 ## 2. Roles
 
-| Role          | Does                                                                      | Must hold                                                                                  |
-| ------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Incident lead | Decides the path (section 3), keeps the log, says when it is over         | the authority to stop the service                                                          |
-| Operator      | Runs the commands                                                         | database owner access, the backup volume, the off-host copy's read credential              |
-| Key custodian | Provides keys, and says honestly what is lost if one is gone              | `OBOP_BACKUP_KEY` and `OBOP_SECRET_KEY` from the secret store; a second custodian for each |
-| Data owner    | Decides which loss is acceptable (a day, an hour) and approves a rollback | the business's authority over the data                                                     |
-| Communicator  | Tells users and, where the law asks, authorities                          | the contact lists                                                                          |
+| Role | Does | Must hold |
+|---|---|---|
+| Incident lead | Decides the path (section 3), keeps the log, says when it is over | the authority to stop the service |
+| Operator | Runs the commands | database owner access, the backup volume, the off-host copy's read credential |
+| Key custodian | Provides keys, and says honestly what is lost if one is gone | `OBOP_BACKUP_KEY` and `OBOP_SECRET_KEY` from the secret store; a second custodian for each |
+| Data owner | Decides which loss is acceptable (a day, an hour) and approves a rollback | the business's authority over the data |
+| Communicator | Tells users and, where the law asks, authorities | the contact lists |
 
 Write the names and numbers into your copy. A runbook with a role nobody holds is a plan to improvise.
 
@@ -35,14 +35,14 @@ Write the names and numbers into your copy. A runbook with a role nobody holds i
 1. **Stop writes if data may still be getting worse** (a bad import is running, a migration half-applied): stop the processes that write (`obop serve`, scheduled jobs). Reads can wait.
 2. **What happened?**
 
-| Symptom                                                                                                                  | Path                                                                                                                                                            |
-| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A migration or module update broke data, and it was backed up first (the ledger names the backup: `obop migrate status`) | **A. Roll back by restore** (section 4)                                                                                                                         |
-| A wrong bulk change or deletion, and you know when it happened                                                           | **C. Point-in-time recovery** to just before it (section 5), if WAL archiving was on; else the newest backup before it, **A**                                   |
-| The primary host or its volume is gone                                                                                   | **B. New host from the off-host copy** (section 6), or **C** when WAL is also off-host                                                                          |
-| Corruption on disk (checksum errors)                                                                                     | stop; **C** or **B**; do not repair in place                                                                                                                    |
-| A key is lost                                                                                                            | **D** (section 7), first, before restoring anything                                                                                                             |
-| Suspected compromise                                                                                                     | do not restore over the evidence: copy the volume, then rebuild on a new host (**B**), rotate every key (DEPLOY.md, "If a key leaks") and the database password |
+| Symptom | Path |
+|---|---|
+| A migration or module update broke data, and it was backed up first (the ledger names the backup: `obop migrate status`) | **A. Roll back by restore** (section 4) |
+| A wrong bulk change or deletion, and you know when it happened | **C. Point-in-time recovery** to just before it (section 5), if WAL archiving was on; else the newest backup before it, **A** |
+| The primary host or its volume is gone | **B. New host from the off-host copy** (section 6), or **C** when WAL is also off-host |
+| Corruption on disk (checksum errors) | stop; **C** or **B**; do not repair in place |
+| A key is lost | **D** (section 7), first, before restoring anything |
+| Suspected compromise | do not restore over the evidence: copy the volume, then rebuild on a new host (**B**), rotate every key (DEPLOY.md, "If a key leaks") and the database password |
 
 3. **Choose the recovery point** with the data owner: the newest backup is not always the right one. `obop backup list` shows what exists; a restore point `pre-migration-<version>` is listed in the WAL archive of a migration that ran with archiving on.
 
@@ -81,24 +81,24 @@ This is the half-yearly drill too (section 8). Everything comes from outside the
 
 ## 7. D. A key is lost
 
-| Lost                                    | Consequence                                                                     | Do                                                                                                                                                                                 |
-| --------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The backup key, and another copy exists | none                                                                            | restore the key from the second custodian; note the incident                                                                                                                       |
-| The backup key, no copy                 | **every backup sealed with it is unreadable; there is no backdoor**             | the live database is unaffected: take a new backup with a new key at once (`obop backup run`), then protect the keys properly. Only the live database can be recovered from now on |
-| `OBOP_SECRET_KEY`                       | the data restores; two-factor seeds and connection credentials cannot be opened | DEPLOY.md, "If the key is lost": set a new key, `obop secrets rotate --skip-unopenable` to see what is lost, `obop admin reset-mfa`, enter credentials again                       |
-| Both                                    | sealed backups unreadable and secrets lost                                      | as the first two rows together                                                                                                                                                     |
-| The database password                   | the server cannot connect                                                       | reset it at PostgreSQL, update the secret store and the URL                                                                                                                        |
+| Lost | Consequence | Do |
+|---|---|---|
+| The backup key, and another copy exists | none | restore the key from the second custodian; note the incident |
+| The backup key, no copy | **every backup sealed with it is unreadable; there is no backdoor** | the live database is unaffected: take a new backup with a new key at once (`obop backup run`), then protect the keys properly. Only the live database can be recovered from now on |
+| `OBOP_SECRET_KEY` | the data restores; two-factor seeds and connection credentials cannot be opened | DEPLOY.md, "If the key is lost": set a new key, `obop secrets rotate --skip-unopenable` to see what is lost, `obop admin reset-mfa`, enter credentials again |
+| Both | sealed backups unreadable and secrets lost | as the first two rows together |
+| The database password | the server cannot connect | reset it at PostgreSQL, update the secret store and the URL |
 
 ## 8. Drills: what, how often, how to record
 
 A copy you have not restored is not a backup. Each drill is recorded (`obop drill ... --record-in URL`, which `obop storage check` reads: it fails when the newest passed drill is older than 35 days).
 
-| Drill                                  | How often                                                                     | How                                                                                                                                                                                                                                                                                                                                                                   | Passes when                                                                                             |
-| -------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Logical restore from the off-host copy | monthly                                                                       | fetch the newest backup and manifest from the copy to a scratch host; `deploy/restore-drill.sh FILE` (a scratch PostgreSQL, a server on the copy; the scratch holds the backup **decrypted** while the drill runs, so use a host you trust with the data) with `DRILL_RECORD_IN` (recorded after the server step: a server that did not answer is recorded as FAILED) | every check passes; the time is written to section 1                                                    |
-| Point-in-time                          | quarterly                                                                     | on a fresh server: write a marker row at T0, write more rows, restore to T0 + 1 s, expect the marker and none of the later rows; also a restore point 34 days back                                                                                                                                                                                                    | the marker is there, the later rows are not, `obop storage check` and the drill's checks pass           |
-| Loss of primary                        | twice a year                                                                  | section 6 from the off-host copy alone, on a new host, with a stopwatch                                                                                                                                                                                                                                                                                               | serving, with the measured recovery time and the age of the newest backup (recovery point) in section 1 |
-| Failure injection                      | each time the backup job or key handling changes (CI does it on every change) | the wrong key (`restore_key_required`, `obop drill` itself exits 3), a plain copy where a key is configured (exit 4), a corrupt copy, a truncated copy: `obop drill` must fail for each, loudly                                                                                                                                                                       | all three fail the drill                                                                                |
+| Drill | How often | How | Passes when |
+|---|---|---|---|
+| Logical restore from the off-host copy | monthly | fetch the newest backup and manifest from the copy to a scratch host; `deploy/restore-drill.sh FILE` (a scratch PostgreSQL, a server on the copy; the scratch holds the backup **decrypted** while the drill runs, so use a host you trust with the data) with `DRILL_RECORD_IN` (recorded after the server step: a server that did not answer is recorded as FAILED) | every check passes; the time is written to section 1 |
+| Point-in-time | quarterly | on a fresh server: write a marker row at T0, write more rows, restore to T0 + 1 s, expect the marker and none of the later rows; also a restore point 34 days back | the marker is there, the later rows are not, `obop storage check` and the drill's checks pass |
+| Loss of primary | twice a year | section 6 from the off-host copy alone, on a new host, with a stopwatch | serving, with the measured recovery time and the age of the newest backup (recovery point) in section 1 |
+| Failure injection | each time the backup job or key handling changes (CI does it on every change) | the wrong key (`restore_key_required`, `obop drill` itself exits 3), a plain copy where a key is configured (exit 4), a corrupt copy, a truncated copy: `obop drill` must fail for each, loudly | all three fail the drill |
 
 After each drill: the record exists (`obop storage show`), the table in section 1 is updated, and anything that surprised you becomes a line in this page.
 

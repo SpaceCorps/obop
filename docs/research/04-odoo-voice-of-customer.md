@@ -12,40 +12,40 @@ Blocked or unusable today: G2, TrustRadius and Gartner Peer Insights returned 40
 
 Pain themes ranked by breadth across independent sources, severity (money lost or operations blocked) and how often they appear in "why we left" stories. The last column says whether a greenfield Rust backend plus modern frontend can fix the pain by technology alone, by governance and business model alone, or needs both.
 
-| Rank | Pain theme                                        | Severity                   | Fix lever                                       |
-| ---- | ------------------------------------------------- | -------------------------- | ----------------------------------------------- |
-| 1    | Upgrade and migration pain                        | Very high                  | Technology plus governance (strong opportunity) |
-| 2    | Pricing, licensing and open-core surprises        | Very high                  | Governance and business model only              |
-| 3    | Customization debt                                | High                       | Technology plus governance                      |
-| 4    | Support quality and partner dependence            | High                       | Mostly neither (partly product design)          |
-| 5    | Accounting localization gaps                      | High                       | Labor plus data-driven design                   |
-| 6    | App-store and third-party module quality variance | Medium-high                | Governance plus technology                      |
-| 7    | Performance at scale                              | Medium                     | Technology, but DB-bound limits                 |
-| 8    | UX inconsistency and learning curve               | Medium                     | Technology plus design discipline               |
-| 9    | Hosting and ops burden                            | Medium                     | Technology (strong)                             |
-| 10   | Documentation and API                             | Medium                     | Process, helped by tooling                      |
-| 11   | Testing culture                                   | Low-medium (thin evidence) | Technology plus process                         |
-| 12   | Security and disclosure                           | Medium (thin evidence)     | Partly technology, partly governance            |
+| Rank | Pain theme | Severity | Fix lever |
+|---|---|---|---|
+| 1 | Upgrade and migration pain | Very high | Technology plus governance (strong opportunity) |
+| 2 | Pricing, licensing and open-core surprises | Very high | Governance and business model only |
+| 3 | Customization debt | High | Technology plus governance |
+| 4 | Support quality and partner dependence | High | Mostly neither (partly product design) |
+| 5 | Accounting localization gaps | High | Labor plus data-driven design |
+| 6 | App-store and third-party module quality variance | Medium-high | Governance plus technology |
+| 7 | Performance at scale | Medium | Technology, but DB-bound limits |
+| 8 | UX inconsistency and learning curve | Medium | Technology plus design discipline |
+| 9 | Hosting and ops burden | Medium | Technology (strong) |
+| 10 | Documentation and API | Medium | Process, helped by tooling |
+| 11 | Testing culture | Low-medium (thin evidence) | Technology plus process |
+| 12 | Security and disclosure | Medium (thin evidence) | Partly technology, partly governance |
 
 Praise themes ranked: (1) one integrated system on one data model, (2) modular, incremental adoption, (3) price/value, (4) open, hackable framework with a real community, (5) operational depth in inventory, sales-to-invoice and multi-currency, (6) ecosystem and talent pool, (7) acceptable-to-good UX after ramp-up.
 
-Core insight [I]: the two worst Odoo pains (upgrades, pricing/open-core) are mostly _design and business-model choices_, not Python limitations. A Rust rewrite with the same model would reproduce them. The opportunity is in the delivery contract (upgradable, open, predictable), not raw language speed.
+Core insight [I]: the two worst Odoo pains (upgrades, pricing/open-core) are mostly *design and business-model choices*, not Python limitations. A Rust rewrite with the same model would reproduce them. The opportunity is in the delivery contract (upgradable, open, predictable), not raw language speed.
 
 ## 2. Odoo baseline (verified today)
 
-| Fact                   | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Source                                                                                                                                                                |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current major          | Odoo 20; `20.0` is the default GitHub branch, updated 2026-10-01; release notes dated "September 2026" (no exact day) [V]                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | https://github.com/odoo/odoo/branches , https://www.odoo.com/odoo-20-release-notes                                                                                    |
-| Previous major         | 19.0 released 2025-09-18 [V, via Wikipedia]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | https://en.wikipedia.org/wiki/Odoo                                                                                                                                    |
-| Support windows        | Standard support is 3 years from release: 20.0 (September 2026) to September 2029 (planned); 19.0 to September 2028 (planned); 18.0 to September 2027 (planned); 17.0 standard support ended September 2026 and is now extended support at extra fee [V, added in verification]                                                                                                                                                                                                                                                                                                                    | https://raw.githubusercontent.com/odoo/documentation/master/content/administration/standard_extended_support.rst                                                      |
-| Repo size              | 54.8k stars, 33.9k forks, about 211.7k commits (211,739 via GitHub API on 2026-10-01) [V]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | https://github.com/odoo/odoo                                                                                                                                          |
-| Community license      | LGPLv3 [V]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | https://raw.githubusercontent.com/odoo/odoo/master/LICENSE                                                                                                            |
-| Enterprise license     | Proprietary "Odoo Enterprise Edition License v1.0" (short id OEEL-1); use requires a valid Odoo Enterprise Subscription for the correct number of users [V]                                                                                                                                                                                                                                                                                                                                                                                                                                        | https://raw.githubusercontent.com/odoo/documentation/19.0/content/legal/licenses/enterprise_license.txt , https://www.odoo.com/documentation/19.0/legal/licenses.html |
-| Frontend framework     | Owl, Odoo's own TypeScript UI framework, LGPLv3, README says "Owl 3.0.0 Alpha" [V]                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | https://github.com/odoo/owl                                                                                                                                           |
-| Plans (EUR/user/month) | One App Free; Standard list 24.90 yearly-billed, promotional 19.90 (list 24.90 less a 5.00 "First Year Initial Discount"); Custom list 44.90 yearly-billed, promotional 35.90 (less 9.00); Light User 7.90 by quote. Monthly-billed: Standard 24.90 promotional vs 31.10 struck-through list, Custom 44.90 vs 56.90 (monthly list prices read from the page's struck-through figures, not from the monthly configurator) [V/I]. So the headline 19.90 / 35.90 are first-12-month prices for initial users, not steady-state list prices (corrected in verification)                                | https://www.odoo.com/pricing-plan , https://www.odoo.com/pricing-configurator?plan=standard , https://www.odoo.com/pricing-configurator?plan=custom                   |
-| Plan gating            | Studio / agentic AI, multi-company and the external API are Custom-only (the FAQ says One App Free may use multiple companies and may choose Studio as its one app; installing Studio or adding companies switches a database to Custom); Odoo.sh and on-premise hosting are listed only under Custom; the discount lasts 12 months and applies to initial users only; IAP credits (SMS, contact auto-complete, lead generation, AI bill/expense scanning) are not included, and Odoo 20 makes all AI features credit-based; Odoo.sh hosting cost and custom-code maintenance are not included [V] | same                                                                                                                                                                  |
-| Ecosystem              | App store lists about 93.6k apps across all versions (93,609 at first fetch, 93,612 on re-check; 5.0 to 20.0) [V]; OCA has 664 members, about 1,600 contributors, 271 GitHub repos, and advertises "+20 000" modules [V]                                                                                                                                                                                                                                                                                                                                                                           | https://apps.odoo.com/apps/modules/browse , https://odoo-community.org/ , https://github.com/OCA                                                                      |
-| Review scores          | Software Advice/GetApp 4.2/5 from 1,332 reviews (53% 5-star, 7% 1-star; ease 4.0, support 3.9, value 4.1, functionality 4.2) [V]; Trustpilot 3.1 from 1,280 reviews, 46% 5-star vs 43% 1-star [V]; SourceForge 4.2 is an aggregate of 1,714 ratings (12 SourceForge reviews, 1,702 third-party ratings; the 12 SourceForge-native reviews average 4.7) [V]                                                                                                                                                                                                                                         | https://www.softwareadvice.com/erp/odoo-profile/reviews/ , https://www.trustpilot.com/review/odoo.com , https://sourceforge.net/software/product/Odoo/                |
+| Fact | Value | Source |
+|---|---|---|
+| Current major | Odoo 20; `20.0` is the default GitHub branch, updated 2026-10-01; release notes dated "September 2026" (no exact day) [V] | https://github.com/odoo/odoo/branches , https://www.odoo.com/odoo-20-release-notes |
+| Previous major | 19.0 released 2025-09-18 [V, via Wikipedia] | https://en.wikipedia.org/wiki/Odoo |
+| Support windows | Standard support is 3 years from release: 20.0 (September 2026) to September 2029 (planned); 19.0 to September 2028 (planned); 18.0 to September 2027 (planned); 17.0 standard support ended September 2026 and is now extended support at extra fee [V, added in verification] | https://raw.githubusercontent.com/odoo/documentation/master/content/administration/standard_extended_support.rst |
+| Repo size | 54.8k stars, 33.9k forks, about 211.7k commits (211,739 via GitHub API on 2026-10-01) [V] | https://github.com/odoo/odoo |
+| Community license | LGPLv3 [V] | https://raw.githubusercontent.com/odoo/odoo/master/LICENSE |
+| Enterprise license | Proprietary "Odoo Enterprise Edition License v1.0" (short id OEEL-1); use requires a valid Odoo Enterprise Subscription for the correct number of users [V] | https://raw.githubusercontent.com/odoo/documentation/19.0/content/legal/licenses/enterprise_license.txt , https://www.odoo.com/documentation/19.0/legal/licenses.html |
+| Frontend framework | Owl, Odoo's own TypeScript UI framework, LGPLv3, README says "Owl 3.0.0 Alpha" [V] | https://github.com/odoo/owl |
+| Plans (EUR/user/month) | One App Free; Standard list 24.90 yearly-billed, promotional 19.90 (list 24.90 less a 5.00 "First Year Initial Discount"); Custom list 44.90 yearly-billed, promotional 35.90 (less 9.00); Light User 7.90 by quote. Monthly-billed: Standard 24.90 promotional vs 31.10 struck-through list, Custom 44.90 vs 56.90 (monthly list prices read from the page's struck-through figures, not from the monthly configurator) [V/I]. So the headline 19.90 / 35.90 are first-12-month prices for initial users, not steady-state list prices (corrected in verification) | https://www.odoo.com/pricing-plan , https://www.odoo.com/pricing-configurator?plan=standard , https://www.odoo.com/pricing-configurator?plan=custom |
+| Plan gating | Studio / agentic AI, multi-company and the external API are Custom-only (the FAQ says One App Free may use multiple companies and may choose Studio as its one app; installing Studio or adding companies switches a database to Custom); Odoo.sh and on-premise hosting are listed only under Custom; the discount lasts 12 months and applies to initial users only; IAP credits (SMS, contact auto-complete, lead generation, AI bill/expense scanning) are not included, and Odoo 20 makes all AI features credit-based; Odoo.sh hosting cost and custom-code maintenance are not included [V] | same |
+| Ecosystem | App store lists about 93.6k apps across all versions (93,609 at first fetch, 93,612 on re-check; 5.0 to 20.0) [V]; OCA has 664 members, about 1,600 contributors, 271 GitHub repos, and advertises "+20 000" modules [V] | https://apps.odoo.com/apps/modules/browse , https://odoo-community.org/ , https://github.com/OCA |
+| Review scores | Software Advice/GetApp 4.2/5 from 1,332 reviews (53% 5-star, 7% 1-star; ease 4.0, support 3.9, value 4.1, functionality 4.2) [V]; Trustpilot 3.1 from 1,280 reviews, 46% 5-star vs 43% 1-star [V]; SourceForge 4.2 is an aggregate of 1,714 ratings (12 SourceForge reviews, 1,702 third-party ratings; the 12 SourceForge-native reviews average 4.7) [V] | https://www.softwareadvice.com/erp/odoo-profile/reviews/ , https://www.trustpilot.com/review/odoo.com , https://sourceforge.net/software/product/Odoo/ |
 
 The Trustpilot split is bimodal. Some Software Advice/GetApp reviews are marked "invited by us ... offered a nominal incentive" (by the review site, not necessarily the vendor), while others are marked organic with no incentive, so scores may be inflated [S] (stated on the review pages).
 
@@ -72,7 +72,6 @@ The Trustpilot split is bimodal. Some Software Advice/GetApp reviews are marked 
 ### 4.1 Upgrade and migration pain (rank 1)
 
 **Evidence.**
-
 - Odoo's own process: custom or third-party modules are outside the upgrade SLA unless under a maintenance contract. The docs state a database with custom modules cannot be upgraded until a target-version build of those modules exists. Every major version gets 3 years of standard support, and Online databases on a major version must upgrade every 2 years; on-premise may stay on one version indefinitely, though not recommended [V] https://raw.githubusercontent.com/odoo/documentation/19.0/content/administration/upgrade.rst . Odoo 17.0 standard support ended September 2026 (now extended support at extra fee) [V] https://raw.githubusercontent.com/odoo/documentation/master/content/administration/standard_extended_support.rst .
 - Enterprise agreement v13 (dated 2026-09-24; verified against the agreement text in the docs source, though the signed contract governs): "Covered Versions" are the 3 most recent major versions; a database on an older version pays, once per year and no earlier than 6 months after a new major release, an extra fee of 25% of the annualized price (based on current per-user price and user count); self-hosted upgrade requests must include a copy of the database [V] https://raw.githubusercontent.com/odoo/documentation/19.0/content/legal/terms/enterprise.rst . With 20.0 out (September 2026), databases on 17.0 or older become non-covered versions, so the 25% fee would start to apply from roughly March 2027 [I].
 - Self-hosted Enterprise user on v15/v16 had to send a full production dump off-site, with no path for third-party addons; a small partner nearly lost customers because on-prem customers cannot run the scripts themselves [S] https://news.ycombinator.com/item?id=46486079 , https://news.ycombinator.com/item?id=46486350 . Another on-prem user called the OpenUpgrade path awful and dropped Odoo [S] https://news.ycombinator.com/item?id=47916231 .
@@ -84,18 +83,16 @@ The Trustpilot split is bimodal. Some Software Advice/GetApp reviews are marked 
 - Vendor blogs put typical partner-run upgrades at $1.5k to $15k and $30k+ for heavy customization [S, biased] https://iventureteam.com/blog/odoo-upgrade-cost/ .
 
 **Can a Rust + modern frontend OSS alternative fix it?** Yes, in large part; this is obop's best differentiator [I]. How:
-
-1. Customizations as _data_ (custom fields, formulas, views, automations, state machines) that migrate with the schema, so most "customization" needs no porting.
+1. Customizations as *data* (custom fields, formulas, views, automations, state machines) that migrate with the schema, so most "customization" needs no porting.
 2. A semver'd, narrow host API for code extensions, running as sandboxed WASM or out-of-process plugins. Rust has no stable ABI, so avoid in-process dynamic loading.
 3. Forward-only, transactional, idempotent migrations with dry-run and a report, runnable by the customer on-prem; never require shipping a database to the vendor.
 4. CI gate: upgrade a fixture database across N-1 and N-2 with the extension matrix on every merge.
 5. Rust's type system catches API drift at compile time for in-tree modules.
-   Limits: real custom logic still breaks when business rules change; regulatory data (tax tables, charts of accounts) changes every year regardless of language.
+Limits: real custom logic still breaks when business rules change; regulatory data (tax tables, charts of accounts) changes every year regardless of language.
 
 ### 4.2 Pricing, licensing and open-core surprises (rank 2)
 
 **Evidence.**
-
 - Feature drift from Community to Enterprise over versions: v12 moved accounting reports, budgets and assets ("iirc", one user's recollection); payroll left in v13 (another user's claim) (HN Dec 2019) [S, unverified against release notes] https://hn.algolia.com/api/v1/items/21865699 . The founder replies that they try to keep about 80% of what they do open source and 20% Enterprise [S, vendor voice].
 - A Dec 2025 to Jan 2026 HN thread (posted 2025-12-31, cited comments dated 2026-01-04) again centers on open-core economics (commenters say the important modules and "most powerful" features are Enterprise-only) and forced upgrade handling [S] https://news.ycombinator.com/item?id=46439993 .
 - Odoo 20: Türkiye's Nilvera e-invoicing integration is now Enterprise-only; all AI features now require purchased credits [V] https://www.odoo.com/odoo-20-release-notes .
@@ -173,7 +170,7 @@ Snapshot [V]: GPL-3.0, 39.7k stars, 13.0k forks, 1.7k open issues; v16.37.0 and 
 
 Praise [S]: fully open, no edition split (frequently contrasted with Odoo) https://news.ycombinator.com/item?id=46485416 ; the DocType approach (one declaration gives table, model, forms and lookups) https://news.ycombinator.com/item?id=49510482 ; easy API scripting https://news.ycombinator.com/item?id=43270987 ; cheap hosting; low cost. Pain [S]: self-hosting complexity; performance under concurrency (long-running Frappe forum history, including a 2026-09-21 thread on v15 concurrent-user performance and deadlock reports) https://discuss.frappe.io/search.json?q=performance%20slow%20many%20users%20order%3Alatest ; v15 to v16 upgrade friction (2026 forum threads on failed patches, "row size too large", permission errors, no rollback command) https://discuss.frappe.io/search.json?q=v16%20migrate%20error%20order%3Alatest ; few implementation partners and uneven support; UI polish and reporting; HR/payroll and project gaps. A pro-ERPNext blog claims ERPNext partner rates run higher than Odoo freelancers ($100 to $150 vs $60 to $90 per hour), unsourced and unverified https://khaledelsayed.com/odoo-erpnext-comparison/ .
 
-Lessons for obop: fully open plus metadata-driven models are loved; upgrades and ops are still painful even without open-core, so these are _technical_ problems obop must solve itself. Rust fixability: deploy (yes), performance (partly), upgrades (yes with the same levers as 4.1), partners (no).
+Lessons for obop: fully open plus metadata-driven models are loved; upgrades and ops are still painful even without open-core, so these are *technical* problems obop must solve itself. Rust fixability: deploy (yes), performance (partly), upgrades (yes with the same levers as 4.1), partners (no).
 
 ### 5.2 Dolibarr
 
@@ -193,31 +190,31 @@ Lessons for obop: the market pays for deep scriptable customization that survive
 
 ### 5.4 Peer comparison
 
-| Dimension                      | Odoo                                      | ERPNext                             | Dolibarr                         | NetSuite                      |
-| ------------------------------ | ----------------------------------------- | ----------------------------------- | -------------------------------- | ----------------------------- |
-| License                        | LGPLv3 Community + proprietary Enterprise | GPL-3.0, single edition             | GPL-3.0, single edition          | Proprietary SaaS              |
-| Review score (Software Advice) | 4.2 (1,332)                               | 4.5 (140)                           | 4.5 (107)                        | 4.2 (2,076)                   |
-| Top praise                     | Integrated suite, modular, value          | Fully open, flexible DocTypes       | Free, simple, lightweight        | Deep customization, scale     |
-| Top pain                       | Upgrades, pricing surprises, custom debt  | Ops/upgrades, performance, partners | Dated UI, feature gaps           | Cost, complexity, specialists |
-| Upgrade story                  | Hardest for custom code                   | Bench migrate; v15 to v16 friction  | Frequent releases, mixed reports | Vendor-managed                |
-| Localization                   | 103 country entries, uneven               | Strong India, uneven elsewhere      | Patchy                           | Via SuiteApps/partners        |
+| Dimension | Odoo | ERPNext | Dolibarr | NetSuite |
+|---|---|---|---|---|
+| License | LGPLv3 Community + proprietary Enterprise | GPL-3.0, single edition | GPL-3.0, single edition | Proprietary SaaS |
+| Review score (Software Advice) | 4.2 (1,332) | 4.5 (140) | 4.5 (107) | 4.2 (2,076) |
+| Top praise | Integrated suite, modular, value | Fully open, flexible DocTypes | Free, simple, lightweight | Deep customization, scale |
+| Top pain | Upgrades, pricing surprises, custom debt | Ops/upgrades, performance, partners | Dated UI, feature gaps | Cost, complexity, specialists |
+| Upgrade story | Hardest for custom code | Bench migrate; v15 to v16 friction | Frequent releases, mixed reports | Vendor-managed |
+| Localization | 103 country entries, uneven | Strong India, uneven elsewhere | Patchy | Via SuiteApps/partners |
 
 ## 6. Where a greenfield Rust + modern frontend helps
 
-| Pain               | Tech alone                                                 | Needs governance/business model          | Not fixable by us         |
-| ------------------ | ---------------------------------------------------------- | ---------------------------------------- | ------------------------- |
-| Upgrades           | Typed migrations, data-driven customization, extension ABI | Deprecation policy, upgrade CI           | Regulatory-driven changes |
-| Pricing/licensing  | -                                                          | Single open edition, pricing commitments | -                         |
-| Customization debt | Low-code tier, customization report                        | Partner norms                            | Genuinely bespoke logic   |
-| Support/partners   | Diagnostics                                                | Partner program                          | Human service quality     |
-| Localization       | Decimal types, typed e-invoice schemas                     | Country maintainers, certification       | The law itself            |
-| Module quality     | Sandboxing, compile-time checks                            | Marketplace policy                       | Author abandonment        |
-| Performance        | Async Rust, typed SQL, lower memory                        | Query budgets                            | DB-bound workloads        |
-| UX                 | Design system, one frontend architecture                   | Design investment                        | Domain complexity         |
-| Ops                | Single binary, built-in jobs/migrations                    | -                                        | -                         |
-| Docs/API           | OpenAPI from types, doc tests                              | Doc culture                              | -                         |
-| Testing            | Fixtures, property tests                                   | Test requirements                        | -                         |
-| Security           | Memory safety, typed queries                               | Equal-time disclosure                    | AuthZ design              |
+| Pain | Tech alone | Needs governance/business model | Not fixable by us |
+|---|---|---|---|
+| Upgrades | Typed migrations, data-driven customization, extension ABI | Deprecation policy, upgrade CI | Regulatory-driven changes |
+| Pricing/licensing | - | Single open edition, pricing commitments | - |
+| Customization debt | Low-code tier, customization report | Partner norms | Genuinely bespoke logic |
+| Support/partners | Diagnostics | Partner program | Human service quality |
+| Localization | Decimal types, typed e-invoice schemas | Country maintainers, certification | The law itself |
+| Module quality | Sandboxing, compile-time checks | Marketplace policy | Author abandonment |
+| Performance | Async Rust, typed SQL, lower memory | Query budgets | DB-bound workloads |
+| UX | Design system, one frontend architecture | Design investment | Domain complexity |
+| Ops | Single binary, built-in jobs/migrations | - | - |
+| Docs/API | OpenAPI from types, doc tests | Doc culture | - |
+| Testing | Fixtures, property tests | Test requirements | - |
+| Security | Memory safety, typed queries | Equal-time disclosure | AuthZ design |
 
 ## Confidence & gaps
 
@@ -230,7 +227,6 @@ Lessons for obop: the market pays for deep scriptable customization that survive
 ## Implications for obop
 
 **MUST**
-
 1. **One open edition, no feature withholding.** Ship accounting, bank reconciliation, payroll engine, e-invoicing and API all in the open core. Monetize hosting, support, certified localizations and marketplace revenue share. Evidence: pain 2, Odoo 20's Enterprise-only Nilvera move, HN complaints across 2019 to 2026.
 2. **Make upgrade a product requirement, not an afterthought.** Forward-only transactional migrations with dry-run and report, runnable on-prem without sending data anywhere, tested in CI from N-1 and N-2 fixtures on every merge, with a stated goal of skip-level support. Publish a deprecation policy at least as generous as Odoo's multi-year RPC timeline (Odoo 20 to 22).
 3. **Customization as data first, code second.** Custom fields, formulas, states, automations and view layouts stored as versioned, migratable metadata. Code extensions only through a semver'd host API, sandboxed as WASM or out-of-process (Rust has no stable ABI, so no in-process dynamic plugins).
@@ -239,9 +235,20 @@ Lessons for obop: the market pays for deep scriptable customization that survive
 6. **Operational simplicity.** Single binary plus Postgres, built-in job queue, websockets, migrate, backup and restore commands. No required reverse proxy or separate real-time worker.
 7. **Equal-time security disclosure.** Public advisories for everyone simultaneously; no customer-tiered embargo (unlike Odoo's current policy).
 
-**SHOULD** 8. **Marketplace governance from the first external extension.** Automated compatibility runs against each core release, "Verified on vX" badges, capability-manifest permissions, signed packages, auto-delisting of abandoned ones. 9. **Performance budgets as part of the model DSL.** Declared indexes, N+1 and query-count tests, asynchronous recomputation of derived aggregates, and a published benchmark (for example a large stock-move table with hundreds of concurrent users). Treat any speed-up claims as [G] until measured. 10. **One frontend architecture and a strict design system.** Avoid Odoo's multi-era Owl/legacy mix. Include offline-capable forms early (Odoo 20 now ships it) and accessibility. 11. **Guided onboarding.** Learning curve is the top con. Import wizards with validation, sample data, a configuration linter, and "start with one app" like Odoo's free single-app funnel. 12. **Predictable hosted pricing in writing.** Price caps on renewal, no per-country surprise pricing, no 12-month promotional cliffs, cancel-anytime data export. Software Advice and Trustpilot show this is where trust is lost. 13. **Customization report.** A built-in view of what differs from stock and its upgrade risk score (Odoo bills covered custom modules per 100 lines via `cloc`; the economics are real). 14. **Limited localization launch.** Prioritize a small set of countries done to the point of filing-ready, rather than claiming 100.
+**SHOULD**
+8. **Marketplace governance from the first external extension.** Automated compatibility runs against each core release, "Verified on vX" badges, capability-manifest permissions, signed packages, auto-delisting of abandoned ones.
+9. **Performance budgets as part of the model DSL.** Declared indexes, N+1 and query-count tests, asynchronous recomputation of derived aggregates, and a published benchmark (for example a large stock-move table with hundreds of concurrent users). Treat any speed-up claims as [G] until measured.
+10. **One frontend architecture and a strict design system.** Avoid Odoo's multi-era Owl/legacy mix. Include offline-capable forms early (Odoo 20 now ships it) and accessibility.
+11. **Guided onboarding.** Learning curve is the top con. Import wizards with validation, sample data, a configuration linter, and "start with one app" like Odoo's free single-app funnel.
+12. **Predictable hosted pricing in writing.** Price caps on renewal, no per-country surprise pricing, no 12-month promotional cliffs, cancel-anytime data export. Software Advice and Trustpilot show this is where trust is lost.
+13. **Customization report.** A built-in view of what differs from stock and its upgrade risk score (Odoo bills covered custom modules per 100 lines via `cloc`; the economics are real).
+14. **Limited localization launch.** Prioritize a small set of countries done to the point of filing-ready, rather than claiming 100.
 
-**COULD** 15. **Odoo and ERPNext importers.** Migrating users (pricing shock, upgrade fatigue, cancellation complaints on Trustpilot) are the acquisition channel. Importer from Odoo JSON-2 and ERPNext API. 16. **MCP and agent-ready API surface without credit metering.** Odoo 20 (MCP connection to the database, AI agents) and Dolibarr 24 (experimental MCP server and AI assistant) both shipped agent/MCP features; Odoo meters all AI features with purchased credits. An open, ungated agent API is a differentiator. 17. **Declarative model layer with Rust codegen** (DocType-style ergonomics that ERPNext developers praise, with compile-time types). 18. **Public partner program** with published rate cards and no database lock-in, addressing partner-dependence complaints.
+**COULD**
+15. **Odoo and ERPNext importers.** Migrating users (pricing shock, upgrade fatigue, cancellation complaints on Trustpilot) are the acquisition channel. Importer from Odoo JSON-2 and ERPNext API.
+16. **MCP and agent-ready API surface without credit metering.** Odoo 20 (MCP connection to the database, AI agents) and Dolibarr 24 (experimental MCP server and AI assistant) both shipped agent/MCP features; Odoo meters all AI features with purchased credits. An open, ungated agent API is a differentiator.
+17. **Declarative model layer with Rust codegen** (DocType-style ergonomics that ERPNext developers praise, with compile-time types).
+18. **Public partner program** with published rate cards and no database lock-in, addressing partner-dependence complaints.
 
 ## Verification log
 
@@ -271,7 +278,6 @@ Adversarial re-check on 2026-10-01 using different or more primary sources than 
 **Facts added** (missing from the first pass): support windows (20.0 to September 2029 planned, 19.0 to September 2028, 18.0 to September 2027; 17.0 standard support ended September 2026); Covered Versions = 3 most recent majors, so 17.0 and older become non-covered and the 25% fee could start about March 2027 [I]; Odoo 20 ships MCP connection and AI agents; the Dolibarr MCP server is experimental. Source: https://raw.githubusercontent.com/odoo/documentation/master/content/administration/standard_extended_support.rst , https://www.odoo.com/odoo-20-release-notes .
 
 **Unresolved (unverified)**
-
 - The r/Odoo thread (24-user firm quoted about 272 hours for v17): Reddit blocked to my tools; snippet-only.
 - Software Advice/GetApp anecdotes not found when re-reading pages 1-3 and GetApp: "a database created under a partner's account and later deleted", "a custom project unfinished after a year". Marked unverified inline.
 - "xpath inheritance is fragile" is not in the cited HN comments (removed from the claim, flagged inline).

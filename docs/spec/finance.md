@@ -18,56 +18,56 @@ The entry path is the Invoicing app with compliant German e-invoicing (D4; the o
 
 Tier and wave follow [DECISIONS section 5](../DECISIONS.md); every module is open and free ([section 6](../DECISIONS.md)). The wave windows are RATIFIED (OR-13, D26): W1 2027-01-01 to 2027-09-30, W2 to 2028-06-30, W3 to 2029-06-30, W4 after. The W1 cut of D86 is RATIFIED (OR-13, OR-15); the slip order ([DECISIONS 5.3](../DECISIONS.md)) and the landing waves of displaced items are Proposed, and so are the tiers and the placement of every item that D86 does not name (D25).
 
-| Module (app)                     | Content                                                                                                                                                                         | Tier | Wave                                                            | Licence |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------- | ------- |
-| `account` (Accounting)           | Ledger kernel, journals, AR/AP, reconciliation, locks, hash chain, reports                                                                                                      | T1   | W1                                                              | Open    |
-| `tax`                            | Tax engine, fiscal positions, tags, tax reports                                                                                                                                 | T1   | W1                                                              | Open    |
-| `invoicing` (Invoicing)          | Invoices, credit notes, bills, terms, reminders, PDF                                                                                                                            | T1   | W1                                                              | Open    |
-| `payment`                        | Manual registration (W1); SEPA files, Stripe plus one PSP, batches (W2)                                                                                                         | T1   | W1, providers W2                                                | Open    |
-| `bank`                           | camt.053 and MT940 statement import, reconciliation (W1); CSV mapping, OFX, QIF (W2, Proposed); aggregator feeds with the user's own credentials (W3)                           | T1   | W1, feeds W3                                                    | Open    |
-| `edi`                            | EN 16931 UBL/CII, Factur-X, XRechnung; issue and receive by email or file (W1); Peppol transport adapter through an access point the user chooses (W2)                          | T1   | W1, Peppol W2                                                   | Open    |
-| `l10n` framework, `l10n_de`      | Pack hooks; German pack (chart, taxes, UStVA, DATEV EXTF export, GoBD); `l10n_fr` W2 (Proposed), `l10n_pl` W3                                                                   | T1   | W1                                                              | Open    |
-| `analytic`                       | Plans, accounts, distribution, lines                                                                                                                                            | T0   | W3                                                              | Open    |
-| `stock_account`                  | Stock valuation postings (specified in [supply-chain](supply-chain.md))                                                                                                         | T1   | W1                                                              | Open    |
-| Importer targets                 | Finance side of the importers owned by [integrations](integrations.md): chart, taxes, open invoices and bills, opening balances as a draft entry with a zero trial-balance diff | T1   | CSV W1 (0.3), Odoo W1 (0.6); QuickBooks W2; Xero and ERPNext W3 | Open    |
-| Multi-company                    | Selector, per-company books; first W2 item to slip to W3 if time is short (DECISIONS 5.1)                                                                                       | T1   | W2                                                              | Open    |
-| Approvals (in `automation`)      | Posting and payment approvals                                                                                                                                                   | T0   | W2                                                              | Open    |
-| `expenses` (financial side)      | Expense bills, reimbursement; HR side in [people](people.md)                                                                                                                    | T1   | W3                                                              | Open    |
-| Fixed assets, deferrals, budgets | Modules `assets`, `deferral`, `budget` (names Proposed)                                                                                                                         | T1   | W3                                                              | Open    |
-| `intercompany`                   | Mirrored documents between companies                                                                                                                                            | T2   | W3                                                              | Open    |
-| `consolidation`                  | Translation, eliminations, non-controlling interest                                                                                                                             | T2   | W4                                                              | Open    |
+| Module (app) | Content | Tier | Wave | Licence |
+|---|---|---|---|---|
+| `account` (Accounting) | Ledger kernel, journals, AR/AP, reconciliation, locks, hash chain, reports | T1 | W1 | Open |
+| `tax` | Tax engine, fiscal positions, tags, tax reports | T1 | W1 | Open |
+| `invoicing` (Invoicing) | Invoices, credit notes, bills, terms, reminders, PDF | T1 | W1 | Open |
+| `payment` | Manual registration (W1); SEPA files, Stripe plus one PSP, batches (W2) | T1 | W1, providers W2 | Open |
+| `bank` | camt.053 and MT940 statement import, reconciliation (W1); CSV mapping, OFX, QIF (W2, Proposed); aggregator feeds with the user's own credentials (W3) | T1 | W1, feeds W3 | Open |
+| `edi` | EN 16931 UBL/CII, Factur-X, XRechnung; issue and receive by email or file (W1); Peppol transport adapter through an access point the user chooses (W2) | T1 | W1, Peppol W2 | Open |
+| `l10n` framework, `l10n_de` | Pack hooks; German pack (chart, taxes, UStVA, DATEV EXTF export, GoBD); `l10n_fr` W2 (Proposed), `l10n_pl` W3 | T1 | W1 | Open |
+| `analytic` | Plans, accounts, distribution, lines | T0 | W3 | Open |
+| `stock_account` | Stock valuation postings (specified in [supply-chain](supply-chain.md)) | T1 | W1 | Open |
+| Importer targets | Finance side of the importers owned by [integrations](integrations.md): chart, taxes, open invoices and bills, opening balances as a draft entry with a zero trial-balance diff | T1 | CSV W1 (0.3), Odoo W1 (0.6); QuickBooks W2; Xero and ERPNext W3 | Open |
+| Multi-company | Selector, per-company books; first W2 item to slip to W3 if time is short (DECISIONS 5.1) | T1 | W2 | Open |
+| Approvals (in `automation`) | Posting and payment approvals | T0 | W2 | Open |
+| `expenses` (financial side) | Expense bills, reimbursement; HR side in [people](people.md) | T1 | W3 | Open |
+| Fixed assets, deferrals, budgets | Modules `assets`, `deferral`, `budget` (names Proposed) | T1 | W3 | Open |
+| `intercompany` | Mirrored documents between companies | T2 | W3 | Open |
+| `consolidation` | Translation, eliminations, non-controlling interest | T2 | W4 | Open |
 
 Nothing in this area is paid, gated or withheld (OR-2). The services that earlier drafts put on a paid list do not exist: hosted Peppol, KSeF and Veri*Factu gateways, the per-country Assurance service (legal-change SLA, filing connectors, capped warranty) and a hosted bank-feed broker. SpaceCorps operates no access point, gateway or filing service (D17, D83). Transmission to an authority or a network is the user's step, an adapter that uses the user's own credentials, or a certified access point or platform the user chooses. WORM or object-lock checkpoint publication and auditor evidence packs are ordinary backlog items: not withheld, not promised ([DECISIONS section 6](../DECISIONS.md)).
 
 **W1 and what left it.** W1 is the smallest honest loop (D86; the cut is RATIFIED, OR-13, OR-15): `account`, `tax`, `invoicing`, `payment` (manual registration only), `bank` (camt.053 and MT940 statement import), `edi` (issue and receive by email or file), `l10n_de` (UStVA, DATEV EXTF export, GoBD) and `stock_account`. If time runs short, items leave W1 in the slip order of [DECISIONS 5.3](../DECISIONS.md) (Proposed) and return in reverse order; the table below shows that order and the landing waves (Proposed). The protected core of this area never slips inside W1: the ledger invariants (D30), `account`, `tax`, `invoicing`, manual payments, statement import, `edi` and `l10n_de` with their oracles. The German pack stays beta rather than ship without oracles, golden cases and accountant sign-off (DECISIONS 5.2).
 
-| Finance item                                                       | Slip-order position (DECISIONS 5.3) | Lands | Consequence in this spec                                                                                                                                                                            |
-| ------------------------------------------------------------------ | ----------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `analytics` semantic layer, `analytic`                             | 2, 3                                | W3    | `account` does not depend on `analytic`; `journal_line.analytic_distribution` is added by `analytic` with an expand-only migration; `aggregate` commands cover agent reads (4.8, [cli](cli.md) 3.4) |
-| Xero and ERPNext importers                                         | 4                                   | W3    | W1 imports CSV (0.3) and Odoo (0.6) only                                                                                                                                                            |
-| Pivot, graph and calendar views                                    | 5                                   | W2    | W1 reports use the report viewer, list and form views (4.13)                                                                                                                                        |
-| Approvals on post and pay (`automation` rules, approvals engine)   | 6                                   | W2    | W1 uses `confirm` plans for agents and permission groups for humans (4.16, [ai](ai.md) 4.3)                                                                                                         |
-| QuickBooks importer                                                | 7                                   | W2    | Second switcher path                                                                                                                                                                                |
-| `portal` (customer view and pay)                                   | 8                                   | W2    | Documents reach customers as email with PDF and XML (4.2)                                                                                                                                           |
-| `payment` beyond manual: SEPA files, Stripe plus one               | 9                                   | W2    | Payments are registered by hand; no batch, no PSP (4.5)                                                                                                                                             |
-| `mail` inbound gateway                                             | 11                                  | W2    | A received e-invoice enters as a file (4.6)                                                                                                                                                         |
-| Peppol transport adapter                                           | 12                                  | W2    | Email and file transports only in W1 (4.6; open question 19)                                                                                                                                        |
-| `purchase` orders, `purchase_stock`                                | 13                                  | W2    | Vendor bills without an order in W1; the price-variance path waits (5.4)                                                                                                                            |
-| Aggregator bank feeds; fixed assets, deferrals, budgets; `l10n_pl` | Placed in W3 by DECISIONS 5.1       | W3    | Sections 4.5, 4.9, 4.10                                                                                                                                                                             |
+| Finance item | Slip-order position (DECISIONS 5.3) | Lands | Consequence in this spec |
+|---|---|---|---|
+| `analytics` semantic layer, `analytic` | 2, 3 | W3 | `account` does not depend on `analytic`; `journal_line.analytic_distribution` is added by `analytic` with an expand-only migration; `aggregate` commands cover agent reads (4.8, [cli](cli.md) 3.4) |
+| Xero and ERPNext importers | 4 | W3 | W1 imports CSV (0.3) and Odoo (0.6) only |
+| Pivot, graph and calendar views | 5 | W2 | W1 reports use the report viewer, list and form views (4.13) |
+| Approvals on post and pay (`automation` rules, approvals engine) | 6 | W2 | W1 uses `confirm` plans for agents and permission groups for humans (4.16, [ai](ai.md) 4.3) |
+| QuickBooks importer | 7 | W2 | Second switcher path |
+| `portal` (customer view and pay) | 8 | W2 | Documents reach customers as email with PDF and XML (4.2) |
+| `payment` beyond manual: SEPA files, Stripe plus one | 9 | W2 | Payments are registered by hand; no batch, no PSP (4.5) |
+| `mail` inbound gateway | 11 | W2 | A received e-invoice enters as a file (4.6) |
+| Peppol transport adapter | 12 | W2 | Email and file transports only in W1 (4.6; open question 19) |
+| `purchase` orders, `purchase_stock` | 13 | W2 | Vendor bills without an order in W1; the price-variance path waits (5.4) |
+| Aggregator bank feeds; fixed assets, deferrals, budgets; `l10n_pl` | Placed in W3 by DECISIONS 5.1 | W3 | Sections 4.5, 4.9, 4.10 |
 
 ### 1.3 Boundaries
 
-| Neighbour                                                                                  | Finance owns                                                                             | Neighbour owns                                                                      | Contract                                                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Sales and CRM](sales-crm.md)                                                              | Invoice posting, payment state                                                           | Orders, pricing, quantities, subscription dunning                                   | `InvoiceableSource` (implemented by `sales` and `subscriptions`, called by `invoicing`); `InvoicePosted` updates `qty_invoiced` [R23 D.4]                                                                    |
-| [Supply chain](supply-chain.md)                                                            | Ledger, account roles, posting modes                                                     | Moves, valuation entries, landed costs, the three-way match (`purchase_bill_match`) | `PostingPort` by account role (callers `stock_account`, `mrp_account`); the `BeforeInvoicePost` extension point adds COGS                                                                                    |
-| [People](people.md)                                                                        | Vendor bill and reimbursement                                                            | Employees, expense policy, payroll engine                                           | An approved claim (`ExpenseClaimApproved`) becomes a draft bill through `invoicing`; payroll calls `PostingPort` itself after a confirmed run (entries defined by the payroll pack) and emits `PayRunPosted` |
-| [Retail](retail-commerce-marketing.md)                                                     | Session entries, PSP money                                                               | POS, checkout, fiscal signers                                                       | `pos_account` posts `PosSessionClosed` totals via `PostingPort`; `payment`                                                                                                                                   |
-| [Services](services.md)                                                                    | Invoice of billable time, read from the sale line                                        | Timesheets, project                                                                 | Timesheets are analytic lines; billable time reaches invoicing only through the sale line (`QtyContributionPort` via `sale_timesheet`), then `InvoiceableSource` on `sales` [R23 D.4]                        |
-| [Platform](platform.md)                                                                    | Report definitions, locks                                                                | Contacts, currencies, approvals engine, import, documents                           | Registry, outbox, semantic layer                                                                                                                                                                             |
-| [CLI](cli.md)                                                                              | Command names (wire ids), effect classes and what each dry-run plan shows (section 4.16) | Grammar, flags, exit codes, the output envelope, catalogue tooling, distribution    | D80; cli.md 2 and 3.5                                                                                                                                                                                        |
-| [Security](security-privacy.md), [Integrations](integrations.md), [AI](ai.md), [UX](ux.md) | Permission rows, retention classes, commands and events                                  | Audit log, erasure; API, webhooks, MCP, importers; agents; views                    | D10, D33, sections 4.15 and 4.16                                                                                                                                                                             |
-| [Localization](../LOCALIZATION.md)                                                         | Pack hooks (section 4.14)                                                                | Pack content, channels, gates                                                       | D17, D34                                                                                                                                                                                                     |
+| Neighbour | Finance owns | Neighbour owns | Contract |
+|---|---|---|---|
+| [Sales and CRM](sales-crm.md) | Invoice posting, payment state | Orders, pricing, quantities, subscription dunning | `InvoiceableSource` (implemented by `sales` and `subscriptions`, called by `invoicing`); `InvoicePosted` updates `qty_invoiced` [R23 D.4] |
+| [Supply chain](supply-chain.md) | Ledger, account roles, posting modes | Moves, valuation entries, landed costs, the three-way match (`purchase_bill_match`) | `PostingPort` by account role (callers `stock_account`, `mrp_account`); the `BeforeInvoicePost` extension point adds COGS |
+| [People](people.md) | Vendor bill and reimbursement | Employees, expense policy, payroll engine | An approved claim (`ExpenseClaimApproved`) becomes a draft bill through `invoicing`; payroll calls `PostingPort` itself after a confirmed run (entries defined by the payroll pack) and emits `PayRunPosted` |
+| [Retail](retail-commerce-marketing.md) | Session entries, PSP money | POS, checkout, fiscal signers | `pos_account` posts `PosSessionClosed` totals via `PostingPort`; `payment` |
+| [Services](services.md) | Invoice of billable time, read from the sale line | Timesheets, project | Timesheets are analytic lines; billable time reaches invoicing only through the sale line (`QtyContributionPort` via `sale_timesheet`), then `InvoiceableSource` on `sales` [R23 D.4] |
+| [Platform](platform.md) | Report definitions, locks | Contacts, currencies, approvals engine, import, documents | Registry, outbox, semantic layer |
+| [CLI](cli.md) | Command names (wire ids), effect classes and what each dry-run plan shows (section 4.16) | Grammar, flags, exit codes, the output envelope, catalogue tooling, distribution | D80; cli.md 2 and 3.5 |
+| [Security](security-privacy.md), [Integrations](integrations.md), [AI](ai.md), [UX](ux.md) | Permission rows, retention classes, commands and events | Audit log, erasure; API, webhooks, MCP, importers; agents; views | D10, D33, sections 4.15 and 4.16 |
+| [Localization](../LOCALIZATION.md) | Pack hooks (section 4.14) | Pack content, channels, gates | D17, D34 |
 
 ### 1.4 Conventions
 
@@ -75,29 +75,29 @@ Entity, field, state, permission-group and event names follow [CONVENTIONS.md](.
 
 ## 2. Personas and roles
 
-| Persona                             | Jobs in this area                                                                       | Default permission group                                       |
-| ----------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Business owner or manager           | Cash position, approve payments, read reports                                           | `account.read`, `account.payment_approver` in small businesses |
-| Billing clerk, office manager       | Quote to invoice, send, chase, register payments                                        | `account.billing`                                              |
-| Bookkeeper (in-house, part-time)    | Bills, statements, reconciliation, payment runs                                         | `account.bookkeeper`                                           |
-| Accountant, internal                | Entries, closing, VAT returns                                                           | `account.user`                                                 |
-| External accountant                 | Read, adjust, export; MFA required by default; no seat limit exists (OR-2)              | `account.adviser`                                              |
-| Controller or finance manager       | Chart, taxes, journals, lock dates, budgets, consolidation                              | `account.manager`                                              |
-| Auditor, tax inspector (time-boxed) | Read ledger, audit log, hash verification, exports                                      | `account.read` plus `audit.reader`                             |
-| Employee                            | Submit expenses                                                                         | Expense user (people); no `account.*` group                    |
-| Customer, vendor                    | View and pay documents                                                                  | Portal principal                                               |
-| Implementer                         | Install pack, map chart, migrate opening balances                                       | `account.manager` plus pack install right                      |
-| Agent, API client                   | Drafts, reads, dry-runs and proposals, through the same typed commands as people (OR-4) | Intersection of token scopes and user rights (D18)             |
+| Persona | Jobs in this area | Default permission group |
+|---|---|---|
+| Business owner or manager | Cash position, approve payments, read reports | `account.read`, `account.payment_approver` in small businesses |
+| Billing clerk, office manager | Quote to invoice, send, chase, register payments | `account.billing` |
+| Bookkeeper (in-house, part-time) | Bills, statements, reconciliation, payment runs | `account.bookkeeper` |
+| Accountant, internal | Entries, closing, VAT returns | `account.user` |
+| External accountant | Read, adjust, export; MFA required by default; no seat limit exists (OR-2) | `account.adviser` |
+| Controller or finance manager | Chart, taxes, journals, lock dates, budgets, consolidation | `account.manager` |
+| Auditor, tax inspector (time-boxed) | Read ledger, audit log, hash verification, exports | `account.read` plus `audit.reader` |
+| Employee | Submit expenses | Expense user (people); no `account.*` group |
+| Customer, vendor | View and pay documents | Portal principal |
+| Implementer | Install pack, map chart, migrate opening balances | `account.manager` plus pack install right |
+| Agent, API client | Drafts, reads, dry-runs and proposals, through the same typed commands as people (OR-4) | Intersection of token scopes and user rights (D18) |
 
-| Permission group           | Grants (scope `company`, D10)                                                                             | Never grants                                     |
-| -------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `account.read`             | Reports, documents, drill-through, hash verification, exports                                             | Edits                                            |
-| `account.billing`          | Create and post sales documents, register payments, send                                                  | Vendor bank details, configuration               |
-| `account.bookkeeper`       | Bills, statements, reconciliation, draft payments and batches (batches W2)                                | Batch release, configuration, locks              |
-| `account.user`             | Post and reverse entries, revaluation, closing, tax reports, reconcile models                             | Hard lock, bank-detail changes                   |
-| `account.adviser`          | Everything `account.user` grants on the companies named in the grant, plus export                         | Configuration, payment release                   |
-| `account.manager`          | Configuration, soft lock dates, lock exceptions, packs; hard lock with step-up re-authentication [R18 s2] | Payment release (separate group)                 |
-| `account.payment_approver` | Release batches (W2), approve vendor bank-detail changes                                                  | Creating the same payment (separation of duties) |
+| Permission group | Grants (scope `company`, D10) | Never grants |
+|---|---|---|
+| `account.read` | Reports, documents, drill-through, hash verification, exports | Edits |
+| `account.billing` | Create and post sales documents, register payments, send | Vendor bank details, configuration |
+| `account.bookkeeper` | Bills, statements, reconciliation, draft payments and batches (batches W2) | Batch release, configuration, locks |
+| `account.user` | Post and reverse entries, revaluation, closing, tax reports, reconcile models | Hard lock, bank-detail changes |
+| `account.adviser` | Everything `account.user` grants on the companies named in the grant, plus export | Configuration, payment release |
+| `account.manager` | Configuration, soft lock dates, lock exceptions, packs; hard lock with step-up re-authentication [R18 s2] | Payment release (separate group) |
+| `account.payment_approver` | Release batches (W2), approve vendor bank-detail changes | Creating the same payment (separation of duties) |
 
 The group names are the `account.*` names of the registry in [CONVENTIONS](../CONVENTIONS.md) section 4; [security-privacy](security-privacy.md) section 2 holds the seed list, and [ux](ux.md) and [people](people.md) use the same names. Auditors combine `account.read` with `audit.reader`; there is no separate auditor group. Agents never hold `account.payment_approver`; they create drafts, propose reconciliations and run dry-runs with a digest-bound `plan_id`, while posting, paying and changing bank details need a human or an approval policy (D18, [R16 s5]). In W1 the human approval is a `confirm` plan that a human commits (exit 10 on the CLI, `approval_required` on the API, [cli](cli.md) 2.7); the configurable approve-by-role policy arrives with the approvals engine in W2. IBANs, statement lines, batch files and customer payment token references (PSP references) are `financial` class behind `obop_cls_*` roles (D10, [R23 DR-4]). PSP API keys and webhook secrets are class `secret` (Proposed, [security-privacy](security-privacy.md) 4.1); until it is ratified they are vault entries handled as `financial`. Card numbers are never stored.
 
@@ -105,53 +105,53 @@ The group names are the `account.*` names of the registry in [CONVENTIONS](../CO
 
 Odoo parity column: CE and EE mean Odoo Community and Odoo Enterprise. "Not verified" marks edition facts the research did not establish.
 
-| Capability                                             | Description                                                                                                                                                                                                                 | Wave                           | Odoo parity                                                                                               |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| Double-entry ledger                                    | Journals, entries, lines, GL, trial balance                                                                                                                                                                                 | W1                             | Matches EE (CE has Invoicing only)                                                                        |
-| Chart from pack, parent accounts, roles                | Country templates; roles replace hard-coded accounts                                                                                                                                                                        | W1                             | Matches CE/EE; parent accounts as Odoo 20                                                                 |
-| Posted immutability, reversal-only correction          | No unpost, ever                                                                                                                                                                                                             | W1                             | Beyond (DB-enforced, unconditional)                                                                       |
-| Gapless legal numbering at post                        | Row-locked counter per journal and fiscal year                                                                                                                                                                              | W1                             | Beyond (Odoo flags gaps afterwards)                                                                       |
-| Hash chain per journal                                 | Versioned, integer canonical form, verifier                                                                                                                                                                                 | W1                             | Matches CE; beyond on canonical form                                                                      |
-| Lock dates, time-boxed exceptions                      | Fiscal, sale, purchase, tax, hard                                                                                                                                                                                           | W1                             | Matches CE (20.0 source); DB-enforced                                                                     |
-| Explicit fiscal years and periods                      | Non-overlapping tables                                                                                                                                                                                                      | W1                             | Beyond (Odoo keeps last day and month)                                                                    |
-| Opening balances, year-end closing                     | Dated opening entries with trial-balance diff; optional closing entry                                                                                                                                                       | W1                             | Beyond; edition of Odoo's closing not verified                                                            |
-| Invoices, credit and debit notes, bills, down payments | One document model, credit links                                                                                                                                                                                            | W1                             | Matches CE                                                                                                |
-| Payment terms, early-payment discount                  | Instalments, three discount modes, cash rounding                                                                                                                                                                            | W1                             | Matches CE                                                                                                |
-| PDF and email; portal view and pay                     | Typst PDF/A-3b (Proposed, D20); the portal is W2                                                                                                                                                                            | W1, portal W2                  | Matches CE; beyond on archival PDF                                                                        |
-| Overdue reminders; follow-up policy                    | Simple W1; multi-level W2                                                                                                                                                                                                   | W1, W2                         | CE has automatic reminders in Odoo 20 [R01 s3.2]; no follow-up module in the CE tree [R09 s1.1]           |
-| Duplicate-bill fingerprint                             | Vendor, number, amount, date. The three-way match (`purchase_bill_match`) belongs to `purchase` ([supply-chain](supply-chain.md) 4.2); a mismatch sets `invoice.payment_hold` through an `invoicing-api` command (Proposed) | W1                             | Not verified                                                                                              |
-| Tax engine                                             | Percent, fixed, group, division, price-included, base-affecting, tags                                                                                                                                                       | W1                             | Matches CE                                                                                                |
-| Fiscal positions, reverse charge                       | Substitution by country and VAT status                                                                                                                                                                                      | W1                             | Matches CE                                                                                                |
-| Cash-basis exigibility                                 | Transition account, entries at payment                                                                                                                                                                                      | W1 (Proposed)                  | Matches CE                                                                                                |
-| Withholding on payment, non-deductible VAT             | Repartition features                                                                                                                                                                                                        | W2                             | Matches CE (Odoo 20)                                                                                      |
-| VAT return from tags; OSS                              | German UStVA first; OSS W2                                                                                                                                                                                                  | W1, W2                         | Returns match EE; OSS matches CE                                                                          |
-| `TaxProvider` trait                                    | Contract W1; US sales-tax adapters W3                                                                                                                                                                                       | W1, W3                         | Matches EE (Avatax)                                                                                       |
-| Payments, outstanding-account flow                     | Manual registration; `in_process` prevents double payment                                                                                                                                                                   | W1                             | Matches CE                                                                                                |
-| SEPA credit transfer (pain.001)                        | Batches with maker-checker                                                                                                                                                                                                  | W2                             | No batch or SEPA file module in the Community 20.0 addons list (presumably EE, [I])                       |
-| SEPA direct debit (pain.008), mandates                 | Collection batches                                                                                                                                                                                                          | W2 (Proposed, open question 5) | Same: no module in the Community 20.0 list (presumably EE, [I])                                           |
-| PSP payments                                           | Stripe plus one; idempotent webhooks; payout reconciliation                                                                                                                                                                 | W2                             | Narrower than the 21 online providers in Odoo 20's docs [R21 s6.1], deliberately                          |
-| Statement import                                       | camt.053 and MT940 W1; CSV mapping, OFX and QIF W2 (Proposed)                                                                                                                                                               | W1, W2                         | No statement-import module in the Community 20.0 addons list (presumably EE, [I])                         |
-| Aggregator bank feeds                                  | Bring-your-own-credential                                                                                                                                                                                                   | W3                             | Matches EE                                                                                                |
-| Reconciliation                                         | Split view, rules, suggestions, write-offs                                                                                                                                                                                  | W1                             | Matches EE                                                                                                |
-| Multi-currency                                         | Rate types, exchange differences, revaluation                                                                                                                                                                               | W1                             | Matches CE; revaluation matches EE [I]                                                                    |
-| EN 16931 model, UBL/CII, XRechnung, Factur-X/ZUGFeRD   | Create, parse, validate                                                                                                                                                                                                     | W1                             | Matches CE                                                                                                |
-| E-invoice transports                                   | `EDocTransport` trait with email and file transports (W1); Peppol adapter through an access point the user chooses, with the user's credentials (W2)                                                                        | W1, W2                         | Matches CE (IAP proxy); beyond (bring your own)                                                           |
-| Immutable e-document artefact                          | Raw XML, SHA-256, receipt                                                                                                                                                                                                   | W1                             | Beyond                                                                                                    |
-| Authority adapters                                     | France via PA W2; KSeF beta W2, stable W3; Veri*Factu gated by counsel                                                                                                                                                      | W2, W3                         | CE has connectors                                                                                         |
-| Analytic accounting                                    | Plans, distribution, lines                                                                                                                                                                                                  | W3                             | Matches CE                                                                                                |
-| Budgets                                                | Per analytic account, account, period; revisions                                                                                                                                                                            | W3                             | Matches EE                                                                                                |
-| Fixed assets, deferrals                                | Schedule generators emitting ordinary entries                                                                                                                                                                               | W3                             | Matches EE                                                                                                |
-| Expenses to vendor bills                               | Approved claim becomes a bill                                                                                                                                                                                               | W3                             | Matches CE (Odoo 20)                                                                                      |
-| Report engine and viewer                               | Trial balance, GL, aged, balance sheet, P&L; drill-through                                                                                                                                                                  | W1                             | Engine CE; catalogue and viewer EE                                                                        |
-| Audit-file exports                                     | DATEV, GoBD W1; FEC W2; JPK W3                                                                                                                                                                                              | W1-W3                          | Mostly EE: no `l10n_*_reports` module in the CE tree [R25 B1]                                             |
-| Cash-flow statement, comparatives                      | Period columns, cash-flow report                                                                                                                                                                                            | W2 (Proposed)                  | Not verified                                                                                              |
-| Multi-company books                                    | Selector, per-company chart and locks                                                                                                                                                                                       | W2                             | CE shares one tree; obop keeps company flat (D28)                                                         |
-| Approvals on post and pay                              | Engine with CEL conditions                                                                                                                                                                                                  | W2                             | Matches EE                                                                                                |
-| Intercompany mirroring                                 | Durable events, inbox, reject                                                                                                                                                                                               | W3                             | EE (inferred from absence)                                                                                |
-| VAT groups (`fiscal_unit`)                             | Returns per unit                                                                                                                                                                                                            | W3 (Proposed)                  | Matches Odoo's tax units [R23 C.1]; no tax-unit module or model in the CE 20.0 tree, so presumably EE [I] |
-| Consolidation                                          | Translation, CTA, eliminations, non-controlling interest                                                                                                                                                                    | W4                             | Matches EE; beyond on eliminations                                                                        |
-| Code inside report definitions                         | Odoo lists a `custom` report engine; obop allows CEL only                                                                                                                                                                   | Never                          | Deliberately skipped (D11)                                                                                |
-| Typed commands on CLI, API and MCP                     | Every capability above is a catalogue command with dry-run, `plan_id` and idempotency key (section 4.16)                                                                                                                    | W1, with each module           | Beyond: Odoo gates its API to the Custom plan (D31)                                                       |
+| Capability | Description | Wave | Odoo parity |
+|---|---|---|---|
+| Double-entry ledger | Journals, entries, lines, GL, trial balance | W1 | Matches EE (CE has Invoicing only) |
+| Chart from pack, parent accounts, roles | Country templates; roles replace hard-coded accounts | W1 | Matches CE/EE; parent accounts as Odoo 20 |
+| Posted immutability, reversal-only correction | No unpost, ever | W1 | Beyond (DB-enforced, unconditional) |
+| Gapless legal numbering at post | Row-locked counter per journal and fiscal year | W1 | Beyond (Odoo flags gaps afterwards) |
+| Hash chain per journal | Versioned, integer canonical form, verifier | W1 | Matches CE; beyond on canonical form |
+| Lock dates, time-boxed exceptions | Fiscal, sale, purchase, tax, hard | W1 | Matches CE (20.0 source); DB-enforced |
+| Explicit fiscal years and periods | Non-overlapping tables | W1 | Beyond (Odoo keeps last day and month) |
+| Opening balances, year-end closing | Dated opening entries with trial-balance diff; optional closing entry | W1 | Beyond; edition of Odoo's closing not verified |
+| Invoices, credit and debit notes, bills, down payments | One document model, credit links | W1 | Matches CE |
+| Payment terms, early-payment discount | Instalments, three discount modes, cash rounding | W1 | Matches CE |
+| PDF and email; portal view and pay | Typst PDF/A-3b (Proposed, D20); the portal is W2 | W1, portal W2 | Matches CE; beyond on archival PDF |
+| Overdue reminders; follow-up policy | Simple W1; multi-level W2 | W1, W2 | CE has automatic reminders in Odoo 20 [R01 s3.2]; no follow-up module in the CE tree [R09 s1.1] |
+| Duplicate-bill fingerprint | Vendor, number, amount, date. The three-way match (`purchase_bill_match`) belongs to `purchase` ([supply-chain](supply-chain.md) 4.2); a mismatch sets `invoice.payment_hold` through an `invoicing-api` command (Proposed) | W1 | Not verified |
+| Tax engine | Percent, fixed, group, division, price-included, base-affecting, tags | W1 | Matches CE |
+| Fiscal positions, reverse charge | Substitution by country and VAT status | W1 | Matches CE |
+| Cash-basis exigibility | Transition account, entries at payment | W1 (Proposed) | Matches CE |
+| Withholding on payment, non-deductible VAT | Repartition features | W2 | Matches CE (Odoo 20) |
+| VAT return from tags; OSS | German UStVA first; OSS W2 | W1, W2 | Returns match EE; OSS matches CE |
+| `TaxProvider` trait | Contract W1; US sales-tax adapters W3 | W1, W3 | Matches EE (Avatax) |
+| Payments, outstanding-account flow | Manual registration; `in_process` prevents double payment | W1 | Matches CE |
+| SEPA credit transfer (pain.001) | Batches with maker-checker | W2 | No batch or SEPA file module in the Community 20.0 addons list (presumably EE, [I]) |
+| SEPA direct debit (pain.008), mandates | Collection batches | W2 (Proposed, open question 5) | Same: no module in the Community 20.0 list (presumably EE, [I]) |
+| PSP payments | Stripe plus one; idempotent webhooks; payout reconciliation | W2 | Narrower than the 21 online providers in Odoo 20's docs [R21 s6.1], deliberately |
+| Statement import | camt.053 and MT940 W1; CSV mapping, OFX and QIF W2 (Proposed) | W1, W2 | No statement-import module in the Community 20.0 addons list (presumably EE, [I]) |
+| Aggregator bank feeds | Bring-your-own-credential | W3 | Matches EE |
+| Reconciliation | Split view, rules, suggestions, write-offs | W1 | Matches EE |
+| Multi-currency | Rate types, exchange differences, revaluation | W1 | Matches CE; revaluation matches EE [I] |
+| EN 16931 model, UBL/CII, XRechnung, Factur-X/ZUGFeRD | Create, parse, validate | W1 | Matches CE |
+| E-invoice transports | `EDocTransport` trait with email and file transports (W1); Peppol adapter through an access point the user chooses, with the user's credentials (W2) | W1, W2 | Matches CE (IAP proxy); beyond (bring your own) |
+| Immutable e-document artefact | Raw XML, SHA-256, receipt | W1 | Beyond |
+| Authority adapters | France via PA W2; KSeF beta W2, stable W3; Veri*Factu gated by counsel | W2, W3 | CE has connectors |
+| Analytic accounting | Plans, distribution, lines | W3 | Matches CE |
+| Budgets | Per analytic account, account, period; revisions | W3 | Matches EE |
+| Fixed assets, deferrals | Schedule generators emitting ordinary entries | W3 | Matches EE |
+| Expenses to vendor bills | Approved claim becomes a bill | W3 | Matches CE (Odoo 20) |
+| Report engine and viewer | Trial balance, GL, aged, balance sheet, P&L; drill-through | W1 | Engine CE; catalogue and viewer EE |
+| Audit-file exports | DATEV, GoBD W1; FEC W2; JPK W3 | W1-W3 | Mostly EE: no `l10n_*_reports` module in the CE tree [R25 B1] |
+| Cash-flow statement, comparatives | Period columns, cash-flow report | W2 (Proposed) | Not verified |
+| Multi-company books | Selector, per-company chart and locks | W2 | CE shares one tree; obop keeps company flat (D28) |
+| Approvals on post and pay | Engine with CEL conditions | W2 | Matches EE |
+| Intercompany mirroring | Durable events, inbox, reject | W3 | EE (inferred from absence) |
+| VAT groups (`fiscal_unit`) | Returns per unit | W3 (Proposed) | Matches Odoo's tax units [R23 C.1]; no tax-unit module or model in the CE 20.0 tree, so presumably EE [I] |
+| Consolidation | Translation, CTA, eliminations, non-controlling interest | W4 | Matches EE; beyond on eliminations |
+| Code inside report definitions | Odoo lists a `custom` report engine; obop allows CEL only | Never | Deliberately skipped (D11) |
+| Typed commands on CLI, API and MCP | Every capability above is a catalogue command with dry-run, `plan_id` and idempotency key (section 4.16) | W1, with each module | Beyond: Odoo gates its API to the Custom plan (D31) |
 
 ## 4. Per-app specification
 
@@ -161,35 +161,35 @@ Shared by every finance app. Each app section below adds only what differs. The 
 
 #### 4.1.1 Entities
 
-| Entity                                                                        | Module                      | Purpose                                                                                                                                                  | Key fields                                                                                                                                                                                                                                                                                          | States                                                                               |
-| ----------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `account`                                                                     | account                     | Chart node                                                                                                                                               | `code` (unique per company), `account_type`, `reconcile`, `parent_id`, `is_group`, `currency_code?`                                                                                                                                                                                                 | active, deprecated                                                                   |
-| `account_role`                                                                | account                     | Posting target by name                                                                                                                                   | `role`, `account_id`, `valid_during`                                                                                                                                                                                                                                                                | -                                                                                    |
-| `journal`                                                                     | account                     | Numbering, hashing and posting scope                                                                                                                     | `kind` (sale, purchase, bank, cash, credit_card, general), `gapless`, `hash_chain`, `credit_note_series`, `payment_posting` (direct, via_outstanding)                                                                                                                                               | active                                                                               |
-| `journal_sequence`                                                            | account                     | Counter and chain head per journal and fiscal year                                                                                                       | `next_value`, `last_hash`, `last_chain_seq`                                                                                                                                                                                                                                                         | -                                                                                    |
-| `journal_entry`                                                               | account                     | Ledger header                                                                                                                                            | `entry_kind`, `ledger_kind` (statutory, consolidation), `date`, `number`, `currency_code`, `party_id`, `source_ref`, `reverses_entry_id`, `hash`, `prev_hash`, `is_system`                                                                                                                          | draft, posted, reversed                                                              |
-| `journal_line`                                                                | account                     | Ledger line                                                                                                                                              | `account_id`, `debit_minor`, `credit_minor`, `currency_code`, `amount_currency_minor`, `fx_rate`, `date_maturity`, `residual_minor`, `residual_currency_minor`, `open_item`, `repartition_line_id`, `statement_line_id`; `analytic_distribution` is added by `analytic` in W3                       | follows entry                                                                        |
-| `fiscal_year`, `fiscal_period`                                                | account                     | Calendar                                                                                                                                                 | `during` (date range), `kind` (normal, special)                                                                                                                                                                                                                                                     | open, closed                                                                         |
-| `lock_date`, `lock_exception`                                                 | account                     | Locks and time-boxed exceptions                                                                                                                          | `kind` (fiscal, sale, purchase, tax, hard), `locked_through`; `principal_id`, `until`, `reason`, `revoked_at`                                                                                                                                                                                       | -                                                                                    |
-| `currency_rate`                                                               | base                        | Rate history                                                                                                                                             | `rate NUMERIC(28,14)`, `rate_type` (spot, average, closing, historical), `valid_on`, source                                                                                                                                                                                                         | -                                                                                    |
-| `tax`, `tax_rate_version`                                                     | tax                         | Tax identity; effective-dated rate                                                                                                                       | `amount_type`, `price_include`, `include_base_amount`, `exigibility`; `rate`, `valid_during`                                                                                                                                                                                                        | active                                                                               |
-| `tax_repartition_line`                                                        | tax                         | Where base and tax land                                                                                                                                  | `document_type` (invoice, refund), `kind` (base, tax), `factor_pct`, account role, tags                                                                                                                                                                                                             | -                                                                                    |
-| `tax_tag`                                                                     | tax                         | Return box                                                                                                                                               | `code`, `applies_to`, `sign`, `pack_id`                                                                                                                                                                                                                                                             | -                                                                                    |
-| `fiscal_position`                                                             | tax                         | Substitution                                                                                                                                             | match rules (country, VAT-ID status, B2B or B2C), tax and account substitutions                                                                                                                                                                                                                     | -                                                                                    |
-| `payment_term`                                                                | account                     | Due dates, discount                                                                                                                                      | lines (balance, percent, fixed; offset), early-payment percent, days, mode                                                                                                                                                                                                                          | -                                                                                    |
-| `invoice`, `invoice_line`                                                     | invoicing                   | Commercial document: one model for invoice, bill and credit note                                                                                         | `direction` (`out`, `in`), `kind` (`invoice`, `credit_note`, `debit_note`; values Proposed), `number`, `entry_id`, totals, `supplier_reference`, `payment_hold` (Proposed; set by the three-way match of `purchase` through an `invoicing-api` command), derived `payment_state` and `credit_state` | draft, posted, cancelled (drafts only)                                               |
-| `follow_up_policy`                                                            | invoicing                   | Invoice reminder steps (name Proposed); shares the step-list policy engine with subscription dunning                                                     | ordered steps, reminder templates                                                                                                                                                                                                                                                                   | active                                                                               |
-| `invoice_line_tax`                                                            | tax                         | Frozen tax result                                                                                                                                        | `tax_id`, `rate_version_id`, base, tax, `pack_version`                                                                                                                                                                                                                                              | -                                                                                    |
-| `bank_statement`, `bank_statement_line`                                       | bank                        | Imported bank truth                                                                                                                                      | balances, `source_hash`, `provider_transaction_id`, amount, counterparty, reference, `entry_id`                                                                                                                                                                                                     | imported, matched, reconciled                                                        |
-| `payment`, `payment_batch`                                                    | payment                     | Money movement (`payment`); SEPA file (`payment_batch`, W2)                                                                                              | `direction`, `journal_id`, `method` (`manual` in W1), amount, `batch_id` (W2), `entry_id`; `file_hash` (W2)                                                                                                                                                                                         | draft, posted, reconciled, voided; batch: draft, confirmed, exported, reconciled     |
-| `payment_provider`, `payment_transaction`                                     | payment                     | PSP link (W2)                                                                                                                                            | pinned API version, `provider_tx_id` (unique)                                                                                                                                                                                                                                                       | draft, pending, authorized, done, cancelled, error, refunded                         |
-| `reconciliation_partial`, `reconciliation_group`                              | account                     | Matching                                                                                                                                                 | debit and credit line, amounts in both currencies, `exchange_entry_id`, `source`, `unreconciled_at`                                                                                                                                                                                                 | active, unreconciled                                                                 |
-| `reconcile_model`                                                             | account                     | Rules                                                                                                                                                    | `kind` (match, writeoff), `trigger` (manual, suggest, auto), condition (Domain AST; JSON storage is Proposed, D12), tolerance                                                                                                                                                                       | active                                                                               |
-| `e_document`                                                                  | edi                         | Issued or received e-invoice                                                                                                                             | `format`, `transport` (`email`, `file`; `peppol` from W2), raw XML blob, SHA-256, receipt, validation report, pack version                                                                                                                                                                          | draft, validated, queued, sent, delivered, acknowledged, rejected, failed, cancelled |
-| `asset`, `asset_schedule_line`, `depreciation_model`                          | assets                      | Fixed asset and schedule                                                                                                                                 | cost, salvage, method, duration, roles                                                                                                                                                                                                                                                              | draft, running, paused, closed, disposed                                             |
-| `deferral`, `deferral_line`                                                   | deferral                    | Release schedule                                                                                                                                         | source line, dates, method                                                                                                                                                                                                                                                                          | draft, running, done                                                                 |
-| `analytic_plan`, `analytic_account`, `analytic_line`; `budget`, `budget_line` | analytic, budget            | Dimensions; plan vs actual (W3)                                                                                                                          | `analytic_distribution`; `revision`, planned minor                                                                                                                                                                                                                                                  | budget: draft, confirmed, superseded                                                 |
-| `interco_link`, `ownership_interest`, `fiscal_unit`, `elimination_run`        | intercompany, consolidation | Company-group structure (the single definition of these entities; `failed` is a retryable state, for example when the mirror company's period is locked) | `interco_link`: `src_ref`, `mirror_ref`, `idempotency_key`; `ownership_interest`: `pct_bp`, `method`, `valid_during` (no overlap) [R23 C.2, C.4]                                                                                                                                                    | link: pending, mirrored, rejected, failed                                            |
+| Entity | Module | Purpose | Key fields | States |
+|---|---|---|---|---|
+| `account` | account | Chart node | `code` (unique per company), `account_type`, `reconcile`, `parent_id`, `is_group`, `currency_code?` | active, deprecated |
+| `account_role` | account | Posting target by name | `role`, `account_id`, `valid_during` | - |
+| `journal` | account | Numbering, hashing and posting scope | `kind` (sale, purchase, bank, cash, credit_card, general), `gapless`, `hash_chain`, `credit_note_series`, `payment_posting` (direct, via_outstanding) | active |
+| `journal_sequence` | account | Counter and chain head per journal and fiscal year | `next_value`, `last_hash`, `last_chain_seq` | - |
+| `journal_entry` | account | Ledger header | `entry_kind`, `ledger_kind` (statutory, consolidation), `date`, `number`, `currency_code`, `party_id`, `source_ref`, `reverses_entry_id`, `hash`, `prev_hash`, `is_system` | draft, posted, reversed |
+| `journal_line` | account | Ledger line | `account_id`, `debit_minor`, `credit_minor`, `currency_code`, `amount_currency_minor`, `fx_rate`, `date_maturity`, `residual_minor`, `residual_currency_minor`, `open_item`, `repartition_line_id`, `statement_line_id`; `analytic_distribution` is added by `analytic` in W3 | follows entry |
+| `fiscal_year`, `fiscal_period` | account | Calendar | `during` (date range), `kind` (normal, special) | open, closed |
+| `lock_date`, `lock_exception` | account | Locks and time-boxed exceptions | `kind` (fiscal, sale, purchase, tax, hard), `locked_through`; `principal_id`, `until`, `reason`, `revoked_at` | - |
+| `currency_rate` | base | Rate history | `rate NUMERIC(28,14)`, `rate_type` (spot, average, closing, historical), `valid_on`, source | - |
+| `tax`, `tax_rate_version` | tax | Tax identity; effective-dated rate | `amount_type`, `price_include`, `include_base_amount`, `exigibility`; `rate`, `valid_during` | active |
+| `tax_repartition_line` | tax | Where base and tax land | `document_type` (invoice, refund), `kind` (base, tax), `factor_pct`, account role, tags | - |
+| `tax_tag` | tax | Return box | `code`, `applies_to`, `sign`, `pack_id` | - |
+| `fiscal_position` | tax | Substitution | match rules (country, VAT-ID status, B2B or B2C), tax and account substitutions | - |
+| `payment_term` | account | Due dates, discount | lines (balance, percent, fixed; offset), early-payment percent, days, mode | - |
+| `invoice`, `invoice_line` | invoicing | Commercial document: one model for invoice, bill and credit note | `direction` (`out`, `in`), `kind` (`invoice`, `credit_note`, `debit_note`; values Proposed), `number`, `entry_id`, totals, `supplier_reference`, `payment_hold` (Proposed; set by the three-way match of `purchase` through an `invoicing-api` command), derived `payment_state` and `credit_state` | draft, posted, cancelled (drafts only) |
+| `follow_up_policy` | invoicing | Invoice reminder steps (name Proposed); shares the step-list policy engine with subscription dunning | ordered steps, reminder templates | active |
+| `invoice_line_tax` | tax | Frozen tax result | `tax_id`, `rate_version_id`, base, tax, `pack_version` | - |
+| `bank_statement`, `bank_statement_line` | bank | Imported bank truth | balances, `source_hash`, `provider_transaction_id`, amount, counterparty, reference, `entry_id` | imported, matched, reconciled |
+| `payment`, `payment_batch` | payment | Money movement (`payment`); SEPA file (`payment_batch`, W2) | `direction`, `journal_id`, `method` (`manual` in W1), amount, `batch_id` (W2), `entry_id`; `file_hash` (W2) | draft, posted, reconciled, voided; batch: draft, confirmed, exported, reconciled |
+| `payment_provider`, `payment_transaction` | payment | PSP link (W2) | pinned API version, `provider_tx_id` (unique) | draft, pending, authorized, done, cancelled, error, refunded |
+| `reconciliation_partial`, `reconciliation_group` | account | Matching | debit and credit line, amounts in both currencies, `exchange_entry_id`, `source`, `unreconciled_at` | active, unreconciled |
+| `reconcile_model` | account | Rules | `kind` (match, writeoff), `trigger` (manual, suggest, auto), condition (Domain AST; JSON storage is Proposed, D12), tolerance | active |
+| `e_document` | edi | Issued or received e-invoice | `format`, `transport` (`email`, `file`; `peppol` from W2), raw XML blob, SHA-256, receipt, validation report, pack version | draft, validated, queued, sent, delivered, acknowledged, rejected, failed, cancelled |
+| `asset`, `asset_schedule_line`, `depreciation_model` | assets | Fixed asset and schedule | cost, salvage, method, duration, roles | draft, running, paused, closed, disposed |
+| `deferral`, `deferral_line` | deferral | Release schedule | source line, dates, method | draft, running, done |
+| `analytic_plan`, `analytic_account`, `analytic_line`; `budget`, `budget_line` | analytic, budget | Dimensions; plan vs actual (W3) | `analytic_distribution`; `revision`, planned minor | budget: draft, confirmed, superseded |
+| `interco_link`, `ownership_interest`, `fiscal_unit`, `elimination_run` | intercompany, consolidation | Company-group structure (the single definition of these entities; `failed` is a retryable state, for example when the mirror company's period is locked) | `interco_link`: `src_ref`, `mirror_ref`, `idempotency_key`; `ownership_interest`: `pct_bp`, `method`, `valid_during` (no overlap) [R23 C.2, C.4] | link: pending, mirrored, rejected, failed |
 
 Account types (19; names Proposed, coverage equal to Odoo's [R09 s1.3]): receivable, payable, bank_cash, credit_card, current_asset, non_current_asset, prepayment, fixed_asset, current_liability, non_current_liability, equity, unaffected_earnings, income, other_income, expense, other_expense, depreciation, direct_cost, off_balance. Account roles are snake_case identifiers, not prose (registry: [CONVENTIONS](../CONVENTIONS.md) section 6; US spelling): `receivable`, `payable`, `outstanding_receipts`, `outstanding_payments`, `suspense`, `fx_gain_realized`, `fx_loss_realized`, `fx_gain_unrealized`, `fx_loss_unrealized`, `stock_valuation`, `stock_variation`, `grni`, `cogs`, `price_difference`, `inventory_loss`, `production_cost`, `work_center_absorption`, `landed_cost_clearing`, `tax_payable`, `tax_transition`, `deferred_revenue`, `deferred_expense`, `accumulated_depreciation`, `cumulative_translation_adjustment`, `down_payment`, `rental_deposit_liability`, `gift_card_liability`, `purchases`. The roles from `inventory_loss` to `landed_cost_clearing` are the ones [supply-chain](supply-chain.md) requests through `PostingPort`; the last four names are Proposed. An account that is not a role (office expense, payable to employee) stays a chart account. Document totals are bigint minor units; unit prices `NUMERIC(24,8)`; quantities `NUMERIC(24,6)`; rates `NUMERIC(28,14)` (D9).
 
@@ -207,25 +207,25 @@ Account types (19; names Proposed, coverage equal to Odoo's [R09 s1.3]): receiva
 
 #### 4.1.3 Database-enforced invariants (D30)
 
-| ID     | Invariant                                                                                                                                             | Mechanism                                                                          |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| INV-01 | Posted entry balances in company currency and is not empty                                                                                            | Deferred constraint trigger on `journal_entry`, once per posting [R08 s11]         |
-| INV-02 | Line shape: `debit >= 0`, `credit >= 0`, `debit x credit = 0`; `amount_currency` sign matches; equals `debit - credit` in company currency            | CHECK [R23 DR-5]                                                                   |
-| INV-03 | Posted rows are immutable except whitelisted reconciliation columns                                                                                   | BEFORE UPDATE and DELETE triggers; DELETE and TRUNCATE revoked                     |
-| INV-04 | Transitions only draft, posted, reversed; reversed needs a linked reversal                                                                            | Trigger plus deferred check                                                        |
-| INV-05 | No posting at or before a lock date without a live exception; hard lock moves only forward                                                            | Triggers on entry, line and generated entries [R09 s9.7]                           |
-| INV-06 | Legal number assigned only at post, unique per company and journal                                                                                    | Counter row lock; `CHECK (state='draft' OR number IS NOT NULL)`; unique index      |
-| INV-07 | Hash and previous hash never change; chain sequence unique                                                                                            | Trigger; `UNIQUE (journal_sequence_id, chain_seq)`                                 |
-| INV-08 | Account code unique; receivable and payable are reconcilable; type frozen once used; no posting to group or deprecated accounts; off-balance isolated | Unique index; triggers; composite FK `(company_id, account_id)`                    |
-| INV-09 | Partials never exceed a line in either currency; same account and company; full only at zero residual; residuals equal amount minus partials          | Deferred trigger                                                                   |
-| INV-10 | Repartition factors sum to 100 per tax, document type and kind; rate versions do not overlap                                                          | Deferred trigger; EXCLUDE (PG 17 level)                                            |
-| INV-11 | Fiscal years do not overlap and cover every entry date                                                                                                | EXCLUDE plus a coverage trigger; `WITHOUT OVERLAPS` behind `requires_pg = 18` (D8) |
-| INV-12 | Invoice totals equal posted line sums; cumulative credit never exceeds the original                                                                   | Deferred trigger on credit links                                                   |
-| INV-13 | E-document artefact immutable after validation; status moves only along the transition table                                                          | Trigger                                                                            |
-| INV-14 | Statement lines and PSP events are idempotent; bank-account lines need a statement line unless the journal posts directly                             | Unique indexes; trigger [R09 s9.13]                                                |
-| INV-15 | Company isolation                                                                                                                                     | `company_id NOT NULL`, composite FKs, RLS backstop (D10)                           |
-| INV-16 | Audit and security events are append-only; lock, journal and tax configuration changes always logged                                                  | Trigger; REVOKE [R18 s6]                                                           |
-| INV-17 | No anonymising or deleting posted-document personal data before the pack's retention class expires                                                    | Pack-driven guard                                                                  |
+| ID | Invariant | Mechanism |
+|---|---|---|
+| INV-01 | Posted entry balances in company currency and is not empty | Deferred constraint trigger on `journal_entry`, once per posting [R08 s11] |
+| INV-02 | Line shape: `debit >= 0`, `credit >= 0`, `debit x credit = 0`; `amount_currency` sign matches; equals `debit - credit` in company currency | CHECK [R23 DR-5] |
+| INV-03 | Posted rows are immutable except whitelisted reconciliation columns | BEFORE UPDATE and DELETE triggers; DELETE and TRUNCATE revoked |
+| INV-04 | Transitions only draft, posted, reversed; reversed needs a linked reversal | Trigger plus deferred check |
+| INV-05 | No posting at or before a lock date without a live exception; hard lock moves only forward | Triggers on entry, line and generated entries [R09 s9.7] |
+| INV-06 | Legal number assigned only at post, unique per company and journal | Counter row lock; `CHECK (state='draft' OR number IS NOT NULL)`; unique index |
+| INV-07 | Hash and previous hash never change; chain sequence unique | Trigger; `UNIQUE (journal_sequence_id, chain_seq)` |
+| INV-08 | Account code unique; receivable and payable are reconcilable; type frozen once used; no posting to group or deprecated accounts; off-balance isolated | Unique index; triggers; composite FK `(company_id, account_id)` |
+| INV-09 | Partials never exceed a line in either currency; same account and company; full only at zero residual; residuals equal amount minus partials | Deferred trigger |
+| INV-10 | Repartition factors sum to 100 per tax, document type and kind; rate versions do not overlap | Deferred trigger; EXCLUDE (PG 17 level) |
+| INV-11 | Fiscal years do not overlap and cover every entry date | EXCLUDE plus a coverage trigger; `WITHOUT OVERLAPS` behind `requires_pg = 18` (D8) |
+| INV-12 | Invoice totals equal posted line sums; cumulative credit never exceeds the original | Deferred trigger on credit links |
+| INV-13 | E-document artefact immutable after validation; status moves only along the transition table | Trigger |
+| INV-14 | Statement lines and PSP events are idempotent; bank-account lines need a statement line unless the journal posts directly | Unique indexes; trigger [R09 s9.13] |
+| INV-15 | Company isolation | `company_id NOT NULL`, composite FKs, RLS backstop (D10) |
+| INV-16 | Audit and security events are append-only; lock, journal and tax configuration changes always logged | Trigger; REVOKE [R18 s6] |
+| INV-17 | No anonymising or deleting posted-document personal data before the pack's retention class expires | Pack-driven guard |
 
 #### 4.1.4 Legal numbering and the hash chain
 
@@ -256,7 +256,6 @@ Suggestions come from `reconcile_model` rules (reference, amount, party, IBAN, d
 **Entities and states.** `invoice`, `invoice_line`, `invoice_line_tax`, `payment_term` (section 4.1.1). Document state: draft, posted, cancelled (never-numbered drafts only). Derived `payment_state`: unpaid, partial, in_process (covered by posted payments not yet bank-matched), paid. Derived `credit_state`: `none`, `partially_credited`, `fully_credited`.
 
 **Workflow.**
-
 1. Draft from an `InvoiceableSource` (sales order, including billable time through `sale_timesheet`; subscription) or manually; the tax engine recomputes on every edit.
 2. Preview entries (`dry_run`): lines by role, no number.
 3. Post: locks, `BeforeInvoicePost` (COGS lines, EN 16931 pre-flight), number, hash, balance check.
@@ -287,7 +286,6 @@ Suggestions come from `reconcile_model` rules (reference, amount, party, IBAN, d
 **Entities.** Section 4.1.1. Entry kinds: invoice_out, invoice_in, credit, payment, bank, misc, opening, closing, revaluation, exchange_difference, tax_closing, depreciation, deferral, stock_valuation, elimination.
 
 **Workflow (period close).**
-
 1. Bank lines matched; suspense balance zero.
 2. Revaluation run with auto-reversal (4.7); depreciation and deferral jobs posted where assets and deferrals are installed (W3).
 3. Trial balance and sequence-gap report clean.
@@ -320,12 +318,12 @@ The sequence is also available as one composite command, `period.close` (Propose
 
 **Tax engine contract.**
 
-| Item            | Contract                                                                                                                                                                                                                                                |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Input           | Tax-point date, company tax profile, resolved fiscal position, lines (quantity, unit price, discount, tax ids), currency exponent, rounding profile, cash rounding, early-payment mode                                                                  |
-| Output          | Per-line base and tax (minor units), totals per (tax, rate), expanded repartition lines (role, tags, sign), rounding line, `explain` trace, pack and rate versions used                                                                                 |
-| Guarantees      | Pure, total, deterministic, no I/O or clock; same crate runs on the server and in Wasm for drafts, POS and cart (D29, [R12 s3.2])                                                                                                                       |
-| Lifecycle       | Computed on every draft edit; recomputed once from frozen inputs at post; stored in `invoice_line_tax`; never recomputed after post (D38)                                                                                                               |
+| Item | Contract |
+|---|---|
+| Input | Tax-point date, company tax profile, resolved fiscal position, lines (quantity, unit price, discount, tax ids), currency exponent, rounding profile, cash rounding, early-payment mode |
+| Output | Per-line base and tax (minor units), totals per (tax, rate), expanded repartition lines (role, tags, sign), rounding line, `explain` trace, pack and rate versions used |
+| Guarantees | Pure, total, deterministic, no I/O or clock; same crate runs on the server and in Wasm for drafts, POS and cart (D29, [R12 s3.2]) |
+| Lifecycle | Computed on every draft edit; recomputed once from frozen inputs at post; stored in `invoice_line_tax`; never recomputed after post (D38) |
 | External engine | `TaxProvider`: `calculate` (draft), `commit` (post, idempotent on document id and version), `void`, `refund` (credit notes) [R21 s6.7]. Provider failure blocks posting unless a fallback is configured; provider reference and raw response are stored |
 
 Rounding example: three lines of 1.02 at 19% give 0.57 with `per_line` and 0.58 with `per_group` (3.06 x 0.19 = 0.5814). EN 16931 output requires group rounding (BR-CO-17) [R23 DR-5], so EU packs default to `per_group` and freeze it after the first posting (Proposed).
@@ -349,7 +347,6 @@ Rounding example: three lines of 1.02 at 19% give 0.57 with `per_line` and 0.58 
 **States.** Payment: draft, posted (shown as "Paid"; the outstanding entry exists), reconciled (bank-matched), voided (reversed; a reconciled payment is unreconciled first). The register-payment dialog subtracts posted payments so a bill cannot be paid twice [R09 s6].
 
 **Workflow.**
-
 1. Import a statement (idempotent on `source_hash` and provider transaction id); each line creates its own bank entry against the suspense role. The opening and closing balance must chain. A line dated inside a locked period is rejected and listed in the import report; the accountant grants a lock exception, and nothing is silently re-dated (Proposed).
 2. Accept suggestions or match manually; differences go to a write-off or an exchange difference.
 3. Register payments against invoices or bills, singly in W1 and as a batch from W2; the entry debits or credits an outstanding role. Cash journals, and journals with `payment_posting = direct`, post to the account at once.
@@ -394,7 +391,6 @@ stateDiagram-v2
 ```
 
 **Workflow (outbound).**
-
 1. At `BeforeInvoicePost`, pure-Rust BR-CO totals and mandatory-field checks run; failure blocks posting with a problem+json error.
 2. After commit, the durable `InvoicePosted` handler builds the syntax, runs the Rust validation engine against the pinned rule sets and stores raw XML, SHA-256 and report (immutable).
 3. `EDocTransport` sends (`send`, `poll`, `receive`, `cancel`) through the configured transport: `email` or `file` in W1 (handed to the mail relay, or written to a directory), the user's own Peppol access point from W2.
@@ -444,7 +440,6 @@ A line with a deferral policy posts to the `deferred_revenue` or `deferred_expen
 ### 4.11 Expenses (financial side, W3)
 
 **Workflow.**
-
 1. The employee submits a claim with receipts (HR side in [people](people.md)).
 2. The approvals engine routes it (CEL conditions, [R15 s9]); claim states (owned by [people](people.md) 4.5): draft, submitted, approved, refused, cancelled. `reimbursed` is a value of the derived `reimbursement_state`, not a claim state.
 3. Approval creates a draft vendor bill in the expense journal through `invoicing`, with the employee as party (Odoo 20 does the same, [R09 s1.2], [R13 s3.4]); the accountant posts it.
@@ -476,16 +471,16 @@ A line with a deferral policy posts to the `deferred_revenue` or `deferred_expen
 
 Core never imports a country; packs register at start-up [R09 s8]. Hooks (content and gates in [Localization](../LOCALIZATION.md), D17, D34):
 
-| Hook                                   | Form                  | Finance use                                                                     |
-| -------------------------------------- | --------------------- | ------------------------------------------------------------------------------- |
-| Chart template                         | Data                  | Accounts, parents, roles, default journals                                      |
-| Tax template                           | Data, effective-dated | Taxes, versions, repartition, tags, fiscal positions                            |
-| Report definitions                     | Data (declarative)    | VAT return, balance sheet, P&L, aged                                            |
-| `IntegrityProfile`                     | Policy data           | Gapless scope, hash fields and version, lock defaults, retention years, QR spec |
-| `AuditFileExporter`                    | Code                  | DATEV, GoBD, FEC, SAF-T, JPK                                                    |
-| `DocFormat`, `EDocTransport`           | Code                  | Build, parse, validate; send, poll, receive, cancel                             |
-| `VatIdValidator`, `ExchangeRateSource` | Code                  | VIES; rate feeds                                                                |
-| Templates and defaults                 | Data                  | Payment terms, rounding profile, numbering, bank format variants                |
+| Hook | Form | Finance use |
+|---|---|---|
+| Chart template | Data | Accounts, parents, roles, default journals |
+| Tax template | Data, effective-dated | Taxes, versions, repartition, tags, fiscal positions |
+| Report definitions | Data (declarative) | VAT return, balance sheet, P&L, aged |
+| `IntegrityProfile` | Policy data | Gapless scope, hash fields and version, lock defaults, retention years, QR spec |
+| `AuditFileExporter` | Code | DATEV, GoBD, FEC, SAF-T, JPK |
+| `DocFormat`, `EDocTransport` | Code | Build, parse, validate; send, poll, receive, cancel |
+| `VatIdValidator`, `ExchangeRateSource` | Code | VIES; rate feeds |
+| Templates and defaults | Data | Payment terms, rounding profile, numbering, bank format variants |
 
 Packs are signed, effective-dated bundles (code tier X1 plus optional code; D11, [R24 s3.1]); upgrades are migrations keyed by `template_version`. The Wasm host arrives in W3 (D11, D86), so in W1 and W2 the hooks marked "Code" are first-party native code (X5) in `l10n_de` and the EN 16931 crates, released with core and consuming the signed data pack; from W3 format builders, validators and transport clients can move into packs as Wasm components (X3), while hash-chain algorithms stay X5 ([Localization](../LOCALIZATION.md), Proposed D25). Every tax computation stores the pack version and inputs (D38). The German pack is estimated at 14.5 person-months, plus or minus 40% (estimate, [R25 A8]), sized for a larger team than the owner plus AI agents; its VAT-return line includes ELSTER/ERiC transmission, its transport line a Peppol access-point partner and its audit-export line DATEV Connect online, three parts that the W1 cut (D86) does not include. The dates are alpha 2027-03-31, beta 2027-06-30 and pack stable 2027-09-30 (D26; the pack-stable date is RATIFIED, OR-13, and the alpha and beta dates are Proposed). Whether the owner plus agents (D84) can deliver even the cut pack on those dates is the schedule-feasibility risk; the mitigation is scope, in the slip order of DECISIONS 5.3 (Proposed), and the pack stays beta until its oracles, golden cases and accountant sign-off are in. Its retention classes: invoices eight years (section 14b(1) UStG, [R09 s4]), books ten years (HGB section 257, [R18 s8]). Chart licences can force data-pack delivery (D4).
 
@@ -493,41 +488,41 @@ Packs are signed, effective-dated bundles (code tier X1 plus optional code; D11,
 
 Event names, kinds and named consumers follow [CONVENTIONS](../CONVENTIONS.md) sections 3.2 and 3.4 (kinds: T handler in the publisher's transaction, D durable outbox delivery, T+D both). Names are Proposed except those in [R23 D.4]. `BeforeInvoicePost` is an extension point (a port with a chain of implementers that `invoicing` runs), not an event (ARCHITECTURE 4.3).
 
-| Event or extension point                                                   | Kind                  | Emitter (owner for the extension point)          | Consumers (implementers for the extension point)                                                                                                                                                                                                             |
-| -------------------------------------------------------------------------- | --------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `BeforeInvoicePost`                                                        | Extension point, runs | invoicing                                        | stock_account (COGS lines), edi (EN 16931 pre-flight), tax provider (commit)                                                                                                                                                                                 |
-| `InvoicePosted`                                                            | T+D                   | invoicing                                        | T: sales (`qty_invoiced`), sale_timesheet (locks entries). D: edi, portal, mail, intercompany, assets, deferral, webhooks (`invoice.posted`); the full list is CONVENTIONS 3.4                                                                               |
-| `InvoiceReversed`                                                          | T+D                   | invoicing                                        | T: sales (quantities). D: stock_account (to confirm; return COGS is added at `BeforeInvoicePost`, 5.2), commissions (clawback), loyalty (reverse points), webhooks. Not edi: the credit note document is a posted invoice and reaches edi as `InvoicePosted` |
-| `PaymentTransactionDone`                                                   | D                     | payment                                          | sales via `sale_payment` (prepayment, Proposed), subscriptions, ecommerce, appointments (deposit), webhooks                                                                                                                                                  |
-| `PaymentTransactionFailed`                                                 | D                     | payment                                          | subscriptions (dunning), sales, webhooks                                                                                                                                                                                                                     |
-| `PaymentPosted`                                                            | D                     | payment                                          | invoicing (`payment_state`), people, webhooks                                                                                                                                                                                                                |
-| `PaymentReconciled`                                                        | D                     | payment                                          | invoicing (`payment_state`), sales (order `payment_state`), people (claim reimbursed), payroll (run paid), subscriptions, commissions, ecommerce, webhooks                                                                                                   |
-| `PaymentVoided`                                                            | D                     | payment                                          | invoicing (`payment_state`), sales, people, webhooks                                                                                                                                                                                                         |
-| `BankStatementImported`                                                    | D                     | bank                                             | Suggestion job                                                                                                                                                                                                                                               |
-| `EntryPosted`, `LockDateChanged`                                           | D                     | account                                          | Analytics, automation, audit                                                                                                                                                                                                                                 |
-| `TaxClosingPosted`                                                         | D                     | tax (not account)                                | Analytics, automation, audit                                                                                                                                                                                                                                 |
-| `TaxRuleChanged` (Proposed)                                                | D                     | tax                                              | POS snapshot builder                                                                                                                                                                                                                                         |
-| `EDocumentStatusChanged`                                                   | D                     | edi                                              | invoicing badge, mail, webhooks                                                                                                                                                                                                                              |
-| `FxRatesUpdated`                                                           | D                     | base, via `ExchangeRateSource`                   | account (revaluation hint), pricing, analytics, mail                                                                                                                                                                                                         |
-| `AssetDepreciationPosted`, `DeferralReleased`, `IntercompanyMirrorCreated` | D                     | assets, deferral, intercompany                   | Analytics, mail, approvals                                                                                                                                                                                                                                   |
-| `TransferDone`                                                             | T+D                   | stock                                            | T: stock_account, which posts valuation entries through `PostingPort`                                                                                                                                                                                        |
-| `PosSessionClosed`                                                         | T                     | pos                                              | pos_account, which posts session entries through `PostingPort`                                                                                                                                                                                               |
-| `ExpenseClaimApproved`                                                     | D                     | people (expenses)                                | The finance side of expenses: a draft bill through `invoicing`, one per claim                                                                                                                                                                                |
-| `PayRunPosted`                                                             | D                     | payroll                                          | Analytics. Payroll calls `PostingPort` itself after a confirmed run; `account` does not consume `PayslipConfirmed` (payslip ready is a portal and notification event)                                                                                        |
-| `PartyBankAccountChanged` (Proposed)                                       | D                     | base contacts ([platform](platform.md) 4.2)      | account: approval and payment block, so a changed payee account is not paid in a batch until an `account.payment_approver` approves it (4.5)                                                                                                                 |
-| `ExtractionCompleted`                                                      | D                     | ai extraction                                    | account: draft vendor bill from the draft reference, created through `invoicing` (4.6); the call into extraction is the optional `ExtractionPort`                                                                                                            |
-| `CommissionPeriodClosed`                                                   | D                     | commissions ([sales-crm](sales-crm.md) 4.7)      | account: draft vendor bill for external agents, created through `invoicing`; payroll export is the other consumer ([people](people.md))                                                                                                                      |
-| `PosInvoiceRequested`                                                      | D                     | pos ([retail](retail-commerce-marketing.md) 4.1) | invoicing via `InvoiceableSource`: a draft invoice, numbered on posting                                                                                                                                                                                      |
-| `ReturnRequested`, `WithdrawalRequested`                                   | D                     | ecommerce (retail 4.3)                           | invoicing: a credit note once the return is approved. `stock` creates the return transfer                                                                                                                                                                    |
+| Event or extension point | Kind | Emitter (owner for the extension point) | Consumers (implementers for the extension point) |
+|---|---|---|---|
+| `BeforeInvoicePost` | Extension point, runs | invoicing | stock_account (COGS lines), edi (EN 16931 pre-flight), tax provider (commit) |
+| `InvoicePosted` | T+D | invoicing | T: sales (`qty_invoiced`), sale_timesheet (locks entries). D: edi, portal, mail, intercompany, assets, deferral, webhooks (`invoice.posted`); the full list is CONVENTIONS 3.4 |
+| `InvoiceReversed` | T+D | invoicing | T: sales (quantities). D: stock_account (to confirm; return COGS is added at `BeforeInvoicePost`, 5.2), commissions (clawback), loyalty (reverse points), webhooks. Not edi: the credit note document is a posted invoice and reaches edi as `InvoicePosted` |
+| `PaymentTransactionDone` | D | payment | sales via `sale_payment` (prepayment, Proposed), subscriptions, ecommerce, appointments (deposit), webhooks |
+| `PaymentTransactionFailed` | D | payment | subscriptions (dunning), sales, webhooks |
+| `PaymentPosted` | D | payment | invoicing (`payment_state`), people, webhooks |
+| `PaymentReconciled` | D | payment | invoicing (`payment_state`), sales (order `payment_state`), people (claim reimbursed), payroll (run paid), subscriptions, commissions, ecommerce, webhooks |
+| `PaymentVoided` | D | payment | invoicing (`payment_state`), sales, people, webhooks |
+| `BankStatementImported` | D | bank | Suggestion job |
+| `EntryPosted`, `LockDateChanged` | D | account | Analytics, automation, audit |
+| `TaxClosingPosted` | D | tax (not account) | Analytics, automation, audit |
+| `TaxRuleChanged` (Proposed) | D | tax | POS snapshot builder |
+| `EDocumentStatusChanged` | D | edi | invoicing badge, mail, webhooks |
+| `FxRatesUpdated` | D | base, via `ExchangeRateSource` | account (revaluation hint), pricing, analytics, mail |
+| `AssetDepreciationPosted`, `DeferralReleased`, `IntercompanyMirrorCreated` | D | assets, deferral, intercompany | Analytics, mail, approvals |
+| `TransferDone` | T+D | stock | T: stock_account, which posts valuation entries through `PostingPort` |
+| `PosSessionClosed` | T | pos | pos_account, which posts session entries through `PostingPort` |
+| `ExpenseClaimApproved` | D | people (expenses) | The finance side of expenses: a draft bill through `invoicing`, one per claim |
+| `PayRunPosted` | D | payroll | Analytics. Payroll calls `PostingPort` itself after a confirmed run; `account` does not consume `PayslipConfirmed` (payslip ready is a portal and notification event) |
+| `PartyBankAccountChanged` (Proposed) | D | base contacts ([platform](platform.md) 4.2) | account: approval and payment block, so a changed payee account is not paid in a batch until an `account.payment_approver` approves it (4.5) |
+| `ExtractionCompleted` | D | ai extraction | account: draft vendor bill from the draft reference, created through `invoicing` (4.6); the call into extraction is the optional `ExtractionPort` |
+| `CommissionPeriodClosed` | D | commissions ([sales-crm](sales-crm.md) 4.7) | account: draft vendor bill for external agents, created through `invoicing`; payroll export is the other consumer ([people](people.md)) |
+| `PosInvoiceRequested` | D | pos ([retail](retail-commerce-marketing.md) 4.1) | invoicing via `InvoiceableSource`: a draft invoice, numbered on posting |
+| `ReturnRequested`, `WithdrawalRequested` | D | ecommerce (retail 4.3) | invoicing: a credit note once the return is approved. `stock` creates the return transfer |
 
 `sales` consumes `PaymentReconciled` and `PaymentVoided` only, not `PaymentPosted`: an order's `payment_state` counts an invoice that is `in_process` as unpaid.
 
-| Port or trait                                                                        | Implemented by                                                                                        | Called by                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PostingPort` (hub port, in `account-api`, D27)                                      | `account`, by account role                                                                            | `stock_account`, `mrp_account`, `payroll`, `pos_account`, `rental` (deposit role). Not `expenses`: an approved claim becomes a draft bill through `invoicing`                               |
-| `InvoiceableSource` (hub port, D27)                                                  | `sales`, `subscriptions`; Proposed: `purchase` (vendor bills), `pos`, `expenses` via `expenses_sales` | `invoicing` (`CreateInvoice`). `timesheet` is not an implementer: billable time reaches invoicing through the sale line, and time-only invoicing stays an owner question (open question 18) |
-| `ExtractionPort` (optional, `Option<Arc<dyn ExtractionPort>>`, D27)                  | `ai` extraction                                                                                       | `account` (inbound bills), `expenses` (receipts)                                                                                                                                            |
-| `TaxProvider`, `BankFeed`, `PaymentProvider`, `ExchangeRateSource` (provider traits) | First-party native adapters (X5); third-party adapters as X3 or X4 from W3 (D86)                      | `tax`, `bank`, `payment`, `base`                                                                                                                                                            |
+| Port or trait | Implemented by | Called by |
+|---|---|---|
+| `PostingPort` (hub port, in `account-api`, D27) | `account`, by account role | `stock_account`, `mrp_account`, `payroll`, `pos_account`, `rental` (deposit role). Not `expenses`: an approved claim becomes a draft bill through `invoicing` |
+| `InvoiceableSource` (hub port, D27) | `sales`, `subscriptions`; Proposed: `purchase` (vendor bills), `pos`, `expenses` via `expenses_sales` | `invoicing` (`CreateInvoice`). `timesheet` is not an implementer: billable time reaches invoicing through the sale line, and time-only invoicing stays an owner question (open question 18) |
+| `ExtractionPort` (optional, `Option<Arc<dyn ExtractionPort>>`, D27) | `ai` extraction | `account` (inbound bills), `expenses` (receipts) |
+| `TaxProvider`, `BankFeed`, `PaymentProvider`, `ExchangeRateSource` (provider traits) | First-party native adapters (X5); third-party adapters as X3 or X4 from W3 (D86) | `tax`, `bank`, `payment`, `base` |
 
 Webhooks use Standard Webhooks with dotted names such as `invoice.posted` (D31, [R21 s4.2]). API posting endpoints take `Idempotency-Key` and support `dry_run`; so do the CLI and the MCP tools, which share one catalogue with the API (D80, section 4.16).
 
@@ -539,39 +534,39 @@ Finance is a set of typed commands. Each command below is one entry of the regis
 
 **Commands.** Ids marked (P) are Proposed names that [cli](cli.md) 3.5 does not yet list; the others are named in cli.md 3.5 (where it marks some with `*` until this spec names them). "Agent" is the default for an agent principal (ai.md 4.3): `auto` runs, `confirm` produces a plan that a human commits, "not exposed" means the command is absent from the agent's tool list.
 
-| Wire id (CLI form `obop <model> <action>`)                                                    | What it does and what its plan shows                                                                                                                                     | Effect                  | Agent                            | Wave   |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | -------------------------------- | ------ |
-| `invoice.create_draft`                                                                        | Draft invoice, bill or credit note from lines or an `InvoiceableSource`; tax recomputed                                                                                  | draft                   | auto                             | W1     |
-| `invoice.post`                                                                                | Posts: locks, `BeforeInvoicePost`, number, hash, balance check. Plan: entries by role, tax lines per tax and rate, EN 16931 pre-flight result, lock-date check           | commit                  | confirm                          | W1     |
-| `invoice.reverse`                                                                             | Credit note draft linked to the original, in full or by line. Plan: the creditable remainder (INV-12). Posting it is `invoice.post`                                      | draft                   | auto                             | W1     |
-| `invoice.cancel` (P)                                                                          | Cancels a never-numbered draft                                                                                                                                           | draft                   | auto                             | W1     |
-| `invoice.send` (P)                                                                            | Renders the PDF and sends it through the party's channel; delegates to `e_document.send` when the pack needs an e-invoice                                                | external                | confirm                          | W1     |
-| `invoice.remind` (P)                                                                          | Sends the next step of a `follow_up_policy`                                                                                                                              | external                | confirm                          | W1     |
-| `payment.register`                                                                            | Registers a receipt or payment against invoices or bills. Plan: the payment entry on the outstanding or bank account, the new residuals, the resulting `payment_state`   | commit                  | confirm                          | W1     |
-| `payment.void` (P)                                                                            | Voids a posted payment by reversal, unreconciling first                                                                                                                  | commit                  | confirm                          | W1     |
-| `bank_statement.import`                                                                       | Imports a camt.053 or MT940 file into a bank journal, idempotent on `source_hash`. Plan: new lines, duplicates skipped, balance chain, lines rejected for locked periods | commit                  | confirm                          | W1     |
-| `bank_statement_line.suggest` (P)                                                             | Ranked candidate matches from `reconcile_model` rules; AI may rank, never posts                                                                                          | read                    | auto                             | W1     |
-| `bank_statement_line.reconcile`                                                               | Matches a statement line to a payment or open items, with write-off or exchange difference. Plan: matched items, partial or full, system entries                         | commit                  | confirm                          | W1     |
-| `journal_line.reconcile`, `journal_line.unreconcile` (P)                                      | Matches open items of one account (credit note to invoice) or undoes a match (partials are append-only, 4.1.6)                                                           | commit                  | confirm                          | W1     |
-| `journal_entry.post`, `journal_entry.reverse`                                                 | Posts a draft entry; reverses a posted one on an open date                                                                                                               | commit                  | confirm                          | W1     |
-| `fx_revaluation.run` (P)                                                                      | Period-end revaluation with auto-reversal (4.7)                                                                                                                          | commit                  | confirm                          | W1     |
-| `lock_date.set`                                                                               | Moves a lock date forward (a hard lock also needs step-up). Plan: the entries and drafts the new date would block                                                        | commit                  | confirm                          | W1     |
-| `lock_date.reopen` (P)                                                                        | Moves a soft lock date back. Never applies to the hard lock (INV-05)                                                                                                     | destructive             | not exposed                      | W1     |
-| `lock_exception.grant`, `lock_exception.revoke`                                               | Time-boxed, per principal, audited                                                                                                                                       | destructive             | not exposed                      | W1     |
-| `period.close` (P)                                                                            | Composite over 4.3: checks, blockers in the plan, then lock dates                                                                                                        | commit                  | confirm                          | W1     |
-| `tax_closing.post` (P)                                                                        | Posts the tax closing entry and moves the tax lock when configured                                                                                                       | commit                  | confirm                          | W1     |
-| `tax_return.compute`                                                                          | UStVA box values from tax tags for a period                                                                                                                              | read                    | auto                             | W1, DE |
-| `audit_file.export`                                                                           | DATEV EXTF and GoBD (W1); FEC (W2); JPK (W3). Audited; needs the `export` operation                                                                                      | read                    | auto within scope                | W1, DE |
-| `report.run` (P)                                                                              | Runs a report definition for a period, company scope and target currency                                                                                                 | read                    | auto                             | W1     |
-| `ledger.verify`                                                                               | Recomputes the per-journal hash chain                                                                                                                                    | read                    | auto                             | W1     |
-| `e_document.validate`                                                                         | Validates against the pinned rule sets                                                                                                                                   | read                    | auto                             | W1     |
-| `e_document.send`                                                                             | Transmits by email or file (W1), Peppol (W2)                                                                                                                             | external                | confirm                          | W1     |
-| `e_document.receive` (P)                                                                      | Parses a received EN 16931 file into a draft bill; deduplicates by fingerprint                                                                                           | draft                   | auto                             | W1     |
-| `e_document.retry` (P)                                                                        | Moves a `failed` document back to `queued`                                                                                                                               | external                | confirm                          | W1     |
-| `payment_batch.create`, `.confirm`, `.export` (P)                                             | pain.001 batch with maker-checker                                                                                                                                        | draft, commit, external | auto, confirm, confirm           | W2     |
-| `payment_batch.release` (P)                                                                   | Releases a batch; `account.payment_approver` only                                                                                                                        | money_and_payee         | not exposed before the W2 policy | W2     |
-| `payment_provider.create`, `payment_transaction.refund` (P)                                   | Connects a PSP account (keys from a file); refunds a transaction                                                                                                         | commit, money_and_payee | confirm, not exposed             | W2     |
-| `asset.*`, `deferral.*`, `budget.*`, `interco_link.*`, `elimination_run.*`, `bank_feed.*` (P) | Specified with their modules (4.8 to 4.12, 4.5)                                                                                                                          | per module              | per module                       | W3, W4 |
+| Wire id (CLI form `obop <model> <action>`) | What it does and what its plan shows | Effect | Agent | Wave |
+|---|---|---|---|---|
+| `invoice.create_draft` | Draft invoice, bill or credit note from lines or an `InvoiceableSource`; tax recomputed | draft | auto | W1 |
+| `invoice.post` | Posts: locks, `BeforeInvoicePost`, number, hash, balance check. Plan: entries by role, tax lines per tax and rate, EN 16931 pre-flight result, lock-date check | commit | confirm | W1 |
+| `invoice.reverse` | Credit note draft linked to the original, in full or by line. Plan: the creditable remainder (INV-12). Posting it is `invoice.post` | draft | auto | W1 |
+| `invoice.cancel` (P) | Cancels a never-numbered draft | draft | auto | W1 |
+| `invoice.send` (P) | Renders the PDF and sends it through the party's channel; delegates to `e_document.send` when the pack needs an e-invoice | external | confirm | W1 |
+| `invoice.remind` (P) | Sends the next step of a `follow_up_policy` | external | confirm | W1 |
+| `payment.register` | Registers a receipt or payment against invoices or bills. Plan: the payment entry on the outstanding or bank account, the new residuals, the resulting `payment_state` | commit | confirm | W1 |
+| `payment.void` (P) | Voids a posted payment by reversal, unreconciling first | commit | confirm | W1 |
+| `bank_statement.import` | Imports a camt.053 or MT940 file into a bank journal, idempotent on `source_hash`. Plan: new lines, duplicates skipped, balance chain, lines rejected for locked periods | commit | confirm | W1 |
+| `bank_statement_line.suggest` (P) | Ranked candidate matches from `reconcile_model` rules; AI may rank, never posts | read | auto | W1 |
+| `bank_statement_line.reconcile` | Matches a statement line to a payment or open items, with write-off or exchange difference. Plan: matched items, partial or full, system entries | commit | confirm | W1 |
+| `journal_line.reconcile`, `journal_line.unreconcile` (P) | Matches open items of one account (credit note to invoice) or undoes a match (partials are append-only, 4.1.6) | commit | confirm | W1 |
+| `journal_entry.post`, `journal_entry.reverse` | Posts a draft entry; reverses a posted one on an open date | commit | confirm | W1 |
+| `fx_revaluation.run` (P) | Period-end revaluation with auto-reversal (4.7) | commit | confirm | W1 |
+| `lock_date.set` | Moves a lock date forward (a hard lock also needs step-up). Plan: the entries and drafts the new date would block | commit | confirm | W1 |
+| `lock_date.reopen` (P) | Moves a soft lock date back. Never applies to the hard lock (INV-05) | destructive | not exposed | W1 |
+| `lock_exception.grant`, `lock_exception.revoke` | Time-boxed, per principal, audited | destructive | not exposed | W1 |
+| `period.close` (P) | Composite over 4.3: checks, blockers in the plan, then lock dates | commit | confirm | W1 |
+| `tax_closing.post` (P) | Posts the tax closing entry and moves the tax lock when configured | commit | confirm | W1 |
+| `tax_return.compute` | UStVA box values from tax tags for a period | read | auto | W1, DE |
+| `audit_file.export` | DATEV EXTF and GoBD (W1); FEC (W2); JPK (W3). Audited; needs the `export` operation | read | auto within scope | W1, DE |
+| `report.run` (P) | Runs a report definition for a period, company scope and target currency | read | auto | W1 |
+| `ledger.verify` | Recomputes the per-journal hash chain | read | auto | W1 |
+| `e_document.validate` | Validates against the pinned rule sets | read | auto | W1 |
+| `e_document.send` | Transmits by email or file (W1), Peppol (W2) | external | confirm | W1 |
+| `e_document.receive` (P) | Parses a received EN 16931 file into a draft bill; deduplicates by fingerprint | draft | auto | W1 |
+| `e_document.retry` (P) | Moves a `failed` document back to `queued` | external | confirm | W1 |
+| `payment_batch.create`, `.confirm`, `.export` (P) | pain.001 batch with maker-checker | draft, commit, external | auto, confirm, confirm | W2 |
+| `payment_batch.release` (P) | Releases a batch; `account.payment_approver` only | money_and_payee | not exposed before the W2 policy | W2 |
+| `payment_provider.create`, `payment_transaction.refund` (P) | Connects a PSP account (keys from a file); refunds a transaction | commit, money_and_payee | confirm, not exposed | W2 |
+| `asset.*`, `deferral.*`, `budget.*`, `interco_link.*`, `elimination_run.*`, `bank_feed.*` (P) | Specified with their modules (4.8 to 4.12, 4.5) | per module | per module | W3, W4 |
 
 **Generated commands and import.** Every finance model also gets `list`, `get` and `aggregate`, and `create`, `update` and `delete` for drafts only. `update` sends `If-Match` from `row_version`. A posted entry, document or payment is never updated or deleted: the command fails with `posted_immutable` (exit 7) and correction is the reversal commands above (D30). Opening balances enter through `obop data import <file> --model journal_entry` ([cli](cli.md) 3.4), which creates drafts that `journal_entry.post` then posts (4.1.2); the Odoo (0.6, W1), QuickBooks (W2), Xero and ERPNext (W3) importers map into the same drafts.
 
@@ -587,14 +582,14 @@ Each scenario is an acceptance test. Company Alpha GmbH: euro, German pack, `per
 
 Setup: Widget costs 120.00 (average cost), 10 on hand, valued 1,200.00. Customer Beta AG, term 30 days net. Order: 10 x 200.00. The bank journal uses `payment_posting = via_outstanding`.
 
-| INV/2027/0001, 2027-03-01         | Dr       | Cr       |
-| --------------------------------- | -------- | -------- |
-| Trade receivable (due 2027-03-31) | 2,380.00 |          |
-| Revenue                           |          | 2,000.00 |
-| Output VAT 19%                    |          | 380.00   |
-| COGS                              | 1,200.00 |          |
-| Stock valuation                   |          | 1,200.00 |
-| Total                             | 3,580.00 | 3,580.00 |
+| INV/2027/0001, 2027-03-01 | Dr | Cr |
+|---|---|---|
+| Trade receivable (due 2027-03-31) | 2,380.00 | |
+| Revenue | | 2,000.00 |
+| Output VAT 19% | | 380.00 |
+| COGS | 1,200.00 | |
+| Stock valuation | | 1,200.00 |
+| Total | 3,580.00 | 3,580.00 |
 
 - **Given** delivery was validated, **when** the invoice posts, **then** the delivery made no entry [R10 s3.7], the entry balances (INV-01), the number is gapless and `InvoicePosted` fires.
 - **Given** a bank line of 1,000.00 from Beta AG on 2027-03-10, **when** it is imported and matched to the invoice, **then** the entry is Dr Bank 1,000.00 and Cr Trade receivable 1,000.00, residual 1,380.00, `payment_state` partial.
@@ -605,14 +600,14 @@ Setup: Widget costs 120.00 (average cost), 10 on hand, valued 1,200.00. Customer
 
 Branch of 5.1 after the first payment. Beta AG returns 2 Widgets and the return receipt is validated.
 
-| CN/2027/0001, 2027-03-15                  | Dr     | Cr     |
-| ----------------------------------------- | ------ | ------ |
-| Revenue (returns)                         | 400.00 |        |
-| Output VAT 19%                            | 76.00  |        |
-| Trade receivable                          |        | 476.00 |
-| Stock valuation (return at original cost) | 240.00 |        |
-| COGS                                      |        | 240.00 |
-| Total                                     | 716.00 | 716.00 |
+| CN/2027/0001, 2027-03-15 | Dr | Cr |
+|---|---|---|
+| Revenue (returns) | 400.00 | |
+| Output VAT 19% | 76.00 | |
+| Trade receivable | | 476.00 |
+| Stock valuation (return at original cost) | 240.00 | |
+| COGS | | 240.00 |
+| Total | 716.00 | 716.00 |
 
 - **When** the credit note posts and reconciles with the invoice, **then** the invoice residual is 1,380.00 - 476.00 = 904.00 and `credit_state` is `partially_credited`. Posting the credit note emits `InvoicePosted` and `InvoiceReversed` (original and reversing invoice ids).
 - **When** a payment of 904.00 is matched on 2027-03-28, **then** the invoice is `paid`.
@@ -622,18 +617,18 @@ Branch of 5.1 after the first payment. Beta AG returns 2 Widgets and the return 
 
 Customer in the US. Invoice 2027-03-01: USD 1,000.00, export fiscal position (no tax), rate 0.9200 (EUR 920.00).
 
-| Entry                                                   | Account            | Dr EUR | Cr EUR | USD amount |
-| ------------------------------------------------------- | ------------------ | ------ | ------ | ---------- |
-| Invoice 2027-03-01 (rate 0.9200)                        | Trade receivable   | 920.00 |        | +1,000.00  |
-|                                                         | Revenue            |        | 920.00 | -1,000.00  |
-| Revaluation 2027-03-31 (closing rate 0.9100, so 910.00) | Unrealised FX loss | 10.00  |        | 0          |
-|                                                         | Trade receivable   |        | 10.00  | 0          |
-| Auto-reversal 2027-04-01                                | Trade receivable   | 10.00  |        | 0          |
-|                                                         | Unrealised FX loss |        | 10.00  | 0          |
-| Bank line 2027-04-10 (rate 0.9050)                      | Bank (USD account) | 905.00 |        | +1,000.00  |
-|                                                         | Trade receivable   |        | 905.00 | -1,000.00  |
-| Exchange difference 2027-04-10                          | Realised FX loss   | 15.00  |        | 0          |
-|                                                         | Trade receivable   |        | 15.00  | 0          |
+| Entry | Account | Dr EUR | Cr EUR | USD amount |
+|---|---|---|---|---|
+| Invoice 2027-03-01 (rate 0.9200) | Trade receivable | 920.00 | | +1,000.00 |
+| | Revenue | | 920.00 | -1,000.00 |
+| Revaluation 2027-03-31 (closing rate 0.9100, so 910.00) | Unrealised FX loss | 10.00 | | 0 |
+| | Trade receivable | | 10.00 | 0 |
+| Auto-reversal 2027-04-01 | Trade receivable | 10.00 | | 0 |
+| | Unrealised FX loss | | 10.00 | 0 |
+| Bank line 2027-04-10 (rate 0.9050) | Bank (USD account) | 905.00 | | +1,000.00 |
+| | Trade receivable | | 905.00 | -1,000.00 |
+| Exchange difference 2027-04-10 | Realised FX loss | 15.00 | | 0 |
+| | Trade receivable | | 15.00 | 0 |
 
 - **When** the bank line is matched, **then** the USD residual is 0.00 while the EUR residual is 920.00 - 905.00 = 15.00, so a system exchange-difference entry of 15.00 is created and the group becomes full. Revaluation lines are not open items, so the realised loss is measured against the original 920.00.
 - **Then** the trial balance after April shows Dr Bank 905.00 and Dr FX loss 15.00 against Cr Revenue 920.00.
@@ -642,11 +637,11 @@ Customer in the US. Invoice 2027-03-01: USD 1,000.00, export fiscal position (no
 
 Vendor Gamma GmbH. PO: 100 Component at 50.00 (5,000.00), 30-day term. Receipt validated 2027-04-05. This needs `purchase` and `purchase_stock` (slip-order position 13) and SEPA files (position 9), both W2; in W1 the same kind of bill is entered without an order and paid by manual registration, as in 5.11.
 
-| BILL/2027/0001, 2027-04-12 (supplier ref RE-2027-118) | Dr       | Cr       |
-| ----------------------------------------------------- | -------- | -------- |
-| Stock valuation                                       | 5,200.00 |          |
-| Input VAT 19%                                         | 988.00   |          |
-| Trade payable (due 2027-05-12)                        |          | 6,188.00 |
+| BILL/2027/0001, 2027-04-12 (supplier ref RE-2027-118) | Dr | Cr |
+|---|---|---|
+| Stock valuation | 5,200.00 | |
+| Input VAT 19% | 988.00 | |
+| Trade payable (due 2027-05-12) | | 6,188.00 |
 
 - **When** the bill posts at 52.00 per unit, **then** the receipt move is revalued from 5,000.00 to 5,200.00 because the bill is a value source [R10 s3.6], unit cost 52.00, and the variance is flagged for review when it exceeds the company tolerance (default 0, Proposed).
 - **Variants.** `perpetual_per_transfer`: receipt Dr Stock 5,000.00, Cr GRNI 5,000.00; bill Dr GRNI 5,000.00, Dr Stock 200.00 (price difference capitalised under average cost; a standard-cost product posts it to the price-difference role), Dr Input VAT 988.00, Cr Payable 6,188.00. `periodic` (a W2 variant, [supply-chain](supply-chain.md) section 3): bill Dr Purchases 5,200.00, Dr Input VAT 988.00, Cr Payable 6,188.00.
@@ -657,11 +652,11 @@ Vendor Gamma GmbH. PO: 100 Component at 50.00 (5,000.00), 30-day term. Receipt v
 
 Using 5.2 for March 2027.
 
-| March 2027                                | Base     | Tax    |
-| ----------------------------------------- | -------- | ------ |
+| March 2027 | Base | Tax |
+|---|---|---|
 | Output VAT 19% (invoice less credit note) | 1,600.00 | 304.00 |
-| Input VAT                                 | 0.00     | 0.00   |
-| Payable                                   |          | 304.00 |
+| Input VAT | 0.00 | 0.00 |
+| Payable | | 304.00 |
 
 - **Given** the March entries, **when** `tax_return.compute` runs for the period, **then** it returns the box values (base 1,600.00 and tax 304.00 on the 19% line) for the user to transmit in ELSTER; obop does not transmit them (4.4).
 - **When** the tax closing entry posts on 2027-03-31 (Dr Output VAT 304.00, Cr Tax payable 304.00), **then** the tax lock date becomes 2027-03-31.
@@ -701,12 +696,12 @@ Using 5.2 for March 2027.
 
 Agent `ap-intake` holds the scopes `invoice:create_draft`, `invoice:post` (under policy `confirm`), `party:read` and `attachment:create` ([ai](ai.md) 4.2). It has the vendor's PDF RE-0412 from Mueller GmbH, which it fetched with its own mail tool because the inbound gateway is W2. Figures are illustrative; the sequence is the transcript of [cli](cli.md) 8.4. A W1-only business has no purchase order, so this is the W1 vendor-bill path (compare 5.4).
 
-| Bill of 2027-04-12 (supplier ref RE-0412) | Dr       | Cr       |
-| ----------------------------------------- | -------- | -------- |
-| Expense                                   | 1,000.00 |          |
-| Input VAT 19%                             | 190.00   |          |
-| Trade payable (due 2027-05-12)            |          | 1,190.00 |
-| Total                                     | 1,190.00 | 1,190.00 |
+| Bill of 2027-04-12 (supplier ref RE-0412) | Dr | Cr |
+|---|---|---|
+| Expense | 1,000.00 | |
+| Input VAT 19% | 190.00 | |
+| Trade payable (due 2027-05-12) | | 1,190.00 |
+| Total | 1,190.00 | 1,190.00 |
 
 - **Given** the draft created with `invoice.create_draft` (net 100000, tax 19000, total 119000 minor units EUR) and the PDF attached, **then** no number is assigned, no entry is posted and a chatter note records that `ap-intake` drafted it.
 - **When** the agent runs `invoice.post` with `--dry-run`, **then** it receives a plan (`plan_id`, the entries above by role, the lock-date check, risk, approval `confirm`) and nothing is posted (exit 0).
@@ -735,20 +730,20 @@ Agent `ap-intake` holds the scopes `invoice:create_draft`, `invoice:post` (under
 
 ## 7. Where obop deliberately differs from Odoo, and why
 
-| Topic                     | Odoo                                                                                 | obop                                                                                                                 | Pain addressed                                                                                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Edition                   | Accounting, reconciliation, assets, deferrals, budgets, consolidation are Enterprise | All open and free under Apache-2.0, with no gated tier (OR-1, OR-2); what is not in W1 is a backlog, not a paid list | Open-core surprises, rank 2; accounting is the missing piece [R04 s4.2, s4.5]                                                                                        |
-| Balance check             | ORM only                                                                             | Deferred trigger in PostgreSQL                                                                                       | Trust and audit [R09 s1.3]                                                                                                                                           |
-| Numbering                 | Gaps tolerated, flagged afterwards                                                   | Gapless at post, unique index, nightly detector                                                                      | Regimes that expect no gaps: France anti-fraud and Veri*Factu chains [R09 s9, s4]; whether any member state requires strictly gapless series is unverified [R08 s11] |
-| Correction                | Audit trail is a company setting                                                     | Reversal only, unconditional                                                                                         | Tamper evidence (GoBD, Veri*Factu)                                                                                                                                   |
-| Calendar                  | Last day and month only                                                              | Fiscal year and period tables                                                                                        | SAF-T, FEC, DATEV need period attributes [R09 s2]                                                                                                                    |
-| Reconciliation            | Widget and bank sync are Enterprise                                                  | Open split view; file-first feeds; bring-your-own aggregators                                                        | Accounting cost, bank dependence [R19 s1]                                                                                                                            |
-| Reports                   | Catalogue and viewer Enterprise; `custom` engine                                     | Open catalogue; CEL, no code engine                                                                                  | Customisation debt (D11)                                                                                                                                             |
-| Localisation              | Modules that move with majors                                                        | Signed, effective-dated packs on their own channel; stable needs oracle, golden cases, sign-off                      | Localisation gaps, upgrades [R04 s4.1, s4.5]                                                                                                                         |
-| E-invoicing               | Some connectors Enterprise (Nilvera in 20); Peppol through Odoo's proxy              | Open syntaxes and adapters; email and file first; bring your own access point; no SpaceCorps gateway                 | Pricing surprises [R04 s4.2]                                                                                                                                         |
-| Interco and consolidation | Enterprise; docs show no eliminations or minority interest                           | `interco_link`, eliminations, non-controlling interest                                                               | Group reporting [R23 C.1]                                                                                                                                            |
-| AI                        | Credits through IAP                                                                  | Bring your own key; drafts, not posts (D18)                                                                          | Metered credits                                                                                                                                                      |
-| Automation surface        | External API gated to the Custom plan, RPC removed in 2028 (D31)                     | Every action is a typed command on CLI, API and MCP; the UI is a client (OR-4, D80)                                  | API lock-in; agents need the same permission path as users (D18)                                                                                                     |
+| Topic | Odoo | obop | Pain addressed |
+|---|---|---|---|
+| Edition | Accounting, reconciliation, assets, deferrals, budgets, consolidation are Enterprise | All open and free under Apache-2.0, with no gated tier (OR-1, OR-2); what is not in W1 is a backlog, not a paid list | Open-core surprises, rank 2; accounting is the missing piece [R04 s4.2, s4.5] |
+| Balance check | ORM only | Deferred trigger in PostgreSQL | Trust and audit [R09 s1.3] |
+| Numbering | Gaps tolerated, flagged afterwards | Gapless at post, unique index, nightly detector | Regimes that expect no gaps: France anti-fraud and Veri*Factu chains [R09 s9, s4]; whether any member state requires strictly gapless series is unverified [R08 s11] |
+| Correction | Audit trail is a company setting | Reversal only, unconditional | Tamper evidence (GoBD, Veri*Factu) |
+| Calendar | Last day and month only | Fiscal year and period tables | SAF-T, FEC, DATEV need period attributes [R09 s2] |
+| Reconciliation | Widget and bank sync are Enterprise | Open split view; file-first feeds; bring-your-own aggregators | Accounting cost, bank dependence [R19 s1] |
+| Reports | Catalogue and viewer Enterprise; `custom` engine | Open catalogue; CEL, no code engine | Customisation debt (D11) |
+| Localisation | Modules that move with majors | Signed, effective-dated packs on their own channel; stable needs oracle, golden cases, sign-off | Localisation gaps, upgrades [R04 s4.1, s4.5] |
+| E-invoicing | Some connectors Enterprise (Nilvera in 20); Peppol through Odoo's proxy | Open syntaxes and adapters; email and file first; bring your own access point; no SpaceCorps gateway | Pricing surprises [R04 s4.2] |
+| Interco and consolidation | Enterprise; docs show no eliminations or minority interest | `interco_link`, eliminations, non-controlling interest | Group reporting [R23 C.1] |
+| AI | Credits through IAP | Bring your own key; drafts, not posts (D18) | Metered credits |
+| Automation surface | External API gated to the Custom plan, RPC removed in 2028 (D31) | Every action is a typed command on CLI, API and MCP; the UI is a client (OR-4, D80) | API lock-in; agents need the same permission path as users (D18) |
 
 Kept from Odoo (behaviour from public docs, Odoo only as a black-box oracle, F3): journal, entry and line model; repartition-line taxes; partial and full reconciliation; parent accounts; Odoo 20's lock model and bank-origin-only rule; "in process" payments; declarative reports.
 
@@ -791,29 +786,29 @@ Kept from Odoo (behaviour from public docs, Odoo only as a black-box oracle, F3)
 
 Decisions and rulings cited by ID (D1-D93, OR-1 to OR-38, F3 to F6, I-1 to I-4, Q1-Q61) are in [DECISIONS.md](../DECISIONS.md); names of events, permission groups, data classes, states, account roles and ports follow [CONVENTIONS.md](../CONVENTIONS.md); the command grammar and output contracts are in [cli.md](cli.md); neighbouring specs are linked in section 1.3.
 
-| Tag         | File                                                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------------------- |
-| Conventions | [CONVENTIONS.md](../CONVENTIONS.md)                                                                           |
-| CLI         | [cli.md](cli.md)                                                                                              |
-| Rulings     | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS.md](../DECISIONS.md)                                |
-| R00         | [research/README.md](../research/README.md)                                                                   |
-| R01         | [research/01-odoo-app-catalog.md](../research/01-odoo-app-catalog.md)                                         |
-| R04         | [research/04-odoo-voice-of-customer.md](../research/04-odoo-voice-of-customer.md)                             |
-| R08         | [research/08-metadata-platforms-dynamic-orm.md](../research/08-metadata-platforms-dynamic-orm.md)             |
-| R09         | [research/09-accounting-finance-compliance.md](../research/09-accounting-finance-compliance.md)               |
-| R10         | [research/10-supply-chain-manufacturing.md](../research/10-supply-chain-manufacturing.md)                     |
-| R11         | [research/11-crm-sales-subscriptions.md](../research/11-crm-sales-subscriptions.md)                           |
-| R12         | [research/12-retail-pos-ecommerce-marketing.md](../research/12-retail-pos-ecommerce-marketing.md)             |
-| R13         | [research/13-hr-payroll.md](../research/13-hr-payroll.md)                                                     |
-| R15         | [research/15-platform-collaboration-documents.md](../research/15-platform-collaboration-documents.md)         |
-| R16         | [research/16-ai-native-erp.md](../research/16-ai-native-erp.md)                                               |
-| R18         | [research/18-security-compliance-deployment-ops.md](../research/18-security-compliance-deployment-ops.md)     |
-| R19         | [research/19-ux-design-system.md](../research/19-ux-design-system.md)                                         |
-| R20         | [research/20-market-personas-mvp-gtm.md](../research/20-market-personas-mvp-gtm.md)                           |
-| R21         | [research/21-integrations-interoperability-api.md](../research/21-integrations-interoperability-api.md)       |
-| R22         | [research/22-data-layer-sync-realtime-performance.md](../research/22-data-layer-sync-realtime-performance.md) |
-| R23         | [research/23-kernel-model-architecture-decisions.md](../research/23-kernel-model-architecture-decisions.md)   |
-| R24         | [research/24-extension-platform-sdk.md](../research/24-extension-platform-sdk.md)                             |
-| R25         | [research/25-localization-operating-model.md](../research/25-localization-operating-model.md)                 |
-| R26         | [research/26-business-model-pricing-risk.md](../research/26-business-model-pricing-risk.md)                   |
-| R27         | [research/27-quality-release-engineering.md](../research/27-quality-release-engineering.md)                   |
+| Tag | File |
+|---|---|
+| Conventions | [CONVENTIONS.md](../CONVENTIONS.md) |
+| CLI | [cli.md](cli.md) |
+| Rulings | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS.md](../DECISIONS.md) |
+| R00 | [research/README.md](../research/README.md) |
+| R01 | [research/01-odoo-app-catalog.md](../research/01-odoo-app-catalog.md) |
+| R04 | [research/04-odoo-voice-of-customer.md](../research/04-odoo-voice-of-customer.md) |
+| R08 | [research/08-metadata-platforms-dynamic-orm.md](../research/08-metadata-platforms-dynamic-orm.md) |
+| R09 | [research/09-accounting-finance-compliance.md](../research/09-accounting-finance-compliance.md) |
+| R10 | [research/10-supply-chain-manufacturing.md](../research/10-supply-chain-manufacturing.md) |
+| R11 | [research/11-crm-sales-subscriptions.md](../research/11-crm-sales-subscriptions.md) |
+| R12 | [research/12-retail-pos-ecommerce-marketing.md](../research/12-retail-pos-ecommerce-marketing.md) |
+| R13 | [research/13-hr-payroll.md](../research/13-hr-payroll.md) |
+| R15 | [research/15-platform-collaboration-documents.md](../research/15-platform-collaboration-documents.md) |
+| R16 | [research/16-ai-native-erp.md](../research/16-ai-native-erp.md) |
+| R18 | [research/18-security-compliance-deployment-ops.md](../research/18-security-compliance-deployment-ops.md) |
+| R19 | [research/19-ux-design-system.md](../research/19-ux-design-system.md) |
+| R20 | [research/20-market-personas-mvp-gtm.md](../research/20-market-personas-mvp-gtm.md) |
+| R21 | [research/21-integrations-interoperability-api.md](../research/21-integrations-interoperability-api.md) |
+| R22 | [research/22-data-layer-sync-realtime-performance.md](../research/22-data-layer-sync-realtime-performance.md) |
+| R23 | [research/23-kernel-model-architecture-decisions.md](../research/23-kernel-model-architecture-decisions.md) |
+| R24 | [research/24-extension-platform-sdk.md](../research/24-extension-platform-sdk.md) |
+| R25 | [research/25-localization-operating-model.md](../research/25-localization-operating-model.md) |
+| R26 | [research/26-business-model-pricing-risk.md](../research/26-business-model-pricing-risk.md) |
+| R27 | [research/27-quality-release-engineering.md](../research/27-quality-release-engineering.md) |

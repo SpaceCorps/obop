@@ -5,20 +5,20 @@ landing page. The rules live in [BRAND.md](BRAND.md); this page is how the code 
 
 ## Contents
 
-| Path                            | What                                                                                                                                                                                                                    |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/tokens.css`                | Design tokens as CSS custom properties: OKLCH ramps, semantic colours, type, spacing, radius, elevation, motion, density. Fonts (Geist, Geist Mono) are imported from fontsource and self-hosted.                       |
-| `src/base.css`                  | Reset, document defaults, headings, focus ring, utilities (`.sr-only`, `.hint`, `.tabular`). Logical properties only.                                                                                                   |
-| `src/components.css`            | Styles of every primitive. No hard-coded colours, sizes or radii.                                                                                                                                                       |
-| `src/styles.css`                | Imports the three above; apps import `@obop/ui/styles.css`.                                                                                                                                                             |
-| `src/colors.ts`                 | Pure colour maths: hex and OKLCH, WCAG contrast, ramps, accent resolution and the AA correction.                                                                                                                        |
-| `src/theme.ts`                  | `applyTheme()`, `ACCENTS`, `DEFAULT_THEME`.                                                                                                                                                                             |
-| `src/icon-data.ts`, `icons.tsx` | The icon set (shape data) and `Icon`, `AppIcon`.                                                                                                                                                                        |
-| `src/app-colors.ts`             | Module id to glyph and tile colour.                                                                                                                                                                                     |
-| `src/logo-data.ts`, `logo.tsx`  | Logo geometry and the `Logo` component.                                                                                                                                                                                 |
-| `src/primitives.tsx`            | Button, IconButton, Input, Select, Textarea, Checkbox, Switch, Badge, Chip, Kbd, Avatar, Spinner, Notice, Panel, Card, Table, Skeleton, EmptyState, Tabs, Segmented, Popover, Menu, Tooltip, Dialog (and sheet), Toast. |
-| `src/hooks.ts`                  | `useDismiss`, `useFocusTrap`, `rovingKeys`.                                                                                                                                                                             |
-| `src/static.ts`                 | The logo, icons and app tiles as strings, for non-React pages.                                                                                                                                                          |
+| Path | What |
+|---|---|
+| `src/tokens.css` | Design tokens as CSS custom properties: OKLCH ramps, semantic colours, type, spacing, radius, elevation, motion, density. Fonts (Geist, Geist Mono) are imported from fontsource and self-hosted. |
+| `src/base.css` | Reset, document defaults, headings, focus ring, utilities (`.sr-only`, `.hint`, `.tabular`). Logical properties only. |
+| `src/components.css` | Styles of every primitive. No hard-coded colours, sizes or radii. |
+| `src/styles.css` | Imports the three above; apps import `@obop/ui/styles.css`. |
+| `src/colors.ts` | Pure colour maths: hex and OKLCH, WCAG contrast, ramps, accent resolution and the AA correction. |
+| `src/theme.ts` | `applyTheme()`, `ACCENTS`, `DEFAULT_THEME`. |
+| `src/icon-data.ts`, `icons.tsx` | The icon set (shape data) and `Icon`, `AppIcon`. |
+| `src/app-colors.ts` | Module id to glyph and tile colour. |
+| `src/logo-data.ts`, `logo.tsx` | Logo geometry and the `Logo` component. |
+| `src/primitives.tsx` | Button, IconButton, Input, Select, Textarea, Checkbox, Switch, Badge, Chip, Kbd, Avatar, Spinner, Notice, Panel, Card, Table, Skeleton, EmptyState, Tabs, Segmented, Popover, Menu, Tooltip, Dialog (and sheet), Toast. |
+| `src/hooks.ts` | `useDismiss`, `useFocusTrap`, `rovingKeys`. |
+| `src/static.ts` | The logo, icons and app tiles as strings, for non-React pages. |
 
 ## Theming
 

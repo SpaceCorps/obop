@@ -21,38 +21,38 @@ description = "A mailing list contacts can belong to"
 read_group = "email_marketing.user"
 write_group = "email_marketing.manager"
 
-[model.ui]
-title = "{name}"
-list = ["name", "is_public"]
-order = "name asc"
-default_view = "list"
-menu = "main"
-menu_order = 2
+  [model.ui]
+  title = "{name}"
+  list = ["name", "is_public"]
+  order = "name asc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 2
 
-[[model.child]]
-model = "email_marketing_contact"
-via = "list_id"
-shape = "list"
+  [[model.child]]
+  model = "email_marketing_contact"
+  via = "list_id"
+  shape = "list"
 
-[[model.field]]
-name = "name"
-description = "List name, for example Newsletter"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "List name, for example Newsletter"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "description"
-description = "What subscribers receive"
-class = "none"
-kind = "longtext"
-[model.field.ui]
-display = "markdown"
+  [[model.field]]
+  name = "description"
+  description = "What subscribers receive"
+  class = "none"
+  kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
-[[model.field]]
-name = "is_public"
-description = "Whether visitors can subscribe themselves"
-class = "none"
-kind = "bool"
+  [[model.field]]
+  name = "is_public"
+  description = "Whether visitors can subscribe themselves"
+  class = "none"
+  kind = "bool"
 
 [[model]]
 name = "email_marketing_contact"
@@ -60,67 +60,67 @@ description = "A person on a mailing list"
 read_group = "email_marketing.user"
 write_group = "email_marketing.user"
 
-[model.ui]
-title = "{name} | {email}"
-subtitle = "{email}"
-list = ["email", "name", "list_id", "consent_status", "consent_date"]
-quick_create = ["email", "name", "list_id"]
-order = "email asc"
-default_view = "list"
-menu = "main"
-menu_order = 3
+  [model.ui]
+  title = "{name} | {email}"
+  subtitle = "{email}"
+  list = ["email", "name", "list_id", "consent_status", "consent_date"]
+  quick_create = ["email", "name", "list_id"]
+  order = "email asc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 3
 
-[[model.ui.filter]]
-label = "May be mailed"
-where = "consent_status = opted_in"
+  [[model.ui.filter]]
+  label = "May be mailed"
+  where = "consent_status = opted_in"
 
-[[model.field]]
-name = "list_id"
-description = "The list the contact is on"
-class = "none"
-kind = "ref"
-to = "email_marketing_list"
-required = true
+  [[model.field]]
+  name = "list_id"
+  description = "The list the contact is on"
+  class = "none"
+  kind = "ref"
+  to = "email_marketing_list"
+  required = true
 
-[[model.field]]
-name = "email"
-description = "Email address"
-class = "internal"
-personal_data = true
-required = true
-[model.field.ui]
-display = "email"
+  [[model.field]]
+  name = "email"
+  description = "Email address"
+  class = "internal"
+  personal_data = true
+  required = true
+  [model.field.ui]
+  display = "email"
 
-[[model.field]]
-name = "name"
-description = "Name of the contact"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "name"
+  description = "Name of the contact"
+  class = "internal"
+  personal_data = true
 
-[[model.field]]
-name = "consent_status"
-description = "Permission to mail: pending, opted_in, opted_out, bounced; pending unless given"
-class = "internal"
-personal_data = true
-kind = "select"
-options = ["pending", "opted_in", "opted_out", "bounced"]
-required = true
-default = "pending"
-[model.field.ui]
-tones = { pending = "warn", opted_in = "ok", opted_out = "bad", bounced = "bad" }
+  [[model.field]]
+  name = "consent_status"
+  description = "Permission to mail: pending, opted_in, opted_out, bounced; pending unless given"
+  class = "internal"
+  personal_data = true
+  kind = "select"
+  options = ["pending", "opted_in", "opted_out", "bounced"]
+  required = true
+  default = "pending"
+  [model.field.ui]
+  tones = { pending = "warn", opted_in = "ok", opted_out = "bad", bounced = "bad" }
 
-[[model.field]]
-name = "consent_date"
-description = "Day the contact gave or withdrew permission (YYYY-MM-DD)"
-class = "internal"
-personal_data = true
-kind = "date"
+  [[model.field]]
+  name = "consent_date"
+  description = "Day the contact gave or withdrew permission (YYYY-MM-DD)"
+  class = "internal"
+  personal_data = true
+  kind = "date"
 
-[[model.field]]
-name = "consent_source"
-description = "Where consent was collected, for example website signup form"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "consent_source"
+  description = "Where consent was collected, for example website signup form"
+  class = "internal"
+  personal_data = true
 
 [[model]]
 name = "email_marketing_campaign"
@@ -128,217 +128,203 @@ description = "One mailing to a list"
 read_group = "email_marketing.user"
 write_group = "email_marketing.user"
 
-[model.ui]
-title = "{name}"
-subtitle = "{subject}"
-list = ["name", "subject", "list_id", "scheduled_for", "sent_on", "sent_count", "state"]
-card = ["name", "list_id", "scheduled_for", "sent_on"]
-quick_create = ["name", "subject", "list_id"]
-order = "scheduled_for desc, name asc"
-default_view = "kanban"
-menu = "main"
-menu_order = 1
-calendar = { start = "scheduled_for" }
+  [model.ui]
+  title = "{name}"
+  subtitle = "{subject}"
+  list = ["name", "subject", "list_id", "scheduled_for", "sent_on", "sent_count", "state"]
+  card = ["name", "list_id", "scheduled_for", "sent_on"]
+  quick_create = ["name", "subject", "list_id"]
+  order = "scheduled_for desc, name asc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "scheduled_for" }
 
-[[model.ui.section]]
-label = "Message"
-fields = ["name", "subject", "preview_text", "from_name", "from_email", "list_id"]
+  [[model.ui.section]]
+  label = "Message"
+  fields = ["name", "subject", "preview_text", "from_name", "from_email", "list_id"]
 
-[[model.ui.section]]
-label = "Content"
-fields = ["body"]
+  [[model.ui.section]]
+  label = "Content"
+  fields = ["body"]
 
-[[model.ui.section]]
-label = "Schedule"
-fields = ["scheduled_for", "sent_on"]
+  [[model.ui.section]]
+  label = "Schedule"
+  fields = ["scheduled_for", "sent_on"]
 
-[[model.ui.section]]
-label = "Results"
-fields = [
-  "sent_count",
-  "delivered_count",
-  "opened_count",
-  "clicked_count",
-  "bounced_count",
-  "unsubscribed_count",
-]
-show_in = ["sent"]
+  [[model.ui.section]]
+  label = "Results"
+  fields = ["sent_count", "delivered_count", "opened_count", "clicked_count", "bounced_count", "unsubscribed_count"]
+  show_in = ["sent"]
 
-[model.guard]
-immutable_when = ["sent", "cancelled"]
-mutable_fields = [
-  "sent_count",
-  "delivered_count",
-  "opened_count",
-  "clicked_count",
-  "bounced_count",
-  "unsubscribed_count",
-]
-message = "A sent or cancelled campaign cannot be changed; only its statistics can still be entered."
+  [model.guard]
+  immutable_when = ["sent", "cancelled"]
+  mutable_fields = ["sent_count", "delivered_count", "opened_count", "clicked_count", "bounced_count", "unsubscribed_count"]
+  message = "A sent or cancelled campaign cannot be changed; only its statistics can still be entered."
 
-[[model.field]]
-name = "name"
-description = "Internal campaign name"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Internal campaign name"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "subject"
-description = "Email subject line"
-class = "none"
-required = true
+  [[model.field]]
+  name = "subject"
+  description = "Email subject line"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "preview_text"
-description = "Short text shown after the subject in inboxes"
-class = "none"
+  [[model.field]]
+  name = "preview_text"
+  description = "Short text shown after the subject in inboxes"
+  class = "none"
 
-[[model.field]]
-name = "from_name"
-description = "Sender name shown to recipients"
-class = "none"
+  [[model.field]]
+  name = "from_name"
+  description = "Sender name shown to recipients"
+  class = "none"
 
-[[model.field]]
-name = "from_email"
-description = "Sender address shown to recipients"
-class = "none"
-[model.field.ui]
-display = "email"
+  [[model.field]]
+  name = "from_email"
+  description = "Sender address shown to recipients"
+  class = "none"
+  [model.field.ui]
+  display = "email"
 
-[[model.field]]
-name = "list_id"
-description = "The list the campaign goes to"
-class = "none"
-kind = "ref"
-to = "email_marketing_list"
-required = true
+  [[model.field]]
+  name = "list_id"
+  description = "The list the campaign goes to"
+  class = "none"
+  kind = "ref"
+  to = "email_marketing_list"
+  required = true
 
-[[model.field]]
-name = "body"
-description = "Email content (HTML or Markdown, as the sender expects)"
-class = "none"
-kind = "longtext"
-[model.field.ui]
-display = "markdown"
+  [[model.field]]
+  name = "body"
+  description = "Email content (HTML or Markdown, as the sender expects)"
+  class = "none"
+  kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
-[[model.field]]
-name = "scheduled_for"
-description = "Day the campaign is to be sent (YYYY-MM-DD)"
-class = "none"
-kind = "date"
+  [[model.field]]
+  name = "scheduled_for"
+  description = "Day the campaign is to be sent (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
 
-[[model.field]]
-name = "sent_on"
-description = "Day the campaign was marked as sent (YYYY-MM-DD); set by the action"
-class = "none"
-kind = "date"
-readonly = true
+  [[model.field]]
+  name = "sent_on"
+  description = "Day the campaign was marked as sent (YYYY-MM-DD); set by the action"
+  class = "none"
+  kind = "date"
+  readonly = true
 
-[[model.field]]
-name = "sent_count"
-description = "Emails handed to the mail server"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "sent_count"
+  description = "Emails handed to the mail server"
+  class = "none"
+  kind = "number"
 
-[[model.field]]
-name = "delivered_count"
-description = "Emails accepted by recipients' servers"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "delivered_count"
+  description = "Emails accepted by recipients' servers"
+  class = "none"
+  kind = "number"
 
-[[model.field]]
-name = "opened_count"
-description = "Recipients who opened the email"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "opened_count"
+  description = "Recipients who opened the email"
+  class = "none"
+  kind = "number"
 
-[[model.field]]
-name = "clicked_count"
-description = "Recipients who clicked a link"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "clicked_count"
+  description = "Recipients who clicked a link"
+  class = "none"
+  kind = "number"
 
-[[model.field]]
-name = "bounced_count"
-description = "Emails that bounced"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "bounced_count"
+  description = "Emails that bounced"
+  class = "none"
+  kind = "number"
 
-[[model.field]]
-name = "unsubscribed_count"
-description = "Recipients who unsubscribed because of this campaign"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "unsubscribed_count"
+  description = "Recipients who unsubscribed because of this campaign"
+  class = "none"
+  kind = "number"
 
-[[model.field]]
-name = "state"
-description = "Campaign status: draft, scheduled, sent, cancelled"
-class = "none"
-kind = "select"
-options = ["draft", "scheduled", "sent", "cancelled"]
-required = true
-[model.field.ui]
-tones = { draft = "info", scheduled = "warn", sent = "ok", cancelled = "neutral" }
+  [[model.field]]
+  name = "state"
+  description = "Campaign status: draft, scheduled, sent, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["draft", "scheduled", "sent", "cancelled"]
+  required = true
+  [model.field.ui]
+  tones = { draft = "info", scheduled = "warn", sent = "ok", cancelled = "neutral" }
 
-[[model.action]]
-name = "schedule"
-description = "Mark the campaign as scheduled for its day"
-field = "state"
-from = "draft"
-to = "scheduled"
-[model.action.ui]
-primary = true
-done = "Scheduled"
+  [[model.action]]
+  name = "schedule"
+  description = "Mark the campaign as scheduled for its day"
+  field = "state"
+  from = "draft"
+  to = "scheduled"
+  [model.action.ui]
+  primary = true
+  done = "Scheduled"
 
-[[model.action]]
-name = "send"
-description = "Mark the scheduled campaign as sent; no email is sent (manager only)"
-field = "state"
-from = "scheduled"
-to = "sent"
-group = "email_marketing.manager"
-approval = true
-[model.action.ui]
-confirm = "Mark this campaign as sent? No email is sent: this instance does not send email yet. The campaign can no longer be changed afterwards."
-done = "Marked as sent; no email was sent"
-group = "mark_sent"
+  [[model.action]]
+  name = "send"
+  description = "Mark the scheduled campaign as sent; no email is sent (manager only)"
+  field = "state"
+  from = "scheduled"
+  to = "sent"
+  group = "email_marketing.manager"
+  approval = true
+  [model.action.ui]
+  confirm = "Mark this campaign as sent? No email is sent: this instance does not send email yet. The campaign can no longer be changed afterwards."
+  done = "Marked as sent; no email was sent"
+  group = "mark_sent"
 
-[[model.action.effect]]
-kind = "set"
-set = { sent_on = "$today" }
-when = "!is_set(sent_on)"
+    [[model.action.effect]]
+    kind = "set"
+    set = { sent_on = "$today" }
+    when = "!is_set(sent_on)"
 
-[[model.action]]
-name = "send_now"
-description = "Mark a draft campaign as sent; no email is sent (manager only)"
-field = "state"
-from = "draft"
-to = "sent"
-group = "email_marketing.manager"
-approval = true
-[model.action.ui]
-confirm = "Mark this campaign as sent? No email is sent: this instance does not send email yet. The campaign can no longer be changed afterwards."
-done = "Marked as sent; no email was sent"
-group = "mark_sent"
+  [[model.action]]
+  name = "send_now"
+  description = "Mark a draft campaign as sent; no email is sent (manager only)"
+  field = "state"
+  from = "draft"
+  to = "sent"
+  group = "email_marketing.manager"
+  approval = true
+  [model.action.ui]
+  confirm = "Mark this campaign as sent? No email is sent: this instance does not send email yet. The campaign can no longer be changed afterwards."
+  done = "Marked as sent; no email was sent"
+  group = "mark_sent"
 
-[[model.action.effect]]
-kind = "set"
-set = { sent_on = "$today" }
-when = "!is_set(sent_on)"
+    [[model.action.effect]]
+    kind = "set"
+    set = { sent_on = "$today" }
+    when = "!is_set(sent_on)"
 
-[[model.action]]
-name = "unschedule"
-description = "Take a scheduled campaign back to draft"
-field = "state"
-from = "scheduled"
-to = "draft"
+  [[model.action]]
+  name = "unschedule"
+  description = "Take a scheduled campaign back to draft"
+  field = "state"
+  from = "scheduled"
+  to = "draft"
 
-[[model.action]]
-name = "cancel"
-description = "Cancel a scheduled campaign"
-field = "state"
-from = "scheduled"
-to = "cancelled"
-[model.action.ui]
-danger = true
-confirm = "Cancel this campaign? It can no longer be changed afterwards."
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a scheduled campaign"
+  field = "state"
+  from = "scheduled"
+  to = "cancelled"
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this campaign? It can no longer be changed afterwards."

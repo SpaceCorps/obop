@@ -21,144 +21,135 @@ description = "A page of the website"
 read_group = "website.user"
 write_group = "website.user"
 
-[model.ui]
-title = "{title}"
-subtitle = "/{slug}"
-list = ["title", "slug", "published_on", "state"]
-card = ["cover_image", "title", "slug", "published_on"]
-quick_create = ["title", "slug"]
-order = "title asc"
-default_view = "list"
-menu = "main"
-menu_order = 1
-public_url = "/{slug}"
+  [model.ui]
+  title = "{title}"
+  subtitle = "/{slug}"
+  list = ["title", "slug", "published_on", "state"]
+  card = ["cover_image", "title", "slug", "published_on"]
+  quick_create = ["title", "slug"]
+  order = "title asc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 1
+  public_url = "/{slug}"
 
-[[model.ui.section]]
-label = "Content"
-fields = ["title", "slug", "body"]
+  [[model.ui.section]]
+  label = "Content"
+  fields = ["title", "slug", "body"]
 
-[[model.ui.section]]
-label = "Cover picture"
-fields = ["cover_image", "cover_alt"]
+  [[model.ui.section]]
+  label = "Cover picture"
+  fields = ["cover_image", "cover_alt"]
 
-[[model.ui.section]]
-label = "Search engines"
-fields = ["seo_title", "seo_description"]
-collapsed = true
+  [[model.ui.section]]
+  label = "Search engines"
+  fields = ["seo_title", "seo_description"]
+  collapsed = true
 
-[model.guard]
-immutable_when = ["archived"]
-message = "An archived page is retired for good. Make a new page to replace it."
+  [model.guard]
+  immutable_when = ["archived"]
+  message = "An archived page is retired for good. Make a new page to replace it."
 
-[model.public]
-read = true
-published_field = "state"
-published_value = "published"
-gone_value = "archived"
-fields = [
-  "title",
-  "slug",
-  "body",
-  "seo_title",
-  "seo_description",
-  "published_on",
-  "cover_image",
-  "cover_alt",
-]
-order_by = "title"
+  [model.public]
+  read = true
+  published_field = "state"
+  published_value = "published"
+  gone_value = "archived"
+  fields = ["title", "slug", "body", "seo_title", "seo_description", "published_on", "cover_image", "cover_alt"]
+  order_by = "title"
 
-[[model.field]]
-name = "title"
-description = "Page title"
-class = "none"
-required = true
+  [[model.field]]
+  name = "title"
+  description = "Page title"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "slug"
-description = "URL path of the page without slashes at the ends, lowercase with dashes, for example about-us. The page with slug home is the front page"
-class = "none"
-required = true
+  [[model.field]]
+  name = "slug"
+  description = "URL path of the page without slashes at the ends, lowercase with dashes, for example about-us. The page with slug home is the front page"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "body"
-description = "Page content in Markdown (a safe subset: headings, lists, links, emphasis, code, quotes, tables)"
-class = "none"
-kind = "longtext"
-[model.field.ui]
-display = "markdown"
+  [[model.field]]
+  name = "body"
+  description = "Page content in Markdown (a safe subset: headings, lists, links, emphasis, code, quotes, tables)"
+  class = "none"
+  kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
-[[model.field]]
-name = "seo_title"
-description = "Title shown in search results; empty means the page title"
-class = "none"
+  [[model.field]]
+  name = "seo_title"
+  description = "Title shown in search results; empty means the page title"
+  class = "none"
 
-[[model.field]]
-name = "seo_description"
-description = "Description shown in search results"
-class = "none"
+  [[model.field]]
+  name = "seo_description"
+  description = "Description shown in search results"
+  class = "none"
 
-[[model.field]]
-name = "published_on"
-description = "Day the page went public (YYYY-MM-DD); publishing sets it to today when it is empty"
-class = "none"
-kind = "date"
+  [[model.field]]
+  name = "published_on"
+  description = "Day the page went public (YYYY-MM-DD); publishing sets it to today when it is empty"
+  class = "none"
+  kind = "date"
 
-[[model.field]]
-name = "cover_image"
-description = "Picture shown at the top of the page and in link previews (PNG, JPEG, WebP or GIF, re-encoded on upload)"
-class = "none"
-kind = "image"
+  [[model.field]]
+  name = "cover_image"
+  description = "Picture shown at the top of the page and in link previews (PNG, JPEG, WebP or GIF, re-encoded on upload)"
+  class = "none"
+  kind = "image"
 
-[[model.field]]
-name = "cover_alt"
-description = "Text that describes the cover picture for people who cannot see it"
-class = "none"
+  [[model.field]]
+  name = "cover_alt"
+  description = "Text that describes the cover picture for people who cannot see it"
+  class = "none"
 
-[[model.field]]
-name = "state"
-description = "Page status: draft, published, archived"
-class = "none"
-kind = "select"
-options = ["draft", "published", "archived"]
-required = true
-[model.field.ui]
-tones = { draft = "info", published = "ok", archived = "neutral" }
+  [[model.field]]
+  name = "state"
+  description = "Page status: draft, published, archived"
+  class = "none"
+  kind = "select"
+  options = ["draft", "published", "archived"]
+  required = true
+  [model.field.ui]
+  tones = { draft = "info", published = "ok", archived = "neutral" }
 
-[[model.action]]
-name = "publish"
-description = "Make the page public (manager only)"
-field = "state"
-from = "draft"
-to = "published"
-group = "website.manager"
-approval = true
-[model.action.ui]
-primary = true
-done = "Published"
+  [[model.action]]
+  name = "publish"
+  description = "Make the page public (manager only)"
+  field = "state"
+  from = "draft"
+  to = "published"
+  group = "website.manager"
+  approval = true
+  [model.action.ui]
+  primary = true
+  done = "Published"
 
-[[model.action.effect]]
-kind = "set"
-set = { published_on = "$today" }
-when = "!is_set(published_on)"
+    [[model.action.effect]]
+    kind = "set"
+    set = { published_on = "$today" }
+    when = "!is_set(published_on)"
 
-[[model.action]]
-name = "unpublish"
-description = "Take the page offline and back to draft"
-field = "state"
-from = "published"
-to = "draft"
-group = "website.manager"
+  [[model.action]]
+  name = "unpublish"
+  description = "Take the page offline and back to draft"
+  field = "state"
+  from = "published"
+  to = "draft"
+  group = "website.manager"
 
-[[model.action]]
-name = "archive"
-description = "Retire a published page for good"
-field = "state"
-from = "published"
-to = "archived"
-group = "website.manager"
-[model.action.ui]
-danger = true
-confirm = "Archive this page? It goes offline for good, its address answers that it is gone, and it can no longer be changed."
+  [[model.action]]
+  name = "archive"
+  description = "Retire a published page for good"
+  field = "state"
+  from = "published"
+  to = "archived"
+  group = "website.manager"
+  [model.action.ui]
+  danger = true
+  confirm = "Archive this page? It goes offline for good, its address answers that it is gone, and it can no longer be changed."
 
 [[model]]
 name = "website_menu_item"
@@ -166,61 +157,61 @@ description = "An entry of the site navigation"
 read_group = "website.user"
 write_group = "website.manager"
 
-[model.ui]
-title = "{label}"
-subtitle = "{url}"
-list = ["label", "url", "parent_id", "sequence", "visible", "new_window"]
-quick_create = ["label", "url"]
-order = "sequence asc, label asc"
-default_view = "tree"
-menu = "main"
-menu_order = 3
+  [model.ui]
+  title = "{label}"
+  subtitle = "{url}"
+  list = ["label", "url", "parent_id", "sequence", "visible", "new_window"]
+  quick_create = ["label", "url"]
+  order = "sequence asc, label asc"
+  default_view = "tree"
+  menu = "main"
+  menu_order = 3
 
-[model.public]
-read = true
-published_field = "visible"
-fields = ["label", "url", "sequence", "new_window"]
-order_by = "sequence"
+  [model.public]
+  read = true
+  published_field = "visible"
+  fields = ["label", "url", "sequence", "new_window"]
+  order_by = "sequence"
 
-[[model.field]]
-name = "label"
-description = "Text shown in the menu"
-class = "none"
-required = true
+  [[model.field]]
+  name = "label"
+  description = "Text shown in the menu"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "url"
-description = "Where the entry leads: a page slug starting with a slash or a full address"
-class = "none"
-required = true
+  [[model.field]]
+  name = "url"
+  description = "Where the entry leads: a page slug starting with a slash or a full address"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "parent_id"
-description = "The entry this one is nested under; empty for a top-level entry"
-class = "none"
-kind = "ref"
-to = "website_menu_item"
+  [[model.field]]
+  name = "parent_id"
+  description = "The entry this one is nested under; empty for a top-level entry"
+  class = "none"
+  kind = "ref"
+  to = "website_menu_item"
 
-[[model.field]]
-name = "sequence"
-description = "Order among its siblings, lowest first"
-class = "none"
-kind = "number"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "sequence"
+  description = "Order among its siblings, lowest first"
+  class = "none"
+  kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "visible"
-description = "Whether the entry is shown"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "visible"
+  description = "Whether the entry is shown"
+  class = "none"
+  kind = "bool"
+  default = true
 
-[[model.field]]
-name = "new_window"
-description = "Whether the link opens in a new window"
-class = "none"
-kind = "bool"
+  [[model.field]]
+  name = "new_window"
+  description = "Whether the link opens in a new window"
+  class = "none"
+  kind = "bool"
 
 [[model]]
 name = "website_blog_post"
@@ -228,154 +219,144 @@ description = "A blog post"
 read_group = "website.user"
 write_group = "website.user"
 
-[model.ui]
-title = "{title}"
-subtitle = "{byline}"
-list = ["title", "author_name", "byline", "published_on", "tags", "state"]
-card = ["cover_image", "title", "summary", "published_on"]
-quick_create = ["title", "slug", "author_name"]
-order = "published_on desc, title asc"
-default_view = "list"
-menu = "main"
-menu_order = 2
-public_url = "/blog/{slug}"
-calendar = { start = "published_on" }
+  [model.ui]
+  title = "{title}"
+  subtitle = "{byline}"
+  list = ["title", "author_name", "byline", "published_on", "tags", "state"]
+  card = ["cover_image", "title", "summary", "published_on"]
+  quick_create = ["title", "slug", "author_name"]
+  order = "published_on desc, title asc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 2
+  public_url = "/blog/{slug}"
+  calendar = { start = "published_on" }
 
-[[model.ui.section]]
-label = "Content"
-fields = ["title", "slug", "author_name", "byline", "summary", "body", "tags"]
+  [[model.ui.section]]
+  label = "Content"
+  fields = ["title", "slug", "author_name", "byline", "summary", "body", "tags"]
 
-[[model.ui.section]]
-label = "Cover picture"
-fields = ["cover_image", "cover_alt"]
+  [[model.ui.section]]
+  label = "Cover picture"
+  fields = ["cover_image", "cover_alt"]
 
-[model.guard]
-immutable_when = ["archived"]
-message = "An archived post is retired for good. Write a new post to replace it."
+  [model.guard]
+  immutable_when = ["archived"]
+  message = "An archived post is retired for good. Write a new post to replace it."
 
-[model.public]
-read = true
-published_field = "state"
-published_value = "published"
-gone_value = "archived"
-fields = [
-  "title",
-  "slug",
-  "byline",
-  "summary",
-  "body",
-  "tags",
-  "published_on",
-  "cover_image",
-  "cover_alt",
-]
-order_by = "published_on"
-order_dir = "desc"
+  [model.public]
+  read = true
+  published_field = "state"
+  published_value = "published"
+  gone_value = "archived"
+  fields = ["title", "slug", "byline", "summary", "body", "tags", "published_on", "cover_image", "cover_alt"]
+  order_by = "published_on"
+  order_dir = "desc"
 
-[[model.field]]
-name = "title"
-description = "Post title"
-class = "none"
-required = true
+  [[model.field]]
+  name = "title"
+  description = "Post title"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "slug"
-description = "URL part of the post, lowercase with dashes"
-class = "none"
-required = true
+  [[model.field]]
+  name = "slug"
+  description = "URL part of the post, lowercase with dashes"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "author_name"
-description = "Name of the author, for the team's own records; never shown on the site (the byline is)"
-class = "public_directory"
-personal_data = true
-required = true
+  [[model.field]]
+  name = "author_name"
+  description = "Name of the author, for the team's own records; never shown on the site (the byline is)"
+  class = "public_directory"
+  personal_data = true
+  required = true
 
-[[model.field]]
-name = "byline"
-description = "Author line shown publicly, for example the team or brand name; use a name here only if the person agreed to it"
-class = "none"
+  [[model.field]]
+  name = "byline"
+  description = "Author line shown publicly, for example the team or brand name; use a name here only if the person agreed to it"
+  class = "none"
 
-[[model.field]]
-name = "summary"
-description = "Teaser shown in listings"
-class = "none"
+  [[model.field]]
+  name = "summary"
+  description = "Teaser shown in listings"
+  class = "none"
 
-[[model.field]]
-name = "body"
-description = "Post content in Markdown (a safe subset: headings, lists, links, emphasis, code, quotes, tables)"
-class = "none"
-kind = "longtext"
-[model.field.ui]
-display = "markdown"
+  [[model.field]]
+  name = "body"
+  description = "Post content in Markdown (a safe subset: headings, lists, links, emphasis, code, quotes, tables)"
+  class = "none"
+  kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
-[[model.field]]
-name = "tags"
-description = "Comma-separated tags, for example news,product"
-class = "none"
+  [[model.field]]
+  name = "tags"
+  description = "Comma-separated tags, for example news,product"
+  class = "none"
 
-[[model.field]]
-name = "published_on"
-description = "Day the post is dated (YYYY-MM-DD); publishing sets it to today when it is empty"
-class = "none"
-kind = "date"
+  [[model.field]]
+  name = "published_on"
+  description = "Day the post is dated (YYYY-MM-DD); publishing sets it to today when it is empty"
+  class = "none"
+  kind = "date"
 
-[[model.field]]
-name = "cover_image"
-description = "Picture shown at the top of the post and in link previews (PNG, JPEG, WebP or GIF, re-encoded on upload)"
-class = "none"
-kind = "image"
+  [[model.field]]
+  name = "cover_image"
+  description = "Picture shown at the top of the post and in link previews (PNG, JPEG, WebP or GIF, re-encoded on upload)"
+  class = "none"
+  kind = "image"
 
-[[model.field]]
-name = "cover_alt"
-description = "Text that describes the cover picture for people who cannot see it"
-class = "none"
+  [[model.field]]
+  name = "cover_alt"
+  description = "Text that describes the cover picture for people who cannot see it"
+  class = "none"
 
-[[model.field]]
-name = "state"
-description = "Post status: draft, published, archived"
-class = "none"
-kind = "select"
-options = ["draft", "published", "archived"]
-required = true
-[model.field.ui]
-tones = { draft = "info", published = "ok", archived = "neutral" }
+  [[model.field]]
+  name = "state"
+  description = "Post status: draft, published, archived"
+  class = "none"
+  kind = "select"
+  options = ["draft", "published", "archived"]
+  required = true
+  [model.field.ui]
+  tones = { draft = "info", published = "ok", archived = "neutral" }
 
-[[model.action]]
-name = "publish"
-description = "Make the post public (manager only)"
-field = "state"
-from = "draft"
-to = "published"
-group = "website.manager"
-approval = true
-[model.action.ui]
-primary = true
-done = "Published"
+  [[model.action]]
+  name = "publish"
+  description = "Make the post public (manager only)"
+  field = "state"
+  from = "draft"
+  to = "published"
+  group = "website.manager"
+  approval = true
+  [model.action.ui]
+  primary = true
+  done = "Published"
 
-[[model.action.effect]]
-kind = "set"
-set = { published_on = "$today" }
-when = "!is_set(published_on)"
+    [[model.action.effect]]
+    kind = "set"
+    set = { published_on = "$today" }
+    when = "!is_set(published_on)"
 
-[[model.action]]
-name = "unpublish"
-description = "Take the post offline and back to draft"
-field = "state"
-from = "published"
-to = "draft"
-group = "website.manager"
+  [[model.action]]
+  name = "unpublish"
+  description = "Take the post offline and back to draft"
+  field = "state"
+  from = "published"
+  to = "draft"
+  group = "website.manager"
 
-[[model.action]]
-name = "archive"
-description = "Retire a published post"
-field = "state"
-from = "published"
-to = "archived"
-group = "website.manager"
-[model.action.ui]
-danger = true
-confirm = "Archive this post? It goes offline for good and can no longer be changed."
+  [[model.action]]
+  name = "archive"
+  description = "Retire a published post"
+  field = "state"
+  from = "published"
+  to = "archived"
+  group = "website.manager"
+  [model.action.ui]
+  danger = true
+  confirm = "Archive this post? It goes offline for good and can no longer be changed."
 
 [[model]]
 name = "website_form_submission"
@@ -383,108 +364,108 @@ description = "A message a visitor sent through a form on the site"
 read_group = "website.user"
 write_group = "website.user"
 
-[model.ui]
-title = "{sender_name} · {form_name} | {sender_email} · {form_name}"
-subtitle = "{submitted_on}"
-list = ["submitted_on", "form_name", "sender_name", "sender_email", "message", "state"]
-card = ["sender_name", "form_name", "message", "submitted_on"]
-order = "submitted_on desc"
-default_view = "list"
-menu = "main"
-menu_order = 4
+  [model.ui]
+  title = "{sender_name} · {form_name} | {sender_email} · {form_name}"
+  subtitle = "{submitted_on}"
+  list = ["submitted_on", "form_name", "sender_name", "sender_email", "message", "state"]
+  card = ["sender_name", "form_name", "message", "submitted_on"]
+  order = "submitted_on desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 4
 
-[[model.ui.filter]]
-label = "New"
-where = "state = new"
+  [[model.ui.filter]]
+  label = "New"
+  where = "state = new"
 
-[model.public]
-submit = true
-submit_fields = ["sender_name", "sender_email", "sender_phone", "message", "consent_given"]
-rate_limit_per_hour = 10
+  [model.public]
+  submit = true
+  submit_fields = ["sender_name", "sender_email", "sender_phone", "message", "consent_given"]
+  rate_limit_per_hour = 10
 
-[[model.field]]
-name = "form_name"
-description = "Which form it came from, for example contact"
-class = "none"
-required = true
+  [[model.field]]
+  name = "form_name"
+  description = "Which form it came from, for example contact"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "sender_name"
-description = "Name the visitor gave"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "sender_name"
+  description = "Name the visitor gave"
+  class = "internal"
+  personal_data = true
 
-[[model.field]]
-name = "sender_email"
-description = "Email address the visitor gave"
-class = "internal"
-personal_data = true
-required = true
-[model.field.ui]
-display = "email"
+  [[model.field]]
+  name = "sender_email"
+  description = "Email address the visitor gave"
+  class = "internal"
+  personal_data = true
+  required = true
+  [model.field.ui]
+  display = "email"
 
-[[model.field]]
-name = "sender_phone"
-description = "Phone number the visitor gave"
-class = "internal"
-personal_data = true
-[model.field.ui]
-display = "tel"
+  [[model.field]]
+  name = "sender_phone"
+  description = "Phone number the visitor gave"
+  class = "internal"
+  personal_data = true
+  [model.field.ui]
+  display = "tel"
 
-[[model.field]]
-name = "message"
-description = "What the visitor wrote"
-class = "internal"
-personal_data = true
-kind = "longtext"
+  [[model.field]]
+  name = "message"
+  description = "What the visitor wrote"
+  class = "internal"
+  personal_data = true
+  kind = "longtext"
 
-[[model.field]]
-name = "source_page"
-description = "Slug of the page the form was on"
-class = "none"
+  [[model.field]]
+  name = "source_page"
+  description = "Slug of the page the form was on"
+  class = "none"
 
-[[model.field]]
-name = "submitted_on"
-description = "Day of the submission (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-default = "today"
+  [[model.field]]
+  name = "submitted_on"
+  description = "Day of the submission (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  default = "today"
 
-[[model.field]]
-name = "consent_given"
-description = "Whether the visitor ticked the consent box for being contacted"
-class = "none"
-kind = "bool"
+  [[model.field]]
+  name = "consent_given"
+  description = "Whether the visitor ticked the consent box for being contacted"
+  class = "none"
+  kind = "bool"
 
-[[model.field]]
-name = "state"
-description = "Handling status: new, handled, spam"
-class = "none"
-kind = "select"
-options = ["new", "handled", "spam"]
-required = true
-[model.field.ui]
-tones = { new = "info", handled = "ok", spam = "neutral" }
+  [[model.field]]
+  name = "state"
+  description = "Handling status: new, handled, spam"
+  class = "none"
+  kind = "select"
+  options = ["new", "handled", "spam"]
+  required = true
+  [model.field.ui]
+  tones = { new = "info", handled = "ok", spam = "neutral" }
 
-[[model.action]]
-name = "handle"
-description = "Mark the message as answered or dealt with"
-field = "state"
-from = "new"
-to = "handled"
-[model.action.ui]
-primary = true
-done = "Marked as handled"
+  [[model.action]]
+  name = "handle"
+  description = "Mark the message as answered or dealt with"
+  field = "state"
+  from = "new"
+  to = "handled"
+  [model.action.ui]
+  primary = true
+  done = "Marked as handled"
 
-[[model.action]]
-name = "mark_spam"
-description = "Mark the message as spam"
-field = "state"
-from = "new"
-to = "spam"
-[model.action.ui]
-danger = true
-done = "Marked as spam"
+  [[model.action]]
+  name = "mark_spam"
+  description = "Mark the message as spam"
+  field = "state"
+  from = "new"
+  to = "spam"
+  [model.action.ui]
+  danger = true
+  done = "Marked as spam"
 
 [[model]]
 name = "website_page_translation"
@@ -492,64 +473,64 @@ description = "A page translated into another language; the public site shows it
 read_group = "website.user"
 write_group = "website.user"
 
-[model.ui]
-title = "{title}"
-subtitle = "{lang}"
-list = ["lang", "title", "published"]
-quick_create = ["lang", "title"]
-menu = "hidden"
+  [model.ui]
+  title = "{title}"
+  subtitle = "{lang}"
+  list = ["lang", "title", "published"]
+  quick_create = ["lang", "title"]
+  menu = "hidden"
 
-[model.public]
-read = true
-published_field = "published"
-fields = ["page_id", "lang", "title", "body", "seo_title", "seo_description"]
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["page_id", "lang", "title", "body", "seo_title", "seo_description"]
 
-[[model.field]]
-name = "page_id"
-description = "The page this translates"
-class = "none"
-kind = "ref"
-to = "website_page"
-required = true
+  [[model.field]]
+  name = "page_id"
+  description = "The page this translates"
+  class = "none"
+  kind = "ref"
+  to = "website_page"
+  required = true
 
-[[model.field]]
-name = "lang"
-description = "Language of the translation: en, de, fr, pl, fi, sv or es"
-class = "none"
-kind = "select"
-options = ["en", "de", "fr", "pl", "fi", "sv", "es"]
-required = true
+  [[model.field]]
+  name = "lang"
+  description = "Language of the translation: en, de, fr, pl, fi, sv or es"
+  class = "none"
+  kind = "select"
+  options = ["en", "de", "fr", "pl", "fi", "sv", "es"]
+  required = true
 
-[[model.field]]
-name = "title"
-description = "Translated page title"
-class = "none"
-required = true
+  [[model.field]]
+  name = "title"
+  description = "Translated page title"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "body"
-description = "Translated page content in Markdown"
-class = "none"
-kind = "longtext"
-[model.field.ui]
-display = "markdown"
+  [[model.field]]
+  name = "body"
+  description = "Translated page content in Markdown"
+  class = "none"
+  kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
-[[model.field]]
-name = "seo_title"
-description = "Translated title shown in search results"
-class = "none"
+  [[model.field]]
+  name = "seo_title"
+  description = "Translated title shown in search results"
+  class = "none"
 
-[[model.field]]
-name = "seo_description"
-description = "Translated description shown in search results"
-class = "none"
+  [[model.field]]
+  name = "seo_description"
+  description = "Translated description shown in search results"
+  class = "none"
 
-[[model.field]]
-name = "published"
-description = "Whether the translation is shown; it is only reachable while its page is published"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "published"
+  description = "Whether the translation is shown; it is only reachable while its page is published"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "website_blog_post_translation"
@@ -557,56 +538,56 @@ description = "A blog post translated into another language"
 read_group = "website.user"
 write_group = "website.user"
 
-[model.ui]
-title = "{title}"
-subtitle = "{lang}"
-list = ["lang", "title", "published"]
-quick_create = ["lang", "title"]
-menu = "hidden"
+  [model.ui]
+  title = "{title}"
+  subtitle = "{lang}"
+  list = ["lang", "title", "published"]
+  quick_create = ["lang", "title"]
+  menu = "hidden"
 
-[model.public]
-read = true
-published_field = "published"
-fields = ["post_id", "lang", "title", "summary", "body"]
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["post_id", "lang", "title", "summary", "body"]
 
-[[model.field]]
-name = "post_id"
-description = "The post this translates"
-class = "none"
-kind = "ref"
-to = "website_blog_post"
-required = true
+  [[model.field]]
+  name = "post_id"
+  description = "The post this translates"
+  class = "none"
+  kind = "ref"
+  to = "website_blog_post"
+  required = true
 
-[[model.field]]
-name = "lang"
-description = "Language of the translation: en, de, fr, pl, fi, sv or es"
-class = "none"
-kind = "select"
-options = ["en", "de", "fr", "pl", "fi", "sv", "es"]
-required = true
+  [[model.field]]
+  name = "lang"
+  description = "Language of the translation: en, de, fr, pl, fi, sv or es"
+  class = "none"
+  kind = "select"
+  options = ["en", "de", "fr", "pl", "fi", "sv", "es"]
+  required = true
 
-[[model.field]]
-name = "title"
-description = "Translated post title"
-class = "none"
-required = true
+  [[model.field]]
+  name = "title"
+  description = "Translated post title"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "summary"
-description = "Translated teaser"
-class = "none"
+  [[model.field]]
+  name = "summary"
+  description = "Translated teaser"
+  class = "none"
 
-[[model.field]]
-name = "body"
-description = "Translated post content in Markdown"
-class = "none"
-kind = "longtext"
-[model.field.ui]
-display = "markdown"
+  [[model.field]]
+  name = "body"
+  description = "Translated post content in Markdown"
+  class = "none"
+  kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
-[[model.field]]
-name = "published"
-description = "Whether the translation is shown; it is only reachable while its post is published"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "published"
+  description = "Whether the translation is shown; it is only reachable while its post is published"
+  class = "none"
+  kind = "bool"
+  default = true

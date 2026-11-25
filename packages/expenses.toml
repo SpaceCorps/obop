@@ -21,216 +21,216 @@ description = "An amount an employee spent for the business and wants reimbursed
 read_group = "expenses.user"
 write_group = "expenses.user"
 
-[model.access]
-own = "employee"
-see_all_group = ["expenses.manager", "expenses.finance"]
+  [model.access]
+  own = "employee"
+  see_all_group = ["expenses.manager", "expenses.finance"]
 
-[model.ui]
-title = "{description}"
-subtitle = "{employee} · {spent_on}"
-list = ["number", "spent_on", "employee", "description", "category", "amount", "state"]
-card = ["description", "employee", "amount", "category", "spent_on"]
-card_sum = "amount"
-quick_create = ["description", "amount", "category"]
-order = "spent_on desc, number desc"
-default_view = "kanban"
-menu = "main"
-calendar = { start = "spent_on", color = "category" }
-report = { rows = "employee", cols = "category", measure = "amount" }
+  [model.ui]
+  title = "{description}"
+  subtitle = "{employee} · {spent_on}"
+  list = ["number", "spent_on", "employee", "description", "category", "amount", "state"]
+  card = ["description", "employee", "amount", "category", "spent_on"]
+  card_sum = "amount"
+  quick_create = ["description", "amount", "category"]
+  order = "spent_on desc, number desc"
+  default_view = "kanban"
+  menu = "main"
+  calendar = { start = "spent_on", color = "category" }
+  report = { rows = "employee", cols = "category", measure = "amount" }
 
-[[model.ui.section]]
-label = "Expense"
-fields = ["description", "amount", "category", "spent_on", "receipt"]
+  [[model.ui.section]]
+  label = "Expense"
+  fields = ["description", "amount", "category", "spent_on", "receipt"]
 
-[[model.ui.section]]
-label = "Notes"
-fields = ["receipt_note"]
+  [[model.ui.section]]
+  label = "Notes"
+  fields = ["receipt_note"]
 
-[[model.ui.section]]
-label = "Claimed by"
-fields = ["employee", "submitted_by", "currency"]
+  [[model.ui.section]]
+  label = "Claimed by"
+  fields = ["employee", "submitted_by", "currency"]
 
-[[model.ui.section]]
-label = "Payment"
-fields = ["paid_on", "payment_reference"]
-show_in = ["approved", "paid"]
+  [[model.ui.section]]
+  label = "Payment"
+  fields = ["paid_on", "payment_reference"]
+  show_in = ["approved", "paid"]
 
-[[model.ui.filter]]
-label = "My claims"
-where = "employee = $user"
+  [[model.ui.filter]]
+  label = "My claims"
+  where = "employee = $user"
 
-[[model.ui.filter]]
-label = "To approve"
-where = "state = submitted"
+  [[model.ui.filter]]
+  label = "To approve"
+  where = "state = submitted"
 
-[[model.ui.filter]]
-label = "To pay"
-where = "state = approved"
+  [[model.ui.filter]]
+  label = "To pay"
+  where = "state = approved"
 
-[model.guard]
-immutable_when = ["approved", "paid", "refused"]
-mutable_fields = ["receipt", "receipt_note", "paid_on", "payment_reference"]
-exit_to = ["paid"]
-message = "An approved, paid or refused claim cannot be changed, except its receipt and the payment details."
+  [model.guard]
+  immutable_when = ["approved", "paid", "refused"]
+  mutable_fields = ["receipt", "receipt_note", "paid_on", "payment_reference"]
+  exit_to = ["paid"]
+  message = "An approved, paid or refused claim cannot be changed, except its receipt and the payment details."
 
-[[model.field]]
-name = "number"
-description = "Claim number such as EXP-2026-0042, assigned when the claim is created; the series starts again each year"
-class = "none"
-kind = "sequence"
-format = "EXP-{year}-{seq:04}"
-reset = "year"
+  [[model.field]]
+  name = "number"
+  description = "Claim number such as EXP-2026-0042, assigned when the claim is created; the series starts again each year"
+  class = "none"
+  kind = "sequence"
+  format = "EXP-{year}-{seq:04}"
+  reset = "year"
 
-[[model.field]]
-name = "description"
-description = "What the money was spent on"
-class = "none"
-required = true
+  [[model.field]]
+  name = "description"
+  description = "What the money was spent on"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "employee"
-description = "User name of the person claiming the expense; the person who creates the claim unless set otherwise"
-class = "internal"
-personal_data = true
-required = true
-default = "$user"
+  [[model.field]]
+  name = "employee"
+  description = "User name of the person claiming the expense; the person who creates the claim unless set otherwise"
+  class = "internal"
+  personal_data = true
+  required = true
+  default = "$user"
 
-[[model.field]]
-name = "submitted_by"
-description = "User name of the person who submitted the claim, recorded by the submit action; they may not approve it either, unless self-approval is allowed"
-class = "internal"
-personal_data = true
-readonly = true
+  [[model.field]]
+  name = "submitted_by"
+  description = "User name of the person who submitted the claim, recorded by the submit action; they may not approve it either, unless self-approval is allowed"
+  class = "internal"
+  personal_data = true
+  readonly = true
 
-[[model.field]]
-name = "spent_on"
-description = "Date of the purchase (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-default = "today"
+  [[model.field]]
+  name = "spent_on"
+  description = "Date of the purchase (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  default = "today"
 
-[[model.field]]
-name = "category"
-description = "Expense category: travel, meals, lodging, supplies, software, other"
-class = "none"
-kind = "select"
-options = ["travel", "meals", "lodging", "supplies", "software", "other"]
-required = true
+  [[model.field]]
+  name = "category"
+  description = "Expense category: travel, meals, lodging, supplies, software, other"
+  class = "none"
+  kind = "select"
+  options = ["travel", "meals", "lodging", "supplies", "software", "other"]
+  required = true
 
-[[model.field]]
-name = "amount"
-description = "Amount owed to the employee (minor currency units, e.g. cents)"
-class = "financial"
-personal_data = true
-kind = "money"
-required = true
+  [[model.field]]
+  name = "amount"
+  description = "Amount owed to the employee (minor currency units, e.g. cents)"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  required = true
 
-[model.field.ui]
-currency_from = "currency"
+    [model.field.ui]
+    currency_from = "currency"
 
-[[model.field]]
-name = "currency"
-description = "ISO 4217 currency code, for example EUR"
-class = "none"
-default = "$instance.currency"
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code, for example EUR"
+  class = "none"
+  default = "$instance.currency"
 
-[[model.field]]
-name = "receipt"
-description = "A photo or scan of the receipt (PDF or image); served only as a download to people who may read the claim"
-class = "financial"
-personal_data = true
-kind = "file"
+  [[model.field]]
+  name = "receipt"
+  description = "A photo or scan of the receipt (PDF or image); served only as a download to people who may read the claim"
+  class = "financial"
+  personal_data = true
+  kind = "file"
 
-[[model.field]]
-name = "receipt_note"
-description = "Where the receipt is kept and what it shows"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "receipt_note"
+  description = "Where the receipt is kept and what it shows"
+  class = "none"
+  kind = "longtext"
 
-[[model.field]]
-name = "paid_on"
-description = "Date the employee was reimbursed (YYYY-MM-DD)"
-class = "financial"
-personal_data = true
-kind = "date"
-group = "expenses.finance"
+  [[model.field]]
+  name = "paid_on"
+  description = "Date the employee was reimbursed (YYYY-MM-DD)"
+  class = "financial"
+  personal_data = true
+  kind = "date"
+  group = "expenses.finance"
 
-[[model.field]]
-name = "payment_reference"
-description = "Bank transfer reference of the reimbursement"
-class = "financial"
-personal_data = true
-group = "expenses.finance"
+  [[model.field]]
+  name = "payment_reference"
+  description = "Bank transfer reference of the reimbursement"
+  class = "financial"
+  personal_data = true
+  group = "expenses.finance"
 
-[[model.field]]
-name = "state"
-description = "Claim status: draft, submitted, approved, paid, refused"
-class = "none"
-kind = "select"
-options = ["draft", "submitted", "approved", "paid", "refused"]
-required = true
+  [[model.field]]
+  name = "state"
+  description = "Claim status: draft, submitted, approved, paid, refused"
+  class = "none"
+  kind = "select"
+  options = ["draft", "submitted", "approved", "paid", "refused"]
+  required = true
 
-[model.field.ui]
-tones = { submitted = "warn", approved = "info", paid = "ok", refused = "bad" }
+    [model.field.ui]
+    tones = { submitted = "warn", approved = "info", paid = "ok", refused = "bad" }
 
-[[model.action]]
-name = "submit"
-description = "Submit the claim for approval"
-field = "state"
-from = "draft"
-to = "submitted"
+  [[model.action]]
+  name = "submit"
+  description = "Submit the claim for approval"
+  field = "state"
+  from = "draft"
+  to = "submitted"
 
-[[model.action.effect]]
-kind = "set"
-set = { submitted_by = "$caller" }
+    [[model.action.effect]]
+    kind = "set"
+    set = { submitted_by = "$caller" }
 
-[model.action.ui]
-primary = true
-done = "Submitted for approval"
+    [model.action.ui]
+    primary = true
+    done = "Submitted for approval"
 
-[[model.action]]
-name = "approve"
-description = "Approve a submitted claim (manager only)"
-field = "state"
-from = "submitted"
-to = "approved"
-group = "expenses.manager"
-approval = true
+  [[model.action]]
+  name = "approve"
+  description = "Approve a submitted claim (manager only)"
+  field = "state"
+  from = "submitted"
+  to = "approved"
+  group = "expenses.manager"
+  approval = true
 
-[model.action.ui]
-primary = true
-done = "Claim approved"
+    [model.action.ui]
+    primary = true
+    done = "Claim approved"
 
-[[model.action]]
-name = "pay"
-description = "Record the reimbursement as paid (finance only); the paid date is today unless it was given"
-field = "state"
-from = "approved"
-to = "paid"
-group = "expenses.finance"
-approval = true
+  [[model.action]]
+  name = "pay"
+  description = "Record the reimbursement as paid (finance only); the paid date is today unless it was given"
+  field = "state"
+  from = "approved"
+  to = "paid"
+  group = "expenses.finance"
+  approval = true
 
-[[model.action.effect]]
-kind = "set"
-set = { paid_on = "$today" }
-when = "!is_set(paid_on)"
+    [[model.action.effect]]
+    kind = "set"
+    set = { paid_on = "$today" }
+    when = "!is_set(paid_on)"
 
-[model.action.ui]
-primary = true
-confirm = "Record this claim as paid?"
-done = "Claim marked as paid"
+    [model.action.ui]
+    primary = true
+    confirm = "Record this claim as paid?"
+    done = "Claim marked as paid"
 
-[[model.action]]
-name = "refuse"
-description = "Refuse a submitted claim (manager only)"
-field = "state"
-from = "submitted"
-to = "refused"
-group = "expenses.manager"
-approval = true
+  [[model.action]]
+  name = "refuse"
+  description = "Refuse a submitted claim (manager only)"
+  field = "state"
+  from = "submitted"
+  to = "refused"
+  group = "expenses.manager"
+  approval = true
 
-[model.action.ui]
-danger = true
-confirm = "Refuse this claim? A refused claim can no longer be changed."
-done = "Claim refused"
+    [model.action.ui]
+    danger = true
+    confirm = "Refuse this claim? A refused claim can no longer be changed."
+    done = "Claim refused"

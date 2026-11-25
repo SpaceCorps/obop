@@ -25,54 +25,54 @@ description = "A group of listings shown together in the shop"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
 
-[model.ui]
-title = "{name}"
-subtitle = "{slug}"
-list = ["name", "slug", "sequence", "published"]
-quick_create = ["name", "slug"]
-order = "sequence asc, name asc"
-default_view = "list"
-menu = "main"
-menu_section = "Catalogue"
-menu_order = 3
+  [model.ui]
+  title = "{name}"
+  subtitle = "{slug}"
+  list = ["name", "slug", "sequence", "published"]
+  quick_create = ["name", "slug"]
+  order = "sequence asc, name asc"
+  default_view = "list"
+  menu = "main"
+  menu_section = "Catalogue"
+  menu_order = 3
 
-[model.public]
-read = true
-published_field = "published"
-fields = ["name", "slug", "description", "sequence"]
-order_by = "sequence"
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["name", "slug", "description", "sequence"]
+  order_by = "sequence"
 
-[[model.field]]
-name = "name"
-description = "Category name shown in the shop"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Category name shown in the shop"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "slug"
-description = "URL part of the category, lowercase with dashes"
-class = "none"
-required = true
+  [[model.field]]
+  name = "slug"
+  description = "URL part of the category, lowercase with dashes"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "description"
-description = "Short text about the category"
-class = "none"
+  [[model.field]]
+  name = "description"
+  description = "Short text about the category"
+  class = "none"
 
-[[model.field]]
-name = "sequence"
-description = "Order among categories, lowest first"
-class = "none"
-kind = "number"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "sequence"
+  description = "Order among categories, lowest first"
+  class = "none"
+  kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "published"
-description = "Whether the category is visible to shoppers"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "published"
+  description = "Whether the category is visible to shoppers"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_listing"
@@ -80,163 +80,149 @@ description = "A product as it appears in the online shop"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
 
-[model.ui]
-title = "{title}"
-subtitle = "{sku}"
-list = ["title", "product_id", "category_id", "price", "stock_quantity", "published"]
-card = ["image", "title", "price", "stock_quantity", "published"]
-quick_create = ["product_id", "slug"]
-order = "title asc"
-default_view = "gallery"
-menu = "main"
-menu_section = "Catalogue"
-menu_order = 2
+  [model.ui]
+  title = "{title}"
+  subtitle = "{sku}"
+  list = ["title", "product_id", "category_id", "price", "stock_quantity", "published"]
+  card = ["image", "title", "price", "stock_quantity", "published"]
+  quick_create = ["product_id", "slug"]
+  order = "title asc"
+  default_view = "gallery"
+  menu = "main"
+  menu_section = "Catalogue"
+  menu_order = 2
 
-[[model.ui.section]]
-label = "In the shop"
-fields = ["product_id", "title", "price", "compare_at_price", "image", "published"]
+  [[model.ui.section]]
+  label = "In the shop"
+  fields = ["product_id", "title", "price", "compare_at_price", "image", "published"]
 
-[[model.ui.section]]
-label = "Stock"
-fields = ["stock_policy", "stock_quantity"]
+  [[model.ui.section]]
+  label = "Stock"
+  fields = ["stock_policy", "stock_quantity"]
 
-[[model.ui.section]]
-label = "Product page"
-fields = ["slug", "category_id", "summary", "description", "image_alt"]
+  [[model.ui.section]]
+  label = "Product page"
+  fields = ["slug", "category_id", "summary", "description", "image_alt"]
 
-[[model.ui.section]]
-label = "Advanced"
-fields = ["sku", "currency"]
-collapsed = true
+  [[model.ui.section]]
+  label = "Advanced"
+  fields = ["sku", "currency"]
+  collapsed = true
 
-[[model.ui.filter]]
-label = "In the shop"
-where = "published = true"
+  [[model.ui.filter]]
+  label = "In the shop"
+  where = "published = true"
 
-[[model.ui.filter]]
-label = "Out of stock"
-where = "stock_quantity <= 0"
+  [[model.ui.filter]]
+  label = "Out of stock"
+  where = "stock_quantity <= 0"
 
-[model.public]
-read = true
-published_field = "published"
-fields = [
-  "title",
-  "slug",
-  "summary",
-  "description",
-  "price",
-  "compare_at_price",
-  "currency",
-  "sku",
-  "stock_policy",
-  "stock_quantity",
-  "category_id",
-  "image",
-  "image_alt",
-]
-order_by = "title"
-server_adjust = ["stock_quantity"]
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["title", "slug", "summary", "description", "price", "compare_at_price", "currency", "sku", "stock_policy", "stock_quantity", "category_id", "image", "image_alt"]
+  order_by = "title"
+  server_adjust = ["stock_quantity"]
 
-[[model.field]]
-name = "product_id"
-description = "The product being sold online"
-class = "none"
-kind = "ref"
-to = "product"
-required = true
+  [[model.field]]
+  name = "product_id"
+  description = "The product being sold online"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
 
-[[model.field]]
-name = "title"
-description = "Title shown in the shop; the product's name unless given"
-class = "none"
-required = true
-fill_from = "product_id.name"
+  [[model.field]]
+  name = "title"
+  description = "Title shown in the shop; the product's name unless given"
+  class = "none"
+  required = true
+  fill_from = "product_id.name"
 
-[[model.field]]
-name = "slug"
-description = "URL part of the product page, lowercase with dashes"
-class = "none"
-required = true
+  [[model.field]]
+  name = "slug"
+  description = "URL part of the product page, lowercase with dashes"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "summary"
-description = "One or two sentences shown on product cards"
-class = "none"
+  [[model.field]]
+  name = "summary"
+  description = "One or two sentences shown on product cards"
+  class = "none"
 
-[[model.field]]
-name = "description"
-description = "Description shown on the product page, in Markdown"
-class = "none"
-kind = "longtext"
-[model.field.ui]
-display = "markdown"
+  [[model.field]]
+  name = "description"
+  description = "Description shown on the product page, in Markdown"
+  class = "none"
+  kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
-[[model.field]]
-name = "image"
-description = "Main picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB; it is re-encoded and its metadata removed on upload)"
-class = "none"
-kind = "image"
+  [[model.field]]
+  name = "image"
+  description = "Main picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB; it is re-encoded and its metadata removed on upload)"
+  class = "none"
+  kind = "image"
 
-[[model.field]]
-name = "image_alt"
-description = "Text that describes the main picture for people who cannot see it"
-class = "none"
+  [[model.field]]
+  name = "image_alt"
+  description = "Text that describes the main picture for people who cannot see it"
+  class = "none"
 
-[[model.field]]
-name = "category_id"
-description = "The category the listing is shown under"
-class = "none"
-kind = "ref"
-to = "ecommerce_category"
+  [[model.field]]
+  name = "category_id"
+  description = "The category the listing is shown under"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_category"
 
-[[model.field]]
-name = "price"
-description = "Shop price including tax (minor currency units, e.g. cents); the product's list price unless given"
-class = "none"
-kind = "money"
-required = true
-fill_from = "product_id.list_price_minor"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "price"
+  description = "Shop price including tax (minor currency units, e.g. cents); the product's list price unless given"
+  class = "none"
+  kind = "money"
+  required = true
+  fill_from = "product_id.list_price_minor"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "compare_at_price"
-description = "Previous price shown crossed out (minor currency units)"
-class = "none"
-kind = "money"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "compare_at_price"
+  description = "Previous price shown crossed out (minor currency units)"
+  class = "none"
+  kind = "money"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "currency"
-description = "ISO 4217 currency code of the prices, for example EUR; empty means the shop currency from the instance settings"
-class = "none"
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code of the prices, for example EUR; empty means the shop currency from the instance settings"
+  class = "none"
 
-[[model.field]]
-name = "sku"
-description = "Stock keeping unit shown on the product page; the product's SKU unless given"
-class = "none"
-fill_from = "product_id.sku"
+  [[model.field]]
+  name = "sku"
+  description = "Stock keeping unit shown on the product page; the product's SKU unless given"
+  class = "none"
+  fill_from = "product_id.sku"
 
-[[model.field]]
-name = "stock_policy"
-description = "What happens when stock runs out: always_available, block_when_out, allow_backorder"
-class = "none"
-kind = "select"
-options = ["always_available", "block_when_out", "allow_backorder"]
+  [[model.field]]
+  name = "stock_policy"
+  description = "What happens when stock runs out: always_available, block_when_out, allow_backorder"
+  class = "none"
+  kind = "select"
+  options = ["always_available", "block_when_out", "allow_backorder"]
 
-[[model.field]]
-name = "stock_quantity"
-description = "Units on hand, used with the stock policy. Every order takes its units off at checkout, and a cancelled, expired or refunded order puts them back; correct it by hand after a stock count"
-class = "none"
-kind = "number"
+  [[model.field]]
+  name = "stock_quantity"
+  description = "Units on hand, used with the stock policy. Every order takes its units off at checkout, and a cancelled, expired or refunded order puts them back; correct it by hand after a stock count"
+  class = "none"
+  kind = "number"
 
-[[model.field]]
-name = "published"
-description = "Whether the listing is visible to shoppers"
-class = "none"
-kind = "bool"
+  [[model.field]]
+  name = "published"
+  description = "Whether the listing is visible to shoppers"
+  class = "none"
+  kind = "bool"
 
 [[model]]
 name = "ecommerce_listing_image"
@@ -244,54 +230,54 @@ description = "An extra picture of a listing for its gallery"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
 
-[model.ui]
-title = "{alt}"
-list = ["image", "alt", "sequence", "published"]
-card = ["image", "alt"]
-order = "sequence asc"
-default_view = "gallery"
-menu = "hidden"
+  [model.ui]
+  title = "{alt}"
+  list = ["image", "alt", "sequence", "published"]
+  card = ["image", "alt"]
+  order = "sequence asc"
+  default_view = "gallery"
+  menu = "hidden"
 
-[model.public]
-read = true
-published_field = "published"
-fields = ["listing_id", "image", "alt", "sequence"]
-order_by = "sequence"
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["listing_id", "image", "alt", "sequence"]
+  order_by = "sequence"
 
-[[model.field]]
-name = "listing_id"
-description = "The listing the picture belongs to; it is shown only while the listing is published"
-class = "none"
-kind = "ref"
-to = "ecommerce_listing"
-required = true
+  [[model.field]]
+  name = "listing_id"
+  description = "The listing the picture belongs to; it is shown only while the listing is published"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_listing"
+  required = true
 
-[[model.field]]
-name = "image"
-description = "The picture (PNG, JPEG, WebP or GIF, up to 5 MiB)"
-class = "none"
-kind = "image"
-required = true
+  [[model.field]]
+  name = "image"
+  description = "The picture (PNG, JPEG, WebP or GIF, up to 5 MiB)"
+  class = "none"
+  kind = "image"
+  required = true
 
-[[model.field]]
-name = "alt"
-description = "Text that describes the picture for people who cannot see it"
-class = "none"
+  [[model.field]]
+  name = "alt"
+  description = "Text that describes the picture for people who cannot see it"
+  class = "none"
 
-[[model.field]]
-name = "sequence"
-description = "Order in the gallery, lowest first"
-class = "none"
-kind = "number"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "sequence"
+  description = "Order in the gallery, lowest first"
+  class = "none"
+  kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "published"
-description = "Whether the picture is shown in the shop"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "published"
+  description = "Whether the picture is shown in the shop"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_listing_translation"
@@ -299,59 +285,59 @@ description = "A listing translated into another language"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
 
-[model.ui]
-title = "{title}"
-subtitle = "{lang}"
-list = ["lang", "title", "published"]
-quick_create = ["lang", "title"]
-menu = "hidden"
+  [model.ui]
+  title = "{title}"
+  subtitle = "{lang}"
+  list = ["lang", "title", "published"]
+  quick_create = ["lang", "title"]
+  menu = "hidden"
 
-[model.public]
-read = true
-published_field = "published"
-fields = ["listing_id", "lang", "title", "summary", "description"]
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["listing_id", "lang", "title", "summary", "description"]
 
-[[model.field]]
-name = "listing_id"
-description = "The listing this translates"
-class = "none"
-kind = "ref"
-to = "ecommerce_listing"
-required = true
+  [[model.field]]
+  name = "listing_id"
+  description = "The listing this translates"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_listing"
+  required = true
 
-[[model.field]]
-name = "lang"
-description = "Language of the translation: en, de, fr, pl, fi, sv or es"
-class = "none"
-kind = "select"
-options = ["en", "de", "fr", "pl", "fi", "sv", "es"]
-required = true
+  [[model.field]]
+  name = "lang"
+  description = "Language of the translation: en, de, fr, pl, fi, sv or es"
+  class = "none"
+  kind = "select"
+  options = ["en", "de", "fr", "pl", "fi", "sv", "es"]
+  required = true
 
-[[model.field]]
-name = "title"
-description = "Translated title"
-class = "none"
-required = true
+  [[model.field]]
+  name = "title"
+  description = "Translated title"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "summary"
-description = "Translated card text"
-class = "none"
+  [[model.field]]
+  name = "summary"
+  description = "Translated card text"
+  class = "none"
 
-[[model.field]]
-name = "description"
-description = "Translated description in Markdown"
-class = "none"
-kind = "longtext"
-[model.field.ui]
-display = "markdown"
+  [[model.field]]
+  name = "description"
+  description = "Translated description in Markdown"
+  class = "none"
+  kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
-[[model.field]]
-name = "published"
-description = "Whether the translation is shown; it is only reachable while its listing is published"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "published"
+  description = "Whether the translation is shown; it is only reachable while its listing is published"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_shipping_method"
@@ -359,62 +345,62 @@ description = "A way of delivering orders with its price"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
 
-[model.ui]
-title = "{name}"
-subtitle = "{carrier}"
-list = ["name", "carrier", "price", "free_over", "delivery_days", "active"]
-order = "price asc"
-default_view = "list"
-menu = "configuration"
+  [model.ui]
+  title = "{name}"
+  subtitle = "{carrier}"
+  list = ["name", "carrier", "price", "free_over", "delivery_days", "active"]
+  order = "price asc"
+  default_view = "list"
+  menu = "configuration"
 
-[model.public]
-read = true
-published_field = "active"
-fields = ["name", "carrier", "price", "free_over", "delivery_days"]
-order_by = "price"
+  [model.public]
+  read = true
+  published_field = "active"
+  fields = ["name", "carrier", "price", "free_over", "delivery_days"]
+  order_by = "price"
 
-[[model.field]]
-name = "name"
-description = "Name shown at checkout, for example Standard delivery"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Name shown at checkout, for example Standard delivery"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "carrier"
-description = "Carrier that delivers, for example DHL"
-class = "none"
+  [[model.field]]
+  name = "carrier"
+  description = "Carrier that delivers, for example DHL"
+  class = "none"
 
-[[model.field]]
-name = "price"
-description = "Delivery price (minor currency units)"
-class = "none"
-kind = "money"
-required = true
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "price"
+  description = "Delivery price (minor currency units)"
+  class = "none"
+  kind = "money"
+  required = true
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "free_over"
-description = "Order total above which delivery is free (minor currency units); empty means never"
-class = "none"
-kind = "money"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "free_over"
+  description = "Order total above which delivery is free (minor currency units); empty means never"
+  class = "none"
+  kind = "money"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "delivery_days"
-description = "Usual number of days until delivery"
-class = "none"
-kind = "number"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "delivery_days"
+  description = "Usual number of days until delivery"
+  class = "none"
+  kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "active"
-description = "Whether shoppers can choose it"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "active"
+  description = "Whether shoppers can choose it"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_discount_code"
@@ -422,99 +408,99 @@ description = "A code a shopper enters at checkout for a reduction"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
 
-[model.ui]
-title = "{code}"
-list = ["code", "kind", "value", "starts_on", "ends_on", "used_count", "max_uses", "active"]
-quick_create = ["code", "kind", "value"]
-order = "code asc"
-default_view = "list"
-menu = "configuration"
+  [model.ui]
+  title = "{code}"
+  list = ["code", "kind", "value", "starts_on", "ends_on", "used_count", "max_uses", "active"]
+  quick_create = ["code", "kind", "value"]
+  order = "code asc"
+  default_view = "list"
+  menu = "configuration"
 
-[model.public]
-server_read = true
-server_adjust = ["used_count"]
+  [model.public]
+  server_read = true
+  server_adjust = ["used_count"]
 
-[[model.field]]
-name = "code"
-description = "The code shoppers type, for example SPRING10"
-class = "none"
-required = true
+  [[model.field]]
+  name = "code"
+  description = "The code shoppers type, for example SPRING10"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "kind"
-description = "Type of reduction: percent or fixed"
-class = "none"
-kind = "select"
-options = ["percent", "fixed"]
-required = true
+  [[model.field]]
+  name = "kind"
+  description = "Type of reduction: percent or fixed"
+  class = "none"
+  kind = "select"
+  options = ["percent", "fixed"]
+  required = true
 
-[[model.field]]
-name = "value"
-description = "Reduction: basis points for percent (1000 is 10.00 percent), minor currency units for fixed"
-class = "none"
-kind = "number"
-required = true
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "value"
+  description = "Reduction: basis points for percent (1000 is 10.00 percent), minor currency units for fixed"
+  class = "none"
+  kind = "number"
+  required = true
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "starts_on"
-description = "First day the code works (YYYY-MM-DD)"
-class = "none"
-kind = "date"
+  [[model.field]]
+  name = "starts_on"
+  description = "First day the code works (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
 
-[[model.field]]
-name = "ends_on"
-description = "Last day the code works (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-[model.field.ui]
-warn_before_days = 7
+  [[model.field]]
+  name = "ends_on"
+  description = "Last day the code works (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  [model.field.ui]
+  warn_before_days = 7
 
-[[model.field]]
-name = "max_uses"
-description = "How many times the code may be used in total; empty means unlimited"
-class = "none"
-kind = "number"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "max_uses"
+  description = "How many times the code may be used in total; empty means unlimited"
+  class = "none"
+  kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "used_count"
-description = "How many times it has been used. The shop counts a use when the order is placed and gives it back when the order is cancelled or never paid"
-class = "none"
-kind = "number"
-readonly = true
+  [[model.field]]
+  name = "used_count"
+  description = "How many times it has been used. The shop counts a use when the order is placed and gives it back when the order is cancelled or never paid"
+  class = "none"
+  kind = "number"
+  readonly = true
 
-[[model.field]]
-name = "minimum_order"
-description = "Smallest order total the code applies to (minor currency units)"
-class = "none"
-kind = "money"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "minimum_order"
+  description = "Smallest order total the code applies to (minor currency units)"
+  class = "none"
+  kind = "money"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "per_customer_limit"
-description = "How many times one customer (by email address) may use the code; empty means no limit"
-class = "none"
-kind = "number"
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "per_customer_limit"
+  description = "How many times one customer (by email address) may use the code; empty means no limit"
+  class = "none"
+  kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "category_id"
-description = "Only listings of this category get the reduction; empty means the whole order"
-class = "none"
-kind = "ref"
-to = "ecommerce_category"
+  [[model.field]]
+  name = "category_id"
+  description = "Only listings of this category get the reduction; empty means the whole order"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_category"
 
-[[model.field]]
-name = "active"
-description = "Whether the code can be used"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "active"
+  description = "Whether the code can be used"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_discount_use"
@@ -522,33 +508,33 @@ description = "How many times one customer has used one discount code (the custo
 read_group = "ecommerce.manager"
 write_group = "ecommerce.manager"
 
-[model.ui]
-title = "{code_id} · {count}"
-menu = "hidden"
+  [model.ui]
+  title = "{code_id} · {count}"
+  menu = "hidden"
 
-[model.public]
-server_adjust = ["count"]
+  [model.public]
+  server_adjust = ["count"]
 
-[[model.field]]
-name = "code_id"
-description = "The discount code"
-class = "none"
-kind = "ref"
-to = "ecommerce_discount_code"
-required = true
+  [[model.field]]
+  name = "code_id"
+  description = "The discount code"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_discount_code"
+  required = true
 
-[[model.field]]
-name = "customer_hash"
-description = "Hash of the customer's email address, so the per-customer limit can be checked without keeping the address here"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "customer_hash"
+  description = "Hash of the customer's email address, so the per-customer limit can be checked without keeping the address here"
+  class = "internal"
+  personal_data = true
 
-[[model.field]]
-name = "count"
-description = "Uses so far"
-class = "none"
-kind = "number"
-readonly = true
+  [[model.field]]
+  name = "count"
+  description = "Uses so far"
+  class = "none"
+  kind = "number"
+  readonly = true
 
 [[model]]
 name = "ecommerce_tax_rate"
@@ -556,57 +542,57 @@ description = "A tax rate the shop applies to listings, computed on the server"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
 
-[model.ui]
-title = "{name} {country} | {name}"
-list = ["name", "rate_bp", "country", "category_id", "included", "active"]
-order = "name asc"
-default_view = "list"
-menu = "configuration"
+  [model.ui]
+  title = "{name} {country} | {name}"
+  list = ["name", "rate_bp", "country", "category_id", "included", "active"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
 
-[model.public]
-server_read = true
+  [model.public]
+  server_read = true
 
-[[model.field]]
-name = "name"
-description = "Name shown on the order, for example VAT"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Name shown on the order, for example VAT"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "rate_bp"
-description = "Rate in basis points: 1900 is 19.00 percent"
-class = "none"
-kind = "number"
-required = true
-[model.field.ui]
-display = "percent_bp"
-aggregate = "none"
+  [[model.field]]
+  name = "rate_bp"
+  description = "Rate in basis points: 1900 is 19.00 percent"
+  class = "none"
+  kind = "number"
+  required = true
+  [model.field.ui]
+  display = "percent_bp"
+  aggregate = "none"
 
-[[model.field]]
-name = "country"
-description = "Two-letter country code (for example DE) of the delivery address this rate is for; empty means every country that has no rate of its own"
-class = "none"
+  [[model.field]]
+  name = "country"
+  description = "Two-letter country code (for example DE) of the delivery address this rate is for; empty means every country that has no rate of its own"
+  class = "none"
 
-[[model.field]]
-name = "category_id"
-description = "Only listings of this category; empty means every listing (and delivery)"
-class = "none"
-kind = "ref"
-to = "ecommerce_category"
+  [[model.field]]
+  name = "category_id"
+  description = "Only listings of this category; empty means every listing (and delivery)"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_category"
 
-[[model.field]]
-name = "included"
-description = "Whether listing prices already include this tax (the usual way in the EU). If not, the tax is added on top at checkout"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "included"
+  description = "Whether listing prices already include this tax (the usual way in the EU). If not, the tax is added on top at checkout"
+  class = "none"
+  kind = "bool"
+  default = true
 
-[[model.field]]
-name = "active"
-description = "Whether the rate is applied"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "active"
+  description = "Whether the rate is applied"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_order"
@@ -614,371 +600,318 @@ description = "An order placed online"
 read_group = "ecommerce.user"
 write_group = "ecommerce.user"
 
-[model.ui]
-title = "{number}"
-subtitle = "{customer_name} | {customer_email}"
-list = [
-  "number",
-  "placed_on",
-  "customer_name",
-  "customer_email",
-  "payment_method",
-  "total",
-  "state",
-]
-card = ["number", "customer_name", "total", "placed_on"]
-card_sum = "total"
-order = "placed_on desc, number desc"
-default_view = "list"
-menu = "main"
-menu_section = "Sales"
-menu_order = 1
-report = { rows = "placed_on", cols = "state", measure = "total" }
+  [model.ui]
+  title = "{number}"
+  subtitle = "{customer_name} | {customer_email}"
+  list = ["number", "placed_on", "customer_name", "customer_email", "payment_method", "total", "state"]
+  card = ["number", "customer_name", "total", "placed_on"]
+  card_sum = "total"
+  order = "placed_on desc, number desc"
+  default_view = "list"
+  menu = "main"
+  menu_section = "Sales"
+  menu_order = 1
+  report = { rows = "placed_on", cols = "state", measure = "total" }
 
-[[model.ui.section]]
-label = "Customer"
-fields = [
-  "customer_name",
-  "customer_email",
-  "customer_id",
-  "shipping_address",
-  "billing_address",
-  "country",
-]
+  [[model.ui.section]]
+  label = "Customer"
+  fields = ["customer_name", "customer_email", "customer_id", "shipping_address", "billing_address", "country"]
 
-[[model.ui.section]]
-label = "Delivery"
-fields = ["shipping_method_id", "tracking_reference"]
+  [[model.ui.section]]
+  label = "Delivery"
+  fields = ["shipping_method_id", "tracking_reference"]
 
-[[model.ui.section]]
-label = "Amounts"
-fields = [
-  "subtotal",
-  "discount_code",
-  "discount_total",
-  "shipping_total",
-  "tax_total",
-  "total",
-  "currency",
-]
+  [[model.ui.section]]
+  label = "Amounts"
+  fields = ["subtotal", "discount_code", "discount_total", "shipping_total", "tax_total", "total", "currency"]
 
-[[model.ui.section]]
-label = "Payment"
-fields = ["payment_method", "payment_reference"]
+  [[model.ui.section]]
+  label = "Payment"
+  fields = ["payment_method", "payment_reference"]
 
-[[model.ui.section]]
-label = "Checkout record"
-fields = [
-  "placed_on",
-  "reserved_until",
-  "stock_returned",
-  "tax_summary",
-  "discount_code_id",
-  "discount_use_id",
-]
-collapsed = true
+  [[model.ui.section]]
+  label = "Checkout record"
+  fields = ["placed_on", "reserved_until", "stock_returned", "tax_summary", "discount_code_id", "discount_use_id"]
+  collapsed = true
 
-[[model.ui.filter]]
-label = "To ship"
-where = "state = paid"
+  [[model.ui.filter]]
+  label = "To ship"
+  where = "state = paid"
 
-[[model.ui.filter]]
-label = "Waiting for payment"
-where = "state = pending"
+  [[model.ui.filter]]
+  label = "Waiting for payment"
+  where = "state = pending"
 
-[[model.child]]
-model = "ecommerce_payment"
-via = "order_id"
-shape = "list"
+  [[model.child]]
+  model = "ecommerce_payment"
+  via = "order_id"
+  shape = "list"
 
-[model.guard]
-immutable_when = ["delivered", "cancelled", "refunded"]
-mutable_fields = ["customer_id", "tracking_reference"]
-exit_to = [{ to = "refunded", action = "refund_delivered" }]
-message = "A delivered, cancelled or refunded order cannot be changed; only its contact and tracking number can."
+  [model.guard]
+  immutable_when = ["delivered", "cancelled", "refunded"]
+  mutable_fields = ["customer_id", "tracking_reference"]
+  exit_to = [{ to = "refunded", action = "refund_delivered" }]
+  message = "A delivered, cancelled or refunded order cannot be changed; only its contact and tracking number can."
 
-[model.public]
-submit = true
-submit_fields = [
-  "customer_email",
-  "customer_name",
-  "shipping_address",
-  "shipping_method_id",
-  "country",
-]
-rate_limit_per_hour = 10
-receipt_token_field = "access_token"
-receipt_fields = [
-  "number",
-  "customer_email",
-  "customer_name",
-  "shipping_address",
-  "country",
-  "placed_on",
-  "currency",
-  "subtotal",
-  "discount_total",
-  "discount_code",
-  "shipping_total",
-  "tax_total",
-  "tax_summary",
-  "total",
-  "payment_method",
-  "state",
-]
+  [model.public]
+  submit = true
+  submit_fields = ["customer_email", "customer_name", "shipping_address", "shipping_method_id", "country"]
+  rate_limit_per_hour = 10
+  receipt_token_field = "access_token"
+  receipt_fields = ["number", "customer_email", "customer_name", "shipping_address", "country", "placed_on", "currency", "subtotal", "discount_total", "discount_code", "shipping_total", "tax_total", "tax_summary", "total", "payment_method", "state"]
 
-[[model.field]]
-name = "number"
-description = "Order number shown to the shopper. Free text: packages cannot generate sequences; the public checkout makes a random one"
-class = "none"
-required = true
+  [[model.field]]
+  name = "number"
+  description = "Order number shown to the shopper. Free text: packages cannot generate sequences; the public checkout makes a random one"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "customer_email"
-description = "Email address of the shopper"
-class = "internal"
-personal_data = true
-required = true
-[model.field.ui]
-display = "email"
+  [[model.field]]
+  name = "customer_email"
+  description = "Email address of the shopper"
+  class = "internal"
+  personal_data = true
+  required = true
+  [model.field.ui]
+  display = "email"
 
-[[model.field]]
-name = "customer_name"
-description = "Name of the shopper"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "customer_name"
+  description = "Name of the shopper"
+  class = "internal"
+  personal_data = true
 
-[[model.field]]
-name = "customer_id"
-description = "The matching contact, once the shopper is known"
-class = "none"
-kind = "ref"
-to = "party"
+  [[model.field]]
+  name = "customer_id"
+  description = "The matching contact, once the shopper is known"
+  class = "none"
+  kind = "ref"
+  to = "party"
 
-[[model.field]]
-name = "shipping_address"
-description = "Delivery address"
-class = "internal"
-personal_data = true
-kind = "longtext"
-[model.field.ui]
-display = "address"
+  [[model.field]]
+  name = "shipping_address"
+  description = "Delivery address"
+  class = "internal"
+  personal_data = true
+  kind = "longtext"
+  [model.field.ui]
+  display = "address"
 
-[[model.field]]
-name = "billing_address"
-description = "Billing address when different from delivery"
-class = "internal"
-personal_data = true
-kind = "longtext"
-[model.field.ui]
-display = "address"
+  [[model.field]]
+  name = "billing_address"
+  description = "Billing address when different from delivery"
+  class = "internal"
+  personal_data = true
+  kind = "longtext"
+  [model.field.ui]
+  display = "address"
 
-[[model.field]]
-name = "shipping_method_id"
-description = "The chosen way of delivery"
-class = "none"
-kind = "ref"
-to = "ecommerce_shipping_method"
+  [[model.field]]
+  name = "shipping_method_id"
+  description = "The chosen way of delivery"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_shipping_method"
 
-[[model.field]]
-name = "discount_code_id"
-description = "The discount code used, if any"
-class = "none"
-kind = "ref"
-to = "ecommerce_discount_code"
-readonly = true
+  [[model.field]]
+  name = "discount_code_id"
+  description = "The discount code used, if any"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_discount_code"
+  readonly = true
 
-[[model.field]]
-name = "discount_code"
-description = "The code the shopper entered, as it is shown on the order"
-class = "none"
-readonly = true
+  [[model.field]]
+  name = "discount_code"
+  description = "The code the shopper entered, as it is shown on the order"
+  class = "none"
+  readonly = true
 
-[[model.field]]
-name = "discount_use_id"
-description = "Which per-customer use counter this order counted against, so it can be given back"
-class = "internal"
-personal_data = true
-readonly = true
+  [[model.field]]
+  name = "discount_use_id"
+  description = "Which per-customer use counter this order counted against, so it can be given back"
+  class = "internal"
+  personal_data = true
+  readonly = true
 
-[[model.field]]
-name = "country"
-description = "Two-letter country code of the delivery address, which decides the tax rate"
-class = "internal"
-personal_data = true
+  [[model.field]]
+  name = "country"
+  description = "Two-letter country code of the delivery address, which decides the tax rate"
+  class = "internal"
+  personal_data = true
 
-[[model.field]]
-name = "tax_summary"
-description = "The tax lines of the order as JSON: name, rate in basis points, whether included in the prices, amount"
-class = "none"
-kind = "longtext"
-readonly = true
+  [[model.field]]
+  name = "tax_summary"
+  description = "The tax lines of the order as JSON: name, rate in basis points, whether included in the prices, amount"
+  class = "none"
+  kind = "longtext"
+  readonly = true
 
-[[model.field]]
-name = "stock_returned"
-description = "Set when the units of a cancelled, expired or refunded order were put back on the listings, so it happens once"
-class = "none"
-kind = "bool"
-readonly = true
+  [[model.field]]
+  name = "stock_returned"
+  description = "Set when the units of a cancelled, expired or refunded order were put back on the listings, so it happens once"
+  class = "none"
+  kind = "bool"
+  readonly = true
 
-[[model.field]]
-name = "reserved_until"
-description = "Unix time until which an unpaid order holds its stock; after that it is cancelled and the stock goes back"
-class = "none"
-kind = "number"
-readonly = true
-[model.field.ui]
-display = "epoch_seconds"
-aggregate = "none"
+  [[model.field]]
+  name = "reserved_until"
+  description = "Unix time until which an unpaid order holds its stock; after that it is cancelled and the stock goes back"
+  class = "none"
+  kind = "number"
+  readonly = true
+  [model.field.ui]
+  display = "epoch_seconds"
+  aggregate = "none"
 
-[[model.field]]
-name = "payment_method"
-description = "How the shopper chose to pay: manual (bank transfer or invoice), stripe (card) or fake (demo)"
-class = "none"
-kind = "select"
-options = ["manual", "stripe", "fake"]
+  [[model.field]]
+  name = "payment_method"
+  description = "How the shopper chose to pay: manual (bank transfer or invoice), stripe (card) or fake (demo)"
+  class = "none"
+  kind = "select"
+  options = ["manual", "stripe", "fake"]
 
-[[model.field]]
-name = "placed_on"
-description = "Day the order was placed (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-readonly = true
+  [[model.field]]
+  name = "placed_on"
+  description = "Day the order was placed (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  readonly = true
 
-[[model.field]]
-name = "currency"
-description = "ISO 4217 currency code, for example EUR"
-class = "none"
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code, for example EUR"
+  class = "none"
 
-[[model.field]]
-name = "subtotal"
-description = "Sum of the lines at listing prices (minor currency units, computed by the shop at checkout)"
-class = "none"
-kind = "money"
-readonly = true
+  [[model.field]]
+  name = "subtotal"
+  description = "Sum of the lines at listing prices (minor currency units, computed by the shop at checkout)"
+  class = "none"
+  kind = "money"
+  readonly = true
 
-[[model.field]]
-name = "discount_total"
-description = "Reduction from the discount code (minor currency units)"
-class = "none"
-kind = "money"
-readonly = true
+  [[model.field]]
+  name = "discount_total"
+  description = "Reduction from the discount code (minor currency units)"
+  class = "none"
+  kind = "money"
+  readonly = true
 
-[[model.field]]
-name = "shipping_total"
-description = "Delivery charge (minor currency units)"
-class = "none"
-kind = "money"
-readonly = true
+  [[model.field]]
+  name = "shipping_total"
+  description = "Delivery charge (minor currency units)"
+  class = "none"
+  kind = "money"
+  readonly = true
 
-[[model.field]]
-name = "tax_total"
-description = "All tax on the order, both the part included in the prices and the part added on top (minor currency units)"
-class = "none"
-kind = "money"
-readonly = true
+  [[model.field]]
+  name = "tax_total"
+  description = "All tax on the order, both the part included in the prices and the part added on top (minor currency units)"
+  class = "none"
+  kind = "money"
+  readonly = true
 
-[[model.field]]
-name = "total"
-description = "Amount the shopper pays: lines, minus the discount, plus delivery, plus tax that was added on top (minor currency units)"
-class = "none"
-kind = "money"
-required = true
+  [[model.field]]
+  name = "total"
+  description = "Amount the shopper pays: lines, minus the discount, plus delivery, plus tax that was added on top (minor currency units)"
+  class = "none"
+  kind = "money"
+  required = true
 
-[[model.field]]
-name = "payment_reference"
-description = "Reference from the payment provider; never a card number"
-class = "financial"
-personal_data = true
+  [[model.field]]
+  name = "payment_reference"
+  description = "Reference from the payment provider; never a card number"
+  class = "financial"
+  personal_data = true
 
-[[model.field]]
-name = "tracking_reference"
-description = "Carrier tracking number"
-class = "none"
+  [[model.field]]
+  name = "tracking_reference"
+  description = "Carrier tracking number"
+  class = "none"
 
-[[model.field]]
-name = "access_token"
-description = "Secret link token that lets the shopper who placed a public order see its confirmation page. Nobody can read it back"
-class = "secret"
+  [[model.field]]
+  name = "access_token"
+  description = "Secret link token that lets the shopper who placed a public order see its confirmation page. Nobody can read it back"
+  class = "secret"
 
-[[model.field]]
-name = "state"
-description = "Fulfilment status: pending, paid, shipped, delivered, cancelled, refunded"
-class = "none"
-kind = "select"
-options = ["pending", "paid", "shipped", "delivered", "cancelled", "refunded"]
-required = true
-[model.field.ui]
-tones = { pending = "warn", paid = "info", shipped = "info", delivered = "ok", cancelled = "neutral", refunded = "neutral" }
+  [[model.field]]
+  name = "state"
+  description = "Fulfilment status: pending, paid, shipped, delivered, cancelled, refunded"
+  class = "none"
+  kind = "select"
+  options = ["pending", "paid", "shipped", "delivered", "cancelled", "refunded"]
+  required = true
+  [model.field.ui]
+  tones = { pending = "warn", paid = "info", shipped = "info", delivered = "ok", cancelled = "neutral", refunded = "neutral" }
 
-[[model.action]]
-name = "mark_paid"
-description = "The payment arrived"
-field = "state"
-from = "pending"
-to = "paid"
-[model.action.ui]
-primary = true
-done = "Marked as paid"
+  [[model.action]]
+  name = "mark_paid"
+  description = "The payment arrived"
+  field = "state"
+  from = "pending"
+  to = "paid"
+  [model.action.ui]
+  primary = true
+  done = "Marked as paid"
 
-[[model.action]]
-name = "ship"
-description = "The parcel was handed to the carrier"
-field = "state"
-from = "paid"
-to = "shipped"
-[model.action.ui]
-primary = true
-confirm = "Mark this order as shipped? Add the tracking number first if there is one."
-done = "Shipped"
+  [[model.action]]
+  name = "ship"
+  description = "The parcel was handed to the carrier"
+  field = "state"
+  from = "paid"
+  to = "shipped"
+  [model.action.ui]
+  primary = true
+  confirm = "Mark this order as shipped? Add the tracking number first if there is one."
+  done = "Shipped"
 
-[[model.action]]
-name = "deliver"
-description = "The parcel reached the shopper"
-field = "state"
-from = "shipped"
-to = "delivered"
-[model.action.ui]
-primary = true
-done = "Delivered"
+  [[model.action]]
+  name = "deliver"
+  description = "The parcel reached the shopper"
+  field = "state"
+  from = "shipped"
+  to = "delivered"
+  [model.action.ui]
+  primary = true
+  done = "Delivered"
 
-[[model.action]]
-name = "cancel"
-description = "Cancel an order that was never paid"
-field = "state"
-from = "pending"
-to = "cancelled"
-[model.action.ui]
-danger = true
-confirm = "Cancel this order? Its stock goes back to the listings and it can no longer be changed."
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel an order that was never paid"
+  field = "state"
+  from = "pending"
+  to = "cancelled"
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this order? Its stock goes back to the listings and it can no longer be changed."
 
-[[model.action]]
-name = "refund"
-description = "Return the money for a paid order that was not delivered (manager only)"
-field = "state"
-from = "paid"
-to = "refunded"
-group = "ecommerce.manager"
-approval = true
-[model.action.ui]
-danger = true
-confirm = "Refund this order? The money goes back to the shopper and the stock back to the listings."
-done = "Refunded"
-group = "refund"
+  [[model.action]]
+  name = "refund"
+  description = "Return the money for a paid order that was not delivered (manager only)"
+  field = "state"
+  from = "paid"
+  to = "refunded"
+  group = "ecommerce.manager"
+  approval = true
+  [model.action.ui]
+  danger = true
+  confirm = "Refund this order? The money goes back to the shopper and the stock back to the listings."
+  done = "Refunded"
+  group = "refund"
 
-[[model.action]]
-name = "refund_delivered"
-description = "Return the money for a delivered order, for example after a return (manager only)"
-field = "state"
-from = "delivered"
-to = "refunded"
-group = "ecommerce.manager"
-approval = true
-[model.action.ui]
-danger = true
-confirm = "Refund this delivered order? The money goes back to the shopper; the goods do not go back on the shelf."
-done = "Refunded"
-group = "refund"
+  [[model.action]]
+  name = "refund_delivered"
+  description = "Return the money for a delivered order, for example after a return (manager only)"
+  field = "state"
+  from = "delivered"
+  to = "refunded"
+  group = "ecommerce.manager"
+  approval = true
+  [model.action.ui]
+  danger = true
+  confirm = "Refund this delivered order? The money goes back to the shopper; the goods do not go back on the shelf."
+  done = "Refunded"
+  group = "refund"
 
 [[model]]
 name = "ecommerce_order_line"
@@ -986,113 +919,96 @@ description = "One product line of a web order"
 read_group = "ecommerce.user"
 write_group = "ecommerce.user"
 
-[model.ui]
-title = "{description} × {quantity} | {listing_id} × {quantity}"
-list = [
-  "description",
-  "listing_id",
-  "quantity",
-  "unit_price",
-  "discount_amount",
-  "tax_amount",
-  "subtotal",
-]
-menu = "hidden"
+  [model.ui]
+  title = "{description} × {quantity} | {listing_id} × {quantity}"
+  list = ["description", "listing_id", "quantity", "unit_price", "discount_amount", "tax_amount", "subtotal"]
+  menu = "hidden"
 
-[model.guard]
-children_of = "order_id"
-message = "The lines of a delivered, cancelled or refunded order cannot be changed."
+  [model.guard]
+  children_of = "order_id"
+  message = "The lines of a delivered, cancelled or refunded order cannot be changed."
 
-[model.public]
-submit = true
-submit_fields = ["listing_id", "quantity"]
-rate_limit_per_hour = 10
-receipt_parent = "order_id"
-receipt_fields = [
-  "description",
-  "quantity",
-  "unit_price",
-  "subtotal",
-  "discount_amount",
-  "tax_name",
-  "tax_rate_bp",
-  "tax_amount",
-]
+  [model.public]
+  submit = true
+  submit_fields = ["listing_id", "quantity"]
+  rate_limit_per_hour = 10
+  receipt_parent = "order_id"
+  receipt_fields = ["description", "quantity", "unit_price", "subtotal", "discount_amount", "tax_name", "tax_rate_bp", "tax_amount"]
 
-[[model.field]]
-name = "order_id"
-description = "The order the line belongs to"
-class = "none"
-kind = "ref"
-to = "ecommerce_order"
-required = true
+  [[model.field]]
+  name = "order_id"
+  description = "The order the line belongs to"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_order"
+  required = true
 
-[[model.field]]
-name = "product_id"
-description = "The product ordered"
-class = "none"
-kind = "ref"
-to = "product"
+  [[model.field]]
+  name = "product_id"
+  description = "The product ordered"
+  class = "none"
+  kind = "ref"
+  to = "product"
 
-[[model.field]]
-name = "listing_id"
-description = "The shop listing the line was ordered from"
-class = "none"
-kind = "ref"
-to = "ecommerce_listing"
+  [[model.field]]
+  name = "listing_id"
+  description = "The shop listing the line was ordered from"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_listing"
 
-[[model.field]]
-name = "description"
-description = "Product text as it was when ordered"
-class = "none"
+  [[model.field]]
+  name = "description"
+  description = "Product text as it was when ordered"
+  class = "none"
 
-[[model.field]]
-name = "quantity"
-description = "Units ordered"
-class = "none"
-kind = "number"
-required = true
+  [[model.field]]
+  name = "quantity"
+  description = "Units ordered"
+  class = "none"
+  kind = "number"
+  required = true
 
-[[model.field]]
-name = "unit_price"
-description = "Price per unit including tax (minor currency units)"
-class = "none"
-kind = "money"
-required = true
-[model.field.ui]
-aggregate = "none"
+  [[model.field]]
+  name = "unit_price"
+  description = "Price per unit including tax (minor currency units)"
+  class = "none"
+  kind = "money"
+  required = true
+  [model.field.ui]
+  aggregate = "none"
 
-[[model.field]]
-name = "subtotal"
-description = "Line total (minor currency units, entered not computed)"
-class = "none"
-kind = "money"
+  [[model.field]]
+  name = "subtotal"
+  description = "Line total (minor currency units, entered not computed)"
+  class = "none"
+  kind = "money"
 
-[[model.field]]
-name = "discount_amount"
-description = "Part of the order discount that falls on this line (minor currency units)"
-class = "none"
-kind = "money"
+  [[model.field]]
+  name = "discount_amount"
+  description = "Part of the order discount that falls on this line (minor currency units)"
+  class = "none"
+  kind = "money"
 
-[[model.field]]
-name = "tax_name"
-description = "Name of the tax applied to this line"
-class = "none"
+  [[model.field]]
+  name = "tax_name"
+  description = "Name of the tax applied to this line"
+  class = "none"
 
-[[model.field]]
-name = "tax_rate_bp"
-description = "Tax rate of this line in basis points"
-class = "none"
-kind = "number"
-[model.field.ui]
-display = "percent_bp"
-aggregate = "none"
+  [[model.field]]
+  name = "tax_rate_bp"
+  description = "Tax rate of this line in basis points"
+  class = "none"
+  kind = "number"
+  [model.field.ui]
+  display = "percent_bp"
+  aggregate = "none"
 
-[[model.field]]
-name = "tax_amount"
-description = "Tax on this line, included in the prices or added on top (minor currency units)"
-class = "none"
-kind = "money"
+  [[model.field]]
+  name = "tax_amount"
+  description = "Tax on this line, included in the prices or added on top (minor currency units)"
+  class = "none"
+  kind = "money"
 
 [[model]]
 name = "ecommerce_payment"
@@ -1100,101 +1016,101 @@ description = "A payment for a web order: which provider, its reference, the amo
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
 
-[model.ui]
-title = "{order_id} · {provider}"
-list = ["order_id", "provider", "amount", "refunded_amount", "state"]
-default_view = "list"
-menu = "main"
-menu_section = "Sales"
-menu_order = 4
+  [model.ui]
+  title = "{order_id} · {provider}"
+  list = ["order_id", "provider", "amount", "refunded_amount", "state"]
+  default_view = "list"
+  menu = "main"
+  menu_section = "Sales"
+  menu_order = 4
 
-[model.public]
-receipt_parent = "order_id"
-receipt_fields = ["provider", "state", "amount", "currency"]
+  [model.public]
+  receipt_parent = "order_id"
+  receipt_fields = ["provider", "state", "amount", "currency"]
 
-[[model.field]]
-name = "order_id"
-description = "The order being paid"
-class = "none"
-kind = "ref"
-to = "ecommerce_order"
-required = true
+  [[model.field]]
+  name = "order_id"
+  description = "The order being paid"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_order"
+  required = true
 
-[[model.field]]
-name = "provider"
-description = "Who takes the payment: manual (bank transfer or invoice), stripe (Stripe Checkout) or fake (local demo)"
-class = "none"
-kind = "select"
-options = ["manual", "stripe", "fake"]
-required = true
+  [[model.field]]
+  name = "provider"
+  description = "Who takes the payment: manual (bank transfer or invoice), stripe (Stripe Checkout) or fake (local demo)"
+  class = "none"
+  kind = "select"
+  options = ["manual", "stripe", "fake"]
+  required = true
 
-[[model.field]]
-name = "external_id"
-description = "The provider's reference for this payment, for example a Stripe Checkout Session id. Never a card number"
-class = "financial"
+  [[model.field]]
+  name = "external_id"
+  description = "The provider's reference for this payment, for example a Stripe Checkout Session id. Never a card number"
+  class = "financial"
 
-[[model.field]]
-name = "checkout_url"
-description = "Where the shopper pays, kept so the payment page can send them back to it while the payment is open"
-class = "financial"
+  [[model.field]]
+  name = "checkout_url"
+  description = "Where the shopper pays, kept so the payment page can send them back to it while the payment is open"
+  class = "financial"
 
-[[model.field]]
-name = "state"
-description = "Payment status: open (waiting for the shopper), succeeded, failed, expired, cancelled, refunded"
-class = "none"
-kind = "select"
-options = ["open", "succeeded", "failed", "expired", "cancelled", "refunded"]
-required = true
-[model.field.ui]
-tones = { open = "warn", succeeded = "ok", failed = "bad", expired = "neutral", cancelled = "neutral", refunded = "neutral" }
+  [[model.field]]
+  name = "state"
+  description = "Payment status: open (waiting for the shopper), succeeded, failed, expired, cancelled, refunded"
+  class = "none"
+  kind = "select"
+  options = ["open", "succeeded", "failed", "expired", "cancelled", "refunded"]
+  required = true
+  [model.field.ui]
+  tones = { open = "warn", succeeded = "ok", failed = "bad", expired = "neutral", cancelled = "neutral", refunded = "neutral" }
 
-[[model.field]]
-name = "amount"
-description = "Amount to pay, set by the server from the order (minor currency units)"
-class = "none"
-kind = "money"
-required = true
+  [[model.field]]
+  name = "amount"
+  description = "Amount to pay, set by the server from the order (minor currency units)"
+  class = "none"
+  kind = "money"
+  required = true
 
-[[model.field]]
-name = "currency"
-description = "ISO 4217 currency code of the amount"
-class = "none"
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code of the amount"
+  class = "none"
 
-[[model.field]]
-name = "refund_id"
-description = "The provider's reference for the refund, once the payment was refunded"
-class = "financial"
+  [[model.field]]
+  name = "refund_id"
+  description = "The provider's reference for the refund, once the payment was refunded"
+  class = "financial"
 
-[[model.field]]
-name = "refunded_amount"
-description = "Amount returned to the shopper (minor currency units)"
-class = "none"
-kind = "money"
+  [[model.field]]
+  name = "refunded_amount"
+  description = "Amount returned to the shopper (minor currency units)"
+  class = "none"
+  kind = "money"
 
-[[model.field]]
-name = "event_ids"
-description = "Ids of the provider events already applied, as JSON, so a repeated notification changes nothing"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "event_ids"
+  description = "Ids of the provider events already applied, as JSON, so a repeated notification changes nothing"
+  class = "none"
+  kind = "longtext"
 
-[[model.action]]
-name = "mark_failed"
-description = "The provider reports that the payment failed"
-field = "state"
-from = "open"
-to = "failed"
-group = "ecommerce.manager"
-[model.action.ui]
-danger = true
-confirm = "Mark this payment as failed?"
+  [[model.action]]
+  name = "mark_failed"
+  description = "The provider reports that the payment failed"
+  field = "state"
+  from = "open"
+  to = "failed"
+  group = "ecommerce.manager"
+  [model.action.ui]
+  danger = true
+  confirm = "Mark this payment as failed?"
 
-[[model.action]]
-name = "cancel"
-description = "Give up waiting for this payment"
-field = "state"
-from = "open"
-to = "cancelled"
-group = "ecommerce.manager"
-[model.action.ui]
-danger = true
-confirm = "Stop waiting for this payment?"
+  [[model.action]]
+  name = "cancel"
+  description = "Give up waiting for this payment"
+  field = "state"
+  from = "open"
+  to = "cancelled"
+  group = "ecommerce.manager"
+  [model.action.ui]
+  danger = true
+  confirm = "Stop waiting for this payment?"

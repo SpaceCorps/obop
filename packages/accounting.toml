@@ -24,74 +24,61 @@ description = "An account of the chart of accounts"
 read_group = "accounting.user"
 write_group = "accounting.manager"
 
-[model.ui]
-title = "{code} {name}"
-list = ["code", "name", "account_type", "reconcile", "deprecated"]
-quick_create = ["code", "name", "account_type"]
-order = "code asc"
-default_view = "list"
-menu = "configuration"
-menu_order = 1
+  [model.ui]
+  title = "{code} {name}"
+  list = ["code", "name", "account_type", "reconcile", "deprecated"]
+  quick_create = ["code", "name", "account_type"]
+  order = "code asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 1
 
-[[model.ui.filter]]
-label = "Reconcilable"
-where = "reconcile = true"
+  [[model.ui.filter]]
+  label = "Reconcilable"
+  where = "reconcile = true"
 
-[[model.ui.filter]]
-label = "In use"
-where = "deprecated = false"
+  [[model.ui.filter]]
+  label = "In use"
+  where = "deprecated = false"
 
-[[model.field]]
-name = "code"
-description = "Account code as used in the chart, for example 400000; no two accounts share a code"
-class = "none"
-required = true
-unique = true
+  [[model.field]]
+  name = "code"
+  description = "Account code as used in the chart, for example 400000; no two accounts share a code"
+  class = "none"
+  required = true
+  unique = true
 
-[[model.field]]
-name = "name"
-description = "Account name, for example Trade receivables"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Account name, for example Trade receivables"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "account_type"
-description = "Type of account: asset_receivable, asset_cash, asset_current, asset_fixed, liability_payable, liability_current, liability_non_current, equity, income, income_other, expense, expense_direct_cost"
-class = "none"
-kind = "select"
-options = [
-  "asset_receivable",
-  "asset_cash",
-  "asset_current",
-  "asset_fixed",
-  "liability_payable",
-  "liability_current",
-  "liability_non_current",
-  "equity",
-  "income",
-  "income_other",
-  "expense",
-  "expense_direct_cost",
-]
-required = true
+  [[model.field]]
+  name = "account_type"
+  description = "Type of account: asset_receivable, asset_cash, asset_current, asset_fixed, liability_payable, liability_current, liability_non_current, equity, income, income_other, expense, expense_direct_cost"
+  class = "none"
+  kind = "select"
+  options = ["asset_receivable", "asset_cash", "asset_current", "asset_fixed", "liability_payable", "liability_current", "liability_non_current", "equity", "income", "income_other", "expense", "expense_direct_cost"]
+  required = true
 
-[[model.field]]
-name = "reconcile"
-description = "Whether open items on this account can be reconciled (receivable, payable, bank clearing)"
-class = "none"
-kind = "bool"
+  [[model.field]]
+  name = "reconcile"
+  description = "Whether open items on this account can be reconciled (receivable, payable, bank clearing)"
+  class = "none"
+  kind = "bool"
 
-[[model.field]]
-name = "deprecated"
-description = "Whether the account is closed to new postings"
-class = "none"
-kind = "bool"
+  [[model.field]]
+  name = "deprecated"
+  description = "Whether the account is closed to new postings"
+  class = "none"
+  kind = "bool"
 
-[[model.field]]
-name = "note"
-description = "Internal remarks about how the account is used"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "note"
+  description = "Internal remarks about how the account is used"
+  class = "none"
+  kind = "longtext"
 
 [[model]]
 name = "accounting_journal"
@@ -99,55 +86,55 @@ description = "A journal that groups entries of one kind (sales, purchases, bank
 read_group = "accounting.user"
 write_group = "accounting.manager"
 
-[model.ui]
-title = "{name}"
-subtitle = "{code} · {kind}"
-list = ["code", "name", "kind", "default_account_id", "currency", "active"]
-quick_create = ["name", "code", "kind"]
-order = "code asc"
-default_view = "list"
-menu = "configuration"
-menu_order = 2
+  [model.ui]
+  title = "{name}"
+  subtitle = "{code} · {kind}"
+  list = ["code", "name", "kind", "default_account_id", "currency", "active"]
+  quick_create = ["name", "code", "kind"]
+  order = "code asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 2
 
-[[model.field]]
-name = "name"
-description = "Journal name, for example Customer invoices"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Journal name, for example Customer invoices"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "code"
-description = "Short code of the journal, for example INV; no two journals share a code"
-class = "none"
-required = true
-unique = true
+  [[model.field]]
+  name = "code"
+  description = "Short code of the journal, for example INV; no two journals share a code"
+  class = "none"
+  required = true
+  unique = true
 
-[[model.field]]
-name = "kind"
-description = "What the journal records: sale, purchase, cash, bank, general"
-class = "none"
-kind = "select"
-options = ["sale", "purchase", "cash", "bank", "general"]
-required = true
+  [[model.field]]
+  name = "kind"
+  description = "What the journal records: sale, purchase, cash, bank, general"
+  class = "none"
+  kind = "select"
+  options = ["sale", "purchase", "cash", "bank", "general"]
+  required = true
 
-[[model.field]]
-name = "default_account_id"
-description = "Default account for entries of this journal (the bank account for a bank journal)"
-class = "none"
-kind = "ref"
-to = "accounting_account"
+  [[model.field]]
+  name = "default_account_id"
+  description = "Default account for entries of this journal (the bank account for a bank journal)"
+  class = "none"
+  kind = "ref"
+  to = "accounting_account"
 
-[[model.field]]
-name = "currency"
-description = "ISO 4217 currency code of the journal, for example EUR; empty means the company currency"
-class = "none"
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code of the journal, for example EUR; empty means the company currency"
+  class = "none"
 
-[[model.field]]
-name = "active"
-description = "Whether the journal can still receive entries"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "active"
+  description = "Whether the journal can still receive entries"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "accounting_tax"
@@ -155,59 +142,59 @@ description = "A tax rate that entry lines can refer to"
 read_group = "accounting.user"
 write_group = "accounting.manager"
 
-[model.ui]
-title = "{name}"
-list = ["name", "rate_bp", "scope", "price_included", "tax_account_id", "active"]
-quick_create = ["name", "rate_bp", "scope"]
-order = "name asc"
-default_view = "list"
-menu = "configuration"
-menu_order = 3
+  [model.ui]
+  title = "{name}"
+  list = ["name", "rate_bp", "scope", "price_included", "tax_account_id", "active"]
+  quick_create = ["name", "rate_bp", "scope"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 3
 
-[[model.field]]
-name = "name"
-description = "Tax name, for example VAT 20% sales"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Tax name, for example VAT 20% sales"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "rate_bp"
-description = "Rate in basis points: 2000 means 20.00 percent, 550 means 5.50 percent"
-class = "none"
-kind = "number"
-required = true
+  [[model.field]]
+  name = "rate_bp"
+  description = "Rate in basis points: 2000 means 20.00 percent, 550 means 5.50 percent"
+  class = "none"
+  kind = "number"
+  required = true
 
-[model.field.ui]
-display = "percent_bp"
-aggregate = "none"
+    [model.field.ui]
+    display = "percent_bp"
+    aggregate = "none"
 
-[[model.field]]
-name = "scope"
-description = "Where the tax applies: sales, purchases, none"
-class = "none"
-kind = "select"
-options = ["sales", "purchases", "none"]
-required = true
+  [[model.field]]
+  name = "scope"
+  description = "Where the tax applies: sales, purchases, none"
+  class = "none"
+  kind = "select"
+  options = ["sales", "purchases", "none"]
+  required = true
 
-[[model.field]]
-name = "price_included"
-description = "Whether prices already include this tax"
-class = "none"
-kind = "bool"
+  [[model.field]]
+  name = "price_included"
+  description = "Whether prices already include this tax"
+  class = "none"
+  kind = "bool"
 
-[[model.field]]
-name = "tax_account_id"
-description = "Account the tax amount is booked on"
-class = "none"
-kind = "ref"
-to = "accounting_account"
+  [[model.field]]
+  name = "tax_account_id"
+  description = "Account the tax amount is booked on"
+  class = "none"
+  kind = "ref"
+  to = "accounting_account"
 
-[[model.field]]
-name = "active"
-description = "Whether the tax can still be chosen on new lines"
-class = "none"
-kind = "bool"
-default = true
+  [[model.field]]
+  name = "active"
+  description = "Whether the tax can still be chosen on new lines"
+  class = "none"
+  kind = "bool"
+  default = true
 
 [[model]]
 name = "accounting_fiscal_year"
@@ -215,94 +202,94 @@ description = "A fiscal year, opened and closed as a whole"
 read_group = "accounting.user"
 write_group = "accounting.manager"
 
-[model.ui]
-title = "{name}"
-list = ["name", "start_on", "end_on", "state"]
-order = "start_on desc"
-default_view = "list"
-menu = "configuration"
-menu_order = 4
+  [model.ui]
+  title = "{name}"
+  list = ["name", "start_on", "end_on", "state"]
+  order = "start_on desc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 4
 
-[model.guard]
-immutable_when = ["closed"]
-exit_to = ["open"]
-message = "A closed fiscal year cannot be changed. Reopen it to correct it."
+  [model.guard]
+  immutable_when = ["closed"]
+  exit_to = ["open"]
+  message = "A closed fiscal year cannot be changed. Reopen it to correct it."
 
-[[model.rule]]
-key = "ends_after_start"
-expr = "end_on >= start_on"
-message = "The fiscal year ends before it starts: set a last day on or after the first day"
+  [[model.rule]]
+  key = "ends_after_start"
+  expr = "end_on >= start_on"
+  message = "The fiscal year ends before it starts: set a last day on or after the first day"
 
-[model.no_overlap]
-rule = "no_overlapping_years"
-key = []
-start = "start_on"
-end = "end_on"
-inclusive_end = true
-message = "Another fiscal year already covers some of these days: start this one after its last day"
+  [model.no_overlap]
+  rule = "no_overlapping_years"
+  key = []
+  start = "start_on"
+  end = "end_on"
+  inclusive_end = true
+  message = "Another fiscal year already covers some of these days: start this one after its last day"
 
-[[model.field]]
-name = "name"
-description = "Fiscal year name, for example FY2026"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Fiscal year name, for example FY2026"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "start_on"
-description = "First day of the fiscal year (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-min = "1900-01-01"
-max = "2199-12-31"
+  [[model.field]]
+  name = "start_on"
+  description = "First day of the fiscal year (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  min = "1900-01-01"
+  max = "2199-12-31"
 
-[[model.field]]
-name = "end_on"
-description = "Last day of the fiscal year (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-min = "1900-01-01"
-max = "2199-12-31"
+  [[model.field]]
+  name = "end_on"
+  description = "Last day of the fiscal year (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  min = "1900-01-01"
+  max = "2199-12-31"
 
-[[model.field]]
-name = "state"
-description = "Fiscal year status: open, closed"
-class = "none"
-kind = "select"
-options = ["open", "closed"]
-required = true
+  [[model.field]]
+  name = "state"
+  description = "Fiscal year status: open, closed"
+  class = "none"
+  kind = "select"
+  options = ["open", "closed"]
+  required = true
 
-[model.field.ui]
-tones = { open = "ok", closed = "neutral" }
+    [model.field.ui]
+    tones = { open = "ok", closed = "neutral" }
 
-[[model.action]]
-name = "close"
-description = "Close the fiscal year so nothing more is posted in it (approver only)"
-field = "state"
-from = "open"
-to = "closed"
-group = "accounting.approver"
-approval = true
+  [[model.action]]
+  name = "close"
+  description = "Close the fiscal year so nothing more is posted in it (approver only)"
+  field = "state"
+  from = "open"
+  to = "closed"
+  group = "accounting.approver"
+  approval = true
 
-[model.action.ui]
-primary = true
-confirm = "Close this fiscal year? It can no longer be changed until it is reopened."
-done = "Fiscal year closed"
+    [model.action.ui]
+    primary = true
+    confirm = "Close this fiscal year? It can no longer be changed until it is reopened."
+    done = "Fiscal year closed"
 
-[[model.action]]
-name = "reopen"
-description = "Reopen a closed fiscal year to correct it (approver only)"
-field = "state"
-from = "closed"
-to = "open"
-group = "accounting.approver"
-approval = true
+  [[model.action]]
+  name = "reopen"
+  description = "Reopen a closed fiscal year to correct it (approver only)"
+  field = "state"
+  from = "closed"
+  to = "open"
+  group = "accounting.approver"
+  approval = true
 
-[model.action.ui]
-danger = true
-confirm = "Reopen this closed fiscal year?"
-done = "Fiscal year reopened"
+    [model.action.ui]
+    danger = true
+    confirm = "Reopen this closed fiscal year?"
+    done = "Fiscal year reopened"
 
 [[model]]
 name = "accounting_period"
@@ -310,107 +297,107 @@ description = "An accounting period (normally a month) inside a fiscal year"
 read_group = "accounting.user"
 write_group = "accounting.manager"
 
-[model.ui]
-title = "{name}"
-subtitle = "{fiscal_year_id}"
-list = ["name", "fiscal_year_id", "start_on", "end_on", "state"]
-order = "start_on desc"
-default_view = "list"
-menu = "configuration"
-menu_order = 5
+  [model.ui]
+  title = "{name}"
+  subtitle = "{fiscal_year_id}"
+  list = ["name", "fiscal_year_id", "start_on", "end_on", "state"]
+  order = "start_on desc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 5
 
-[[model.ui.filter]]
-label = "Open"
-where = "state = open"
+  [[model.ui.filter]]
+  label = "Open"
+  where = "state = open"
 
-[model.guard]
-immutable_when = ["closed"]
-exit_to = ["open"]
-message = "A closed period cannot be changed. Reopen it to correct it."
+  [model.guard]
+  immutable_when = ["closed"]
+  exit_to = ["open"]
+  message = "A closed period cannot be changed. Reopen it to correct it."
 
-[[model.rule]]
-key = "ends_after_start"
-expr = "end_on >= start_on"
-message = "The period ends before it starts: set a last day on or after the first day"
+  [[model.rule]]
+  key = "ends_after_start"
+  expr = "end_on >= start_on"
+  message = "The period ends before it starts: set a last day on or after the first day"
 
-[model.no_overlap]
-rule = "no_overlapping_periods"
-key = []
-start = "start_on"
-end = "end_on"
-inclusive_end = true
-message = "Another period already covers some of these days: start this one after its last day"
+  [model.no_overlap]
+  rule = "no_overlapping_periods"
+  key = []
+  start = "start_on"
+  end = "end_on"
+  inclusive_end = true
+  message = "Another period already covers some of these days: start this one after its last day"
 
-[[model.field]]
-name = "fiscal_year_id"
-description = "The fiscal year the period belongs to"
-class = "none"
-kind = "ref"
-to = "accounting_fiscal_year"
-required = true
+  [[model.field]]
+  name = "fiscal_year_id"
+  description = "The fiscal year the period belongs to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_fiscal_year"
+  required = true
 
-[[model.field]]
-name = "name"
-description = "Period name, for example 2026-03"
-class = "none"
-required = true
+  [[model.field]]
+  name = "name"
+  description = "Period name, for example 2026-03"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "start_on"
-description = "First day of the period (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-min = "1900-01-01"
-max = "2199-12-31"
+  [[model.field]]
+  name = "start_on"
+  description = "First day of the period (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  min = "1900-01-01"
+  max = "2199-12-31"
 
-[[model.field]]
-name = "end_on"
-description = "Last day of the period (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-min = "1900-01-01"
-max = "2199-12-31"
+  [[model.field]]
+  name = "end_on"
+  description = "Last day of the period (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  min = "1900-01-01"
+  max = "2199-12-31"
 
-[[model.field]]
-name = "state"
-description = "Period status: open, closed"
-class = "none"
-kind = "select"
-options = ["open", "closed"]
-required = true
+  [[model.field]]
+  name = "state"
+  description = "Period status: open, closed"
+  class = "none"
+  kind = "select"
+  options = ["open", "closed"]
+  required = true
 
-[model.field.ui]
-tones = { open = "ok", closed = "neutral" }
+    [model.field.ui]
+    tones = { open = "ok", closed = "neutral" }
 
-[[model.action]]
-name = "close"
-description = "Close the period against further posting (approver only)"
-field = "state"
-from = "open"
-to = "closed"
-group = "accounting.approver"
-approval = true
+  [[model.action]]
+  name = "close"
+  description = "Close the period against further posting (approver only)"
+  field = "state"
+  from = "open"
+  to = "closed"
+  group = "accounting.approver"
+  approval = true
 
-[model.action.ui]
-primary = true
-confirm = "Close this period? Entries dated in it can no longer be posted or changed."
-done = "Period closed"
+    [model.action.ui]
+    primary = true
+    confirm = "Close this period? Entries dated in it can no longer be posted or changed."
+    done = "Period closed"
 
-[[model.action]]
-name = "reopen"
-description = "Reopen a closed period (approver only)"
-field = "state"
-from = "closed"
-to = "open"
-group = "accounting.approver"
-approval = true
+  [[model.action]]
+  name = "reopen"
+  description = "Reopen a closed period (approver only)"
+  field = "state"
+  from = "closed"
+  to = "open"
+  group = "accounting.approver"
+  approval = true
 
-[model.action.ui]
-danger = true
-confirm = "Reopen this period? Draft entries dated in it can be changed and posted again."
-done = "Period reopened"
+    [model.action.ui]
+    danger = true
+    confirm = "Reopen this period? Draft entries dated in it can be changed and posted again."
+    done = "Period reopened"
 
 [[model]]
 name = "accounting_move"
@@ -418,176 +405,176 @@ description = "A journal entry: a dated set of debit and credit lines in one jou
 read_group = "accounting.user"
 write_group = "accounting.user"
 
-[model.ui]
-title = "{number}"
-subtitle = "{journal_id} · {date}"
-list = ["number", "date", "journal_id", "partner_id", "reference", "total_debit", "state"]
-card = ["number", "date", "journal_id", "partner_id", "total_debit"]
-card_sum = "total_debit"
-quick_create = ["journal_id", "date", "reference"]
-order = "date desc, number desc"
-default_view = "list"
-menu = "main"
-menu_order = 1
-calendar = { start = "date", color = "journal_id" }
-report = { rows = "journal_id", cols = "state", measure = "total_debit" }
+  [model.ui]
+  title = "{number}"
+  subtitle = "{journal_id} · {date}"
+  list = ["number", "date", "journal_id", "partner_id", "reference", "total_debit", "state"]
+  card = ["number", "date", "journal_id", "partner_id", "total_debit"]
+  card_sum = "total_debit"
+  quick_create = ["journal_id", "date", "reference"]
+  order = "date desc, number desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "date", color = "journal_id" }
+  report = { rows = "journal_id", cols = "state", measure = "total_debit" }
 
-[[model.child]]
-model = "accounting_move_line"
-via = "move_id"
-shape = "lines"
+  [[model.child]]
+  model = "accounting_move_line"
+  via = "move_id"
+  shape = "lines"
 
-[[model.ui.filter]]
-label = "Drafts"
-where = "state = draft"
+  [[model.ui.filter]]
+  label = "Drafts"
+  where = "state = draft"
 
-[[model.ui.filter]]
-label = "Posted"
-where = "state = posted"
+  [[model.ui.filter]]
+  label = "Posted"
+  where = "state = posted"
 
-[model.guard]
-immutable_when = ["posted", "cancelled", "reversed"]
-mutable_fields = ["narration"]
-exit_to = ["reversed"]
-lock_date = { field = "date", closed_by = "accounting_period" }
-message = "Posted, cancelled and reversed entries, and entries dated in a closed period, cannot be changed. Reverse a posted entry to correct it."
+  [model.guard]
+  immutable_when = ["posted", "cancelled", "reversed"]
+  mutable_fields = ["narration"]
+  exit_to = ["reversed"]
+  lock_date = { field = "date", closed_by = "accounting_period" }
+  message = "Posted, cancelled and reversed entries, and entries dated in a closed period, cannot be changed. Reverse a posted entry to correct it."
 
-[[model.field]]
-name = "journal_id"
-description = "The journal the entry belongs to"
-class = "none"
-kind = "ref"
-to = "accounting_journal"
-required = true
-ref_filter = "active = true"
+  [[model.field]]
+  name = "journal_id"
+  description = "The journal the entry belongs to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_journal"
+  required = true
+  ref_filter = "active = true"
 
-[[model.field]]
-name = "date"
-description = "Accounting date of the entry (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-default = "today"
+  [[model.field]]
+  name = "date"
+  description = "Accounting date of the entry (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  default = "today"
 
-[[model.field]]
-name = "number"
-description = "Entry number such as JE/2026/00042, assigned when the entry is posted from a gapless series that starts again each year"
-class = "none"
-kind = "sequence"
-format = "JE/{year}/{seq:05}"
-assign_on = "post"
-gapless = true
-reset = "year"
+  [[model.field]]
+  name = "number"
+  description = "Entry number such as JE/2026/00042, assigned when the entry is posted from a gapless series that starts again each year"
+  class = "none"
+  kind = "sequence"
+  format = "JE/{year}/{seq:05}"
+  assign_on = "post"
+  gapless = true
+  reset = "year"
 
-[[model.field]]
-name = "reference"
-description = "External reference, for example the supplier's invoice number"
-class = "none"
+  [[model.field]]
+  name = "reference"
+  description = "External reference, for example the supplier's invoice number"
+  class = "none"
 
-[[model.field]]
-name = "partner_id"
-description = "The contact the entry is about"
-class = "none"
-kind = "ref"
-to = "party"
+  [[model.field]]
+  name = "partner_id"
+  description = "The contact the entry is about"
+  class = "none"
+  kind = "ref"
+  to = "party"
 
-[[model.field]]
-name = "narration"
-description = "Free-text note about the entry"
-class = "none"
-kind = "longtext"
+  [[model.field]]
+  name = "narration"
+  description = "Free-text note about the entry"
+  class = "none"
+  kind = "longtext"
 
-[[model.field]]
-name = "total_debit"
-description = "Sum of the debit amounts of the entry's lines (minor currency units)"
-class = "financial"
-kind = "money"
-computed = "sum(lines.debit)"
+  [[model.field]]
+  name = "total_debit"
+  description = "Sum of the debit amounts of the entry's lines (minor currency units)"
+  class = "financial"
+  kind = "money"
+  computed = "sum(lines.debit)"
 
-[model.field.ui]
-currency_from = "journal_id.currency"
+    [model.field.ui]
+    currency_from = "journal_id.currency"
 
-[[model.field]]
-name = "total_credit"
-description = "Sum of the credit amounts of the entry's lines (minor currency units)"
-class = "financial"
-kind = "money"
-computed = "sum(lines.credit)"
+  [[model.field]]
+  name = "total_credit"
+  description = "Sum of the credit amounts of the entry's lines (minor currency units)"
+  class = "financial"
+  kind = "money"
+  computed = "sum(lines.credit)"
 
-[model.field.ui]
-currency_from = "journal_id.currency"
+    [model.field.ui]
+    currency_from = "journal_id.currency"
 
-[[model.field]]
-name = "state"
-description = "Entry status: draft, posted, cancelled, reversed"
-class = "none"
-kind = "select"
-options = ["draft", "posted", "cancelled", "reversed"]
-required = true
+  [[model.field]]
+  name = "state"
+  description = "Entry status: draft, posted, cancelled, reversed"
+  class = "none"
+  kind = "select"
+  options = ["draft", "posted", "cancelled", "reversed"]
+  required = true
 
-[model.field.ui]
-tones = { posted = "ok", cancelled = "neutral", reversed = "neutral" }
+    [model.field.ui]
+    tones = { posted = "ok", cancelled = "neutral", reversed = "neutral" }
 
-[[model.action]]
-name = "post"
-description = "Post a draft entry to the ledger and number it (approver only; refused unless it has an amount and debits equal credits)"
-field = "state"
-from = "draft"
-to = "posted"
-group = "accounting.approver"
-approval = true
-assert = [
-  { expr = "total_debit > 0", message = "The entry has no amount: add debit and credit lines before posting it", key = "has_amount" },
-  { expr = "total_debit == total_credit", message = "The entry does not balance: total debit and total credit must be equal", key = "balanced" },
-]
+  [[model.action]]
+  name = "post"
+  description = "Post a draft entry to the ledger and number it (approver only; refused unless it has an amount and debits equal credits)"
+  field = "state"
+  from = "draft"
+  to = "posted"
+  group = "accounting.approver"
+  approval = true
+  assert = [
+    { expr = "total_debit > 0", message = "The entry has no amount: add debit and credit lines before posting it", key = "has_amount" },
+    { expr = "total_debit == total_credit", message = "The entry does not balance: total debit and total credit must be equal", key = "balanced" },
+  ]
 
-[model.action.ui]
-primary = true
-confirm = "Post this entry? It gets its number and can no longer be changed."
-done = "Entry posted"
+    [model.action.ui]
+    primary = true
+    confirm = "Post this entry? It gets its number and can no longer be changed."
+    done = "Entry posted"
 
-[[model.action]]
-name = "cancel"
-description = "Cancel a draft entry that was never posted"
-field = "state"
-from = "draft"
-to = "cancelled"
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a draft entry that was never posted"
+  field = "state"
+  from = "draft"
+  to = "cancelled"
 
-[model.action.ui]
-danger = true
-confirm = "Cancel this draft entry?"
-done = "Entry cancelled"
+    [model.action.ui]
+    danger = true
+    confirm = "Cancel this draft entry?"
+    done = "Entry cancelled"
 
-[[model.action]]
-name = "reverse"
-description = "Mark a posted entry as reversed and create the opposite entry as a draft for an approver to post (approver only)"
-field = "state"
-from = "posted"
-to = "reversed"
-group = "accounting.approver"
-approval = true
+  [[model.action]]
+  name = "reverse"
+  description = "Mark a posted entry as reversed and create the opposite entry as a draft for an approver to post (approver only)"
+  field = "state"
+  from = "posted"
+  to = "reversed"
+  group = "accounting.approver"
+  approval = true
 
-[model.action.ui]
-danger = true
-confirm = "Reverse this entry? A draft with the opposite lines is created for an approver to post."
-done = "Entry reversed; the opposite entry is a draft"
+    [model.action.ui]
+    danger = true
+    confirm = "Reverse this entry? A draft with the opposite lines is created for an approver to post."
+    done = "Entry reversed; the opposite entry is a draft"
 
-# The reversal is a new draft entry in the same journal, dated today, that refers to the
-# original by its number. It has no narration: a fixed sentence would be stored in one
-# language. Posting it is a separate step (`post`: approver, human approval).
-[[model.action.effect]]
-kind = "create"
-model = "accounting_move"
-as = "reversal"
-map = { journal_id = "$self.journal_id", date = "$today", partner_id = "$self.partner_id", reference = "$self.number" }
+    # The reversal is a new draft entry in the same journal, dated today, that refers to the
+    # original by its number. It has no narration: a fixed sentence would be stored in one
+    # language. Posting it is a separate step (`post`: approver, human approval).
+    [[model.action.effect]]
+    kind = "create"
+    model = "accounting_move"
+    as = "reversal"
+    map = { journal_id = "$self.journal_id", date = "$today", partner_id = "$self.partner_id", reference = "$self.number" }
 
-# One line per original line with debit and credit swapped. The tax stays on the line, so a
-# tax report that sums by tax sees the reversal cancel the original.
-[[model.action.effect]]
-kind = "create"
-model = "accounting_move_line"
-for_each = "lines"
-map = { move_id = "$created.reversal", account_id = "$line.account_id", partner_id = "$line.partner_id", label = "$line.label", debit = "$line.credit", credit = "$line.debit", tax_id = "$line.tax_id" }
+    # One line per original line with debit and credit swapped. The tax stays on the line, so a
+    # tax report that sums by tax sees the reversal cancel the original.
+    [[model.action.effect]]
+    kind = "create"
+    model = "accounting_move_line"
+    for_each = "lines"
+    map = { move_id = "$created.reversal", account_id = "$line.account_id", partner_id = "$line.partner_id", label = "$line.label", debit = "$line.credit", credit = "$line.debit", tax_id = "$line.tax_id" }
 
 [[model]]
 name = "accounting_move_line"
@@ -595,116 +582,106 @@ description = "One debit or credit line of a journal entry"
 read_group = "accounting.user"
 write_group = "accounting.user"
 
-[model.ui]
-title = "{account_id} · {label} | {account_id}"
-subtitle = "{move_id}"
-list = [
-  "move_id",
-  "account_id",
-  "partner_id",
-  "label",
-  "debit",
-  "credit",
-  "due_on",
-  "tax_id",
-  "reconciled",
-]
-quick_create = ["account_id", "label", "debit", "credit"]
-default_view = "list"
-menu = "reporting"
-menu_order = 1
-report = { rows = "account_id", measure = "debit" }
+  [model.ui]
+  title = "{account_id} · {label} | {account_id}"
+  subtitle = "{move_id}"
+  list = ["move_id", "account_id", "partner_id", "label", "debit", "credit", "due_on", "tax_id", "reconciled"]
+  quick_create = ["account_id", "label", "debit", "credit"]
+  default_view = "list"
+  menu = "reporting"
+  menu_order = 1
+  report = { rows = "account_id", measure = "debit" }
 
-[[model.ui.filter]]
-label = "Open items"
-where = "reconciled = false && settled = false"
+  [[model.ui.filter]]
+  label = "Open items"
+  where = "reconciled = false && settled = false"
 
-[[model.ui.filter]]
-label = "Overdue"
-where = "due_on < today && reconciled = false && settled = false"
+  [[model.ui.filter]]
+  label = "Overdue"
+  where = "due_on < today && reconciled = false && settled = false"
 
-[[model.ui.filter]]
-label = "Due in 30 days"
-where = "due_on <= today+30 && reconciled = false && settled = false"
+  [[model.ui.filter]]
+  label = "Due in 30 days"
+  where = "due_on <= today+30 && reconciled = false && settled = false"
 
-[model.guard]
-children_of = "move_id"
-message = "The lines of a posted, cancelled or reversed entry, or of an entry dated in a closed period, cannot be changed."
+  [model.guard]
+  children_of = "move_id"
+  message = "The lines of a posted, cancelled or reversed entry, or of an entry dated in a closed period, cannot be changed."
 
-[[model.field]]
-name = "move_id"
-description = "The journal entry the line belongs to"
-class = "none"
-kind = "ref"
-to = "accounting_move"
-required = true
+  [[model.field]]
+  name = "move_id"
+  description = "The journal entry the line belongs to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_move"
+  required = true
 
-[[model.field]]
-name = "account_id"
-description = "The account the line is booked on"
-class = "none"
-kind = "ref"
-to = "accounting_account"
-required = true
+  [[model.field]]
+  name = "account_id"
+  description = "The account the line is booked on"
+  class = "none"
+  kind = "ref"
+  to = "accounting_account"
+  required = true
 
-[[model.field]]
-name = "partner_id"
-description = "The contact the line is about"
-class = "none"
-kind = "ref"
-to = "party"
-fill_from = "move_id.partner_id"
+  [[model.field]]
+  name = "partner_id"
+  description = "The contact the line is about"
+  class = "none"
+  kind = "ref"
+  to = "party"
+  fill_from = "move_id.partner_id"
 
-[[model.field]]
-name = "label"
-description = "Line description"
-class = "none"
+  [[model.field]]
+  name = "label"
+  description = "Line description"
+  class = "none"
 
-[[model.field]]
-name = "debit"
-description = "Debit amount in minor currency units; 0 when the line is a credit"
-class = "financial"
-kind = "money"
-required = true
-default = 0
+  [[model.field]]
+  name = "debit"
+  description = "Debit amount in minor currency units; 0 when the line is a credit"
+  class = "financial"
+  kind = "money"
+  required = true
+  default = 0
 
-[[model.field]]
-name = "credit"
-description = "Credit amount in minor currency units; 0 when the line is a debit"
-class = "financial"
-kind = "money"
-required = true
-default = 0
+  [[model.field]]
+  name = "credit"
+  description = "Credit amount in minor currency units; 0 when the line is a debit"
+  class = "financial"
+  kind = "money"
+  required = true
+  default = 0
 
-[[model.field]]
-name = "tax_id"
-description = "Tax the line carries, if any"
-class = "none"
-kind = "ref"
-to = "accounting_tax"
-ref_filter = "active = true"
+  [[model.field]]
+  name = "tax_id"
+  description = "Tax the line carries, if any"
+  class = "none"
+  kind = "ref"
+  to = "accounting_tax"
+  ref_filter = "active = true"
 
-[[model.field]]
-name = "due_on"
-description = "Due date for receivable and payable lines (YYYY-MM-DD)"
-class = "none"
-kind = "date"
+  [[model.field]]
+  name = "due_on"
+  description = "Due date for receivable and payable lines (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
 
-[model.field.ui]
-warn_before_days = 7
+    [model.field.ui]
+    warn_before_days = 7
 
-[[model.field]]
-name = "reconciled"
-description = "Whether the line has been matched against a payment"
-class = "none"
-kind = "bool"
+  [[model.field]]
+  name = "reconciled"
+  description = "Whether the line has been matched against a payment"
+  class = "none"
+  kind = "bool"
 
-[[model.field]]
-name = "settled"
-description = "Whether a bank transaction settles this receivable or payable item (its settles_line_id names it); computed, so a posted line shows it too"
-class = "none"
-kind = "bool"
-computed = "count(accounting_bank_statement_line[settles_line_id]) > 0"
+  [[model.field]]
+  name = "settled"
+  description = "Whether a bank transaction settles this receivable or payable item (its settles_line_id names it); computed, so a posted line shows it too"
+  class = "none"
+  kind = "bool"
+  computed = "count(accounting_bank_statement_line[settles_line_id]) > 0"
 
 [[model]]
 name = "accounting_bank_statement_line"
@@ -712,156 +689,154 @@ description = "A line of a bank statement waiting to be matched to entries"
 read_group = "accounting.user"
 write_group = "accounting.user"
 
-[model.ui]
-title = "{label}"
-subtitle = "{date} · {journal_id}"
-list = ["date", "journal_id", "label", "counterparty_name", "amount", "move_line_id", "state"]
-card = ["label", "date", "counterparty_name", "amount"]
-card_sum = "amount"
-order = "date desc"
-default_view = "kanban"
-menu = "main"
-menu_order = 2
-report = { rows = "journal_id", cols = "state", measure = "amount" }
+  [model.ui]
+  title = "{label}"
+  subtitle = "{date} · {journal_id}"
+  list = ["date", "journal_id", "label", "counterparty_name", "amount", "move_line_id", "state"]
+  card = ["label", "date", "counterparty_name", "amount"]
+  card_sum = "amount"
+  order = "date desc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 2
+  report = { rows = "journal_id", cols = "state", measure = "amount" }
 
-[[model.ui.filter]]
-label = "To match"
-where = "state = unmatched"
+  [[model.ui.filter]]
+  label = "To match"
+  where = "state = unmatched"
 
-[model.guard]
-immutable_when = ["reconciled"]
-exit_to = ["matched"]
-message = "A reconciled bank transaction cannot be changed. A manager can undo the reconciliation first."
+  [model.guard]
+  immutable_when = ["reconciled"]
+  exit_to = ["matched"]
+  message = "A reconciled bank transaction cannot be changed. A manager can undo the reconciliation first."
 
-[[model.field]]
-name = "journal_id"
-description = "The bank journal the statement belongs to"
-class = "none"
-kind = "ref"
-to = "accounting_journal"
-required = true
-ref_filter = "active = true"
+  [[model.field]]
+  name = "journal_id"
+  description = "The bank journal the statement belongs to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_journal"
+  required = true
+  ref_filter = "active = true"
 
-[[model.field]]
-name = "date"
-description = "Booking date at the bank (YYYY-MM-DD)"
-class = "none"
-kind = "date"
-required = true
-default = "today"
+  [[model.field]]
+  name = "date"
+  description = "Booking date at the bank (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+  default = "today"
 
-[[model.field]]
-name = "label"
-description = "Payment reference or description as the bank reports it"
-class = "none"
-required = true
+  [[model.field]]
+  name = "label"
+  description = "Payment reference or description as the bank reports it"
+  class = "none"
+  required = true
 
-[[model.field]]
-name = "amount"
-description = "Amount in minor currency units; positive for money in, negative for money out"
-class = "financial"
-kind = "money"
-required = true
+  [[model.field]]
+  name = "amount"
+  description = "Amount in minor currency units; positive for money in, negative for money out"
+  class = "financial"
+  kind = "money"
+  required = true
 
-[model.field.ui]
-currency_from = "journal_id.currency"
+    [model.field.ui]
+    currency_from = "journal_id.currency"
 
-[[model.field]]
-name = "counterparty_name"
-description = "Name of the payer or payee as the bank reports it"
-class = "financial"
-personal_data = true
+  [[model.field]]
+  name = "counterparty_name"
+  description = "Name of the payer or payee as the bank reports it"
+  class = "financial"
+  personal_data = true
 
-[[model.field]]
-name = "counterparty_iban"
-description = "IBAN of the payer or payee"
-class = "financial"
-personal_data = true
-pattern = "iban"
+  [[model.field]]
+  name = "counterparty_iban"
+  description = "IBAN of the payer or payee"
+  class = "financial"
+  personal_data = true
+  pattern = "iban"
 
-[[model.field]]
-name = "move_line_id"
-description = "The entry line this statement line was matched to"
-class = "none"
-kind = "ref"
-to = "accounting_move_line"
+  [[model.field]]
+  name = "move_line_id"
+  description = "The entry line this statement line was matched to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_move_line"
 
-[[model.field]]
-name = "settles_line_id"
-description = "The open receivable or payable item this payment settles; no two bank transactions may settle the same item"
-class = "none"
-kind = "ref"
-to = "accounting_move_line"
-unique = true
+  [[model.field]]
+  name = "settles_line_id"
+  description = "The open receivable or payable item this payment settles; no two bank transactions may settle the same item"
+  class = "none"
+  kind = "ref"
+  to = "accounting_move_line"
+  unique = true
 
-[[model.field]]
-name = "state"
-description = "Matching status: unmatched, matched, reconciled"
-class = "none"
-kind = "select"
-options = ["unmatched", "matched", "reconciled"]
-required = true
+  [[model.field]]
+  name = "state"
+  description = "Matching status: unmatched, matched, reconciled"
+  class = "none"
+  kind = "select"
+  options = ["unmatched", "matched", "reconciled"]
+  required = true
 
-[model.field.ui]
-tones = { unmatched = "warn", matched = "info", reconciled = "ok" }
+    [model.field.ui]
+    tones = { unmatched = "warn", matched = "info", reconciled = "ok" }
 
-[[model.action]]
-name = "match"
-description = "Record that the line corresponds to an entry line, the one named in move_line_id"
-field = "state"
-from = "unmatched"
-to = "matched"
-assert = [
-  { expr = "is_set(move_line_id)", message = "Choose the journal item this bank transaction belongs to", key = "has_line" },
-]
+  [[model.action]]
+  name = "match"
+  description = "Record that the line corresponds to an entry line, the one named in move_line_id"
+  field = "state"
+  from = "unmatched"
+  to = "matched"
+  assert = [{ expr = "is_set(move_line_id)", message = "Choose the journal item this bank transaction belongs to", key = "has_line" }]
 
-[model.action.ui]
-primary = true
-needs = ["move_line_id"]
-done = "Matched"
+    [model.action.ui]
+    primary = true
+    needs = ["move_line_id"]
+    done = "Matched"
 
-[[model.action]]
-name = "reconcile"
-description = "Reconcile a matched line (manager only)"
-field = "state"
-from = "matched"
-to = "reconciled"
-group = "accounting.manager"
+  [[model.action]]
+  name = "reconcile"
+  description = "Reconcile a matched line (manager only)"
+  field = "state"
+  from = "matched"
+  to = "reconciled"
+  group = "accounting.manager"
 
-[model.action.ui]
-primary = true
-confirm = "Reconcile this bank transaction? It cannot be changed until a manager undoes the reconciliation."
-done = "Reconciled"
+    [model.action.ui]
+    primary = true
+    confirm = "Reconcile this bank transaction? It cannot be changed until a manager undoes the reconciliation."
+    done = "Reconciled"
 
-[[model.action]]
-name = "unreconcile"
-description = "Undo a reconciliation that was wrong; the line goes back to matched and can be changed again (manager only)"
-field = "state"
-from = "reconciled"
-to = "matched"
-group = "accounting.manager"
+  [[model.action]]
+  name = "unreconcile"
+  description = "Undo a reconciliation that was wrong; the line goes back to matched and can be changed again (manager only)"
+  field = "state"
+  from = "reconciled"
+  to = "matched"
+  group = "accounting.manager"
 
-[model.action.ui]
-danger = true
-confirm = "Undo the reconciliation of this bank transaction? It goes back to matched and can be changed again."
-done = "Reconciliation undone"
+    [model.action.ui]
+    danger = true
+    confirm = "Undo the reconciliation of this bank transaction? It goes back to matched and can be changed again."
+    done = "Reconciliation undone"
 
-[[model.action]]
-name = "unmatch"
-description = "Undo a match that was wrong; the item the transaction settled is open again"
-field = "state"
-from = "matched"
-to = "unmatched"
+  [[model.action]]
+  name = "unmatch"
+  description = "Undo a match that was wrong; the item the transaction settled is open again"
+  field = "state"
+  from = "matched"
+  to = "unmatched"
 
-[model.action.ui]
-danger = true
-confirm = "Undo this match?"
-done = "Match undone"
+    [model.action.ui]
+    danger = true
+    confirm = "Undo this match?"
+    done = "Match undone"
 
-[[model.action.effect]]
-kind = "set"
-set = { settles_line_id = "$null" }
-when = "is_set(settles_line_id)"
+    [[model.action.effect]]
+    kind = "set"
+    set = { settles_line_id = "$null" }
+    when = "is_set(settles_line_id)"
 
 [[migration]]
 from = "<0.3.1"
