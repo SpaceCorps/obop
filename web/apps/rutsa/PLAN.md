@@ -195,44 +195,29 @@ Components from `@obop/ui-native`.
       without the window (the switch off, an app ended by Android, the automatic stop of stage 4).
       The category (work, private, commute) joins this window in stage 2, with the classification
 - [x] D5 `feat(rutsa): trips list`: trips by day; each trip shows its kind (a trip added by hand
-      is marked; mixed comes with D8) and its name, else From → To, else its times
+      is marked; mixed comes with the edit of a trip, stage 2) and its name, else From → To, else
+      its times
 - [x] D6 `feat(rutsa): trip detail`: its name ("Untitled trip N" for a trip without one, numbered
       among the untitled trips), times, km, duration (without the pauses), the positions stored
-      and those the distance left out, its details (From, To, Note) and their change in the window
-      of Stop (promised by D4b), delete; the way to its edit screen comes with D8
-- [ ] D7 `feat(rutsa): manual add`: a grey underlined "Manual add" on the home screen (under the
-      data of Current while a trip is open, under Start and the last trip otherwise) opens a
-      window over the screen (a modal, its content scrolls, Cancel and Done in its footer) that
-      adds a new trip typed by hand: date (Today, Yesterday, or typed as `2026-11-24`), start and
-      end times (24 h; an end before the start is the next day, said under the field), km (a dot
-      or a comma), From and To (required text, the addresses in effect), Note (optional, for
-      example why it was typed). The trip is one typed part (D8) and of the kind manual (BR-28),
-      shown "Added by hand" in the list (D5) and on its screen (D6). The checks, each under its
+      and those the distance left out, its details (From, To, Note) changed in place (promised by
+      D4b), delete; the edit of its parts is in stage 2
+- [ ] D7 `feat(rutsa): manual add`: the last step of the screens. A button "Add trip" in the header
+      of Recent trips on the home screen, at the right of "Open history" (which stays a link and
+      moves to its left), a small filled button of the main colour, opens a screen of its own (the
+      route `add`), in the style of the trip's screen: Back and Save in its footer. It adds a new
+      trip typed by hand: name (optional; untitled gets its number), date (Today, Yesterday, or
+      typed as `2026-11-24`), start and end times (24 h; an end before the start is the next day,
+      said under the field), km (a dot or a comma), From and To (required text, the addresses in
+      effect), Note (optional, for example why it was typed). The trip is of the kind manual
+      (BR-28), marked "Added by hand" in History and in Recent trips. The checks, each under its
       field: a real date and times, no start or end in the future, km over 0 and under a sane
       maximum (about 2,000 km), no overlap with another trip, the open one included (its km would
       count twice); a dialog, not a refusal, when the average speed is over about 150 km/h. Times
       are typed in the phone's time zone and stored in UTC, like recorded ones. No date picker
-      package in this stage
-- [ ] D8 `feat(rutsa): edit a trip`: a trip that ended is made of parts in the order of their
-      times: recorded parts (the segments of GPS between pauses) and typed parts (start, end, km,
-      From, To, typed by hand; a table of typed parts, a migration). Its km are the sum of the km
-      of its parts and its time the sum of their times; the gaps between parts (pauses, a part
-      with no recording) count for neither. Its start is the start of its earliest part and its
-      end the end of its latest. Its kind follows its parts: recorded (only recorded parts),
-      manual (only typed ones, D7) or mixed (both); the list (D5) and its screen (D6) show it, and
-      the report of stage 2 says the km measured (the recorded parts) and the km typed. The edit
-      screen, opened from the trip's screen (D6), lists the parts top to bottom, each with its
-      times, km, From and To and a mark of GPS or typed; a typed part can be changed or deleted,
-      "Add a part" adds one; a recorded part cannot be changed (its km and times were measured)
-      but can be deleted (a stretch the GPS recorded by mistake), and the km measured go down
-      with it; under the list the totals and the kind. The list sorts itself by time: when a
-      changed part loses the focus it moves to its place (no dragging). A trip can be edited as
-      often as the driver likes. The open trip cannot be edited: a trip is recorded first, and
-      what was forgotten (a late Start) is added after Stop. The checks of a part: not in the
-      future, its end after its start, no overlap with another part or another trip, its km and
-      its speed as in D7. Deleting the whole trip stays on its screen (D6)
+      package in this stage. Reachable without location (US-18 AC1). The edit of the parts of a
+      trip (the old D8) moved to stage 2
       Checkpoint: the app runs on the emulator; every check of `CHECKS.md` is run; Start, Pause, Resume,
-      Stop, the list, a trip added by hand and a trip edited by hand work when tried by hand; the clock
+      Stop, History, a trip's screen and a trip added by hand work when tried by hand; the clock
       times and km on the screen are right (`Intl` of Hermes:
       `mileage-app` notes that an engine without data for a language or time zone falls back quietly).
 
@@ -261,8 +246,27 @@ Checkpoint: the APK builds and installs, a route gives a trip with the expected 
 
 ## Proposed for stage 2 (not built in this stage)
 
-**The GPS side of a manual add** (asked for on 2026-11-24; the manual add and the edit of a trip
-are D7 and D8): in stage 1 From and To of a typed trip or part are text and its km are the
+**The edit of a trip** (D8 of stage 1, moved here on 2026-11-25, after D6 gave the details an edit
+in place and D7 adds a forgotten trip whole; what was decided stays): a trip that ended is made of
+parts in the order of their times: recorded parts (the segments of GPS between pauses) and typed
+parts (start, end, km, From, To, typed by hand; a table of typed parts, a migration). Its km are
+the sum of the km of its parts and its time the sum of their times; the gaps between parts
+(pauses, a part with no recording) count for neither. Its start is the start of its earliest part
+and its end the end of its latest. Its kind follows its parts: recorded, manual (D7) or mixed; the
+list and its screen show it, and the report says the km measured (the recorded parts) and the km
+typed. The edit screen, opened from the trip's screen, lists the parts top to bottom, each with its
+times, km, From and To and a mark of GPS or typed; a typed part can be changed or deleted, "Add a
+part" adds one; a recorded part cannot be changed (its km and times were measured) but can be
+deleted (a stretch the GPS recorded by mistake), and the km measured go down with it; under the
+list the totals and the kind. The list sorts itself by time: when a changed part loses the focus
+it moves to its place (no dragging). A trip can be edited as often as the driver likes. The open
+trip cannot be edited: a trip is recorded first, and what was forgotten (a late Start) is added
+after Stop. The checks of a part: not in the future, its end after its start, no overlap with
+another part or another trip, its km and its speed as in D7. It belongs with the report of stage
+2, which separates the km measured and typed.
+
+**The GPS side of a manual add** (asked for on 2026-11-24; the manual add is D7, the edit of a
+trip is above): in stage 1 From and To of a typed trip or part are text and its km are the
 driver's.
 
 - A route or places picked on a map for a typed trip or part, instead of text.
@@ -286,7 +290,7 @@ switch went. Asking for a category at Stop may come back with the classification
 US-3, US-4), together with the end of a trip from its notification (BR-27) and the automatic stop
 of stage 4.
 
-**Joining two trips** that follow each other, in the edit of a trip (D8): for a trip split in two by
+**Joining two trips** that follow each other, in the edit of a trip (above): for a trip split in two by
 a Stop pressed by mistake.
 
 ## Dependencies
@@ -603,3 +607,13 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   A placeholder for stage 2 at the right of the title of the home screen: "User" and a round
   avatar with its first letter (`ui/UserBadge.tsx`); it does nothing yet (no sign-in or profile in
   stage 1).
+- 2026-11-25: after D6, D7 and D8 were weighed against what is left of stage 1. D7 stays and is the
+  last step of the screens: the goal of the stage, BR-28 and US-18 AC1 need a trip added by hand
+  (`mileage-app` has none to follow). Its entry is rewritten for the screens as they are now: a
+  filled button "Add trip" at the right of "Open history" in the header of Recent trips, and a
+  screen of its own (the route `add`) with Back and Save, instead of a grey link under Current
+  and a window; the trip may have a name. D8 (the edit of the parts of a trip) moves to "Proposed
+  for stage 2" with what was decided: no BR or US asks for it, it is the heaviest step of block D
+  (a table, a migration, the kind mixed, an edit screen), D6 already edits the details in place
+  and D7 adds a forgotten trip whole, and it belongs with the report of stage 2, which separates
+  the km measured and typed. The checkpoint of block D no longer has "a trip edited by hand".
