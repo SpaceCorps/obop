@@ -38,6 +38,9 @@ Useful commands:
 `pm revoke` of the location keeps Expo's own note that it asked already, so the app reads it as
 refused for good; `pm clear` resets both.
 
+All of the above in one: `vp run emulator:ship` (check, test, the emulator started if needed, build,
+install, open; `--fresh` for a change in a shared package only, `--no-build` to install again).
+
 A change in a shared package only (`web/packages/ui-native`, `trip-core`) is not seen by Gradle,
 which keeps the last bundle: delete `android\app\build\generated\assets\react`,
 `android\app\build\generated\res\react` and `$env:TEMP\metro-*` before the build.
@@ -265,7 +268,18 @@ Since the fifth round of D6: no Edit details and no window; the details are chan
 
 ## E2. Check a recorded trip
 
-- [x] 2026-11-25 `smoke` With no trip open and location allowed: `vp run emulator:check` presses Start (the widget turns red), drives the route (4 min, the screen off and on), presses Stop and confirms; it prints "ok 4.0 km on the screen, 3.989 km expected ..." and ends with status 0; run: "ok   4.0 km on the screen, 3.989 km expected, off by 0.011 km (allowed 0.130)"
+- [x] 2026-11-25 `smoke` With no trip open and location allowed: `vp run emulator:check` presses Start (the widget turns red), drives the route (4 min, the screen off and on), presses Stop and confirms; it prints "ok 4.0 km on the screen, 3.989 km expected ..." and ends with status 0; run: "ok 4.0 km on the screen, 3.989 km expected, off by 0.011 km (allowed 0.130)"
 - [x] 2026-11-25 (a trip's screen left open before the run) A trip's screen or History left open before the run, Stop pressed by hand during the drive, or a trip's screen opened: it goes back to the home screen by itself, says "the trip was stopped already" and checks the km
 - [ ] With a trip open: it stops at once with "a trip is open (Recording): stop it first", status 1
 - [ ] `--tolerance 0` still passes (4.0 km is within the rounding of 3.989 km)
+
+## The trip's screen with the current widget (after E2)
+
+- [x] 2026-11-25 `smoke` Home, tap the widget: the trip's screen; the widget stays in the very same place (no jump), the title above it is empty, the rest fades in under it: From and To, then Date to Positions, then Note
+- [x] 2026-11-25 `smoke` The widget there shows the same time, km, start and state as on Home; while recording the timer runs and the km grow, Paused stands, Ended for a trip from History or Recent trips
+- [x] 2026-11-25 `smoke` Tap the name in the widget: the cursor is in it; type a name, tap elsewhere: kept, and Home's widget and History show it; clear it all: "Untitled trip N" comes back with the same number
+- [ ] The widget on the trip's screen is not a button (a tap outside the name does nothing)
+- [ ] A trip of yesterday from History: the widget says "Yesterday HH:MM" at the bottom right
+- [x] 2026-11-25 `smoke` Home → widget → trip's screen → Back, many times, while a trip records: the trip's screen never shows the bare "Trip" with Back at the top
+- [x] 2026-11-25 `smoke` A trip that ended: the widget's bottom right says when it ended (on Home and on its screen); an open trip: when it started
+- [x] 2026-11-25 `smoke` The trip's screen has no Duration and no Distance rows: Date, Time, Positions only

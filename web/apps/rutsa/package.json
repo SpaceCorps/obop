@@ -18,6 +18,7 @@
     "emulator:route": "node scripts/emulator/route.mjs",
     "emulator:drive": "node scripts/emulator/drive.mjs",
     "emulator:check": "node scripts/emulator/check-trip.mjs",
+    "emulator:ship": "node scripts/emulator/ship.mjs",
     "simulator:route": "node scripts/simulator/route.mjs"
   },
   "dependencies": {

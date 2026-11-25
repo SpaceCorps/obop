@@ -64,14 +64,27 @@ export interface Trips {
   loaded: boolean;
 }
 
+/**
+ * The trips last read, by store: a screen that opens shows them at once and the fresh read
+ * replaces them, so it never flashes empty (a trip's screen showed its bare frame while the list
+ * was read again).
+ */
+const lastRead = new WeakMap<TripRepository, Trips>();
+
 /** The trips on this phone; read again whenever the bus says that they changed. */
 export function useTrips(store: TripRepository): Trips {
-  const [state, setState] = useState<Trips>({ trips: [], active: null, loaded: false });
+  const [state, setState] = useState<Trips>(
+    () => lastRead.get(store) ?? { trips: [], active: null, loaded: false },
+  );
   useEffect(() => {
     let alive = true;
     const load = () => {
       Promise.all([store.listTrips(), store.activeTrip()]).then(
-        ([trips, active]) => alive && setState({ trips, active, loaded: true }),
+        ([trips, active]) => {
+          const read = { trips, active, loaded: true };
+          lastRead.set(store, read);
+          if (alive) setState(read);
+        },
         () => alive && setState((s) => ({ ...s, loaded: true })),
       );
     };

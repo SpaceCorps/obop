@@ -1,4 +1,5 @@
 import { Text, useTheme } from "@obop/ui-native";
+import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import type { Trip } from "../core/types.ts";
 import { t } from "../i18n/index.ts";
@@ -9,15 +10,17 @@ import { tripName } from "./trip-label.ts";
  * shows the open trip, else the last trip that ended, else "No trips yet.": the trip's name at the
  * top left ("Untitled trip 39" until it is named), a dot and its state at the top right (red
  * Recording, grey Paused, green Ended), the big time without the pauses (running while it
- * records), its km at the bottom left and when it started at the bottom right. A tap opens the
- * trip's screen (D6), where it can be named and, while it records, its count grows.
+ * records), its km at the bottom left and at the bottom right when it started (open) or ended.
+ * A tap opens the trip's screen (D6), which shows the same card in the same place of the screen, with the name
+ * typed in place (`nameSlot`) and no tap, over the rest of the trip.
  */
 export function CurrentWidget({
   trip,
   elapsed,
   km,
-  started,
+  clock,
   onPress,
+  nameSlot,
 }: {
   /** `null` before the first trip. */
   trip: Pick<Trip, "state" | "name" | "number"> | null;
@@ -25,9 +28,15 @@ export function CurrentWidget({
   elapsed: string;
   /** Its km: so far while it is open, as Stop counts them. */
   km: string;
-  /** `22:42`, or `Yesterday 23:40` for a trip begun before today. */
-  started: string;
-  onPress: () => void;
+  /**
+   * When it started while it is open, when it ended once it ended: `22:42`, or `Yesterday 23:40`
+   * on another day.
+   */
+  clock: string;
+  /** A tap opens the trip (the home screen); without it the card is not a button (the trip's screen). */
+  onPress?: () => void;
+  /** Drawn in the place of the name: the name typed in place on the trip's screen. */
+  nameSlot?: ReactNode;
 }) {
   const theme = useTheme();
   const card = {
@@ -57,21 +66,15 @@ export function CurrentWidget({
       : trip.state === "paused"
         ? { text: t("home.paused"), color: theme.c.textMuted }
         : { text: t("home.ended"), color: theme.c.success.fill };
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={[name, state.text, elapsed, km, started].join(", ")}
-      accessibilityHint={t("home.current.hint")}
-      onPress={onPress}
-      android_ripple={{ color: theme.c.accentSoft }}
-      testID="current"
-      style={({ pressed }) => ({ ...card, opacity: pressed ? 0.85 : 1 })}
-    >
+  const content = (
+    <>
       <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space[2] }}>
         <View style={{ flex: 1 }}>
-          <Text variant="label" numberOfLines={1} testID="current-name">
-            {name}
-          </Text>
+          {nameSlot ?? (
+            <Text variant="label" numberOfLines={1} testID="current-name">
+              {name}
+            </Text>
+          )}
         </View>
         <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: state.color }} />
         <Text tone="muted" testID="current-state">
@@ -96,10 +99,30 @@ export function CurrentWidget({
         <Text variant="title" testID="current-km">
           {km}
         </Text>
-        <Text tone="muted" testID="current-started">
-          {started}
+        <Text tone="muted" testID="current-clock">
+          {clock}
         </Text>
       </View>
+    </>
+  );
+  if (!onPress) {
+    return (
+      <View style={card} testID="current">
+        {content}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={[name, state.text, elapsed, km, clock].join(", ")}
+      accessibilityHint={t("home.current.hint")}
+      onPress={onPress}
+      android_ripple={{ color: theme.c.accentSoft }}
+      testID="current"
+      style={({ pressed }) => ({ ...card, opacity: pressed ? 0.85 : 1 })}
+    >
+      {content}
     </Pressable>
   );
 }

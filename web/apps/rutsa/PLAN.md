@@ -675,3 +675,15 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   `scripts/emulator/check-lib.mjs`, with tests. Before: location allowed and its explanation read,
   no trip open. Unlike `mileage-app`, which reads the trip from its server, the km are those the
   driver sees.
+- 2026-11-25: after E2, asked for: the trip's screen shows the current widget as the card of the
+  trip, in the very place it has on the home screen (an empty title as high as "Rutsa", so a tap on
+  the widget leaves it where it is and the rest comes in under it, faded in over 200 ms). Its name
+  is typed in place there (`CurrentWidget` takes a `nameSlot`, `InlineText` a look `label`); the
+  time, km, start and state are only shown, so every trip, from History too, says whether it is
+  recording, paused or ended. The name leaves the title. What the widget shows comes from one pure
+  function on both screens (`ui/widget-values.ts`, `widgetValues`, with tests).
+  Tried, then changed: the trip's screen showed its bare frame ("Trip" and Back) while the list
+  of trips was read again; `useTrips` now starts from the list last read (by store), so a screen
+  that opens shows it at once and the fresh read replaces it. The bottom right of the widget says
+  when a trip that ended ended (when an open one started), on both screens; the rows Duration
+  and Distance leave the trip's screen, since the widget says them.

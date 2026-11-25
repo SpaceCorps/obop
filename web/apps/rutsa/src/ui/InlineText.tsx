@@ -35,8 +35,11 @@ export function InlineText({
    */
   onChange?: (text: string) => void;
   keyboardType?: TextInputProps["keyboardType"];
-  /** `title` (the name, as the title of the screen), `value` (at the right of a row), `note` (lines). */
-  look: "title" | "value" | "note";
+  /**
+   * `title` (a title of a screen), `label` (the name in the current widget, D6), `value` (at the
+   * right of a row), `note` (lines).
+   */
+  look: "title" | "label" | "value" | "note";
   maxLength: number;
   /**
    * An empty field shows `value` again when it loses the focus: for the name, whose `value` is the
@@ -75,7 +78,9 @@ export function InlineText({
   const font =
     look === "title"
       ? { fontSize: theme.fontSize["2xl"], fontWeight: theme.fontWeight.bold }
-      : { fontSize: theme.fontSize.md, fontWeight: theme.fontWeight.regular };
+      : look === "label"
+        ? { fontSize: theme.fontSize.md, fontWeight: theme.fontWeight.semibold }
+        : { fontSize: theme.fontSize.md, fontWeight: theme.fontWeight.regular };
   return (
     <TextInput
       value={text}
@@ -98,7 +103,7 @@ export function InlineText({
       placeholder={editing ? undefined : placeholder}
       placeholderTextColor={theme.c.textMuted}
       maxLength={maxLength}
-      multiline={look !== "value"}
+      multiline={look === "title" || look === "note"}
       // A name and a place end with Done; a note takes new lines and is kept when it loses the focus.
       submitBehavior={look === "note" ? "newline" : "blurAndSubmit"}
       returnKeyType={look === "note" ? "default" : "done"}

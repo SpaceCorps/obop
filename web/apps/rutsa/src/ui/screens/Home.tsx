@@ -2,7 +2,7 @@ import { Banner, Button, Screen, Text, type BannerTone } from "@obop/ui-native";
 import { useEffect, useRef, useState } from "react";
 import { Alert, View, type HostInstance } from "react-native";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
-import { dayKey, formatClock, formatKm, phoneTimeZone, totals } from "../../core/present.ts";
+import { formatKm, phoneTimeZone, totals } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
 import { LANGUAGE, t, tp, type MessageKey } from "../../i18n/index.ts";
 import {
@@ -17,17 +17,12 @@ import { announce } from "../announce.ts";
 import { CurrentWidget } from "../CurrentWidget.tsx";
 import { RecentTrips } from "../RecentTrips.tsx";
 import { RoundButton } from "../RoundButton.tsx";
+import { widgetValues } from "../widget-values.ts";
 import { UserBadge } from "../UserBadge.tsx";
-import { lastEndedTrip, tripDurationMs, whenText } from "../home.ts";
+import { lastEndedTrip } from "../home.ts";
 import { useNow, useProgress, useRegistered, useTrips, type Check } from "../hooks.ts";
 import { tOs } from "../os-text.ts";
-import {
-  buttonsFor,
-  elapsedMs,
-  formatElapsed,
-  warningOf,
-  type Warning,
-} from "../recording-view.ts";
+import { buttonsFor, warningOf, type Warning } from "../recording-view.ts";
 import type { Nav } from "../router.ts";
 import { endedNewestFirst, recentLine } from "../trips-list.ts";
 
@@ -145,7 +140,6 @@ export function Home({
   const zone = phoneTimeZone();
   const sum = totals(trips, now, zone);
   const words = { today: t("day.today"), yesterday: t("day.yesterday") };
-  const when = (ms: number) => whenText(ms, now, LANGUAGE, zone, words);
 
   const checkBlocked =
     check?.kind === "done" && check.ensured.kind === "blocked" && check.at > checkHandledAt
@@ -168,18 +162,6 @@ export function Home({
     signal: progress?.signal ?? null,
   });
   const buttons = buttonsFor(active?.state ?? null);
-  const elapsedText = formatElapsed(
-    active === null || progress === null
-      ? 0
-      : elapsedMs({
-          // The state the count was read in: right after a Pause or a Resume, until it is read
-          // again (at once), the clock goes on as it went, and nothing jumps.
-          state: progress.state,
-          closedMs: progress.closedMs,
-          segmentStartedAt: active.segmentStartedAt,
-          now,
-        }),
-  );
 
   /**
    * Runs the action of a button; only that button shows that it works (`which`), so the other one
@@ -361,22 +343,9 @@ export function Home({
       {/* Always there: the open trip, else the last one that ended, else "No trips yet." */}
       <CurrentWidget
         trip={widgetTrip}
-        elapsed={
-          active
-            ? elapsedText
-            : formatElapsed(
-                last === null ? 0 : (tripDurationMs(last, lastProgress?.closedMs ?? null) ?? 0),
-              )
-        }
-        km={formatKm((active ? progress?.distanceM : last?.distanceM) ?? 0, LANGUAGE)}
-        started={
-          widgetTrip === null
-            ? ""
-            : // The clock time; with its day when the trip began before today.
-              dayKey(widgetTrip.startedAt, zone) === dayKey(now, zone)
-              ? formatClock(widgetTrip.startedAt, LANGUAGE, zone)
-              : when(widgetTrip.startedAt)
-        }
+        {...(widgetTrip === null
+          ? { elapsed: "", km: "", clock: "" }
+          : widgetValues(widgetTrip, active ? progress : lastProgress, now, LANGUAGE, zone, words))}
         onPress={() => widgetTrip && nav.push({ name: "trip", id: widgetTrip.id })}
       />
 

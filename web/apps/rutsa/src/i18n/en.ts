@@ -64,8 +64,6 @@ export const en = {
   "trip.date": "Date",
   "trip.time": "Time",
   "trip.time.open": "{start}–now",
-  "trip.duration": "Duration",
-  "trip.distance": "Distance",
   "trip.positions": "Positions",
   "trip.positions.count.one": "{count} position",
   "trip.positions.count.other": "{count} positions",

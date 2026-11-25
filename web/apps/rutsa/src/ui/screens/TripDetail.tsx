@@ -1,39 +1,31 @@
 import { Banner, Button, Row, Screen, Text, useTheme, useWords } from "@obop/ui-native";
 import { useEffect, useRef, useState } from "react";
-import { Alert, View } from "react-native";
+import { Alert, Animated, View } from "react-native";
 import { DETAIL_MAX, type TripDetails } from "../../core/details.ts";
-import { durationParts, formatKm, phoneTimeZone } from "../../core/present.ts";
+import { phoneTimeZone } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
 import { LANGUAGE, t, tp } from "../../i18n/index.ts";
 import { deleteTrip, updateTripDetails } from "../../native/actions.ts";
+import { CurrentWidget } from "../CurrentWidget.tsx";
 import { DetailRow } from "../DetailRow.tsx";
 import { InlineText } from "../InlineText.tsx";
 import { useFillToFooter } from "../fill.ts";
-import { tripDurationMs } from "../home.ts";
 import { useNow, useProgress, useTrips } from "../hooks.ts";
-import { elapsedMs, formatElapsed } from "../recording-view.ts";
 import type { Nav } from "../router.ts";
 import { tripName, typedName } from "../trip-label.ts";
 import { tripDate, tripTimes } from "../trip-view.ts";
-
-/** A duration in the words of the catalogue: `12 min`, `1 h 5 min`. */
-function durationText(ms: number): string {
-  const { hours, minutes } = durationParts(0, ms);
-  return hours === 0
-    ? t("duration.minutes", { minutes })
-    : t("duration.hoursMinutes", { hours, minutes });
-}
+import { widgetValues } from "../widget-values.ts";
 
 /**
- * One trip (D6), the open one too. Its name as the title ("Untitled trip 12" while it has none),
- * then From and To ("Not given" when empty); its date and times, how long it took without the
- * pauses, its km, how many positions a recorded trip has and how many the distance left out (the
- * kind of a trip is marked in the list, BR-28); then its note ("Empty"), as long as it is. While
- * the trip is open (from the current widget of the home screen) its time, km and positions grow
- * as it records, and it has no Delete: it is stopped on the home screen. The name, From, To and
- * Note are changed where they stand (`InlineText`): a tap, typing, and they are kept when they lose
- * the focus; the name is the title, with the default of an untitled trip as its text. In the
- * footer, Back and Delete trip (asked first). The way to the edit of its parts comes with D8.
+ * One trip (D6), the open one too. On top the current widget of the home screen, in the same place
+ * (an empty title above it): its name, typed in place, its state, its time without the pauses, its
+ * km and when it started or ended. Under it From and To ("Not given" when empty), then its date
+ * and times and how many positions a recorded trip has and how many the distance left out (the
+ * kind of a trip is marked in the list, BR-28), then its note ("Empty"), down to the footer. While
+ * the trip is open its time, km and positions grow as it records, and it has no Delete: it is
+ * stopped on the home screen. The name, From, To and Note are changed where they stand
+ * (`InlineText`): a tap, typing, and they are kept when they lose the focus. In the footer, Back
+ * and Delete trip (asked first). The edit of its parts is in stage 2.
  *
  * After `TripDetail` of `mileage-app` (`src/ui/screens/TripDetail.tsx`), without its server: no
  * purpose (stage 2), no submit, and Delete instead of Discard with a reason.
@@ -62,6 +54,11 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
 
   // The note reaches down to the footer (`useFillToFooter`).
   const note = useFillToFooter();
+  // The details come in softly under the card of the trip, which does not move.
+  const fade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+  }, [fade]);
 
   if (trip === null) {
     return (
@@ -76,23 +73,6 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
   }
 
   const zone = phoneTimeZone();
-  // Open: the clock of the current widget; ended: its time in minutes.
-  const duration = open
-    ? progress === null
-      ? null
-      : formatElapsed(
-          elapsedMs({
-            state: progress.state,
-            closedMs: progress.closedMs,
-            segmentStartedAt: trip.segmentStartedAt,
-            now,
-          }),
-        )
-    : (() => {
-        const ms = tripDurationMs(trip, progress?.closedMs ?? null);
-        return ms === null ? null : durationText(ms);
-      })();
-  const distanceM = open ? (progress?.distanceM ?? 0) : (trip.distanceM ?? 0);
   const positions =
     progress === null
       ? null
@@ -160,18 +140,12 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
   return (
     <Screen
       title={name}
-      // The name is changed where it stands, as the title of the screen.
+      // An empty title as high as the one of the home screen, so the current widget stands where it
+      // stood there when it was tapped.
       titleSlot={
-        <InlineText
-          value={trip.name ?? defaultName}
-          placeholder={name}
-          label={t("details.name")}
-          onCommit={(text) => save("name", text)}
-          look="title"
-          maxLength={DETAIL_MAX.name}
-          restoreWhenEmpty
-          testID="trip-name"
-        />
+        <Text variant="title" accessibilityElementsHidden importantForAccessibility="no">
+          {" "}
+        </Text>
       }
       footer={
         // Back at the left, Delete trip at the right; the open trip has no Delete (it is stopped
@@ -200,70 +174,92 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
         </View>
       }
     >
-      {deleteFailed ? (
-        <Banner tone="danger" title={t("trip.delete.failed")} testID="trip-delete-failed" />
-      ) : null}
-      {saveFailed ? (
-        <Banner tone="danger" title={t("trip.details.failed")} testID="trip-save-failed" />
-      ) : null}
+      {/* The card of the trip, as on the home screen, with its name typed in place. */}
+      <CurrentWidget
+        trip={trip}
+        {...widgetValues(trip, progress, now, LANGUAGE, zone, {
+          today: t("day.today"),
+          yesterday: t("day.yesterday"),
+        })}
+        nameSlot={
+          <InlineText
+            value={trip.name ?? defaultName}
+            placeholder={name}
+            label={t("details.name")}
+            onCommit={(text) => save("name", text)}
+            look="label"
+            maxLength={DETAIL_MAX.name}
+            restoreWhenEmpty
+            testID="trip-name"
+          />
+        }
+      />
 
-      <View>
-        {placeRow("from")}
-        {placeRow("to")}
-      </View>
-
-      <View>
-        <Row
-          title={t("trip.date")}
-          value={tripDate(trip, Date.now(), LANGUAGE, zone)}
-          testID="trip-date"
-        />
-        <Row
-          title={t("trip.time")}
-          value={
-            open
-              ? t("trip.time.open", { start: tripTimes(trip, LANGUAGE, zone) })
-              : tripTimes(trip, LANGUAGE, zone)
-          }
-          testID="trip-time"
-        />
-        <Row title={t("trip.duration")} value={duration ?? undefined} testID="trip-duration" />
-        <Row
-          title={t("trip.distance")}
-          value={formatKm(distanceM, LANGUAGE)}
-          testID="trip-distance"
-        />
-        {trip.source === "recorded" ? (
-          <Row title={t("trip.positions")} value={positions ?? undefined} testID="trip-positions" />
+      {/* The rest comes in under the card, which stays in place. */}
+      <Animated.View style={{ opacity: fade, gap: theme.space[4] }}>
+        {deleteFailed ? (
+          <Banner tone="danger" title={t("trip.delete.failed")} testID="trip-delete-failed" />
         ) : null}
-      </View>
+        {saveFailed ? (
+          <Banner tone="danger" title={t("trip.details.failed")} testID="trip-save-failed" />
+        ) : null}
 
-      {/* The note under its label, changed in place: it reaches down to the footer, and a longer
+        <View>
+          {placeRow("from")}
+          {placeRow("to")}
+        </View>
+
+        <View>
+          <Row
+            title={t("trip.date")}
+            value={tripDate(trip, Date.now(), LANGUAGE, zone)}
+            testID="trip-date"
+          />
+          <Row
+            title={t("trip.time")}
+            value={
+              open
+                ? t("trip.time.open", { start: tripTimes(trip, LANGUAGE, zone) })
+                : tripTimes(trip, LANGUAGE, zone)
+            }
+            testID="trip-time"
+          />
+          {trip.source === "recorded" ? (
+            <Row
+              title={t("trip.positions")}
+              value={positions ?? undefined}
+              testID="trip-positions"
+            />
+          ) : null}
+        </View>
+
+        {/* The note under its label, changed in place: it reaches down to the footer, and a longer
           note makes it grow and the screen scroll. */}
-      <View
-        ref={note.blockRef}
-        onLayout={note.onLayout}
-        style={{
-          minHeight: note.minHeight,
-          gap: theme.space[1],
-          paddingVertical: theme.space[3],
-          paddingHorizontal: theme.space[4],
-          backgroundColor: theme.c.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.c.border,
-        }}
-      >
-        <Text variant="label">{t("details.note")}</Text>
-        <InlineText
-          value={trip.note}
-          placeholder={t("trip.note.empty")}
-          label={t("details.note")}
-          onCommit={(text) => save("note", text)}
-          look="note"
-          maxLength={DETAIL_MAX.note}
-          testID="trip-note"
-        />
-      </View>
+        <View
+          ref={note.blockRef}
+          onLayout={note.onLayout}
+          style={{
+            minHeight: note.minHeight,
+            gap: theme.space[1],
+            paddingVertical: theme.space[3],
+            paddingHorizontal: theme.space[4],
+            backgroundColor: theme.c.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.c.border,
+          }}
+        >
+          <Text variant="label">{t("details.note")}</Text>
+          <InlineText
+            value={trip.note}
+            placeholder={t("trip.note.empty")}
+            label={t("details.note")}
+            onCommit={(text) => save("note", text)}
+            look="note"
+            maxLength={DETAIL_MAX.note}
+            testID="trip-note"
+          />
+        </View>
+      </Animated.View>
     </Screen>
   );
 }
