@@ -95,7 +95,6 @@ export const en = {
   "duration.part.hours": "Hours",
   "duration.part.minutes": "Minutes",
   "duration.part.seconds": "Seconds",
-  "manual.next_day": "Ends the next day.",
   "manual.km": "Distance (km)",
   "manual.km.unit": "km",
   "manual.failed": "The trip could not be saved. Try again.",
@@ -129,9 +128,9 @@ export const en = {
   "recording.nofix.ios":
     "No position arrived in the first minute. Check that Location Services are switched on, then restart recording.",
   "recording.quiet.one":
-    "The last position is {count} minute old. Standing still, that is normal; driving, restart recording.",
+    "The last position is {count} minute old. Standing still, that is normal; driving, check that Location Services are on.",
   "recording.quiet.other":
-    "The last position is {count} minutes old. Standing still, that is normal; driving, restart recording.",
+    "The last position is {count} minutes old. Standing still, that is normal; driving, check that Location Services are on.",
   "recording.weak":
     "The location signal is too weak to measure the distance. Indoors, move to a window or go outside.",
   "recording.jumpy":

@@ -16,14 +16,14 @@ import { useFillToBottom } from "../fill.ts";
 import { useNow, useProgress, useTrips } from "../hooks.ts";
 import type { Nav } from "../router.ts";
 import { tripName, typedName } from "../trip-label.ts";
-import { tripTimes } from "../trip-view.ts";
+import { tripDate, tripTimes } from "../trip-view.ts";
 import { widgetValues } from "../widget-values.ts";
 
 /**
  * One trip (D6), the open one too. On top the current widget of the home screen, in the same place
  * (under the same header): its name, typed in place, its state, its time without the pauses, its
  * km and when it started or ended (with its day when not today). Under it From and To ("Not
- * given" when empty), then its times and how many positions a recorded trip has and how many the
+ * given" when empty), then its date and times and how many positions a recorded trip has and how many the
  * distance left out (the kind of a trip is marked in the list, BR-28), then its note (an empty
  * block when there is none), down to the bottom. While the trip is open its time, km and
  * positions grow as it records. Back at the left of the header, Edit at the right: the screen is
@@ -254,8 +254,13 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
           {placeRow("to")}
         </View>
 
-        {/* No date row: the widget says the day of a trip that was not today. */}
+        {/* Its date, as on Manual add (read only: its edit is in stage 2), then its times. */}
         <View>
+          <Row
+            title={t("trip.date")}
+            value={tripDate(trip, Date.now(), LANGUAGE, zone)}
+            testID="trip-date"
+          />
           <Row
             title={t("trip.time")}
             value={

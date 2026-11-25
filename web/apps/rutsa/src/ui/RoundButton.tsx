@@ -1,15 +1,19 @@
 import { Text, useTheme } from "@obop/ui-native";
 import { ActivityIndicator, Pressable, View } from "react-native";
+import { ON_FILL } from "./ScreenHeader.tsx";
 
 /**
  * The big round button of the home screen (Start, Stop, Resume): `Button size="big"` of
- * `@obop/ui-native` with a smaller circle and word, so Recent trips keeps five rows above it and
- * the switcher. The size of `big` is a shared token (176), and the other apps keep it.
+ * `@obop/ui-native` with a circle that takes the room the recent trips leave (`size`, from
+ * `ROUND_MIN` to `ROUND_MAX`, `shareRoom`) and a smaller word. The size of `big` is a shared
+ * token (176), and the other apps keep it.
  */
-export const ROUND_SIZE = 88;
+export const ROUND_MIN = 88;
+export const ROUND_MAX = 144;
 
 export function RoundButton({
   label,
+  size = ROUND_MIN,
   danger = false,
   busy = false,
   hint,
@@ -17,6 +21,8 @@ export function RoundButton({
   testID,
 }: {
   label: string;
+  /** Its diameter. */
+  size?: number;
   /** Red (Stop) instead of the main colour (Start, Resume). */
   danger?: boolean;
   busy?: boolean;
@@ -26,7 +32,9 @@ export function RoundButton({
 }) {
   const theme = useTheme();
   const fill = danger ? theme.c.danger.fill : theme.c.accentFill;
-  const ink = danger ? theme.c.onDanger : theme.c.onAccent;
+  // White on the main colour and on red, in the dark theme too (its `onAccent` and `onDanger`
+  // are nearly black), as the filled buttons of the header.
+  const ink = ON_FILL;
   return (
     <Pressable
       accessibilityRole="button"
@@ -39,9 +47,9 @@ export function RoundButton({
       // Not borderless: on Android a borderless ripple takes the place of the background colour.
       android_ripple={{ color: theme.c.accentSoft }}
       style={({ pressed }) => ({
-        width: ROUND_SIZE,
-        height: ROUND_SIZE,
-        borderRadius: ROUND_SIZE / 2,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
         alignItems: "center",
         justifyContent: "center",
         alignSelf: "center",

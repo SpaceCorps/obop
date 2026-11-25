@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vite-plus/test";
-import { buttonsFor, elapsedMs, formatElapsed, warningOf } from "./recording-view.ts";
+import {
+  buttonsFor,
+  elapsedMs,
+  formatElapsed,
+  settleRegistered,
+  STUCK_AFTER_MS,
+  warningOf,
+} from "./recording-view.ts";
 
 describe("the buttons of the home screen", () => {
   test("Start without a trip, and after one ended", () => {
@@ -119,5 +126,32 @@ describe("the elapsed time", () => {
 
   test("a clock set back is no negative time", () => {
     expect(formatElapsed(-5_000)).toBe("0:00:00");
+  });
+});
+
+describe("Recording has stopped: only after the updates are gone a while", () => {
+  const T = 1_000_000;
+
+  test("registered: said at once, and a false before it is forgotten", () => {
+    expect(settleRegistered(true, T - 60_000, T)).toEqual({ shown: true, falseSince: null });
+  });
+
+  test("a first false is not said: not known yet", () => {
+    expect(settleRegistered(false, null, T)).toEqual({ shown: null, falseSince: T });
+  });
+
+  test("false answers for less than 15 s are not said (Stop, before the trips are read again)", () => {
+    expect(settleRegistered(false, T, T + 10_000)).toEqual({ shown: null, falseSince: T });
+  });
+
+  test("false answers for 15 s and more are said", () => {
+    expect(settleRegistered(false, T, T + STUCK_AFTER_MS)).toEqual({ shown: false, falseSince: T });
+  });
+
+  test("a true between false answers starts the wait again", () => {
+    let settled = settleRegistered(false, null, T);
+    settled = settleRegistered(true, settled.falseSince, T + 5_000);
+    settled = settleRegistered(false, settled.falseSince, T + 10_000);
+    expect(settleRegistered(false, settled.falseSince, T + 20_000).shown).toBeNull();
   });
 });

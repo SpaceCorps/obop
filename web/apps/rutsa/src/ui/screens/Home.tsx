@@ -1,5 +1,5 @@
 import { Banner, Button, Screen, Text, useTheme, type BannerTone } from "@obop/ui-native";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, View, type HostInstance } from "react-native";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
 import { formatKm, phoneTimeZone, totals } from "../../core/present.ts";
@@ -17,7 +17,7 @@ import { startWhenReady } from "../../native/start.ts";
 import { announce } from "../announce.ts";
 import { CurrentWidget } from "../CurrentWidget.tsx";
 import { RecentTrips } from "../RecentTrips.tsx";
-import { RoundButton } from "../RoundButton.tsx";
+import { ROUND_MAX, ROUND_MIN, RoundButton } from "../RoundButton.tsx";
 import { TripNameInput } from "../TripNameInput.tsx";
 import { widgetValues } from "../widget-values.ts";
 import { ScreenHeader } from "../ScreenHeader.tsx";
@@ -32,6 +32,11 @@ import { endedNewestFirst, recentLine } from "../trips-list.ts";
 let restoredNoteRead = false;
 
 type Blocked = Exclude<Readiness, "ready">;
+
+/** Five recent trips at most, and the round button between its smallest and its largest. */
+const ROOM = { maxRows: 5, minButton: ROUND_MIN, maxButton: ROUND_MAX } as const;
+// The size the round button had, for the next drawing of the screen.
+let lastRound: number = ROUND_MIN;
 
 /** Which button's action runs: only that one shows it. */
 type Busy = "main" | "side" | "again" | "restart" | null;
@@ -66,11 +71,14 @@ function warningBanner(
         action: { label: t("recording.blocked.action"), onPress: actions.fix },
       };
     case "stuck":
-      return { tone: "danger", title: t("recording.stuck"), action: restart };
+      // No button: the trip has Restart under the widget, and the app starts the updates again
+      // by itself when it comes back to the front.
+      return { tone: "danger", title: t("recording.stuck") };
     case "no_fix":
       return { tone: "danger", title: tOs("recording.nofix"), action: restart };
     case "quiet":
-      return { tone: "warning", title: tp("recording.quiet", warning.minutes), action: restart };
+      // No button: standing still is normal, and the trip has Restart under the widget.
+      return { tone: "warning", title: tp("recording.quiet", warning.minutes) };
     case "signal":
       return {
         tone: "warning",
@@ -104,8 +112,6 @@ export function Home({
 }) {
   const theme = useTheme();
   const { trips, active } = useTrips(store);
-  // The content of the footer: the recent trips end above it.
-  const footerRef = useRef<HostInstance>(null);
   const last = lastEndedTrip(trips);
   // The trip of the current widget: the open one, else the last that ended.
   const widgetTrip = active ?? last;
@@ -118,6 +124,19 @@ export function Home({
     last?.state ?? null,
   );
   const [busy, setBusy] = useState<Busy>(null);
+  // The size of the round button: what the recent trips leave (`RecentTrips`), kept for the
+  // next time the screen is drawn so it does not start small.
+  const [round, setRoundState] = useState(lastRound);
+  // A change under a point is none: the round button does not move for a rounding.
+  const setRound = useCallback((size: number) => {
+    setRoundState((current) => {
+      if (Math.abs(current - size) < 1) return current;
+      lastRound = size;
+      return size;
+    });
+  }, []);
+  // The row of the round button, measured by the recent trips.
+  const buttonRow = useRef<HostInstance>(null);
   // Not asked while a button's action runs: Stop stops the updates before it ends the trip, and
   // Resume opens the segment before it starts them, so an answer in between is a false "stopped".
   // Asked again at once when the action is done.
@@ -268,6 +287,7 @@ export function Home({
       case "start":
         return (
           <RoundButton
+            size={round}
             label={t("home.start")}
             hint={t("home.start.hint")}
             busy={busy === "main"}
@@ -286,6 +306,7 @@ export function Home({
       case "stop":
         return (
           <RoundButton
+            size={round}
             label={t("home.stop")}
             danger
             hint={t("home.stop.hint")}
@@ -297,6 +318,7 @@ export function Home({
       case "resume":
         return (
           <RoundButton
+            size={round}
             label={t("home.resume")}
             busy={busy === "main"}
             onPress={() =>
@@ -354,39 +376,19 @@ export function Home({
   return (
     <Screen
       title={t("app.title")}
-      // "Record" in the middle and the pill Edit at the left (a PLACEHOLDER of stage 2: no tap
+      // "Record" in the middle and the pill Edit at the right (a PLACEHOLDER of stage 2: no tap
       // yet), as high as the other headers, so the current widget stands where it stands on the
       // trip's screen.
       titleSlot={
         <ScreenHeader
           title={t("tabs.record")}
-          left={{
+          right={{
             text: t("header.edit"),
             label: t("header.edit"),
             inactive: true,
             testID: "record-edit",
           }}
         />
-      }
-      // The big button stands on the background, above the switcher, with no panel.
-      footerBare
-      footer={
-        // The round button in the middle; Pause (or Stop while paused) at its left and Restart at
-        // its right, centred on its height, a small gap from it, in places of the same width that
-        // stay when the buttons are not there, so nothing moves when they come or go.
-        <View
-          ref={footerRef}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: theme.space[3],
-          }}
-        >
-          <View style={{ width: SIDE_WIDTH }}>{sideButton}</View>
-          {mainButton}
-          <View style={{ width: SIDE_WIDTH }}>{restartButton}</View>
-        </View>
       }
     >
       {recoveredStaleFile && !restoredRead ? (
@@ -415,6 +417,24 @@ export function Home({
         nameSlot={widgetTrip === null ? undefined : <TripNameInput trip={widgetTrip} />}
         onPress={() => widgetTrip && nav.push({ name: "trip", id: widgetTrip.id })}
       />
+
+      {/* Under the widget: the round button in the middle; Restart at its left and Pause (or Stop
+        while paused) at its right, centred on its height, a small gap from it, in places of the
+        same width that stay when the buttons are not there, so nothing moves when they come or
+        go. */}
+      <View
+        ref={buttonRow}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: theme.space[3],
+        }}
+      >
+        <View style={{ width: SIDE_WIDTH }}>{restartButton}</View>
+        {mainButton}
+        <View style={{ width: SIDE_WIDTH }}>{sideButton}</View>
+      </View>
 
       {shown ? (
         <Banner
@@ -451,7 +471,7 @@ export function Home({
         </View>
       </View>
 
-      {/* The newest trips that ended, as many as fit above the footer, and the way to History. */}
+      {/* The newest trips that ended, as many as fit above the switcher, and the way to History. */}
       <RecentTrips
         lines={endedNewestFirst(trips).map((trip) =>
           recentLine(trip, now, LANGUAGE, zone, {
@@ -461,7 +481,9 @@ export function Home({
             manual: t("trips.manual"),
           }),
         )}
-        footerRef={footerRef}
+        buttonRowRef={buttonRow}
+        limits={ROOM}
+        onButton={setRound}
         onOpen={(id) => nav.push({ name: "trip", id })}
         onHistory={() => nav.tab("history")}
       />

@@ -12,6 +12,7 @@ import { locationReadiness, notificationsAllowed } from "../native/permissions.t
 import { isRecording } from "../native/recorder.ts";
 import { databaseInfo, getStore } from "../native/store.ts";
 import { onForeground } from "./foreground.ts";
+import { settleRegistered } from "./recording-view.ts";
 import type { PhoneStatus } from "./status.ts";
 
 /**
@@ -172,8 +173,10 @@ export function useProgress(
 
 /**
  * Whether the location updates are registered with the system, asked every 5 s while `asking`
- * (a trip records): `false` then means that the trip records nothing. `null` before the first
- * answer and while not asking.
+ * (a trip records): `false` then means that the trip records nothing, said only after the
+ * answers were `false` for `STUCK_AFTER_MS` (`settleRegistered`), so a moment without updates
+ * (Stop, before the trips are read again) shows nothing. `null` before that, and while not
+ * asking.
  */
 export function useRegistered(asking: boolean): boolean | null {
   const [registered, setRegistered] = useState<boolean | null>(null);
@@ -181,9 +184,15 @@ export function useRegistered(asking: boolean): boolean | null {
     setRegistered(null);
     if (!asking) return;
     let alive = true;
+    let falseSince: number | null = null;
     const ask = () => {
       isRecording().then(
-        (r) => alive && setRegistered(r),
+        (r) => {
+          if (!alive) return;
+          const settled = settleRegistered(r, falseSince, Date.now());
+          falseSince = settled.falseSince;
+          setRegistered(settled.shown);
+        },
         () => undefined,
       );
     };

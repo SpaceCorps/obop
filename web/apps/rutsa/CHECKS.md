@@ -354,7 +354,8 @@ Since the fourth round: Cancel and Done while editing a trip, no Date row, no pl
 - [ ] `smoke` Manual add: "km" black next to a grey "0.0"; the note an empty block, a tap in it and the cursor is there
 - [ ] `smoke` Edit, type a name, a note and To, "✓": all three kept at once; Record's widget and History show the name
 - [ ] Edit, type, then the back button of Android: nothing is kept, and the screen goes back
-- [ ] A trip of yesterday: the widget says "Yesterday HH:MM", the day the Date row said
+- [ ] A trip of yesterday: the widget says "Yesterday HH:MM"
+- [ ] `smoke` A trip's screen has Date again, before Time, as on Manual add ("Wed, Nov 25"), read only also in Edit
 
 The duration with seconds:
 
@@ -366,6 +367,18 @@ The duration with seconds:
 - [x] 2026-11-25 `smoke` (by the agent) Record: "Statistics" over Today and This month in grey, "Recent trips" with "Show more" and no "Add trip", five recent trips above a smaller Start and the switcher
 - [x] 2026-11-25 `smoke` (by the agent) Start: Pause at the left of the red Stop and Restart at its right, both centred on its height with a small gap
 - [x] 2026-11-25 `smoke` (by the agent) Restart after 25 s: "Restart the trip?" with Cancel and Restart; Restart: still "Untitled trip 90", Recording, the timer from 0 again, the start time now (the trip stopped and deleted after)
+- [x] 2026-11-25 `smoke` (by the agent) Restart at the left of the round button, Pause at its right; Record shows five recent trips and a round button of 110 (was 88), 46 px under the list, as the 43 px between the widget and "Statistics" (the test trip stopped and deleted after)
+- [x] 2026-11-25 `smoke` (by the agent) Record: "Record" with Edit at the right; the round button (110) right under the widget, Restart at its left and Pause at its right while a trip records; Statistics under it; five recent trips down to the switcher (the test trip stopped and deleted after)
+- [ ] A warning banner on Record: a row less, and the round button grows with the room left (not over 144)
+- [x] 2026-11-25 `smoke` (by the agent) After the fix of the swinging share: 5 garbage collections in 10 s while a trip records (was about 50); the app installed again from nothing, it no longer hangs (by the driver)
+- [ ] `smoke` Stop many times: "Recording has stopped" never flashes
+- [ ] Location updates gone for 15 s while a trip records (`adb shell am force-stop` of the location, or the app's process ended and the app opened from recents): "Recording has stopped" comes, in red, with no button
+- [ ] "The last position is N minutes old" has no button and says to check Location Services
+- [ ] `smoke` Manual add with an end past midnight: Time "22:56–10:56 (Wed, Nov 18)", as on the trip's screen, no "Ends the next day."
+- [x] 2026-11-25 `smoke` (by the agent, a screenshot) The app is dark: Record, the widget, the switcher; "Start" white on purple
+- [ ] `smoke` Dark everywhere: History, a trip's screen with Edit and Done, Manual add, Profile, the permissions, the dialogs; "Start" and "Stop" white
+- [x] 2026-11-25 `smoke` (by the agent, a screenshot) History: "+" filled purple with a purple ring and a grey plus (since: a white plus), the sort with a purple ring
+- [ ] `smoke` Manual add and a trip's edit: "✓" the same as "+"
 - [ ] `smoke` Restart while paused: the trip records again (red, Stop and Pause), the timer from 0
 - [ ] `smoke` Cancel in the dialog of Restart changes nothing
 - [ ] Restart after a drive: the km go back to 0.0 and grow again; Stop: the km of the drive after the restart only

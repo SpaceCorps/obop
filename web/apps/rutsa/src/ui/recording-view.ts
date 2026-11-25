@@ -93,3 +93,23 @@ export function formatElapsed(ms: number): string {
   const two = (n: number) => String(n).padStart(2, "0");
   return `${hours}:${two(minutes)}:${two(seconds)}`;
 }
+
+/** How long the updates must be found not registered before "Recording has stopped" is said. */
+export const STUCK_AFTER_MS = 15_000;
+
+/**
+ * One answer of the system to "are the updates registered?" (asked every 5 s while a trip
+ * records), settled: `false` is said only when every answer since `falseSince` was `false` for at
+ * least `STUCK_AFTER_MS`, so a short `false` is never shown (right after Stop, before the list of
+ * trips is read again, the trip still looks recording while its updates were stopped already).
+ * Until then the answer is `null` (not known yet). A `true` forgets the `false` before it.
+ */
+export function settleRegistered(
+  answer: boolean,
+  falseSince: number | null,
+  now: number,
+): { shown: boolean | null; falseSince: number | null } {
+  if (answer) return { shown: true, falseSince: null };
+  const since = falseSince ?? now;
+  return { shown: now - since >= STUCK_AFTER_MS ? false : null, falseSince: since };
+}

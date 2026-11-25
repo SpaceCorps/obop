@@ -761,7 +761,8 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   Changed again: "km" is always black on Manual add (only the number is grey until typed). The
   note has no placeholder on Manual add and on a trip's screen ("Empty" and "Optional, ..." are
   gone): an empty block, a tap in it and the note is typed. A trip's screen has no Date row (the
-  widget says the day of a trip that was not today). While a trip is edited, Back becomes Cancel
+  widget says the day of a trip that was not today); it came back the same day, as on Manual add
+  (read only until the edit of stage 2). While a trip is edited, Back becomes Cancel
   (a round "x") and Done a round filled "✓"; what is typed is a draft, kept all at once by "✓"
   and dropped by "x" (the fields are drawn again with what is stored); the fields no longer keep
   their text when they lose the focus there. "Untitled trip N" is grey while editing (an empty
@@ -790,3 +791,36 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   deletes its positions and segments and makes it record in a new segment 1 from now; it is the
   same trip, so an untitled one keeps its number and its details stay (`Recording.restart` checks
   that the phone can record first, and pauses the trip when the updates cannot start).
+- 2026-11-25: asked for after the commit: Restart at the left of the round button and Pause (Stop
+  while paused) at its right; the round button as big as the room lets it be, one gap (the 16 of
+  the screen's padding, as between the current widget and "Statistics") under the fifth recent
+  trip. `shareRoom` (`ui/home-room.ts`) shares the room from the top of the list to the bottom of
+  the footer: up to five rows with the button at least 88 under them, the button the rest (88 to
+  144); the bottom of the footer stays where it is when the button grows, so the share is stable.
+  A bare footer (`footerBare` of `Screen`) has no padding at its top. On the emulator: five rows
+  and a button of 110 (was 88).
+  Changed again: the round button with Restart and Pause is no footer any more: it stands right
+  under the current widget, then Statistics, then Recent trips down to the switcher; `shareRoom`
+  now shares the room from the top of the round button to the bottom of the screen's content
+  (measured as the top of the list less the button, the same whatever its size). The pill Edit
+  of Record is at the right of its header.
+  Found after: the share swung for ever (the button asked for and the list measured before it was
+  drawn), the screen was drawn again and again and Pause and Stop waited behind it; the height of
+  the button's row is now measured with the list, in the same layout, and a change under a point
+  is none. The app was installed again from nothing on a cold emulator, the old builds deleted.
+- 2026-11-25: asked for: "Recording has stopped" flashed at a Stop (the trips not read again yet,
+  the trip looked recording while its updates were stopped already): it is said only after the
+  updates were found not registered for 15 s (`settleRegistered`, `STUCK_AFTER_MS`); it has no
+  button any more, nor "The last position is N minutes old" (its words now say to check that
+  Location Services are on): the trip has Restart, and the app starts the updates again by itself
+  when it comes back to the front ("Restart recording" stays on "No position arrived" and on a
+  restart that failed). The Time of Manual add is written as on a trip's screen, an end on another
+  day with that day in brackets ("Ends the next day." is gone). The app is dark: `ChosenTheme`
+  gives dark unless light is chosen (stage 2), Loading and the failure too; the symbols, rings
+  and words on the filled buttons (the header's "+" and "✓", the round button, also red) are
+  white (`ON_FILL`), since `onAccent` and `onDanger` of the dark palette are nearly black.
+  Changed again: the filled buttons of the header ("+" of History, "✓" of Manual add and of a
+  trip's edit) have the ring of their ground (the main colour, as the ring of the sort) and a
+  symbol in the grey of a tab of the switcher that is not shown (`textMuted`); the round button
+  keeps its white word. Changed again the same day: the symbol is white (the grey was hard to see
+  on the purple); the ring stays of the ground.

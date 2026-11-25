@@ -174,15 +174,17 @@ function Root() {
 }
 
 /**
- * The look the driver chose (in Profile, stage 2), once the trips are open: light,
- * dark, or the system's. Loading and the screen of a failure follow the system.
+ * The look of the app once the trips are open: dark, unless light is chosen (in Profile, stage 2;
+ * the choice "system" is dark too for now). Loading and the screen of a failure are dark.
  */
 function ChosenTheme({ children }: { children: ReactNode }) {
   const [choice] = useThemeChoice();
+  // Dark unless light is chosen (stage 1 has no choice yet, so it is dark).
+  const mode = choice === "light" ? "light" : "dark";
   return (
-    <ThemeProvider mode={choice === "system" ? undefined : choice}>
+    <ThemeProvider mode={mode}>
       {children}
-      <StatusBar style={choice === "system" ? "auto" : choice === "dark" ? "light" : "dark"} />
+      <StatusBar style={mode === "dark" ? "light" : "dark"} />
     </ThemeProvider>
   );
 }
@@ -190,10 +192,11 @@ function ChosenTheme({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
+      {/* Dark, as the screens once the trips are open (`ChosenTheme`): Loading and a failure too. */}
+      <ThemeProvider mode="dark">
         <Insets>
           <Root />
-          <StatusBar style="auto" />
+          <StatusBar style="light" />
         </Insets>
       </ThemeProvider>
     </SafeAreaProvider>

@@ -27,7 +27,10 @@ export type ScreenProps = {
   compactInLandscape?: boolean;
   /** The footer's ground reaches the left and right edges of the screen, under the side insets; its buttons stay inside them. */
   footerToEdges?: boolean;
-  /** The footer has no ground and no line above it: its buttons stand on the screen's background. */
+  /**
+   * The footer has no ground, no line above it and no padding at its top: its buttons stand on the
+   * screen's background, the padding at the bottom of the content apart from them.
+   */
   footerBare?: boolean;
   children: ReactNode;
 };
@@ -118,7 +121,7 @@ export function Screen({
                 }
               : {}),
             ...(footerBare
-              ? {}
+              ? { paddingTop: 0 }
               : { backgroundColor: t.c.surface, borderTopWidth: 1, borderTopColor: t.c.border }),
           }}
           testID="screen-footer"

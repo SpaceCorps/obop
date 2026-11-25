@@ -75,10 +75,12 @@ describe("the footer of a screen", () => {
     expect(footerStyle({})).toMatchObject({ backgroundColor: "#fff", borderTopWidth: 1 });
   });
 
-  test("a bare footer has neither", () => {
+  test("a bare footer has neither, nor a padding at its top", () => {
     const style = footerStyle({ footerBare: true });
     expect(style.backgroundColor).toBeUndefined();
     expect(style.borderTopWidth).toBeUndefined();
+    expect(style.paddingTop).toBe(0);
+    expect(footerStyle({}).paddingTop).toBeUndefined();
   });
 });
 

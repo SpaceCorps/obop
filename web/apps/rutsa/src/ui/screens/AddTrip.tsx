@@ -24,6 +24,7 @@ import { InlineText } from "../InlineText.tsx";
 import { ScreenHeader } from "../ScreenHeader.tsx";
 import { IosPicker, pickerInRow, pickOnAndroid, type PickMode } from "../pick.tsx";
 import { formatElapsed } from "../recording-view.ts";
+import { tripTimes } from "../trip-view.ts";
 import type { Nav } from "../router.ts";
 
 /** The words of a problem under its field. */
@@ -55,8 +56,8 @@ function clockOf(text: string): { hour: number; minute: number } | null {
  * big time is how long it took, its hours, minutes and seconds typed in place (each empty part is
  * 0, shown as a grey "00"), and the time at the bottom right is when it started, chosen with the
  * clock of the system on a tap. The start is at first the moment the screen was opened. Under it From and To typed in place; then Date (a picker) and
- * Time, the start and the end that follows from the duration (`08:30–09:15`; an end past
- * midnight is said under it); then Note, down to the bottom; Back and Save are the round buttons
+ * Time, the start and the end that follows from the duration (`08:30–09:15`, an end on
+ * another day with that day in brackets, as on a trip's screen); then Note, down to the bottom; Back and Save are the round buttons
  * of the header. Save
  * checks it all (`checkManual`): each problem is said under its place, and an average speed over
  * `FAST_KMH` asks first. The trip is stored as manual and the screen goes back. Reachable without
@@ -222,7 +223,8 @@ export function AddTrip({ store, nav }: { store: TripRepository; nav: Nav }) {
   const times =
     result.times === null
       ? form.start
-      : `${formatClock(result.times.startedAt, LANGUAGE, zone)}–${formatClock(result.times.endedAt, LANGUAGE, zone)}`;
+      : // As on a trip's screen: an end on another day says that day in brackets.
+        tripTimes(result.times, LANGUAGE, zone);
   // A duration that cannot be (minutes over 59) or none at all is said under the widget, where it
   // is typed; an end after now under Time.
   const durationProblem =
@@ -351,7 +353,6 @@ export function AddTrip({ store, nav }: { store: TripRepository; nav: Nav }) {
             problem("start") ??
             (result.problems.duration === "end_future" ? problem("duration") : undefined)
           }
-          hint={result.nextDay ? t("manual.next_day") : undefined}
           testID="manual-time"
         >
           <Text tone="muted">{times}</Text>
