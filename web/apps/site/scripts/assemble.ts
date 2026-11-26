@@ -18,6 +18,7 @@ import { DEFAULT_LOCALE, LOCALES, messages, type Locale, type Messages } from ".
 import { appMirror, developerBody } from "./lib/app-page.ts";
 import { appView } from "./lib/app-view.ts";
 import { appName, loadApps, type App } from "./lib/apps.ts";
+import { blogMarkdown, isPost, localPosts, postDate, postEyebrow, type Post } from "./lib/blog.ts";
 import { changelogMarkdown, loadChangelog } from "./lib/changelog.ts";
 import { isMain } from "./lib/main.ts";
 import { appsIndexMirror, homeMirror, pricingMirror } from "./lib/mirror.ts";
@@ -117,7 +118,7 @@ function moduleGuide(): string {
     );
 }
 
-const TOKENS: Record<string, (apps: App[]) => string> = {
+const TOKENS: Record<string, (apps: App[], posts: Post[]) => string> = {
   catalog: (apps) => {
     const rows = apps
       .filter((a) => !a.builtin)
@@ -134,13 +135,14 @@ const TOKENS: Record<string, (apps: App[]) => string> = {
     return changelogMarkdown(entries);
   },
   moduleguide: () => moduleGuide(),
+  blog: (_apps, posts) => blogMarkdown(posts),
 };
 
-function expandTokens(body: string, apps: App[]): string {
+function expandTokens(body: string, apps: App[], posts: Post[]): string {
   return body.replace(/^%%(\w+)%%$/gm, (_m, name: string) => {
     const fn = TOKENS[name];
     if (!fn) throw new Error(`unknown token %%${name}%%`);
-    return fn(apps);
+    return fn(apps, posts);
   });
 }
 
@@ -189,6 +191,15 @@ export function assemble(): PageRecord[] {
     authored.set(l, map);
   }
   const en = authored.get("en")!;
+  const posts: Post[] = [...en]
+    .filter(([path]) => isPost(path))
+    .map(([path, raw]) => ({
+      path,
+      title: raw.fm["title"]!,
+      description: raw.fm["description"]!,
+      date: postDate(raw.fm, raw.file),
+      author: raw.fm["author"],
+    }));
 
   const generatedPaths = [
     "/",
@@ -348,11 +359,13 @@ export function assemble(): PageRecord[] {
     }
 
     // 3. Authored pages: translated when present, otherwise the English text as a fallback.
+    const listed = localPosts(posts, (path) => authored.get(locale)!.get(path)?.fm);
     for (const [path, en0] of en) {
       const own = authored.get(locale)!.get(path);
       const raw = own ?? en0;
       const fallback = !own;
-      const body = loc(expandTokens(raw.body, apps));
+      const body = loc(expandTokens(raw.body, apps, listed));
+      const post = posts.find((p) => p.path === path);
       const isDoc = path.startsWith("/docs/");
       const guide = path === "/docs/reference/module-manifest/";
       add(locale, path, {
@@ -364,7 +377,12 @@ export function assemble(): PageRecord[] {
         body,
         fallback,
         editPath: guide ? "docs/MODULES.md" : raw.file,
-        extra: { lead: raw.fm["lead"], eyebrow: raw.fm["eyebrow"] },
+        extra: {
+          lead: raw.fm["lead"],
+          // A post's date (and author) stands above its title in every language.
+          eyebrow: raw.fm["eyebrow"] ?? (post ? postEyebrow(post) : undefined),
+          date: post?.date,
+        },
       });
     }
   }

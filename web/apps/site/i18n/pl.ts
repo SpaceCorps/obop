@@ -52,6 +52,7 @@ export const pl: Messages = {
     { label: "Platforma", href: "/platform/" },
     { label: "Marketplace", href: "/marketplace/" },
     { label: "Dokumentacja", href: "/docs/" },
+    { label: "Blog", href: "/blog/" },
     { label: "Cennik", href: "/pricing/" },
   ],
   footer: {
@@ -65,6 +66,7 @@ export const pl: Messages = {
           { label: "Cennik", href: "/pricing/" },
           { label: "Dziennik zmian", href: "/changelog/" },
           { label: "Plan rozwoju", href: "/roadmap/" },
+          { label: "Blog", href: "/blog/" },
         ],
       },
       {

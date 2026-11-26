@@ -57,6 +57,12 @@ D38 names "VitePress 2 inside Vite+". The newest stable VitePress, 1.6.4 (2025-0
 
 Tokens you can put on their own line in a page: `%%catalog%%` (the bundled marketplace table), `%%changelog%%`, `%%moduleguide%%` (docs/MODULES.md).
 
+### Add a blog post
+
+1. Create `content/en/blog/<slug>.md` with `title`, `description` and `date: "YYYY-MM-DD"` (required for a post; the build fails without a valid date) and, optionally, `author`. No H1 in the body.
+2. Build. The post's date (and author) stands above its title, and the index `/blog/` (`content/en/blog/index.md`, token `%%blog%%`, `scripts/lib/blog.ts`) lists it, newest first. Other languages show the English text with the untranslated notice until a translation exists in `content/<locale>/blog/` and in that locale's `translation-status.json`.
+3. A post says what was true on its date and keeps to what is built; plans name their status (ratified or proposed), as the roadmap does.
+
 ### Add or change an app
 
 The app pages are generated. To add a bundled package: add `packages/<id>.toml` (the Rust catalog in `crates/kernel/obop-pkg/src/marketplace.rs` must list it too), then add an entry to `APP_COPY` in `data/apps.ts` (name, category, English tagline, purpose, where something is too technical for the plain text, `technical`, and where a caveat is only for developers, `limits`, see "Where a caveat goes" below) and a tagline for it in every `i18n/<locale>.ts` (`apps.taglines`). On a translated page the app is called what its label file calls it (`[labels.<locale>.module] name` in `packages/labels/<locale>/<id>.toml`), so add that file too. The build fails if the copy is missing. The tile, the row, the cards and the facts of the new app need nothing else. To change a built-in module, edit `data/builtin/<id>.toml` to match the Rust module.

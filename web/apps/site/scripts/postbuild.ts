@@ -233,6 +233,7 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
       "/apps/",
       "/roadmap/",
       "/changelog/",
+      "/blog/",
     ]),
     "## Apps",
     "",

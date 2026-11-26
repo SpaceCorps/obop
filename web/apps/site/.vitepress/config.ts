@@ -40,7 +40,9 @@ export default defineConfig({
     lineNumbers: false,
   },
   vite: {
-    root,
+    // No `root` here: VitePress sets Vite's root to srcDir (.src). Setting it to the app folder left the
+    // build unchanged but made the dev server answer every page module with HTML, so `vp run dev`
+    // showed "Page not found" on every page.
     server: { fs: { allow: [root, resolve(root, "../../..")] } },
     build: { chunkSizeWarningLimit: 1200 },
   },

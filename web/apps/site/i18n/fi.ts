@@ -52,6 +52,7 @@ export const fi: Messages = {
     { label: "Alusta", href: "/platform/" },
     { label: "Markkinapaikka", href: "/marketplace/" },
     { label: "Dokumentaatio", href: "/docs/" },
+    { label: "Blogi", href: "/blog/" },
     { label: "Hinnoittelu", href: "/pricing/" },
   ],
   footer: {
@@ -65,6 +66,7 @@ export const fi: Messages = {
           { label: "Hinnoittelu", href: "/pricing/" },
           { label: "Muutosloki", href: "/changelog/" },
           { label: "Tiekartta", href: "/roadmap/" },
+          { label: "Blogi", href: "/blog/" },
         ],
       },
       {
