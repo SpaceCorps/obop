@@ -310,6 +310,55 @@ mod tests {
         assert!(p(&many).unwrap_err().contains("columns"));
     }
 
+    /// The cases the back office's reader is held to as well (`readSheet` in
+    /// web/apps/backoffice/src/importNames.ts, tested by importNames.test.ts): the Import dialog
+    /// puts a record's id in place of its name only in a cell this reader reads the same way.
+    #[test]
+    fn the_shared_fixtures_read_the_same_as_the_back_office() {
+        const FIXTURES: &str =
+            include_str!("../../../../web/apps/backoffice/src/csvRead.fixtures.json");
+        let cases: serde_json::Value = serde_json::from_str(FIXTURES).unwrap();
+        let cases = cases.as_array().unwrap();
+        assert!(cases.len() >= 30, "{} cases", cases.len());
+        let strs = |v: &serde_json::Value| -> Vec<String> {
+            v.as_array()
+                .unwrap()
+                .iter()
+                .map(|x| x.as_str().unwrap().to_string())
+                .collect()
+        };
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            let expect = &case["expect"];
+            let got = p(case["text"].as_str().unwrap());
+            if expect["refused"].as_bool() == Some(true) {
+                assert!(got.is_err(), "{name}: {got:?}");
+                continue;
+            }
+            let t = got.unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(
+                t.delimiter.to_string(),
+                expect["delimiter"].as_str().unwrap(),
+                "{name}"
+            );
+            assert_eq!(t.headers, strs(&expect["headers"]), "{name}");
+            let rows: Vec<Vec<String>> = expect["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(strs)
+                .collect();
+            assert_eq!(t.rows, rows, "{name}");
+            let lines: Vec<usize> = expect["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|x| x.as_u64().unwrap() as usize)
+                .collect();
+            assert_eq!(t.lines, lines, "{name}");
+        }
+    }
+
     #[test]
     fn formula_looking_cells_are_kept_as_written() {
         let t = p("a\n=1+1\n@x\n-3\n").unwrap();
