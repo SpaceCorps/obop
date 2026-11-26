@@ -300,10 +300,6 @@ description = "Taxe portée par la ligne, le cas échéant"
 label = "Date d’échéance"
 description = "Date d’échéance des lignes clients et fournisseurs (YYYY-MM-DD)"
 
-[labels.fr.model.accounting_move_line.field.reconciled]
-label = "Lettrée"
-description = "Indique si la ligne a été rapprochée d’un paiement"
-
 [labels.fr.model.accounting_bank_statement_line]
 name = "Ligne de relevé bancaire"
 plural = "Lignes de relevé bancaire"

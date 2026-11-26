@@ -541,8 +541,7 @@ fn a_paid_receivable_item_is_settled_and_not_overdue() {
             .map(|r| r["id"].as_str().unwrap().to_string())
             .collect::<Vec<_>>()
     };
-    let open = json!([{"field": "reconciled", "op": "ne", "value": true},
-                      {"field": "settled", "op": "eq", "value": false}]);
+    let open = json!([{"field": "settled", "op": "eq", "value": false}]);
     assert!(search(open.clone()).contains(&item));
     let got = call(
         &f.app,
@@ -574,7 +573,9 @@ fn a_paid_receivable_item_is_settled_and_not_overdue() {
         .unwrap_or_default();
     assert_eq!(wheres.len(), 3, "{wheres:?}");
     assert!(
-        wheres.iter().all(|w| w.ends_with("&& settled = false")),
+        wheres
+            .iter()
+            .all(|w| w == "settled = false" || w.ends_with(" && settled = false")),
         "{wheres:?}"
     );
 }

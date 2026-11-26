@@ -300,10 +300,6 @@ description = "Steuer der Zeile, falls vorhanden"
 label = "Fällig am"
 description = "Fälligkeitsdatum bei Forderungs- und Verbindlichkeitszeilen (YYYY-MM-DD)"
 
-[labels.de.model.accounting_move_line.field.reconciled]
-label = "Abgeglichen"
-description = "Ob die Zeile mit einer Zahlung abgeglichen wurde"
-
 [labels.de.model.accounting_bank_statement_line]
 name = "Kontoauszugszeile"
 plural = "Kontoauszugszeilen"

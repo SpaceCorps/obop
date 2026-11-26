@@ -300,10 +300,6 @@ description = "Impuesto que lleva la línea, si lo hay"
 label = "Fecha de vencimiento"
 description = "Fecha de vencimiento de las líneas a cobrar y a pagar (YYYY-MM-DD)"
 
-[labels.es.model.accounting_move_line.field.reconciled]
-label = "Conciliado"
-description = "Indica si la línea se ha cruzado con un pago"
-
 [labels.es.model.accounting_bank_statement_line]
 name = "Línea de extracto bancario"
 plural = "Líneas de extracto bancario"

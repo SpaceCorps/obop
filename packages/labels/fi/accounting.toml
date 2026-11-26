@@ -300,10 +300,6 @@ description = "Rivin vero, jos sellainen on"
 label = "Eräpäivä"
 description = "Myyntisaamis- ja ostovelkarivien eräpäivä (YYYY-MM-DD)"
 
-[labels.fi.model.accounting_move_line.field.reconciled]
-label = "Täsmäytetty"
-description = "Onko rivi kohdistettu maksuun"
-
 [labels.fi.model.accounting_bank_statement_line]
 name = "Tiliotteen rivi"
 plural = "Tiliotteen rivit"

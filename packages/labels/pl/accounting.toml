@@ -300,10 +300,6 @@ description = "Podatek przypisany do pozycji, jeśli jest"
 label = "Termin"
 description = "Termin płatności pozycji należności i zobowiązań (YYYY-MM-DD)"
 
-[labels.pl.model.accounting_move_line.field.reconciled]
-label = "Uzgodniony"
-description = "Czy pozycję dopasowano do płatności"
-
 [labels.pl.model.accounting_bank_statement_line]
 name = "Pozycja wyciągu bankowego"
 plural = "Pozycje wyciągu bankowego"
