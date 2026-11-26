@@ -824,3 +824,58 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   symbol in the grey of a tab of the switcher that is not shown (`textMuted`); the round button
   keeps its white word. Changed again the same day: the symbol is white (the grey was hard to see
   on the purple); the ring stays of the ground.
+- 2026-11-26: asked for: the "+" of History is outlined (no ground, a ring and a plus of the main
+  colour, as the sort); the time at the bottom right of the current widget is the clock time only,
+  on Record and on a trip's screen, with no "Yesterday" or day before it (the day is in the row
+  Date of the trip's screen; `widgetValues` takes no words of the days any more).
+- 2026-11-26: asked for: the round button and its Restart and Pause go into the current widget
+  of Record, a version of its own (`ui/RecordWidget.tsx`; the trip's screen keeps
+  `CurrentWidget`). At its top left a red dot and "Recording" while the trip records, else the
+  trip's name (typed in place); at its top right the time; then the big time; then the km at the
+  left and, at the bottom right, the round button (104, as high as the column at its left) with
+  Restart over Pause (Stop while paused) in a column at its left (the layout chosen of three
+  shown). The round button no longer takes the room the list leaves: `shareRoom`
+  (`ui/home-room.ts`) is gone, Recent trips takes up to five rows down to the switcher.
+  `emulator:check` reads the state of the trip from the buttons (Stop, Resume, Start), since the
+  widget says "Recording" only while it records, and knows a trip's screen by its own ids (the
+  name of the widget is `trip-name` on Record too).
+  Changed again the same day: the big time goes to the bottom left, under the km, at the left of
+  the buttons and as high as them, so the card is about 47 lower; a time too wide for the room
+  left gets a smaller font (to 0.6), not under the buttons.
+  Changed again: no clock time on Record (the trip's screen has it); at the left, as on the
+  trip's screen, the name (or "Recording"), the big time and the km; the buttons at the right,
+  centred on their height; the round button 96 and the gaps smaller, so the big time keeps its
+  whole size beside them.
+  Changed again: the record widget is the footer of Record, right over the switcher: the footer
+  is its panel (the ground of the cards, to the edges of the screen, `footerToEdges`), the widget
+  has no card of its own, and on Record the switcher takes the ground of the screen, the other
+  way round (`TabBar`); on History and Profile it stays as it was. Statistics and Recent trips
+  stand under the header; the list ends above the footer again (`footerRef`).
+  Changed again: the switcher stands a little higher (14 over the bottom, was 8), and the panel
+  with it; the name, the big time and the km a little in from the left, the round button a little
+  closer to the right edge; Restart, Pause and Stop while paused are smaller (`ui/SmallButton.tsx`:
+  40 high, 84 wide, the look of the shared `Button`).
+  Changed again: the name, the big time and the km stand 32 from the left edge of the panel and
+  the round button 32 from its right edge, the same on both sides.
+  Changed again: 44 on both sides (12 more), and 12 more between the widget and the switcher (the
+  widget no longer reaches into the padding at the bottom of the footer), so the footer is 12
+  higher.
+  Changed again: Restart, Pause and Stop while paused smaller still (34 high, 72 wide, a smaller
+  word); the red dot of "Recording" fades out and in again and again (`PulsingDot`, 1 s each way),
+  and stands still when the phone asks for less motion.
+  Changed again: no footer; the record widget is in the switcher, over its tabs: on Record the
+  switcher (the ground of the cards, as on the other tabs) is as wide as ever and higher, drawn by
+  Record itself (`TabBar` with `header`; `App.tsx` draws the small one on History and Profile);
+  the recent trips end one padding above it. Restart and Pause (Stop while paused) are hidden for
+  now, there is no room for them (`SHOW_SIDE_BUTTONS`; their code stays): a paused trip is ended
+  by Resume, then Stop.
+  Changed again: the name, the big time and the km 22 from the left edge of the switcher (6
+  less); the round button about 19 from its top edge, its right edge and the tabs alike (measured:
+  18.7, 19.4, 19.0).
+  Changed again: the round button is smaller (72, was 96) and stands closer to the three; at its
+  right, small round buttons with one symbol each (`ui/RoundIconButton.tsx`, 32, the ring of the
+  main colour; `icons.tsx` draws pause, stop and restart): Pause (Stop while paused, red) at the
+  top and Restart at the bottom, as high as the round button together. They are shown again
+  (`SHOW_SIDE_BUTTONS` and `ui/SmallButton.tsx` are gone).
+  Changed again: the small round buttons at the left of the round one; with no trip open there
+  are none and the round button stands in the middle of their place, which keeps its width.

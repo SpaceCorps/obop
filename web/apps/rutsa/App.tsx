@@ -151,7 +151,8 @@ function Routes({
               </View>
             ) : null}
           </InsetsProvider>
-          <TabBar tab={tab} onTab={nav.tab} bottom={shown.bottom} />
+          {/* Record draws its own, with the record widget in it (`screens/Home.tsx`). */}
+          {tab === "record" ? null : <TabBar tab={tab} onTab={nav.tab} bottom={shown.bottom} />}
         </View>
         {screen === null ? null : <View style={{ flex: 1 }}>{screen}</View>}
       </InsetsProvider>

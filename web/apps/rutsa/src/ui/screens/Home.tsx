@@ -1,6 +1,7 @@
-import { Banner, Button, Screen, Text, useTheme, type BannerTone } from "@obop/ui-native";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Banner, Screen, Text, useTheme, type BannerTone } from "@obop/ui-native";
+import { useEffect, useRef, useState } from "react";
 import { Alert, View, type HostInstance } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
 import { formatKm, phoneTimeZone, totals } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
@@ -15,9 +16,11 @@ import {
 } from "../../native/actions.ts";
 import { startWhenReady } from "../../native/start.ts";
 import { announce } from "../announce.ts";
-import { CurrentWidget } from "../CurrentWidget.tsx";
+import { RecordWidget } from "../RecordWidget.tsx";
 import { RecentTrips } from "../RecentTrips.tsx";
-import { ROUND_MAX, ROUND_MIN, RoundButton } from "../RoundButton.tsx";
+import { ROUND_SIZE, RoundButton } from "../RoundButton.tsx";
+import { TabBar } from "../TabBar.tsx";
+import { ROUND_ICON_SIZE, RoundIconButton } from "../RoundIconButton.tsx";
 import { TripNameInput } from "../TripNameInput.tsx";
 import { widgetValues } from "../widget-values.ts";
 import { ScreenHeader } from "../ScreenHeader.tsx";
@@ -33,19 +36,14 @@ let restoredNoteRead = false;
 
 type Blocked = Exclude<Readiness, "ready">;
 
-/** Five recent trips at most, and the round button between its smallest and its largest. */
-const ROOM = { maxRows: 5, minButton: ROUND_MIN, maxButton: ROUND_MAX } as const;
-// The size the round button had, for the next drawing of the screen.
-let lastRound: number = ROUND_MIN;
-
 /** Which button's action runs: only that one shows it. */
 type Busy = "main" | "side" | "again" | "restart" | null;
 
 /**
- * The width of a small button at a side of the round one (Pause or Stop at the left, Restart at
- * the right), the same for each, so nothing moves when one comes, goes or changes.
+ * The width of the column of the small round buttons at the left of the big one (Pause or Stop,
+ * then Restart).
  */
-const SIDE_WIDTH = 100;
+const SIDE_WIDTH = ROUND_ICON_SIZE;
 
 const BLOCKED_TEXT: Readonly<Record<Blocked, MessageKey>> = {
   services_off: "recording.blocked.services_off",
@@ -124,19 +122,10 @@ export function Home({
     last?.state ?? null,
   );
   const [busy, setBusy] = useState<Busy>(null);
-  // The size of the round button: what the recent trips leave (`RecentTrips`), kept for the
-  // next time the screen is drawn so it does not start small.
-  const [round, setRoundState] = useState(lastRound);
-  // A change under a point is none: the round button does not move for a rounding.
-  const setRound = useCallback((size: number) => {
-    setRoundState((current) => {
-      if (Math.abs(current - size) < 1) return current;
-      lastRound = size;
-      return size;
-    });
-  }, []);
-  // The row of the round button, measured by the recent trips.
-  const buttonRow = useRef<HostInstance>(null);
+  // The switcher with the record widget: the recent trips end above it.
+  const footerRef = useRef<HostInstance>(null);
+  // The bar of the system under the switcher (the insets of this tab keep room for the small one).
+  const safeArea = useSafeAreaInsets();
   // Not asked while a button's action runs: Stop stops the updates before it ends the trip, and
   // Resume opens the segment before it starts them, so an answer in between is a false "stopped".
   // Asked again at once when the action is done.
@@ -167,7 +156,6 @@ export function Home({
 
   const zone = phoneTimeZone();
   const sum = totals(trips, now, zone);
-  const words = { today: t("day.today"), yesterday: t("day.yesterday") };
 
   const checkBlocked =
     check?.kind === "done" && check.ensured.kind === "blocked" && check.at > checkHandledAt
@@ -287,7 +275,6 @@ export function Home({
       case "start":
         return (
           <RoundButton
-            size={round}
             label={t("home.start")}
             hint={t("home.start.hint")}
             busy={busy === "main"}
@@ -306,7 +293,6 @@ export function Home({
       case "stop":
         return (
           <RoundButton
-            size={round}
             label={t("home.stop")}
             danger
             hint={t("home.stop.hint")}
@@ -318,7 +304,6 @@ export function Home({
       case "resume":
         return (
           <RoundButton
-            size={round}
             label={t("home.resume")}
             busy={busy === "main"}
             onPress={() =>
@@ -340,17 +325,18 @@ export function Home({
 
   const sideButton =
     buttons.side === null || !active ? null : buttons.side === "pause" ? (
-      <Button
+      <RoundIconButton
+        icon="pause"
         label={t("home.pause")}
-        variant="secondary"
         busy={busy === "side"}
         onPress={() => act("side", () => pauseTrip(active.id))}
         testID="pause"
       />
     ) : (
-      <Button
+      <RoundIconButton
+        icon="stop"
         label={t("home.stop")}
-        variant="danger"
+        danger
         busy={busy === "side"}
         onPress={() => confirmStop("side", active.id)}
         testID="stop-paused"
@@ -359,9 +345,9 @@ export function Home({
 
   const restartButton =
     active && active.state !== "ended" ? (
-      <Button
+      <RoundIconButton
+        icon="restart"
         label={t("home.restart")}
-        variant="secondary"
         busy={busy === "again"}
         onPress={() =>
           confirmRestart({
@@ -374,119 +360,148 @@ export function Home({
     ) : null;
 
   return (
-    <Screen
-      title={t("app.title")}
-      // "Record" in the middle and the pill Edit at the right (a PLACEHOLDER of stage 2: no tap
-      // yet), as high as the other headers, so the current widget stands where it stands on the
-      // trip's screen.
-      titleSlot={
-        <ScreenHeader
-          title={t("tabs.record")}
-          right={{
-            text: t("header.edit"),
-            label: t("header.edit"),
-            inactive: true,
-            testID: "record-edit",
-          }}
-        />
-      }
-    >
-      {recoveredStaleFile && !restoredRead ? (
-        <Banner
-          tone="warning"
-          title={t("home.restored.title")}
-          message={t("home.restored.message")}
-          action={{
-            label: t("home.restored.action"),
-            onPress: () => {
-              restoredNoteRead = true;
-              setRestoredRead(true);
-            },
-          }}
-          testID="restored"
-        />
-      ) : null}
-
-      {/* Always there: the open trip, else the last one that ended, else "No trips yet." */}
-      <CurrentWidget
-        trip={widgetTrip}
-        {...(widgetTrip === null
-          ? { elapsed: "", km: "", clock: "" }
-          : widgetValues(widgetTrip, active ? progress : lastProgress, now, LANGUAGE, zone, words))}
-        // The name is typed in place here too; a tap elsewhere on the card opens the trip.
-        nameSlot={widgetTrip === null ? undefined : <TripNameInput trip={widgetTrip} />}
-        onPress={() => widgetTrip && nav.push({ name: "trip", id: widgetTrip.id })}
-      />
-
-      {/* Under the widget: the round button in the middle; Restart at its left and Pause (or Stop
-        while paused) at its right, centred on its height, a small gap from it, in places of the
-        same width that stay when the buttons are not there, so nothing moves when they come or
-        go. */}
-      <View
-        ref={buttonRow}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: theme.space[3],
-        }}
+    <View style={{ flex: 1 }}>
+      <Screen
+        title={t("app.title")}
+        // "Record" in the middle and the pill Edit at the right (a PLACEHOLDER of stage 2: no tap yet).
+        titleSlot={
+          <ScreenHeader
+            title={t("tabs.record")}
+            right={{
+              text: t("header.edit"),
+              label: t("header.edit"),
+              inactive: true,
+              testID: "record-edit",
+            }}
+          />
+        }
       >
-        <View style={{ width: SIDE_WIDTH }}>{restartButton}</View>
-        {mainButton}
-        <View style={{ width: SIDE_WIDTH }}>{sideButton}</View>
-      </View>
+        {recoveredStaleFile && !restoredRead ? (
+          <Banner
+            tone="warning"
+            title={t("home.restored.title")}
+            message={t("home.restored.message")}
+            action={{
+              label: t("home.restored.action"),
+              onPress: () => {
+                restoredNoteRead = true;
+                setRestoredRead(true);
+              },
+            }}
+            testID="restored"
+          />
+        ) : null}
 
-      {shown ? (
-        <Banner
-          tone={shown.tone}
-          title={shown.title}
-          {...(shown.action ? { action: shown.action } : {})}
-          testID={`warning-${warning?.kind ?? ""}`}
-        />
-      ) : null}
-      {warning?.kind === "signal" ? (
-        <Text tone="muted" testID="signal-detail">
-          {tp("recording.signal.detail", warning.note.dropped, { total: warning.note.stored })}
-        </Text>
-      ) : null}
+        {shown ? (
+          <Banner
+            tone={shown.tone}
+            title={shown.title}
+            {...(shown.action ? { action: shown.action } : {})}
+            testID={`warning-${warning?.kind ?? ""}`}
+          />
+        ) : null}
+        {warning?.kind === "signal" ? (
+          <Text tone="muted" testID="signal-detail">
+            {tp("recording.signal.detail", warning.note.dropped, { total: warning.note.stored })}
+          </Text>
+        ) : null}
 
-      {/* The totals under a grey header, as Recent trips. */}
-      <View style={{ gap: theme.space[2] }} testID="statistics">
-        <Text variant="label" tone="muted" accessibilityRole="header">
-          {t("home.statistics")}
-        </Text>
-        <View style={{ flexDirection: "row", gap: 24 }}>
-          <View style={{ flex: 1 }}>
-            <Text tone="muted">{t("home.today")}</Text>
-            <Text variant="title" testID="today-km">
-              {formatKm(sum.todayM, LANGUAGE)}
-            </Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text tone="muted">{t("home.month")}</Text>
-            <Text variant="title" testID="month-km">
-              {formatKm(sum.monthM, LANGUAGE)}
-            </Text>
+        {/* The totals under a grey header, as Recent trips. */}
+        <View style={{ gap: theme.space[2] }} testID="statistics">
+          <Text variant="label" tone="muted" accessibilityRole="header">
+            {t("home.statistics")}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 24 }}>
+            <View style={{ flex: 1 }}>
+              <Text tone="muted">{t("home.today")}</Text>
+              <Text variant="title" testID="today-km">
+                {formatKm(sum.todayM, LANGUAGE)}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text tone="muted">{t("home.month")}</Text>
+              <Text variant="title" testID="month-km">
+                {formatKm(sum.monthM, LANGUAGE)}
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* The newest trips that ended, as many as fit above the switcher, and the way to History. */}
-      <RecentTrips
-        lines={endedNewestFirst(trips).map((trip) =>
-          recentLine(trip, now, LANGUAGE, zone, {
-            today: t("day.today"),
-            yesterday: t("day.yesterday"),
-            trips: (count) => tp("trips.count", count),
-            manual: t("trips.manual"),
-          }),
-        )}
-        buttonRowRef={buttonRow}
-        limits={ROOM}
-        onButton={setRound}
-        onOpen={(id) => nav.push({ name: "trip", id })}
-        onHistory={() => nav.tab("history")}
+        {/* The newest trips that ended, as many as fit above the switcher, and the way to History. */}
+        <RecentTrips
+          lines={endedNewestFirst(trips).map((trip) =>
+            recentLine(trip, now, LANGUAGE, zone, {
+              today: t("day.today"),
+              yesterday: t("day.yesterday"),
+              trips: (count) => tp("trips.count", count),
+              manual: t("trips.manual"),
+            }),
+          )}
+          maxRows={5}
+          footerRef={footerRef}
+          onOpen={(id) => nav.push({ name: "trip", id })}
+          onHistory={() => nav.tab("history")}
+        />
+      </Screen>
+      {/* The switcher of Record, drawn here: it holds the record widget over its tabs (the other
+      tabs have the small one of `App.tsx`), and the recent trips end above it. */}
+      <TabBar
+        tab="record"
+        onTab={nav.tab}
+        bottom={safeArea.bottom}
+        barRef={footerRef}
+        header={
+          <>
+            {/* Always there: the open trip, else the last one that ended, else "No trips yet." With the
+        buttons of a recording at its right: the round one, Restart and Pause (Stop while
+        paused) in a column at its left, a place of the same width that stays when they are not
+        there, so the round button does not move when they come or go. */}
+            <RecordWidget
+              trip={widgetTrip}
+              {...(() => {
+                if (widgetTrip === null) return { elapsed: "", km: "" };
+                // No clock time on Record: the trip's screen has it.
+                const { elapsed, km } = widgetValues(
+                  widgetTrip,
+                  active ? progress : lastProgress,
+                  now,
+                  LANGUAGE,
+                  zone,
+                );
+                return { elapsed, km };
+              })()}
+              // The name is typed in place here too; a tap elsewhere on the card opens the trip.
+              nameSlot={widgetTrip === null ? undefined : <TripNameInput trip={widgetTrip} />}
+              onPress={() => widgetTrip && nav.push({ name: "trip", id: widgetTrip.id })}
+              controls={
+                // Pause (Stop while paused) over Restart, small and round, as high as the round
+                // button together, at its left; with no trip open there are none and the round
+                // button stands in the middle of the place, which keeps its width, so the three
+                // at its left do not move. As far from the right edge of the switcher as the round
+                // button is from its top edge and from the tabs (`TabBar`).
+                <View
+                  style={{
+                    width: SIDE_WIDTH + theme.space[2] + ROUND_SIZE,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: restartButton === null ? "center" : "flex-start",
+                    gap: theme.space[2],
+                    marginRight: theme.space[5] - 1,
+                  }}
+                >
+                  {restartButton === null ? null : (
+                    <View style={{ width: SIDE_WIDTH, gap: theme.space[2] }}>
+                      {sideButton ?? <View style={{ height: ROUND_ICON_SIZE }} />}
+                      {restartButton}
+                    </View>
+                  )}
+                  {mainButton}
+                </View>
+              }
+            />
+          </>
+        }
       />
-    </Screen>
+    </View>
   );
 }

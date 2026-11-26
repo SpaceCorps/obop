@@ -1,8 +1,8 @@
 import { View } from "react-native";
 
 /**
- * The few symbols of the app, drawn with views: the round buttons of the header and the
- * switcher at the bottom. No font of icons and no SVG, so no package to add.
+ * The few symbols of the app, drawn with views: the round buttons of the header, the switcher at
+ * the bottom and the small round buttons of a recording (Pause, Stop, Restart). No font of icons and no SVG, so no package to add.
  */
 export type IconName =
   | "back"
@@ -14,7 +14,10 @@ export type IconName =
   | "trash"
   | "person"
   | "clock"
-  | "record";
+  | "record"
+  | "pause"
+  | "stop"
+  | "restart";
 
 const STROKE = 2.5;
 
@@ -245,6 +248,65 @@ export function Icon({ name, color, size = 22 }: { name: IconName; color: string
               height: 9 * unit,
               borderRadius: 5 * unit,
               backgroundColor: color,
+            }}
+          />
+        </View>
+      );
+    case "pause":
+      // Two upright bars.
+      return (
+        <View style={[box, { flexDirection: "row", gap: 4 * unit }]}>
+          {[0, 1].map((bar) => (
+            <View
+              key={bar}
+              style={{
+                width: 3.5 * unit,
+                height: 13 * unit,
+                borderRadius: 1,
+                backgroundColor: color,
+              }}
+            />
+          ))}
+        </View>
+      );
+    case "stop":
+      // A square.
+      return (
+        <View style={box}>
+          <View
+            style={{ width: 11 * unit, height: 11 * unit, borderRadius: 2, backgroundColor: color }}
+          />
+        </View>
+      );
+    case "restart":
+      // A ring open at its upper right, with the head of an arrow at its top, going round.
+      return (
+        <View style={box}>
+          <View
+            style={{
+              position: "absolute",
+              width: 16 * unit,
+              height: 16 * unit,
+              borderRadius: 8 * unit,
+              borderWidth: STROKE,
+              borderColor: color,
+              borderTopColor: "transparent",
+              transform: [{ rotate: "45deg" }],
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              left: 10 * unit,
+              top: 0.5 * unit,
+              width: 0,
+              height: 0,
+              borderLeftWidth: 6 * unit,
+              borderTopWidth: 4 * unit,
+              borderBottomWidth: 4 * unit,
+              borderLeftColor: color,
+              borderTopColor: "transparent",
+              borderBottomColor: "transparent",
             }}
           />
         </View>

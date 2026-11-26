@@ -1,27 +1,15 @@
-import { dayKey, formatClock, formatKm } from "../core/present.ts";
+import { formatClock, formatKm } from "../core/present.ts";
 import type { Trip } from "../core/types.ts";
-import { tripDurationMs, whenText } from "./home.ts";
+import { tripDurationMs } from "./home.ts";
 import { elapsedMs, formatElapsed } from "./recording-view.ts";
-
-/** The time at the bottom right of the widget: the clock time today, else with its day. */
-function clockOf(
-  at: number,
-  now: number,
-  locale: string,
-  timeZone: string,
-  words: { today: string; yesterday: string },
-): string {
-  return dayKey(at, timeZone) === dayKey(now, timeZone)
-    ? formatClock(at, locale, timeZone)
-    : whenText(at, now, locale, timeZone, words);
-}
 
 /**
  * What the current widget shows of a trip, the same on the home screen and on the trip's screen:
  * its time without the pauses (`H:MM:SS`; running while it records, standing while it is paused,
  * the whole time once it ended), its km (so far while it is open, by the count; as stored once it
  * ended) and the time at its bottom right: when it started while it is open, when it ended once
- * it ended (the clock time today, else with its day). Pure, so it is tested.
+ * it ended, the clock time only (the day is in the row Date of the trip's screen). Pure, so it is
+ * tested.
  */
 export function widgetValues(
   trip: Pick<Trip, "state" | "source" | "startedAt" | "endedAt" | "distanceM" | "segmentStartedAt">,
@@ -30,7 +18,6 @@ export function widgetValues(
   now: number,
   locale: string,
   timeZone: string,
-  words: { today: string; yesterday: string },
 ): { elapsed: string; km: string; clock: string } {
   const open = trip.state !== "ended";
   const ms = open
@@ -50,6 +37,6 @@ export function widgetValues(
   return {
     elapsed: formatElapsed(ms),
     km: formatKm(metres, locale),
-    clock: clockOf(at, now, locale, timeZone, words),
+    clock: formatClock(at, locale, timeZone),
   };
 }

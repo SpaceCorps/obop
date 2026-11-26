@@ -4,16 +4,16 @@ import { ON_FILL } from "./ScreenHeader.tsx";
 
 /**
  * The big round button of the home screen (Start, Stop, Resume): `Button size="big"` of
- * `@obop/ui-native` with a circle that takes the room the recent trips leave (`size`, from
- * `ROUND_MIN` to `ROUND_MAX`, `shareRoom`) and a smaller word. The size of `big` is a shared
- * token (176), and the other apps keep it.
+ * `@obop/ui-native` with a smaller circle and word, at the right of the current widget of the
+ * home screen, with the small round Pause and Restart at its left (as high as it together);
+ * small enough to leave the big time its room at their left. The size of `big` is a shared token (176), and the other
+ * apps keep it.
  */
-export const ROUND_MIN = 88;
-export const ROUND_MAX = 144;
+export const ROUND_SIZE = 72;
 
 export function RoundButton({
   label,
-  size = ROUND_MIN,
+  size = ROUND_SIZE,
   danger = false,
   busy = false,
   hint,

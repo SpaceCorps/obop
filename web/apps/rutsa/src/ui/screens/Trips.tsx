@@ -46,7 +46,6 @@ export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
             icon: "plus",
             label: t("home.add"),
             onPress: () => nav.push({ name: "add" }),
-            look: "filled",
             testID: "history-add",
           }}
         />

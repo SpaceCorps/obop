@@ -223,10 +223,7 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
       {/* The card of the trip, as on the home screen, with its name typed in place. */}
       <CurrentWidget
         trip={trip}
-        {...widgetValues(trip, progress, now, LANGUAGE, zone, {
-          today: t("day.today"),
-          yesterday: t("day.yesterday"),
-        })}
+        {...widgetValues(trip, progress, now, LANGUAGE, zone)}
         nameSlot={
           <TripNameInput
             key={session}

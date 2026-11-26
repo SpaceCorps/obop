@@ -379,6 +379,33 @@ The duration with seconds:
 - [ ] `smoke` Dark everywhere: History, a trip's screen with Edit and Done, Manual add, Profile, the permissions, the dialogs; "Start" and "Stop" white
 - [x] 2026-11-25 `smoke` (by the agent, a screenshot) History: "+" filled purple with a purple ring and a grey plus (since: a white plus), the sort with a purple ring
 - [ ] `smoke` Manual add and a trip's edit: "✓" the same as "+"
+- [ ] `smoke` History: "+" outlined, as the sort (a purple ring and plus, no ground); "✓" of Manual add and of the edit stays filled
+- [ ] `smoke` A trip of another day (History): the widget's bottom right says only "10:56", its day is in Date
+- [x] 2026-11-26 `smoke` (by the agent, a screenshot) Record with no trip open: the widget shows the name of the last trip at the top left and its time at the top right, the big time, the km, and Start at the bottom right of the card; Statistics and five recent trips under it
+- [ ] `smoke` Start: "● Recording" in red at the top left in place of the name, the time it started at the top right, Restart over Pause at the left of the red Stop
+- [ ] `smoke` Pause: the name comes back at the top left, Restart over Stop at the left of Resume
+- [ ] `smoke` A tap on the card (not on a button or the name) opens the trip; a tap on the name edits it (not while recording)
+- [ ] `vp run emulator:check` still passes with the buttons in the widget
+- [x] 2026-11-26 `smoke` (by the agent, a screenshot) The km at the top left, the big time at the bottom left, Start at the right as high as both; the card 427 px high (was about 550)
+- [ ] A trip of 10 hours and more (Manual add, then its card on Record): the big time smaller, whole, not under the buttons
+- [x] 2026-11-26 `smoke` (by the agent, a screenshot) Record: Statistics and Recent trips under the header; at the bottom one panel (the ground of the cards, to the edges) with the record widget and, close under it, the switcher in the ground of the screen
+- [ ] `smoke` History and Profile: the switcher as before (the ground of the cards), no panel
+- [ ] `smoke` Start on Record: Recording, Restart over Pause and Stop in the panel, nothing under the switcher
+- [x] 2026-11-26 `smoke` (by the agent, a screenshot) The switcher a little higher, the three of the widget a little in from the left, Start a little closer to the right edge
+- [ ] `smoke` The three of the widget as far from the left edge as the round button from the right edge (44)
+- [ ] `smoke` 12 more between the widget and the switcher, the footer 12 higher
+- [ ] `smoke` While a trip records: Restart and Pause smaller (34 high), their words whole; the red dot fades out and in, smoothly
+- [ ] Settings, Accessibility, Remove animations on: the red dot stands still
+- [x] 2026-11-26 `smoke` (by the agent, a screenshot) Record: no footer; the switcher as wide as on the other tabs and higher, with the name, the big time, the km and Start over its tabs
+- [x] 2026-11-26 `smoke` (by the agent, measured) The three 22.9 dp from the left edge of the switcher; Stop 18.7 dp from its top, 19.4 from its right edge, 19.0 from the tabs
+- [ ] `smoke` History and Profile: the small switcher, as before
+- [x] 2026-11-26 `smoke` (by the agent, a screenshot) No trip open: Start 72 in the middle of its place (the small buttons not there)
+- [ ] `smoke` A trip records: at the left of Stop a small round Pause (two bars) over a small round Restart (a ring with an arrow); Stop at the right; both work (Restart asks first); the three at the left do not move at Start
+- [ ] `smoke` Paused: the top one is a small red Stop (a white square), asked first; Resume in the round button
+- [ ] `smoke` A trip records: Recording (the dot fading), Stop in the switcher; no Restart, no Pause; Stop ends it
+- [ ] The big time of a long trip (10:00:00) smaller, whole, not under Start
+- [ ] `smoke` While a trip records: Restart and Pause small (their words whole), the big time whole beside them; paused: Stop small and red
+- [x] 2026-11-26 `smoke` (by the agent, a screenshot of a trip the driver started) Record: "● Recording", the big time whole and the km at the left as on the trip's screen, no clock time; Restart over Pause and the red Stop at the right
 - [ ] `smoke` Restart while paused: the trip records again (red, Stop and Pause), the timer from 0
 - [ ] `smoke` Cancel in the dialog of Restart changes nothing
 - [ ] Restart after a drive: the km go back to 0.0 and grow again; Stop: the km of the drive after the restart only

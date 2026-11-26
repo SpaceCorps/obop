@@ -57,10 +57,12 @@ function fail(reason, xml) {
 }
 
 /**
- * Waits until `find` finds its node on the screen (a dump every second), then gives it.
+ * Waits until `find` finds what it looks for on the screen (a dump every second), then gives it.
+ * @template T
  * @param {string} what
- * @param {(nodes: ReturnType<typeof parseNodes>) => import("./check-lib.mjs").UiNode | null} find
+ * @param {(nodes: ReturnType<typeof parseNodes>) => T | null} find
  * @param {number} seconds
+ * @returns {Promise<T>}
  */
 async function waitFor(what, find, seconds) {
   let last = "";
@@ -96,7 +98,11 @@ function openApp() {
  * and Profile.
  */
 const OVER_HOME = [
-  "trip-",
+  // A trip's screen (its name is `trip-name` on the home screen too, so not by the prefix).
+  "trip-back",
+  "trip-edit",
+  "trip-cancel",
+  "trip-from",
   "trips-",
   "section-",
   "manual-",
@@ -106,11 +112,23 @@ const OVER_HOME = [
 ];
 
 /**
+ * The state of the open trip on the home screen, read from its buttons (the widget of the home
+ * screen says "Recording" only while it records): `Recording` (Stop), `Paused` (Resume), or
+ * `none` (Start: no trip open; the widget shows the last one that ended, or none).
+ * @param {import("./check-lib.mjs").UiNode[]} nodes
+ */
+function stateOf(nodes) {
+  if (byId(nodes, "stop")) return "Recording";
+  if (byId(nodes, "resume")) return "Paused";
+  if (byId(nodes, "start")) return "none";
+  return null;
+}
+
+/**
  * The home screen, whatever was left open on the phone (a trip's screen, History, the form of a
  * trip added by hand): the back button of Android until the current widget of the home screen
  * shows (on Profile and History it goes to Record), and the app opened again if it left. Gives
- * the state of the current widget (Recording, Paused, Ended), or its "No trips yet." before the
- * first trip.
+ * the state of the open trip (`stateOf`).
  * @param {string} when
  */
 function homeScreen(when) {
@@ -122,8 +140,7 @@ function homeScreen(when) {
         run(["shell", "input", "keyevent", "4"]);
         return null;
       }
-      // The state of the widget, or its "No trips yet." before the first trip.
-      const state = byId(nodes, "current-state") ?? byId(nodes, "current-none");
+      const state = stateOf(nodes);
       if (state) return state;
       openApp();
       return null;
@@ -138,8 +155,8 @@ say(`reference route: ${waypoints().length} waypoints, ${referenceM.toFixed(2)} 
 // The "phone" at the start before Start, so the first fix is not a jump from elsewhere.
 moveTo(run, START);
 const before = await homeScreen("before the start");
-if (before.text !== "Ended" && before.id !== "current-none") {
-  fail(`a trip is open (${before.text}): stop it first`);
+if (before !== "none") {
+  fail(`a trip is open (${before}): stop it first`);
 }
 const start = await waitFor(
   "the button Start",
@@ -150,10 +167,7 @@ tap(start);
 say("Start pressed");
 await waitFor(
   "the recording (if the screen of the permissions came, allow location by hand first)",
-  (nodes) => {
-    const state = byId(nodes, "current-state");
-    return state && state.text === "Recording" ? state : null;
-  },
+  (nodes) => (stateOf(nodes) === "Recording" ? true : null),
   20,
 );
 say("recording");
@@ -164,7 +178,7 @@ await sleep(5000);
 // Back on the home screen, whatever was opened by hand meanwhile.
 const home = await homeScreen("after the drive");
 
-if (home.text === "Ended") {
+if (home === "none") {
   // Stopped by hand before the script came to it: the trip is read as it is.
   say("the trip was stopped already");
 } else {
@@ -184,20 +198,13 @@ if (home.text === "Ended") {
   say("Stop pressed");
 }
 
-const ended = await waitFor(
-  "the trip that ended",
-  (nodes) => {
-    const state = byId(nodes, "current-state");
-    return state && state.text === "Ended" ? state : null;
-  },
-  20,
-);
+await waitFor("the trip that ended", (nodes) => (stateOf(nodes) === "none" ? true : null), 20);
 const { xml, nodes } = screen();
 const kmNode = byId(nodes, "current-km");
 const shownKm = kmNode ? parseKm(kmNode.text) : null;
 if (shownKm === null) fail("no km in the current widget", xml);
-const name = byId(nodes, "current-name")?.text ?? "";
-say(`${name}: ${ended.text}, ${kmNode?.text}`);
+const name = byId(nodes, "trip-name")?.text ?? byId(nodes, "current-name")?.text ?? "";
+say(`${name}: ended, ${kmNode?.text}`);
 
 const verdict = judgeKm(shownKm, referenceM, tolerance);
 const line = `${shownKm.toFixed(1)} km on the screen, ${verdict.expectedKm.toFixed(3)} km expected, off by ${verdict.offKm.toFixed(3)} km (allowed ${verdict.allowedKm.toFixed(3)})`;
