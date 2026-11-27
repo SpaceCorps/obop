@@ -8,7 +8,7 @@ import { Group } from "../Group.tsx";
 import { Icon } from "../icons.tsx";
 import { ListRow } from "../ListRow.tsx";
 import type { Nav } from "../router.ts";
-import { ScreenHeader } from "../ScreenHeader.tsx";
+import { HEADER_BUTTON, ScreenHeader } from "../ScreenHeader.tsx";
 import { SectionHeader } from "../SectionHeader.tsx";
 import { tripSections, type ListWords } from "../trips-list.ts";
 
@@ -40,6 +40,7 @@ export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
 
   return (
     <Screen
+      floatingHeaderHeight={HEADER_BUTTON}
       title={t("trips.title")}
       titleSlot={
         <ScreenHeader

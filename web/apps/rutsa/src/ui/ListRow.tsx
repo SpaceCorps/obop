@@ -38,14 +38,33 @@ export function ListRow({
         paddingVertical: theme.space[2],
       }}
     >
-      <View style={{ flex: 1, minWidth: "30%" }}>
-        <Text variant="label">{title}</Text>
-        {subtitle ? (
+      {subtitle ? (
+        <View style={{ flex: 1, minWidth: "30%" }}>
+          <Text variant="label">{title}</Text>
           <Text variant="caption" tone="muted">
             {subtitle}
           </Text>
-        ) : null}
-      </View>
+        </View>
+      ) : (
+        // The title alone, in the middle of a row as high as one with a line under its title (the
+        // recent trips of Record): an unseen title and line of no width give the height, as the
+        // phone's font size draws them.
+        <View style={{ flex: 1, minWidth: "30%", flexDirection: "row", alignItems: "center" }}>
+          <View
+            style={{ width: 0, overflow: "hidden", opacity: 0 }}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <View style={{ width: 100 }}>
+              <Text variant="label"> </Text>
+              <Text variant="caption"> </Text>
+            </View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text variant="label">{title}</Text>
+          </View>
+        </View>
+      )}
       {/* A long value wraps inside its share of the row; it never squeezes the title to nothing. */}
       {value ? (
         <View style={{ flexShrink: 1, maxWidth: "65%" }}>

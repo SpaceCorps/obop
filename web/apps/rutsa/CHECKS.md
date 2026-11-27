@@ -424,12 +424,25 @@ The duration with seconds:
 - [ ] `smoke` A warning of a recording (Restart recording, the permissions) on Record, while the buttons are pressed on another tab
 - [x] 2026-11-27 `smoke` (by the agent, screenshots) History and Record: the headers grey, 22 in from the sides, over rounded cards; every trip row with an arrow at its end; Statistics on a card; Show more at the right of its header
 - [ ] `smoke` A tap on a row of History and of Recent trips opens the trip; Show more opens History
-- [ ] `smoke` A warning on Record: the recent trips fewer, none under the switcher; a trip added by hand: its row with the mark, the arrow at its end
+- [ ] `smoke` A trip added by hand: its row with the mark, the arrow at its end
+- [x] 2026-11-27 `smoke` (by the agent, screenshots) Record: Recent trips shows all the trips of today and yesterday; the screen scrolls under the header and the switcher, as History
+- [x] 2026-11-27 `smoke` (by the agent, measured) The rows of History (the times alone, in the middle) as high as those of Recent trips (with Today or Yesterday under them): 143 px both
+- [x] 2026-11-27 `smoke` (by the agent, screenshots) A trip in Edit: the Note square, Delete trip right under it, the end of the screen scrolled above the switcher, the content under the header
+- [x] 2026-11-27 `smoke` (by the agent, a screenshot and a dump) History: Sort and + 32 dp from the sides; the tabs white, History grey on a place of the screen's colour
+- [ ] `smoke` The dots of Ended (green), New (yellow) and Paused (grey) brighter on the cards; the header buttons 32 dp from the sides on every screen; the title still in the middle
+- [ ] `smoke` Manual add: the Note square, the screen scrolls under the header and the switcher; a long note grows the block on both screens
+- [ ] Settings, Display, Font size largest: the rows of History still as high as those of Recent trips, the title in the middle; TalkBack reads a row of History once, without an empty line
+- [ ] `smoke` After midnight: yesterday's trips under Yesterday, the day before gone from Record (still in History); a day with no trips: Recent trips with an empty place under its header
 - [ ] TalkBack: a day and Recent trips read as headers; a row reads its title, line and km
 - [x] 2026-11-27 `smoke` (by the agent, screenshots) A trip that ended: the switcher with the whole widget at the bottom, no tab marked, the note above it; the trip being recorded: only Pause, Stop and Restart in a row in the middle
 - [ ] `smoke` Manual add and the permissions: the switcher at the bottom, no tab marked, nothing of the screen under it; a tab tapped there opens that tab
 - [ ] `smoke` Editing a trip or typing on Manual add: the switcher goes while the keyboard is up and comes back with it down
 - [ ] `smoke` The screen of the trip being recorded: Restart at the left of Stop, Pause at its right; paused: Stop (small, red) at the right of Resume; Stop there ends it and the whole widget comes back
+- [x] 2026-11-27 `smoke` (by the agent, screenshots) History: the list starts under the header and runs under the switcher; scrolled, it goes under the header (no ground) and the status bar
+- [ ] `smoke` The same on Record, Profile, a trip, Manual add and the permissions; the end of each screen can be scrolled above the switcher; the header's buttons work over the list
+- [ ] `smoke` The phone on its side: the header over the content, the content starts under it
+- [x] 2026-11-27 `smoke` (by the agent, a screenshot) History scrolled: the rows fade out under the header toward the top and under the switcher toward the bottom
+- [ ] `smoke` The fades seen in the emulator window while scrolling: no coloured streaks, no steps between the bands
 - [ ] `smoke` The dot of Recording in the red of Stop, fading out and in on the switcher and on the trip's card alike; Delete trip (its word and its bin) a softer red, not brighter than Stop
 - [ ] `smoke` Pause and Restart from the trip's screen work as on Record
 - [ ] `smoke` Cancel in the dialog of Restart changes nothing

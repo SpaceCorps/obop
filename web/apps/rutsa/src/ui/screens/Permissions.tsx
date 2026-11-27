@@ -25,7 +25,7 @@ import {
   type Step,
 } from "../permission-step.ts";
 import type { Nav, Route } from "../router.ts";
-import { ScreenHeader } from "../ScreenHeader.tsx";
+import { HEADER_BUTTON, ScreenHeader } from "../ScreenHeader.tsx";
 
 type Next = Extract<Route, { name: "permissions" }>["next"];
 
@@ -189,6 +189,7 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
   if (step === "check") {
     return (
       <Screen
+        floatingHeaderHeight={HEADER_BUTTON}
         title={t("disclosure.title")}
         titleSlot={header(t("disclosure.title"))}
         scroll={false}
@@ -201,6 +202,7 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
   if (step === "disclosure") {
     return (
       <Screen
+        floatingHeaderHeight={HEADER_BUTTON}
         title={t("disclosure.title")}
         titleSlot={header(t("disclosure.title"))}
         footerBare
@@ -223,6 +225,7 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
   if (step === "denied") {
     return (
       <Screen
+        floatingHeaderHeight={HEADER_BUTTON}
         title={t("permission.denied.title")}
         titleSlot={header(t("permission.denied.title"))}
         footerBare
@@ -261,6 +264,7 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
           : tOs("permission.services.message");
     return (
       <Screen
+        floatingHeaderHeight={HEADER_BUTTON}
         title={title}
         titleSlot={header(title)}
         footerBare
@@ -282,6 +286,7 @@ export function Permissions({ nav, next }: { nav: Nav; next: Next }) {
 
   return (
     <Screen
+      floatingHeaderHeight={HEADER_BUTTON}
       title={t("guide.title")}
       titleSlot={header(t("guide.title"))}
       footerBare

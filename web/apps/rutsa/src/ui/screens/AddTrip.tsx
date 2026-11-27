@@ -19,10 +19,10 @@ import { addManualTrip } from "../../native/actions.ts";
 import { CurrentWidget } from "../CurrentWidget.tsx";
 import { DetailRow } from "../DetailRow.tsx";
 import { Group, GROUP_INSET, GROUP_RADIUS } from "../Group.tsx";
-import { useFillToBottom } from "../fill.ts";
+import { useSquare } from "../square.ts";
 import { useTrips } from "../hooks.ts";
 import { InlineText } from "../InlineText.tsx";
-import { ScreenHeader } from "../ScreenHeader.tsx";
+import { HEADER_BUTTON, ScreenHeader } from "../ScreenHeader.tsx";
 import { IosPicker, pickerInRow, pickOnAndroid, type PickMode } from "../pick.tsx";
 import { formatElapsed } from "../recording-view.ts";
 import { tripTimes } from "../trip-view.ts";
@@ -58,7 +58,7 @@ function clockOf(text: string): { hour: number; minute: number } | null {
  * 0, shown as a grey "00"), and the time at the bottom right is when it started, chosen with the
  * clock of the system on a tap. The start is at first the moment the screen was opened. Under it From and To typed in place; then Date (a picker) and
  * Time, the start and the end that follows from the duration (`08:30–09:15`, an end on
- * another day with that day in brackets, as on a trip's screen); then Note, down to the bottom; Back and Save are the round buttons
+ * another day with that day in brackets, as on a trip's screen); then Note, at least as high as it is wide; Back and Save are the round buttons
  * of the header. Save
  * checks it all (`checkManual`): each problem is said under its place, and an average speed over
  * `FAST_KMH` asks first. The trip is stored as manual and the screen goes back. Reachable without
@@ -68,7 +68,7 @@ export function AddTrip({ store, nav }: { store: TripRepository; nav: Nav }) {
   const theme = useTheme();
   const shared = useWords();
   const { trips } = useTrips(store);
-  const note = useFillToBottom();
+  const note = useSquare();
   const zone = phoneTimeZone();
   const [form, setForm] = useState<ManualForm>(() => {
     // The moment Add trip was pressed: the start until another is chosen.
@@ -234,6 +234,7 @@ export function AddTrip({ store, nav }: { store: TripRepository; nav: Nav }) {
 
   return (
     <Screen
+      floatingHeaderHeight={HEADER_BUTTON}
       title={t("manual.title")}
       // Back at the left (nothing is saved), Save at the right, filled: the action of the screen.
       titleSlot={
@@ -360,9 +361,8 @@ export function AddTrip({ store, nav }: { store: TripRepository; nav: Nav }) {
         </DetailRow>
       </Group>
 
-      {/* The note, as on a trip's screen: down to the bottom, growing with its text. */}
+      {/* The note, as on a trip's screen: at least as high as it is wide, growing with its text. */}
       <View
-        ref={note.blockRef}
         onLayout={note.onLayout}
         style={{
           minHeight: note.minHeight,

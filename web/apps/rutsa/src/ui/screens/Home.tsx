@@ -1,6 +1,6 @@
 import { Banner, Screen, Text, useTheme, type BannerTone } from "@obop/ui-native";
-import { useState, type RefObject } from "react";
-import { View, type HostInstance } from "react-native";
+import { useState } from "react";
+import { View } from "react-native";
 import { formatKm, phoneTimeZone, totals } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
 import { LANGUAGE, t, tp, type MessageKey } from "../../i18n/index.ts";
@@ -11,9 +11,9 @@ import type { Warning } from "../recording-view.ts";
 import { RecentTrips } from "../RecentTrips.tsx";
 import type { Nav } from "../router.ts";
 import { GROUP_INSET, GROUP_RADIUS } from "../Group.tsx";
-import { ScreenHeader } from "../ScreenHeader.tsx";
+import { HEADER_BUTTON, ScreenHeader } from "../ScreenHeader.tsx";
 import { SectionHeader } from "../SectionHeader.tsx";
-import { endedNewestFirst, recentLine } from "../trips-list.ts";
+import { recentLine, recentTrips } from "../trips-list.ts";
 
 // Read once in this start of the app: the note comes back only with another replaced file.
 let restoredNoteRead = false;
@@ -62,7 +62,7 @@ function warningBanner(
  * The first screen, the tab Record (D4): the one warning of a recording that matters most
  * (`warningOf`, from `useRecordPanel`) with its way on (Restart recording, or the way to the
  * permissions), the totals of today and this month (they leave the open trip out until it ends;
- * they follow the phone's day) and the newest trips that ended. The trip being recorded and its
+ * they follow the phone's day) and the trips of today and yesterday that ended. The trip being recorded and its
  * buttons are in the switcher at the bottom, the same on every tab (`RecordPanel.tsx`).
  */
 export function Home({
@@ -71,7 +71,6 @@ export function Home({
   recoveredStaleFile,
   warning,
   restart,
-  footerRef,
 }: {
   store: TripRepository;
   nav: Nav;
@@ -80,8 +79,6 @@ export function Home({
   warning: Warning | null;
   /** Restart recording, from `useRecordPanel`. */
   restart: () => void;
-  /** The switcher with the record widget: the recent trips end above it. */
-  footerRef: RefObject<HostInstance | null>;
 }) {
   const theme = useTheme();
   const { trips, active } = useTrips(store);
@@ -100,6 +97,7 @@ export function Home({
 
   return (
     <Screen
+      floatingHeaderHeight={HEADER_BUTTON}
       title={t("app.title")}
       // "Record" in the middle and the pill Edit at the right (a PLACEHOLDER of stage 2: no tap yet).
       titleSlot={
@@ -172,9 +170,9 @@ export function Home({
         </View>
       </View>
 
-      {/* The newest trips that ended, as many as fit above the switcher, and the way to History. */}
+      {/* All the trips of today and yesterday, and the way to History. */}
       <RecentTrips
-        lines={endedNewestFirst(trips).map((trip) =>
+        lines={recentTrips(trips, now, zone).map((trip) =>
           recentLine(trip, now, LANGUAGE, zone, {
             today: t("day.today"),
             yesterday: t("day.yesterday"),
@@ -182,8 +180,6 @@ export function Home({
             manual: t("trips.manual"),
           }),
         )}
-        maxRows={5}
-        footerRef={footerRef}
         onOpen={(id) => nav.push({ name: "trip", id })}
         onHistory={() => nav.tab("history")}
       />

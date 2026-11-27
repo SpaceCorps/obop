@@ -27,7 +27,7 @@ vi.mock("../theme.tsx", () => ({
   useWords: () => ({ back: "Back" }),
 }));
 
-const { Screen } = await import("./Screen.tsx");
+const { Fade, FADE_BANDS, Screen } = await import("./Screen.tsx");
 const { Button } = await import("./Button.tsx");
 const { Text } = await import("./Text.tsx");
 
@@ -81,6 +81,72 @@ describe("the footer of a screen", () => {
     expect(style.borderTopWidth).toBeUndefined();
     expect(style.paddingTop).toBe(0);
     expect(footerStyle({}).paddingTop).toBeUndefined();
+  });
+});
+
+describe("a fading ground", () => {
+  const bandsOf = (toward: "bottom" | "top") => {
+    const fill = Fade({ color: "#0a0c11", toward }) as ReactElement;
+    const style = (fill.props as { style: Record<string, unknown> }).style;
+    const bands = elements((fill.props as { children: ReactNode }).children).map(
+      (e) => (e.props as { style: { backgroundColor: string; opacity: number } }).style,
+    );
+    return { style, bands };
+  };
+
+  test("is plain bands of the colour, each less opaque than the one before", () => {
+    const { bands } = bandsOf("bottom");
+    expect(bands).toHaveLength(FADE_BANDS);
+    expect(bands.every((band) => band.backgroundColor === "#0a0c11")).toBe(true);
+    const opacities = bands.map((band) => band.opacity);
+    expect(opacities[0]).toBeGreaterThan(0.95);
+    expect(opacities.at(-1)).toBeLessThan(0.05);
+    expect(opacities.every((o, i) => i === 0 || o < opacities[i - 1]!)).toBe(true);
+  });
+
+  test("fills its parent, takes no touch, and turns round for a footer", () => {
+    expect(bandsOf("bottom").style).toMatchObject({
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      flexDirection: "column",
+    });
+    expect(bandsOf("top").style.flexDirection).toBe("column-reverse");
+    const fill = Fade({ color: "#000000", toward: "top" }) as ReactElement;
+    expect((fill.props as { pointerEvents: string }).pointerEvents).toBe("none");
+  });
+});
+
+describe("a floating header", () => {
+  const byTestId = (tree: ReactNode, id: string) =>
+    elements(tree).find((e) => (e.props as { testID?: string }).testID === id);
+  const styleOf = (element: ReactElement | undefined) =>
+    (element!.props as { style: Record<string, unknown> }).style;
+
+  test("lies over the content, drawn after it, on a ground that fades out downward", () => {
+    const tree = Screen({ title: "Trips", floatingHeaderHeight: 40, children: null });
+    const header = byTestId(tree, "screen-header");
+    expect(styleOf(header)).toMatchObject({ position: "absolute", top: 0 });
+    expect(styleOf(header).backgroundColor).toBeUndefined();
+    const fill = elements((header!.props as { children: ReactNode }).children).find(
+      (e) => e.type === Fade,
+    );
+    expect(fill?.props).toMatchObject({ color: "#fff", toward: "bottom" });
+    const all = elements(tree);
+    expect(all.indexOf(header!)).toBeGreaterThan(all.indexOf(byTestId(tree, "screen-body")!));
+  });
+
+  test("the content starts under it and the frame keeps no room at its top", () => {
+    const tree = Screen({ title: "Trips", floatingHeaderHeight: 40, children: null });
+    // The top padding of the header (12), its height and the space under it (16).
+    expect(styleOf(byTestId(tree, "screen-body")).paddingTop).toBe(12 + 40 + 16);
+    expect(styleOf(tree as ReactElement).paddingTop).toBe(0);
+  });
+
+  test("without it the header is in the flow and the content has no padding at its top", () => {
+    const tree = Screen({ title: "Trips", children: null });
+    expect(byTestId(tree, "screen-header")).toBeUndefined();
+    expect(styleOf(byTestId(tree, "screen-body")).paddingTop).toBeUndefined();
   });
 });
 

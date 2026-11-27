@@ -8,8 +8,13 @@ import { PulsingDot } from "./RecordWidget.tsx";
 import { RECORD_RED } from "./RoundButton.tsx";
 import { tripName } from "./trip-label.ts";
 
-/** The yellow dot of a trip being added by hand (New); the theme has no yellow. */
-const NEW_DOT = "#f4b400";
+/**
+ * The dots of the states but Recording (the red of recording), brighter than the soft colours of the
+ * theme, so they stand out on the dark card: as the system colours of iOS in the dark.
+ */
+const NEW_DOT = "#ffd60a";
+const ENDED_DOT = "#30d158";
+const PAUSED_DOT = "#c7c7cc";
 
 /**
  * The current widget: one white card on the home screen, like the row History, always there. It
@@ -83,10 +88,10 @@ export function CurrentWidget({
     trip.state === "recording"
       ? { text: t("home.recording"), color: RECORD_RED }
       : trip.state === "paused"
-        ? { text: t("home.paused"), color: theme.c.textMuted }
+        ? { text: t("home.paused"), color: PAUSED_DOT }
         : trip.state === "new"
           ? { text: t("manual.new"), color: NEW_DOT }
-          : { text: t("home.ended"), color: theme.c.success.fill };
+          : { text: t("home.ended"), color: ENDED_DOT };
   const running = trip.state === "recording" || trip.state === "paused";
   const content = (
     <>

@@ -114,9 +114,22 @@ export function recentLine(
   };
 }
 
-/** The trips that ended, newest first: the recent trips of the home screen take the first ones. */
+/** The trips that ended, newest first. */
 export function endedNewestFirst(trips: readonly Trip[]): Trip[] {
   return trips.filter((trip) => trip.state === "ended").sort((a, b) => b.startedAt - a.startedAt);
+}
+
+/**
+ * The recent trips of the home screen: the trips that ended and started today or yesterday (by the
+ * phone's day), newest first, all of them.
+ */
+export function recentTrips(trips: readonly Trip[], now: number, timeZone: string): Trip[] {
+  const today = dayKey(now, timeZone);
+  const yesterday = dayBefore(today);
+  return endedNewestFirst(trips).filter((trip) => {
+    const day = dayKey(trip.startedAt, timeZone);
+    return day === today || day === yesterday;
+  });
 }
 
 /**

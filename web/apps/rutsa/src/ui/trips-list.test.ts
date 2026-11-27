@@ -3,6 +3,7 @@ import type { Trip } from "../core/types.ts";
 import {
   endedNewestFirst,
   recentLine,
+  recentTrips,
   tripLine,
   tripSections,
   type ListWords,
@@ -224,5 +225,25 @@ describe("the recent trips of the home screen", () => {
       distanceM: null,
     });
     expect(endedNewestFirst([older, open, newer]).map((x) => x.id)).toEqual([newer.id, older.id]);
+  });
+
+  test("all the trips of today and yesterday by the phone's day, newest first, none older", () => {
+    // 00:30 in Stockholm on the 18th is still the 17th in UTC: it is today.
+    const justAfterMidnight = trip("2026-11-17T23:30:00Z");
+    const yesterdayMorning = trip("2026-11-17T07:30:00Z");
+    // 23:30 in Stockholm on the 16th: the day before yesterday.
+    const dayBefore = trip("2026-11-16T22:30:00Z");
+    const open = trip("2026-11-18T09:30:00Z", { state: "recording", endedAt: null });
+    const many = Array.from({ length: 8 }, (_, i) => trip(`2026-11-18T0${i}:05:00Z`));
+    const ids = recentTrips(
+      [dayBefore, yesterdayMorning, open, justAfterMidnight, ...many],
+      NOW,
+      STOCKHOLM,
+    ).map((x) => x.id);
+    expect(ids).toEqual([
+      ...many.map((x) => x.id).reverse(),
+      justAfterMidnight.id,
+      yesterdayMorning.id,
+    ]);
   });
 });

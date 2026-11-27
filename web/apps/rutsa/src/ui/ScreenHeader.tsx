@@ -94,8 +94,10 @@ export function ScreenHeader({
       style={{
         flexGrow: 1,
         flexBasis: 0,
-        minWidth: HEADER_BUTTON,
+        minWidth: HEADER_BUTTON + theme.space[4],
         alignItems: side === "left" ? "flex-start" : "flex-end",
+        // Twice as far from its edge of the screen as the padding of the screen alone.
+        ...(side === "left" ? { paddingLeft: theme.space[4] } : { paddingRight: theme.space[4] }),
       }}
     >
       {button ? <CornerButton button={button} /> : null}

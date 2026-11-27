@@ -1,7 +1,7 @@
 import { Screen, Text, useTheme } from "@obop/ui-native";
 import { View } from "react-native";
 import { t } from "../../i18n/index.ts";
-import { ScreenHeader } from "../ScreenHeader.tsx";
+import { HEADER_BUTTON, ScreenHeader } from "../ScreenHeader.tsx";
 
 const AVATAR = 88;
 
@@ -14,7 +14,11 @@ export function Profile() {
   const theme = useTheme();
   const name = t("home.user");
   return (
-    <Screen title={t("tabs.profile")} titleSlot={<ScreenHeader title={t("tabs.profile")} />}>
+    <Screen
+      floatingHeaderHeight={HEADER_BUTTON}
+      title={t("tabs.profile")}
+      titleSlot={<ScreenHeader title={t("tabs.profile")} />}
+    >
       <View style={{ alignItems: "center", gap: theme.space[3], paddingTop: theme.space[5] }}>
         <View
           testID="profile-avatar"

@@ -12,9 +12,9 @@ import { Group, GROUP_INSET, GROUP_RADIUS } from "../Group.tsx";
 import { DELETE_RED } from "../RoundButton.tsx";
 import { Icon } from "../icons.tsx";
 import { InlineText } from "../InlineText.tsx";
-import { ScreenHeader } from "../ScreenHeader.tsx";
+import { HEADER_BUTTON, ScreenHeader } from "../ScreenHeader.tsx";
 import { TripNameInput } from "../TripNameInput.tsx";
-import { useFillToBottom } from "../fill.ts";
+import { useSquare } from "../square.ts";
 import { useNow, useProgress, useTrips } from "../hooks.ts";
 import type { Nav } from "../router.ts";
 import { tripName, typedName } from "../trip-label.ts";
@@ -27,7 +27,7 @@ import { widgetValues } from "../widget-values.ts";
  * km and when it started or ended (with its day when not today). Under it From and To ("Not
  * given" when empty), then its date and times and how many positions a recorded trip has and how many the
  * distance left out (the kind of a trip is marked in the list, BR-28), then its note (an empty
- * block when there is none), down to the bottom. While the trip is open its time, km and
+ * block when there is none), at least as high as it is wide. While the trip is open its time, km and
  * positions grow as it records. Back at the left of the header, Edit at the right: the screen is
  * read only until Edit is pressed; then the name, From, To and Note are typed where they stand
  * (`InlineText`), Back becomes Cancel ("x": what was typed is dropped) and Edit becomes Done
@@ -60,12 +60,10 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
   const [draft, setDraft] = useState<Partial<Record<keyof TripDetails, string>>>({});
   // Changed by Cancel, so the fields are drawn again with what is stored.
   const [session, setSession] = useState(0);
-  // The height of Delete trip, kept under the note while the trip is edited.
-  const [deleteHeight, setDeleteHeight] = useState(0);
   const deletable = editing && !open;
 
-  // The note reaches down to the bottom of the screen (`useFillToBottom`), above Delete trip.
-  const note = useFillToBottom(deletable ? deleteHeight + theme.space[4] : 0);
+  // The note is at least as high as it is wide (`useSquare`); Delete trip comes under it.
+  const note = useSquare();
   // The details come in softly under the card of the trip, which does not move.
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -75,6 +73,7 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
   if (trip === null) {
     return (
       <Screen
+        floatingHeaderHeight={HEADER_BUTTON}
         title={t("trip.title")}
         titleSlot={
           <ScreenHeader
@@ -178,6 +177,7 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
 
   return (
     <Screen
+      floatingHeaderHeight={HEADER_BUTTON}
       title={name}
       // A header as high as the home screen's, so the current widget stands where it stood there
       // when it was tapped. Back at the left and the pill Edit at the right; while editing, Cancel
@@ -273,11 +273,9 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
         </Group>
 
         {/* The note under its label, with no placeholder: an empty note is an empty block, and a
-          tap anywhere in it while editing puts the cursor there. It reaches down to the bottom
-          (above Delete trip while editing), and a longer note makes it grow and the screen
-          scroll. */}
+          tap anywhere in it while editing puts the cursor there. It is at least as high as it is
+          wide, and a longer note makes it grow and the screen scroll. */}
         <View
-          ref={note.blockRef}
           onLayout={note.onLayout}
           style={{
             minHeight: note.minHeight,
@@ -310,7 +308,6 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
             accessibilityState={{ busy: deleting }}
             disabled={deleting}
             onPress={confirmDelete}
-            onLayout={(e) => setDeleteHeight(e.nativeEvent.layout.height)}
             hitSlop={8}
             testID="trip-delete"
             style={({ pressed }) => ({

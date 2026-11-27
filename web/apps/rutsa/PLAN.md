@@ -914,5 +914,29 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   the middle: the round one, Restart at its left, Pause (Stop while paused) at its right
   (`compact` of `useRecordPanel`). The dot of Recording in the red of recording (`RECORD_RED`), as
   Stop, fading out and in on the trip's card too; Delete trip a little softer (`DELETE_RED`, that
-  red at 80 % over the ground), as bright to the eye as Stop. Over the tabs it goes while the keyboard is up, so it does not
+  red at 80 % over the ground), as bright to the eye as Stop.
+  Changed again: the whole screen is the content's, as on iOS: it scrolls under the status bar,
+  under the header, which lies over it with no ground, and under the switcher, and starts under
+  the header and ends above the switcher when not scrolled. `Screen` of `@obop/ui-native` has the
+  option for it (`floatingHeaderHeight`, the height of the title row; with tests); every screen of
+  Rutsa with the round buttons of the header passes `HEADER_BUTTON`. The other apps are unchanged.
+  The header lies on a ground of the screen's colour, whole at the top of the screen and fading to
+  nothing at its bottom; the switcher on the same ground the other way, whole at the bottom of the
+  screen and nothing a little above it (`Fade` of `@obop/ui-native`: 32 plain bands of the
+  colour, each less opaque than the one before; a gradient of React Native, `backgroundImage`,
+  was tried first and drew coloured streaks on the emulator; no new package).
+  Changed again: Recent trips on Record shows all the trips of today and yesterday that ended
+  (`recentTrips` of `ui/trips-list.ts`, by the phone's day, tested), no longer as many as fit
+  above the switcher (the measuring and its `footerRef` are gone): Record scrolls under the
+  header and the switcher as History does. A row with its title alone (History) is as high as one
+  with a line under its title (Recent trips), the title in its middle: an unseen title and line of
+  no width give the height (`ListRow`), so it holds at every font size.
+  Changed again: the Note of a trip and of Manual add is no longer stretched down to the bottom
+  (`ui/fill.ts` is gone): it is at least as high as it is wide (`ui/square.ts`), grows with a long
+  note, and the screen scrolls under the header and the switcher; Delete trip comes right under it
+  while a trip that ended is edited.
+  Changed again: the dots of New, Ended and Paused brighter (the system colours of iOS in the
+  dark: #ffd60a, #30d158, #c7c7cc); the buttons of the header twice as far from the sides of the
+  screen (32); the tabs of the switcher white, the tab shown grey on a place of the screen's
+  colour. Over the tabs it goes while the keyboard is up, so it does not
   ride over the field being typed.

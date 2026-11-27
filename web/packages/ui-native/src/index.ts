@@ -9,7 +9,7 @@ export { Field } from "./components/Field.tsx";
 export type { FieldProps } from "./components/Field.tsx";
 export { Row } from "./components/Row.tsx";
 export type { RowProps } from "./components/Row.tsx";
-export { Screen } from "./components/Screen.tsx";
+export { Fade, Screen } from "./components/Screen.tsx";
 export type { ScreenProps } from "./components/Screen.tsx";
 export { Text } from "./components/Text.tsx";
 export type { TextProps, TextTone, TextVariant } from "./components/Text.tsx";

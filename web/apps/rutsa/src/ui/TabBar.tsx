@@ -1,6 +1,6 @@
-import { Text, useTheme } from "@obop/ui-native";
-import type { ReactNode, RefObject } from "react";
-import { Pressable, View, type HostInstance } from "react-native";
+import { Fade, Text, useTheme } from "@obop/ui-native";
+import type { ReactNode } from "react";
+import { Pressable, View } from "react-native";
 import { t, type MessageKey } from "../i18n/index.ts";
 import { Icon, type IconName } from "./icons.tsx";
 import { TABS, type Tab } from "./router.ts";
@@ -47,7 +47,6 @@ export function TabBar({
   onTab,
   bottom,
   header,
-  barRef,
   onRoom,
 }: {
   /** The tab shown, marked; `null` on a screen over the tabs (a trip, Manual add), none marked. */
@@ -57,8 +56,6 @@ export function TabBar({
   bottom: number;
   /** Drawn over the tabs, in the switcher: the record widget. */
   header: ReactNode;
-  /** The switcher itself, measured by what ends above it (the recent trips). */
-  barRef?: RefObject<HostInstance | null>;
   /** The room the tabs keep at their bottom for it, said each time its height changes. */
   onRoom?: (room: number) => void;
 }) {
@@ -68,7 +65,8 @@ export function TabBar({
       {TABS.map((name) => {
         const shown = name === tab;
         const look = TAB_LOOK[name];
-        const ink = shown ? theme.c.accentInk : theme.c.textMuted;
+        // White when not shown; the tab shown is grey on a place of the screen's colour.
+        const ink = shown ? theme.c.textMuted : theme.c.text;
         return (
           <Pressable
             key={name}
@@ -83,7 +81,7 @@ export function TabBar({
               alignItems: "center",
               justifyContent: "center",
               gap: 2,
-              backgroundColor: shown ? theme.c.accentSoft : "transparent",
+              backgroundColor: shown ? theme.c.bg : "transparent",
             }}
           >
             <Icon name={look.icon} color={ink} size={20} />
@@ -96,18 +94,22 @@ export function TabBar({
     </View>
   );
   return (
+    // From the bottom of the screen to a little above the switcher: a ground of the screen's colour,
+    // whole at the bottom and fading to nothing at its top, over the content that scrolls under it.
     <View
       pointerEvents="box-none"
       style={{
         position: "absolute",
         left: 0,
         right: 0,
-        bottom: bottom + LIFT,
+        bottom: 0,
+        paddingTop: theme.space[4],
+        paddingBottom: bottom + LIFT,
         alignItems: "center",
       }}
     >
+      <Fade color={theme.c.bg} toward="top" />
       <View
-        ref={barRef}
         accessibilityRole="tablist"
         testID="tab-bar"
         onLayout={(e) => onRoom?.(e.nativeEvent.layout.height + LIFT + 4)}

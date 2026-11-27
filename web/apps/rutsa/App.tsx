@@ -1,7 +1,7 @@
 import { InsetsProvider, Screen, Text, ThemeProvider, useInsets } from "@obop/ui-native";
 import { StatusBar } from "expo-status-bar";
-import { memo, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
-import { BackHandler, Keyboard, LayoutAnimation, View, type HostInstance } from "react-native";
+import { memo, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { BackHandler, Keyboard, LayoutAnimation, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { TripRepository } from "./src/core/repository.ts";
 import { t } from "./src/i18n/index.ts";
@@ -72,9 +72,7 @@ function Routes({
   const status = usePhoneStatus();
   const insets = useInsets();
   const [, setClosings] = useState(0);
-  // The switcher with the record widget, the same on the three tabs; the recent trips of Record end
-  // above it, and every tab keeps room at its bottom as high as it is.
-  const footerRef = useRef<HostInstance>(null);
+  // The switcher with the record widget: every screen keeps room at its bottom as high as it is.
   const [barRoom, setBarRoom] = useState(TAB_BAR_ROOM);
 
   const nav: Nav = useMemo(() => {
@@ -168,7 +166,6 @@ function Routes({
                 recoveredStaleFile={recoveredStaleFile}
                 warning={recording.warning}
                 restart={recording.restart}
-                footerRef={footerRef}
               />
             </View>
             {opened.has("history") ? (
@@ -192,7 +189,6 @@ function Routes({
             onTab={nav.tab}
             bottom={shown.bottom}
             header={recording.widget}
-            barRef={footerRef}
             onRoom={(room) => setBarRoom((was) => (Math.abs(was - room) < 0.5 ? was : room))}
           />
         ) : null}
