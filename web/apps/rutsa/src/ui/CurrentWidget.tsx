@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import type { Trip } from "../core/types.ts";
 import { t } from "../i18n/index.ts";
+import { GROUP_INSET, GROUP_RADIUS } from "./Group.tsx";
+import { PulsingDot } from "./RecordWidget.tsx";
+import { RECORD_RED } from "./RoundButton.tsx";
 import { tripName } from "./trip-label.ts";
 
 /** The yellow dot of a trip being added by hand (New); the theme has no yellow. */
@@ -55,10 +58,12 @@ export function CurrentWidget({
   const theme = useTheme();
   const card = {
     gap: theme.space[1],
-    padding: theme.space[4],
+    paddingVertical: theme.space[4],
+    paddingHorizontal: GROUP_INSET,
     backgroundColor: theme.c.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.c.border,
+    // Rounded as the groups under it (`Group`), with no line round it.
+    borderRadius: GROUP_RADIUS,
+    overflow: "hidden",
   } as const;
 
   if (trip === null) {
@@ -76,7 +81,7 @@ export function CurrentWidget({
   );
   const state =
     trip.state === "recording"
-      ? { text: t("home.recording"), color: theme.c.danger.fill }
+      ? { text: t("home.recording"), color: RECORD_RED }
       : trip.state === "paused"
         ? { text: t("home.paused"), color: theme.c.textMuted }
         : trip.state === "new"
@@ -93,7 +98,12 @@ export function CurrentWidget({
             </Text>
           )}
         </View>
-        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: state.color }} />
+        {trip.state === "recording" ? (
+          // Fading out and in, as in the switcher.
+          <PulsingDot color={state.color} />
+        ) : (
+          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: state.color }} />
+        )}
         <Text tone="muted" testID="current-state">
           {state.text}
         </Text>

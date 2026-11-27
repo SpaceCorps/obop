@@ -2,7 +2,7 @@ import { Text, useTheme } from "@obop/ui-native";
 import { ActivityIndicator, Pressable, View } from "react-native";
 import { Icon, type IconName } from "./icons.tsx";
 
-/** The symbol of a filled button and the word of the round button: white in both themes. */
+/** The symbols of the round buttons of a recording: white in both themes. */
 export const ON_FILL = "#ffffff";
 
 /** The height of a button of the header, and so of the header. */
@@ -17,8 +17,8 @@ export type HeaderButton = (
   label: string;
   onPress?: () => void;
   /**
-   * `filled`: the ground and the ring of the main colour, a white symbol (the action of the
-   * screen, as Save); `outline` (the default): no ground, a ring and a symbol of the main colour.
+   * `filled`: the ground and the ring of the main colour, the symbol cut out of it (Add, and the
+   * action of the screen, as Save); `outline` (the default): no ground, a ring and a symbol of the main colour.
    */
   look?: "filled" | "outline";
   /** Shown greyed, and a tap does nothing. */
@@ -33,9 +33,9 @@ export type HeaderButton = (
 function CornerButton({ button }: { button: HeaderButton }) {
   const theme = useTheme();
   const filled = button.look === "filled";
-  // Filled: the ground and the ring of the main colour (as the ring of an outlined button), a
-  // white symbol (`onAccent` of the dark palette is nearly black).
-  const ink = filled ? ON_FILL : theme.c.accentFill;
+  // Filled: the ground and the ring of the main colour (as the ring of an outlined button), the
+  // symbol cut out of it: drawn in the ground of the screen the header lies on.
+  const ink = filled ? theme.c.bg : theme.c.accentFill;
   const off = button.disabled === true || button.busy === true || button.inactive === true;
   const pill = button.text !== undefined;
   return (

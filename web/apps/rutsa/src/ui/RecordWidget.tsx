@@ -3,6 +3,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, View } from "react-native";
 import type { Trip } from "../core/types.ts";
 import { t } from "../i18n/index.ts";
+import { GROUP_INSET } from "./Group.tsx";
+import { RECORD_RED } from "./RoundButton.tsx";
+import { TAB_BAR_LINE } from "./TabBar.tsx";
 import { tripName } from "./trip-label.ts";
 
 /** One fade of the dot of a recording, out or in. */
@@ -12,7 +15,7 @@ const PULSE_MS = 1000;
  * The red dot of a recording: it fades out and in again and again (`PULSE_MS` each way), so the
  * recording is seen to go on; it stands still when the phone asks for less motion.
  */
-function PulsingDot({ color }: { color: string }) {
+export function PulsingDot({ color }: { color: string }) {
   const opacity = useRef(new Animated.Value(1)).current;
   const [still, setStill] = useState(false);
   useEffect(() => {
@@ -51,8 +54,8 @@ function PulsingDot({ color }: { color: string }) {
 }
 
 /**
- * The current widget of the home screen (Record), with the buttons of a recording in it, in the
- * switcher at the bottom, over its tabs (`TabBar`): the trip's screen keeps
+ * The record widget, with the buttons of a recording in it, in the switcher at the bottom of the
+ * three tabs, over its tabs (`TabBar`): the trip's screen keeps
  * `CurrentWidget`. At the left, as there: a red dot (fading out and in, `PulsingDot`) and
  * "Recording" while the
  * trip records, else the trip's name ("Untitled trip 39" until it is named; typed in place,
@@ -93,7 +96,7 @@ export function RecordWidget({
   if (trip === null) {
     return (
       <View style={card} testID="current">
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, paddingLeft: GROUP_INSET - TAB_BAR_LINE }}>
           <Text tone="muted" testID="current-none">
             {t("home.none")}
           </Text>
@@ -118,11 +121,11 @@ export function RecordWidget({
       style={({ pressed }) => ({ ...card, opacity: pressed ? 0.85 : 1 })}
     >
       {/* The three as on the trip's screen: the name (or Recording), the big time, the km. */}
-      {/* 22 in from the left edge of the switcher. */}
-      <View style={{ flex: 1, gap: theme.space[1], paddingLeft: theme.space[5] + 2 }}>
+      {/* As far in from the left edge of the switcher (with its line) as on the card of a trip. */}
+      <View style={{ flex: 1, gap: theme.space[1], paddingLeft: GROUP_INSET - TAB_BAR_LINE }}>
         {recording ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space[2] }}>
-            <PulsingDot color={theme.c.danger.fill} />
+            <PulsingDot color={RECORD_RED} />
             <Text variant="label" testID="current-state">
               {t("home.recording")}
             </Text>

@@ -879,3 +879,40 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   (`SHOW_SIDE_BUTTONS` and `ui/SmallButton.tsx` are gone).
   Changed again: the small round buttons at the left of the round one; with no trip open there
   are none and the round button stands in the middle of their place, which keeps its width.
+  Changed again: the round button looks like the record button of a camera, with no word (said
+  to a screen reader): a light ring round a dark disc with a red circle (Start, Resume) or a red
+  square (Stop), the red of recording `RECORD_RED`; the small round buttons white (ring and
+  symbol), the small Stop in that red.
+  Changed again: the small round buttons in the look of the big one (the light ring `RING`, the
+  dark disc, a white symbol; the small Stop a red square). The switcher of Record has a handle at
+  its top (54 by 4, half of the handle of the system, in `RING`, 8 from the top edge; the widget
+  5 lower for it), which folds the record
+  widget away (the switcher keeps the handle and the tabs, and the recent trips take the room)
+  and back; the fold is kept while the app runs, not across a start.
+  Changed again: a filled button of the header has its symbol cut out (drawn in the ground of the
+  screen): the check of the trip's screen and of Manual add, and the plus of History, now filled.
+  Changed again: the trip's screen and Manual add in the manner of the grouped lists of iOS: the
+  card of the trip, each group of rows (`ui/Group.tsx`) and the note on cards rounded as the
+  switcher of Record (28), their words 22 from the sides as in the record widget, with no line
+  round them, and between two rows a line of a whole number of pixels (every line as thick) that
+  keeps those 22 at both ends. No symbols in the rows. Date, Time and Positions of the trip's screen are `DetailRow`s now.
+  Changed again: the handle of the switcher and the fold are gone. The switcher with the record
+  widget is the same on the three tabs (History, Record, Profile): the recording, its buttons and
+  its warning live above the tabs (`ui/RecordPanel.tsx`, `useRecordPanel`, called in `App.tsx`),
+  Record keeps the warning, the totals and the recent trips, and every tab keeps room at its
+  bottom as high as the switcher is (measured). The words of the widget are as far from the left
+  and the top edge of the switcher as those of the card of a trip (22 and 16).
+  Changed again: the lists in the manner of iOS too. One header for every list
+  (`ui/SectionHeader.tsx`: grey, 22 in from the sides, an action at its right as Show more) over
+  a rounded card of rows (`Group`, `ui/ListRow.tsx`: the look of `Row` without its ground and
+  line, with an arrow at the end of a row that opens its page; `icons.tsx` draws it, "forward").
+  History: a header and a card for each day. Record: Statistics on a card under its header, the
+  recent trips on a card under theirs (as many as fit, with the lines between them counted).
+  Changed again: the switcher with the record widget is the footer of every screen, the trip's
+  screen, Manual add and the permissions too (no tab marked there; every screen keeps room at its
+  bottom as high as it is). On the screen of the open trip it keeps only the buttons, in a row in
+  the middle: the round one, Restart at its left, Pause (Stop while paused) at its right
+  (`compact` of `useRecordPanel`). The dot of Recording in the red of recording (`RECORD_RED`), as
+  Stop, fading out and in on the trip's card too; Delete trip a little softer (`DELETE_RED`, that
+  red at 80 % over the ground), as bright to the eye as Stop. Over the tabs it goes while the keyboard is up, so it does not
+  ride over the field being typed.

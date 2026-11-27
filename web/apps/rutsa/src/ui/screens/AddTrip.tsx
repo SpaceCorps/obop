@@ -18,6 +18,7 @@ import { LANGUAGE, t } from "../../i18n/index.ts";
 import { addManualTrip } from "../../native/actions.ts";
 import { CurrentWidget } from "../CurrentWidget.tsx";
 import { DetailRow } from "../DetailRow.tsx";
+import { Group, GROUP_INSET, GROUP_RADIUS } from "../Group.tsx";
 import { useFillToBottom } from "../fill.ts";
 import { useTrips } from "../hooks.ts";
 import { InlineText } from "../InlineText.tsx";
@@ -332,7 +333,7 @@ export function AddTrip({ store, nav }: { store: TripRepository; nav: Nav }) {
           clockSlot={startPicker(<Text tone="muted">{form.start}</Text>)}
         />
         {widgetProblem ? (
-          <View style={{ paddingHorizontal: theme.space[4] }}>
+          <View style={{ paddingHorizontal: GROUP_INSET }}>
             <Text variant="caption" tone="danger" testID="manual-widget-problem">
               {widgetProblem}
             </Text>
@@ -340,12 +341,12 @@ export function AddTrip({ store, nav }: { store: TripRepository; nav: Nav }) {
         ) : null}
       </View>
 
-      <View>
+      <Group>
         {typeRow("from", t("details.from"))}
         {typeRow("to", t("details.to"))}
-      </View>
+      </Group>
 
-      <View>
+      <Group>
         {dateRow()}
         <DetailRow
           label={t("trip.time")}
@@ -357,7 +358,7 @@ export function AddTrip({ store, nav }: { store: TripRepository; nav: Nav }) {
         >
           <Text tone="muted">{times}</Text>
         </DetailRow>
-      </View>
+      </Group>
 
       {/* The note, as on a trip's screen: down to the bottom, growing with its text. */}
       <View
@@ -367,10 +368,9 @@ export function AddTrip({ store, nav }: { store: TripRepository; nav: Nav }) {
           minHeight: note.minHeight,
           gap: theme.space[1],
           paddingVertical: theme.space[3],
-          paddingHorizontal: theme.space[4],
+          paddingHorizontal: GROUP_INSET,
           backgroundColor: theme.c.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.c.border,
+          borderRadius: GROUP_RADIUS,
         }}
       >
         <Text variant="label">{t("details.note")}</Text>

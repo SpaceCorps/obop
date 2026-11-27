@@ -407,6 +407,31 @@ The duration with seconds:
 - [ ] `smoke` While a trip records: Restart and Pause small (their words whole), the big time whole beside them; paused: Stop small and red
 - [x] 2026-11-26 `smoke` (by the agent, a screenshot of a trip the driver started) Record: "● Recording", the big time whole and the km at the left as on the trip's screen, no clock time; Restart over Pause and the red Stop at the right
 - [ ] `smoke` Restart while paused: the trip records again (red, Stop and Pause), the timer from 0
+- [x] 2026-11-27 `smoke` (by the agent, a screenshot of a recording) Stop as the stop of a camera (a light ring, a dark disc, a red rounded square); Pause and Restart white
+- [ ] `smoke` No trip open: Start as the record button of a camera (a red circle in the ring); paused: Resume the same, the small Stop red with a white square
+- [ ] TalkBack: the round button is read as Start, Stop or Resume
+- [ ] `smoke` Pause and Restart in the look of Stop (the light ring, the dark disc, a white symbol); paused: the small Stop a red square in the same ring
+- [x] 2026-11-27 `smoke` (by the agent, a dump) A tap on the handle at the top of the switcher folds the widget away (the handle and the tabs)
+- [x] 2026-11-27 `smoke` (by the agent, a screenshot) The handle short (54), in the colour of the rings, lower; the switcher 5 higher, the widget 5 lower; Pause and Restart in the look of Stop
+- [x] 2026-11-27 `smoke` (by the agent, a screenshot) History: the plus filled, the plus itself in the ground of the screen; the check of Manual add the same
+- [x] 2026-11-27 `smoke` (by the agent, screenshots) The trip's screen and Manual add: the card, From and To, Date, Time (and Positions) and the note on rounded cards; the lines between rows short at both ends, none under the last row
+- [x] 2026-11-27 `smoke` (by the agent, a screenshot, measured) The cards rounded as the switcher of Record (28), the words 22 from the sides; the three lines of the trip's screen 3 pixels each
+- [ ] `smoke` The trip's Edit: the check cut out; a problem under a row (Manual add, a time in the future) inside its card; the note card grows with a long note and the screen scrolls
+- [ ] `smoke` Manual add, a tap on Date and on the start time: the dialogs open as before
+- [x] 2026-11-27 `smoke` (by the agent, a dump and screenshots) No handle; the switcher with the record widget on History, Record and Profile; the name 22 dp from the left and 16 dp from the top of the switcher, as on the card of a trip
+- [ ] `smoke` On History and on Profile: Start, Pause, Restart and Stop work from the switcher; a trip that records ticks there; a tap on the widget opens the trip
+- [ ] `smoke` History scrolled to its end: the last trip above the switcher, not under it
+- [ ] `smoke` A warning of a recording (Restart recording, the permissions) on Record, while the buttons are pressed on another tab
+- [x] 2026-11-27 `smoke` (by the agent, screenshots) History and Record: the headers grey, 22 in from the sides, over rounded cards; every trip row with an arrow at its end; Statistics on a card; Show more at the right of its header
+- [ ] `smoke` A tap on a row of History and of Recent trips opens the trip; Show more opens History
+- [ ] `smoke` A warning on Record: the recent trips fewer, none under the switcher; a trip added by hand: its row with the mark, the arrow at its end
+- [ ] TalkBack: a day and Recent trips read as headers; a row reads its title, line and km
+- [x] 2026-11-27 `smoke` (by the agent, screenshots) A trip that ended: the switcher with the whole widget at the bottom, no tab marked, the note above it; the trip being recorded: only Pause, Stop and Restart in a row in the middle
+- [ ] `smoke` Manual add and the permissions: the switcher at the bottom, no tab marked, nothing of the screen under it; a tab tapped there opens that tab
+- [ ] `smoke` Editing a trip or typing on Manual add: the switcher goes while the keyboard is up and comes back with it down
+- [ ] `smoke` The screen of the trip being recorded: Restart at the left of Stop, Pause at its right; paused: Stop (small, red) at the right of Resume; Stop there ends it and the whole widget comes back
+- [ ] `smoke` The dot of Recording in the red of Stop, fading out and in on the switcher and on the trip's card alike; Delete trip (its word and its bin) a softer red, not brighter than Stop
+- [ ] `smoke` Pause and Restart from the trip's screen work as on Record
 - [ ] `smoke` Cancel in the dialog of Restart changes nothing
 - [ ] Restart after a drive: the km go back to 0.0 and grow again; Stop: the km of the drive after the restart only
 - [ ] Start the next trip after a restarted untitled one: it takes the next number (no gap, none taken twice)

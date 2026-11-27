@@ -1,4 +1,4 @@
-import { Banner, Row, Screen, Text, useTheme, useWords } from "@obop/ui-native";
+import { Banner, Screen, Text, useTheme, useWords } from "@obop/ui-native";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, Keyboard, Pressable, View } from "react-native";
 import { DETAIL_MAX, type TripDetails } from "../../core/details.ts";
@@ -8,6 +8,8 @@ import { LANGUAGE, t, tp } from "../../i18n/index.ts";
 import { deleteTrip, updateTripDetails } from "../../native/actions.ts";
 import { CurrentWidget } from "../CurrentWidget.tsx";
 import { DetailRow } from "../DetailRow.tsx";
+import { Group, GROUP_INSET, GROUP_RADIUS } from "../Group.tsx";
+import { DELETE_RED } from "../RoundButton.tsx";
 import { Icon } from "../icons.tsx";
 import { InlineText } from "../InlineText.tsx";
 import { ScreenHeader } from "../ScreenHeader.tsx";
@@ -246,35 +248,29 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
           <Banner tone="danger" title={t("trip.details.failed")} testID="trip-save-failed" />
         ) : null}
 
-        <View>
+        <Group>
           {placeRow("from")}
           {placeRow("to")}
-        </View>
+        </Group>
 
         {/* Its date, as on Manual add (read only: its edit is in stage 2), then its times. */}
-        <View>
-          <Row
-            title={t("trip.date")}
-            value={tripDate(trip, Date.now(), LANGUAGE, zone)}
-            testID="trip-date"
-          />
-          <Row
-            title={t("trip.time")}
-            value={
-              open
+        <Group>
+          <DetailRow label={t("trip.date")} testID="trip-date">
+            <Text tone="muted">{tripDate(trip, Date.now(), LANGUAGE, zone)}</Text>
+          </DetailRow>
+          <DetailRow label={t("trip.time")} testID="trip-time">
+            <Text tone="muted">
+              {open
                 ? t("trip.time.open", { start: tripTimes(trip, LANGUAGE, zone) })
-                : tripTimes(trip, LANGUAGE, zone)
-            }
-            testID="trip-time"
-          />
+                : tripTimes(trip, LANGUAGE, zone)}
+            </Text>
+          </DetailRow>
           {trip.source === "recorded" ? (
-            <Row
-              title={t("trip.positions")}
-              value={positions ?? undefined}
-              testID="trip-positions"
-            />
+            <DetailRow label={t("trip.positions")} testID="trip-positions">
+              <Text tone="muted">{positions ?? ""}</Text>
+            </DetailRow>
           ) : null}
-        </View>
+        </Group>
 
         {/* The note under its label, with no placeholder: an empty note is an empty block, and a
           tap anywhere in it while editing puts the cursor there. It reaches down to the bottom
@@ -287,10 +283,9 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
             minHeight: note.minHeight,
             gap: theme.space[1],
             paddingVertical: theme.space[3],
-            paddingHorizontal: theme.space[4],
+            paddingHorizontal: GROUP_INSET,
             backgroundColor: theme.c.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.c.border,
+            borderRadius: GROUP_RADIUS,
           }}
         >
           <Text variant="label">{t("details.note")}</Text>
@@ -323,17 +318,19 @@ export function TripDetail({ store, nav, id }: { store: TripRepository; nav: Nav
               alignItems: "center",
               alignSelf: "flex-start",
               gap: theme.space[3],
-              paddingHorizontal: theme.space[4],
+              paddingHorizontal: GROUP_INSET,
               paddingVertical: theme.space[2],
               opacity: pressed ? 0.6 : 1,
             })}
           >
+            {/* The red of recording, a little softer: thin words on the dark ground look redder
+              than the square of Stop on its grey disc. */}
             {deleting ? (
-              <ActivityIndicator size="small" color={theme.c.danger.ink} />
+              <ActivityIndicator size="small" color={DELETE_RED} />
             ) : (
-              <Icon name="trash" color={theme.c.danger.ink} size={20} />
+              <Icon name="trash" color={DELETE_RED} size={20} />
             )}
-            <Text variant="label" tone="danger">
+            <Text variant="label" color={DELETE_RED}>
               {t("trip.delete")}
             </Text>
           </Pressable>

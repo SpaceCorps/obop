@@ -1,19 +1,23 @@
-import { Row, Screen, Text, useTheme } from "@obop/ui-native";
+import { Screen, Text, useTheme } from "@obop/ui-native";
 import { View } from "react-native";
 import { phoneTimeZone } from "../../core/present.ts";
 import type { TripRepository } from "../../core/repository.ts";
 import { LANGUAGE, t, tp } from "../../i18n/index.ts";
 import { useNow, useTrips } from "../hooks.ts";
+import { Group } from "../Group.tsx";
 import { Icon } from "../icons.tsx";
+import { ListRow } from "../ListRow.tsx";
 import type { Nav } from "../router.ts";
 import { ScreenHeader } from "../ScreenHeader.tsx";
+import { SectionHeader } from "../SectionHeader.tsx";
 import { tripSections, type ListWords } from "../trips-list.ts";
 
 /**
  * The trips on this phone that ended, called History (D5), a tab of the switcher, by the day of
  * their start, newest first, each day with its number of trips and its km; each trip with its
  * name (else From → To, else its times), its km and the mark of a trip added by hand, and a tap
- * opens its screen. The open trip is not history yet: the home screen shows it. The round "+" of
+ * opens its screen (the arrow at its end). Each day is a header over a rounded card of its trips,
+ * as the lists of iOS (`SectionHeader`, `Group`, `ListRow`). The open trip is not history yet: the home screen shows it. The round "+" of
  * the header adds a trip by hand (D7); the sort at its left and the search under it are
  * placeholders of stage 2. Reachable without location (BR-36, US-18 AC1).
  *
@@ -46,6 +50,7 @@ export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
             icon: "plus",
             label: t("home.add"),
             onPress: () => nav.push({ name: "add" }),
+            look: "filled",
             testID: "history-add",
           }}
         />
@@ -80,12 +85,10 @@ export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
       ) : null}
       {sections.map((section) => (
         <View key={section.key} style={{ gap: theme.space[2] }} testID={`section-${section.key}`}>
-          <Text variant="label" tone="muted" accessibilityRole="header">
-            {section.header}
-          </Text>
-          <View>
+          <SectionHeader title={section.header} />
+          <Group>
             {section.trips.map((line) => (
-              <Row
+              <ListRow
                 key={line.id}
                 title={line.title}
                 subtitle={line.subtitle ?? undefined}
@@ -94,7 +97,7 @@ export function Trips({ store, nav }: { store: TripRepository; nav: Nav }) {
                 testID={`trip-${line.id}`}
               />
             ))}
-          </View>
+          </Group>
         </View>
       ))}
     </Screen>

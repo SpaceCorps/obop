@@ -1,6 +1,7 @@
 import { useTheme } from "@obop/ui-native";
 import { ActivityIndicator, Pressable } from "react-native";
 import { Icon, type IconName } from "./icons.tsx";
+import { RECORD_RED, RING } from "./RoundButton.tsx";
 import { ON_FILL } from "./ScreenHeader.tsx";
 
 /** The size of a small round button of a recording; two and their gap are as high as the big one. */
@@ -8,9 +9,9 @@ export const ROUND_ICON_SIZE = 32;
 
 /**
  * A small round button of the record widget with one symbol (Pause, Restart, Stop while paused), at
- * the right of the big round one: the look of the outlined buttons of the header (a ring and a
- * symbol of the main colour); `danger` is red with a white symbol (Stop). Its word is said to a
- * screen reader (`label`).
+ * the left of the big round one, in its look: the light ring round the dark disc, a white symbol;
+ * `danger` makes the symbol the red of recording (Stop). Its word is said to a screen reader
+ * (`label`).
  */
 export function RoundIconButton({
   icon,
@@ -28,7 +29,7 @@ export function RoundIconButton({
   testID?: string;
 }) {
   const theme = useTheme();
-  const ink = danger ? ON_FILL : theme.c.accentFill;
+  const ink = danger ? RECORD_RED : ON_FILL;
   return (
     <Pressable
       accessibilityRole="button"
@@ -45,8 +46,8 @@ export function RoundIconButton({
         alignItems: "center",
         justifyContent: "center",
         borderWidth: 1.5,
-        borderColor: danger ? theme.c.danger.fill : theme.c.accentFill,
-        backgroundColor: danger ? theme.c.danger.fill : "transparent",
+        borderColor: RING,
+        backgroundColor: theme.c.surface3,
         opacity: busy ? 0.5 : pressed ? 0.7 : 1,
       })}
     >

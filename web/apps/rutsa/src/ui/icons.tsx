@@ -17,7 +17,8 @@ export type IconName =
   | "record"
   | "pause"
   | "stop"
-  | "restart";
+  | "restart"
+  | "forward";
 
 const STROKE = 2.5;
 
@@ -56,6 +57,23 @@ export function Icon({ name, color, size = 22 }: { name: IconName; color: string
               marginLeft: 4 * unit,
               borderLeftWidth: STROKE,
               borderBottomWidth: STROKE,
+              borderColor: color,
+              transform: [{ rotate: "45deg" }],
+            }}
+          />
+        </View>
+      );
+    case "forward":
+      // The arrow of a row that opens its page, as in iOS: Back turned the other way.
+      return (
+        <View style={box}>
+          <View
+            style={{
+              width: 11 * unit,
+              height: 11 * unit,
+              marginRight: 4 * unit,
+              borderRightWidth: STROKE,
+              borderTopWidth: STROKE,
               borderColor: color,
               transform: [{ rotate: "45deg" }],
             }}

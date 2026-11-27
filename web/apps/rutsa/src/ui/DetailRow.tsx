@@ -1,11 +1,12 @@
 import { Text, useTheme } from "@obop/ui-native";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
+import { GROUP_INSET } from "./Group.tsx";
 
 /**
  * A row of the details of a trip (D6, D7): its label at the left, its value at the right (a text
- * changed in place, or the value a tap chooses), and a problem under it in red. The look of `Row`
- * of `@obop/ui-native`, which takes only text.
+ * changed in place, or the value a tap chooses), and a problem under it in red. It lies in a
+ * `Group`, which draws the card and the lines between the rows.
  */
 export function DetailRow({
   label,
@@ -28,10 +29,7 @@ export function DetailRow({
   const theme = useTheme();
   const frame = {
     paddingVertical: theme.space[2],
-    paddingHorizontal: theme.space[4],
-    backgroundColor: theme.c.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.c.border,
+    paddingHorizontal: GROUP_INSET,
   } as const;
   const content = (
     <>

@@ -5,7 +5,7 @@ import { t, type MessageKey } from "../i18n/index.ts";
 import { Icon, type IconName } from "./icons.tsx";
 import { TABS, type Tab } from "./router.ts";
 
-/** The height of the switcher (of its row of tabs). */
+/** The height of the row of tabs, with the padding of the switcher round it. */
 const BAR = 56;
 /** Its distance from the bottom of the screen (above the bar of the system). */
 const LIFT = 14;
@@ -13,11 +13,20 @@ const LIFT = 14;
 const PAD = 4;
 /** The width of a tab. */
 const TAB_WIDTH = 92;
-/** The width of the switcher: its tabs, its padding and its line; the same with the widget in it. */
+/** The width of the switcher: its tabs, its padding and its line. */
 const WIDTH = TABS.length * TAB_WIDTH + 2 * PAD + 2;
+/** The thickness of its line. */
+export const TAB_BAR_LINE = 1;
+const LINE = TAB_BAR_LINE;
 /**
- * The room the tabs leave at their bottom for the switcher, which lies over them: its height,
- * its distance from the bottom and a gap above it.
+ * The distance of the words of the record widget from the top edge of the switcher (with its line):
+ * that of the words of the card of a trip from its top (`CurrentWidget`).
+ */
+export const WIDGET_TOP = 16;
+
+/**
+ * The room the tabs leave at their bottom for the switcher before it has been measured: its row of
+ * tabs, its distance from the bottom and a gap above it. Once measured, `onRoom` says the room.
  */
 export const TAB_BAR_ROOM = BAR + LIFT + 4;
 
@@ -28,10 +37,10 @@ const TAB_LOOK: Readonly<Record<Tab, { icon: IconName; label: MessageKey }>> = {
 };
 
 /**
- * The switcher at the bottom of the tabs, as in Telegram: a small round-ended bar that lies over
- * the screen, with History, Record (the home screen) and Profile; the tab shown is marked. On
- * Record it holds the record widget over its tabs (`header`): it is then as wide as ever, and
- * higher. A placeholder of its look: stage 2 makes it finer.
+ * The switcher at the bottom of the tabs, as in Telegram: a round-ended panel that lies over the
+ * screen, with the record widget (`header`) over History, Record (the home screen) and Profile; the
+ * tab shown is marked. It is at the bottom of every screen, the footer of the app: on a screen over
+ * the tabs no tab is marked. A placeholder of its look: stage 2 makes it finer.
  */
 export function TabBar({
   tab,
@@ -39,18 +48,21 @@ export function TabBar({
   bottom,
   header,
   barRef,
+  onRoom,
 }: {
-  tab: Tab;
+  /** The tab shown, marked; `null` on a screen over the tabs (a trip, Manual add), none marked. */
+  tab: Tab | null;
   onTab: (tab: Tab) => void;
   /** The space of the bar of the system under it. */
   bottom: number;
-  /** Drawn over the tabs, in the switcher: the record widget on Record. */
-  header?: ReactNode;
+  /** Drawn over the tabs, in the switcher: the record widget. */
+  header: ReactNode;
   /** The switcher itself, measured by what ends above it (the recent trips). */
   barRef?: RefObject<HostInstance | null>;
+  /** The room the tabs keep at their bottom for it, said each time its height changes. */
+  onRoom?: (room: number) => void;
 }) {
   const theme = useTheme();
-  const wide = header !== undefined;
   const tabs = (
     <View style={{ height: BAR - 2 * PAD, flexDirection: "row", justifyContent: "center" }}>
       {TABS.map((name) => {
@@ -98,12 +110,13 @@ export function TabBar({
         ref={barRef}
         accessibilityRole="tablist"
         testID="tab-bar"
+        onLayout={(e) => onRoom?.(e.nativeEvent.layout.height + LIFT + 4)}
         style={{
           width: WIDTH,
           padding: PAD,
-          borderRadius: wide ? 28 : BAR / 2,
+          borderRadius: 28,
           backgroundColor: theme.c.surface,
-          borderWidth: 1,
+          borderWidth: LINE,
           borderColor: theme.c.border,
           elevation: 8,
           shadowColor: "#000",
@@ -112,21 +125,20 @@ export function TabBar({
           shadowOffset: { width: 0, height: 4 },
         }}
       >
-        {wide ? (
-          // The record widget over the tabs, as wide as the switcher (its padding taken back, so
-          // the widget keeps its own distances from the sides).
-          <View
-            style={{
-              marginHorizontal: -PAD,
-              // The round button of the widget as far from the top edge as from the tabs (and
-              // from the right edge, in `screens/Home.tsx`).
-              paddingTop: theme.space[4] - PAD - 3,
-              paddingBottom: theme.space[3] + 3,
-            }}
-          >
-            {header}
-          </View>
-        ) : null}
+        {/* The record widget over the tabs, as wide as the switcher (its padding taken back): its
+          words as far from the left and the top edge as those of the card of a trip
+          (`CurrentWidget`); the round button as far from the right edge as from the tabs (in
+          `RecordPanel`). */}
+        <View
+          style={{
+            marginHorizontal: -PAD,
+            marginTop: -PAD,
+            paddingTop: WIDGET_TOP - LINE,
+            paddingBottom: theme.space[3] + 3,
+          }}
+        >
+          {header}
+        </View>
         {tabs}
       </View>
     </View>
