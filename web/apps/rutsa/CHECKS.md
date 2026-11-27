@@ -38,6 +38,12 @@ Useful commands:
 `pm revoke` of the location keeps Expo's own note that it asked already, so the app reads it as
 refused for good; `pm clear` resets both.
 
+A clean install filled with test trips (TEMPORARY, until F3): `vp test` first without the flag,
+then in Git Bash `EXPO_PUBLIC_RUTSA_SEED=1 vp run emulator:ship -- --fresh --wipe --no-test`
+(PowerShell: `$env:EXPO_PUBLIC_RUTSA_SEED="1"; vp run emulator:ship -- --fresh --wipe --no-test;
+Remove-Item Env:EXPO_PUBLIC_RUTSA_SEED`). The app shows Loading for about half a minute while it
+writes them. The next normal build needs `--fresh`, or the old bundle with the flag is packed again.
+
 All of the above in one: `vp run emulator:ship` (check, test, the emulator started if needed, build,
 install, open; `--fresh` for a change in a shared package only, `--no-build` to install again).
 

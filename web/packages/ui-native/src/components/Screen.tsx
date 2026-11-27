@@ -46,14 +46,20 @@ export type ScreenProps = {
 /** The bands of a `Fade`: thin enough that their steps are not seen. */
 export const FADE_BANDS = 32;
 
+/** How opaque a `Fade` still is at its far edge: a quarter, so what lies under it stays dimmed. */
+export const FADE_LEAST = 0.25;
+
 /**
- * A ground of `color` that fills its parent, whole at one edge and fading to nothing toward the
- * other: toward the bottom for a header, toward the top for a footer. It is made of plain bands of
- * the colour, each less opaque than the one before (no gradient, which some phones and the emulator
- * draw with coloured streaks), and takes no touch.
+ * A ground of `color` that fills its parent, whole at one edge and fading to a quarter
+ * (`FADE_LEAST`) toward the other: toward the bottom for a header, toward the top for a footer. It
+ * is made of plain bands of the colour, each less opaque than the one before (no gradient, which
+ * some phones and the emulator draw with coloured streaks), and takes no touch.
  */
 export function Fade({ color, toward }: { color: string; toward: "bottom" | "top" }) {
-  const bands = Array.from({ length: FADE_BANDS }, (_, i) => 1 - (i + 0.5) / FADE_BANDS);
+  const bands = Array.from(
+    { length: FADE_BANDS },
+    (_, i) => 1 - ((1 - FADE_LEAST) * (i + 0.5)) / FADE_BANDS,
+  );
   return (
     <View
       pointerEvents="none"

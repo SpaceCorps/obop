@@ -245,7 +245,9 @@ Checkpoint: the APK builds and installs, a route gives a trip with the expected 
       spec as PROPOSED, so they outlive this file
 - [ ] F2 `docs: add the Rutsa app to the README`
 - [ ] F3 remove the test flag `EXPO_PUBLIC_RUTSA_TEST_DB_FAILURE` of D1 (`core/open-db.ts`,
-      `native/database.ts`, their tests), delete this file and `CHECKS.md`, then "Ready for review"
+      `native/database.ts`, their tests) and the test trips of `EXPO_PUBLIC_RUTSA_SEED`
+      (`core/seed.ts`, its test, the part of `native/store.ts`; added 2026-11-27), delete this file
+      and `CHECKS.md`, then "Ready for review"
 
 ## Proposed for stage 2 (not built in this stage)
 
@@ -922,8 +924,8 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   Rutsa with the round buttons of the header passes `HEADER_BUTTON`. The other apps are unchanged.
   The header lies on a ground of the screen's colour, whole at the top of the screen and fading to
   nothing at its bottom; the switcher on the same ground the other way, whole at the bottom of the
-  screen and nothing a little above it (`Fade` of `@obop/ui-native`: 32 plain bands of the
-  colour, each less opaque than the one before; a gradient of React Native, `backgroundImage`,
+  screen and a quarter a little above it (`Fade` of `@obop/ui-native`: 32 plain bands of the
+  colour, each less opaque than the one before, from whole to a quarter, `FADE_LEAST`; a gradient of React Native, `backgroundImage`,
   was tried first and drew coloured streaks on the emulator; no new package).
   Changed again: Recent trips on Record shows all the trips of today and yesterday that ended
   (`recentTrips` of `ui/trips-list.ts`, by the phone's day, tested), no longer as many as fit
@@ -938,5 +940,11 @@ size="big"`), so one more recent trip fits; the small button (Pause, Stop while 
   Changed again: the dots of New, Ended and Paused brighter (the system colours of iOS in the
   dark: #ffd60a, #30d158, #c7c7cc); the buttons of the header twice as far from the sides of the
   screen (32); the tabs of the switcher white, the tab shown grey on a place of the screen's
-  colour. Over the tabs it goes while the keyboard is up, so it does not
+  colour.
+- 2026-11-27: test trips for the emulator (TEMPORARY, removed in F3): a build made with
+  `EXPO_PUBLIC_RUTSA_SEED=1` fills an empty database, once, with the trips of the last 45 days
+  (`core/seed.ts`, written through the repository: recorded ones with positions, some paused,
+  about a third added by hand, some with a name, places and a note; tested). `emulator:ship` has
+  `--wipe` (uninstalls Rutsa first). The database is encrypted with a key in the Keystore, so a
+  prepared file cannot be put on the phone instead. Over the tabs it goes while the keyboard is up, so it does not
   ride over the field being typed.

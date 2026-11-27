@@ -99,8 +99,10 @@ describe("a fading ground", () => {
     expect(bands).toHaveLength(FADE_BANDS);
     expect(bands.every((band) => band.backgroundColor === "#0a0c11")).toBe(true);
     const opacities = bands.map((band) => band.opacity);
-    expect(opacities[0]).toBeGreaterThan(0.95);
-    expect(opacities.at(-1)).toBeLessThan(0.05);
+    // Whole at one edge, a quarter at the other.
+    expect(opacities[0]).toBeGreaterThan(0.97);
+    expect(opacities.at(-1)).toBeGreaterThan(0.25);
+    expect(opacities.at(-1)).toBeLessThan(0.27);
     expect(opacities.every((o, i) => i === 0 || o < opacities[i - 1]!)).toBe(true);
   });
 

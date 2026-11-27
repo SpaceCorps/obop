@@ -2,11 +2,14 @@
 // the emulator started if none runs (and waited for until Android has booted), the release APK
 // built, installed over the last one (the trips stay) and opened.
 //
-//   vp run emulator:ship -- [--fresh] [--no-check] [--no-test] [--no-build] [--serial emulator-5554]
+//   vp run emulator:ship -- [--fresh] [--wipe] [--no-check] [--no-test] [--no-build] [--serial emulator-5554]
 //
 //   --fresh      deletes the bundle of the last build and the cache of Metro first: Gradle does not
 //                see a change in a shared package only (web/packages/ui-native, trip-core) and
 //                would install the old bundle (CHECKS.md, Setup)
+//   --wipe       uninstalls Rutsa before the install: its trips, its settings, its permissions and
+//                the key of its database are gone, and it opens as on a new phone (with
+//                EXPO_PUBLIC_RUTSA_SEED=1 in the build, filled with test trips, core/seed.ts)
 //   --no-check, --no-test   skip those steps
 //   --no-build   only make sure the emulator runs, install the APK that is there and open the app
 //
@@ -128,7 +131,14 @@ if (!existsSync(APK)) {
   console.error(`ship: no APK at ${APK}; build without --no-build first`);
   process.exit(1);
 }
-say("installing over the last build (the trips stay)");
+if (has("--wipe")) {
+  say("uninstalling Rutsa (its trips and the key of its database go with it)");
+  // Not installed yet is not a failure.
+  adb(["uninstall", PACKAGE]);
+  say("installing");
+} else {
+  say("installing over the last build (the trips stay)");
+}
 step("adb", ["-s", serial, "install", "-r", APK]);
 
 say("opening Rutsa");
