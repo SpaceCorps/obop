@@ -88,7 +88,7 @@ Oracles are off-the-shelf programs that run only in CI images (the KoSIT validat
 
 | Area | Oracle |
 |---|---|
-| EN 16931, XRechnung, Peppol, Factur-X | CEN artefacts 1.3.16 (next cycle effective 2026-11-16, then 2027-05-17 and 2027-11-15); KoSIT validator 1.6.3 with testsuite 2026-08-31; Peppol BIS Billing 3.0.21; phase4 4.8.0; Mustang 2.26.0 |
+| EN 16931, XRechnung, Peppol, Factur-X | CEN artefacts 1.3.17 (next cycle effective 2026-11-16, then 2027-05-17 and 2027-11-15); KoSIT validator 1.6.3 with testsuite 2026-08-31; Peppol BIS Billing 3.0.22; phase4 4.8.0; Mustang 2.26.0 |
 | KSeF, VIES | official TEST and DEMO environments (FA(3)); VIES REST API |
 | DATEV, ELSTER, AEAT, SDI, PA | no reachable sandbox when checked (unverified, [R25 B3]): regulator worked examples plus recorded accountant sign-off |
 | Payroll | regulator worked examples (IRS Pub. 15-T, HMRC test service, DSN conformance) [R13]; reference country decided 2029-04-01 (D19) |

@@ -303,7 +303,7 @@ In these sheets Germany first (D4, OR-7), the German pack stable date 2027-09-30
 | Scope in W1 (D86) | `l10n` framework and `l10n_de` (SKR03/04 chart and taxes, UStVA computation, DATEV EXTF export, GoBD export) with `edi` (EN 16931 issue and receive by email or file) and `bank` (camt.053 and MT940 import). Out of W1: the Peppol transport adapter (W2), POS/TSE and payroll (W3 or later). Not placed by the cut: DATEV Connect online (question 21 in section 7.3) |
 | Mandate | Receive EN 16931 e-invoices since 2025-01-01; issue from 2027-01-01 above EUR 800,000 prior-year turnover; all businesses from 2028-01-01. No clearance platform; no domestic real-time reporting. Section 14 UStG defines the e-invoice as structured EN 16931 |
 | Secondary | Legacy EDI to end-2027; invoices up to EUR 250 exempt; ZUGFeRD accepted from 2.0.1 but not MINIMUM or BASIC WL; the structured XML is the legal record and must be kept as received |
-| Formats | XRechnung, ZUGFeRD 2.5.2 (= Factur-X 1.09.2, 2026-08-04), Peppol BIS Billing 3.0.21 |
+| Formats | XRechnung, ZUGFeRD 2.5.2 (= Factur-X 1.09.2, 2026-08-04), Peppol BIS Billing 3.0.22 |
 | Transport | Email or file needs no access point and is the W1 route. Peppol is a W2 adapter through a certified access point that the user chooses, with the user's own credentials; SpaceCorps operates none (D4, D17, D83, D86) |
 | Returns and exports | UStVA through ELSTER, EC sales list, DATEV export, GoBD export, DATEV Connect online (gated by DATEV's own developer programme). Odoo keeps these in paid modules (`l10n_de_reports`, `l10n_de_reports_elster`); obop generates the files for free in the same install. Transmission through ELSTER is the user's step or a later adapter, never core (DECISIONS 5.3, item 15); whether ERiC fits F1 and I-1 is open (section 7.3) |
 | Chart | SKR03 and SKR04, published by DATEV; licence terms not found. Odoo and ERPNext ship them, which tolerates the practice but is not legal clearance |
@@ -311,7 +311,7 @@ In these sheets Germany first (D4, OR-7), the German pack stable date 2027-09-30
 | Accountant channel | DATEV: 40,296 members in 2025 (secondary; DATEV says "over 40,000"). The Bundeskartellamt forced access to its power-of-attorney database in 2019; partner and interface certification is criticised; programme terms and fees unverified |
 | Producer exposure | Section 379(6) AO: fines up to EUR 25,000 for commercially advertising or distributing non-compliant cash-register systems or software (binds at POS, W3). Accounting software itself has no state certification (unverified) |
 | Watch item | A draft bill of 2026-09-23 proposes digital receipts and mandatory electronic registers above EUR 100,000 turnover from 2028 (secondary) [R09 s4] |
-| Oracles | CEN artefacts 1.3.16; KoSIT validator 1.6.3 with XRechnung configuration and testsuite v2026-08-31; xrechnung-schematron 2.6.0; Mustang 2.26.0; phase4 4.8.0. DATEV and ELSTER sandboxes not reachable |
+| Oracles | CEN artefacts 1.3.17; KoSIT validator 1.6.3 with XRechnung configuration and testsuite v2026-08-31; xrechnung-schematron 2.6.0; Mustang 2.26.0; phase4 4.8.0. DATEV and ELSTER sandboxes not reachable |
 | Effort | 14.5 PM (estimate; section 3.5). The W1 cut moves the Peppol adapter, which sits inside R25's 1.5 PM transport line, out of W1, and does not list DATEV Connect online (2.0 PM); R25 does not split the transport line, so the W1 share is not computed here |
 | Out of first delivery | POS/TSE and payroll (D4) |
 
@@ -444,9 +444,9 @@ A pack-freshness dashboard shows upstream changes, last verified date and open b
 
 | Area | Oracle (version, date) | Use |
 |---|---|---|
-| EN 16931 | CEN validation artefacts 1.3.16 (published 2026-04-16, effective 2026-05-15, EUPL-1.2) | Preview gate; D34 |
+| EN 16931 | CEN validation artefacts 1.3.17 (published 2026-10-12, EUPL-1.2) | Preview gate; D34 |
 | XRechnung | KoSIT validator 1.6.3 (2026-08-20, Apache-2.0); configuration and testsuite v2026-08-31; xrechnung-schematron 2.6.0 (changelog 2026-08-31, GitHub release 2026-09-02) | Preview gate; D34 |
-| Peppol | BIS Billing 3.0.21; phase4 4.8.0 (2026-10-01, Apache-2.0) | Transport tests, from W2 with the adapter |
+| Peppol | BIS Billing 3.0.22; phase4 4.8.0 (2026-10-01, Apache-2.0). The OpenPeppol examples carry no licence file, README note or header at 3.0.22; their licence status is a question for counsel. | Transport tests, from W2 with the adapter |
 | ZUGFeRD / Factur-X | Mustang 2.26.0 (2026-08-25, Apache-2.0) | Format tests |
 | KSeF | TEST, DEMO, PROD; release 2.8.1 | D34 names DEMO |
 | DATEV, ELSTER, AEAT, SDI, platform sandboxes | Not reachable | Gap: covered by golden cases and sign-off |
@@ -661,7 +661,7 @@ Triggers and thresholds are Proposed unless cited. LZ-9 (Assurance revenue again
 | Country order | R09: DE, BE, FR, US, NL first | DE first (RATIFIED, OR-7), then FR, PL (Proposed, D4); BE and NL in W4 |
 | AT and CH | R25 B2 puts them in L2 (paid local partners) | Proposed D25 schedules them in W3, derived from DE; delivery by third-party maintainers (L2) is kept, without payment or revenue share (OR-2) |
 | Own Peppol access point | R26 O4: about 150-200 paying tenants (R26's word for businesses); DECISIONS section 2.3 of the earlier draft: about 250 businesses or M31 | None: SpaceCorps operates no access point (D17, D83, OR-11); users choose a certified one |
-| Peppol BIS version | R25 B3 names GitHub release v3.0.20 | 3.0.21 is current (R09; the Peppol release notes also list a 3.0.20-hotfix of 2026-01-27) |
+| Peppol BIS version | R25 B3 names GitHub release v3.0.20 | 3.0.22 is current (OpenPeppol GitHub release of 2026-11-04; the Peppol release notes also list a 3.0.20-hotfix of 2026-01-27) |
 | Poland smallest firms | R09: secondary, not on the KSeF page | R25 verified 2027-01-01 on the KSeF stages page (re-checked 2026-10-01) |
 | Pack code before W3 | R25 B5: pack code ships monthly on the pack channel | W1 and W2 country code is X5 inside the core binary (D11), so it rides the core releases; only data rides the channel until the Wasm host (W3, D86) |
 | Bank import order | R09 SHOULD 16: camt.053 and MT940, then OFX, then CSV mapping | DECISIONS 5.1 lists camt.053 and MT940 in W1; [spec/finance.md](spec/finance.md) section 4.5 adds CSV mapping in W1 and OFX and QIF in W2 (Proposed) |
