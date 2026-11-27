@@ -1,0 +1,205 @@
+import type { Trip } from "./types.ts";
+
+/**
+ * Trips as the driver sees them: kilometres, clock times, durations, trips by day and the totals
+ * of today and this month. Pure functions without words: numbers and times are written by `Intl`
+ * for the language given (`"en"`, later `"sv"`), and the words around them ("Today", "min") are
+ * the screens' (`src/i18n`).
+ *
+ * Times are stored in UTC; days and clock times follow the time zone given, which on the phone is
+ * the phone's own (`Intl.DateTimeFormat().resolvedOptions().timeZone`). A trip belongs to the day
+ * and the month of its start, also when it ends after midnight.
+ */
+
+const dayFormats = new Map<string, Intl.DateTimeFormat>();
+
+function dayFormat(timeZone: string): Intl.DateTimeFormat {
+  let format = dayFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    dayFormats.set(timeZone, format);
+  }
+  return format;
+}
+
+/** The day of a moment in a time zone, as `YYYY-MM-DD`; such keys sort as the days do. */
+export function dayKey(ms: number, timeZone: string): string {
+  const parts = dayFormat(timeZone).formatToParts(new Date(ms));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+/** The month of a moment in a time zone, as `YYYY-MM`. */
+export function monthKey(ms: number, timeZone: string): string {
+  return dayKey(ms, timeZone).slice(0, 7);
+}
+
+/** The distance of a trip for the sums: a trip still recording has none yet and counts 0. */
+const metres = (trip: Trip): number => trip.distanceM ?? 0;
+
+export interface DayOfTrips {
+  /** `YYYY-MM-DD` in the time zone given. */
+  day: string;
+  /** Newest first. */
+  trips: Trip[];
+  distanceM: number;
+}
+
+/** The trips grouped by the day of their start, newest day first. */
+export function byDay(trips: readonly Trip[], timeZone: string): DayOfTrips[] {
+  const days = new Map<string, Trip[]>();
+  for (const trip of trips) {
+    const day = dayKey(trip.startedAt, timeZone);
+    const list = days.get(day) ?? [];
+    list.push(trip);
+    days.set(day, list);
+  }
+  return [...days.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0))
+    .map(([day, list]) => ({
+      day,
+      trips: [...list].sort((a, b) => b.startedAt - a.startedAt),
+      distanceM: list.reduce((sum, trip) => sum + metres(trip), 0),
+    }));
+}
+
+/** The metres of the trips that started today and this month, in the time zone given. */
+export function totals(
+  trips: readonly Trip[],
+  now: number,
+  timeZone: string,
+): { todayM: number; monthM: number } {
+  const today = dayKey(now, timeZone);
+  const month = today.slice(0, 7);
+  let todayM = 0;
+  let monthM = 0;
+  for (const trip of trips) {
+    const day = dayKey(trip.startedAt, timeZone);
+    if (day === today) todayM += metres(trip);
+    if (day.slice(0, 7) === month) monthM += metres(trip);
+  }
+  return { todayM, monthM };
+}
+
+/** Metres as kilometres with one decimal: `12.4 km` in English, `12,4 km` in Swedish. */
+export function formatKm(distanceM: number, locale: string): string {
+  const km = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(distanceM / 1000);
+  return `${km} km`;
+}
+
+/** The clock time of a moment in a time zone, 24 hours: `09:05`. */
+export function formatClock(ms: number, locale: string, timeZone: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(ms));
+}
+
+/** A day without its year, as the language writes it: `Nov 18` in English. */
+export function formatShortDate(ms: number, locale: string, timeZone: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone, day: "numeric", month: "short" }).format(
+    new Date(ms),
+  );
+}
+
+/**
+ * A day with its weekday, as the language writes it: `Wed, Nov 18` in English, and with the year
+ * when asked (`Tue, Nov 18, 2025`), for a day of another year than the current one.
+ */
+export function formatDay(ms: number, locale: string, timeZone: string, withYear: boolean): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    ...(withYear ? { year: "numeric" } : {}),
+  }).format(new Date(ms));
+}
+
+/** The day before a `YYYY-MM-DD` key (across months, years and leap days). */
+export function dayBefore(day: string): string {
+  const [year, month, date] = day.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
+}
+
+/** The day after a `YYYY-MM-DD` key. */
+export function dayAfter(day: string): string {
+  const [year, month, date] = day.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
+}
+
+const clockFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** The wall clock of a moment in a time zone, written as if it were UTC (to read its offset). */
+function wallClockAsUtc(ms: number, timeZone: string): number {
+  let format = clockFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+    clockFormats.set(timeZone, format);
+  }
+  const parts = format.formatToParts(new Date(ms));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return Date.UTC(
+    part("year"),
+    part("month") - 1,
+    part("day"),
+    part("hour") % 24,
+    part("minute"),
+    part("second"),
+  );
+}
+
+/**
+ * The moment of a clock time on a day (`YYYY-MM-DD`) in a time zone: what a driver types in the
+ * phone's time zone, to be stored in UTC (D7). The offset is read for the moment itself, so
+ * summer and winter time are each right; a clock time that a change of the clock skips is taken
+ * an hour on.
+ */
+export function momentOf(day: string, hour: number, minute: number, timeZone: string): number {
+  const [year, month, date] = day.split("-").map(Number) as [number, number, number];
+  const wall = Date.UTC(year, month - 1, date, hour, minute);
+  const first = wall - (wallClockAsUtc(wall, timeZone) - wall);
+  return wall - (wallClockAsUtc(first, timeZone) - first);
+}
+
+/** The time zone of the phone; UTC where the engine cannot say. */
+export function phoneTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+/**
+ * How long a trip took, rounded to the minute, in hours and minutes; the screen puts the words
+ * around them. A trip still recording passes the current time as its end.
+ */
+export function durationParts(
+  startedAt: number,
+  endedAt: number,
+): { hours: number; minutes: number } {
+  const total = Math.max(0, Math.round((endedAt - startedAt) / 60_000));
+  return { hours: Math.floor(total / 60), minutes: total % 60 };
+}

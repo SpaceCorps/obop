@@ -84,12 +84,12 @@ jobs:
           git diff --exit-code -- web/packages/client
       - name: Check, lint and type-check every app and the design system
         run: |
-          for app in apps/backoffice apps/platform apps/site apps/mileage-app apps/host-app apps/storybook packages/client packages/trip-core packages/host-bridge packages/ui packages/ui-native; do
+          for app in apps/backoffice apps/platform apps/site apps/mileage-app apps/host-app apps/rutsa apps/storybook packages/client packages/trip-core packages/host-bridge packages/ui packages/ui-native; do
             (cd web/$app && vp check)
           done
       - name: Unit tests (design system, client, trip logic, host bridge, back office and website)
         run: |
-          for app in packages/ui packages/client packages/trip-core packages/host-bridge packages/ui-native apps/backoffice apps/mileage-app apps/host-app apps/site; do
+          for app in packages/ui packages/client packages/trip-core packages/host-bridge packages/ui-native apps/backoffice apps/mileage-app apps/host-app apps/rutsa apps/site; do
             (cd web/$app && vp test)
           done
       - name: The website's translations keep the structure of the English text (every language)
