@@ -2,7 +2,7 @@
 //!
 //! `build.rs` finds it (the environment variable `OBOP_BUILD_COMMIT`, which the Docker build sets
 //! from its build argument, else `git rev-parse HEAD` in the checkout) and hands it to the
-//! compiler as `OBOP_BUILD_COMMIT`; `main` prints it. The build script and `tests/version.rs`
+//! compiler as `OBOP_BUILD_COMMIT`; `run` prints it. The build script and `tests/version.rs`
 //! include this file by path, so the rule that decides what counts as a commit, and what makes
 //! the build look at git again, is the same in all three. Its tests are in `build_commit_tests.rs`.
 

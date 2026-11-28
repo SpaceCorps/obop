@@ -76,7 +76,7 @@ fn the_area_is_found_behind_any_global_option() {
     .unwrap();
     assert_eq!(flags, Some(Flags::default()));
     assert_eq!(rest.len(), 8);
-    // `--year N` (the SIE options of `main`) is a global option with a value like the others: the
+    // `--year N` (the SIE options of `run`) is a global option with a value like the others: the
     // `2026` after it is not the command word, and a `--title` after the words is the area's.
     let (flags, rest) = take_flags(vec![
         "--year",
@@ -100,11 +100,11 @@ fn the_area_is_found_behind_any_global_option() {
     assert_eq!(flags, None);
 }
 
-/// The list the area uses is the list `main` takes: every `take_opt(&args, "--x")` of `main.rs`
+/// The list the area uses is the list `run` takes: every `take_opt(&args, "--x")` of `lib.rs`
 /// is a value option here and every value option here is taken there.
 #[test]
 fn the_value_options_are_the_ones_main_takes() {
-    let main = include_str!("main.rs");
+    let main = include_str!("lib.rs");
     let marker = "take_opt(&args, \"";
     let mut taken = Vec::new();
     let mut rest = main;

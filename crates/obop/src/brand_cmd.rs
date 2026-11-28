@@ -12,7 +12,7 @@
 //! - `check FILE.svg` runs the strict SVG reader on a file and needs no database.
 //!
 //! **The flags.** `--title LANG=TEXT` and `--message LANG=TEXT` are repeatable, and the binary's
-//! global options of the same names take one value each for `status incident`, so `main` hands the
+//! global options of the same names take one value each for `status incident`, so `run` hands the
 //! argument list to [`take_flags`] first. Only when the first two words are `admin brand` does it
 //! pull out the flags of this area (`--title`, `--message`, `--name`, `--slug`, `--logo-file`,
 //! `--clear-logo`, `--hide-product-docs`); every other command line goes on untouched. `--db`, `--dry-run` and `--from`
@@ -137,8 +137,8 @@ impl Flags {
     }
 }
 
-/// The global options that take a value: the ones `main` takes with `take_opt`, before it looks
-/// at the command. Here to find the words of the area past any of them; a test reads `main.rs` and
+/// The global options that take a value: the ones `run` takes with `take_opt`, before it looks
+/// at the command. Here to find the words of the area past any of them; a test reads `lib.rs` and
 /// holds this list to the `take_opt` calls in it, so a global option added there is added here.
 pub const VALUE_OPTIONS: [&str; 37] = [
     "--db",

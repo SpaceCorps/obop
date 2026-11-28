@@ -315,7 +315,7 @@ fn a_reader_put_into_the_real_files_is_found_whatever_comes_before_it() {
             "kernel/obop-storage/src/pg.rs",
             "pub(crate) fn lock_batch(c: &mut Client, keys: &[i32]) -> PR<()> {",
         ),
-        ("obop/src/main.rs", "fn take_opt<'a>("),
+        ("obop/src/lib.rs", "fn take_opt<'a>("),
     ] {
         let src = &files[file];
         assert_eq!(
