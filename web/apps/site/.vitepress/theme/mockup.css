@@ -1,0 +1,184 @@
+/*
+ * Design previews in a blog post (`<figure class="mockup">`, SITE.md "Add a blog post"): a static
+ * picture of a screen, drawn in HTML and CSS so it follows the reader's text size, language and
+ * theme. Nothing in it is a control: the "buttons" are spans with no hover, no focus and the
+ * default cursor, and the dashed frame and the "Design preview" label say it is a picture. A check
+ * is an icon and words, never colour alone. Mobile first, logical properties only (a test reads
+ * this file for physical ones), @obop/ui tokens only, so light and dark come from the tokens.
+ */
+.prose .mockup {
+  container-type: inline-size;
+  margin-block: var(--space-6);
+  margin-inline: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+
+.prose .mockup-label {
+  display: inline-block;
+  margin-block-end: var(--space-3);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.prose .mockup-card {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.prose .mockup-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--border);
+}
+
+.prose .mockup-title {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+}
+
+.prose .mockup-tag {
+  padding-block: 0.1em;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* One row per fact: the name above the value on a phone, beside it where there is room. */
+.prose .mockup-rows {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding-block: var(--space-3);
+  border-block-end: 1px solid var(--border);
+}
+
+.prose .mockup-rows > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.prose .mockup-rows dt {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.prose .mockup-rows dd {
+  margin: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+@container (inline-size >= 30rem) {
+  .prose .mockup-rows > div {
+    grid-template-columns: minmax(8rem, 2fr) 5fr;
+    gap: var(--space-4);
+    align-items: baseline;
+  }
+
+  .prose .mockup-rows dt {
+    font-size: var(--text-sm);
+  }
+}
+
+.prose .mockup-checks {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-block: var(--space-3);
+  padding-inline: 0;
+  list-style: none;
+}
+
+.prose .mockup-checks li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text);
+}
+
+/* The icon's shape carries the meaning (a tick, an exclamation mark); the colour only repeats it. */
+.prose .mockup-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: 1.4em;
+  block-size: 1.4em;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+}
+
+.prose .mockup-ok .mockup-icon {
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+
+.prose .mockup-warn .mockup-icon {
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+}
+
+/* Drawn buttons: they look like the screen's buttons but are spans, with no hover and no focus. */
+.prose .mockup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.prose .mockup-btn {
+  display: inline-block;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  cursor: default;
+  user-select: none;
+}
+
+/* A soft tint, not the site's filled pill, so the drawn button is not mistaken for a real one. */
+.prose .mockup-btn-primary {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.prose .mockup figcaption {
+  margin-block-start: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The figure is the container, so only what is inside it can follow its width. */
+@container (inline-size >= 30rem) {
+  .prose .mockup-card {
+    padding: var(--space-5);
+  }
+}

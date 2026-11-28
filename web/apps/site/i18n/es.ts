@@ -52,6 +52,7 @@ export const es: Messages = {
     { label: "Plataforma", href: "/platform/" },
     { label: "Marketplace", href: "/marketplace/" },
     { label: "Documentación", href: "/docs/" },
+    { label: "Blog", href: "/blog/" },
     { label: "Precios", href: "/pricing/" },
   ],
   footer: {
@@ -65,6 +66,7 @@ export const es: Messages = {
           { label: "Precios", href: "/pricing/" },
           { label: "Novedades", href: "/changelog/" },
           { label: "Hoja de ruta", href: "/roadmap/" },
+          { label: "Blog", href: "/blog/" },
         ],
       },
       {

@@ -2812,7 +2812,7 @@ test.describe("accessibility", () => {
     // RTL is out of scope, but adding it must be a layout review, not a rewrite (SITE.md).
     const physical =
       /\b(?:margin|padding|border)-(?:left|right|top|bottom)\b|(?:^|[\s;{])(?:left|right|top|bottom)\s*:|(?:^|[\s;{])(?:min-|max-)?(?:width|height)\s*:|text-align\s*:\s*(?:left|right)|\bfloat\s*:\s*(?:left|right)/;
-    for (const file of ["apps.css", "app-page.css"]) {
+    for (const file of ["apps.css", "app-page.css", "mockup.css"]) {
       const css = readFileSync(
         join(repoRoot, "web/apps/site/.vitepress/theme", file),
         "utf8",
