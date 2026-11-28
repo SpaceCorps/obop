@@ -1,9 +1,16 @@
+//! The `obop` command as a library (D98, C1): the start-up, the command line and the linked
+//! modules of the `obop` binary, so that another Rust crate can build a server from them. The
+//! binary (`src/main.rs`) is one call, `run`. `app` is the composition root.
+//!
+//! This is the first step of D98 and the API is not versioned yet: a `NativeModule` trait and a
+//! `Build` come with C2, and the native API version number with them.
+
 #[cfg(test)]
 mod account_tests;
 mod accounts_cmd;
 #[cfg(test)]
 mod accounts_tests;
-mod app;
+pub mod app;
 #[cfg(test)]
 mod app_ids_tests;
 #[cfg(test)]
@@ -438,7 +445,11 @@ fn refused_answer(seen: &errors::Outcome) -> Option<ExitCode> {
     Some(ExitCode::from(c.exit))
 }
 
-fn main() -> ExitCode {
+/// The whole `obop` command line: reads the arguments and the environment of this process, does
+/// what `obop <command>` does and returns its exit status. Nothing about the command line, its
+/// exit statuses or its environment variables is decided anywhere else: the `obop` binary only
+/// calls this.
+pub fn run() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // Operator commands that work on a whole database: migrate, backup, restore, secrets.
     if let Some(code) = ops::dispatch(&args) {

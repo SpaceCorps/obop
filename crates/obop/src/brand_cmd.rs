@@ -137,8 +137,8 @@ impl Flags {
     }
 }
 
-/// The global options that take a value: the ones `main` takes with `take_opt`, before it looks
-/// at the command. Here to find the words of the area past any of them; a test reads `main.rs` and
+/// The global options that take a value: the ones `run` takes with `take_opt`, before it looks
+/// at the command. Here to find the words of the area past any of them; a test reads `lib.rs` and
 /// holds this list to the `take_opt` calls in it, so a global option added there is added here.
 pub const VALUE_OPTIONS: [&str; 37] = [
     "--db",

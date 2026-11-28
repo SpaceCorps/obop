@@ -100,11 +100,11 @@ fn the_area_is_found_behind_any_global_option() {
     assert_eq!(flags, None);
 }
 
-/// The list the area uses is the list `main` takes: every `take_opt(&args, "--x")` of `main.rs`
+/// The list the area uses is the list `run` takes: every `take_opt(&args, "--x")` of `lib.rs`
 /// is a value option here and every value option here is taken there.
 #[test]
 fn the_value_options_are_the_ones_main_takes() {
-    let main = include_str!("main.rs");
+    let main = include_str!("lib.rs");
     let marker = "take_opt(&args, \"";
     let mut taken = Vec::new();
     let mut rest = main;
