@@ -22,6 +22,13 @@ pub struct App {
     pub mail: Arc<obop_mail::Mail>,
 }
 
+impl Default for App {
+    /// The same as [`App::new`]. The type is public since C1 (D98), where clippy asks for it.
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// The bundled catalog, plus a remote one when `OBOP_MARKETPLACE_URL` is set.
 fn marketplace() -> Arc<dyn Marketplace> {
     let mut sources: Vec<Box<dyn Marketplace>> = vec![Box::new(Bundled)];
