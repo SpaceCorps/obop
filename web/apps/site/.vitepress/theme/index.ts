@@ -7,5 +7,6 @@ import Layout from "./Layout.vue";
 import "./style.css";
 import "./apps.css";
 import "./app-page.css";
+import "./mockup.css";
 
 export default { Layout } satisfies Theme;

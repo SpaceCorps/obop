@@ -22,6 +22,7 @@ import { blogMarkdown, isPost, localPosts, postDate, postEyebrow, type Post } fr
 import { changelogMarkdown, loadChangelog } from "./lib/changelog.ts";
 import { isMain } from "./lib/main.ts";
 import { appsIndexMirror, homeMirror, pricingMirror } from "./lib/mirror.ts";
+import { mockupMirror } from "./lib/mockup.ts";
 import { CORE_VERSION, GEN, GITHUB, REPO_ROOT, SITE_ROOT, SITE_URL, SRC } from "./lib/paths.ts";
 import { slugify } from "./lib/slug.ts";
 
@@ -375,6 +376,8 @@ export function assemble(): PageRecord[] {
         layout: raw.fm["layout"] ?? (isDoc ? "doc" : "page"),
         section: raw.fm["section"] ?? (isDoc ? "docs" : "page"),
         body,
+        // A design preview is HTML on the page and one line in the Markdown copy.
+        mirror: mockupMirror(body),
         fallback,
         editPath: guide ? "docs/MODULES.md" : raw.file,
         extra: {
