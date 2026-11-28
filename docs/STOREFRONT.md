@@ -14,7 +14,7 @@ Every instance can serve a **public website and web shop** to ordinary visitors:
 | Images and files: storage, validation, thumbnails | `crates/kernel/obop-storage/src/blob.rs`, `crates/kernel/obop-media`, `crates/kernel/obop-commands/src/blobs.rs` |
 | Payments: providers, webhook, refunds, release of stock | `crates/kernel/obop-payments`, the port in `crates/kernel/obop-commands/src/pay.rs`, the door in `crates/kernel/obop-http/src/payments.rs` |
 | axum adapter and serving layout | `crates/kernel/obop-http/src/public.rs` |
-| CLI | `crates/obop/src/main.rs` (`serve --public-site`, `site seed|set|show`) |
+| CLI | `crates/obop/src/lib.rs` (`serve --public-site`, `site seed|set|show`) |
 
 ## Build and run
 

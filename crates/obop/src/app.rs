@@ -22,13 +22,6 @@ pub struct App {
     pub mail: Arc<obop_mail::Mail>,
 }
 
-impl Default for App {
-    /// The same as [`App::new`]. The type is public since C1 (D98), where clippy asks for it.
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// The bundled catalog, plus a remote one when `OBOP_MARKETPLACE_URL` is set.
 fn marketplace() -> Arc<dyn Marketplace> {
     let mut sources: Vec<Box<dyn Marketplace>> = vec![Box::new(Bundled)];
@@ -39,7 +32,9 @@ fn marketplace() -> Arc<dyn Marketplace> {
 }
 
 impl App {
-    /// An app over an in-memory store (tests, `modules check`).
+    /// An app over an in-memory store (tests, `modules check`). Not a `Default`: it builds a whole
+    /// dispatcher and may end the process on a key-ring error (D98 Consequences).
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self::with_store(Store::new())
     }
@@ -154,7 +149,7 @@ impl App {
 
 /// Development principals, selected by bearer token. Test values only: the server binds to
 /// localhost and real authentication (D33) replaces this before any non-local use.
-pub fn dev_principal(token: &str) -> Option<Principal> {
+pub(crate) fn dev_principal(token: &str) -> Option<Principal> {
     const ALL: &[&str] = &[
         "base.user",
         "privacy.officer",
@@ -190,7 +185,7 @@ pub fn dev_principal(token: &str) -> Option<Principal> {
 }
 
 /// `--dev-auth`: the three fixed dev principals as an `Authenticator`. Loopback only.
-pub struct DevAuth;
+pub(crate) struct DevAuth;
 
 impl Authenticator for DevAuth {
     fn resolve(&self, token: &str) -> Option<Principal> {

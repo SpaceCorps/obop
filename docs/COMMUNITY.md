@@ -10,7 +10,7 @@ The control plane (`obop platform serve`) serves two dynamic, server-rendered pa
 |---|---|
 | Logic, rendering, tests (no web framework) | `crates/kernel/obop-community` |
 | axum adapter, the only place the two meet (D29) | `crates/kernel/obop-http/src/community.rs` (`obop_http::community::router`) |
-| Wiring, checker start, CLI | `crates/obop/src/main.rs` (`platform_serve`, `status_probes`, `status_incident`) |
+| Wiring, checker start, CLI | `crates/obop/src/lib.rs` (`platform_serve`, `status_probes`, `status_incident`) |
 
 `Community::handle(&Req) -> Resp` is the whole interface; `Req` and `Resp` are small framework-neutral structs. The router is merged into the platform router: `platform_router(api, static_dir).merge(community::router(community))`.
 

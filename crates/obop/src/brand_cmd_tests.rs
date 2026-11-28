@@ -76,7 +76,7 @@ fn the_area_is_found_behind_any_global_option() {
     .unwrap();
     assert_eq!(flags, Some(Flags::default()));
     assert_eq!(rest.len(), 8);
-    // `--year N` (the SIE options of `main`) is a global option with a value like the others: the
+    // `--year N` (the SIE options of `run`) is a global option with a value like the others: the
     // `2026` after it is not the command word, and a `--title` after the words is the area's.
     let (flags, rest) = take_flags(vec![
         "--year",

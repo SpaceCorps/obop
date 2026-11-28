@@ -12,7 +12,7 @@
 //! - `check FILE.svg` runs the strict SVG reader on a file and needs no database.
 //!
 //! **The flags.** `--title LANG=TEXT` and `--message LANG=TEXT` are repeatable, and the binary's
-//! global options of the same names take one value each for `status incident`, so `main` hands the
+//! global options of the same names take one value each for `status incident`, so `run` hands the
 //! argument list to [`take_flags`] first. Only when the first two words are `admin brand` does it
 //! pull out the flags of this area (`--title`, `--message`, `--name`, `--slug`, `--logo-file`,
 //! `--clear-logo`, `--hide-product-docs`); every other command line goes on untouched. `--db`, `--dry-run` and `--from`
